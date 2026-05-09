@@ -25,6 +25,8 @@ import {
 import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
+import { FloatingTabs } from "@/components/sections/floating-tabs";
+import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 
 const INPUT_BASE =
   "h-11 w-full rounded-[10px] border-[1.5px] border-border bg-white dark:bg-surface px-3.5 text-sm text-foreground placeholder:text-zinc-400 transition focus:border-primary-500 focus:outline-none focus:ring-[3px] focus:ring-primary-500/10";
@@ -124,26 +126,27 @@ export default function RegisterPage() {
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500"
             >
-              Google
+              <GoogleIcon className="h-[18px] w-[18px]" /> Google
             </button>
             <button
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
               style={{ color: "#00B900" }}
             >
-              LINE
+              <LineIcon className="h-[18px] w-[18px]" /> LINE
             </button>
             <button
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
               style={{ color: "#1877F2" }}
             >
-              Facebook
+              <FacebookIcon className="h-[18px] w-[18px]" /> Facebook
             </button>
           </div>
         </div>
       </main>
       <Footer />
+      <FloatingTabs />
     </>
   );
 }

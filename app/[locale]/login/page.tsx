@@ -7,6 +7,8 @@ import { Eye, EyeOff } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
+import { FloatingTabs } from "@/components/sections/floating-tabs";
+import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 
 const INPUT_BASE =
   "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
@@ -134,21 +136,21 @@ export default function LoginPage() {
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500"
             >
-              <span className="text-base">G</span> Google
+              <GoogleIcon className="h-[18px] w-[18px]" /> Google
             </button>
             <button
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
               style={{ color: "#00B900" }}
             >
-              LINE
+              <LineIcon className="h-[18px] w-[18px]" /> LINE
             </button>
             <button
               type="button"
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
               style={{ color: "#1877F2" }}
             >
-              Facebook
+              <FacebookIcon className="h-[18px] w-[18px]" /> Facebook
             </button>
           </div>
 
@@ -165,6 +167,7 @@ export default function LoginPage() {
         </div>
       </main>
       <Footer />
+      <FloatingTabs />
     </>
   );
 }
