@@ -7,6 +7,8 @@ export function ThemeToggle({ variant = "default" }: { variant?: "default" | "on
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
+  // SSR-safe: skip first render until client mounts to avoid theme mismatch
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   if (!mounted) return <div className="w-9 h-9" />;

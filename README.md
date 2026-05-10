@@ -20,29 +20,33 @@
 
 ## Getting Started
 
-### 1. Install
-```bash
-pnpm install
-```
+> 📖 อ่าน [`docs/setup/local-development.md`](docs/setup/local-development.md) ก่อน — มีรายละเอียดทุกขั้นตอน
 
-### 2. Run dev server
+### Quick start
+
 ```bash
+# 1. Install
+pnpm install
+
+# 2. Setup env
+cp .env.example .env.local
+# → แก้ค่าใน .env.local ตามคู่มือ docs/setup/
+
+# 3. Setup Supabase (สร้าง project + รัน SQL)
+# → ทำตาม docs/setup/supabase.md
+
+# 4. Run dev
 pnpm dev
 ```
-เปิด [http://localhost:3000](http://localhost:3000) — locale default `th`, อังกฤษที่ `/en`
 
-### 3. Build / Start production
-```bash
-pnpm build
-pnpm start
-```
+เปิด [http://localhost:3000](http://localhost:3000) — locale default `th`, อังกฤษที่ `/en`
 
 ### Scripts
 | Command | Description |
 |---|---|
-| `pnpm dev` | start dev server |
+| `pnpm dev` | start dev server (hot reload) |
 | `pnpm build` | production build |
-| `pnpm start` | start production server |
+| `pnpm start` | start production server (after build) |
 | `pnpm lint` | run ESLint |
 
 ---
@@ -51,32 +55,54 @@ pnpm start
 
 ```
 pacred-web/
-├─ app/[locale]/          # App Router (locale-prefixed routes)
-│  ├─ page.tsx            # หน้าแรก (home)
-│  ├─ login/              # หน้าเข้าสู่ระบบ
-│  ├─ register/           # หน้าสมัครสมาชิก (Personal + Juristic 3-step)
-│  └─ layout.tsx          # locale layout (next-intl provider)
+├─ app/[locale]/                  # App Router with locale prefix
+│  ├─ (public)/                   # ไม่ต้อง login (home)
+│  ├─ (auth)/                     # auto-redirect → / ถ้า login (login, register)
+│  ├─ (protected)/                # auto-redirect → /login ถ้าไม่ login (dashboard, orders)
+│  └─ complete-profile/           # ต้อง login + allows incomplete profile
+├─ app/auth/                      # OAuth callback + signout (no locale)
+│
+├─ actions/                       # Server Actions (mutations)
+│  ├─ auth.ts                     # signIn, register*, OAuth
+│  ├─ otp.ts                      # requestOtp, verifyOtp (with bypass)
+│  └─ orders.ts                   # demo CRUD pattern reference
+│
+├─ lib/
+│  ├─ supabase/                   # 3 clients: browser, server, admin
+│  ├─ auth/                       # get-user, require-auth helpers
+│  ├─ sms/gateway.ts              # ThaiBulkSMS adapter
+│  ├─ utils/                      # phone normalization, etc.
+│  └─ validators/                 # Zod schemas
 │
 ├─ components/
-│  ├─ sections/           # section-level (navbar, hero, service, blog, footer, ...)
-│  ├─ ui/                 # reusable UI (button, carousel, ...)
-│  └─ icons/              # brand SVG icons (Google/LINE/Facebook)
+│  ├─ sections/                   # navbar, hero, service, blog, footer, ...
+│  ├─ ui/                         # button, carousel, ...
+│  └─ icons/                      # brand SVGs (Google/LINE/Facebook)
 │
-├─ messages/              # i18n translations
-│  ├─ th.json
-│  └─ en.json
+├─ messages/{th,en}.json          # i18n translations
+├─ i18n/                          # next-intl config
+├─ supabase/                      # SQL schema + migrations
+│  ├─ schema.sql
+│  └─ migrations/0002_orders.sql
 │
-├─ i18n/                  # next-intl config
-│  ├─ routing.ts          # locales + defaultLocale
-│  ├─ navigation.ts       # localized Link
-│  └─ request.ts
-│
-├─ public/images/         # logos, banners, partner logos, hero icons
+├─ public/images/                 # logos, banners, etc.
 ├─ docs/
-│  └─ architecture.md     # 📐 blueprint สำหรับระบบ auth + backend
-├─ proxy.ts               # middleware (next-intl routing)
+│  ├─ architecture.md             # 📐 system blueprint (diagrams, flows)
+│  └─ setup/                      # 🔧 service config guides
+│     ├─ README.md
+│     ├─ local-development.md
+│     ├─ supabase.md
+│     ├─ thaibulksms.md
+│     ├─ google-oauth.md
+│     ├─ facebook-oauth.md
+│     ├─ line.md
+│     └─ vercel.md
+│
+├─ proxy.ts                       # middleware (i18n + Supabase session refresh)
+├─ .env.example                   # env vars template
 ├─ next.config.ts
-└─ AGENTS.md              # คำเตือนสำหรับ AI agents
+├─ CLAUDE.md                      # context for AI agents
+└─ AGENTS.md                      # Next.js 16 breaking-change warning
 ```
 
 ---
@@ -115,63 +141,86 @@ pacred-web/
 
 | Route | สถานะ | หมายเหตุ |
 |---|---|---|
-| `/` (home) | ✅ UI complete | hero + promotion + service + blog + partner + sales + footer + floating tabs |
-| `/login` | ✅ UI complete | ❌ ยังไม่ต่อ backend |
-| `/register` | ✅ UI complete | ❌ ยังไม่ต่อ backend (Personal + Juristic 3-step) |
-| `/dashboard` | ⏳ planned (Phase 4) | |
+| `/` (home) | ✅ live | landing — hero / promotion / service / blog / partner / sales |
+| `/login` | ✅ wired | email/phone/member-code + Google/Facebook OAuth (LINE = mocked) |
+| `/register` | ✅ wired | Personal + Juristic 3-step (with file uploads) |
+| `/dashboard` | ✅ basic | profile info + member_code + quick links (placeholder for full feature) |
+| `/orders` | ✅ demo | list + create — pattern reference for new features |
+| `/complete-profile` | ⏳ placeholder | จะมี form ทีหลัง |
+| `/auth/callback` (server) | ✅ | OAuth code exchange |
+| `/auth/signout` (POST) | ✅ | clears session |
 
 ---
 
-## Roadmap
+## Service Setup Guides
 
-ระบบ **auth + backend** ใช้ **Supabase + Next.js Server Actions** (ไม่มี backend service แยก)
+ก่อน dev/deploy ต้องตั้งค่า service ภายนอก — แยกคู่มือไฟล์ละ service ที่ [`docs/setup/`](docs/setup/):
 
-📐 **อ่าน blueprint ก่อน implement:** [`docs/architecture.md`](docs/architecture.md)
+| คู่มือ | ใช้เมื่อ |
+|---|---|
+| [`local-development.md`](docs/setup/local-development.md) | เริ่ม dev บน machine ใหม่ |
+| [`supabase.md`](docs/setup/supabase.md) | สร้าง project + รัน SQL + ตั้ง auth providers |
+| [`thaibulksms.md`](docs/setup/thaibulksms.md) | ปิด `OTP_BYPASS` แล้วใช้ OTP จริง |
+| [`google-oauth.md`](docs/setup/google-oauth.md) | เปิดปุ่ม Google login |
+| [`facebook-oauth.md`](docs/setup/facebook-oauth.md) | เปิดปุ่ม Facebook login |
+| [`line.md`](docs/setup/line.md) | เปิดปุ่ม LINE login |
+| [`vercel.md`](docs/setup/vercel.md) | deploy ขึ้น production |
 
-ครอบคลุม:
-- High-level architecture diagram
-- DB schema + RLS
-- 6 auth flows (sequence diagrams)
-- OTP flow ผ่าน 3rd-party SMS
-- Security model
-- Future systems pattern
-- 5-phase implementation roadmap
+📐 **System architecture** (ก่อนเริ่ม implement feature ใหญ่): [`docs/architecture.md`](docs/architecture.md) — มี high-level diagram, DB schema, auth flows, security model
 
-### ตัดสินใจแล้ว
-- **Hosting:** Vercel + Supabase Cloud
-- **Phone OTP:** 3rd-party SMS gateway (custom logic)
-- **OAuth:** Google + Facebook + LINE Login
-- **Tax-ID lookup:** future (manual ก่อน)
+---
+
+## Tech Decisions (locked)
+
+- **Hosting:** Vercel (frontend + Server Actions) + Supabase Cloud (auth/db/storage)
+- **Phone OTP:** ThaiBulkSMS (custom — bypass via `OTP_BYPASS=true` ใน dev)
+- **OAuth:** Google + Facebook + LINE (LINE ผ่าน custom OIDC)
+- **member_code:** `PR00001` running, auto-gen ผ่าน Postgres trigger
+- **Email verification:** optional (Supabase confirm-email = OFF)
+- **Password:** min 6 / max 30 (no complexity rules)
+- **Backend pattern:** Hybrid — Supabase BaaS + Next.js Server Actions (ไม่มี service แยก)
 
 ---
 
 ## Conventions
 
-- **Component:** Server Component เป็น default; ใช้ `"use client"` เฉพาะเมื่อต้องการ state/effect/event handler
+- **Component:** Server Component เป็น default; ใช้ `"use client"` เฉพาะเมื่อต้องการ state / effect / event handler
+- **Mutations:** ทำผ่าน **Server Actions** ใน [`actions/`](actions/) — ห้ามเรียก Supabase admin จาก client
+- **Data access:** ผ่าน Supabase clients 3 ตัวใน [`lib/supabase/`](lib/supabase/):
+  - `client.ts` — browser ("use client")
+  - `server.ts` — RSC + Server Action (มี cookies + RLS)
+  - `admin.ts` — service-role (bypass RLS, server only)
 - **Carousels:** `<ServiceCarousel />` รับ 3 variants (`items` / `imageItems` / `blogItems`) ดู [`components/ui/service-carousel.tsx`](components/ui/service-carousel.tsx)
 - **Path alias:** `@/*` → `./*`
-- **Icons:** ใช้ `lucide-react` ทั้งโปรเจกต์ (outline-style); brand icons (Google/LINE/FB) อยู่ที่ `components/icons/social-icons.tsx`
-- **i18n keys:** ตั้งชื่อตาม namespace ของ section/page (`nav.*`, `service.*`, `login.*`, `register.*`, ...)
+- **Icons:** `lucide-react` ทั้งโปรเจกต์ (outline-style); brand icons (Google/LINE/FB) อยู่ที่ [`components/icons/social-icons.tsx`](components/icons/social-icons.tsx)
+- **i18n keys:** ตั้งชื่อตาม namespace ของ section/page (`nav.*`, `service.*`, `login.*`, `register.*`, ...) — แก้ทั้ง th + en พร้อมกันเสมอ
+- **Localized links:** ใช้ `Link` จาก `@/i18n/navigation` แทน `next/link` (auto-prefix locale)
 
 ---
 
-## Deployment
+## Adding a new feature
 
-วางแผนใช้ **Vercel** สำหรับ frontend + Server Actions และ **Supabase Cloud** สำหรับ auth/db/storage
+ทำตาม pattern นี้ (อ้างอิง [actions/orders.ts](actions/orders.ts) + [app/[locale]/(protected)/orders/](app/[locale]/(protected)/orders/) เป็นตัวอย่าง):
 
-- Push ไป main → Vercel preview/production deploy อัตโนมัติ
-- Env vars (production): ตั้งใน Vercel dashboard
+1. **SQL** — เพิ่ม table + RLS ที่ `supabase/migrations/00NN_<name>.sql` → รันใน Supabase SQL Editor
+2. **Validator** — Zod schema ใน `lib/validators/<name>.ts`
+3. **Server Actions** — `actions/<name>.ts` (`"use server"`)
+4. **Pages** — ใต้ `app/[locale]/(protected)/<name>/` (auto auth guard)
+5. **i18n** — เพิ่ม namespace ใน `messages/th.json` + `en.json`
+6. **(optional)** Realtime — `supabase.channel(...)` ใน `"use client"` component
 
-ดูรายละเอียด env vars ที่ [`docs/architecture.md`](docs/architecture.md) Section 8
+ดูรายละเอียดที่ [`docs/architecture.md`](docs/architecture.md) Section 9
 
 ---
 
 ## Contributing
 
-1. สร้าง branch: `git checkout -b feature/...`
-2. แก้โค้ด — ทุก mutation ผ่าน Server Action; ทุก data access ผ่าน Supabase client (3 ตัวใน `lib/supabase/`)
+1. สร้าง branch: `git checkout -b feature/<name>`
+2. แก้โค้ด ตาม conventions ข้างบน
 3. เพิ่ม locale string ทั้ง th + en
-4. `pnpm lint` ก่อน commit
+4. ตรวจ:
+   - `pnpm exec tsc --noEmit` (TypeScript)
+   - `pnpm lint` (ESLint)
 5. PR + รอ review
 
 ---

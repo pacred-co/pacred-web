@@ -10,7 +10,12 @@
     "warehouse": "Our Warehouse",
     "about": "About Us",
     "register": "Register",
-    "login": "Login"
+    "login": "Login",
+    "myAccount": "My Account",
+    "dashboard": "Dashboard",
+    "profile": "Profile",
+    "logout": "Sign out",
+    "completeProfile": "Complete your profile"
   },
   "heroTabs": {
     "tab1Title": "Sea Freight",

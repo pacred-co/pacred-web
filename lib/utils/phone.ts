@@ -1,0 +1,23 @@
+/**
+ * Normalize a Thai phone number to E.164 format (+66...).
+ * Accepts variations like "081 234 5678", "0812345678", "+66812345678", "66812345678".
+ */
+export function normalizePhone(input: string): string {
+  const cleaned = input.replace(/[\s-()]/g, "");
+
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("66")) return "+" + cleaned;
+  if (cleaned.startsWith("0")) return "+66" + cleaned.slice(1);
+  return "+66" + cleaned;
+}
+
+/**
+ * Detect identifier format used at sign-in.
+ */
+export type IdentifierKind = "email" | "memberCode" | "phone";
+
+export function detectIdentifier(input: string): IdentifierKind {
+  if (input.includes("@")) return "email";
+  if (/^PR\d{5}$/i.test(input.trim())) return "memberCode";
+  return "phone";
+}

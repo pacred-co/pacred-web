@@ -2,7 +2,7 @@
 
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
 > Marketing site + landing pages + (incoming) member portal
@@ -54,78 +54,109 @@ Last updated: 2026-05-09
   3. `blogItems?: BlogCardItem[]` → full red bg + title overlay
   4. ไม่ส่งอะไร → placeholder 6 ใบเปล่า
 
-## Current State
+## Folder Structure
 
-### หน้าที่เสร็จแล้ว (UI complete)
+```
+app/[locale]/
+├─ (public)/                  # ไม่ต้อง login
+│  └─ page.tsx                # home
+├─ (auth)/                    # auto-redirect → / ถ้า login แล้ว
+│  ├─ layout.tsx              # requireGuest()
+│  ├─ login/page.tsx
+│  └─ register/page.tsx
+├─ (protected)/               # auto-redirect → /login ถ้าไม่ login, → /complete-profile ถ้า incomplete
+│  ├─ layout.tsx              # requireAuth()
+│  ├─ dashboard/page.tsx
+│  └─ orders/                 # demo: pattern reference
+│     ├─ page.tsx             # list
+│     └─ new/page.tsx         # create form
+├─ complete-profile/page.tsx  # auth required, allows incomplete
+├─ auth/                      # OAuth callback + signout (no locale prefix)
+│  ├─ callback/route.ts
+│  └─ signout/route.ts
+└─ layout.tsx                 # NextIntl + LocaleHtmlLang
 
-**1. Home** — [app/[locale]/page.tsx](app/[locale]/page.tsx)
-- NavBar (logo, nav links, login/register buttons, locale switcher with flags, theme toggle)
-- SearchBar
-- HeroSection (banner + 3 stat cards พร้อม icon + เลขสีแดง #B30000)
-- Promotion (heading, 4 coupon cards, 2 carousels, 5 country link cards)
-- Service (20 containers: 20 product categories grid, banners, rate carousels (LCL/FCL/FF), feature cards, about 2-column text)
-- Sales (sales staff marquee — 60s cycle)
-- Blog (1 hero + 3 small video cards 70/30 layout, 2 article carousels, 25 tag link cards)
-- Partner (logo marquee, 24 logos)
-- Footer
-- FloatingTabs (vertical menu + LINE chat button)
+actions/                       # Server Actions
+├─ auth.ts                    # signIn, signOut, register*, OAuth
+├─ otp.ts                     # requestOtp, verifyOtp (with bypass)
+└─ orders.ts                  # demo CRUD
 
-**2. Login** — [app/[locale]/login/page.tsx](app/[locale]/login/page.tsx)
-- Logo + title + email/phone/member-code field + password + forgot link + submit
-- Divider + 3 social buttons (Google/LINE/Facebook with brand SVG icons)
-- Link → /register
-- ✅ UI พร้อม | ❌ ยังไม่ต่อ backend
+lib/
+├─ supabase/{client,server,admin}.ts
+├─ auth/{get-user,require-auth}.ts
+├─ sms/gateway.ts             # ThaiBulkSMS adapter
+├─ utils/phone.ts             # normalizePhone + detectIdentifier
+└─ validators/{auth,orders}.ts # Zod schemas
 
-**3. Register** — [app/[locale]/register/page.tsx](app/[locale]/register/page.tsx)
-- Logo + title + login link
-- 2 tabs: **Personal** (single form) / **Juristic** (3-step wizard)
-- Personal: name, surname, phone, password, service chips (multi-select 6 อัน), how-know select, email, agree
-- Juristic Step 1: phone, password, services, how-know
-- Juristic Step 2: tax ID, company name, address (4 fields)
-- Juristic Step 3: 3 file uploads + agree
-- Step indicator with active/done states
-- Divider + 3 social buttons
-- ✅ UI พร้อม | ❌ ยังไม่ต่อ backend
+supabase/
+├─ schema.sql                 # initial: profiles + documents + otp_codes + RLS + Storage
+└─ migrations/0002_orders.sql # demo: orders table
+```
 
-### ยังไม่ทำ
-- ❌ Backend / API routes / Server Actions
-- ❌ Database (จะใช้ Supabase Postgres + RLS)
-- ❌ Authentication (Supabase Auth)
-- ❌ File storage (Supabase Storage)
-- ❌ Protected routes (`/dashboard`, `/profile`, etc.)
-- ❌ OTP via 3rd-party SMS gateway
-- ❌ OAuth (Google/LINE/Facebook) integration
-- ❌ Tax-ID lookup API (future)
+## Auth & Backend State (Phase 1-5 ✅ done)
+
+### What works
+- **Supabase Auth** — email/phone + password, OAuth Google/Facebook (LINE = mocked)
+- **DB** — profiles (auto-gen `PR00001` member_code), documents, otp_codes, orders
+- **Storage** — `member-docs/` private bucket, RLS = owner-only
+- **OTP** — custom via ThaiBulkSMS, hashed (sha256+pepper), TTL 5min, rate-limited 3/hour
+  - **`OTP_BYPASS=true`** in dev → skip SMS + accept any code
+- **Sessions** — `proxy.ts` middleware refreshes tokens; cookies set by `@supabase/ssr`
+- **Route guards** — `(auth)` redirects logged-in users; `(protected)` redirects guests + incomplete profiles
+- **NavBar** — auto-aware: shows login/register buttons OR user menu (avatar + dropdown) based on session
+
+### Pages live
+| Route | สถานะ |
+|---|---|
+| `/` (home) | ✅ UI complete |
+| `/login` | ✅ wired (signIn + Google/FB OAuth + LINE mock) |
+| `/register` | ✅ wired (Personal + Juristic 3-step + uploads) |
+| `/dashboard` | ✅ placeholder (shows profile + member_code + quick links) |
+| `/complete-profile` | ✅ placeholder (form to-be-built) |
+| `/orders` | ✅ demo (list + create form — pattern reference) |
+| `/auth/callback` | ✅ OAuth handler (creates profile if first-time) |
+| `/auth/signout` (POST) | ✅ |
+
+### Yet to do
+- ❌ OTP UI (UI hidden while `OTP_BYPASS=true`; build when bypass=false)
+- ❌ LINE Login channel + Supabase custom OIDC
+- ❌ `/complete-profile` actual form (only placeholder right now)
+- ❌ `/profile` settings page
+- ❌ Tax-ID lookup
 - ❌ Tests
 
 ## Architecture & Roadmap
 
-📐 **Blueprint อยู่ที่ [docs/architecture.md](docs/architecture.md)** — มี:
-- High-level architecture (Vercel + Supabase + 3rd-party services)
-- DB schema (ER diagram) + RLS policies
-- 6 auth flows (sign up personal/juristic, sign in, OAuth, sign out, session refresh) — sequence diagrams
-- OTP flow detail (3rd-party SMS, ไม่ใช้ Supabase phone auth)
-- Security model (3 Supabase clients, env vars, rate limiting)
-- Future systems pattern
-- 5-phase implementation roadmap
+📐 **Blueprint:** [docs/architecture.md](docs/architecture.md) — full diagrams, DB schema, auth flows, security model, 5-phase roadmap
 
-### ตัดสินใจแล้ว
+### Decisions (all locked)
 - Hosting: **Vercel + Supabase Cloud**
-- Phone OTP: **3rd-party SMS gateway** (custom logic, ไม่ใช้ Twilio ของ Supabase)
-- LINE Login: ใช้ผ่าน Supabase OIDC + LINE Official Account
-- Tax-ID lookup: **future** (manual ก่อน)
-- Implementation: ทำตาม **5 phases** เรียง 1→5
-
-### ที่ยังต้องตัดสินใจก่อน Phase 1
-- SMS gateway provider (ThaiBulkSMS / Twilio / 1moby ฯลฯ)
-- LINE Login channel มีไว้แล้วหรือยัง
-- member_code format (PC001 running หรือ random)
-- Email verification บังคับหรือ optional
-- Password policy ขั้นต่ำ
+- Phone OTP: **ThaiBulkSMS** (custom — bypass via `OTP_BYPASS=true`)
+- LINE Login: mocked UI; channel TBD
+- member_code: `PR00001` (running, auto-gen via Postgres trigger)
+- Email verification: optional (Supabase confirm-email OFF)
+- Password: min 6 / max 30, no complexity rules
 
 ## Working with this codebase
 
-- เพิ่ม section ใหม่ใน home: สร้าง [components/sections/](components/sections/) ใหม่ + import ใน [app/[locale]/page.tsx](app/[locale]/page.tsx)
-- เพิ่ม locale string: แก้ทั้ง [messages/th.json](messages/th.json) + [messages/en.json](messages/en.json) พร้อมกัน
-- เพิ่ม theme color: แก้ที่ `@theme inline` ใน [app/globals.css](app/globals.css)
-- ทำ feature ใหม่ที่ใช้ auth/db: ทำตาม pattern ใน [docs/architecture.md](docs/architecture.md) Section 9 (Future Systems Pattern)
+### Add a section to home
+- New component in [components/sections/](components/sections/)
+- Import in [app/[locale]/(public)/page.tsx](app/[locale]/(public)/page.tsx)
+
+### Add a new feature/system (pattern)
+1. SQL: add table + RLS in `supabase/migrations/NNNN_<name>.sql`
+2. Validator: Zod schema in `lib/validators/<name>.ts`
+3. Server Action: mutations in `actions/<name>.ts` (`"use server"`)
+4. Pages: under `app/[locale]/(protected)/<name>/` (auth-guarded)
+5. i18n: add keys in [messages/th.json](messages/th.json) + [messages/en.json](messages/en.json) namespace
+6. (optional) Realtime: subscribe via `supabase.channel(...)` in `"use client"` component
+
+→ See [actions/orders.ts](actions/orders.ts) + [app/[locale]/(protected)/orders/](app/[locale]/(protected)/orders/) as a working reference
+
+### Common edits
+- Locale string → both `messages/th.json` + `messages/en.json`
+- Theme color → `@theme inline` in [app/globals.css](app/globals.css)
+- Auth check on a page → `await requireAuth()` from `lib/auth/require-auth.ts`
+- Get current user → `await getCurrentUserWithProfile()` from `lib/auth/get-user.ts`
+- Mutate Supabase from Server Action → `await createClient()` from `lib/supabase/server.ts`
+- Bypass RLS (admin only) → `createAdminClient()` from `lib/supabase/admin.ts`

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useTransition, Fragment } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import {
@@ -21,12 +21,35 @@ import {
   CreditCard,
   Hash,
   Building2,
+  Loader2,
 } from "lucide-react";
-import { Link } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { FloatingTabs } from "@/components/sections/floating-tabs";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
+import {
+  registerPersonal,
+  registerJuristicStep1,
+  saveJuristicStep2,
+  uploadJuristicDoc,
+  completeJuristicRegistration,
+} from "@/actions/auth";
+
+const ERR: Record<string, string> = {
+  invalid_otp: "OTP ไม่ถูกต้องหรือหมดอายุ",
+  invalid_input: "ข้อมูลไม่ครบหรือไม่ถูกต้อง",
+  rate_limit: "ส่ง OTP เกิน 3 ครั้งใน 1 ชม. กรุณารอสักครู่",
+  sms_failed: "ส่ง SMS ไม่สำเร็จ ลองอีกครั้ง",
+  signup_failed: "สมัครไม่สำเร็จ — เบอร์นี้อาจสมัครไปแล้ว",
+  profile_failed: "บันทึกโปรไฟล์ไม่สำเร็จ",
+  signin_failed: "เข้าสู่ระบบหลังสมัครไม่สำเร็จ",
+  must_agree: "ต้องยอมรับข้อกำหนดก่อนสมัคร",
+  upload_failed: "อัปโหลดไฟล์ไม่สำเร็จ",
+  file_too_large: "ไฟล์ใหญ่เกิน 10 MB",
+  invalid_mime: "รับเฉพาะ PDF / JPG / PNG",
+  not_signed_in: "เซสชันหมดอายุ กรุณา login ใหม่",
+};
 
 const INPUT_BASE =
   "h-11 w-full rounded-[10px] border-[1.5px] border-border bg-white dark:bg-surface px-3.5 text-sm text-foreground placeholder:text-zinc-400 transition focus:border-primary-500 focus:outline-none focus:ring-[3px] focus:ring-primary-500/10";
@@ -154,6 +177,7 @@ export default function RegisterPage() {
 /* ──────────────────────────  PERSONAL  ────────────────────────── */
 function PersonalForm() {
   const t = useTranslations("register");
+  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -163,6 +187,8 @@ function PersonalForm() {
   const [howKnow, setHowKnow] = useState("");
   const [email, setEmail] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function toggleService(id: string) {
     setServices((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -170,7 +196,26 @@ function PersonalForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    console.log({ firstName, lastName, phone, password, services, howKnow, email, agreed });
+    setError(null);
+    startTransition(async () => {
+      const res = await registerPersonal({
+        firstName,
+        lastName,
+        phone,
+        password,
+        services: services as ("import" | "export" | "clear" | "customs" | "order" | "payment")[],
+        howKnow: howKnow || null,
+        email: email || "",
+        otp: "bypass",
+        agreed,
+      });
+      if (res.ok) {
+        router.replace("/");
+        router.refresh();
+      } else {
+        setError(ERR[res.error] ?? res.error);
+      }
+    });
   }
 
   return (
@@ -253,8 +298,15 @@ function PersonalForm() {
       {/* Agree */}
       <AgreeRow checked={agreed} onChange={setAgreed} />
 
+      {/* Error */}
+      {error && (
+        <p className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
       {/* Submit */}
-      <SubmitButton>
+      <SubmitButton pending={pending}>
         <User className="h-4 w-4" /> {t("submit")}
       </SubmitButton>
     </form>
@@ -288,21 +340,81 @@ function JuristicForm() {
   const [docID, setDocID] = useState<File | null>(null);
   const [agreed, setAgreed] = useState(false);
 
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
   function toggleService(id: string) {
     setServices((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function nextFromStep1() {
+    setError(null);
+    startTransition(async () => {
+      const res = await registerJuristicStep1({
+        phone,
+        password,
+        services: services as ("import" | "export" | "clear" | "customs" | "order" | "payment")[],
+        howKnow: howKnow || null,
+        otp: "bypass",
+      });
+      if (res.ok) setStep(2);
+      else setError(ERR[res.error] ?? res.error);
+    });
+  }
+
+  function nextFromStep2() {
+    setError(null);
+    startTransition(async () => {
+      const res = await saveJuristicStep2({
+        taxId,
+        companyName,
+        addressLine,
+        subdistrict: subdistrict || null,
+        district: district || null,
+        province: province || null,
+        postcode: postcode || "",
+      });
+      if (res.ok) setStep(3);
+      else setError(ERR[res.error] ?? res.error);
+    });
+  }
+
+  async function uploadOne(file: File | null, docType: "company_affidavit" | "vat" | "national_id") {
+    if (!file) return { ok: true as const };
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("docType", docType);
+    return uploadJuristicDoc(fd);
+  }
+
+  function handleFinalSubmit(e: React.FormEvent) {
     e.preventDefault();
-    console.log({
-      phone, password, services, howKnow,
-      taxId, companyName, addressLine, subdistrict, district, province, postcode,
-      docCompany, docVAT, docID, agreed,
+    setError(null);
+    if (!agreed) return setError(ERR.must_agree);
+    if (!docCompany) return setError("กรุณาแนบเอกสารรับรองบริษัท");
+    if (!docID) return setError("กรุณาแนบบัตรประชาชนกรรมการ");
+
+    startTransition(async () => {
+      const r1 = await uploadOne(docCompany, "company_affidavit");
+      if (!r1.ok) return setError(ERR[r1.error] ?? r1.error);
+      const r2 = await uploadOne(docVAT, "vat");
+      if (!r2.ok) return setError(ERR[r2.error] ?? r2.error);
+      const r3 = await uploadOne(docID, "national_id");
+      if (!r3.ok) return setError(ERR[r3.error] ?? r3.error);
+
+      const done = await completeJuristicRegistration();
+      if (done.ok) {
+        router.replace("/");
+        router.refresh();
+      } else {
+        setError(ERR[done.error] ?? done.error);
+      }
     });
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleFinalSubmit}>
       {/* Steps indicator */}
       <StepIndicator step={step} />
 
@@ -342,7 +454,15 @@ function JuristicForm() {
             <SelectField value={howKnow} onChange={setHowKnow} placeholder={t("howKnowPh")} />
           </Field>
 
-          <NextButton onClick={() => setStep(2)}>{t("next")}</NextButton>
+          {error && (
+            <p className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+
+          <NextButton onClick={nextFromStep1} pending={pending}>
+            {t("next")}
+          </NextButton>
         </>
       )}
 
@@ -427,7 +547,13 @@ function JuristicForm() {
             </Field>
           </div>
 
-          <NavButtons onBack={() => setStep(1)} onNext={() => setStep(3)} />
+          {error && (
+            <p className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+
+          <NavButtons onBack={() => setStep(1)} onNext={nextFromStep2} pending={pending} />
         </>
       )}
 
@@ -463,9 +589,15 @@ function JuristicForm() {
 
           <AgreeRow checked={agreed} onChange={setAgreed} />
 
+          {error && (
+            <p className="mb-3 rounded-lg bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+
           <div className="mt-1 flex gap-2.5">
             <BackButton onClick={() => setStep(2)}>{t("back")}</BackButton>
-            <SubmitButton>
+            <SubmitButton pending={pending}>
               <Building2 className="h-4 w-4" /> {t("submit")}
             </SubmitButton>
           </div>
@@ -674,12 +806,20 @@ function AgreeRow({
   );
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
+function SubmitButton({
+  children,
+  pending,
+}: {
+  children: React.ReactNode;
+  pending?: boolean;
+}) {
   return (
     <button
       type="submit"
-      className="flex h-[46px] flex-1 w-full items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary-600 to-primary-700 text-[15px] font-bold text-white transition hover:opacity-90 active:scale-[0.985]"
+      disabled={pending}
+      className="flex h-[46px] flex-1 w-full items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary-600 to-primary-700 text-[15px] font-bold text-white transition hover:opacity-90 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:opacity-60"
     >
+      {pending && <Loader2 className="h-4 w-4 animate-spin" />}
       {children}
     </button>
   );
@@ -688,16 +828,20 @@ function SubmitButton({ children }: { children: React.ReactNode }) {
 function NextButton({
   onClick,
   children,
+  pending,
 }: {
   onClick: () => void;
   children: React.ReactNode;
+  pending?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex h-[46px] w-full items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary-600 to-primary-700 text-[15px] font-bold text-white transition hover:opacity-90 active:scale-[0.985]"
+      disabled={pending}
+      className="flex h-[46px] w-full items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-r from-primary-600 to-primary-700 text-[15px] font-bold text-white transition hover:opacity-90 active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:opacity-60"
     >
+      {pending && <Loader2 className="h-4 w-4 animate-spin" />}
       {children}
     </button>
   );
@@ -721,12 +865,20 @@ function BackButton({
   );
 }
 
-function NavButtons({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+function NavButtons({
+  onBack,
+  onNext,
+  pending,
+}: {
+  onBack: () => void;
+  onNext: () => void;
+  pending?: boolean;
+}) {
   const t = useTranslations("register");
   return (
     <div className="mt-1 flex gap-2.5">
       <BackButton onClick={onBack}>{t("back")}</BackButton>
-      <NextButton onClick={onNext}>{t("next")}</NextButton>
+      <NextButton onClick={onNext} pending={pending}>{t("next")}</NextButton>
     </div>
   );
 }

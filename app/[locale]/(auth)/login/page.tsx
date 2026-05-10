@@ -1,28 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Eye, EyeOff } from "lucide-react";
-import { Link } from "@/i18n/navigation";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { FloatingTabs } from "@/components/sections/floating-tabs";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
+import { signIn, signInWithOAuth } from "@/actions/auth";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  invalid_credentials: "อีเมล/เบอร์/รหัสไม่ถูกต้อง",
+  user_not_found: "ไม่พบผู้ใช้นี้ในระบบ",
+  oauth_failed: "เข้าสู่ระบบผ่านโซเชียลล้มเหลว ลองใหม่อีกครั้ง",
+};
 
 const INPUT_BASE =
   "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
 
 export default function LoginPage() {
   const t = useTranslations("login");
+  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: wire up to backend auth
-    console.log({ identifier, password });
+    setError(null);
+    startTransition(async () => {
+      const res = await signIn({ identifier, password });
+      if (res.ok) {
+        router.replace("/");
+        router.refresh();
+      } else {
+        setError(ERROR_MESSAGES[res.error] ?? res.error);
+      }
+    });
+  }
+
+  function handleOAuth(provider: "google" | "facebook") {
+    setError(null);
+    startTransition(async () => {
+      const res = await signInWithOAuth(provider);
+      if (res.ok && res.data) {
+        window.location.href = res.data.url;
+      } else {
+        setError(ERROR_MESSAGES.oauth_failed);
+      }
+    });
+  }
+
+  function handleLineLogin() {
+    setError("LINE Login กำลังจะมาเร็วๆ นี้");
   }
 
   return (
@@ -109,11 +143,20 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Error */}
+            {error && (
+              <p className="rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-2.5 text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
-              className="w-full rounded-2xl bg-primary-600 px-4 py-[18px] text-[17px] font-semibold text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_12px_25px_rgba(179,0,0,0.35)]"
+              disabled={pending}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[18px] text-[17px] font-semibold text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_12px_25px_rgba(179,0,0,0.35)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
             >
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
               {t("submit")}
             </button>
           </form>
@@ -134,20 +177,26 @@ export default function LoginPage() {
           <div className="grid grid-cols-3 gap-2.5">
             <button
               type="button"
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500"
+              onClick={() => handleOAuth("google")}
+              disabled={pending}
+              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <GoogleIcon className="h-[18px] w-[18px]" /> Google
             </button>
             <button
               type="button"
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
+              onClick={handleLineLogin}
+              disabled={pending}
+              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ color: "#00B900" }}
             >
               <LineIcon className="h-[18px] w-[18px]" /> LINE
             </button>
             <button
               type="button"
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500"
+              onClick={() => handleOAuth("facebook")}
+              disabled={pending}
+              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ color: "#1877F2" }}
             >
               <FacebookIcon className="h-[18px] w-[18px]" /> Facebook

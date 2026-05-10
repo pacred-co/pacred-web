@@ -29,7 +29,6 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { ServiceCarousel } from "@/components/ui/service-carousel";
-import { ServiceCarouselDouble } from "@/components/ui/service-carousel-double";
 
 export function Service() {
   const t = useTranslations("service");

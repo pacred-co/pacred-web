@@ -1,21 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
+import { ChevronDown, LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+
+type ProfileLite = {
+  member_code: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  status: string | null;
+};
 
 export function NavBar() {
   const t = useTranslations("nav");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<ProfileLite | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function loadProfile(u: User) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("member_code, first_name, last_name, email, status")
+        .eq("id", u.id)
+        .maybeSingle<ProfileLite>();
+      setProfile(data ?? null);
+    }
+
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setAuthReady(true);
+      if (data.user) loadProfile(data.user);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      if (u) loadProfile(u);
+      else setProfile(null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const navLinks = [
     { href: "#quick-service", label: t("quickService") },
     { href: "#import", label: t("import") },
-    // { href: "#export", label: t("export") },
     { href: "#order", label: t("order") },
     { href: "#how-to-use", label: t("howToUse") },
     { href: "#pricing", label: t("pricing") },
@@ -53,12 +93,18 @@ export function NavBar() {
 
         {/* Right side: auth + controls */}
         <div className="hidden xl:flex items-center gap-2 shrink-0">
-          <Link href="/login">
-            <Button variant="ghost-primary" size="sm">{t("login")}</Button>
-          </Link>
-          <Link href="/register">
-            <Button variant="white" size="sm">{t("register")}</Button>
-          </Link>
+          {authReady && user ? (
+            <UserMenu user={user} profile={profile} />
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="ghost-primary" size="sm">{t("login")}</Button>
+              </Link>
+              <Link href="/register">
+                <Button variant="white" size="sm">{t("register")}</Button>
+              </Link>
+            </>
+          )}
           <LocaleSwitcher variant="on-primary" />
           <ThemeToggle variant="on-primary" />
         </div>
@@ -102,17 +148,161 @@ export function NavBar() {
               </a>
             ))}
             <div className="my-2 border-t border-white/20" />
-            <div className="flex gap-2 px-1 pb-1">
-              <Link href="/login" className="flex-1" onClick={() => setMenuOpen(false)}>
-                <Button variant="ghost-primary" fullWidth>{t("login")}</Button>
-              </Link>
-              <Link href="/register" className="flex-1" onClick={() => setMenuOpen(false)}>
-                <Button variant="white" fullWidth>{t("register")}</Button>
-              </Link>
-            </div>
+            {authReady && user ? (
+              <MobileUserMenu profile={profile} onClose={() => setMenuOpen(false)} />
+            ) : (
+              <div className="flex gap-2 px-1 pb-1">
+                <Link href="/login" className="flex-1" onClick={() => setMenuOpen(false)}>
+                  <Button variant="ghost-primary" fullWidth>{t("login")}</Button>
+                </Link>
+                <Link href="/register" className="flex-1" onClick={() => setMenuOpen(false)}>
+                  <Button variant="white" fullWidth>{t("register")}</Button>
+                </Link>
+              </div>
+            )}
           </nav>
         </div>
       )}
     </header>
+  );
+}
+
+/* ─────────── User Menu (Desktop) ─────────── */
+function UserMenu({
+  user,
+  profile,
+}: {
+  user: User;
+  profile: ProfileLite | null;
+}) {
+  const t = useTranslations("nav");
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const displayName =
+    profile?.first_name || profile?.last_name
+      ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim()
+      : (profile?.email ?? user.email ?? user.phone ?? "Member");
+  const initial = (displayName?.[0] ?? "U").toUpperCase();
+  const isIncomplete = profile?.status === "incomplete";
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-full border border-white/30 bg-white/10 pl-1 pr-2.5 py-1 text-white transition hover:bg-white/20"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-sm font-bold text-primary-600">
+          {initial}
+        </span>
+        <span className="text-sm font-medium">
+          {profile?.member_code ?? "..."}
+        </span>
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-60 overflow-hidden rounded-xl border border-border bg-white dark:bg-surface shadow-xl">
+          <div className="border-b border-border px-4 py-3">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {displayName}
+            </p>
+            {profile?.member_code && (
+              <p className="mt-0.5 font-mono text-xs text-primary-600">
+                {profile.member_code}
+              </p>
+            )}
+          </div>
+
+          {isIncomplete && (
+            <Link
+              href="/complete-profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 border-b border-border bg-yellow-50 dark:bg-yellow-900/20 px-4 py-2.5 text-sm font-medium text-yellow-800 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/30"
+            >
+              <UserIcon className="h-4 w-4" />
+              {t("completeProfile")}
+            </Link>
+          )}
+
+          <Link
+            href="/dashboard"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-surface dark:hover:bg-surface-alt"
+          >
+            <LayoutDashboard className="h-4 w-4 text-muted" />
+            {t("dashboard")}
+          </Link>
+
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-sm text-foreground hover:bg-surface dark:hover:bg-surface-alt"
+            >
+              <LogOut className="h-4 w-4 text-muted" />
+              {t("logout")}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────── User Menu (Mobile dropdown) ─────────── */
+function MobileUserMenu({
+  profile,
+  onClose,
+}: {
+  profile: ProfileLite | null;
+  onClose: () => void;
+}) {
+  const t = useTranslations("nav");
+  return (
+    <div className="px-1 pb-1">
+      {profile?.member_code && (
+        <p className="px-3 pb-2 font-mono text-xs text-white/70">
+          {profile.member_code}
+        </p>
+      )}
+      <Link
+        href="/dashboard"
+        onClick={onClose}
+        className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10"
+      >
+        <LayoutDashboard className="h-4 w-4" />
+        {t("dashboard")}
+      </Link>
+      {profile?.status === "incomplete" && (
+        <Link
+          href="/complete-profile"
+          onClick={onClose}
+          className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10"
+        >
+          <UserIcon className="h-4 w-4" />
+          {t("completeProfile")}
+        </Link>
+      )}
+      <form action="/auth/signout" method="post">
+        <button
+          type="submit"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10"
+        >
+          <LogOut className="h-4 w-4" />
+          {t("logout")}
+        </button>
+      </form>
+    </div>
   );
 }
