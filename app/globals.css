@@ -53,3 +53,11 @@ body {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+
+.protected-content {
+  padding-left: var(--sidebar-w, 64px);
+  transition: padding-left 200ms;
+}
+@media (max-width: 1023px) {
+  .protected-content { padding-left: 0; }
+}

@@ -1,4 +1,6 @@
 import { requireAuth } from "@/lib/auth/require-auth";
+import { NavBar } from "@/components/sections/navbar";
+import { ProtectedSidebar } from "@/components/sections/protected-sidebar";
 
 /**
  * Layout for routes under (protected).
@@ -12,5 +14,11 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   await requireAuth();
-  return <>{children}</>;
+  return (
+    <>
+      <NavBar />
+      <div className="protected-content">{children}</div>
+      <ProtectedSidebar />
+    </>
+  );
 }

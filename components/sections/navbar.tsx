@@ -136,7 +136,7 @@ export function NavBar() {
       {/* Mobile dropdown */}
       {menuOpen && (
         <div className="xl:hidden border-t border-white/20 bg-[#991b1b]">
-          <nav className="mx-auto max-w-7xl flex flex-col px-4 py-3 gap-0.5">
+          <nav className="flex w-full flex-col px-4 py-3 gap-0.5">
             {navLinks.map((link) => (
               <a
                 key={link.href}

@@ -1,6 +1,6 @@
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
-import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
+import { SearchBar } from "@/components/sections/search-bar";
 import { Link } from "@/i18n/navigation";
 import { Package } from "lucide-react";
 
@@ -16,7 +16,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <NavBar />
+      <SearchBar />
       <main className="mx-auto w-full max-w-[1140px] px-4 py-12">
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-8 shadow-sm">
           <p className="text-sm font-semibold tracking-widest text-primary-500">

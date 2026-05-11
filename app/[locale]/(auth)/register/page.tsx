@@ -26,7 +26,6 @@ import {
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
-import { FloatingTabs } from "@/components/sections/floating-tabs";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 import {
   registerPersonal,
@@ -169,7 +168,6 @@ export default function RegisterPage() {
         </div>
       </main>
       <Footer />
-      <FloatingTabs />
     </>
   );
 }

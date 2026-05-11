@@ -1,5 +1,4 @@
 import { listOrders } from "@/actions/orders";
-import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { Plus } from "lucide-react";
@@ -26,7 +25,6 @@ export default async function OrdersPage() {
 
   return (
     <>
-      <NavBar />
       <main className="mx-auto w-full max-w-[1140px] px-4 py-12">
         <div className="mb-6 flex items-center justify-between">
           <div>
