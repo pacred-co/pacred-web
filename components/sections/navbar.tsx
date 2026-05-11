@@ -214,7 +214,11 @@ function UserMenu({
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-60 overflow-hidden rounded-xl border border-border bg-white dark:bg-surface shadow-xl">
-          <div className="border-b border-border px-4 py-3">
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="block border-b border-border px-4 py-3 transition hover:bg-surface dark:hover:bg-surface-alt"
+          >
             <p className="truncate text-sm font-semibold text-foreground">
               {displayName}
             </p>
@@ -223,7 +227,7 @@ function UserMenu({
                 {profile.member_code}
               </p>
             )}
-          </div>
+          </Link>
 
           {isIncomplete && (
             <Link
