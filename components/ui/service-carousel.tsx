@@ -84,8 +84,16 @@ export function ServiceCarousel({
                 style={{ width: cardWidth, height: cardHeight }}
                 className="group relative flex shrink-0 flex-col justify-end overflow-hidden rounded-xl bg-primary-600 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
               >
+                {blogItem.imageSrc && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={blogItem.imageSrc}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
                 {/* Bottom title overlay with subtle gradient for readability */}
-                <div className="bg-gradient-to-t from-black/50 via-black/20 to-transparent p-4 pt-12">
+                <div className="relative z-10 bg-gradient-to-t from-black/60 via-black/30 to-transparent p-4 pt-12">
                   <h3 className="line-clamp-3 text-sm font-semibold leading-snug text-white">
                     {blogItem.title}
                   </h3>

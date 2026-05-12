@@ -72,7 +72,7 @@ export function Service() {
   ];
 
   return (
-    <section id="service" className="bg-background py-10">
+    <section id="service" className="bg-background py-8">
       <div className="mx-auto w-full max-w-[1140px] px-[10px] flex flex-col gap-4">
 
         {/* Container 1 — Section heading */}

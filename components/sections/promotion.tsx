@@ -1,53 +1,128 @@
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { PromoCarousel } from "@/components/ui/promo-carousel";
+
+const benefits = [
+  {
+    title: "ผู้ใช้ใหม่รับส่วนลดเพิ่ม",
+    description: "ลูกค้าใหม่รับสิทธิ์ทันที",
+    highlight: "",
+    image: "/images/hero-section/icon-draf/people.png",
+    href: "https://line.me/ti/p/@pacred",
+    first: true,
+  },
+  {
+    title: "ล่ามปิดดีลโรงงาน",
+    description: "ล่ามจีนฝากสั่งซื้อปิดดีลโรงงาน",
+    highlight: "ฟรี",
+    image: "/images/hero-section/icon-draf/pcs-sales.png",
+    href: "https://line.me/ti/p/@pacred",
+    first: false,
+  },
+  {
+    title: "เรทคุ้มเบากระเป๋า",
+    description: "ฝากโอนหยวนชำระค่าสินค้า",
+    highlight: "ถูก",
+    image: "/images/hero-section/icon-draf/ongkorn.png",
+    href: "https://line.me/ti/p/@pacred",
+    first: false,
+  },
+  {
+    title: "บาทขนส่งเหมาๆ",
+    description: "ขนส่งทั่วกทม.ปริมณฑล 100",
+    highlight: "100",
+    image: "/images/hero-section/icon-draf/caricon.png",
+    href: "https://line.me/ti/p/@pacred",
+    first: false,
+  },
+];
 
 export function Promotion() {
   const t = useTranslations("promotion");
 
   return (
-    <section id="promotion" className="bg-background py-10">
+    <section id="promotion" className="bg-background pb-6 pt-2">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Container 1 — Section heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary-500">
+          <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
+            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             PROMOTION
-          </p>
-          <h2 className="mt-1 text-2xl font-bold">
+          </div>
+          <h2 className="text-[38px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
             {t("title")}
             <span className="text-primary-600">{t("titleHighlight")}</span>
           </h2>
         </div>
 
-        {/* Container 2 — 4 coupon cards */}
-        <div className="mx-auto mt-6 w-full max-w-[1120px]">
-          <div className="flex gap-5">
-            {[
-              { discount: "20%", off: "OFF", title: t("coupon1Title"), sub: t("coupon1Sub") },
-              { discount: "฿100", off: "OFF", title: t("coupon2Title"), sub: t("coupon2Sub") },
-              { discount: "FREE", off: "SHIP", title: t("coupon3Title"), sub: t("coupon3Sub") },
-              { discount: "x2", off: "PTS", title: t("coupon4Title"), sub: t("coupon4Sub") },
-            ].map((c, i) => (
+        {/* Container 2 — 4 ticket-style benefit cards */}
+        <div className="mx-auto mt-[18px] w-full max-w-[1120px]">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {benefits.map((b, i) => (
               <div
                 key={i}
-                className="flex w-[260px] h-[70px] shrink-0 overflow-hidden rounded-xl border border-border bg-white dark:bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+                className={[
+                  "group relative flex items-center min-h-[70px] rounded-xl border overflow-hidden px-3 py-2 transition-all duration-300 hover:-translate-y-[3px]",
+                  b.first
+                    ? "bg-primary-600 border-primary-600"
+                    : "bg-white dark:bg-surface border-border hover:border-red-300 hover:shadow-[0_8px_20px_rgba(220,38,38,0.10)]",
+                ].join(" ")}
               >
-                <div className="flex w-[72px] shrink-0 flex-col items-center justify-center bg-primary-600 text-white">
-                  <span className="text-base font-bold leading-none">{c.discount}</span>
-                  <span className="mt-1 text-[10px] font-semibold tracking-wider">{c.off}</span>
-                </div>
-                <div className="flex flex-1 items-center gap-2 border-l border-dashed border-border px-3">
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-semibold text-foreground">{c.title}</span>
-                    <span className="truncate text-xs text-muted">{c.sub}</span>
+                {/* Notch circles (ticket tear effect) */}
+                <span className="absolute top-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5]" />
+                <span className="absolute bottom-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5]" />
+
+                {/* Dashed divider */}
+                <span className={`absolute right-[80px] top-2 bottom-2 z-[2] border-l border-dashed ${b.first ? "border-white/30" : "border-border"}`} />
+
+                {/* Inner */}
+                <div className="flex items-center w-full gap-2.5 z-[3]">
+
+                  {/* Icon box */}
+                  <div className={`w-[38px] h-[38px] rounded-lg flex items-center justify-center shrink-0 p-1 ${b.first ? "bg-white/20" : "bg-red-50 dark:bg-red-950/20"}`}>
+                    <Image
+                      src={b.image}
+                      alt={b.title}
+                      width={30}
+                      height={30}
+                      className={`object-contain w-full h-full ${b.first ? "brightness-0 invert" : ""}`}
+                    />
                   </div>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-primary-700"
-                  >
-                    {t("couponClaim")}
-                  </button>
+
+                  {/* Content */}
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    <div className="flex items-baseline gap-1">
+                      {b.highlight && (
+                        <span className={`text-[18px] font-black leading-none shrink-0 ${b.first ? "text-white" : "text-primary-600"}`}>
+                          {b.highlight}
+                        </span>
+                      )}
+                      <h3 className={`text-[13px] font-bold truncate ${b.first ? "text-white" : "text-[#111827] dark:text-white"}`}>
+                        {b.title}
+                      </h3>
+                    </div>
+                    <p className={`text-[10px] leading-[1.2] mt-0.5 ${b.first ? "text-white/80" : "text-muted"}`}>
+                      {b.description}
+                    </p>
+                  </div>
+
+                  {/* Action */}
+                  <div className="w-[65px] shrink-0 text-right">
+                    <Link
+                      href="/register"
+                      className={[
+                        "inline-block text-[10px] font-bold px-1.5 py-1 rounded transition-colors",
+                        b.first
+                          ? "bg-white text-primary-600"
+                          : "bg-red-50 text-primary-600 group-hover:bg-primary-600 group-hover:text-white",
+                      ].join(" ")}
+                    >
+                      รับสิทธิ์
+                    </Link>
+                  </div>
+
                 </div>
               </div>
             ))}
@@ -57,39 +132,6 @@ export function Promotion() {
         {/* Container 3 — Carousel */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <PromoCarousel />
-        </div>
-
-        {/* Container 4 — Section heading */}
-        <div className="mx-auto mt-8 w-full max-w-[1120px]">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary-500">
-            Our Services
-          </p>
-          <h2 className="mt-1 text-2xl font-bold">
-            ครบจบในที่เดียวกับ Pacred
-          </h2>
-        </div>
-
-        {/* Container 5 — 5 service link cards */}
-        <div className="mx-auto mt-6 w-full max-w-[1120px]">
-          <div className="flex gap-4">
-            {[
-              { label: t("link1"), href: "#" },
-              { label: t("link2"), href: "#" },
-              { label: t("link3"), href: "#" },
-              { label: t("link4"), href: "#" },
-              { label: t("link5"), href: "#" },
-            ].map((item, i) => (
-              <Link
-                key={i}
-                href={item.href}
-                className="group flex flex-1 h-[90px] items-center justify-center rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-3 text-center transition-all duration-200 hover:-translate-y-1 hover:border-primary-500 hover:shadow-lg"
-              >
-                <span className="text-sm font-semibold text-foreground group-hover:text-primary-600">
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </div>
         </div>
 
       </div>

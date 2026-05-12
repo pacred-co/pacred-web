@@ -1,8 +1,11 @@
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
-import { HeroSection } from "@/components/sections/hero-section";
+import { BookingCalculator } from "@/components/booking/BookingCalculator";
+import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
-import { Service } from "@/components/sections/service";
+import { OurService } from "@/components/sections/our-service";
+import { ProductCategories } from "@/components/sections/product-categories";
+import { PurchaseBanner } from "@/components/sections/purchase-banner";
 import { Sales } from "@/components/sections/sales";
 import { Blog } from "@/components/sections/blog";
 import { Partner } from "@/components/sections/partner";
@@ -14,9 +17,12 @@ export default function Home() {
       <NavBar />
       <SearchBar />
       <main>
-        <HeroSection />
+        <BookingCalculator />
+        <StatsBar />
         <Promotion />
-        <Service />
+        <OurService />
+        <ProductCategories />
+        <PurchaseBanner />
         <Sales />
         <Blog />
         <Partner />

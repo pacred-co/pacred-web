@@ -1,11 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import type { ElementType } from "react";
 import { useTranslations } from "next-intl";
+import { Anchor, PlaneTakeoff, ClipboardList, ShoppingCart, Banknote } from "lucide-react";
+
+function TruckMoving({ size = 24, className }: { size?: number; className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" width={size} height={size} fill="currentColor" className={className}>
+      <path d="M64 32C28.7 32 0 60.7 0 96L0 304l0 80 0 16c0 44.2 35.8 80 80 80c26.2 0 49.4-12.6 64-32c14.6 19.4 37.8 32 64 32c44.2 0 80-35.8 80-80c0-5.5-.6-10.8-1.6-16L416 384l33.6 0c-1 5.2-1.6 10.5-1.6 16c0 44.2 35.8 80 80 80s80-35.8 80-80c0-5.5-.6-10.8-1.6-16l1.6 0c17.7 0 32-14.3 32-32l0-64 0-16 0-10.3c0-9.2-3.2-18.2-9-25.3l-58.8-71.8c-10.6-13-26.5-20.5-43.3-20.5L480 144l0-48c0-35.3-28.7-64-64-64L64 32zM585 256l-105 0 0-64 48.8 0c2.4 0 4.7 1.1 6.2 2.9L585 256zM528 368a32 32 0 1 1 0 64 32 32 0 1 1 0-64zM176 400a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM80 368a32 32 0 1 1 0 64 32 32 0 1 1 0-64z"/>
+    </svg>
+  );
+}
 import { Button } from "@/components/ui/button";
 
 type FieldType = { label: string; placeholder: string; type?: "text" | "select"; options?: string[] };
-type TabConfig = { title: string; sub: string; fields: FieldType[]; submitLabel: string };
+type TabConfig = { title: string; sub: string; icon: ElementType; fields: FieldType[]; submitLabel: string };
 
 function FormField({ field }: { field: FieldType }) {
   const base =
@@ -35,7 +45,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
 
   const tabs: TabConfig[] = [
     {
-      title: t("tab1Title"), sub: t("tab1Sub"),
+      title: t("tab1Title"), sub: t("tab1Sub"), icon: Anchor,
       submitLabel: "ขอใบเสนอราคา",
       fields: [
         { label: "ประเภท", placeholder: "เลือกประเภท", type: "select", options: ["LCL", "FCL"] },
@@ -45,7 +55,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
       ],
     },
     {
-      title: t("tab2Title"), sub: t("tab2Sub"),
+      title: t("tab2Title"), sub: t("tab2Sub"), icon: TruckMoving,
       submitLabel: "ขอใบเสนอราคา",
       fields: [
         { label: "ต้นทาง", placeholder: "เช่น กวางโจว, จีน" },
@@ -55,7 +65,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
       ],
     },
     {
-      title: t("tab3Title"), sub: t("tab3Sub"),
+      title: t("tab3Title"), sub: t("tab3Sub"), icon: PlaneTakeoff,
       submitLabel: "ขอใบเสนอราคา",
       fields: [
         { label: "ประเภท", placeholder: "เลือกประเภท", type: "select", options: ["นำเข้า", "ส่งออก"] },
@@ -65,7 +75,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
       ],
     },
     {
-      title: t("tab4Title"), sub: t("tab4Sub"),
+      title: t("tab4Title"), sub: t("tab4Sub"), icon: ClipboardList,
       submitLabel: "ติดต่อเจ้าหน้าที่",
       fields: [
         { label: "ด่านศุลกากร", placeholder: "เช่น ท่าเรือแหลมฉบัง" },
@@ -75,7 +85,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
       ],
     },
     {
-      title: t("tab5Title"), sub: t("tab5Sub"),
+      title: t("tab5Title"), sub: t("tab5Sub"), icon: ShoppingCart,
       submitLabel: "ส่งรายการสั่งซื้อ",
       fields: [
         { label: "แพลตฟอร์ม", placeholder: "เลือกแพลตฟอร์ม", type: "select", options: ["1688", "Taobao", "Tmall", "Alibaba"] },
@@ -85,7 +95,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
       ],
     },
     {
-      title: t("tab6Title"), sub: t("tab6Sub"),
+      title: t("tab6Title"), sub: t("tab6Sub"), icon: Banknote,
       submitLabel: "ขอใบเสนอราคา",
       fields: [
         { label: "สกุลเงิน", placeholder: "เลือกสกุลเงิน", type: "select", options: ["CNY (หยวน)", "USD (ดอลลาร์)", "EUR (ยูโร)", "JPY (เยน)"] },
@@ -113,18 +123,24 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
             <button
               key={tab.title}
               onClick={() => handleTabClick(i)}
-              className={`group flex flex-1 min-w-0 flex-col items-center gap-0.5 px-4 py-3 text-center transition-colors border-b-2 ${
+              className={`group flex flex-1 min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors border-b-2 ${
                 active === i
                   ? "border-primary-500 bg-primary-50 dark:bg-primary-950"
                   : "border-transparent hover:bg-surface"
               }`}
             >
-              <span className={`text-sm font-semibold whitespace-nowrap transition-colors ${active === i ? "text-primary-500" : "text-foreground"}`}>
-                {tab.title}
-              </span>
-              <span className={`text-xs whitespace-nowrap transition-colors ${active === i ? "text-primary-400" : "text-muted"}`}>
-                {tab.sub}
-              </span>
+              <tab.icon
+                size={24}
+                className={`shrink-0 transition-colors ${active === i ? "text-primary-500" : "text-muted"}`}
+              />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className={`text-sm font-semibold whitespace-nowrap transition-colors ${active === i ? "text-primary-500" : "text-foreground"}`}>
+                  {tab.title}
+                </span>
+                <span className={`text-xs whitespace-nowrap transition-colors ${active === i ? "text-primary-400" : "text-muted"}`}>
+                  {tab.sub}
+                </span>
+              </div>
             </button>
           ))}
         </div>

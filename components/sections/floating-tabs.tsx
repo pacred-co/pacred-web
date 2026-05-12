@@ -1,25 +1,44 @@
+"use client";
+
+import { useState } from "react";
 import { LineIcon } from "@/components/icons/social-icons";
 
+const floatingTabs = [
+  { label: "หน้าแรก",    icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
+  { label: "บริการ",     icon: "/images/home/iconfloating/pcs-shop.png",         href: "#services" },
+  { label: "โปรโมชั่น", icon: "/images/home/iconfloating/ranka.png",             href: "#promotions" },
+  { label: "บทความ",    icon: "/images/home/iconfloating/checklistred.png",      href: "#blog" },
+  { label: "พาร์ทเนอร์",icon: "/images/home/iconfloating/people.png",            href: "#partner" },
+  { label: "ติดต่อ",    icon: "/images/home/iconfloating/pcs-call-center.png",   href: "#contact" },
+];
+
 export function FloatingTabs() {
+  const [active, setActive] = useState<number | null>(null);
+
   return (
     <>
       {/* Vertical floating tabs — right center */}
-      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-50 flex flex-col">
-        {[
-          { label: "หน้าแรก" },
-          { label: "บริการ" },
-          { label: "โปรโมชั่น" },
-          { label: "บทความ" },
-          { label: "พาร์ทเนอร์" },
-          { label: "ติดต่อ" },
-        ].map((item, i) => (
-          <button
+      <div className="fixed right-0 top-1/2 -translate-y-1/2 z-50 flex flex-col shadow-xl">
+        {floatingTabs.map((item, i) => (
+          <a
             key={i}
-            className="w-[90px] h-[90px] bg-white dark:bg-surface border border-border flex items-center justify-center text-[11px] font-medium text-muted hover:bg-primary-500 hover:text-white hover:border-primary-500 transition-colors first:rounded-t-xl last:rounded-b-xl"
-            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+            href={item.href}
+            onClick={() => setActive(i)}
+            className="group w-[64px] xl:w-[72px] py-3 bg-white dark:bg-surface border border-border flex flex-col items-center justify-center gap-1.5 text-[10px] font-medium text-muted hover:text-foreground transition-colors first:rounded-tl-xl last:rounded-bl-xl"
           >
-            {item.label}
-          </button>
+            {item.icon && (
+              <img
+                src={item.icon}
+                alt={item.label}
+                className={`w-7 h-7 object-contain transition-all duration-300 ${
+                  active === i
+                    ? "grayscale-0 brightness-100 opacity-100"
+                    : "grayscale brightness-75 opacity-60 group-hover:grayscale-0 group-hover:brightness-100 group-hover:opacity-100"
+                }`}
+              />
+            )}
+            <span className="text-center leading-tight">{item.label}</span>
+          </a>
         ))}
       </div>
 
