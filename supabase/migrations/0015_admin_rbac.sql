@@ -30,6 +30,23 @@ create index if not exists admins_role_idx on public.admins(role) where is_activ
 -- SECURITY DEFINER so RLS on `admins` can't recurse when policies on
 -- other tables call it. search_path locked to public so it can't be
 -- subverted by a session-level setting.
+--
+-- Drop any pre-existing is_admin variants first (different arg signatures
+-- would otherwise conflict at call sites like `is_admin()` which would
+-- be ambiguous between is_admin() and is_admin(text[] default null)).
+do $$
+declare r record;
+begin
+  for r in
+    select oid::regprocedure as sig
+      from pg_proc
+     where pronamespace = 'public'::regnamespace
+       and proname = 'is_admin'
+  loop
+    execute format('drop function if exists %s cascade', r.sig);
+  end loop;
+end $$;
+
 create or replace function public.is_admin(any_role text[] default null)
   returns boolean
   language plpgsql
