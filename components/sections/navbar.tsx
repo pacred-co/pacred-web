@@ -10,6 +10,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
+import { NotificationBell } from "@/components/notification-bell";
 
 type ProfileLite = {
   member_code: string | null;
@@ -117,7 +118,10 @@ export function NavBar() {
           {/* Right: auth + lang + theme */}
           <div className="hidden xl:flex items-center gap-2 shrink-0">
             {authReady && user ? (
-              <UserMenu user={user} profile={profile} />
+              <>
+                <NotificationBell />
+                <UserMenu user={user} profile={profile} />
+              </>
             ) : (
               <>
                 <Link href="/login">

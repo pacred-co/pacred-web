@@ -494,6 +494,86 @@
     "setDefaultToast": "ตั้งเป็นที่อยู่หลักแล้ว",
     "deleteConfirm": "ลบที่อยู่ของ {name}?"
   },
+  "sales": {
+    "kicker": "ทีมขาย",
+    "title": "แดชบอร์ดทีมขาย",
+    "subtitle": "ภาพรวมค่าคอมมิชชั่นของทีมที่คุณดูแล",
+    "reportTitle": "รายงานค่าคอม",
+    "reportSubtitle": "เลือกรายการที่ต้องการเบิก แล้วกรอกข้อมูลบัญชี",
+    "payoutHistoryTitle": "ประวัติการเบิก",
+    "payoutHistorySubtitle": "ประวัติคำขอเบิกค่าคอมทั้งหมด",
+    "requestPayout": "เบิกค่าคอม",
+    "payoutHistory": "ประวัติการเบิก",
+    "backToOverview": "กลับหน้าหลัก",
+    "viewHistory": "ดูประวัติทั้งหมด",
+    "items": "รายการ",
+
+    "statTotalEarned": "ยอดรวมทั้งหมด",
+    "statUnpaid": "ค้างจ่าย",
+    "statTeams": "ทีมที่ดูแล",
+
+    "perTeamTitle": "สรุปแยกทีม",
+    "noTeams": "คุณยังไม่ได้เป็นหัวหน้าทีม",
+
+    "colTeam": "รหัสทีม",
+    "colCommissionPct": "%",
+    "colUnpaid": "ค้างจ่าย",
+    "colPaid": "จ่ายแล้ว",
+    "colTotal": "รวม",
+
+    "colCustomer": "ลูกค้า",
+    "colReference": "รายการ",
+    "colBase": "ยอดอ้างอิง",
+    "colPct": "%",
+    "colCommission": "ค่าคอม",
+    "colEarnedAt": "วันที่ได้",
+
+    "refForwarder": "ฝากนำเข้า",
+    "refOrder": "ฝากสั่ง",
+
+    "selectAll": "เลือกทั้งหมด ({selected}/{total})",
+    "selectAtLeastOne": "เลือกอย่างน้อย 1 รายการ",
+    "noUnpaidCommissions": "ไม่มีค่าคอมที่ค้างจ่าย",
+    "noUnpaidForTeam": "ไม่มีค่าคอมค้างในทีมนี้",
+
+    "payoutSummary": "สรุปคำขอ",
+    "selected": "เลือกแล้ว",
+    "requestAmount": "ยอดที่ขอเบิก",
+    "bankInfo": "ข้อมูลบัญชีรับโอน",
+    "bankName": "ธนาคาร",
+    "bankPlaceholder": "เช่น กสิกรไทย, กรุงเทพ",
+    "accountName": "ชื่อบัญชี",
+    "accountNumber": "เลขที่บัญชี",
+    "note": "หมายเหตุ",
+    "submitPayout": "ส่งคำขอเบิก",
+    "submitting": "กำลังส่ง...",
+
+    "payoutRequestedTitle": "ส่งคำขอเบิกแล้ว",
+    "payoutRequestedSubtitle": "ยอด ฿{amount} — แอดมินจะตรวจสอบและโอนภายใน 3 วันทำการ",
+
+    "colRequestedAt": "วันที่ขอ",
+    "colAmount": "จำนวน",
+    "colBankInfo": "บัญชีรับโอน",
+    "colStatus": "สถานะ",
+    "colPaidAt": "วันที่จ่าย",
+    "noPayouts": "ยังไม่เคยขอเบิก",
+    "payoutStatus": {
+      "pending":  "รอตรวจสอบ",
+      "approved": "อนุมัติแล้ว",
+      "paid":     "โอนแล้ว",
+      "rejected": "ปฏิเสธ"
+    }
+  },
+  "notifications": {
+    "kicker": "การแจ้งเตือน",
+    "title": "การแจ้งเตือนทั้งหมด",
+    "subtitle": "อัพเดทเกี่ยวกับออเดอร์ การชำระเงิน และข่าวสาร Pacred",
+    "backToDashboard": "กลับแดชบอร์ด",
+    "empty": "ยังไม่มีการแจ้งเตือน",
+    "markAllRead": "อ่านทั้งหมดแล้ว",
+    "unreadCount": "ยังไม่ได้อ่าน {count} ฉบับ",
+    "viewDetails": "ดูรายละเอียด"
+  },
   "dashboard": {
     "kicker": "DASHBOARD",
     "greeting": "สวัสดี, {name}",

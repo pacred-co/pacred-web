@@ -6,6 +6,7 @@ import {
   yuanPaymentSchema,
   type YuanPaymentInput,
 } from "@/lib/validators/payment";
+import { sendNotification } from "@/lib/notifications";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -126,5 +127,16 @@ export async function createYuanPayment(
   }
 
   revalidatePath("/service-payment");
+
+  void sendNotification(user.id, {
+    category: "yuan_payment",
+    severity: "info",
+    title:    `ฝากโอนหยวนสำเร็จ`,
+    body:     `¥${d.yuan_amount.toFixed(2)} = ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+    link_href: `/service-payment`,
+    reference_type: "yuan_payment",
+    reference_id:   created.id,
+  });
+
   return { ok: true, data: { id: created.id, thb_amount } };
 }

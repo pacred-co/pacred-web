@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
+import { sendNotification } from "@/lib/notifications";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -244,6 +245,18 @@ export async function placeServiceOrder(
   revalidatePath("/service-order");
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/pending");
+
+  // Notification (fire and forget — don't block the action result)
+  void sendNotification(user.id, {
+    category: "order",
+    severity: "info",
+    title:    `ฝากสั่งสำเร็จ ${created.h_no}`,
+    body:     `ยอดที่ต้องชำระ ฿${total_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ภายใน 24 ชม.`,
+    link_href: `/service-order/${created.h_no}`,
+    reference_type: "service_order",
+    reference_id:   created.id,
+  });
+
   return {
     ok: true,
     data: {

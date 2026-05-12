@@ -25,6 +25,8 @@
 | 10 | [0010_forwarder.sql](0010_forwarder.sql) | forwarders + items + images + forwarder-covers bucket | **D2** |
 | 11 | [0011_service_order.sql](0011_service_order.sql) | cart + service_orders + items + promotions + carts bucket | **E1** |
 | 12 | [0012_avatars_bucket.sql](0012_avatars_bucket.sql) | avatars storage bucket (public read) | hotfix |
+| 13 | [0013_sales_referral.sql](0013_sales_referral.sql) | team_leaders + sales_commissions + sales_payouts + auto-emit triggers | **F1** |
+| 14 | [0014_notifications.sql](0014_notifications.sql) | notifications log + notification_reads | **F2** |
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 
@@ -42,12 +44,14 @@ select table_name
      'yuan_payments',
      'customer_groups','settings','rate_general','rate_vip','rate_custom_user','rate_custom_hs',
      'forwarders','forwarder_items','forwarder_images','forwarder_status_log',
-     'cart_items','service_orders','service_order_items','promotions','promotion_applications'
+     'cart_items','service_orders','service_order_items','promotions','promotion_applications',
+     'team_leaders','sales_commissions','sales_payouts',
+     'notifications','notification_reads'
    )
  order by table_name;
 ```
 
-ควรได้ **24 rows** ครบ — ถ้าได้น้อยกว่า แสดงว่า migration บางตัวยังไม่ได้รัน
+ควรได้ **29 rows** ครบ — ถ้าได้น้อยกว่า แสดงว่า migration บางตัวยังไม่ได้รัน
 
 ```sql
 -- ตรวจว่า TOS columns พร้อมแล้ว (แก้ bug "schema cache")

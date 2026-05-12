@@ -494,6 +494,86 @@
     "setDefaultToast": "Default address updated",
     "deleteConfirm": "Delete address for {name}?"
   },
+  "sales": {
+    "kicker": "SALES",
+    "title": "Sales team dashboard",
+    "subtitle": "Overview of commissions earned by your teams.",
+    "reportTitle": "Commission report",
+    "reportSubtitle": "Pick the rows to claim and fill in your bank info.",
+    "payoutHistoryTitle": "Payout history",
+    "payoutHistorySubtitle": "All your payout requests.",
+    "requestPayout": "Request payout",
+    "payoutHistory": "Payout history",
+    "backToOverview": "Back to overview",
+    "viewHistory": "View history",
+    "items": "items",
+
+    "statTotalEarned": "Total earned",
+    "statUnpaid": "Unpaid",
+    "statTeams": "Teams led",
+
+    "perTeamTitle": "Per-team breakdown",
+    "noTeams": "You're not a team leader.",
+
+    "colTeam": "Team code",
+    "colCommissionPct": "%",
+    "colUnpaid": "Unpaid",
+    "colPaid": "Paid",
+    "colTotal": "Total",
+
+    "colCustomer": "Customer",
+    "colReference": "Source",
+    "colBase": "Base",
+    "colPct": "%",
+    "colCommission": "Commission",
+    "colEarnedAt": "Earned",
+
+    "refForwarder": "Import",
+    "refOrder": "Order",
+
+    "selectAll": "Select all ({selected}/{total})",
+    "selectAtLeastOne": "Select at least one row.",
+    "noUnpaidCommissions": "No unpaid commissions.",
+    "noUnpaidForTeam": "No unpaid commissions for this team.",
+
+    "payoutSummary": "Payout summary",
+    "selected": "Selected",
+    "requestAmount": "Request amount",
+    "bankInfo": "Receiving bank info",
+    "bankName": "Bank",
+    "bankPlaceholder": "e.g. KBank, Bangkok Bank",
+    "accountName": "Account name",
+    "accountNumber": "Account number",
+    "note": "Note",
+    "submitPayout": "Submit payout request",
+    "submitting": "Submitting...",
+
+    "payoutRequestedTitle": "Payout request submitted",
+    "payoutRequestedSubtitle": "Amount ฿{amount} — admin will review and transfer within 3 business days.",
+
+    "colRequestedAt": "Requested",
+    "colAmount": "Amount",
+    "colBankInfo": "Bank",
+    "colStatus": "Status",
+    "colPaidAt": "Paid",
+    "noPayouts": "No payout requests yet.",
+    "payoutStatus": {
+      "pending":  "Pending review",
+      "approved": "Approved",
+      "paid":     "Transferred",
+      "rejected": "Rejected"
+    }
+  },
+  "notifications": {
+    "kicker": "NOTIFICATIONS",
+    "title": "All notifications",
+    "subtitle": "Updates about orders, payments, and Pacred news.",
+    "backToDashboard": "Back to dashboard",
+    "empty": "No notifications yet.",
+    "markAllRead": "Mark all as read",
+    "unreadCount": "{count} unread",
+    "viewDetails": "View details"
+  },
   "dashboard": {
     "kicker": "DASHBOARD",
     "greeting": "Hi, {name}",

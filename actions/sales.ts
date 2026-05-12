@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requestPayoutSchema, type RequestPayoutInput } from "@/lib/validators/sales";
+import { sendNotification } from "@/lib/notifications";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -261,5 +262,16 @@ export async function requestPayout(input: RequestPayoutInput): Promise<ActionRe
   revalidatePath("/sales");
   revalidatePath("/sales/report");
   revalidatePath("/sales/history");
+
+  void sendNotification(user.id, {
+    category: "sales",
+    severity: "info",
+    title:    `ส่งคำขอเบิกค่าคอมแล้ว`,
+    body:     `ยอด ฿${amount_total.toLocaleString("th-TH", { minimumFractionDigits: 2 })} — รอแอดมินตรวจสอบ`,
+    link_href: `/sales/history`,
+    reference_type: "sales_payout",
+    reference_id:   payout.id,
+  });
+
   return { ok: true, data: { payout_id: payout.id, amount_total } };
 }
