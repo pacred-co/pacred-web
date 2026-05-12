@@ -63,6 +63,16 @@ export default async function AdminHRPage() {
           </div>
         </Link>
         <Link
+          href="/admin/hr/employees"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500 text-white text-lg shrink-0">📇</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">รายชื่อพนักงานทั้งหมด</p>
+            <p className="text-xs text-muted mt-0.5">Datatable · ทั้งหมด · ทำงาน · พักงาน · ค้นหา</p>
+          </div>
+        </Link>
+        <Link
           href="/admin/admins"
           className="group flex items-start gap-3 rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-4 hover:shadow-md transition-shadow"
         >
