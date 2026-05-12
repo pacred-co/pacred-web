@@ -28,6 +28,7 @@
 | 13 | [0013_sales_referral.sql](0013_sales_referral.sql) | team_leaders + sales_commissions + sales_payouts + auto-emit triggers | **F1** |
 | 14 | [0014_notifications.sql](0014_notifications.sql) | notifications log + notification_reads | **F2** |
 | 15 | [0015_admin_rbac.sql](0015_admin_rbac.sql) | admins + is_admin() + admin_audit_log + admin RLS overrides | **G2** |
+| 16 | [0016_phase_h_upgrades.sql](0016_phase_h_upgrades.sql) | containers + admin_contact_extras + dashboard_banners + cart_items variant fields | **H** |
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 

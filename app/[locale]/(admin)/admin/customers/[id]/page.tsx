@@ -1,16 +1,22 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { AssignRepForm } from "./assign-rep";
 
 export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [{ data: profile }, { data: corporate }, { data: addresses }, { data: wallet }] = await Promise.all([
+  const [{ data: profile }, { data: corporate }, { data: addresses }, { data: wallet }, { data: repProfiles }] = await Promise.all([
     admin.from("profiles").select("*").eq("id", id).maybeSingle(),
     admin.from("corporate").select("*").eq("profile_id", id).maybeSingle(),
     admin.from("addresses").select("*").eq("profile_id", id).is("deleted_at", null),
     admin.from("wallet").select("balance, cashback_balance, credit_balance").eq("profile_id", id).maybeSingle(),
+    // List active admins with sales_admin or super role (with their contact)
+    admin.from("admins")
+      .select(`profile_id, role, profile:profiles!profile_id ( member_code, first_name, last_name, phone ), contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
+      .in("role", ["sales_admin", "super"])
+      .eq("is_active", true),
   ]);
 
   if (!profile) notFound();
@@ -82,6 +88,31 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
         <WalletCard label="Cashback" value={w.cashback_balance} tone="orange" />
         <WalletCard label="เครดิต" value={w.credit_balance} tone="blue" />
       </section>
+
+      {/* Assign sales rep */}
+      <AssignRepForm
+        customerId={p.id}
+        currentRepId={(p as { sales_admin_id?: string | null }).sales_admin_id ?? null}
+        reps={(() => {
+          type RepRow = {
+            profile_id: string;
+            profile: { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }[] | null;
+            contact: { display_name: string | null; direct_phone: string | null } | { display_name: string | null; direct_phone: string | null }[] | null;
+          };
+          const seen = new Set<string>();
+          const out: { profile_id: string; display: string }[] = [];
+          for (const r of (repProfiles ?? []) as RepRow[]) {
+            if (seen.has(r.profile_id)) continue;
+            seen.add(r.profile_id);
+            const prof    = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+            const contact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
+            const name    = contact?.display_name ?? `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() ?? "—";
+            const phone   = contact?.direct_phone ?? prof?.phone ?? "—";
+            out.push({ profile_id: r.profile_id, display: `${name} · ${prof?.member_code ?? ""} · ${phone}` });
+          }
+          return out;
+        })()}
+      />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Section title="ข้อมูลส่วนตัว">

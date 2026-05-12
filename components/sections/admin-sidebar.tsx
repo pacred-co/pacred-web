@@ -25,6 +25,9 @@ const items: NavItem[] = [
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"] },
   { href: "/admin/customers",        label: "ลูกค้า",          icon: <Users className="w-5 h-5" /> },
   { href: "/admin/team-leaders",     label: "ทีมขาย",          icon: <Coins className="w-5 h-5" />,           roles: ["sales_admin"] },
+  { href: "/admin/containers",       label: "รายการตู้",       icon: <Package className="w-5 h-5" />,         roles: ["ops"] },
+  { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"] },
+  { href: "/admin/admins",           label: "จัดการ admin",   icon: <Users className="w-5 h-5" />,           roles: ["super"] },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"] },
 ];
 

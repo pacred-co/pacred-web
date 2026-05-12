@@ -43,9 +43,14 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
             </div>
             <p className="text-xs text-muted mt-1">{t("createdAt", { date: new Date(f.created_at).toLocaleString("th-TH") })}</p>
           </div>
-          <Link href="/service-import" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-            ← {t("backToList")}
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/service-import/${f.f_no}/receipt`} target="_blank" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+              🖨 ดูใบแจ้งหนี้
+            </Link>
+            <Link href="/service-import" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+              ← {t("backToList")}
+            </Link>
+          </div>
         </div>
 
         {/* Payment banner for pending */}
