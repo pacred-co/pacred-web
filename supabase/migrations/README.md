@@ -27,6 +27,7 @@
 | 12 | [0012_avatars_bucket.sql](0012_avatars_bucket.sql) | avatars storage bucket (public read) | hotfix |
 | 13 | [0013_sales_referral.sql](0013_sales_referral.sql) | team_leaders + sales_commissions + sales_payouts + auto-emit triggers | **F1** |
 | 14 | [0014_notifications.sql](0014_notifications.sql) | notifications log + notification_reads | **F2** |
+| 15 | [0015_admin_rbac.sql](0015_admin_rbac.sql) | admins + is_admin() + admin_audit_log + admin RLS overrides | **G2** |
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 
@@ -46,12 +47,13 @@ select table_name
      'forwarders','forwarder_items','forwarder_images','forwarder_status_log',
      'cart_items','service_orders','service_order_items','promotions','promotion_applications',
      'team_leaders','sales_commissions','sales_payouts',
-     'notifications','notification_reads'
+     'notifications','notification_reads',
+     'admins','admin_audit_log'
    )
  order by table_name;
 ```
 
-ควรได้ **29 rows** ครบ — ถ้าได้น้อยกว่า แสดงว่า migration บางตัวยังไม่ได้รัน
+ควรได้ **31 rows** ครบ — ถ้าได้น้อยกว่า แสดงว่า migration บางตัวยังไม่ได้รัน
 
 ```sql
 -- ตรวจว่า TOS columns พร้อมแล้ว (แก้ bug "schema cache")
@@ -152,3 +154,22 @@ CRON_SECRET=<random-string>        # protects /api/cron/* routes
 - 151-item cap on cart_items enforced via trigger (matches legacy `cart.php` hardcoded limit)
 - `h_no` format: `O{YYMMDD}-{seq}` from a sequence + trigger
 - Payment due in 24 hours (`payment_due_at`); see `/api/cron/auto-cancel-orders` route + `vercel.json` cron schedule `*/15 * * * *`
+
+### 0015_admin_rbac.sql — Admin RBAC
+- `admins` table — minimal split from legacy 40+-column tb_admin
+- Role codes: `super` | `ops` | `accounting` | `sales_admin` (`super` inherits all)
+- `is_admin(text[])` SECURITY DEFINER helper for RLS policies on other tables
+- Adds "for all" admin-override policies to ~20 customer-facing tables
+
+**To create the first admin** (replace `<profile-id>` with the target profile uuid):
+
+```sql
+-- Grant super-admin (the safest first admin)
+insert into public.admins (profile_id, role)
+values ('<profile-id>', 'super');
+```
+
+Or via Supabase Dashboard → Table Editor → admins → Insert row. Once
+inserted, that user's `/admin/*` routes unlock; non-admins still 404.
+
+To find profile ids: `select id, member_code, first_name, phone from profiles;`

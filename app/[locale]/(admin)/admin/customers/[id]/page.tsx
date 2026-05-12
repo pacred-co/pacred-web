@@ -1,0 +1,164 @@
+import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+
+export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const admin = createAdminClient();
+
+  const [{ data: profile }, { data: corporate }, { data: addresses }, { data: wallet }] = await Promise.all([
+    admin.from("profiles").select("*").eq("id", id).maybeSingle(),
+    admin.from("corporate").select("*").eq("profile_id", id).maybeSingle(),
+    admin.from("addresses").select("*").eq("profile_id", id).is("deleted_at", null),
+    admin.from("wallet").select("balance, cashback_balance, credit_balance").eq("profile_id", id).maybeSingle(),
+  ]);
+
+  if (!profile) notFound();
+  type Profile = typeof profile & {
+    member_code: string | null;
+    account_type: string;
+    first_name: string | null;
+    last_name: string | null;
+    company_name: string | null;
+    phone: string | null;
+    email: string | null;
+    status: string;
+    customer_group: string;
+    register_with: string | null;
+    referral_channel: string | null;
+    recommended_by: string | null;
+    line_user_id: string | null;
+    line_id: string | null;
+    facebook_url: string | null;
+    sex: string | null;
+    birthday: string | null;
+    last_login_at: string | null;
+    created_at: string;
+  };
+  type Corporate = {
+    tax_id: string;
+    company_name: string;
+    company_address: string | null;
+    status: string;
+  };
+  type Address = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    phone: string;
+    is_default: boolean;
+    address_line: string;
+    sub_district: string;
+    district: string;
+    province: string;
+    postal_code: string;
+  };
+  type Wallet = { balance: number; cashback_balance: number; credit_balance: number };
+
+  const p   = profile as Profile;
+  const c   = (corporate as Corporate | null) ?? null;
+  const a   = (addresses as Address[] | null) ?? [];
+  const w   = (wallet as Wallet | null) ?? { balance: 0, cashback_balance: 0, credit_balance: 0 };
+  const displayName = p.account_type === "juristic" && p.company_name
+    ? p.company_name
+    : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
+
+  return (
+    <main className="p-6 lg:p-8 space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ลูกค้า</p>
+          <h1 className="mt-1 text-2xl font-bold">{displayName}</h1>
+          <p className="text-sm text-muted font-mono">{p.member_code}</p>
+        </div>
+        <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+          ← กลับ
+        </Link>
+      </div>
+
+      {/* Wallet quick view */}
+      <section className="grid sm:grid-cols-3 gap-3">
+        <WalletCard label="กระเป๋า" value={w.balance} tone="primary" />
+        <WalletCard label="Cashback" value={w.cashback_balance} tone="orange" />
+        <WalletCard label="เครดิต" value={w.credit_balance} tone="blue" />
+      </section>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Section title="ข้อมูลส่วนตัว">
+          <Row label="ประเภท" value={p.account_type === "juristic" ? "นิติบุคคล" : "บุคคล"} />
+          <Row label="สถานะ" value={p.status} />
+          <Row label="เบอร์" value={p.phone ?? "—"} />
+          <Row label="อีเมล" value={p.email ?? "—"} />
+          <Row label="กลุ่มลูกค้า" value={p.customer_group} />
+          <Row label="สมัครผ่าน" value={p.register_with ?? "—"} />
+          <Row label="ช่อง" value={p.referral_channel ?? "—"} />
+          <Row label="แนะนำโดย" value={p.recommended_by ?? "—"} />
+          <Row label="เพศ" value={p.sex ?? "—"} />
+          <Row label="วันเกิด" value={p.birthday ?? "—"} />
+          <Row label="LINE" value={p.line_id ?? "—"} />
+          <Row label="LINE userId (push)" value={p.line_user_id ?? "—"} />
+          <Row label="ล็อกอินล่าสุด" value={p.last_login_at ? new Date(p.last_login_at).toLocaleString("th-TH") : "—"} />
+          <Row label="สมัครเมื่อ" value={new Date(p.created_at).toLocaleString("th-TH")} />
+        </Section>
+
+        {c && (
+          <Section title="ข้อมูลบริษัท">
+            <Row label="เลขผู้เสียภาษี" value={c.tax_id} />
+            <Row label="ชื่อบริษัท" value={c.company_name} />
+            <Row label="สถานะ" value={c.status} />
+            {c.company_address && <Row label="ที่อยู่บริษัท" value={c.company_address} multiline />}
+          </Section>
+        )}
+      </div>
+
+      <Section title={`ที่อยู่จัดส่ง (${a.length})`}>
+        {a.length === 0 ? (
+          <p className="text-sm text-muted">ไม่มีที่อยู่</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {a.map((ad) => (
+              <li key={ad.id} className="py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{ad.first_name} {ad.last_name}</span>
+                  {ad.is_default && <span className="rounded-full bg-primary-500 text-white px-2 py-0.5 text-[10px]">หลัก</span>}
+                </div>
+                <p className="text-xs text-muted">📞 {ad.phone}</p>
+                <p className="text-xs">{ad.address_line} ต.{ad.sub_district} อ.{ad.district} จ.{ad.province} {ad.postal_code}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </main>
+  );
+}
+
+function WalletCard({ label, value, tone }: { label: string; value: number; tone: "primary" | "orange" | "blue" }) {
+  const tones = {
+    primary: "from-primary-500/10 to-primary-500/0 border-primary-500/30",
+    orange:  "from-orange-500/10 to-orange-500/0 border-orange-500/30",
+    blue:    "from-blue-500/10 to-blue-500/0 border-blue-500/30",
+  }[tone];
+  return (
+    <div className={`rounded-2xl border bg-gradient-to-br ${tones} p-4`}>
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className="mt-1 text-xl font-bold font-mono">฿{Number(value).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+    </div>
+  );
+}
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-1">
+      <h3 className="font-bold text-sm mb-2">{title}</h3>
+      {children}
+    </div>
+  );
+}
+function Row({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
+  return (
+    <div className={`text-sm ${multiline ? "" : "flex justify-between gap-3"}`}>
+      <span className="text-muted">{label}</span>
+      <span className={`${multiline ? "block whitespace-pre-wrap" : "font-medium"}`}>{value}</span>
+    </div>
+  );
+}
