@@ -1,0 +1,39 @@
+import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { SettingsForm } from "./settings-form";
+
+export default async function AdminSettingsPage() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("settings")
+    .select("service_fee, juristic_discount_threshold, juristic_discount_pct, qc_fee_per_item, crate_fee_base, free_shipping_enabled, free_shipping_threshold, yuan_rate")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!data) notFound();
+  type Settings = {
+    service_fee: number;
+    juristic_discount_threshold: number;
+    juristic_discount_pct: number;
+    qc_fee_per_item: number;
+    crate_fee_base: number;
+    free_shipping_enabled: boolean;
+    free_shipping_threshold: number | null;
+    yuan_rate: number;
+  };
+  const s = data as Settings;
+
+  return (
+    <main className="p-6 lg:p-8 space-y-5">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <h1 className="mt-1 text-2xl font-bold">ตั้งค่าระบบ</h1>
+        <p className="mt-1 text-sm text-muted">
+          ตัวเลขในตารางนี้ถูกใช้ทุกครั้งที่คำนวณราคา — เปลี่ยนจะมีผลกับออเดอร์ใหม่ทันที (ออเดอร์เก่าใช้ค่าเรทตอนเปิด)
+        </p>
+      </div>
+
+      <SettingsForm {...s} />
+    </main>
+  );
+}
