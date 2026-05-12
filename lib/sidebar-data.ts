@@ -62,8 +62,9 @@ export async function getSidebarData(profileId: string): Promise<{
         .select("display_name, direct_phone")
         .eq("profile_id", rep.id)
         .maybeSingle<{ display_name: string | null; direct_phone: string | null }>();
+      const fullName = `${rep.first_name ?? ""} ${rep.last_name ?? ""}`.trim();
       salesRep = {
-        display_name: extras?.display_name ?? `${rep.first_name ?? ""} ${rep.last_name ?? ""}`.trim() || null,
+        display_name: extras?.display_name ?? (fullName || null),
         phone: extras?.direct_phone ?? rep.phone ?? null,
       };
     }
