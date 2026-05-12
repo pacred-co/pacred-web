@@ -378,5 +378,29 @@
     "copyright": "© 2568 Pacred. สงวนลิขสิทธิ์ทุกประการ",
     "privacy": "นโยบายความเป็นส่วนตัว",
     "terms": "ข้อกำหนดการใช้งาน"
+  },
+  "admin": {
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "customers": "จัดการลูกค้า",
+      "customersList": "รายชื่อลูกค้าทั้งหมด",
+      "customersPending": "รอ Approve",
+      "wallet": "กระเป๋าสตางค์",
+      "withdrawals": "รายการเบิกเงิน",
+      "shopOrders": "ฝากสั่งสินค้า",
+      "shopOrdersAll": "รายการทั้งหมด",
+      "shopOrdersPending": "รอดำเนินการ",
+      "importOrders": "ฝากนำเข้า",
+      "importOrdersAll": "รายการทั้งหมด",
+      "importOrdersPending": "รอดำเนินการ",
+      "transferOrders": "ฝากโอน/ชำระ",
+      "freightSea": "ขนส่งทางเรือ (LCL/FCL)",
+      "freightAir": "ขนส่งทางอากาศ",
+      "freightTruck": "ขนส่งทางรถ (DDP)",
+      "reports": "รายงาน/สถิติ",
+      "rates": "อัตราค่าบริการ",
+      "inventory": "คลังสินค้า",
+      "settings": "ตั้งค่าระบบ"
+    }
   }
 }

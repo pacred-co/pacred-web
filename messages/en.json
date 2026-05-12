@@ -378,5 +378,29 @@
     "copyright": "© 2025 Pacred. All rights reserved.",
     "privacy": "Privacy Policy",
     "terms": "Terms of Service"
+  },
+  "admin": {
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "customers": "Customers",
+      "customersList": "All Customers",
+      "customersPending": "Pending Approval",
+      "wallet": "Wallet",
+      "withdrawals": "Withdrawals",
+      "shopOrders": "Shop Orders",
+      "shopOrdersAll": "All Orders",
+      "shopOrdersPending": "Pending",
+      "importOrders": "Import Cargo",
+      "importOrdersAll": "All Shipments",
+      "importOrdersPending": "Pending",
+      "transferOrders": "Transfer (Yuan)",
+      "freightSea": "Sea Freight (LCL/FCL)",
+      "freightAir": "Air Freight",
+      "freightTruck": "Truck (DDP)",
+      "reports": "Reports",
+      "rates": "Service Rates",
+      "inventory": "Inventory",
+      "settings": "Settings"
+    }
   }
 }
