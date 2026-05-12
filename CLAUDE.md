@@ -133,9 +133,71 @@ supabase/
 - Hosting: **Vercel + Supabase Cloud**
 - Phone OTP: **ThaiBulkSMS** (custom — bypass via `OTP_BYPASS=true`)
 - LINE Login: mocked UI; channel TBD
-- member_code: `PR00001` (running, auto-gen via Postgres trigger)
+- member_code: `PR00001` (running, auto-gen via Postgres trigger) — ใหม่ทั้งระบบ ไม่ต้อง compat กับ PHP เดิม (`PCS<num>`)
 - Email verification: optional (Supabase confirm-email OFF)
 - Password: min 6 / max 30, no complexity rules
+
+---
+
+# 🌐 Pacred Ecosystem (brand + service catalogue)
+
+> **Pacred** = บริษัทใหม่ (ไม่ใช่ PCS Cargo เดิม) — เป็น **all-in-one shipping/customs/cargo platform** ที่กินรวบทุกบริการในห่วงโซ่นำเข้า-ส่งออก
+>
+> ระบบ PHP เก่าครอบคลุมเฉพาะฝั่ง **Cargo** (จีน-ไทย ฝากสั่ง/ฝากนำเข้า/ฝากโอน) เท่านั้น — Pacred ขยายไปฝั่ง **Freight** (FCL/LCL ระหว่างประเทศ + customs/clearance/export) ครบทั้ง ecosystem
+
+## Brand & social channels
+- **Company:** Pacred
+- **LINE OA:** https://lin.ee/Yg3fU0I  *(แทน LINE Notify เดิม — LINE Notify EOL Apr 2025)*
+- **YouTube:** https://www.youtube.com/@PacredShipping
+- **Facebook:** https://www.facebook.com/PacredShippingCustomsClearanceImportExport/
+- **TikTok:** https://www.tiktok.com/@pacred.co
+- **Instagram:** https://www.instagram.com/pacred.co/
+
+## Service catalogue
+
+แต่ละบริการมี **landing page ของตัวเอง** ที่ `/services/<slug>` (public, ไม่ต้อง login) — กดจาก landing เพื่อ "ใช้บริการ" → redirect เข้าระบบหลังบ้าน (`/(protected)/...`) ที่ตรงกับ service นั้น
+
+| # | Service (TH) | slug | กลุ่ม | สถานะ in PHP เดิม | Backend module (Next.js) |
+|---|---|---|---|---|---|
+| 1 | จับคู่ลงทะเบียนกรมศุล / ตัวแทนออกของ (YY) | `customs-broker-matching` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 2 | ฝากสั่งซื้อสินค้า (China shopping cart) | `shop-order` | cargo | ✅ shops.php / cart.php | `(protected)/service-order/` |
+| 3 | ฝากโอนชำระสินค้า (Yuan transfer / Alipay) | `yuan-transfer` | cargo | ✅ payment.php | `(protected)/service-payment/` |
+| 4 | ฝากนำเข้าสินค้า — **FCL / LCL ทุกเทอม** (รถ/เรือ/แอร์) + **Cargo** (รถ/เรือ/แอร์) | `import` | both | 🟡 เฉพาะ cargo (forwarder.php) | `(protected)/service-import/` (รองรับ multi-mode) |
+| 5 | ขอคืนภาษี (Tax refund) | `tax-refund` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 6 | เคลียร์สินค้าติดด่าน (รถ/เรือ/แอร์) | `customs-clearance` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 7 | ออกใบกำกับภาษี (Tax invoice) | `tax-invoice` | freight | partial (admin only ใน PHP) | TBD (ต่อยอดจาก receipts) |
+| 8 | ออกใบขนสินค้า (Customs declaration form) | `shipping-document` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 9 | ส่งออกสินค้า (Export) | `export` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 10 | บริการฟูมิเกชัน (Fumigation) | `fumigation` | freight | ❌ ใหม่ทั้งหมด | TBD |
+| 11 | บริการฝากขายสินค้า (Consignment) | `consignment` | new | ❌ ใหม่ทั้งหมด | TBD |
+| 12 | บริการฝากจ่ายบริการ (Pay-on-behalf services) | `bill-payment` | new | ❌ ใหม่ทั้งหมด | TBD |
+| 13 | ขนส่งภายในประเทศ + ต่างประเทศ + แมสเซ็นเจอร์ (Logistics + Messenger) | `logistics` | both | ❌ ใหม่ทั้งหมด | TBD |
+
+**กลุ่ม:**
+- 🟦 **cargo** = ระบบเดิมจาก PHP `pcs-cargo` (จีน→ไทย, ฝากสั่ง/นำเข้า/โอน)
+- 🟧 **freight** = ส่วนขยายใหม่ของ Pacred (international FCL/LCL, customs broker, export)
+- 🟪 **both** = บริการที่ครอบคลุมทั้งสองฝั่ง
+- ⬜ **new** = ฟีเจอร์ใหม่ที่ไม่เคยมีในเครือเดิม
+
+## Routing convention (planned)
+
+```
+app/[locale]/(public)/
+├─ page.tsx                       # home (มีแล้ว)
+└─ services/
+   ├─ page.tsx                    # ภาพรวมทุกบริการ (service grid)
+   └─ [slug]/page.tsx             # landing แต่ละบริการ (dynamic, content จาก CMS หรือ MDX)
+
+app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า)
+├─ service-order/                 # = slug shop-order
+├─ service-payment/               # = slug yuan-transfer
+├─ service-import/                # = slug import (รองรับ FCL/LCL/Cargo modes)
+└─ ... (modules ใหม่ตาม service catalogue)
+```
+
+**หมายเหตุ:** อาจใช้ MDX-per-service หรือ Sanity/Payload CMS ถ้า marketing ต้องแก้ landing บ่อย — ตัดสินใจตอนเริ่ม Phase H (rebrand)
+
+---
 
 ## Working with this codebase
 
@@ -160,3 +222,183 @@ supabase/
 - Get current user → `await getCurrentUserWithProfile()` from `lib/auth/get-user.ts`
 - Mutate Supabase from Server Action → `await createClient()` from `lib/supabase/server.ts`
 - Bypass RLS (admin only) → `createAdminClient()` from `lib/supabase/admin.ts`
+
+---
+
+# 📋 Legacy PHP Port Plan (in progress)
+
+> **Goal:** Port ทั้งระบบ PHP เดิม (`C:\xampp\htdocs\pcscargo\member\`) มาเป็น Next.js + Supabase
+> **Strategy:** เอา **logic + structure** มาก่อน ไม่ต้อง migrate data → ค่อย rebrand UI/UX + จัดกลุ่มใหม่ในเฟสถัดไป
+> **Order:** ฝั่งลูกค้าก่อน (member portal) → ฝั่ง admin (back office)
+>
+> ⚠️ **Scope reminder:** PHP เดิมครอบเฉพาะ **cargo** (services #2, #3, #4-cargo-mode ใน ecosystem table ด้านบน) — services อื่น (`#1, #5-13`) ต้อง **build ใหม่ทั้งหมด** ในเฟสถัดไป (Phase I+) ตามแผน Pacred Ecosystem ไม่มีต้นแบบให้ port
+
+## Survey snapshot (สำรวจแล้ว 2026-05-12)
+
+- **PHP source:** `C:\xampp\htdocs\pcscargo\member\` (~50 ไฟล์ลูกค้า + 187 ไฟล์ admin)
+- **DB:** MySQL `pcsc_main` (110+ tables, schema dump 1.38M LOC ที่ `C:\Users\Admin\Desktop\SQLWPPCS\somedata-2026-03-19-1348-pcsc_main.sql`)
+- **Auth ปัจจุบัน:** PHP session + persistent cookie `pcs_logged` (10 ปี) checked vs `tb_users.pcs_logged`
+- **member_code เดิม:** `PCS<int>` (PHP) — **ทิ้งไม่ใช้** เพราะเป็นบริษัทใหม่ Pacred → ใช้ `PR00001` ของเรา ไม่ต้อง compat
+- **Stack PHP:** mysqli plain SQL, no framework, mPDF (THSarabunNew), PHPMailer, Bootstrap 4 admin theme
+- **wp_* tables ใน `pcsc_cargo.sql`** = WordPress marketing site → ไม่ต้องพอร์ต (Next.js แทนแล้ว)
+
+## Customer-side feature map (ฝั่ง user — port ก่อน)
+
+| Feature module | PHP source | MySQL tables | Next.js target | สถานะ |
+|---|---|---|---|---|
+| **auth** (login/register/recover/verify-tel/OAuth) | login, register, regis-tam, register-id, verify-tel, fb-callback, account-settings, logout | `tb_users`, `tb_register`, `tb_corporate`, `tb_users_otp_hs`, `tb_otp_check`, `tb_users_otp`, `tb_pcs_logged`, `tb_terms_service` | `app/[locale]/(auth)/*`, `actions/auth.ts`, `actions/otp.ts` | 🟡 มี Supabase Auth + OAuth Google/FB แล้ว — ต้องเพิ่ม TOS gate, recover, verify-tel |
+| **profile** | profile, account-settings, menu (avatar) | `tb_users` | `(protected)/profile/` | 🟢 มี placeholder + read user — ขยายฟอร์ม edit |
+| **address** | address, china-address, include/pages/cart/add-address | `tb_address`, `tb_address_main`, `tb_address_maomao_free`, `tb_admin_address` | `(protected)/addresses/` | 🔴 ยังเป็น placeholder |
+| **wallet** (รวม credit/cashback/withdraw) | wallet, wallet-credit, wallet-normal, wallet-notblank | `tb_wallet`, `tb_wallet_hs`, `tb_cash_back`, `tb_cash_back_hs`, `tb_credit`, `tb_wallet_paydeposit` | `(protected)/wallet/{deposit,withdraw,history}` | 🔴 ยังเป็น placeholder (รวม 4 variant ของ PHP เป็น 1) |
+| **service-order** (ฝากสั่งซื้อ — cart→shops) | cart, shops, convertURL, search, searchIMG | `tb_cart`, `tb_header_order`, `tb_order`, `tb_promotion`, `tb_settings` | `(protected)/service-order/{add,cart,pending}` | 🔴 ยังเป็น placeholder — ใหญ่มาก (shops.php = 2215 LOC) |
+| **service-import** (ฝากนำเข้า — forwarder) | forwarder, forwarder-table, invoiceF, printReceiptF, receipt-f-hs | `tb_forwarder`, `tb_forwarder_item`, `tb_forwarder_img`, `tb_rate_*`, `tb_credit` | `(protected)/service-import/{add,pending,receipts}` | 🔴 ยังเป็น placeholder — ซับซ้อนสุด มี rate engine |
+| **service-payment** (ฝากโอนหยวน — Alipay) | payment, pay | `tb_payment` | `(protected)/service-payment/{add}` | 🔴 ยังเป็น placeholder |
+| **sales-report** (referral commission) | user-sales, report-user-sales*, report-user-sales-history | `tb_user_sales`, `tb_user_sales_pay`, `tb_user_sales_admin_pay` | `(protected)/sales/*` (ใหม่ — restrict by role) | 🔴 ยังไม่มี — เคยจำกัด userID hardcode ต้องเปลี่ยนเป็น team_leaders table |
+| **notifications** (LINE Notify) | line-notify, line, api/linenotify/* | `tb_users.userLineNotify`, `tb_users.userLineIDOA`, `tb_notify`, `tb_notify_read` | TBD — LINE Notify EOL 2025-04 → ต้องเลือก replacement | 🔴 ต้องตัดสินใจเทคโนโลยีก่อน |
+| **search** (1688/Taobao) | search, convertURL, searchIMG, dataAPI | `tb_product`, `tb_keyword_product`, `tb_history_key`, `tb_api_china_hs` | `(protected)/service-order/add/` (ฝัง) | 🔴 ขึ้นกับ AkuCargo + RCGroup-TH APIs (3rd party) |
+
+## Admin-side feature map (ฝั่ง admin — พอร์ตเฟสถัดไป)
+
+| Group | Files | สาระหลัก |
+|---|---|---|
+| **Identity & RBAC** | add-admin, admin-table, admin-profile, organization-chart | `tb_admin` + tuple `(companyType, department, section)` × 40 sections; **ไม่มี role table** ต้อง redesign |
+| **Accounting** (acc-*) | 8 files | dashboard บัญชีฝากสั่ง/นำเข้า/โอน/ถอน/เติม |
+| **Forwarder ops** | forwarder, forwarder-bill, forwarder-driver, forwarder-quotation, forwarder-import-warehouse | จัดการ shipment + driver + invoice |
+| **Shops ops** | shops, shop-search, shopping-return, cart | คีย์ออเดอร์แทนลูกค้า, refund |
+| **Wallet/Payment ops** | wallet, payment, pay-users | top-up approve, Alipay payout |
+| **Barcode** | barcode-c-*, barcode-d-* (9 files) | scan รับสินค้าเข้าโกดัง + driver pickup |
+| **API integrations** | api-forwarder-{cn,jmf,ttp}, api-sheets-{ctt,mk,mx,sang} | sync carrier APIs + Google Sheets |
+| **Cron/Automation** | api/autorun/{check-apprentice,send-line-sales,update-active-customers,update-sheet-sang} | cPanel cron → HTTP endpoints (ไม่มี IP restrict) |
+| **Rates** | rate, rate-vip, settings, settings-vip | manage `tb_rate_g_*`, `tb_rate_vip_*`, `tb_rate_custom_*`, `tb_co` |
+| **Reports** | 30 files report-* | datatable + filter date (driver/forwarder/shop/sale/payment/system/OTP/SMS/promo) |
+| **Containers** | cnt, cnt-hs, hs-customrate, report-cnt | container tracking + HS code rates |
+| **Commission withdraw** | withdraw-commission-{sale,interpreter} | จ่ายค่าคอมพนักงาน |
+| **Customer mgmt** | users, users-search, transferSalesCustomers, pay-users | จัดการลูกค้า, ย้าย sales เจ้าของ |
+| **Org/HR** | organization-*, contact-list-outsider, post-job, time-attendance-system, booking-meeting-room | ระบบ org + เวลางาน + จองห้องประชุม |
+| **PDF print** | print*, gateway*, create-f-receipt | mPDF receipts/bills |
+| **Notifications** | notify (cross-DB write→pcscafym_main!), popup, mail, get-token-linenotify | push admin |
+| **Validation utils** | check-juristic, check-customer-maomao-*, check-shipby, check-payMethod, check-price-flash | | 
+| **Bulk import** | import-excel, single-code-text-converter | CSV → tb_csvimport |
+
+**Deprecated (ไม่ต้องพอร์ต ~35 files):** `*Old.php`, `*BackUp.php`, `* copy.php`, `*-test.php`, `addmail-test`, `a-Test-*`, `forwarderBackUp`, `payment20231213`, `20260311*`, `report-driver-2023`, time-bound promos (`user-pro1212`, `user-pro-valentine`, `report-pro-3-year-anniversary`, `oh-my-ghost`, `survey202306`), template skeletons (`blank*`, `code-templet`)
+
+## Critical migration concerns
+
+| # | Concern | แนวทาง |
+|---|---|---|
+| 1 | `pass_tam()` symmetric hash (legacy) — Supabase ใช้ bcrypt | force password reset on first login via OTP, OR Edge Function wrapping legacy hash → upgrade |
+| 2 | LINE Notify EOL 2025-04 | เลือก replacement: LINE Messaging API push / web push / email digest / Discord/Telegram bot |
+| 3 | Hardcoded secrets ใน PHP (DB pass, ThaiBulkSMS, Tiso AI, TechSol, FB secret, Sheets JSON, LINE channel, SMTP, JMF token, Gmail app password) | move to Vercel env vars |
+| 4 | ~~member_code mismatch~~ | ✅ **decided:** ใช้ `PR00001` (Pacred = บริษัทใหม่ ไม่ต้อง compat กับ `PCS<num>`) |
+| 5 | ไม่มี FK constraints ใน MySQL (relations implicit) | สร้าง real FK + RLS policies ใน Postgres |
+| 6 | Cookie `pcs_logged` 10ปี + IP-bound auth | Supabase JWT — ไม่มี migration path สำหรับ active sessions |
+| 7 | shared admin-tables (`tb_settings`, `tb_rate_*`, `tb_admin*`, `tb_organization_*`, `tb_co`) | coordinate schema migration ระหว่าง customer/admin port — อย่า double migrate |
+| 8 | mPDF Thai PDFs | port to `@react-pdf/renderer` หรือ Puppeteer SSR (Sarabun font) |
+| 9 | Image uploads → `/images/users/`, `/images/shops/` | migrate buckets: `avatars/`, `slips/`, `forwarder-covers/`, `member-docs/` |
+| 10 | Multiple version-tagged dup files | port latest non-BackUp เท่านั้น |
+| 11 | Sales feature whitelist hardcoded (`PCS888/2000/352/2678/4155`) | model เป็น `team_leaders` table + commission % |
+| 12 | 3 OTP gateways (ThaiBulkSMS / Tiso AI / TechSol) | consolidate → ThaiBulkSMS (per locked decision) |
+| 13 | 3rd party search APIs (AkuCargo, RCGroup-TH) อาจล่ม | abstract behind `lib/china-search/` interface |
+| 14 | SQL injection risk ทั่วระบบ (concat `$_GET/$_POST`) | ต้อง re-validate ทุก mutation ผ่าน Zod ก่อน DB call |
+| 15 | RBAC inline tuple `(companyType, department, section)` 40+ sections | redesign เป็น `roles` + `role_permissions` + RLS policies |
+| 16 | Cross-DB write ไป `pcscafym_main` (WP DB) ใน notify.php | ตัดออก (WP จะถูก replace) |
+
+## External integrations inventory
+
+| Service | Use | Replace strategy |
+|---|---|---|
+| **ThaiBulkSMS** | OTP + customer SMS | keep, env vars |
+| **Tiso AI / TechSol SMS** | OTP (legacy duplicate) | drop — ใช้ ThaiBulkSMS อย่างเดียว |
+| **Facebook OAuth (v3.2)** | social login | keep — Supabase Auth |
+| **LINE Login (Messaging OA)** | social login + push | TBD (LINE Notify dies; LINE Login อยู่) |
+| **DBD juristic-person lookup** | tax-id verify | keep — Edge Function wrapper |
+| **AkuCargo + RCGroup-TH** | product search 1688/Taobao | keep — Route Handler proxy |
+| **Google Sheets API** | rate sheet cache (admin side) | port to Supabase scheduled function → `sheet_cache` table |
+| **PromptPay QR** (`promptpay.js`) | QR generation client-side | keep |
+| **mPDF** | Thai receipts | replace with `@react-pdf/renderer` |
+| **PHPMailer SMTP** | email | replace with Resend or Supabase email |
+| **JMF / TTP / CN / Flash** carrier APIs | admin sync | port to Edge Functions (admin-only) |
+
+## Phased roadmap (ปรับใหม่จาก survey)
+
+### 🟢 Phase A — Foundation (ก่อนเริ่ม port feature)
+- [x] A1. ~~Decision: member_code scheme~~ → **`PR00001`** (Pacred ใหม่ ไม่ compat PHP)
+- [x] A3. ~~Decision: schema strategy~~ → **Hybrid** (rename column ให้ snake_case + drop columns ที่ deprecated + เพิ่ม FK constraints + ตัด `tb_` prefix)
+- [ ] A2. Decision: LINE Notify replacement → แนะนำ **LINE Messaging API** (มี LINE OA แล้ว: https://lin.ee/Yg3fU0I) + email digest fallback
+- [ ] A4. Extract pure schema (CREATE TABLE only) จาก dump → split เป็น file ตาม domain
+- [ ] A5. Replace social links + branding ทั้งหมดในโปรเจกต์ (PCS Cargo → Pacred, links ใหม่ทั้งหมด — ดู Decisions ด้านบน)
+
+### 🟡 Phase B — Customer Core (1-2 sprints)
+- [ ] B1. Migration `0003_profiles_extended.sql` — เพิ่ม columns ใน profiles ที่ขาด (coID, userCompany, companyCustomer, userPayMethod, userTransportType, userShipBy, adminIDSale, userRecom, userActive, userLineNotify, userLineIDOA, channel, shopUser, etc.)
+- [ ] B2. Migration `0004_corporate.sql` — `tb_corporate` (1-1 with profiles where userCompany=1)
+- [ ] B3. Migration `0005_addresses.sql` — `tb_address` + `tb_address_main` (1-1 default) + soft-delete (`addressStatus=0` blocks main)
+- [ ] B4. Server actions: `actions/profile.ts`, `actions/addresses.ts` + Zod validators
+- [ ] B5. UI: `(protected)/profile/`, `(protected)/addresses/` — เลิก placeholder
+- [ ] B6. TOS acceptance gate (modal on login if version mismatch)
+
+### 🟡 Phase C — Wallet & Payment (1-2 sprints)
+- [ ] C1. Migration `0006_wallet.sql` — `tb_wallet` (1-1) + `tb_wallet_hs` ledger + types/status enums + `tb_cash_back` + `tb_credit`
+- [ ] C2. Migration `0007_payment_yuan.sql` — `tb_payment` (Alipay request)
+- [ ] C3. Server actions + UI: `(protected)/wallet/{deposit,withdraw,history}`, `(protected)/service-payment/`
+- [ ] C4. Slip upload → Supabase Storage `slips/` bucket
+- [ ] C5. PromptPay QR client-side (port `promptpay.js` to npm `promptpay-qr`)
+
+### 🔴 Phase D — Service-Import (Forwarder) (3-5 sprints — ใหญ่สุด)
+- [ ] D1. Migration `0008_rates.sql` — `tb_rate_g_*`, `tb_rate_vip_*`, `tb_rate_custom_*`, `tb_co`, `tb_settings` (singleton config)
+- [ ] D2. Migration `0009_forwarder.sql` — `tb_forwarder` (50+ columns!) + `tb_forwarder_item` + `tb_forwarder_img` + `tb_log_forwarder_status` + status enums
+- [ ] D3. Port rate engine `apiCalPrice.php` → `lib/forwarder/calc-price.ts` (TypeScript) — SVIP→VIP→General waterfall, KG/CBM higher, juristic 1% off ≥1000, +50 PCS service fee
+- [ ] D4. Server actions + UI: `(protected)/service-import/{add,pending,receipts}`
+- [ ] D5. Receipt PDF: port `invoiceF.php` to `@react-pdf/renderer`
+- [ ] D6. Cover image + multi-image upload to Storage `forwarder-covers/`
+
+### 🔴 Phase E — Service-Order (Cart + Shops) (2-3 sprints)
+- [ ] E1. Migration `0010_cart_shops.sql` — `tb_cart` + `tb_header_order` (hNo `ONS{YYMMDD}-{seq}`) + `tb_order` (line items) + `tb_promotion`
+- [ ] E2. Server actions: `actions/cart.ts`, `actions/orders.ts` (replace demo)
+- [ ] E3. URL→cart converter (RCGroup-TH API proxy via Route Handler)
+- [ ] E4. Search 1688/Taobao (AkuCargo API proxy)
+- [ ] E5. Image search (upload→reverse-image)
+- [ ] E6. Auto-cancel cron: `hStatus=2 AND hDatePayment<NOW()` → `hStatus=6` (Vercel Cron / pg_cron)
+- [ ] E7. UI: `(protected)/service-order/{add,cart,pending}`
+
+### 🔴 Phase F — Sales Referral + Notifications (1-2 sprints)
+- [ ] F1. Migration `0011_team_leaders.sql` — แทน hardcoded userID list; `tb_user_sales*` ledger
+- [ ] F2. Notification system replacement (decided in A2)
+- [ ] F3. UI: `(protected)/sales/{team,report,history}` (role-restricted)
+
+### ⚪ Phase G — Admin Back Office (เริ่มหลัง customer-side stable)
+- [ ] G1. Decision: separate Next.js app หรือ same app + `/admin/*` route?
+- [ ] G2. Migration: `tb_admin` + `roles` + `role_permissions` + RLS using `is_admin()` SECURITY DEFINER
+- [ ] G3. Port groups ตามลำดับ: Identity/RBAC → Customer Mgmt → Forwarder ops → Shops ops → Accounting → Reports → Barcode → Rates → API integrations → Cron → Org/HR
+- [ ] G4. mPDF receipt templates → `@react-pdf/renderer`
+- [ ] G5. Drop `notify.php` cross-DB write (WP gone)
+
+### ⚪ Phase H — Polish (หลัง logic ครบ)
+- [ ] H1. UX/UI redesign + rebrand (เปลี่ยนคำใหม่ + จัดกลุ่มก้อนใหม่ตามที่ user ต้องการ)
+- [ ] H2. i18n complete (TH + EN ทุก key)
+- [ ] H3. Tests (unit on rate engine + integration on critical flows)
+- [ ] H4. Production cutover plan (active session migration, password reset campaign)
+
+### 🆕 Phase I — Pacred Ecosystem expansion (ขยายเกิน cargo เดิม)
+ส่วนนี้ **ไม่ใช่งาน port** แต่เป็น **build ใหม่** สำหรับบริการที่ PHP เดิมไม่มี — ดู service catalogue (#1, #5-13) ด้านบน
+
+- [ ] I1. **Landing pages** สำหรับทุกบริการ (`/services/[slug]`) — copy + design + CMS choice
+- [ ] I2. **Service #4 (import) FCL/LCL freight mode** — ขยาย `service-import` ให้รองรับ multi-mode (cargo / FCL / LCL × รถ/เรือ/แอร์); schema เพิ่ม `transport_mode`, `incoterm`, `container_size` fields
+- [ ] I3. **Service #1 customs-broker-matching (YY)** — สร้าง broker directory + matching workflow + agreement signing flow
+- [ ] I4. **Service #6 customs-clearance** — ระบบติดตามสินค้าติดด่าน + document upload + status tracking
+- [ ] I5. **Service #7-8 tax-invoice + shipping-document** — issuance + PDF generation
+- [ ] I6. **Service #9 export** — outbound shipping workflow (mirror import)
+- [ ] I7. **Service #10 fumigation** — booking + certificate
+- [ ] I8. **Service #11 consignment** — inventory + sales tracking + payout
+- [ ] I9. **Service #12 bill-payment (ฝากจ่ายบริการ)** — pay-on-behalf workflow
+- [ ] I10. **Service #13 logistics + messenger** — domestic/international + door-to-door
+- [ ] I11. **Service #5 tax-refund** — refund claim workflow
+
+**Sequencing:** Phase I jobs ทำ **คู่ขนาน** กับ Phase D-F ได้ (คนละ domain) — แต่ landing pages (I1) ควรขึ้นก่อน เพราะ marketing ใช้
+
+## Key references (อย่าลืม consult)
+
+- **PHP source root:** `C:\xampp\htdocs\pcscargo\member\`
+- **Admin source:** `C:\xampp\htdocs\pcscargo\member\pcs-admin\`
+- **Schema dump:** `C:\Users\Admin\Desktop\SQLWPPCS\somedata-2026-03-19-1348-pcsc_main.sql` (1.38M LOC — ห้าม Read ทั้งไฟล์ ใช้ Grep)
+- **Helper catalogue:** `C:\xampp\htdocs\pcscargo\member\include\function.php` (2451 LOC of business helpers — ต้องพอร์ต `nameShipBy`, `statusOrderBadge`, `optionShipBy`, `calPriceForwarderSumCompany`, `clearCreditBalance`, `DateThai*`, etc.)
+- **Auth helper:** `C:\xampp\htdocs\pcscargo\member\include\header.php` (auth gate + dashboard counters precompute)
