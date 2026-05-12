@@ -677,9 +677,9 @@ function ServiceChips({ selected, onToggle }: { selected: ServiceId[]; onToggle:
           const isActive = selected.includes(s.id);
           return (
             <button key={s.id} type="button" onClick={() => onToggle(s.id)}
-              style={{ ...chipStyle(isActive), padding: "20px 8px" }}>
-              <span style={{ fontSize: 28 }}>{s.emoji}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>{s.label}</span>
+              style={{ ...chipStyle(isActive), padding: "10px 4px" }}>
+              <span style={{ fontSize: 20 }}>{s.emoji}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.2 }}>{s.label}</span>
               {s.sub && <span style={{ fontSize: 10, opacity: 0.55, fontWeight: 400 }}>{s.sub}</span>}
             </button>
           );
