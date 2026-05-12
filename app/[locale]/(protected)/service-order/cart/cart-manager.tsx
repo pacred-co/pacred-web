@@ -12,6 +12,7 @@ import {
 } from "@/actions/cart";
 import { placeServiceOrder } from "@/actions/service-order";
 import type { Provider } from "@/lib/validators/cart";
+import { MapPin, Truck, Ship, Plane, Package2, Box, Trash2 } from "lucide-react";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -184,29 +185,81 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
     );
   }
 
+  const fullAddressText = [
+    `${shipFirstName} ${shipLastName}`.trim(),
+    shipAddressLine,
+    shipSubDistrict && `ต.${shipSubDistrict}`,
+    shipDistrict && `อ.${shipDistrict}`,
+    shipProvince && `จ.${shipProvince}`,
+    shipPostalCode,
+  ].filter(Boolean).join(" ");
+
   return (
-    <form onSubmit={onPlaceOrder} className="grid lg:grid-cols-[1fr_360px] gap-6">
+    <form onSubmit={onPlaceOrder} className="space-y-5">
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+      {msg && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{msg}</div>
+      )}
+
+      {/* ── Shipping address (top, full width — PCS legacy layout) ── */}
+      <details className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer hover:bg-surface-alt/30 list-none">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600 shrink-0">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-foreground">ที่อยู่ในการจัดส่งในไทย 🇹🇭</p>
+              <p className="text-xs text-muted truncate mt-0.5">
+                {fullAddressText || "ยังไม่ได้กรอกที่อยู่ — คลิกเพื่อเพิ่ม"}
+                {shipPhone && <span className="ml-2">โทร. {shipPhone}</span>}
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs text-muted shrink-0">เปลี่ยน/แก้ไข</span>
+        </summary>
+        <div className="px-5 pb-5 pt-2 space-y-3 border-t border-border">
+          <div className="grid grid-cols-2 gap-2">
+            <input value={shipFirstName} onChange={(e) => setShipFirstName(e.target.value)} className={inputCls} placeholder={t("firstName")} required />
+            <input value={shipLastName} onChange={(e) => setShipLastName(e.target.value)} className={inputCls} placeholder={t("lastName")} required />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={shipPhone} onChange={(e) => setShipPhone(e.target.value)} className={inputCls} placeholder={t("phone")} required />
+            <input value={shipPhone2 ?? ""} onChange={(e) => setShipPhone2(e.target.value)} className={inputCls} placeholder={t("phone2")} />
+          </div>
+          <input value={shipAddressLine} onChange={(e) => setShipAddressLine(e.target.value)} className={inputCls} placeholder={t("addressLine")} required />
+          <div className="grid grid-cols-2 gap-2">
+            <input value={shipSubDistrict} onChange={(e) => setShipSubDistrict(e.target.value)} className={inputCls} placeholder={t("subDistrict")} required />
+            <input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} className={inputCls} placeholder={t("district")} required />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input value={shipProvince} onChange={(e) => setShipProvince(e.target.value)} className={inputCls} placeholder={t("province")} required />
+            <input value={shipPostalCode} onChange={(e) => setShipPostalCode(e.target.value)} className={inputCls} placeholder={t("postalCode")} maxLength={5} required />
+          </div>
+          <textarea rows={2} value={shipNote ?? ""} onChange={(e) => setShipNote(e.target.value)} className={inputCls} placeholder={t("addressNote")} />
+          <p className="text-[11px] text-red-600">
+            หมายเหตุ: หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น
+          </p>
+        </div>
+      </details>
+
+      {/* Cart header with select-all */}
+      <div className="flex items-center justify-between rounded-2xl border border-border bg-white dark:bg-surface px-4 py-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={selected.size === cart.length}
+            onChange={toggleAll}
+          />
+          <span>{t("selectAll", { selected: selected.size, total: cart.length })}</span>
+        </label>
+        <span className="text-xs text-muted">{cart.length} / 151 ชิ้น</span>
+      </div>
+
       {/* CART ITEMS */}
       <div className="space-y-3">
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-        )}
-        {msg && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{msg}</div>
-        )}
-
-        <div className="flex items-center justify-between rounded-2xl border border-border bg-white dark:bg-surface px-4 py-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={selected.size === cart.length}
-              onChange={toggleAll}
-            />
-            <span>{t("selectAll", { selected: selected.size, total: cart.length })}</span>
-          </label>
-          <span className="text-xs text-muted">{cart.length} / 151</span>
-        </div>
-
         {/* Group cart by (provider + shop_name) — mirrors legacy shops.php
             structure where each shop is its own group with subtotal */}
         {Object.entries(
@@ -289,10 +342,11 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
                           <button
                             type="button"
                             onClick={() => onRemove(c.id)}
-                            className="text-xs text-red-600 hover:underline"
+                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50"
                             disabled={pending}
+                            title={t("remove")}
                           >
-                            {t("remove")}
+                            <Trash2 className="w-3 h-3" /> ลบ
                           </button>
                         </div>
                       </div>
@@ -305,84 +359,158 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
         })}
       </div>
 
-      {/* CHECKOUT */}
-      <aside className="lg:sticky lg:top-20 self-start space-y-4">
-        <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm">
-          <h3 className="text-sm font-bold mb-3">{t("orderSummary")}</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span>{t("itemsSelected")}</span><span>{selected.size}</span></div>
-            <div className="flex justify-between"><span>{t("subtotalCny")}</span><span className="font-mono">¥{subtotalCny.toFixed(2)}</span></div>
-            <div className="flex justify-between text-xs text-muted"><span>{t("rate")}</span><span>฿{yuanRate.toFixed(4)}/¥</span></div>
-            <div className="flex justify-between"><span>{t("serviceFee")}</span><span className="font-mono">฿{serviceFee.toFixed(2)}</span></div>
-            <hr className="border-primary-200" />
-            <div className="flex justify-between font-bold text-base">
-              <span>{t("totalThb")}</span>
-              <span className="font-mono">฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+      {/* ── Transport from China + Crate option (icon-card radios, PCS style) ── */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <h3 className="font-bold text-foreground flex items-center gap-2">
+          <MapPin className="w-5 h-5 text-primary-600" />
+          การขนส่งจากจีนมาไทย 🇨🇳 → 🇹🇭
+        </h3>
+
+        <div className="mt-4 grid md:grid-cols-2 gap-5">
+          {/* Transport type */}
+          <div>
+            <p className="text-sm font-medium mb-2">รูปแบบการขนส่งจีน-ไทย</p>
+            <div className="grid grid-cols-3 gap-2">
+              <IconRadio
+                checked={transport === "truck"} onClick={() => setTransport("truck")}
+                icon={<Truck className="w-7 h-7" />}
+                title="ทางรถ (EK)" subtitle="5-7 วัน"
+              />
+              <IconRadio
+                checked={transport === "ship"} onClick={() => setTransport("ship")}
+                icon={<Ship className="w-7 h-7" />}
+                title="ทางเรือ (SEA)" subtitle="12-16 วัน"
+              />
+              <IconRadio
+                checked={transport === "air"} onClick={() => setTransport("air")}
+                icon={<Plane className="w-7 h-7" />}
+                title="ทางอากาศ" subtitle="3-5 วัน"
+              />
             </div>
+            <div className="mt-3">
+              <label className="text-xs text-muted block mb-1">โกดังต้นทาง</label>
+              <select value={warehouse} onChange={(e) => setWarehouse(e.target.value as "guangzhou" | "yiwu")} className={inputCls}>
+                <option value="guangzhou">กวางโจว</option>
+                <option value="yiwu">อี้อู</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Crate option */}
+          <div>
+            <p className="text-sm font-medium mb-2">การตีลังไม้สินค้า</p>
+            <div className="grid grid-cols-2 gap-2">
+              <IconRadio
+                checked={!crate} onClick={() => setCrate(false)}
+                icon={<Package2 className="w-7 h-7" />}
+                title="ไม่ตีลังไม้" subtitle="มาตรฐาน"
+              />
+              <IconRadio
+                checked={crate} onClick={() => setCrate(true)}
+                icon={<Box className="w-7 h-7" />}
+                title="ตีลังไม้" subtitle="มีค่าบริการ"
+              />
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-muted block mb-1">การชำระค่าขนส่ง</label>
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as "origin" | "destination")} className={inputCls}>
+                <option value="origin">เก็บต้นทาง</option>
+                <option value="destination">เก็บปลายทาง</option>
+              </select>
+            </div>
+            <p className="mt-2 text-[11px] text-red-600">
+              **หากต้องการตีลังไม้สินค้าบางร้าน ให้เลือกสั่งออเดอร์แยกรายการกัน
+            </p>
           </div>
         </div>
 
-        {/* Classification */}
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold">{t("checkoutOptions")}</h3>
-          <label className="block space-y-1 text-sm">
-            <span className="text-xs font-medium">{t("warehouseChina")}</span>
-            <select value={warehouse} onChange={(e) => setWarehouse(e.target.value as "guangzhou" | "yiwu")} className={inputCls}>
-              <option value="guangzhou">กวางโจว</option>
-              <option value="yiwu">อี้อู</option>
-            </select>
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span className="text-xs font-medium">{t("transportType")}</span>
-            <select value={transport} onChange={(e) => setTransport(e.target.value as "truck" | "ship" | "air")} className={inputCls}>
-              <option value="truck">🚚 รถ</option>
-              <option value="ship">🚢 เรือ</option>
-              <option value="air">✈️ อากาศ</option>
-            </select>
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span className="text-xs font-medium">{t("payMethod")}</span>
-            <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as "origin" | "destination")} className={inputCls}>
-              <option value="origin">เก็บต้นทาง</option>
-              <option value="destination">เก็บปลายทาง</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={crate} onChange={(e) => setCrate(e.target.checked)} />
-            <span>{t("crate")}</span>
-          </label>
+        <div className="mt-4">
+          <label className="text-xs text-muted block mb-1">หมายเหตุถึง Pacred</label>
+          <textarea rows={2} value={noteUser} onChange={(e) => setNoteUser(e.target.value)} className={inputCls} placeholder={t("noteUser")} />
+        </div>
+      </div>
+
+      {/* ── Promotion (left) + Order summary (right) — PCS row ── */}
+      <div className="grid md:grid-cols-[1fr_400px] gap-4">
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+          <h3 className="font-bold text-foreground flex items-center gap-2">
+            🎁 โปรโมชันสำหรับคุณ
+          </h3>
+          <div className="mt-3 rounded-xl border-2 border-dashed border-primary-200 bg-primary-50/30 p-4 text-center">
+            <p className="text-3xl">🚚</p>
+            <p className="font-bold text-sm mt-2">Pacred เหมาๆ — จัดส่งฟรีทั่วกรุงเทพฯ/ปริมณฑล</p>
+            <p className="text-xs text-muted mt-1">โปรโมชันจะใช้อัตโนมัติเมื่อยอดถึงเกณฑ์</p>
+          </div>
+          <p className="mt-3 text-[11px] text-red-600 text-right">
+            *หากสินค้ามีขนาดเล็ก แนะนำเลือกขนส่งเป็น Flash Express (เริ่มต้น 30 บ.)
+          </p>
         </div>
 
-        {/* Address */}
-        <details open className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-          <summary className="text-sm font-bold cursor-pointer">{t("shippingAddress")}</summary>
-          <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <input value={shipFirstName} onChange={(e) => setShipFirstName(e.target.value)} className={inputCls} placeholder={t("firstName")} required />
-              <input value={shipLastName} onChange={(e) => setShipLastName(e.target.value)} className={inputCls} placeholder={t("lastName")} required />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={shipPhone} onChange={(e) => setShipPhone(e.target.value)} className={inputCls} placeholder={t("phone")} required />
-              <input value={shipPhone2 ?? ""} onChange={(e) => setShipPhone2(e.target.value)} className={inputCls} placeholder={t("phone2")} />
-            </div>
-            <input value={shipAddressLine} onChange={(e) => setShipAddressLine(e.target.value)} className={inputCls} placeholder={t("addressLine")} required />
-            <div className="grid grid-cols-2 gap-2">
-              <input value={shipSubDistrict} onChange={(e) => setShipSubDistrict(e.target.value)} className={inputCls} placeholder={t("subDistrict")} required />
-              <input value={shipDistrict} onChange={(e) => setShipDistrict(e.target.value)} className={inputCls} placeholder={t("district")} required />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={shipProvince} onChange={(e) => setShipProvince(e.target.value)} className={inputCls} placeholder={t("province")} required />
-              <input value={shipPostalCode} onChange={(e) => setShipPostalCode(e.target.value)} className={inputCls} placeholder={t("postalCode")} maxLength={5} required />
-            </div>
-            <textarea rows={2} value={shipNote ?? ""} onChange={(e) => setShipNote(e.target.value)} className={inputCls} placeholder={t("addressNote")} />
-            <textarea rows={2} value={noteUser} onChange={(e) => setNoteUser(e.target.value)} className={inputCls} placeholder={t("noteUser")} />
+        <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-md">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              🧾 สรุปรายการสั่งซื้อ
+            </h3>
+            <span className="text-xs text-muted">เลือก <b className="text-primary-600">{selected.size}</b> รายการ</span>
           </div>
-        </details>
-
-        <Button type="submit" fullWidth disabled={pending || selected.size === 0}>
-          {pending ? t("submitting") : t("placeOrder")}
-        </Button>
-      </aside>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">รวม</span>
+              <span className="font-mono">¥{subtotalCny.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted">เรทแลกเปลี่ยน</span>
+              <span className="font-mono text-primary-700 font-bold">฿{yuanRate.toFixed(2)}/¥</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">ค่าบริการ Pacred</span>
+              <span className="font-mono">฿{serviceFee.toFixed(2)}</span>
+            </div>
+            <div className="rounded-lg bg-white border border-primary-200 p-3 mt-2">
+              <p className="text-[11px] text-muted">ราคารวมสุทธิ</p>
+              <p className="font-mono font-bold text-2xl text-red-600 mt-1 text-right">
+                ฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="submit"
+            disabled={pending || selected.size === 0}
+            className={`mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold text-base px-4 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${selected.size > 0 && !pending ? "animate-pulse" : ""}`}
+          >
+            {pending ? "กำลังบันทึก..." : "สั่งซื้อสินค้า"}
+          </button>
+        </div>
+      </div>
     </form>
+  );
+}
+
+/** Icon-card radio: big icon on top, title + subtitle below; selected state
+ *  uses primary border + bg tint. Mirrors legacy PCS .border-checkbox-transportType
+ *  styled cards. */
+function IconRadio({
+  checked, onClick, icon, title, subtitle,
+}: {
+  checked: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 rounded-xl border-2 p-3 text-center transition-all ${
+        checked
+          ? "border-primary-500 bg-primary-50 text-primary-700 shadow-sm"
+          : "border-border bg-white text-foreground hover:border-primary-200 hover:bg-surface-alt/30"
+      }`}
+    >
+      <div className={checked ? "text-primary-600" : "text-muted"}>{icon}</div>
+      <p className="text-xs font-bold leading-tight">{title}</p>
+      {subtitle && <p className="text-[10px] text-muted">{subtitle}</p>}
+    </button>
   );
 }
