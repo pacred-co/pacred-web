@@ -12,6 +12,7 @@ import {
   type Address,
 } from "@/actions/addresses";
 import type { AddressInput } from "@/lib/validators/addresses";
+import { Pencil, Trash2, Star, Phone, MapPin, Plus } from "lucide-react";
 
 type Props = {
   initialAddresses: Address[];
@@ -126,53 +127,114 @@ export function AddressesManager({ initialAddresses }: Props) {
         </div>
       )}
 
-      <div className="space-y-3">
-        {addresses.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border p-8 text-center text-muted">
-            {t("empty")}
+      {/* Address list */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-surface-alt/30">
+          <p className="text-sm font-bold text-foreground">
+            ที่อยู่ทั้งหมด <span className="text-muted font-normal">({addresses.length})</span>
+          </p>
+          {!editing && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500 text-white px-3 py-1.5 text-xs font-bold hover:bg-emerald-600 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> เพิ่มที่อยู่
+            </button>
+          )}
+        </div>
+
+        {addresses.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-surface-alt text-muted">
+              <MapPin className="w-7 h-7" />
+            </div>
+            <p className="mt-3 text-sm font-medium text-foreground">ยังไม่มีที่อยู่จัดส่ง</p>
+            <p className="mt-1 text-xs text-muted">เพิ่มที่อยู่แรกของคุณเพื่อใช้สั่งซื้อ</p>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600 shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> เพิ่มที่อยู่
+            </button>
           </div>
-        )}
-        {addresses.map((a) => (
-          <div key={a.id} className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">{a.first_name} {a.last_name}</span>
-                  {a.is_default && (
-                    <span className="rounded-full bg-primary-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      {t("defaultBadge")}
+        ) : (
+          <div className="divide-y divide-border">
+            {addresses.map((a, i) => (
+              <div key={a.id} className="p-5 hover:bg-surface-alt/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className={`shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                    a.is_default ? "bg-red-500 text-white" : "bg-surface-alt text-muted"
+                  }`}>
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-foreground">{a.first_name} {a.last_name}</span>
+                      {a.is_default && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 text-red-700 px-2 py-0.5 text-[11px] font-bold">
+                          <Star className="w-3 h-3 fill-current" /> ที่อยู่หลัก
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted flex items-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      <a href={`tel:${a.phone}`} className="hover:text-primary-600 font-mono">{a.phone}</a>
+                      {a.phone2 && <span className="text-muted"> / {a.phone2}</span>}
+                    </p>
+                    <p className="text-sm text-foreground">
+                      {a.address_line}{" "}
+                      <span className="text-muted">ต.</span>{a.sub_district}{" "}
+                      <span className="text-muted">อ.</span>{a.district}{" "}
+                      <span className="text-muted">จ.</span>{a.province}{" "}
+                      <span className="font-mono">{a.postal_code}</span>
+                    </p>
+                    {a.note && (
+                      <p className="text-xs text-muted">📝 {a.note}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action buttons (PCS-style: red-outline ลบ / amber-outline แก้ไข / blue-outline ตั้งเป็นหลัก) */}
+                <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(a)}
+                    disabled={pending || a.is_default}
+                    title={a.is_default ? "ไม่สามารถลบที่อยู่หลักได้" : "ลบที่อยู่นี้"}
+                    className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white text-red-600 hover:bg-red-50 px-3 py-1 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Trash2 className="w-3 h-3" /> ลบที่อยู่
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(a)}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white text-amber-700 hover:bg-amber-50 px-3 py-1 text-xs font-semibold disabled:opacity-50"
+                  >
+                    <Pencil className="w-3 h-3" /> แก้ไขที่อยู่
+                  </button>
+                  {a.is_default ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 text-red-700 px-3 py-1 text-xs font-bold">
+                      <Star className="w-3 h-3 fill-current" /> ที่อยู่หลัก
                     </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSetDefault(a.id)}
+                      disabled={pending}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white text-blue-700 hover:bg-blue-50 px-3 py-1 text-xs font-semibold disabled:opacity-50"
+                    >
+                      <Star className="w-3 h-3" /> ตั้งเป็นที่อยู่หลัก
+                    </button>
                   )}
                 </div>
-                <p className="text-sm text-muted">{a.phone}{a.phone2 ? ` / ${a.phone2}` : ""}</p>
-                <p className="text-sm text-foreground">
-                  {a.address_line} ต.{a.sub_district} อ.{a.district} จ.{a.province} {a.postal_code}
-                </p>
-                {a.note && <p className="text-xs text-muted">📝 {a.note}</p>}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {!a.is_default && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => onSetDefault(a.id)} disabled={pending}>
-                    {t("setAsDefault")}
-                  </Button>
-                )}
-                <Button type="button" variant="outline" size="sm" onClick={() => openEdit(a)} disabled={pending}>
-                  {t("edit")}
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => onDelete(a)} disabled={pending}>
-                  {t("delete")}
-                </Button>
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
-
-      {!editing && (
-        <div className="flex justify-end">
-          <Button type="button" onClick={openCreate}>{t("addNew")}</Button>
-        </div>
-      )}
 
       {editing && (
         <form onSubmit={onSubmit} className="rounded-2xl border-2 border-primary-500/30 bg-white dark:bg-surface p-6 shadow-sm space-y-4">
