@@ -32,7 +32,7 @@ export function Partner() {
   const t = useTranslations("partner");
 
   return (
-    <section id="partner" className="bg-background py-10">
+    <section id="partner" className="bg-background py-8">
       <div className="mx-auto w-full max-w-[1140px] px-[10px] flex flex-col gap-4">
 
         {/* Container 1 — Section heading */}

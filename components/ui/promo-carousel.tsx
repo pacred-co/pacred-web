@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 
 const LEFT_SLIDES = [
@@ -18,12 +18,28 @@ function InnerCarousel({
   slides,
   width,
   height,
+  delay,
 }: {
   slides: string[];
   width: string;
   height: string;
+  delay?: number;
 }) {
   const [current, setCurrent] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function resetTimer() {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = setInterval(() => {
+      setCurrent((c) => (c + 1) % slides.length);
+    }, delay ?? 4000);
+  }
+
+  useEffect(() => {
+    resetTimer();
+    return () => { if (timer.current) clearInterval(timer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides.length]);
 
   return (
     <div className={`relative ${width} ${height} shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden`}>
@@ -51,7 +67,7 @@ function InnerCarousel({
         {slides.map((_, i) => (
           <button
             key={i}
-            onClick={() => setCurrent(i)}
+            onClick={() => { setCurrent(i); resetTimer(); }}
             className={`h-1.5 rounded-full transition-all ${
               current === i ? "w-5 bg-primary-500" : "w-1.5 bg-black/20 dark:bg-white/30"
             }`}
@@ -66,8 +82,8 @@ function InnerCarousel({
 export function PromoCarousel() {
   return (
     <div className="flex gap-5">
-      <InnerCarousel slides={LEFT_SLIDES} width="w-[730px]" height="h-[180px]" />
-      <InnerCarousel slides={RIGHT_SLIDES} width="w-[350px]" height="h-[180px]" />
+      <InnerCarousel slides={LEFT_SLIDES} width="w-[730px]" height="h-[180px]" delay={4000} />
+      <InnerCarousel slides={RIGHT_SLIDES} width="w-[350px]" height="h-[180px]" delay={3000} />
     </div>
   );
 }
