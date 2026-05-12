@@ -23,8 +23,15 @@ export async function DashboardBanners() {
     .order("sort_order", { ascending: true })
     .limit(3);
 
-  const banners = (data ?? []) as Banner[];
-  if (banners.length === 0) return null;
+  // Fallback to hardcoded default banners when the table is empty (or
+  // migration 0016 hasn't run yet) — so the dashboard always has the
+  // visual row, matching the PCS legacy layout.
+  const DEFAULT_BANNERS: Banner[] = [
+    { id: "default-search-china", slug: "search-china", title: "ค้นหาสินค้าจากเว็บ 1688 / Taobao / Tmall", subtitle: "วางลิ้งสินค้าหรือพิมพ์คำค้น แปลภาษาไทยทันที", image_path: null, link_href: "/service-order/add", cta_label: "เริ่มค้นหา" },
+    { id: "default-billing",      slug: "billing",      title: "ออกบิลใบเสร็จ / ใบแจ้งหนี้",                 subtitle: "ฝากสั่งซื้อด้วยตัวคุณเอง — Pacred ออกบิลให้อัตโนมัติ", image_path: null, link_href: "/service-order/cart", cta_label: "ดูตัวอย่าง" },
+    { id: "default-line-notify",  slug: "line-notify",  title: "ไม่พลาดทุกการแจ้งเตือน",                     subtitle: "เชื่อมต่อ LINE OA Pacred ได้แล้ววันนี้",              image_path: null, link_href: "/profile",            cta_label: "เชื่อม LINE" },
+  ];
+  const banners = ((data ?? []) as Banner[]).length > 0 ? (data as Banner[]) : DEFAULT_BANNERS;
 
   // Use slug to color-theme banners
   const themes: Record<string, string> = {

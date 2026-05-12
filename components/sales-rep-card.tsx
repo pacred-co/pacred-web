@@ -16,7 +16,9 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
     .eq("id", profileId)
     .maybeSingle<{ sales_admin_id: string | null }>();
 
-  if (!customer?.sales_admin_id) return null;
+  // No rep assigned yet → show the Pacred-default fallback so the card is
+  // never invisible (mirrors PCS legacy: every customer sees an "ผู้ดูแล" card).
+  if (!customer?.sales_admin_id) return <SalesRepFallback />;
 
   // sales_admin_id is a profile_id (member_code-style or uuid).
   // Try uuid first, fallback to member_code lookup.
@@ -26,7 +28,7 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
     : supabase.from("profiles").select("id, first_name, last_name, phone, avatar_url, member_code").eq("member_code", customer.sales_admin_id).maybeSingle();
 
   const { data: rep } = await lookup as { data: { id: string; first_name: string | null; last_name: string | null; phone: string | null; avatar_url: string | null; member_code: string | null } | null };
-  if (!rep) return null;
+  if (!rep) return <SalesRepFallback />;
 
   // Optional sidecar with display_name + direct_phone overrides
   const { data: extras } = await supabase
@@ -65,6 +67,33 @@ export async function SalesRepCard({ profileId }: { profileId: string }) {
               📞 {phone}
             </a>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Default sales rep card shown to customers who don't have an assigned
+ *  rep yet — points to Pacred's main contact number. Keeps the dashboard
+ *  visually balanced (no missing card slot) and gives the user someone to
+ *  call from day one. */
+function SalesRepFallback() {
+  return (
+    <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-50 to-primary-100/30 p-4 shadow-sm">
+      <p className="text-[10px] uppercase tracking-widest text-primary-700 font-semibold">ผู้ดูแล</p>
+      <div className="mt-2 flex items-center gap-3">
+        <div className="relative h-14 w-14 rounded-full overflow-hidden border-2 border-white bg-surface-alt flex items-center justify-center shrink-0 shadow-md">
+          <span className="text-xl font-bold text-primary-700">P</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-foreground text-sm leading-tight">ทีมงาน Pacred</p>
+          <p className="text-[10px] text-muted">Customer Care</p>
+          <a
+            href="tel:024447046"
+            className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 font-mono hover:underline"
+          >
+            📞 02-444-7046
+          </a>
         </div>
       </div>
     </div>
