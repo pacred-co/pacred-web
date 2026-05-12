@@ -40,10 +40,63 @@ export default async function AdminHRPage() {
         <p className="mt-1 text-sm text-muted">ข้อมูลพนักงาน admin ทั้งหมดในระบบ จัดกลุ่มตามฝ่าย</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Link href="/admin/admins" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
-          + เพิ่ม / แก้สิทธิ์ admin
+      {/* HR sub-modules quick links — Phase 1 ships org chart, others coming */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          href="/admin/hr/org-chart"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500 text-white text-lg shrink-0">🌳</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">ผังองค์กรแบบภาพ</p>
+            <p className="text-xs text-muted mt-0.5">Tree view · CEO → Directors → Sections → Positions</p>
+          </div>
         </Link>
+        <Link
+          href="/admin/hr/org-table"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500 text-white text-lg shrink-0">📋</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">ผังองค์กรแบบตาราง</p>
+            <p className="text-xs text-muted mt-0.5">ทุก position พร้อม quota + ผู้นั่งปัจจุบัน</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/admins"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500 text-white text-lg shrink-0">👤</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">เพิ่ม / แก้สิทธิ์ Admin</p>
+            <p className="text-xs text-muted mt-0.5">RBAC role + contact extras</p>
+          </div>
+        </Link>
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">📝</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">สรรหา / รับสมัครงาน</p>
+            <p className="text-xs text-muted mt-0.5">Phase 2 — ลงประกาศ · นัดสัมภาษณ์ · รอเข้าทำงาน</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">⏰</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">เข้างาน / ลา / KPI</p>
+            <p className="text-xs text-muted mt-0.5">Phase 3 — TAS · วันลา · KPI · โบนัส · เงินเดือน</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">📚</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">อบรม / นโยบาย / Audit</p>
+            <p className="text-xs text-muted mt-0.5">Phase 3 — Training · Policies · ออดิทพนักงาน</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4 mt-2">
+        <h2 className="text-base font-bold text-foreground mb-3">Admin ที่มีสิทธิ์ในระบบ ({Array.from(byDept.values()).reduce((s, r) => s + r.length, 0)} คน)</h2>
       </div>
 
       {byDept.size === 0 ? (

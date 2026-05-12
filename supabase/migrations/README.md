@@ -29,6 +29,7 @@
 | 14 | [0014_notifications.sql](0014_notifications.sql) | notifications log + notification_reads | **F2** |
 | 15 | [0015_admin_rbac.sql](0015_admin_rbac.sql) | admins + is_admin() + admin_audit_log + admin RLS overrides | **G2** |
 | 16 | [0016_phase_h_upgrades.sql](0016_phase_h_upgrades.sql) | containers + admin_contact_extras + dashboard_banners + cart_items variant fields | **H** |
+| 17 | [0017_org_chart.sql](0017_org_chart.sql) | org_branches + org_sections + org_positions + org_assignments + seed Pacred structure (3 directors, 9 sections, 24 positions) | **H · HR** |
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 
