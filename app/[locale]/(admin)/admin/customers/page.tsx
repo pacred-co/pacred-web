@@ -1,5 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerRowActions } from "@/components/admin/customer-row-actions";
+
+const STATUS_CFG: Record<string, { label: string; className: string }> = {
+  active:     { label: "ใช้งาน",      className: "bg-green-50 text-green-700 border-green-200" },
+  incomplete: { label: "รอ Approve",  className: "bg-amber-50 text-amber-700 border-amber-200" },
+  suspended:  { label: "ระงับ",       className: "bg-red-50 text-red-700 border-red-200" },
+};
 
 export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string }> }) {
   const sp = await searchParams;
@@ -64,8 +71,10 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                   <th className="px-4 py-3">ชื่อ</th>
                   <th className="px-4 py-3">เบอร์ / อีเมล</th>
                   <th className="px-4 py-3">กลุ่ม</th>
+                  <th className="px-4 py-3">สถานะ</th>
                   <th className="px-4 py-3 text-right">ยอดกระเป๋า</th>
                   <th className="px-4 py-3">สมัครเมื่อ</th>
+                  <th className="px-4 py-3">จัดการ</th>
                 </tr>
               </thead>
               <tbody>
@@ -89,10 +98,21 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                       <div className="text-muted">{r.email ?? "—"}</div>
                     </td>
                     <td className="px-4 py-3 text-xs font-mono">{r.customer_group}</td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const cfg = STATUS_CFG[r.status] ?? { label: r.status, className: "bg-surface text-muted border-border" };
+                        return (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>
+                            {cfg.label}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
                       ฿{Number(r.wallet_row?.balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
+                    <td className="px-4 py-3"><CustomerRowActions id={r.id} status={r.status} /></td>
                   </tr>
                 ))}
               </tbody>
