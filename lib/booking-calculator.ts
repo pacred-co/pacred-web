@@ -42,7 +42,7 @@ export function calcLCL(form: LCLForm, term: Term, doc: string): CalcResult | nu
   const docFee     = doc === 'none' ? 0 : doc === 'customs' ? 1200 : 600;
 
   let total = seaFreight + thc + docFee + surcharge;
-  let rows = [
+  const rows = [
     { label: 'ค่าระวางเรือ', value: `${fmt(Math.round(seaFreight))} บาท` },
     { label: 'THC ปลายทาง', value: `${fmt(thc)} บาท` },
   ];

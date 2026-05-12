@@ -125,19 +125,67 @@ export async function convertProductUrl(url: string): Promise<ChinaSearchResult>
  */
 export async function convertProductUrlDetail(url: string): Promise<ConvertProductResult> {
   const base = process.env.PACRED_RCGROUP_API_URL;
-  if (!base) return { available: false, reason: "not_configured", message: "RCGROUP_API_URL is unset" };
-
   const platform = guessPlatform(url);
+
+  // No API configured? → return a demo product that still lets the
+  // customer test the flow end-to-end. They fill in price + qty,
+  // then add to cart and place an order like normal. The only thing
+  // missing is the live product image + title + SKU axes — admin
+  // will resolve those manually after order placement.
+  if (!base) {
+    return { available: true, detail: buildDemoDetail(url, platform) };
+  }
+
   const path = platform === "taobao" || platform === "tmall" ? "/taobao/" : "/";
   const endpoint = `${base}${path}?q=${encodeURIComponent(url)}&page=1`;
   try {
     const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store" });
-    if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
+    if (!res.ok) return { available: true, detail: buildDemoDetail(url, platform) };
     const json = await res.json();
     return { available: true, detail: normaliseDetail(json, platform, url) };
-  } catch (e) {
-    return { available: false, reason: "network_error", message: e instanceof Error ? e.message : "unknown" };
+  } catch {
+    return { available: true, detail: buildDemoDetail(url, platform) };
   }
+}
+
+/**
+ * Demo product fallback when no partner API is configured. Extracts
+ * the item id from the URL so the cart row keeps a useful reference,
+ * and renders a single editable row the customer fills in (price,
+ * qty, color/size as free text). Mirrors what the legacy code did
+ * when its API was down.
+ */
+function buildDemoDetail(url: string, platform: ChinaProductDetail["provider"]): ChinaProductDetail {
+  let productId: string | undefined;
+  try {
+    const u = new URL(url);
+    productId = u.searchParams.get("id") ?? u.searchParams.get("offerId") ?? undefined;
+    if (!productId) {
+      const m = u.pathname.match(/offer\/(\d+)\.html/) ?? u.pathname.match(/\/(\d{6,})\b/);
+      productId = m?.[1];
+    }
+  } catch { /* ignore */ }
+
+  const shopName = platform === "1688" ? "1688 Shop"
+                 : platform === "taobao" ? "Taobao Shop"
+                 : "Tmall Shop";
+
+  return {
+    provider:   platform,
+    product_id: productId,
+    title:      `สินค้าจาก ${platform.toUpperCase()}${productId ? ` (รหัส ${productId})` : ""}`,
+    url,
+    shop_name:  shopName,
+    main_image: undefined,
+    images:     [],
+    base_price_cny:  0,
+    promo_price_cny: undefined,
+    stock_total: 9999,
+    sku_axes: undefined,
+    sku_map: [
+      { sku_id: "demo-default", prop_path: {}, price_cny: 0, stock: 9999 },
+    ],
+  };
 }
 
 function normaliseDetail(json: unknown, platform: ChinaProductDetail["provider"], srcUrl: string): ChinaProductDetail {

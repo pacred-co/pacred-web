@@ -27,7 +27,11 @@
       "Read(//tmp/**)",
       "Bash(cp /tmp/combined-migration.sql \"/c/Users/devvork/Desktop/pacred-migration-0003-to-0015.sql\" && ls -la \"/c/Users/devvork/Desktop/pacred-migration-0003-to-0015.sql\")",
       "Bash(grep -vE \"\\\\.\\(png|jpg|jpeg|txt|webp|svg\\)$|^---|^ public/images\")",
-      "Bash(git -c user.name=\"deffeyameh\" -c user.email=\"tadsakorn.n@gmail.com\" merge origin/podeng --no-edit)"
+      "Bash(git -c user.name=\"deffeyameh\" -c user.email=\"tadsakorn.n@gmail.com\" merge origin/podeng --no-edit)",
+      "Bash(pnpm lint *)",
+      "Bash(node node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx 'app/[locale]/\\(admin\\)/admin/reports/page.tsx' 'app/[locale]/\\(admin\\)/admin/accounting/page.tsx' 'app/[locale]/\\(admin\\)/admin/hr/page.tsx' 'app/[locale]/\\(admin\\)/admin/learning/page.tsx' 'app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx')",
+      "PowerShell($env:PATHEXT += \";.CMD;.JS\"; & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx \"app/[locale]/\\(admin\\)/admin/reports/page.tsx\" \"app/[locale]/\\(admin\\)/admin/accounting/page.tsx\" \"app/[locale]/\\(admin\\)/admin/hr/page.tsx\" \"app/[locale]/\\(admin\\)/admin/learning/page.tsx\" \"app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx\" 2>&1 | Select-Object -Last 80)",
+      "Bash(cd \"/c/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7\" && ls \"app/[locale]/\\(protected\\)\")"
     ]
   }
 }

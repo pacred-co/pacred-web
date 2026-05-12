@@ -38,6 +38,9 @@
     "walletWithdraw": "ถอนเงิน",
     "walletDeposit": "เติมเงิน",
     "addresses": "ที่อยู่จัดส่งสินค้า",
+    "profile": "ข้อมูลส่วนตัว",
+    "notifications": "การแจ้งเตือน",
+    "sales": "พื้นที่ทีมขาย",
     "expand": "ขยายเมนู",
     "collapse": "หดเมนู"
   },

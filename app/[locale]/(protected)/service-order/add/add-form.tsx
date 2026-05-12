@@ -185,15 +185,18 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   const [yuanRate, setYuanRate] = useState(5);     // fetched live
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [qtyMap, setQtyMap] = useState<Record<string, number>>({});
-  const [notesMap, setNotesMap] = useState<Record<string, string>>({});
+  const [qtyMap, setQtyMap]               = useState<Record<string, number>>({});
+  const [notesMap, setNotesMap]           = useState<Record<string, string>>({});
+  const [priceOverrideMap, setPriceMap]   = useState<Record<string, number>>({});
+  const [colorMap, setColorMap]           = useState<Record<string, string>>({});
+  const [sizeMap, setSizeMap]             = useState<Record<string, string>>({});
 
   async function onSearch() {
     if (!url.trim()) return;
     setSearching(true);
     setUnavailable(null);
     setDetail(null);
-    setQtyMap({}); setNotesMap({});
+    setQtyMap({}); setNotesMap({}); setPriceMap({}); setColorMap({}); setSizeMap({});
 
     // Fetch product detail + current yuan rate in parallel
     const [detailRes, rateRes] = await Promise.all([
@@ -233,8 +236,11 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
     }));
   })();
 
+  // Effective price = override > row.price (override only kicks in when user typed something)
+  const priceFor = (key: string, fallback: number) => priceOverrideMap[key] ?? fallback;
+
   const totalQty = Object.values(qtyMap).reduce((s, n) => s + (n || 0), 0);
-  const totalCny = rows.reduce((s, r) => s + ((qtyMap[r.key] || 0) * r.price), 0);
+  const totalCny = rows.reduce((s, r) => s + ((qtyMap[r.key] || 0) * priceFor(r.key, r.price)), 0);
   const totalThb = Math.round(totalCny * yuanRate * 100) / 100;
 
   function onAddSelected() {
@@ -247,8 +253,10 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
         url:               detail.url,
         title:             detail.title,
         image_path:        r.image,
-        price_cny:         r.price,
+        price_cny:         priceFor(r.key, r.price),
         amount:            qtyMap[r.key],
+        color:             colorMap[r.key] || undefined,
+        size:              sizeMap[r.key] || undefined,
         details:           notesMap[r.key] || undefined,
         variant_label:     r.label,
         variant_data:      r.data,
@@ -331,8 +339,10 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
               <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
                 {rows.map((r) => {
                   const qty = qtyMap[r.key] || 0;
-                  const lineCny = qty * r.price;
+                  const effectivePrice = priceFor(r.key, r.price);
+                  const lineCny = qty * effectivePrice;
                   const lineThb = lineCny * yuanRate;
+                  const isDemoMode = r.price === 0;
                   return (
                     <div key={r.key} className="px-4 py-3 hover:bg-surface-alt/30">
                       <div className="flex items-start gap-3">
@@ -342,15 +352,42 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
                         ) : (
                           <div className="w-12 h-12 rounded-md bg-surface-alt shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-medium line-clamp-1">{r.label}</p>
-                          <p className="text-[10px] text-muted">สต๊อก {r.stock.toLocaleString()} · ¥{r.price.toFixed(2)}/ชิ้น</p>
+                          <p className="text-[10px] text-muted">
+                            สต๊อก {r.stock.toLocaleString()}
+                            {!isDemoMode && <> · ¥{r.price.toFixed(2)}/ชิ้น</>}
+                          </p>
+                          {isDemoMode && (
+                            <div className="flex items-center gap-1">
+                              <label className="text-[10px] text-muted whitespace-nowrap">ราคา ¥</label>
+                              <input
+                                type="number" min="0" step="0.01"
+                                value={priceOverrideMap[r.key] ?? ""}
+                                onChange={(e) => setPriceMap({ ...priceOverrideMap, [r.key]: Number(e.target.value) || 0 })}
+                                placeholder="0.00"
+                                className="w-24 text-xs rounded border border-border px-2 py-1"
+                              />
+                              <input
+                                type="text" placeholder="สี"
+                                value={colorMap[r.key] || ""}
+                                onChange={(e) => setColorMap({ ...colorMap, [r.key]: e.target.value })}
+                                className="w-16 text-xs rounded border border-border px-2 py-1"
+                              />
+                              <input
+                                type="text" placeholder="ไซส์"
+                                value={sizeMap[r.key] || ""}
+                                onChange={(e) => setSizeMap({ ...sizeMap, [r.key]: e.target.value })}
+                                className="w-16 text-xs rounded border border-border px-2 py-1"
+                              />
+                            </div>
+                          )}
                           <input
                             type="text"
                             placeholder="หมายเหตุ เช่น ต่อราคาร้านค้า สอบถามข้อมูล"
                             value={notesMap[r.key] || ""}
                             onChange={(e) => setNotesMap({ ...notesMap, [r.key]: e.target.value })}
-                            className="mt-1 w-full text-xs rounded border border-border px-2 py-1"
+                            className="w-full text-xs rounded border border-border px-2 py-1"
                           />
                         </div>
                         <div className="text-right shrink-0 w-24">
@@ -408,7 +445,7 @@ function prettifyPropPath(path: Record<string, string>, axes?: ChinaProductDetai
   if (!axes) return Object.values(path).join(" / ");
   // axes is an array; path keys are axis ids — fallback: just join values
   const parts: string[] = [];
-  for (const [axisId, valId] of Object.entries(path)) {
+  for (const valId of Object.values(path)) {
     // try to resolve label from axes
     for (const axis of axes) {
       const match = axis.values.find((v) => v.data === valId || v.label === valId);

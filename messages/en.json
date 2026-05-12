@@ -38,6 +38,9 @@
     "walletWithdraw": "Withdraw",
     "walletDeposit": "Deposit",
     "addresses": "Shipping Addresses",
+    "profile": "My Profile",
+    "notifications": "Notifications",
+    "sales": "Sales Team Area",
     "expand": "Expand",
     "collapse": "Collapse"
   },

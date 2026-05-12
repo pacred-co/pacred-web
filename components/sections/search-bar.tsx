@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Link } from "@/i18n/navigation";
 
 const QUICK_KEYS = [
   "เสื้อผ้าแฟชั่น",
@@ -18,7 +19,7 @@ export function SearchBar() {
         <div className="flex items-center gap-4">
 
           {/* Logo — ขยายชนขอบบน-ล่าง แล้วโดนขอบ clip */}
-          <a href="/" className="hidden sm:block shrink-0 -my-[10px]">
+          <Link href="/" className="hidden sm:block shrink-0 -my-[10px]">
             <Image
               src="/images/iconfloattabs/pacleft.png"
               alt="Pacred"
@@ -27,7 +28,7 @@ export function SearchBar() {
               className="h-[64px] w-auto object-contain"
               priority
             />
-          </a>
+          </Link>
 
           {/* Search input + camera + button */}
           <div className="relative flex-1">
@@ -60,8 +61,8 @@ export function SearchBar() {
           </div>
 
           {/* Cart */}
-          <a
-            href="/member/cart"
+          <Link
+            href="/service-order/cart"
             aria-label="ตะกร้าสินค้า"
             className="shrink-0 flex items-center justify-center w-[44px] h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background hover:border-red-300 hover:bg-red-50 transition-colors duration-200 text-gray-500 dark:text-muted hover:text-red-600"
           >
@@ -70,23 +71,23 @@ export function SearchBar() {
               <circle cx="19" cy="21" r="1" />
               <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
             </svg>
-          </a>
+          </Link>
 
         </div>
 
         {/* Quick keywords */}
         <div className="flex items-center justify-center flex-wrap gap-0 pt-2">
           {QUICK_KEYS.map((kw, i) => (
-            <a
+            <Link
               key={kw}
-              href={`/member/search/?url=${encodeURIComponent(kw)}`}
+              href={`/service-order/add?q=${encodeURIComponent(kw)}`}
               className="relative px-[10px] text-[11.5px] font-medium text-gray-500 hover:text-red-600 transition-colors duration-200 whitespace-nowrap leading-none first:pl-0"
             >
               {i > 0 && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-[10px] bg-gray-300 dark:bg-border" />
               )}
               {kw}
-            </a>
+            </Link>
           ))}
         </div>
 

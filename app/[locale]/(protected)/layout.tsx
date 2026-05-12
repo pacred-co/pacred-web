@@ -4,6 +4,7 @@ import { ProtectedSidebar } from "@/components/sections/protected-sidebar";
 import { TosGate } from "@/components/tos-gate";
 import { FloatingActionMenu } from "@/components/floating-action-menu";
 import { isTosCurrent } from "@/lib/tos";
+import { getSidebarData } from "@/lib/sidebar-data";
 
 /**
  * Layout for routes under (protected).
@@ -21,11 +22,24 @@ export default async function ProtectedLayout({
   const { profile } = await requireAuth();
   const needsTosAccept = !!profile && !isTosCurrent(profile.tos_accepted_version);
 
+  // Fetch sidebar badges + sales rep; tolerate any DB-shape skew silently.
+  let sidebarData: Awaited<ReturnType<typeof getSidebarData>> = {
+    badges: {},
+    salesRep: null,
+  };
+  if (profile) {
+    try {
+      sidebarData = await getSidebarData(profile.id);
+    } catch {
+      /* keep defaults */
+    }
+  }
+
   return (
     <>
       <NavBar />
       <div className="protected-content pb-16 lg:pb-0">{children}</div>
-      <ProtectedSidebar />
+      <ProtectedSidebar badges={sidebarData.badges} salesRep={sidebarData.salesRep} />
       <FloatingActionMenu />
       {needsTosAccept && <TosGate />}
     </>

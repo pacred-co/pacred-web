@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import {
   Banknote,
+  Bell,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -12,6 +13,8 @@ import {
   MapPin,
   Package,
   ShoppingCart,
+  TrendingUp,
+  User,
   Wallet,
 } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -27,13 +30,30 @@ type LinkItem = {
   href: string;
   labelKey: string;
   Icon: IconType;
+  badgeKey?: BadgeKey;
 };
 
 type GroupItem = {
   labelKey: string;
   Icon: IconType;
-  children: { href: string; labelKey: string }[];
+  badgeKey?: BadgeKey;
+  children: { href: string; labelKey: string; badgeKey?: BadgeKey }[];
 };
+
+export type BadgeKey =
+  | "serviceOrderPending"
+  | "serviceImportPending"
+  | "servicePaymentPending"
+  | "notifications"
+  | "salesPending";
+
+export type SidebarBadges = Partial<Record<BadgeKey, number>>;
+
+export type SalesRepInfo = {
+  display_name: string | null;
+  phone: string | null;
+  line_id?: string | null;
+} | null;
 
 type MenuItem = LinkItem | GroupItem;
 
@@ -47,9 +67,10 @@ const MENU: MenuItem[] = [
   {
     labelKey: "serviceOrder",
     Icon: ShoppingCart,
+    badgeKey: "serviceOrderPending",
     children: [
       { href: "/service-order", labelKey: "serviceOrderAll" },
-      { href: "/service-order/pending", labelKey: "serviceOrderPending" },
+      { href: "/service-order/pending", labelKey: "serviceOrderPending", badgeKey: "serviceOrderPending" },
       { href: "/service-order/cart", labelKey: "serviceOrderCart" },
       { href: "/service-order/add", labelKey: "serviceOrderAdd" },
     ],
@@ -57,9 +78,10 @@ const MENU: MenuItem[] = [
   {
     labelKey: "serviceImport",
     Icon: Package,
+    badgeKey: "serviceImportPending",
     children: [
       { href: "/service-import", labelKey: "serviceImportAll" },
-      { href: "/service-import/pending", labelKey: "serviceImportPending" },
+      { href: "/service-import/pending", labelKey: "serviceImportPending", badgeKey: "serviceImportPending" },
       { href: "/service-import/receipts", labelKey: "serviceImportReceipts" },
       { href: "/service-import/add", labelKey: "serviceImportAdd" },
     ],
@@ -67,8 +89,9 @@ const MENU: MenuItem[] = [
   {
     labelKey: "servicePayment",
     Icon: Banknote,
+    badgeKey: "servicePaymentPending",
     children: [
-      { href: "/service-payment", labelKey: "servicePaymentMain" },
+      { href: "/service-payment", labelKey: "servicePaymentMain", badgeKey: "servicePaymentPending" },
       { href: "/service-payment/add", labelKey: "servicePaymentAdd" },
     ],
   },
@@ -82,6 +105,9 @@ const MENU: MenuItem[] = [
     ],
   },
   { href: "/addresses", labelKey: "addresses", Icon: MapPin },
+  { href: "/profile", labelKey: "profile", Icon: User },
+  { href: "/notifications", labelKey: "notifications", Icon: Bell, badgeKey: "notifications" },
+  { href: "/sales", labelKey: "sales", Icon: TrendingUp, badgeKey: "salesPending" },
 ];
 
 function subscribe(callback: () => void) {
@@ -103,7 +129,13 @@ function getServerSnapshot() {
 
 type LinkHref = Parameters<typeof Link>[0]["href"];
 
-export function ProtectedSidebar() {
+export function ProtectedSidebar({
+  badges = {},
+  salesRep = null,
+}: {
+  badges?: SidebarBadges;
+  salesRep?: SalesRepInfo;
+} = {}) {
   const t = useTranslations("sidebar");
   const pathname = usePathname();
   const expanded = useSyncExternalStore(
@@ -145,29 +177,51 @@ export function ProtectedSidebar() {
         expanded ? "w-52" : "w-16"
       }`}
     >
+      {expanded && salesRep && (salesRep.display_name || salesRep.phone) && (
+        <div className="m-2 mb-1 rounded-xl border border-primary-100 bg-primary-50/60 dark:border-primary-900/40 dark:bg-primary-900/10 px-3 py-2">
+          <p className="text-[10px] font-semibold tracking-widest text-primary-600 uppercase">พนักงานขายของท่าน</p>
+          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground truncate">
+            {salesRep.display_name || "—"}
+          </p>
+          {salesRep.phone && (
+            <a href={`tel:${salesRep.phone}`} className="block text-[11px] text-primary-700 hover:underline">
+              📞 {salesRep.phone}
+            </a>
+          )}
+          {salesRep.line_id && (
+            <p className="text-[11px] text-muted truncate">LINE: {salesRep.line_id}</p>
+          )}
+        </div>
+      )}
+
       <nav className="flex flex-1 flex-col gap-1 p-2 overflow-y-auto">
         {MENU.map((item) => {
           if (!isGroup(item)) {
             const active = isActive(item.href);
+            const badge = item.badgeKey ? badges[item.badgeKey] ?? 0 : 0;
             return (
               <Link
                 key={item.labelKey}
                 href={item.href as LinkHref}
                 title={expanded ? undefined : t(item.labelKey)}
-                className={`flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
+                className={`relative flex h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition ${
                   active
                     ? "bg-primary-500 text-white"
                     : "text-foreground hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600"
                 }`}
               >
                 <item.Icon className="h-5 w-5 shrink-0" />
-                {expanded && <span className="truncate">{t(item.labelKey)}</span>}
+                {expanded && <span className="truncate flex-1">{t(item.labelKey)}</span>}
+                {badge > 0 && (
+                  <BadgePill count={badge} active={active} floating={!expanded} />
+                )}
               </Link>
             );
           }
 
           // Group
           const groupActive = isGroupActive(item);
+          const groupBadge = item.badgeKey ? badges[item.badgeKey] ?? 0 : 0;
 
           // Collapsed: icon links to first child (primary entry point)
           if (!expanded) {
@@ -176,13 +230,14 @@ export function ProtectedSidebar() {
                 key={item.labelKey}
                 href={item.children[0].href as LinkHref}
                 title={t(item.labelKey)}
-                className={`flex h-11 items-center justify-center rounded-lg text-sm font-medium transition ${
+                className={`relative flex h-11 items-center justify-center rounded-lg text-sm font-medium transition ${
                   groupActive
                     ? "bg-primary-500 text-white"
                     : "text-foreground hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600"
                 }`}
               >
                 <item.Icon className="h-5 w-5 shrink-0" />
+                {groupBadge > 0 && <BadgePill count={groupBadge} active={groupActive} floating />}
               </Link>
             );
           }
@@ -205,6 +260,7 @@ export function ProtectedSidebar() {
                 <span className="truncate flex-1 text-left">
                   {t(item.labelKey)}
                 </span>
+                {groupBadge > 0 && <BadgePill count={groupBadge} active={false} />}
                 <ChevronDown
                   className={`h-3.5 w-3.5 shrink-0 transition-transform ${
                     open ? "rotate-180" : ""
@@ -216,17 +272,19 @@ export function ProtectedSidebar() {
                 <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-2">
                   {item.children.map((child) => {
                     const childActive = isActive(child.href);
+                    const childBadge = child.badgeKey ? badges[child.badgeKey] ?? 0 : 0;
                     return (
                       <Link
                         key={child.href}
                         href={child.href as LinkHref}
-                        className={`flex h-9 items-center rounded-md px-2.5 text-[13px] transition ${
+                        className={`flex h-9 items-center gap-2 rounded-md px-2.5 text-[13px] transition ${
                           childActive
                             ? "bg-primary-500 text-white font-medium"
                             : "text-muted hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-600"
                         }`}
                       >
-                        <span className="truncate">{t(child.labelKey)}</span>
+                        <span className="truncate flex-1">{t(child.labelKey)}</span>
+                        {childBadge > 0 && <BadgePill count={childBadge} active={childActive} />}
                       </Link>
                     );
                   })}
@@ -251,5 +309,33 @@ export function ProtectedSidebar() {
         )}
       </button>
     </aside>
+  );
+}
+
+function BadgePill({
+  count,
+  active,
+  floating = false,
+}: {
+  count: number;
+  active: boolean;
+  floating?: boolean;
+}) {
+  const text = count > 99 ? "99+" : String(count);
+  if (floating) {
+    return (
+      <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white shadow">
+        {text}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none ${
+        active ? "bg-white text-primary-600" : "bg-red-600 text-white"
+      }`}
+    >
+      {text}
+    </span>
   );
 }
