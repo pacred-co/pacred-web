@@ -1,33 +1,57 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
 
-export default async function AdminDashboardPage() {
+const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+type TabKey =
+  | "topup" | "withdraw" | "payShop" | "shop1" | "shop2" | "shop4"
+  | "forwarder1" | "forwarder5" | "forwarderC" | "forwarder6" | "forwarder62"
+  | "payment" | "inactiveCustomers";
+
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const sp = await searchParams;
   const admin = createAdminClient();
+
+  // Month range (1st of this month → now)
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const monthLabel = `${THAI_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`;
 
   const [
     settings,
+    revShopMonth, revShopToday,
+    revForwarderMonth, revForwarderToday,
+    revYuanMonth, revYuanToday,
+    walletTotal,
     inactiveCustomers,
+    activeCustomerProfiles,
+    totalProfiles,
+    cancelledOrders,
     walletDepositsPending,
     walletWithdrawsPending,
-    yuanPending,
-    serviceOrdersPending,
-    serviceOrdersAwaitPay,
-    serviceOrdersOrdered,
-    serviceOrdersChnDispatch,
-    forwardersPending,
-    forwardersCredit,
-    forwardersInTransit,
-    forwardersDelivery,
     salesPayoutsPending,
+    yuanPending,
+    serviceOrdersPending, serviceOrdersAwaitPay, serviceOrdersOrdered, serviceOrdersChnDispatch,
+    forwardersPending, forwardersCredit, forwardersDelivery, forwardersInDelivery,
     containersActive,
-    totalProfiles,
-    totalForwarders,
-    totalServiceOrders,
   ] = await Promise.all([
     admin.from("settings").select("yuan_rate, service_fee").eq("id", 1).maybeSingle<{ yuan_rate: number; service_fee: number }>(),
+    admin.from("service_orders").select("total_thb").gte("created_at", monthStart).neq("status", "cancelled"),
+    admin.from("service_orders").select("total_thb").gte("created_at", todayStart).neq("status", "cancelled"),
+    admin.from("forwarders").select("total_price").gte("created_at", monthStart).neq("status", "cancelled"),
+    admin.from("forwarders").select("total_price").gte("created_at", todayStart).neq("status", "cancelled"),
+    admin.from("yuan_payments").select("thb_amount").gte("created_at", monthStart).eq("status", "completed"),
+    admin.from("yuan_payments").select("thb_amount").gte("created_at", todayStart).eq("status", "completed"),
+    admin.from("wallet").select("balance"),
     admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "incomplete"),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("profiles").select("id", { count: "exact", head: true }),
+    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "cancelled").gte("created_at", monthStart),
     admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "deposit").eq("status", "pending"),
     admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "withdraw").eq("status", "pending"),
+    admin.from("sales_payouts").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("yuan_payments").select("id", { count: "exact", head: true }).in("status", ["pending", "processing"]),
     admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
     admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_payment"),
@@ -35,114 +59,562 @@ export default async function AdminDashboardPage() {
     admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_chn_dispatch"),
     admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment"),
     admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment").eq("credit_used", true),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "in_transit"),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).in("status", ["arrived_thailand", "out_for_delivery"]),
-    admin.from("sales_payouts").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    admin.from("forwarders").select("id", { count: "exact", head: true }).in("status", ["arrived_thailand"]),
+    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "out_for_delivery"),
     admin.from("containers").select("id", { count: "exact", head: true }).in("status", ["preparing", "sealed", "in_transit"]),
-    admin.from("profiles").select("id", { count: "exact", head: true }),
-    admin.from("forwarders").select("id", { count: "exact", head: true }),
-    admin.from("service_orders").select("id", { count: "exact", head: true }),
   ]);
 
-  const yuanRate   = Number(settings.data?.yuan_rate ?? 5);
-  const serviceFee = Number(settings.data?.service_fee ?? 50);
+  const sumNum = <T extends Record<string, unknown>>(rows: T[] | null, key: keyof T): number =>
+    (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
 
-  const tabs = [
-    { label: "ลูกค้าที่ยังไม่ได้ใช้งาน", count: inactiveCustomers.count ?? 0,           href: "/admin/customers?status=incomplete",            tone: "muted" as const },
-    { label: "เติมเงิน",                  count: walletDepositsPending.count ?? 0,      href: "/admin/wallet?kind=deposit&status=pending",     tone: "blue" as const },
-    { label: "ถอนเงิน",                   count: walletWithdrawsPending.count ?? 0,     href: "/admin/wallet?kind=withdraw&status=pending",    tone: "orange" as const },
-    { label: "สั่งซื้อรอดำเนินการ",       count: serviceOrdersPending.count ?? 0,        href: "/admin/service-orders?status=pending",          tone: "muted" as const },
-    { label: "รอชำระเงินสินค้า",          count: serviceOrdersAwaitPay.count ?? 0,       href: "/admin/service-orders?status=awaiting_payment", tone: "yellow" as const },
-    { label: "รอร้านจีนจัดส่ง",           count: serviceOrdersOrdered.count ?? 0,        href: "/admin/service-orders?status=ordered",          tone: "blue" as const },
-    { label: "รอเข้าโกดังจีน",            count: serviceOrdersChnDispatch.count ?? 0,    href: "/admin/service-orders?status=awaiting_chn_dispatch", tone: "indigo" as const },
-    { label: "รอชำระเงินนำเข้า",          count: forwardersPending.count ?? 0,           href: "/admin/forwarders?status=pending_payment",      tone: "yellow" as const },
-    { label: "เครดิตค้างนำเข้า",          count: forwardersCredit.count ?? 0,            href: "/admin/forwarders?status=pending_payment",      tone: "orange" as const },
-    { label: "ขนส่งกลางทาง",              count: forwardersInTransit.count ?? 0,         href: "/admin/forwarders?status=in_transit",           tone: "indigo" as const },
-    { label: "เตรียมส่ง/กำลังจัดส่ง",     count: forwardersDelivery.count ?? 0,          href: "/admin/forwarders?status=arrived_thailand",     tone: "primary" as const },
-    { label: "ฝากโอนรอดำเนินการ",         count: yuanPending.count ?? 0,                 href: "/admin/yuan-payments?status=pending",           tone: "blue" as const },
-    { label: "เบิกค่าคอมรอ",              count: salesPayoutsPending.count ?? 0,         href: "/admin/sales-payouts?status=pending",           tone: "green" as const },
-    { label: "🚛 รายการตู้",              count: containersActive.count ?? 0,            href: "/admin/containers",                             tone: "primary" as const, emphasis: true },
+  const shopMonth      = sumNum(revShopMonth.data, "total_thb");
+  const shopToday      = sumNum(revShopToday.data, "total_thb");
+  const forwarderMonth = sumNum(revForwarderMonth.data, "total_price");
+  const forwarderToday = sumNum(revForwarderToday.data, "total_price");
+  const yuanMonth      = sumNum(revYuanMonth.data, "thb_amount");
+  const yuanToday      = sumNum(revYuanToday.data, "thb_amount");
+  const walletAll      = sumNum(walletTotal.data, "balance");
+  const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
+
+  const yuanRate   = Number(settings.data?.yuan_rate ?? 5);
+
+  const totalProfilesCount = totalProfiles.count ?? 0;
+  const activeUsers        = activeCustomerProfiles.count ?? 0;
+  const inactiveUsers      = inactiveCustomers.count ?? 0;
+  const activePct          = totalProfilesCount > 0 ? Math.round((activeUsers / totalProfilesCount) * 100) : 0;
+  const inactivePct        = totalProfilesCount > 0 ? 100 - activePct : 0;
+
+  // Tab counts
+  const tabCounts: Record<TabKey, number> = {
+    topup:              walletDepositsPending.count ?? 0,
+    withdraw:           walletWithdrawsPending.count ?? 0,
+    payShop:            salesPayoutsPending.count ?? 0,
+    shop1:              serviceOrdersPending.count ?? 0,
+    shop2:              serviceOrdersAwaitPay.count ?? 0,
+    shop4:              serviceOrdersOrdered.count ?? 0,
+    forwarder1:         serviceOrdersChnDispatch.count ?? 0,
+    forwarder5:         forwardersPending.count ?? 0,
+    forwarderC:         forwardersCredit.count ?? 0,
+    forwarder6:         forwardersDelivery.count ?? 0,
+    forwarder62:        forwardersInDelivery.count ?? 0,
+    payment:            yuanPending.count ?? 0,
+    inactiveCustomers:  inactiveUsers,
+  };
+
+  const tabDefs: { key: TabKey; label: string }[] = [
+    { key: "inactiveCustomers", label: "ลูกค้าที่ยังไม่ได้ใช้งาน" },
+    { key: "topup",             label: "เติมเงิน" },
+    { key: "payShop",           label: "เบิกเงินค่าสินค้า" },
+    { key: "withdraw",          label: "ถอนเงิน" },
+    { key: "shop1",             label: "สั่งซื้อรอดำเนินการ" },
+    { key: "shop2",             label: "รอชำระเงินสินค้า" },
+    { key: "shop4",             label: "รอร้านจีนจัดส่ง" },
+    { key: "forwarder1",        label: "รอเข้าโกดังจีน" },
+    { key: "forwarder5",        label: "รอชำระเงินนำเข้า" },
+    { key: "forwarderC",        label: "เครดิตค้างนำเข้า" },
+    { key: "forwarder6",        label: "เตรียมส่ง" },
+    { key: "forwarder62",       label: "กำลังจัดส่ง" },
+    { key: "payment",           label: "ฝากโอนรอดำเนินการ" },
   ];
 
+  const activeTab = (sp.tab && tabDefs.some((t) => t.key === sp.tab)) ? (sp.tab as TabKey) : "topup";
+  const tabRows = await fetchTabRows(activeTab);
+
   return (
-    <main className="p-6 lg:p-8 space-y-6">
-      {/* Rate banner — sale/deposit/transfer rates pinned at top (legacy CEO.php pattern) */}
-      <section className="rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 text-white p-5 shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-white/70">ADMIN — ภาพรวมระบบ</p>
-            <h1 className="mt-1 text-2xl font-bold">งานที่ต้องดำเนินการวันนี้</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-6 text-white">
-            <RateBadge label="เรท CNY → THB" value={`฿${yuanRate.toFixed(4)}/¥`} />
-            <RateBadge label="ค่าบริการ"      value={`฿${serviceFee.toFixed(2)}`} />
-            <RateBadge label="ลูกค้าทั้งหมด"   value={(totalProfiles.count ?? 0).toLocaleString("th-TH")} />
-          </div>
+    <main className="p-4 lg:p-6 space-y-4">
+      {/* ── Row 1: 4 revenue stat cards (PCS style: number + icon + progress bar) ── */}
+      <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <RevenueCard
+          tone="info"
+          icon={<ShoppingBasket />}
+          label={`ยอดฝากสั่งซื้อ ${monthLabel}`}
+          monthValue={shopMonth}
+          todayValue={shopToday}
+          href="/admin/service-orders"
+        />
+        <RevenueCard
+          tone="danger"
+          icon={<Box />}
+          label={`ยอดฝากนำเข้า ${monthLabel}`}
+          monthValue={forwarderMonth}
+          todayValue={forwarderToday}
+          href="/admin/forwarders"
+        />
+        <RevenueCard
+          tone="primary"
+          icon={<ArrowLeftRight />}
+          label={`ยอดฝากโอน ${monthLabel}`}
+          monthValue={yuanMonth}
+          todayValue={yuanToday}
+          href="/admin/yuan-payments"
+        />
+        <RevenueCard
+          tone="success"
+          icon={<WalletIcon />}
+          label="กระเป๋าสตางค์ลูกค้ารวม"
+          monthValue={walletAll}
+          subtitle="ยอด wallet ทั้งหมด"
+          href="/admin/wallet"
+        />
+      </section>
+
+      {/* ── Row 2: Rate strip (4 rates) ── */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={yuanRate.toFixed(2)} />
+          <RateChip color="red"     label="เรท Sale"   value={(yuanRate - 0.02).toFixed(2)} />
+          <RateChip color="purple"  label="เรทโอน"     value={(yuanRate - 0.04).toFixed(2)} />
+          <RateChip color="amber"   label="ยอดรวม"     value={formatTHB(grandTotal, true)} />
         </div>
       </section>
 
-      {/* Counter tabs — 14 daily-ops queues */}
-      <section className="flex flex-wrap gap-2">
-        {tabs.map((tab) => <CounterTab key={tab.label} {...tab} />)}
+      {/* ── Row 3: User stat cards ── */}
+      <section className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+        <UserStatCard
+          tone="info"
+          icon={<Users />}
+          label="ลูกค้าที่ใช้งานแล้ว"
+          value={activeUsers}
+          progress={activePct}
+          subtitle={`${activePct}% ของลูกค้าทั้งหมด`}
+          href="/admin/customers?status=active"
+        />
+        <UserStatCard
+          tone="warning"
+          icon={<UserX />}
+          label="ลูกค้าที่ยังไม่ใช้งาน"
+          value={inactiveUsers}
+          progress={inactivePct}
+          subtitle={`${inactivePct}% ของลูกค้าทั้งหมด`}
+          href="/admin/customers?status=incomplete"
+        />
+        <UserStatCard
+          tone="danger"
+          icon={<XCircle />}
+          label="ออเดอร์ที่ลูกค้ายกเลิก"
+          value={cancelledOrders.count ?? 0}
+          progress={100}
+          subtitle={`เดือน ${THAI_MONTHS[now.getMonth()]}`}
+          href="/admin/service-orders?status=cancelled"
+        />
       </section>
 
-      {/* Big stats */}
-      <section className="grid gap-3 sm:grid-cols-3">
-        <BigStat label="ลูกค้าทั้งหมด"    value={(totalProfiles.count ?? 0).toLocaleString("th-TH")} sub="ทุก account_type" />
-        <BigStat label="ฝากนำเข้าทั้งหมด" value={(totalForwarders.count ?? 0).toLocaleString("th-TH")} sub="ทุก status" />
-        <BigStat label="ฝากสั่งทั้งหมด"   value={(totalServiceOrders.count ?? 0).toLocaleString("th-TH")} sub="ทุก status" />
+      {/* ── Row 4: Tab strip + active tab table ── */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        <div className="border-b border-border overflow-x-auto">
+          <div className="flex flex-wrap min-w-max -mb-px">
+            {tabDefs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const count = tabCounts[tab.key];
+              return (
+                <Link
+                  key={tab.key}
+                  href={`/admin?tab=${tab.key}`}
+                  className={`inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                    isActive ? "border-primary-500 text-primary-600 bg-primary-50/30" : "border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50"
+                  }`}
+                >
+                  {tab.label}
+                  {count > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold px-1.5">
+                      {count > 999 ? "999+" : count}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+            <Link
+              href="/admin/containers"
+              className="inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50 whitespace-nowrap"
+            >
+              🚛 รายการตู้
+              {(containersActive.count ?? 0) > 0 && (
+                <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold px-1.5">
+                  {containersActive.count}
+                </span>
+              )}
+            </Link>
+          </div>
+        </div>
+
+        <ActiveTabTable tab={activeTab} rows={tabRows} />
       </section>
     </main>
   );
 }
 
-function RateBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="text-right">
-      <p className="text-[10px] uppercase tracking-wider text-white/60">{label}</p>
-      <p className="text-lg font-bold font-mono">{value}</p>
-    </div>
-  );
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function formatTHB(n: number, compact = false): string {
+  if (compact && n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (compact && n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
+  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const TONE_STYLES = {
-  muted:   { active: "bg-white border-border text-foreground",                  inactive: "bg-white border-border text-muted" },
-  yellow:  { active: "bg-yellow-50 border-yellow-300 text-yellow-800",          inactive: "bg-white border-border text-muted" },
-  blue:    { active: "bg-blue-50 border-blue-300 text-blue-800",                inactive: "bg-white border-border text-muted" },
-  indigo:  { active: "bg-indigo-50 border-indigo-300 text-indigo-800",          inactive: "bg-white border-border text-muted" },
-  orange:  { active: "bg-orange-50 border-orange-300 text-orange-800",          inactive: "bg-white border-border text-muted" },
-  green:   { active: "bg-green-50 border-green-300 text-green-800",             inactive: "bg-white border-border text-muted" },
-  primary: { active: "bg-primary-50 border-primary-300 text-primary-700",       inactive: "bg-white border-border text-muted" },
-} as const;
+type RowShape = {
+  id: string;
+  created_at: string;
+  member_code: string | null;
+  customer_name: string | null;
+  amount: number;
+  detail: string;
+  link: string;
+  status: string;
+};
 
-function CounterTab({ label, count, href, tone, emphasis }: {
-  label: string; count: number; href: string;
-  tone: keyof typeof TONE_STYLES; emphasis?: boolean;
+async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
+  const admin = createAdminClient();
+  switch (tab) {
+    case "topup": {
+      const { data } = await admin.from("wallet_transactions")
+        .select(`
+          id, amount, created_at, slip_url, status,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .eq("kind", "deposit").eq("status", "pending")
+        .order("created_at", { ascending: false }).limit(50);
+      return mapWalletRows(data as RawTxRow[], "/admin/wallet");
+    }
+    case "withdraw": {
+      const { data } = await admin.from("wallet_transactions")
+        .select(`
+          id, amount, created_at, slip_url, status,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .eq("kind", "withdraw").eq("status", "pending")
+        .order("created_at", { ascending: false }).limit(50);
+      return mapWalletRows(data as RawTxRow[], "/admin/wallet");
+    }
+    case "shop1": case "shop2": case "shop4": case "forwarder1": {
+      const statusMap: Record<string, string> = { shop1: "pending", shop2: "awaiting_payment", shop4: "ordered", forwarder1: "awaiting_chn_dispatch" };
+      const { data } = await admin.from("service_orders")
+        .select(`
+          id, h_no, status, total_thb, created_at, title,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .eq("status", statusMap[tab])
+        .order("created_at", { ascending: false }).limit(50);
+      return mapOrderRows(data as RawOrderRow[]);
+    }
+    case "forwarder5": case "forwarderC": case "forwarder6": case "forwarder62": {
+      let query = admin.from("forwarders")
+        .select(`
+          id, f_no, status, total_price, created_at,
+          source_warehouse, transport_type, weight_kg,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .order("created_at", { ascending: false }).limit(50);
+      if (tab === "forwarder5")       query = query.eq("status", "pending_payment");
+      else if (tab === "forwarderC")  query = query.eq("status", "pending_payment").eq("credit_used", true);
+      else if (tab === "forwarder6")  query = query.eq("status", "arrived_thailand");
+      else                            query = query.eq("status", "out_for_delivery");
+      const { data } = await query;
+      return mapForwarderRows(data as RawForwarderRow[]);
+    }
+    case "payment": {
+      const { data } = await admin.from("yuan_payments")
+        .select(`
+          id, yuan_amount, thb_amount, channel, status, created_at,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .in("status", ["pending", "processing"])
+        .order("created_at", { ascending: false }).limit(50);
+      return mapPaymentRows(data as RawPaymentRow[]);
+    }
+    case "payShop": {
+      const { data } = await admin.from("sales_payouts")
+        .select(`
+          id, amount, status, created_at,
+          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
+        `)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }).limit(50);
+      return mapPayoutRows(data as RawPayoutRow[]);
+    }
+    case "inactiveCustomers": {
+      const { data } = await admin.from("profiles")
+        .select("id, member_code, first_name, last_name, company_name, phone, email, created_at, account_type")
+        .eq("status", "incomplete")
+        .order("created_at", { ascending: false }).limit(50);
+      return ((data ?? []) as RawProfileRow[]).map((p) => ({
+        id: p.id,
+        created_at: p.created_at,
+        member_code: p.member_code,
+        customer_name: customerNameOf(p),
+        amount: 0,
+        detail: `${p.phone ?? "—"}${p.email ? ` · ${p.email}` : ""}`,
+        link: `/admin/customers/${p.id}`,
+        status: "incomplete",
+      }));
+    }
+    default:
+      return [];
+  }
+}
+
+type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };
+type ProfileMaybeArray = ProfileShape | ProfileShape[] | null;
+
+function customerNameOf(p: { first_name?: string | null; last_name?: string | null; company_name?: string | null }): string {
+  return `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.company_name || "—";
+}
+
+function pickProfile(p: ProfileMaybeArray): ProfileShape | null {
+  if (!p) return null;
+  return Array.isArray(p) ? (p[0] ?? null) : p;
+}
+
+type RawTxRow      = { id: string; amount: number; created_at: string; slip_url: string | null; status: string; profile: ProfileMaybeArray };
+type RawOrderRow   = { id: string; h_no: string | null; status: string; total_thb: number; created_at: string; title: string | null; profile: ProfileMaybeArray };
+type RawForwarderRow = { id: string; f_no: string | null; status: string; total_price: number; created_at: string; source_warehouse: string; transport_type: string; weight_kg: number; profile: ProfileMaybeArray };
+type RawPaymentRow = { id: string; yuan_amount: number; thb_amount: number; channel: string; status: string; created_at: string; profile: ProfileMaybeArray };
+type RawPayoutRow  = { id: string; amount: number; status: string; created_at: string; profile: ProfileMaybeArray };
+type RawProfileRow = { id: string; member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null; phone: string | null; email: string | null; created_at: string; account_type: string };
+
+function mapWalletRows(rows: RawTxRow[] | null, baseLink: string): RowShape[] {
+  return (rows ?? []).map((r) => {
+    const p = pickProfile(r.profile);
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      member_code: p?.member_code ?? null,
+      customer_name: p ? customerNameOf(p) : "—",
+      amount: Number(r.amount),
+      detail: r.slip_url ? `สลิป: <a class="text-blue-600 underline" href="${r.slip_url}" target="_blank">ดูสลิป</a>` : "ไม่มีสลิป",
+      link: `${baseLink}/${r.id}`,
+      status: r.status,
+    };
+  });
+}
+
+function mapOrderRows(rows: RawOrderRow[] | null): RowShape[] {
+  return (rows ?? []).map((r) => {
+    const p = pickProfile(r.profile);
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      member_code: p?.member_code ?? null,
+      customer_name: p ? customerNameOf(p) : "—",
+      amount: Number(r.total_thb),
+      detail: `${r.h_no ?? "—"} · ${r.title ?? "ไม่มีชื่อ"}`,
+      link: r.h_no ? `/admin/service-orders/${r.h_no}` : "/admin/service-orders",
+      status: r.status,
+    };
+  });
+}
+
+function mapForwarderRows(rows: RawForwarderRow[] | null): RowShape[] {
+  return (rows ?? []).map((r) => {
+    const p = pickProfile(r.profile);
+    const transportLabel = r.transport_type === "truck" ? "รถ" : r.transport_type === "ship" ? "เรือ" : "อากาศ";
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      member_code: p?.member_code ?? null,
+      customer_name: p ? customerNameOf(p) : "—",
+      amount: Number(r.total_price),
+      detail: `${r.f_no ?? "—"} · ${transportLabel} · ${Number(r.weight_kg).toFixed(2)} kg`,
+      link: r.f_no ? `/admin/forwarders/${r.f_no}` : "/admin/forwarders",
+      status: r.status,
+    };
+  });
+}
+
+function mapPaymentRows(rows: RawPaymentRow[] | null): RowShape[] {
+  return (rows ?? []).map((r) => {
+    const p = pickProfile(r.profile);
+    const channelLabel = r.channel === "alipay" ? "Alipay" : r.channel === "wechat" ? "WeChat" : "Bank";
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      member_code: p?.member_code ?? null,
+      customer_name: p ? customerNameOf(p) : "—",
+      amount: Number(r.thb_amount),
+      detail: `${channelLabel} · ¥${Number(r.yuan_amount).toFixed(2)}`,
+      link: `/admin/yuan-payments/${r.id}`,
+      status: r.status,
+    };
+  });
+}
+
+function mapPayoutRows(rows: RawPayoutRow[] | null): RowShape[] {
+  return (rows ?? []).map((r) => {
+    const p = pickProfile(r.profile);
+    return {
+      id: r.id,
+      created_at: r.created_at,
+      member_code: p?.member_code ?? null,
+      customer_name: p ? customerNameOf(p) : "—",
+      amount: Number(r.amount),
+      detail: "เบิกค่าคอม / commission",
+      link: `/admin/sales-payouts/${r.id}`,
+      status: r.status,
+    };
+  });
+}
+
+// ── Cards ──────────────────────────────────────────────────────────────────
+
+function RevenueCard({
+  tone, icon, label, monthValue, todayValue, subtitle, href,
+}: {
+  tone: "info" | "danger" | "primary" | "success";
+  icon: React.ReactNode;
+  label: string;
+  monthValue: number;
+  todayValue?: number;
+  subtitle?: string;
+  href: string;
 }) {
-  const cls = count > 0 ? TONE_STYLES[tone].active : TONE_STYLES[tone].inactive;
+  const tones = {
+    info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
+    danger:  { text: "text-red-600",     bar: "from-red-400 to-red-600" },
+    primary: { text: "text-fuchsia-600", bar: "from-purple-400 to-fuchsia-600" },
+    success: { text: "text-emerald-600", bar: "from-emerald-400 to-green-600" },
+  }[tone];
+
   return (
     <Link
       href={href}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium hover:shadow-sm transition-shadow ${cls} ${
-        emphasis ? "border-dashed border-2" : ""
-      }`}
+      className="group block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden"
     >
-      <span>{label}</span>
-      {count > 0 && (
-        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary-500 text-white text-[11px] font-bold">
-          {count > 999 ? "999+" : count}
-        </span>
-      )}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className={`font-bold leading-none ${tones.text} text-2xl sm:text-3xl font-mono`}>
+              ฿{formatTHB(monthValue)}
+            </p>
+            <p className="mt-2 text-xs font-semibold text-foreground line-clamp-2">{label}</p>
+            {todayValue !== undefined ? (
+              <p className="text-[10px] text-muted mt-1">วันนี้: ฿{formatTHB(todayValue)}</p>
+            ) : subtitle ? (
+              <p className="text-[10px] text-muted mt-1">{subtitle}</p>
+            ) : null}
+          </div>
+          <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
+        </div>
+      </div>
+      <div className="h-1.5 w-full bg-surface-alt">
+        <div className={`h-full w-full bg-gradient-to-r ${tones.bar}`} />
+      </div>
     </Link>
   );
 }
 
-function BigStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function RateChip({ color, label, value }: { color: "cyan" | "red" | "purple" | "amber"; label: string; value: string }) {
+  const colors = {
+    cyan:   "text-cyan-700",
+    red:    "text-red-600",
+    purple: "text-purple-700",
+    amber:  "text-amber-700",
+  };
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1 text-3xl font-bold font-mono text-foreground">{value}</p>
-      <p className="text-[11px] text-muted mt-0.5">{sub}</p>
+    <div>
+      <p className="text-[10px] uppercase tracking-widest text-muted">{label}</p>
+      <p className={`mt-0.5 font-mono text-xl font-bold ${colors[color]}`}>{value}</p>
+    </div>
+  );
+}
+
+function UserStatCard({
+  tone, icon, label, value, progress, subtitle, href,
+}: {
+  tone: "info" | "warning" | "danger";
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  progress: number;
+  subtitle: string;
+  href: string;
+}) {
+  const tones = {
+    info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
+    warning: { text: "text-amber-500",   bar: "from-amber-400 to-orange-500" },
+    danger:  { text: "text-red-600",     bar: "from-red-400 to-red-600" },
+  }[tone];
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden"
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className={`font-bold leading-none ${tones.text} text-3xl font-mono`}>{value.toLocaleString("th-TH")}</p>
+            <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
+            <p className="text-[10px] text-muted mt-0.5">{subtitle}</p>
+          </div>
+          <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
+        </div>
+      </div>
+      <div className="h-1.5 w-full bg-surface-alt">
+        <div className={`h-full bg-gradient-to-r ${tones.bar}`} style={{ width: `${Math.min(100, progress)}%` }} />
+      </div>
+    </Link>
+  );
+}
+
+// ── Active tab content table ───────────────────────────────────────────────
+
+function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="p-12 text-center text-sm text-muted">
+        ไม่มีรายการในหมวดนี้
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+            <th className="px-4 py-3 w-[60px]">ลำดับ</th>
+            <th className="px-4 py-3 w-[140px]">วันที่สร้าง</th>
+            <th className="px-4 py-3">ข้อมูลรายการ</th>
+            <th className="px-4 py-3 w-[180px]">สถานะ</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((r, i) => {
+            const created = new Date(r.created_at);
+            return (
+              <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors">
+                <td className="px-4 py-3 text-center text-sm font-mono">{i + 1}</td>
+                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                  <div>{created.toLocaleDateString("th-TH")}</div>
+                  <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">
+                    {r.member_code ?? "—"}
+                  </Link>{" "}
+                  <span className="text-foreground">{r.customer_name}</span>
+                  <p className="mt-1 text-xs text-muted" dangerouslySetInnerHTML={{ __html: r.detail }} />
+                  {tab !== "inactiveCustomers" && r.amount > 0 && (
+                    <p className="mt-1 text-sm font-bold text-red-600">
+                      ยอดเงิน: ฿{formatTHB(r.amount)}
+                    </p>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <span className="inline-flex rounded-full bg-amber-100 text-amber-700 px-2.5 py-0.5 text-[11px] font-bold">
+                    รอดำเนินการ
+                  </span>
+                  <div className="mt-2">
+                    <Link
+                      href={r.link}
+                      className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-primary-500 to-primary-700 text-white px-3 py-1 text-xs font-bold shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <Eye className="w-3 h-3" /> ดู / แก้ไข
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
