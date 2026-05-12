@@ -47,7 +47,7 @@ const services = [
   {
     title: "เคลียร์สินค้า",        sub: "พิธีการศุลกากร",
     titleMobile: "เคลียร์สินค้า",   subMobile: "พิธีการศุลกากร",
-    href: "/register",
+    href: "/services/customs-clearance",
     bgDesktop:   "/images/ourservices/custom.png",
     bgMobile:    "/images/ourservices/mobile/custom.png",
     iconDesktop: "",

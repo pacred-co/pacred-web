@@ -29,14 +29,14 @@ import type {
   LCLForm, FCLForm, TruckForm, AirForm, CustomsForm, SourcingForm, RemitForm,
 } from "@/types/booking";
 
-const TEL = "02-055-6063";
+const TEL = "066-131-0253";
 
 function ctrl(className?: string) {
-  return `w-full h-[42px] border border-gray-200 rounded-lg bg-white text-gray-800 text-sm font-medium px-3.5 transition-all hover:border-red-300 focus:outline-none focus:border-red-600 focus:shadow-[0_0_0_3px_rgba(220,38,38,0.12)] ${className ?? ""}`;
+  return `w-full h-10 md:h-[42px] border border-gray-200 rounded-lg bg-white text-gray-800 text-[13px] md:text-sm font-medium px-3 md:px-3.5 transition-all hover:border-red-300 focus:outline-none focus:border-red-600 focus:shadow-[0_0_0_3px_rgba(220,38,38,0.12)] ${className ?? ""}`;
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-[13px] font-bold text-gray-800 leading-none">{children}</label>;
+  return <label className="text-[12px] md:text-[13px] font-bold text-gray-800 leading-none">{children}</label>;
 }
 
 function PanelFooter({ hint, calcLabel, onCalc, onModal }: {
@@ -44,16 +44,16 @@ function PanelFooter({ hint, calcLabel, onCalc, onModal }: {
   onCalc: () => void; onModal: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-5 flex-wrap px-6 py-5 border-t border-gray-100 bg-white rounded-b-2xl mt-1">
-      <p className="text-[13px] text-gray-500 leading-relaxed flex-1"
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-5 px-4 md:px-6 py-4 md:py-5 border-t border-gray-100 bg-white rounded-b-2xl mt-1">
+      <p className="text-[12.5px] md:text-[13px] text-gray-500 leading-relaxed md:flex-1"
          dangerouslySetInnerHTML={{ __html: hint + `<br/><strong class="text-gray-800">โทร ${TEL}</strong>` }} />
-      <div className="flex gap-3 shrink-0 flex-wrap">
-        <button type="button" onClick={onModal}
-          className="inline-flex items-center justify-center h-11 px-6 rounded-lg border border-gray-200 bg-white text-sm font-bold text-gray-800 hover:border-gray-400 hover:bg-gray-50 transition-all hover:-translate-y-0.5">
-          ติดต่อด่วน / ออกใบเสนอราคา
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:flex gap-2.5 md:gap-3 md:shrink-0">
+        <button type="button" suppressHydrationWarning onClick={onModal}
+          className="inline-flex items-center justify-center h-11 px-4 md:px-6 rounded-lg border border-gray-200 bg-white text-[13px] md:text-sm font-bold text-gray-800 hover:border-gray-400 hover:bg-gray-50 transition-all hover:-translate-y-0.5">
+          ติดต่อด่วน / ใบเสนอราคา
         </button>
-        <button type="button" onClick={onCalc}
-          className="inline-flex items-center justify-center h-11 px-6 rounded-lg bg-red-600 text-white text-sm font-bold shadow-[0_4px_12px_rgba(220,38,38,0.2)] hover:bg-red-700 hover:-translate-y-0.5 transition-all">
+        <button type="button" suppressHydrationWarning onClick={onCalc}
+          className="inline-flex items-center justify-center h-11 px-4 md:px-6 rounded-lg bg-red-600 text-white text-[13px] md:text-sm font-bold shadow-[0_4px_12px_rgba(220,38,38,0.2)] hover:bg-red-700 hover:-translate-y-0.5 transition-all">
           {calcLabel}
         </button>
       </div>
@@ -61,8 +61,8 @@ function PanelFooter({ hint, calcLabel, onCalc, onModal }: {
   );
 }
 
-export function BookingCalculator() {
-  const [activeTab,  setActiveTab]  = useState<TabMode | null>(null);
+export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
+  const [activeTab,  setActiveTab]  = useState<TabMode | null>(landing ?? null);
   const [seaMode,    setSeaMode]    = useState<SeaMode>("lcl");
   const [lclTerm,    setLclTerm]    = useState<Term>("ddp");
   const [fclTerm,    setFclTerm]    = useState<Term>("ddp");
@@ -151,10 +151,10 @@ export function BookingCalculator() {
   const panelOpen = activeTab !== null;
 
   return (
-    <div className="w-full max-w-[1280px] mx-auto pb-10">
+    <div className="w-full max-w-[1280px] mx-auto pb-6 md:pb-10">
       <BookingHero activeTab={activeTab} seaMode={seaMode} />
 
-      <div className="relative z-10 max-w-[1150px] mx-auto -mt-12 px-5">
+      <div className="relative z-10 max-w-[1150px] mx-auto -mt-8 md:-mt-12 px-3 md:px-5">
         <div className="bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100">
 
           <BookingTabs active={activeTab} onChange={handleTabChange} />
@@ -180,7 +180,7 @@ export function BookingCalculator() {
 
           {/* ── LCL Panel ── */}
           {activeTab === "sea" && seaMode === "lcl" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="ต้นทางในจีน" displayValue={lclForm.originLabel} sections={ORIGIN_SECTIONS}
                   onSelect={(v, l) => setLclForm(f => ({ ...f, origin: v, originLabel: l }))} />
@@ -217,7 +217,7 @@ export function BookingCalculator() {
 
           {/* ── FCL Panel ── */}
           {activeTab === "sea" && seaMode === "fcl" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="ต้นทางในจีน" displayValue={fclForm.originLabel} sections={ORIGIN_SECTIONS}
                   onSelect={(v, l) => setFclForm(f => ({ ...f, origin: v, originLabel: l }))} />
@@ -251,7 +251,7 @@ export function BookingCalculator() {
 
           {/* ── Truck Panel ── */}
           {activeTab === "truck" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="ต้นทางในจีน" displayValue={truckForm.originLabel} sections={ORIGIN_SECTIONS}
                   onSelect={(v, l) => setTruckForm(f => ({ ...f, origin: v, originLabel: l }))} />
@@ -282,7 +282,7 @@ export function BookingCalculator() {
 
           {/* ── Air Panel ── */}
           {activeTab === "air" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <TextDropdown label="ประเทศ / สนามบิน ต้นทาง" value={airForm.origin}
                   onChange={v => setAirForm(f => ({ ...f, origin: v }))}
@@ -317,7 +317,7 @@ export function BookingCalculator() {
 
           {/* ── Customs Panel ── */}
           {activeTab === "customs" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="ด่านศุลกากร / ท่าเรือ" displayValue={customsForm.portLabel} sections={CUSTOMS_PORT_SECTIONS}
                   onSelect={(v, l) => setCustomsForm(f => ({ ...f, port: v, portLabel: l }))} />
@@ -343,7 +343,7 @@ export function BookingCalculator() {
 
           {/* ── Sourcing Panel ── */}
           {activeTab === "sourcing" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="แพลตฟอร์ม" displayValue={sourcingForm.platformLabel} sections={PLATFORM_SECTIONS}
                   onSelect={(v, l) => setSourcingForm(f => ({ ...f, platform: v, platformLabel: l }))} />
@@ -370,7 +370,7 @@ export function BookingCalculator() {
 
           {/* ── Remit Panel ── */}
           {activeTab === "remit" && (
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label="สกุลเงิน" displayValue={remitForm.currencyLabel} sections={CURRENCY_SECTIONS}
                   onSelect={(v, l) => setRemitForm(f => ({ ...f, currency: v, currencyLabel: l }))} />

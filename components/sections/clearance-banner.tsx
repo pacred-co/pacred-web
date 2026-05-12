@@ -49,11 +49,11 @@ export function ClearanceBanner() {
 
   return (
     <>
-      <section className="py-5">
+      <section className="py-3 md:py-5">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
           {/* Banner card */}
-          <div className="relative w-full min-h-[90px] md:min-h-[220px] rounded-[18px] md:rounded-[28px] overflow-hidden bg-[#d60000] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
+          <div className="relative w-full aspect-[1080/220] md:aspect-auto md:min-h-[220px] rounded-[14px] md:rounded-[28px] overflow-hidden bg-[#d60000] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
 
             {/* Background — responsive picture */}
             <a
@@ -67,23 +67,24 @@ export function ClearanceBanner() {
                 src="/images/banner/clearancebanboym.png"
                 alt="ชิปปิ้งเคลียร์สินค้าพิธีการศุลกากร Pacred"
                 fill
-                className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.035]"
+                sizes="(max-width: 768px) 100vw, 1140px"
+                className="object-contain md:object-cover md:object-center transition-transform duration-700 group-hover:scale-[1.035]"
                 priority
               />
             </a>
 
-            {/* Dark gradient overlay — left side for text readability */}
+            {/* Dark gradient overlay — desktop only (mobile uses full image) */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-[2]"
+              className="pointer-events-none absolute inset-0 z-[2] hidden md:block"
               style={{
                 background:
-                  "linear-gradient(90deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.45) 40%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0) 95%)",
+                  "linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.50) 45%, rgba(0,0,0,0.15) 75%, rgba(0,0,0,0) 100%)",
               }}
             />
 
-            {/* Content overlay */}
-            <div className="relative z-[3] min-h-[90px] md:min-h-[220px] w-[78%] md:w-[68%] flex flex-col justify-center px-[12px] py-[13px] md:px-[34px] md:py-[28px]">
+            {/* Content overlay — desktop only (mobile shows pure image) */}
+            <div className="relative z-[3] hidden md:flex md:min-h-[220px] md:w-[68%] flex-col justify-center md:px-[34px] md:py-[28px]">
 
               {/* Title — outlined cartoon stroke */}
               <h2 className="m-0 mb-1.5 md:mb-[9px] flex flex-col gap-[1px] md:gap-[2px] text-white leading-[1.02] tracking-[-0.04em] whitespace-nowrap font-black">

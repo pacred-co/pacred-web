@@ -109,9 +109,9 @@ export function WhyPacred() {
             </p>
           </div>
 
-          {/* ─── Feature grid 6 cards ─── */}
-          <div className="mx-auto mt-6 md:mt-8 w-full max-w-[1120px]">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+          {/* ─── Feature grid 6 cards (horizontal swipe on mobile) ─── */}
+          <div className="mx-auto mt-6 md:mt-8 w-full max-w-[1120px] relative">
+            <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-3 md:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FEATURES.map((f, i) => {
                 const num = String(i + 1).padStart(2, "0");
                 return (
@@ -119,7 +119,7 @@ export function WhyPacred() {
                     key={i}
                     href="/register"
                     aria-label={`สมัครเลย · ${f.title}`}
-                    className="group relative block bg-white dark:bg-surface rounded-2xl border border-border p-5 md:p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_24px_50px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 overflow-hidden cursor-pointer"
+                    className="group relative shrink-0 w-[78%] min-w-[260px] sm:w-auto sm:min-w-0 snap-start block bg-white dark:bg-surface rounded-2xl border border-border p-5 md:p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_24px_50px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 overflow-hidden cursor-pointer"
                   >
                     {/* Decorative dot pattern — appears on hover */}
                     <div
@@ -191,6 +191,10 @@ export function WhyPacred() {
                 );
               })}
             </div>
+            {/* Swipe indicator — mobile only */}
+            <div className="sm:hidden pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent flex items-center justify-end pr-1">
+              <svg className="w-4 h-4 text-primary-600 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </div>
           </div>
 
           {/* ─── Company Certificate — slider ─── */}
@@ -210,7 +214,7 @@ export function WhyPacred() {
             {/* ── Slider column ── */}
             <div className="relative">
               {/* Slider window */}
-              <div className="relative w-[260px] sm:w-[280px] ml-0">
+              <div className="relative w-[260px] sm:w-[280px] mx-auto md:mx-0 md:ml-0">
                 {/* Stacked paper effect — bg layers */}
                 <div aria-hidden className="absolute inset-x-2.5 -bottom-1.5 top-1.5 rounded-md bg-white dark:bg-background shadow-[0_6px_14px_-8px_rgba(15,23,42,0.16)] opacity-60" />
                 <div aria-hidden className="absolute inset-x-1 -bottom-0.5 top-0.5 rounded-md bg-white dark:bg-background shadow-[0_6px_14px_-8px_rgba(15,23,42,0.18)] opacity-80" />
@@ -272,7 +276,7 @@ export function WhyPacred() {
               </div>
 
               {/* Page dots + counter */}
-              <div className="mt-5 md:mt-6 w-[260px] sm:w-[280px] flex items-center gap-2.5">
+              <div className="mt-5 md:mt-6 w-[260px] sm:w-[280px] mx-auto md:mx-0 flex items-center gap-2.5">
                 <div className="flex items-center gap-1">
                   {Array.from({ length: totalPages }).map((_, idx) => (
                     <button

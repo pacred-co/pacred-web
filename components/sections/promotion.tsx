@@ -51,20 +51,23 @@ export function Promotion() {
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
             PROMOTION
           </div>
-          <h2 className="text-[38px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-            {t("title")}
-            <span className="text-primary-600">{t("titleHighlight")}</span>
+          <h2 className="text-[22px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
+            <span className="md:hidden">โปรโมชั่นสิทธิ์พิเศษ</span>
+            <span className="hidden md:inline">
+              {t("title")}
+              <span className="text-primary-600">{t("titleHighlight")}</span>
+            </span>
           </h2>
         </div>
 
-        {/* Container 2 — 4 ticket-style benefit cards */}
-        <div className="mx-auto mt-[18px] w-full max-w-[1120px]">
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Container 2 — 4 ticket-style benefit cards (horizontal swipe on mobile) */}
+        <div className="mx-auto mt-[18px] w-full max-w-[1120px] relative">
+          <div className="flex overflow-x-auto gap-2.5 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {benefits.map((b, i) => (
               <div
                 key={i}
                 className={[
-                  "group relative flex items-center min-h-[70px] rounded-xl border overflow-hidden px-3 py-2 transition-all duration-300 hover:-translate-y-[3px]",
+                  "group relative shrink-0 w-[78%] min-w-[260px] sm:w-auto sm:min-w-0 snap-start flex items-center min-h-[70px] rounded-xl border overflow-hidden px-3 py-2 transition-all duration-300 hover:-translate-y-[3px]",
                   b.first
                     ? "bg-primary-600 border-primary-600"
                     : "bg-white dark:bg-surface border-border hover:border-red-300 hover:shadow-[0_8px_20px_rgba(220,38,38,0.10)]",
@@ -126,6 +129,10 @@ export function Promotion() {
                 </div>
               </div>
             ))}
+          </div>
+          {/* Swipe indicator — mobile only */}
+          <div className="sm:hidden pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent flex items-center justify-end pr-1">
+            <svg className="w-4 h-4 text-primary-600 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
           </div>
         </div>
 

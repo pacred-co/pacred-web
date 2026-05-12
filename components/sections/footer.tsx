@@ -39,7 +39,7 @@ const ABOUT_LINKS = [
   { label: "เกี่ยวกับ Pacred",            href: "/about" },
   { label: "สาระน่ารู้",                  href: "/knowledge" },
   { label: "คำถามที่พบบ่อย",              href: "/faq" },
-  { label: "ร่วมใช้งาน กับ Pacred",       href: "/join-us" },
+  { label: "ร่วมใช้งาน กับ Pacred",       href: "/register" },
   { label: "ข้อกำหนดและเงื่อนไข",          href: "/terms" },
   { label: "นโยบายความเป็นส่วนตัว",        href: "/privacy" },
   { label: "พื้นที่จัดส่ง Pacred เหมาๆ",   href: "/delivery-areas" },
@@ -47,7 +47,8 @@ const ABOUT_LINKS = [
 ];
 
 const SERVICE_LINKS = [
-  { label: "นำเข้าสินค้าจากจีน",                 href: "/services/import-china" },
+  { label: "นำเข้าสินค้าจากจีน FCL ปิดตู้/เหมาตู้", href: "/services/import-china-fcl" },
+  { label: "นำเข้าสินค้าจากจีน LCL แชร์ตู้/รวมตู้", href: "/services/import-china-lcl" },
   { label: "ส่งออกสินค้าทั่วโลก",                 href: "/services/export-worldwide" },
   { label: "ชิปปิ้งเคลียร์พิธีการศุลกากร",          href: "/services/customs-clearance" },
   { label: "สั่งซื้อสินค้าจากจีน 1688 taobao",     href: "/services/china-shopping" },
@@ -77,19 +78,19 @@ export function Footer() {
     <footer id="contact" className="bg-white dark:bg-surface border-t border-border">
       <div className="mx-auto w-full max-w-[1140px] px-[16px] md:px-[20px]">
 
-        <div className="grid grid-cols-2 md:grid-cols-12 gap-8 md:gap-8 py-10 md:py-14">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 py-6 md:py-14">
 
           {/* Col 1 — ติดต่อเรา */}
           <div className="md:col-span-3">
-            <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white mb-4 md:mb-5 tracking-tight">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
               ติดต่อ<span className="text-primary-600">เรา</span>
             </h3>
-            <nav className="flex flex-col gap-2 md:gap-2.5 mb-4">
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 mb-4 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {CONTACT_LINKS.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
-                  className="text-[13px] md:text-[14px] text-muted hover:text-primary-600 transition-colors w-fit"
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
                 >
                   {l.label}
                 </Link>
@@ -150,15 +151,15 @@ export function Footer() {
 
           {/* Col 2 — เกี่ยวกับ */}
           <div className="md:col-span-3">
-            <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white mb-4 md:mb-5 tracking-tight">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
               เกี่ยว<span className="text-primary-600">กับ</span>
             </h3>
-            <nav className="flex flex-col gap-2 md:gap-2.5">
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {ABOUT_LINKS.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
-                  className="text-[13px] md:text-[14px] text-muted hover:text-primary-600 transition-colors w-fit"
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
                 >
                   {l.label}
                 </Link>
@@ -168,15 +169,15 @@ export function Footer() {
 
           {/* Col 3 — บริการ */}
           <div className="md:col-span-2">
-            <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white mb-4 md:mb-5 tracking-tight">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
               บริ<span className="text-primary-600">การ</span>
             </h3>
-            <nav className="flex flex-col gap-2 md:gap-2.5">
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {SERVICE_LINKS.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
-                  className="text-[13px] md:text-[14px] text-muted hover:text-primary-600 transition-colors w-fit"
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
                 >
                   {l.label}
                 </Link>
@@ -185,8 +186,8 @@ export function Footer() {
           </div>
 
           {/* Col 4 — พาร์ทเนอร์ของเรา */}
-          <div className="col-span-2 md:col-span-4">
-            <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white mb-4 md:mb-5 tracking-tight">
+          <div className="md:col-span-4">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
               พาร์ทเนอร์<span className="text-primary-600">ของเรา</span>
             </h3>
             <div className="grid grid-cols-4 gap-3 md:gap-4">
