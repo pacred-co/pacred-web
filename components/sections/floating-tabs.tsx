@@ -48,6 +48,7 @@ export function FloatingTabs() {
           สอบถามเพิ่มเติม
         </span>
         <button
+          suppressHydrationWarning
           className="w-[70px] h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
           aria-label="Chat on LINE"
         >

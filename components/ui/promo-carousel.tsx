@@ -68,6 +68,7 @@ function InnerCarousel({
           <button
             key={i}
             onClick={() => { setCurrent(i); resetTimer(); }}
+            suppressHydrationWarning
             className={`h-1.5 rounded-full transition-all ${
               current === i ? "w-5 bg-primary-500" : "w-1.5 bg-black/20 dark:bg-white/30"
             }`}

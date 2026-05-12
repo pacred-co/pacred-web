@@ -27,7 +27,7 @@ export function StatsBar() {
   ];
 
   return (
-    <section className="bg-background pt-4 pb-1">
+    <section className="pt-4 pb-1">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
         <div className="flex gap-5 justify-center flex-wrap">
           {stats.map((s) => (

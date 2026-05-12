@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(pnpm run *)",
+      "PowerShell(pnpm run dev 2>&1)",
+      "PowerShell($paths = @\\(\"$env:ProgramFiles\\\\nodejs\\\\node.exe\",\"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\node.exe\",\"$env:APPDATA\\\\npm\\\\pnpm.cmd\",\"$env:LOCALAPPDATA\\\\pnpm\\\\pnpm.exe\",\"$env:USERPROFILE\\\\AppData\\\\Local\\\\pnpm\\\\pnpm.exe\",\"$env:USERPROFILE\\\\scoop\\\\shims\\\\node.exe\",\"$env:USERPROFILE\\\\scoop\\\\shims\\\\pnpm.cmd\"\\); $paths | ForEach-Object { if \\(Test-Path $_\\) { \"FOUND: $_\" } }; \"---\"; \"PATH segments:\"; $env:Path -split ';' | Where-Object { $_ -match 'node|pnpm|npm' })",
+      "PowerShell($env:Path = \"C:\\\\Program Files\\\\nodejs;$env:APPDATA\\\\npm;\" + $env:Path; node --version; pnpm --version)",
+      "Read(//c/Users/devvork/AppData/Local/Temp/claude/C--Users-devvork-pacred-web--claude-worktrees-jolly-taussig-7132d7/c1216684-5a18-4215-ade4-74bb2540b8c8/tasks/**)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing -TimeoutSec 10; \"STATUS: $\\($r.StatusCode\\)\"; \"LEN: $\\($r.Content.Length\\)\" } catch { \"ERR: $\\($_.Exception.Message\\)\" })",
+      "Bash(cp \"/c/Users/devvork/pacred-web/.env.local\" \"/c/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7/.env.local\" && ls -la .env.local)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git -C /c/Users/devvork/pacred-web config --get user.name)",
+      "Bash(git -C /c/Users/devvork/pacred-web config --get user.email)",
+      "Bash(git config *)",
+      "Bash(git -c user.name=deffeyameh -c user.email=tadsakorn.n@gmail.com commit -m ' *)",
+      "Bash(cat /tmp/pcsc-tables/tb_users.sql | head -30)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git -c user.name=\"deffeyameh\" -c user.email=\"tadsakorn.n@gmail.com\" merge origin/dave --no-edit)",
+      "Bash(git -c user.name=\"deffeyameh\" -c user.email=\"tadsakorn.n@gmail.com\" commit --no-edit)",
+      "Bash(grep -A 12 \"UPDATE \\\\`tb_users\\\\` SET\" /d/xampp/htdocs/pcscargo/member/profile.php)",
+      "Bash(git reset *)",
+      "Bash(cat 0003_profiles_extended.sql 0004_corporate.sql 0005_addresses.sql 0006_tos_acceptance.sql 0007_wallet.sql 0008_payment_yuan.sql 0009_rates.sql 0010_forwarder.sql 0011_service_order.sql 0012_avatars_bucket.sql 0013_sales_referral.sql 0014_notifications.sql 0015_admin_rbac.sql)",
+      "Read(//tmp/**)",
+      "Bash(cp /tmp/combined-migration.sql \"/c/Users/devvork/Desktop/pacred-migration-0003-to-0015.sql\" && ls -la \"/c/Users/devvork/Desktop/pacred-migration-0003-to-0015.sql\")",
+      "Bash(grep -vE \"\\\\.\\(png|jpg|jpeg|txt|webp|svg\\)$|^---|^ public/images\")",
+      "Bash(git -c user.name=\"deffeyameh\" -c user.email=\"tadsakorn.n@gmail.com\" merge origin/podeng --no-edit)"
+    ]
+  }
+}

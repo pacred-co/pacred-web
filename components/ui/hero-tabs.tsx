@@ -123,6 +123,7 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
             <button
               key={tab.title}
               onClick={() => handleTabClick(i)}
+              suppressHydrationWarning
               className={`group flex flex-1 min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors border-b-2 ${
                 active === i
                   ? "border-primary-500 bg-primary-50 dark:bg-primary-950"
