@@ -29,6 +29,42 @@ export type ChinaSearchHit = {
   shop_name?: string;
 };
 
+/** Rich product detail returned when a single URL is converted.
+ *  Mirrors the legacy `json->data` shape from convertURL.php so any
+ *  existing backend (RCGroup) can populate it without translation. */
+export type ChinaProductDetail = {
+  provider:     "1688" | "taobao" | "tmall";
+  product_id?:  string;
+  title:        string;
+  url:          string;
+  shop_name?:   string;
+  main_image?:  string;
+  images?:      string[];
+  base_price_cny?: number;
+  promo_price_cny?: number;
+  stock_total?: number;
+
+  /** Property axes: e.g. [{ name: 'สี', values: [{label:'แดง', image, data}, ...]}, ...] */
+  sku_axes?: Array<{
+    name: string;
+    values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }>;
+  }>;
+
+  /** Flattened combinations — one row per buyable SKU.
+   *  prop_path identifies which axis-values combine to make this row. */
+  sku_map?: Array<{
+    sku_id:     string;
+    prop_path:  Record<string, string>;     // { 'สี': 'แดง', 'ขนาด': 'M' }
+    price_cny:  number;
+    stock:      number;
+    image?:     string;
+  }>;
+};
+
+export type ConvertProductResult =
+  | { available: false; reason: string; message?: string }
+  | { available: true; detail: ChinaProductDetail };
+
 export type ChinaSearchResult =
   | { available: false; reason: "not_configured" | "network_error" | "rate_limited"; message?: string }
   | { available: true;  hits: ChinaSearchHit[]; page: number; has_more: boolean };
@@ -61,7 +97,8 @@ export async function searchKeyword(
 
 /**
  * Convert a product URL (pasted by user from 1688/Taobao/Tmall) into a
- * normalized product summary that can be added to the cart.
+ * normalized product summary that can be added to the cart. Returns
+ * the simple search-hit shape (still used by some callers).
  */
 export async function convertProductUrl(url: string): Promise<ChinaSearchResult> {
   const base = process.env.PACRED_RCGROUP_API_URL;
@@ -79,6 +116,107 @@ export async function convertProductUrl(url: string): Promise<ChinaSearchResult>
   } catch (e) {
     return { available: false, reason: "network_error", message: e instanceof Error ? e.message : "unknown" };
   }
+}
+
+/**
+ * Rich URL converter — returns the full product detail with SKU
+ * variants. Used by the "วาง URL" tab in /service-order/add to render
+ * the variant grid the user picks quantities from.
+ */
+export async function convertProductUrlDetail(url: string): Promise<ConvertProductResult> {
+  const base = process.env.PACRED_RCGROUP_API_URL;
+  if (!base) return { available: false, reason: "not_configured", message: "RCGROUP_API_URL is unset" };
+
+  const platform = guessPlatform(url);
+  const path = platform === "taobao" || platform === "tmall" ? "/taobao/" : "/";
+  const endpoint = `${base}${path}?q=${encodeURIComponent(url)}&page=1`;
+  try {
+    const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store" });
+    if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
+    const json = await res.json();
+    return { available: true, detail: normaliseDetail(json, platform, url) };
+  } catch (e) {
+    return { available: false, reason: "network_error", message: e instanceof Error ? e.message : "unknown" };
+  }
+}
+
+function normaliseDetail(json: unknown, platform: ChinaProductDetail["provider"], srcUrl: string): ChinaProductDetail {
+  // Legacy response shape: { data: { vendor, title, mainImage, images,
+  //   price: [{price}], promoPrice: [{price}], stock, sku: [{value:[...]}],
+  //   skuMap: [{prop_path, price, stock}] } }
+  const d = (json && typeof json === "object" && "data" in (json as Record<string, unknown>))
+    ? (json as { data: Record<string, unknown> }).data
+    : (json as Record<string, unknown>);
+  const root = d ?? {};
+
+  const main_image = typeof root.mainImage === "string" ? fixAliCdn(root.mainImage) : undefined;
+  const images = Array.isArray(root.images)
+    ? (root.images as unknown[]).map((u) => (typeof u === "string" ? fixAliCdn(u) : undefined)).filter(Boolean) as string[]
+    : main_image ? [main_image] : [];
+
+  const basePrice = pickFirstPrice(root.price);
+  const promoPrice = pickFirstPrice(root.promoPrice);
+
+  // sku axes
+  type SkuValueRaw = { label?: string; image?: string; data?: string; isImage?: number | boolean };
+  type SkuAxisRaw  = { name?: string; value?: SkuValueRaw[] };
+  const skuAxesRaw = (Array.isArray(root.sku) ? (root.sku as SkuAxisRaw[]) : []);
+  const sku_axes = skuAxesRaw.map((axis, i) => ({
+    name: axis?.name ?? `axis_${i}`,
+    values: (axis?.value ?? []).map((v) => ({
+      label:    String(v?.label ?? ""),
+      image:    fixAliCdn(v?.image),
+      data:     v?.data != null ? String(v.data) : undefined,
+      is_image: v?.isImage === 1 || v?.isImage === true,
+    })),
+  }));
+
+  // sku map (combinations)
+  type SkuMapRaw = { skuId?: string | number; price?: number | string; stock?: number; propPath?: string; image?: string };
+  const sku_map = Array.isArray(root.skuMap)
+    ? (root.skuMap as SkuMapRaw[]).map((m) => {
+        // propPath is "axisId:valueId;axisId:valueId" — we resolve to readable labels using sku_axes
+        const path: Record<string, string> = {};
+        if (typeof m.propPath === "string") {
+          const parts = m.propPath.split(";").filter(Boolean);
+          for (const p of parts) {
+            const [axisId, valId] = p.split(":");
+            // best-effort lookup; for now just include the raw ids and let UI prettify
+            path[axisId] = valId;
+          }
+        }
+        return {
+          sku_id:    String(m.skuId ?? ""),
+          prop_path: path,
+          price_cny: Number(m.price ?? basePrice ?? 0),
+          stock:     Number(m.stock ?? 0),
+          image:     fixAliCdn(m.image),
+        };
+      })
+    : [];
+
+  return {
+    provider:        platform,
+    product_id:      typeof root.thid_item_id === "string" ? root.thid_item_id : undefined,
+    title:           String(root.title ?? ""),
+    url:             srcUrl,
+    shop_name:       typeof root.vendor === "string" ? root.vendor : undefined,
+    main_image,
+    images,
+    base_price_cny:  basePrice,
+    promo_price_cny: promoPrice,
+    stock_total:     typeof root.stock === "string" ? Number(root.stock.replace(/[^0-9]/g, "")) : (typeof root.stock === "number" ? root.stock : undefined),
+    sku_axes:        sku_axes.length > 0 ? sku_axes : undefined,
+    sku_map:         sku_map.length > 0 ? sku_map : undefined,
+  };
+}
+
+function pickFirstPrice(v: unknown): number | undefined {
+  if (Array.isArray(v) && v.length > 0) {
+    const first = v[0] as { price?: number | string };
+    if (first?.price != null) return Number(first.price);
+  }
+  return undefined;
 }
 
 /**

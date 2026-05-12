@@ -207,70 +207,102 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
           <span className="text-xs text-muted">{cart.length} / 151</span>
         </div>
 
-        {cart.map((c) => (
-          <div key={c.id} className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={selected.has(c.id)}
-                onChange={() => toggle(c.id)}
-                className="mt-2"
-              />
-              {c.image_path ? (
-                <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-surface-alt relative">
-                  <Image src={c.image_path} alt={c.title ?? ""} fill className="object-cover" unoptimized />
-                </div>
-              ) : (
-                <div className="w-20 h-20 shrink-0 rounded-lg bg-surface-alt flex items-center justify-center text-xs text-muted">
-                  No image
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-medium text-foreground text-sm line-clamp-2">{c.title ?? c.url ?? "—"}</h3>
-                  <span className="text-xs rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200">
-                    {PROVIDER_LABEL[c.provider]}
+        {/* Group cart by (provider + shop_name) — mirrors legacy shops.php
+            structure where each shop is its own group with subtotal */}
+        {Object.entries(
+          cart.reduce<Record<string, typeof cart>>((acc, c) => {
+            const key = `${c.provider}::${c.shop_name || "pacred"}`;
+            (acc[key] ||= []).push(c);
+            return acc;
+          }, {}),
+        ).map(([key, group]) => {
+          const groupSubtotalCny = group.reduce((s, c) => s + Number(c.price_cny) * Number(c.amount), 0);
+          const [provider, shopName] = key.split("::");
+          const allSelected = group.every((c) => selected.has(c.id));
+          function toggleGroup() {
+            setSelected((prev) => {
+              const next = new Set(prev);
+              if (allSelected) group.forEach((c) => next.delete(c.id));
+              else            group.forEach((c) => next.add(c.id));
+              return next;
+            });
+          }
+          return (
+            <div key={key} className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between bg-primary-50/40 border-b border-border px-4 py-2.5">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={allSelected} onChange={toggleGroup} />
+                  <span className="text-xs rounded-full bg-white text-primary-700 px-2 py-0.5 border border-primary-200 font-semibold">
+                    {PROVIDER_LABEL[provider as keyof typeof PROVIDER_LABEL] ?? provider}
                   </span>
-                </div>
-                <p className="text-xs text-muted">
-                  {c.shop_name && <>🏪 {c.shop_name}</>}
-                  {c.color && <> · 🎨 {c.color}</>}
-                  {c.size && <> · 📏 {c.size}</>}
-                </p>
-                {c.url && (
-                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline truncate block">
-                    {c.url.slice(0, 60)}...
-                  </a>
-                )}
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="font-mono text-sm">¥{Number(c.price_cny).toFixed(2)}</span>
-                  <span className="text-xs text-muted">×</span>
-                  <input
-                    type="number"
-                    min="1"
-                    defaultValue={c.amount}
-                    onBlur={(e) => {
-                      const n = Number(e.target.value);
-                      if (n !== c.amount) onQtyChange(c.id, n);
-                    }}
-                    className="w-20 rounded-lg border border-border px-2 py-1 text-sm"
-                  />
-                  <span className="ml-auto text-sm font-bold font-mono">
-                    ¥{(Number(c.price_cny) * Number(c.amount)).toFixed(2)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(c.id)}
-                    className="text-xs text-red-600 hover:underline"
-                    disabled={pending}
-                  >
-                    {t("remove")}
-                  </button>
-                </div>
+                  <span className="font-semibold text-foreground">🏪 {shopName}</span>
+                  <span className="text-xs text-muted">({group.length} ชิ้น)</span>
+                </label>
+                <span className="font-mono text-xs font-bold">¥{groupSubtotalCny.toFixed(2)}</span>
+              </div>
+              <div className="divide-y divide-border">
+                {group.map((c) => (
+                  <div key={c.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.id)}
+                        onChange={() => toggle(c.id)}
+                        className="mt-2"
+                      />
+                      {c.image_path ? (
+                        <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-surface-alt relative">
+                          <Image src={c.image_path} alt={c.title ?? ""} fill className="object-cover" unoptimized />
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 shrink-0 rounded-lg bg-surface-alt flex items-center justify-center text-xs text-muted">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-foreground text-sm line-clamp-2">{c.title ?? c.url ?? "—"}</h3>
+                        <p className="text-xs text-muted">
+                          {c.color && <>🎨 {c.color}</>}
+                          {c.size && <> · 📏 {c.size}</>}
+                        </p>
+                        {c.url && (
+                          <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline truncate block">
+                            🔗 ดูที่ต้นทาง
+                          </a>
+                        )}
+                        <div className="mt-2 flex items-center gap-3">
+                          <span className="font-mono text-sm">¥{Number(c.price_cny).toFixed(2)}</span>
+                          <span className="text-xs text-muted">×</span>
+                          <input
+                            type="number"
+                            min="1"
+                            defaultValue={c.amount}
+                            onBlur={(e) => {
+                              const n = Number(e.target.value);
+                              if (n !== c.amount) onQtyChange(c.id, n);
+                            }}
+                            className="w-20 rounded-lg border border-border px-2 py-1 text-sm"
+                          />
+                          <span className="ml-auto text-sm font-bold font-mono">
+                            ¥{(Number(c.price_cny) * Number(c.amount)).toFixed(2)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onRemove(c.id)}
+                            className="text-xs text-red-600 hover:underline"
+                            disabled={pending}
+                          >
+                            {t("remove")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* CHECKOUT */}

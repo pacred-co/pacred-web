@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { addCartItem } from "@/actions/cart";
+import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 import { PROVIDERS, type Provider } from "@/lib/validators/cart";
 import { uploadSlip } from "@/lib/storage-upload";
+import type { ChinaProductDetail } from "@/lib/china-search";
 
 type Mode = "manual" | "url" | "keyword";
 
@@ -170,7 +171,7 @@ function ManualPanel({
   );
 }
 
-// ───────────────── URL PASTE ─────────────────
+// ───────────────── URL PASTE — product detail + variant grid ─────────────────
 function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   onAdded: () => void;
   onError: (e: string) => void;
@@ -179,38 +180,87 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   router: ReturnType<typeof useRouter>;
 }) {
   const t = useTranslations("serviceOrder");
-  const [url,  setUrl]  = useState("");
-  const [hits, setHits] = useState<Hit[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [url, setUrl] = useState("");
+  const [detail, setDetail] = useState<ChinaProductDetail | null>(null);
+  const [yuanRate, setYuanRate] = useState(5);     // fetched live
   const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [qtyMap, setQtyMap] = useState<Record<string, number>>({});
+  const [notesMap, setNotesMap] = useState<Record<string, string>>({});
 
   async function onSearch() {
     if (!url.trim()) return;
-    setSearched(true);
+    setSearching(true);
     setUnavailable(null);
-    const res = await fetch(`/api/china-search?mode=url&q=${encodeURIComponent(url)}`);
-    const data = await res.json();
-    if (data.available === false) {
-      setUnavailable(data.reason ?? "unavailable");
-      setHits([]);
-    } else {
-      setHits(data.hits ?? []);
+    setDetail(null);
+    setQtyMap({}); setNotesMap({});
+
+    // Fetch product detail + current yuan rate in parallel
+    const [detailRes, rateRes] = await Promise.all([
+      fetch(`/api/china-search?mode=url-detail&q=${encodeURIComponent(url)}`).then((r) => r.json()),
+      fetch(`/api/settings-rate`).then((r) => r.json()).catch(() => ({ yuan_rate: 5 })),
+    ]);
+    setSearching(false);
+    if (detailRes.available === false) {
+      setUnavailable(detailRes.reason ?? "unavailable");
+      return;
     }
+    setDetail(detailRes.detail);
+    if (rateRes?.yuan_rate) setYuanRate(Number(rateRes.yuan_rate));
   }
 
-  function onAddHit(h: Hit) {
+  // Build the row list: if sku_map exists use it, else single virtual row from base price
+  const rows = (() => {
+    if (!detail) return [] as Array<{ key: string; label: string; price: number; stock: number; image?: string; data: Record<string, string> }>;
+    const skuMap = detail.sku_map ?? [];
+    if (skuMap.length === 0) {
+      return [{
+        key: "_default",
+        label: "ตัวเลือกเดียว",
+        price: detail.promo_price_cny ?? detail.base_price_cny ?? 0,
+        stock: detail.stock_total ?? 9999,
+        image: detail.main_image,
+        data: {},
+      }];
+    }
+    return skuMap.map((m, i) => ({
+      key: m.sku_id || `row_${i}`,
+      label: prettifyPropPath(m.prop_path, detail.sku_axes),
+      price: m.price_cny,
+      stock: m.stock,
+      image: m.image ?? detail.main_image,
+      data: m.prop_path,
+    }));
+  })();
+
+  const totalQty = Object.values(qtyMap).reduce((s, n) => s + (n || 0), 0);
+  const totalCny = rows.reduce((s, r) => s + ((qtyMap[r.key] || 0) * r.price), 0);
+  const totalThb = Math.round(totalCny * yuanRate * 100) / 100;
+
+  function onAddSelected() {
+    if (!detail || totalQty === 0) return;
+    const selected = rows
+      .filter((r) => (qtyMap[r.key] || 0) > 0)
+      .map((r) => ({
+        provider:          detail.provider,
+        shop_name:         detail.shop_name || "pacred",
+        url:               detail.url,
+        title:             detail.title,
+        image_path:        r.image,
+        price_cny:         r.price,
+        amount:            qtyMap[r.key],
+        details:           notesMap[r.key] || undefined,
+        variant_label:     r.label,
+        variant_data:      r.data,
+        source_product_id: detail.product_id,
+        stock_available:   r.stock,
+      }));
+
     startTransition(async () => {
-      const res = await addCartItem({
-        provider:   h.provider,
-        shop_name:  h.shop_name || "pacred",
-        url:        h.url,
-        title:      h.title,
-        image_path: h.image_url,
-        price_cny:  h.price_cny ?? 0,
-        amount:     1,
-      });
+      const res = await addCartItemsBulk(selected);
       if (res.ok) {
         onAdded();
+        setDetail(null); setUrl(""); setQtyMap({}); setNotesMap({});
         router.refresh();
       } else {
         onError(res.error);
@@ -225,22 +275,148 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
           <span className="text-sm font-medium">{t("urlPaste")}</span>
           <div className="flex gap-2">
             <input value={url} onChange={(e) => setUrl(e.target.value)} className={inputCls} placeholder="https://detail.1688.com/offer/..." />
-            <Button type="button" onClick={onSearch}>{t("convert")}</Button>
+            <Button type="button" onClick={onSearch} disabled={searching}>
+              {searching ? "..." : t("convert")}
+            </Button>
           </div>
           <span className="block text-xs text-muted">{t("urlPasteHint")}</span>
         </label>
       </div>
+
       {unavailable && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
           {t("apiUnavailable", { reason: unavailable })}
         </div>
       )}
-      {searched && !unavailable && hits.length === 0 && (
-        <p className="text-center text-sm text-muted py-8">{t("noResults")}</p>
+
+      {detail && (
+        <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+          {/* LEFT: product header + variant rows */}
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+              <div className="flex items-start gap-4">
+                {detail.main_image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={detail.main_image} alt={detail.title} className="w-28 h-28 rounded-lg object-cover bg-surface-alt shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium line-clamp-2">{detail.title}</h3>
+                  <p className="text-xs text-muted mt-1">
+                    🏪 {detail.shop_name ?? "—"} · {detail.provider.toUpperCase()}
+                  </p>
+                  <a href={detail.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline">
+                    🔗 ดูที่ต้นทาง
+                  </a>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    {detail.promo_price_cny != null && detail.base_price_cny != null && detail.promo_price_cny < detail.base_price_cny ? (
+                      <>
+                        <span className="font-mono text-lg font-bold text-red-600">¥{detail.promo_price_cny.toFixed(2)}</span>
+                        <span className="text-xs text-muted line-through">¥{detail.base_price_cny.toFixed(2)}</span>
+                      </>
+                    ) : (
+                      <span className="font-mono text-lg font-bold">¥{(detail.base_price_cny ?? 0).toFixed(2)}</span>
+                    )}
+                    <span className="text-[10px] text-muted">≈ ฿{((detail.promo_price_cny ?? detail.base_price_cny ?? 0) * yuanRate).toFixed(2)}/ชิ้น</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Variant rows */}
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between bg-surface-alt/30">
+                <h4 className="font-bold text-sm">เลือกตัวเลือก ({rows.length} แบบ)</h4>
+                <span className="text-xs text-muted">เรท ฿{yuanRate.toFixed(4)}/¥</span>
+              </div>
+              <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
+                {rows.map((r) => {
+                  const qty = qtyMap[r.key] || 0;
+                  const lineCny = qty * r.price;
+                  const lineThb = lineCny * yuanRate;
+                  return (
+                    <div key={r.key} className="px-4 py-3 hover:bg-surface-alt/30">
+                      <div className="flex items-start gap-3">
+                        {r.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.image} alt="" className="w-12 h-12 rounded-md object-cover bg-surface-alt shrink-0" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-md bg-surface-alt shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium line-clamp-1">{r.label}</p>
+                          <p className="text-[10px] text-muted">สต๊อก {r.stock.toLocaleString()} · ¥{r.price.toFixed(2)}/ชิ้น</p>
+                          <input
+                            type="text"
+                            placeholder="หมายเหตุ เช่น ต่อราคาร้านค้า สอบถามข้อมูล"
+                            value={notesMap[r.key] || ""}
+                            onChange={(e) => setNotesMap({ ...notesMap, [r.key]: e.target.value })}
+                            className="mt-1 w-full text-xs rounded border border-border px-2 py-1"
+                          />
+                        </div>
+                        <div className="text-right shrink-0 w-24">
+                          <input
+                            type="number" min="0" max={r.stock}
+                            value={qty || ""}
+                            onChange={(e) => setQtyMap({ ...qtyMap, [r.key]: Math.max(0, Math.min(r.stock, Number(e.target.value) || 0)) })}
+                            className="w-20 text-right rounded border border-border px-2 py-1 text-sm"
+                            placeholder="0"
+                          />
+                          {qty > 0 && (
+                            <div className="text-[10px] text-muted mt-1">
+                              ฿{lineThb.toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: sticky cart summary */}
+          <aside className="lg:sticky lg:top-20 self-start space-y-3">
+            <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm">
+              <h3 className="font-bold text-sm mb-3">สรุปการเลือก</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span>จำนวนชิ้น</span><span>{totalQty}</span></div>
+                <div className="flex justify-between"><span>ยอด CNY</span><span className="font-mono">¥{totalCny.toFixed(2)}</span></div>
+                <div className="flex justify-between text-xs text-muted"><span>เรท</span><span>฿{yuanRate.toFixed(4)}</span></div>
+                <hr className="border-primary-200" />
+                <div className="flex justify-between font-bold text-base">
+                  <span>เทียบเท่า</span>
+                  <span className="font-mono">฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+            <Button type="button" fullWidth onClick={onAddSelected} disabled={pending || totalQty === 0}>
+              {pending ? "กำลังเพิ่ม..." : `+ หยิบใส่รถเข็น (${totalQty} ชิ้น)`}
+            </Button>
+            <p className="text-[10px] text-muted text-center">
+              ราคา THB คำนวณตามเรทล่าสุด — จะ lock ตอนเปิดออเดอร์
+            </p>
+          </aside>
+        </div>
       )}
-      <HitsGrid hits={hits} onAdd={onAddHit} pending={pending} />
     </div>
   );
+}
+
+function prettifyPropPath(path: Record<string, string>, axes?: ChinaProductDetail["sku_axes"]): string {
+  if (!path || Object.keys(path).length === 0) return "ตัวเลือกเดียว";
+  if (!axes) return Object.values(path).join(" / ");
+  // axes is an array; path keys are axis ids — fallback: just join values
+  const parts: string[] = [];
+  for (const [axisId, valId] of Object.entries(path)) {
+    // try to resolve label from axes
+    for (const axis of axes) {
+      const match = axis.values.find((v) => v.data === valId || v.label === valId);
+      if (match?.label) { parts.push(match.label); break; }
+    }
+  }
+  if (parts.length === 0) return Object.values(path).join(" / ");
+  return parts.join(" / ");
 }
 
 // ───────────────── KEYWORD SEARCH ─────────────────

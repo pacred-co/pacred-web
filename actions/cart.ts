@@ -140,3 +140,61 @@ export async function clearCart(): Promise<ActionResult> {
   revalidatePath("/service-order/cart");
   return { ok: true };
 }
+
+// ────────────────────────────────────────────────────────────
+// ADD MULTIPLE — bulk-insert rows (used by URL-paste variant grid)
+// ────────────────────────────────────────────────────────────
+export type CartItemBulkRow = CartItemInput & {
+  variant_label?: string;
+  variant_data?:  Record<string, string>;
+  source_product_id?: string;
+  stock_available?: number;
+};
+
+export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionResult<{ count: number }>> {
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty_rows" };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // Validate each row
+  const validated: Array<CartItemBulkRow & { _ok: true }> = [];
+  for (const r of rows) {
+    const parsed = cartItemSchema.safeParse(r);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+    }
+    validated.push({ ...parsed.data, variant_label: r.variant_label, variant_data: r.variant_data, source_product_id: r.source_product_id, stock_available: r.stock_available, _ok: true });
+  }
+
+  const payload = validated.map((d) => ({
+    profile_id:        user.id,
+    provider:          d.provider,
+    shop_name:         d.shop_name,
+    url:               d.url ?? null,
+    title:             d.title ?? null,
+    image_path:        d.image_path ?? null,
+    color:             d.color ?? null,
+    size:              d.size ?? null,
+    price_cny:         d.price_cny,
+    amount:            d.amount,
+    details:           d.details ?? null,
+    variant_label:     d.variant_label ?? null,
+    variant_data:      d.variant_data ?? null,
+    source_product_id: d.source_product_id ?? null,
+    stock_available:   d.stock_available ?? null,
+  }));
+
+  const { error, count } = await supabase
+    .from("cart_items")
+    .insert(payload, { count: "exact" });
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/service-order/cart");
+  revalidatePath("/service-order/add");
+  return { ok: true, data: { count: count ?? payload.length } };
+}

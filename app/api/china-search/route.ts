@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   searchKeyword,
   convertProductUrl,
+  convertProductUrlDetail,
 } from "@/lib/china-search";
 
 /**
@@ -30,6 +31,10 @@ export async function GET(request: Request) {
 
   if (mode === "url") {
     const result = await convertProductUrl(q);
+    return NextResponse.json(result);
+  }
+  if (mode === "url-detail") {
+    const result = await convertProductUrlDetail(q);
     return NextResponse.json(result);
   }
 

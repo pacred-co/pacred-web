@@ -4,6 +4,8 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
+import { SalesRepCard } from "@/components/sales-rep-card";
+import { DashboardBanners } from "@/components/dashboard-banners";
 
 const STATUS_BADGE_F: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -72,6 +74,9 @@ export default async function DashboardPage() {
   return (
     <>
       <main className="mx-auto w-full max-w-[1200px] px-4 py-8 space-y-6">
+        {/* Sales rep card (server component, renders nothing if no rep) */}
+        <SalesRepCard profileId={profile.id} />
+
         {/* Greeting */}
         <section className="rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white p-6 shadow-sm">
           <p className="text-xs uppercase tracking-widest text-white/70">{t("kicker")}</p>
@@ -88,6 +93,9 @@ export default async function DashboardPage() {
             <Link href="/wallet/deposit"      className="rounded-lg bg-white text-primary-700 hover:bg-white/95 px-4 py-2 text-sm font-bold transition-colors">+ {t("quickDeposit")}</Link>
           </div>
         </section>
+
+        {/* Marketing banners (admin-managed via dashboard_banners table) */}
+        <DashboardBanners />
 
         {/* Stats row */}
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
