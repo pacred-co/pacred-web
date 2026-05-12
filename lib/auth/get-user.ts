@@ -72,6 +72,10 @@ export type Profile = {
 
   note: string | null;
 
+  // TOS acceptance (B6)
+  tos_accepted_version: string | null;
+  tos_accepted_at: string | null;
+
   created_at: string;
   updated_at: string;
 };
