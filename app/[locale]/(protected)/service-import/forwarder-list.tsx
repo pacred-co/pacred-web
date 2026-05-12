@@ -57,7 +57,11 @@ export async function ForwarderList({ items }: { items: ForwarderSummary[] }) {
         <tbody>
           {items.map((f) => (
             <tr key={f.id} className="border-t border-border hover:bg-surface-alt/30">
-              <td className="px-4 py-3 font-mono text-xs text-primary-600">{f.f_no ?? "—"}</td>
+              <td className="px-4 py-3 font-mono text-xs text-primary-600">
+                {f.f_no
+                  ? <Link href={`/service-import/${f.f_no}`} className="hover:underline">{f.f_no}</Link>
+                  : "—"}
+              </td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span>{TRANSPORT_ICON[f.transport_type] ?? "📦"}</span>

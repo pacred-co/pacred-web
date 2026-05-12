@@ -443,7 +443,21 @@
     "savedBasic": "Saved",
     "savedCorporate": "Company info saved",
     "savedNotify": "Updated",
-    "lineUnlinked": "LINE unlinked"
+    "lineUnlinked": "LINE unlinked",
+
+    "sectionAvatar": "Profile picture",
+    "avatarChange": "Change picture",
+    "avatarHint": "JPG / PNG up to 2 MB",
+    "avatarUpdated": "Picture updated",
+
+    "sectionSecurity": "Security",
+    "securityDesc": "Change your sign-in password.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "newPasswordHint": "6-30 characters",
+    "confirmPassword": "Confirm new password",
+    "changePassword": "Change password",
+    "passwordChanged": "Password updated."
   },
   "addresses": {
     "kicker": "SHIPPING",
@@ -479,6 +493,48 @@
     "deletedToast": "Deleted",
     "setDefaultToast": "Default address updated",
     "deleteConfirm": "Delete address for {name}?"
+  },
+  "dashboard": {
+    "kicker": "DASHBOARD",
+    "greeting": "Hi, {name}",
+    "memberCode": "Member ID",
+    "fallbackName": "Customer",
+    "quickShop": "New shopping",
+    "quickImport": "New import",
+    "quickPayment": "Yuan transfer",
+    "quickDeposit": "Top up wallet",
+    "statBalance": "Wallet balance",
+    "statBalanceSub": "View history",
+    "statCart": "In cart",
+    "statCartSub": "Go to cart",
+    "statOrdersPending": "Orders pending",
+    "statOrdersPendingSub": "View all orders",
+    "statForwardersPending": "Imports pending",
+    "statForwardersPendingSub": "View all imports",
+    "recentOrders": "Recent shopping orders",
+    "recentForwarders": "Recent imports",
+    "viewAll": "View all",
+    "noRecentOrders": "No shopping orders yet.",
+    "noRecentForwarders": "No imports yet.",
+    "items": "items",
+    "payBy": "Pay by {date}",
+    "status": {
+      "pending":               "Pending",
+      "awaiting_payment":      "Awaiting payment",
+      "ordered":               "Ordered",
+      "awaiting_chn_dispatch": "Awaiting CN dispatch",
+      "completed":             "Completed",
+      "cancelled":             "Cancelled"
+    },
+    "fstatus": {
+      "pending_payment":  "Pending payment",
+      "shipped_china":    "Shipped from China",
+      "in_transit":       "In transit",
+      "arrived_thailand": "Arrived in TH",
+      "out_for_delivery": "Out for delivery",
+      "delivered":        "Delivered",
+      "cancelled":        "Cancelled"
+    }
   },
   "serviceOrder": {
     "kicker": "SHOPPING",
@@ -577,7 +633,22 @@
       "awaiting_chn_dispatch": "Awaiting CN dispatch",
       "completed":             "Completed",
       "cancelled":             "Cancelled"
-    }
+    },
+    "detailTitle": "Order detail",
+    "createdAt": "Created {date}",
+    "payByBanner": "Amount due",
+    "payNowDeposit": "Top up to pay",
+    "checkWallet": "Check wallet",
+    "itemsTitle": "Items",
+    "noItems": "No items",
+    "viewSource": "View at source",
+    "itemsSubtotal": "Items subtotal (CNY)",
+    "chinaTransport": "China transport",
+    "shipmentInfo": "Shipment info",
+    "freeShipping": "Free shipping (Pacred zone)",
+    "cancelOrder": "Cancel order",
+    "cancelling": "Cancelling...",
+    "cancelConfirm": "Cancel order {hNo}? This cannot be undone."
   },
   "forwarder": {
     "kicker": "IMPORT",
@@ -699,7 +770,22 @@
       "out_for_delivery": "Out for delivery",
       "delivered":        "Delivered",
       "cancelled":        "Cancelled"
-    }
+    },
+    "detailTitle": "Import detail",
+    "createdAt": "Created {date}",
+    "payByBanner": "Amount due",
+    "payNowDeposit": "Top up to pay",
+    "checkWallet": "Check wallet",
+    "dimensions": "Dimensions / weight",
+    "weightShort": "Weight",
+    "volumeShort": "Volume",
+    "dimensionsShort": "Box size",
+    "itemsBreakdown": "Items breakdown",
+    "additionalPhotos": "Additional photos",
+    "priceBreakdown": "Price breakdown",
+    "trackingTitle": "Tracking",
+    "cabinet": "Container",
+    "noTrackingYet": "No tracking number yet."
   },
   "wallet": {
     "kicker": "WALLET",

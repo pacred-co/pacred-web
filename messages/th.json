@@ -443,7 +443,21 @@
     "savedBasic": "บันทึกแล้ว",
     "savedCorporate": "บันทึกข้อมูลบริษัทแล้ว",
     "savedNotify": "อัพเดทแล้ว",
-    "lineUnlinked": "ยกเลิกเชื่อม LINE แล้ว"
+    "lineUnlinked": "ยกเลิกเชื่อม LINE แล้ว",
+
+    "sectionAvatar": "รูปโปรไฟล์",
+    "avatarChange": "เปลี่ยนรูป",
+    "avatarHint": "JPG / PNG ขนาดไม่เกิน 2 MB",
+    "avatarUpdated": "อัพเดทรูปแล้ว",
+
+    "sectionSecurity": "ความปลอดภัย",
+    "securityDesc": "เปลี่ยนรหัสผ่านเข้าสู่ระบบ",
+    "currentPassword": "รหัสผ่านปัจจุบัน",
+    "newPassword": "รหัสผ่านใหม่",
+    "newPasswordHint": "6-30 ตัวอักษร",
+    "confirmPassword": "ยืนยันรหัสผ่านใหม่",
+    "changePassword": "เปลี่ยนรหัสผ่าน",
+    "passwordChanged": "เปลี่ยนรหัสผ่านแล้ว"
   },
   "addresses": {
     "kicker": "ที่อยู่จัดส่ง",
@@ -479,6 +493,48 @@
     "deletedToast": "ลบแล้ว",
     "setDefaultToast": "ตั้งเป็นที่อยู่หลักแล้ว",
     "deleteConfirm": "ลบที่อยู่ของ {name}?"
+  },
+  "dashboard": {
+    "kicker": "DASHBOARD",
+    "greeting": "สวัสดี, {name}",
+    "memberCode": "รหัสสมาชิก",
+    "fallbackName": "ลูกค้า",
+    "quickShop": "เพิ่มฝากสั่ง",
+    "quickImport": "เปิดฝากนำเข้า",
+    "quickPayment": "ฝากโอนหยวน",
+    "quickDeposit": "เติมเงินกระเป๋า",
+    "statBalance": "ยอดเงินกระเป๋า",
+    "statBalanceSub": "ดูประวัติทั้งหมด",
+    "statCart": "ในรถเข็น",
+    "statCartSub": "ไปที่รถเข็น",
+    "statOrdersPending": "ฝากสั่งรอชำระ",
+    "statOrdersPendingSub": "ดูออเดอร์ทั้งหมด",
+    "statForwardersPending": "ฝากนำเข้ารอชำระ",
+    "statForwardersPendingSub": "ดูทั้งหมด",
+    "recentOrders": "ฝากสั่งล่าสุด",
+    "recentForwarders": "ฝากนำเข้าล่าสุด",
+    "viewAll": "ดูทั้งหมด",
+    "noRecentOrders": "ยังไม่มีออเดอร์ฝากสั่ง",
+    "noRecentForwarders": "ยังไม่มีรายการฝากนำเข้า",
+    "items": "ชิ้น",
+    "payBy": "ชำระภายใน {date}",
+    "status": {
+      "pending":               "รอดำเนินการ",
+      "awaiting_payment":      "รอชำระเงิน",
+      "ordered":               "สั่งสินค้าแล้ว",
+      "awaiting_chn_dispatch": "รอจัดส่งจีน",
+      "completed":             "สำเร็จ",
+      "cancelled":             "ยกเลิก"
+    },
+    "fstatus": {
+      "pending_payment":  "รอชำระเงิน",
+      "shipped_china":    "ออกจากจีน",
+      "in_transit":       "ขนส่งกลางทาง",
+      "arrived_thailand": "เข้าโกดังไทย",
+      "out_for_delivery": "กำลังจัดส่ง",
+      "delivered":        "ส่งสำเร็จ",
+      "cancelled":        "ยกเลิก"
+    }
   },
   "serviceOrder": {
     "kicker": "ฝากสั่งซื้อ",
@@ -577,7 +633,22 @@
       "awaiting_chn_dispatch": "รอร้านจีนจัดส่ง",
       "completed":             "สำเร็จ",
       "cancelled":             "ยกเลิก"
-    }
+    },
+    "detailTitle": "รายละเอียดออเดอร์",
+    "createdAt": "เปิดเมื่อ {date}",
+    "payByBanner": "ยอดที่ต้องชำระ",
+    "payNowDeposit": "ไปเติมเงินเพื่อชำระ",
+    "checkWallet": "ดูยอดในกระเป๋า",
+    "itemsTitle": "รายการสินค้า",
+    "noItems": "ไม่มีสินค้า",
+    "viewSource": "ดูที่ต้นทาง",
+    "itemsSubtotal": "ยอดสินค้า (CNY)",
+    "chinaTransport": "ค่าขนส่งในจีน",
+    "shipmentInfo": "ข้อมูลการจัดส่ง",
+    "freeShipping": "ส่งฟรี (พื้นที่ Pacred)",
+    "cancelOrder": "ยกเลิกออเดอร์",
+    "cancelling": "กำลังยกเลิก...",
+    "cancelConfirm": "ยกเลิกออเดอร์ {hNo}? — ไม่สามารถกู้คืนได้"
   },
   "forwarder": {
     "kicker": "ฝากนำเข้า",
@@ -699,7 +770,22 @@
       "out_for_delivery": "กำลังจัดส่ง",
       "delivered":        "ส่งสำเร็จ",
       "cancelled":        "ยกเลิก"
-    }
+    },
+    "detailTitle": "รายละเอียดรายการนำเข้า",
+    "createdAt": "เปิดเมื่อ {date}",
+    "payByBanner": "ยอดที่ต้องชำระ",
+    "payNowDeposit": "ไปเติมเงินเพื่อชำระ",
+    "checkWallet": "ดูยอดในกระเป๋า",
+    "dimensions": "ขนาด / น้ำหนัก",
+    "weightShort": "น้ำหนัก",
+    "volumeShort": "ปริมาตร",
+    "dimensionsShort": "ขนาดกล่อง",
+    "itemsBreakdown": "รายการกล่อง",
+    "additionalPhotos": "รูปประกอบเพิ่มเติม",
+    "priceBreakdown": "รายละเอียดราคา",
+    "trackingTitle": "เลขติดตาม",
+    "cabinet": "ตู้คอนเทนเนอร์",
+    "noTrackingYet": "ยังไม่มีเลขติดตาม"
   },
   "wallet": {
     "kicker": "กระเป๋าเงิน",

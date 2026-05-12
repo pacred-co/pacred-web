@@ -187,6 +187,99 @@ export async function previewPrice(
 }
 
 // ────────────────────────────────────────────────────────────
+// READ ONE (detail page)
+// ────────────────────────────────────────────────────────────
+export type ForwarderDetail = ForwarderSummary & {
+  pay_method: "origin" | "destination";
+  rate_basis: "kg" | "cbm" | "auto";
+  ship_by: string | null;
+  width_cm: number;
+  length_cm: number;
+  height_cm: number;
+  crate: boolean;
+  crate_price: number;
+  qc: boolean;
+  qc_price: number;
+  domestic_china_thb: number;
+  thailand_delivery_thb: number;
+  other_price: number;
+  service_fee: number;
+  transport_price: number;
+  ship_first_name: string;
+  ship_last_name: string;
+  ship_phone: string;
+  ship_phone2: string | null;
+  ship_address_line: string;
+  ship_sub_district: string;
+  ship_district: string;
+  ship_province: string;
+  ship_postal_code: string;
+  ship_note: string | null;
+  cabinet_number: string | null;
+  tracking_chn2: string | null;
+  detail: string | null;
+  note_user: string | null;
+  items: Array<{
+    id: string;
+    product_name: string;
+    product_tracking: string | null;
+    product_qty: number;
+    weight_per_item_kg: number | null;
+  }>;
+  images: Array<{
+    id: string;
+    image_path: string;
+    is_cover: boolean;
+  }>;
+};
+
+const SUMMARY_FORWARDER_COLS =
+  "id, f_no, status, source_warehouse, transport_type, product_type, box_count, weight_kg, volume_cbm, total_price, tracking_chn, tracking_th, created_at, date_arrived_thailand, date_delivered";
+
+export async function getForwarderByNo(fNo: string): Promise<ActionResult<ForwarderDetail>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const { data, error } = await supabase
+    .from("forwarders")
+    .select(
+      `${SUMMARY_FORWARDER_COLS}, pay_method, rate_basis, ship_by,
+       width_cm, length_cm, height_cm, crate, crate_price, qc, qc_price,
+       domestic_china_thb, thailand_delivery_thb, other_price, service_fee, transport_price,
+       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
+       ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
+       cabinet_number, tracking_chn2, detail, note_user`,
+    )
+    .eq("f_no", fNo)
+    .maybeSingle();
+
+  if (error)  return { ok: false, error: error.message };
+  if (!data)  return { ok: false, error: "not_found" };
+
+  const id = (data as { id: string }).id;
+  const [{ data: items }, { data: images }] = await Promise.all([
+    supabase.from("forwarder_items")
+      .select("id, product_name, product_tracking, product_qty, weight_per_item_kg")
+      .eq("forwarder_id", id)
+      .order("created_at"),
+    supabase.from("forwarder_images")
+      .select("id, image_path, is_cover")
+      .eq("forwarder_id", id)
+      .order("sort_order"),
+  ]);
+
+  return {
+    ok: true,
+    data: {
+      ...(data as unknown as Omit<ForwarderDetail, "items" | "images">),
+      items:  (items  ?? []) as ForwarderDetail["items"],
+      images: (images ?? []) as ForwarderDetail["images"],
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────
 // LIST / READ
 // ────────────────────────────────────────────────────────────
 export async function listForwarders(opts?: {

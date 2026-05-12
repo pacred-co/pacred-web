@@ -1,0 +1,220 @@
+import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { Footer } from "@/components/sections/footer";
+import { Link } from "@/i18n/navigation";
+import { getForwarderByNo } from "@/actions/forwarder";
+
+const STATUS_BADGE: Record<string, string> = {
+  pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+  shipped_china:     "bg-blue-50 text-blue-700 border-blue-200",
+  in_transit:        "bg-indigo-50 text-indigo-700 border-indigo-200",
+  arrived_thailand:  "bg-purple-50 text-purple-700 border-purple-200",
+  out_for_delivery:  "bg-orange-50 text-orange-700 border-orange-200",
+  delivered:         "bg-green-50 text-green-700 border-green-200",
+  cancelled:         "bg-gray-50 text-gray-600 border-gray-200",
+};
+
+const TRANSPORT_ICON: Record<string, string> = {
+  truck: "🚚", ship: "🚢", air: "✈️",
+};
+
+export default async function ForwarderDetailPage({ params }: { params: Promise<{ fNo: string }> }) {
+  const { fNo } = await params;
+  const t = await getTranslations("forwarder");
+  const res = await getForwarderByNo(fNo);
+  if (!res.ok || !res.data) notFound();
+  const f = res.data;
+
+  const cover = f.images.find((i) => i.is_cover) ?? f.images[0];
+
+  return (
+    <>
+      <main className="mx-auto w-full max-w-[1100px] px-4 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")} · {t("detailTitle")}</p>
+            <div className="mt-1 flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold font-mono text-foreground">{f.f_no}</h1>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[f.status]}`}>
+                {t(`status.${f.status}` as Parameters<typeof t>[0])}
+              </span>
+              <span className="text-sm">{TRANSPORT_ICON[f.transport_type] ?? "📦"} {t(`transport.${f.transport_type}` as Parameters<typeof t>[0])}</span>
+            </div>
+            <p className="text-xs text-muted mt-1">{t("createdAt", { date: new Date(f.created_at).toLocaleString("th-TH") })}</p>
+          </div>
+          <Link href="/service-import" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            ← {t("backToList")}
+          </Link>
+        </div>
+
+        {/* Payment banner for pending */}
+        {f.status === "pending_payment" && (
+          <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5">
+            <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
+            <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
+              ฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/wallet/deposit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
+                {t("payNowDeposit")}
+              </Link>
+              <Link href="/wallet/history" className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt">
+                {t("checkWallet")}
+              </Link>
+            </div>
+          </div>
+        )}
+
+        <div className="grid lg:grid-cols-[1fr_360px] gap-6">
+          {/* LEFT: cover + items + photos */}
+          <section className="space-y-4">
+            {cover && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cover.image_path} alt="cover" className="w-full max-h-[400px] object-contain bg-surface-alt" />
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+              <h2 className="font-bold mb-3">{t("dimensions")}</h2>
+              <div className="grid grid-cols-4 gap-3 text-center">
+                <Stat label="📦"        value={`${f.box_count}`} />
+                <Stat label={t("weightShort")}    value={`${Number(f.weight_kg).toFixed(2)} kg`} />
+                <Stat label={t("volumeShort")}    value={`${Number(f.volume_cbm).toFixed(3)} cbm`} />
+                <Stat label={t("dimensionsShort")} value={`${Number(f.width_cm)}×${Number(f.length_cm)}×${Number(f.height_cm)} cm`} />
+              </div>
+            </div>
+
+            {f.items.length > 0 && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="font-bold">{t("itemsBreakdown")} ({f.items.length})</h2>
+                </div>
+                <ul className="divide-y divide-border">
+                  {f.items.map((it) => (
+                    <li key={it.id} className="px-5 py-3 text-sm flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">{it.product_name}</p>
+                        {it.product_tracking && (
+                          <p className="text-[10px] font-mono text-muted">📦 {it.product_tracking}</p>
+                        )}
+                      </div>
+                      <div className="text-right text-xs text-muted">
+                        × {it.product_qty}
+                        {it.weight_per_item_kg && (
+                          <div>{Number(it.weight_per_item_kg).toFixed(2)} kg/box</div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {f.images.length > 1 && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+                <h2 className="font-bold mb-3">{t("additionalPhotos")}</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {f.images.filter((i) => !i.is_cover).map((img) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={img.id} src={img.image_path} alt="" className="w-full aspect-square object-cover rounded-lg bg-surface-alt" />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {f.detail && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+                <h3 className="font-bold text-sm mb-2">{t("detail")}</h3>
+                <p className="text-sm whitespace-pre-wrap">{f.detail}</p>
+              </div>
+            )}
+          </section>
+
+          {/* RIGHT: summary + shipping + tracking */}
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm">
+              <h3 className="font-bold text-sm mb-3">{t("priceBreakdown")}</h3>
+              <div className="space-y-1.5 text-sm">
+                <Row label={t("transportSubtotal")} value={`฿${Number(f.transport_price).toFixed(2)}`} />
+                <Row label={t("serviceFee")}        value={`฿${Number(f.service_fee).toFixed(2)}`} />
+                {f.crate && <Row label={t("crateFee")} value={`฿${Number(f.crate_price).toFixed(2)}`} />}
+                {f.qc && <Row label={t("qcFee")} value={`฿${Number(f.qc_price).toFixed(2)}`} />}
+                {f.domestic_china_thb > 0    && <Row label={t("domesticChina")}    value={`฿${Number(f.domestic_china_thb).toFixed(2)}`} />}
+                {f.thailand_delivery_thb > 0 && <Row label={t("thailandDelivery")} value={`฿${Number(f.thailand_delivery_thb).toFixed(2)}`} />}
+                {f.other_price > 0           && <Row label={t("otherFee")}         value={`฿${Number(f.other_price).toFixed(2)}`} />}
+                <hr className="border-primary-200" />
+                <Row label={t("totalPrice")} value={`฿${Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`} bold />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+              <h3 className="font-bold text-sm">{t("shipmentInfo")}</h3>
+              <Meta label={t("sourceWarehouse")} value={f.source_warehouse === "yiwu" ? "อี้อู" : "กวางโจว"} />
+              <Meta label={t("productTypeLabel")} value={t(`productType.${f.product_type}` as Parameters<typeof t>[0])} />
+              <Meta label={t("rateBasis")}      value={f.rate_basis === "auto" ? t("rateBasisAuto") : (f.rate_basis === "kg" ? "kg" : "cbm")} />
+              <Meta label={t("payMethod")}      value={f.pay_method === "origin" ? t("payMethodOrigin") : t("payMethodDestination")} />
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
+              <h3 className="font-bold text-sm">{t("trackingTitle")}</h3>
+              {f.tracking_chn && <Meta label="CN" value={f.tracking_chn} />}
+              {f.tracking_chn2 && <Meta label="CN-2" value={f.tracking_chn2} />}
+              {f.tracking_th && <Meta label="TH" value={f.tracking_th} />}
+              {f.cabinet_number && <Meta label={t("cabinet")} value={f.cabinet_number} />}
+              {!f.tracking_chn && !f.tracking_th && !f.cabinet_number && (
+                <p className="text-xs text-muted">{t("noTrackingYet")}</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
+              <h3 className="font-bold text-sm">{t("sectionAddress")}</h3>
+              <div className="text-sm space-y-1">
+                <p className="font-medium">{f.ship_first_name} {f.ship_last_name}</p>
+                <p className="text-xs text-muted">📞 {f.ship_phone}{f.ship_phone2 ? ` / ${f.ship_phone2}` : ""}</p>
+                <p className="text-xs">
+                  {f.ship_address_line} ต.{f.ship_sub_district} อ.{f.ship_district} จ.{f.ship_province} {f.ship_postal_code}
+                </p>
+                {f.ship_note && <p className="text-xs text-muted">📝 {f.ship_note}</p>}
+              </div>
+            </div>
+
+            {f.note_user && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+                <h3 className="font-bold text-sm mb-2">{t("noteUser")}</h3>
+                <p className="text-sm whitespace-pre-wrap">{f.note_user}</p>
+              </div>
+            )}
+          </aside>
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 ${bold ? "font-bold text-base" : ""}`}>
+      <span className={bold ? "" : "text-muted"}>{label}</span>
+      <span className="font-mono">{value}</span>
+    </div>
+  );
+}
+function Meta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="font-medium font-mono text-xs">{value}</span>
+    </div>
+  );
+}
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted">{label}</p>
+      <p className="font-bold text-sm">{value}</p>
+    </div>
+  );
+}

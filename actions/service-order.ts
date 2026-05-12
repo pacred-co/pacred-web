@@ -187,7 +187,9 @@ export async function placeServiceOrder(
       item_count:        cartRows.length,
       warehouse_china:   d.warehouse_china,
       transport_type:    d.transport_type,
-      ship_by:           free_shipping ? "PCSF" : (d.ship_by ?? null),
+      // 'PACRED_FREE' for orders eligible for free shipping in the
+      // BKK + 5 metro zones (replaces legacy PCSF code).
+      ship_by:           free_shipping ? "PACRED_FREE" : (d.ship_by ?? null),
       pay_method:        d.pay_method,
       crate:             d.crate,
       free_shipping,

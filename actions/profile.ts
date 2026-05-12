@@ -137,6 +137,29 @@ export async function updateNotifyChannels(
 }
 
 // ────────────────────────────────────────────────────────────
+// AVATAR — set avatar_url after client-side upload to 'avatars' bucket
+// ────────────────────────────────────────────────────────────
+export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
+  if (!publicUrl || publicUrl.length > 500) {
+    return { ok: false, error: "invalid_url" };
+  }
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: publicUrl })
+    .eq("id", user.id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
 // LINE UNLINK — remove line_user_id (linking flow lives in OAuth callback)
 // ────────────────────────────────────────────────────────────
 export async function unlinkLine(): Promise<ActionResult> {

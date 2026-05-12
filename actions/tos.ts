@@ -19,7 +19,13 @@ export async function acceptCurrentTos(): Promise<ActionResult> {
     })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // PostgREST returns this when migration 0006 hasn't run yet
+    if (error.message?.includes("schema cache") || error.message?.includes("tos_accepted")) {
+      return { ok: false, error: "ระบบยังไม่พร้อม — โปรดให้แอดมินรัน migration ของฐานข้อมูลก่อน (supabase/migrations/0006_tos_acceptance.sql)" };
+    }
+    return { ok: false, error: error.message };
+  }
 
   // Revalidate everything under (protected) since the gate component
   // lives in the layout

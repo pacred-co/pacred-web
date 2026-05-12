@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { ProfileForm } from "./profile-form";
+import { AvatarPanel } from "./avatar-panel";
+import { SecurityPanel } from "./security-panel";
 
 export default async function ProfilePage() {
   const data = await getCurrentUserWithProfile();
@@ -62,7 +64,14 @@ export default async function ProfilePage() {
           </div>
         </div>
 
-        <ProfileForm profile={profile} corporate={corporate} />
+        <div className="space-y-6">
+          <AvatarPanel
+            currentAvatarUrl={profile.avatar_url}
+            fallbackInitial={(profile.first_name ?? profile.company_name ?? "?").charAt(0).toUpperCase()}
+          />
+          <ProfileForm profile={profile} corporate={corporate} />
+          <SecurityPanel />
+        </div>
       </main>
       <Footer />
     </>

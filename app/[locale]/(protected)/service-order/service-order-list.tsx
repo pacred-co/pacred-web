@@ -44,7 +44,11 @@ export async function ServiceOrderList({ items }: { items: ServiceOrderSummary[]
         <tbody>
           {items.map((o) => (
             <tr key={o.id} className="border-t border-border hover:bg-surface-alt/30">
-              <td className="px-4 py-3 font-mono text-xs text-primary-600">{o.h_no ?? "—"}</td>
+              <td className="px-4 py-3 font-mono text-xs text-primary-600">
+                {o.h_no
+                  ? <Link href={`/service-order/${o.h_no}`} className="hover:underline">{o.h_no}</Link>
+                  : "—"}
+              </td>
               <td className="px-4 py-3">
                 <div className="font-medium">{o.title ?? "—"}</div>
                 {o.status === "awaiting_payment" && o.payment_due_at && (
