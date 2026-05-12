@@ -11,7 +11,7 @@ const thaiPhone = z
   .trim()
   .regex(/^0\d{8,9}$/, "เบอร์โทรต้องขึ้นต้น 0 และมี 9-10 หลัก");
 
-const taxId = z
+const taxIdSchema = z
   .string()
   .trim()
   .regex(/^\d{13}$/, "เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก");
@@ -50,7 +50,7 @@ export type ProfileBasicInput = z.infer<typeof profileBasicSchema>;
 
 // ── corporate (juristic only) ──
 export const corporateSchema = z.object({
-  tax_id,
+  tax_id:          taxIdSchema,
   company_name:    z.string().trim().min(1, "กรุณากรอกชื่อบริษัท").max(300),
   company_address: z.string().trim().min(1, "กรุณากรอกที่อยู่บริษัท").max(1000),
 });
