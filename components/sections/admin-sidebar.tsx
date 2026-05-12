@@ -6,7 +6,7 @@ import { Link } from "@/i18n/navigation";
 import {
   LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
-  BarChart3, BookOpen, Building2, ClipboardCheck, UserCog,
+  BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -36,9 +36,10 @@ const items: NavItem[] = [
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
 
   // Customer & sales
-  { href: "/admin/customers",        label: "ลูกค้า",          icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
-  { href: "/admin/juristic-check",   label: "เช็คนิติบุคคล",     icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/team-leaders",     label: "ทีมขาย",          icon: <Coins className="w-5 h-5" />,           roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
+  { href: "/admin/customers",          label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
+  { href: "/admin/customers/pending",  label: "รอ Approve",        icon: <Clock className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
+  { href: "/admin/juristic-check",     label: "เช็คนิติบุคคล",       icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ลูกค้า · ขาย" },
+  { href: "/admin/team-leaders",       label: "ทีมขาย",            icon: <Coins className="w-5 h-5" />,           roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
 
   // Org & HR
   { href: "/admin/hr",               label: "ทีมงาน (HR)",      icon: <Building2 className="w-5 h-5" />,       roles: ["super"], group: "องค์กร" },
