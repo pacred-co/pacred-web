@@ -6,6 +6,7 @@ import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { SalesRepCard } from "@/components/sales-rep-card";
 import { DashboardBanners } from "@/components/dashboard-banners";
+import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon } from "lucide-react";
 
 const STATUS_BADGE_F: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -39,8 +40,10 @@ export default async function DashboardPage() {
     cartCountRes,
     pendingOrderCountRes,
     pendingForwarderCountRes,
+    pendingPaymentCountRes,
     recentForwardersRes,
     recentOrdersRes,
+    settingsRes,
   ] = await Promise.all([
     supabase.from("wallet").select("balance, cashback_balance, credit_balance").eq("profile_id", profile.id).maybeSingle<{
       balance: number; cashback_balance: number; credit_balance: number;
@@ -54,6 +57,10 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("profile_id", profile.id)
       .eq("status", "pending_payment"),
+    supabase.from("yuan_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", profile.id)
+      .in("status", ["pending", "processing"]),
     supabase.from("forwarders")
       .select("id, f_no, status, weight_kg, volume_cbm, total_price, created_at, tracking_th")
       .eq("profile_id", profile.id)
@@ -64,9 +71,14 @@ export default async function DashboardPage() {
       .eq("profile_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase.from("settings").select("yuan_rate").eq("id", 1).maybeSingle<{ yuan_rate: number }>(),
   ]);
 
   const wallet = walletRes.data ?? { balance: 0, cashback_balance: 0, credit_balance: 0 };
+  const yuanRate = Number(settingsRes.data?.yuan_rate ?? 5.0);
+  // Shopping-cart rate runs slightly higher than Alipay (legacy PCS pattern: ฝากสั่ง 4.97 vs Alipay 4.93)
+  const shopRate = yuanRate;
+  const alipayRate = Math.max(0, yuanRate - 0.04);
   const displayName = profile.first_name
     ? `${profile.first_name}${profile.last_name ? " " + profile.last_name : ""}`
     : profile.company_name ?? t("fallbackName");
@@ -77,15 +89,29 @@ export default async function DashboardPage() {
         {/* Sales rep card (server component, renders nothing if no rep) */}
         <SalesRepCard profileId={profile.id} />
 
-        {/* Greeting */}
+        {/* Greeting + live rates ticker */}
         <section className="rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white p-6 shadow-sm">
-          <p className="text-xs uppercase tracking-widest text-white/70">{t("kicker")}</p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-bold">{t("greeting", { name: displayName })}</h1>
-          {profile.member_code && (
-            <p className="mt-1 text-sm text-white/80">
-              {t("memberCode")}: <span className="font-mono font-semibold">{profile.member_code}</span>
-            </p>
-          )}
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-white/70">{t("kicker")}</p>
+              <h1 className="mt-1 text-2xl sm:text-3xl font-bold">{t("greeting", { name: displayName })}</h1>
+              {profile.member_code && (
+                <p className="mt-1 text-sm text-white/80">
+                  {t("memberCode")}: <span className="font-mono font-semibold">{profile.member_code}</span>
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="rounded-full bg-white/15 backdrop-blur-sm px-4 py-1.5 text-xs">
+                <span className="text-white/70">ฝากสั่ง</span>{" "}
+                <span className="font-mono font-bold text-base">{shopRate.toFixed(2)}</span>
+              </div>
+              <div className="rounded-full bg-white/15 backdrop-blur-sm px-4 py-1.5 text-xs">
+                <span className="text-white/70">Alipay</span>{" "}
+                <span className="font-mono font-bold text-base">{alipayRate.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link href="/service-order/add"   className="rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors">+ {t("quickShop")}</Link>
             <Link href="/service-import/add"  className="rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors">+ {t("quickImport")}</Link>
@@ -97,35 +123,37 @@ export default async function DashboardPage() {
         {/* Marketing banners (admin-managed via dashboard_banners table) */}
         <DashboardBanners />
 
-        {/* Stats row */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label={t("statBalance")}
-            value={`฿${Number(wallet.balance).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            sub={t("statBalanceSub")}
-            href="/wallet/history"
-            tone="primary"
-          />
-          <StatCard
-            label={t("statCart")}
-            value={String(cartCountRes.count ?? 0)}
-            sub={t("statCartSub")}
-            href="/service-order/cart"
-            tone="blue"
-          />
-          <StatCard
-            label={t("statOrdersPending")}
-            value={String(pendingOrderCountRes.count ?? 0)}
-            sub={t("statOrdersPendingSub")}
+        {/* Stats row — 4 PCS-style cards (number left, icon right, progress bar bottom, hover lift) */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <PcsStatCard
             href="/service-order/pending"
-            tone="yellow"
+            label="ฝากสั่งซื้อสินค้า"
+            value={String(pendingOrderCountRes.count ?? 0)}
+            cartBadge={cartCountRes.count ?? 0}
+            tone="info"
+            icon={<ShoppingBasket className="w-9 h-9" />}
           />
-          <StatCard
-            label={t("statForwardersPending")}
-            value={String(pendingForwarderCountRes.count ?? 0)}
-            sub={t("statForwardersPendingSub")}
+          <PcsStatCard
             href="/service-import/pending"
-            tone="indigo"
+            label="ฝากนำเข้าสินค้า"
+            value={String(pendingForwarderCountRes.count ?? 0)}
+            tone="warning"
+            icon={<Box className="w-9 h-9" />}
+          />
+          <PcsStatCard
+            href="/service-payment"
+            label="ฝากชำระเงิน"
+            value={String(pendingPaymentCountRes.count ?? 0)}
+            tone="purple"
+            icon={<ArrowLeftRight className="w-9 h-9" />}
+          />
+          <PcsStatCard
+            href="/wallet/history"
+            label="กระเป๋าสตางค์"
+            value={`฿${Number(wallet.balance).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+            tone="success"
+            icon={<WalletIcon className="w-9 h-9" />}
+            small
           />
         </section>
 
@@ -222,21 +250,49 @@ export default async function DashboardPage() {
   );
 }
 
-function StatCard({ label, value, sub, href, tone }: {
-  label: string; value: string; sub: string; href: string;
-  tone: "primary" | "blue" | "yellow" | "indigo";
+/** PCS-style stat card: big colored number on the left, icon on the right,
+ *  full-width gradient progress bar at bottom, hover lift. Mirrors the
+ *  card layout from legacy member dashboard. */
+function PcsStatCard({
+  href, label, value, icon, tone, cartBadge, small = false,
+}: {
+  href: string;
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  tone: "info" | "warning" | "purple" | "success";
+  cartBadge?: number;
+  small?: boolean;
 }) {
   const tones = {
-    primary: "from-primary-500/10 to-primary-500/0 border-primary-500/30 text-primary-700",
-    blue:    "from-blue-500/10 to-blue-500/0 border-blue-500/30 text-blue-700",
-    yellow:  "from-yellow-500/10 to-yellow-500/0 border-yellow-500/30 text-yellow-700",
-    indigo:  "from-indigo-500/10 to-indigo-500/0 border-indigo-500/30 text-indigo-700",
-  };
+    info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
+    warning: { text: "text-amber-500",   bar: "from-amber-400 to-orange-500" },
+    purple:  { text: "text-purple-600",  bar: "from-purple-400 to-fuchsia-600" },
+    success: { text: "text-emerald-600", bar: "from-emerald-400 to-green-600" },
+  }[tone];
+
   return (
-    <Link href={href} className={`block rounded-2xl border bg-gradient-to-br p-4 hover:shadow-md transition-shadow ${tones[tone]}`}>
-      <p className="text-xs font-medium opacity-80">{label}</p>
-      <p className="mt-1 text-2xl font-bold font-mono text-foreground">{value}</p>
-      <p className="text-[11px] text-muted mt-0.5">{sub}</p>
+    <Link
+      href={href}
+      className="group block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden"
+    >
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className={`font-bold leading-none ${tones.text} ${small ? "text-2xl" : "text-4xl"} font-mono`}>{value}</p>
+              {cartBadge !== undefined && cartBadge > 0 && (
+                <span className="rounded-full bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5">รถเข็น {cartBadge}</span>
+              )}
+            </div>
+            <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
+          </div>
+          <div className={`shrink-0 ${tones.text} opacity-90 group-hover:opacity-100`}>{icon}</div>
+        </div>
+      </div>
+      <div className="h-1.5 w-full bg-surface-alt">
+        <div className={`h-full w-full bg-gradient-to-r ${tones.bar}`} />
+      </div>
     </Link>
   );
 }
