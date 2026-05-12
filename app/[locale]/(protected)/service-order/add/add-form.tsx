@@ -301,34 +301,7 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
         <div className="grid lg:grid-cols-[1fr_360px] gap-4">
           {/* LEFT: product header + variant rows */}
           <div className="space-y-3">
-            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-              <div className="flex items-start gap-4">
-                {detail.main_image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={detail.main_image} alt={detail.title} className="w-28 h-28 rounded-lg object-cover bg-surface-alt shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium line-clamp-2">{detail.title}</h3>
-                  <p className="text-xs text-muted mt-1">
-                    🏪 {detail.shop_name ?? "—"} · {detail.provider.toUpperCase()}
-                  </p>
-                  <a href={detail.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary-500 hover:underline">
-                    🔗 ดูที่ต้นทาง
-                  </a>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    {detail.promo_price_cny != null && detail.base_price_cny != null && detail.promo_price_cny < detail.base_price_cny ? (
-                      <>
-                        <span className="font-mono text-lg font-bold text-red-600">¥{detail.promo_price_cny.toFixed(2)}</span>
-                        <span className="text-xs text-muted line-through">¥{detail.base_price_cny.toFixed(2)}</span>
-                      </>
-                    ) : (
-                      <span className="font-mono text-lg font-bold">¥{(detail.base_price_cny ?? 0).toFixed(2)}</span>
-                    )}
-                    <span className="text-[10px] text-muted">≈ ฿{((detail.promo_price_cny ?? detail.base_price_cny ?? 0) * yuanRate).toFixed(2)}/ชิ้น</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ProductHero detail={detail} yuanRate={yuanRate} />
 
             {/* Variant rows */}
             <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
@@ -412,30 +385,168 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
             </div>
           </div>
 
-          {/* RIGHT: sticky cart summary */}
+          {/* RIGHT: sticky cart summary with explicit price math (legacy PCS style) */}
           <aside className="lg:sticky lg:top-20 self-start space-y-3">
-            <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-5 shadow-sm">
-              <h3 className="font-bold text-sm mb-3">สรุปการเลือก</h3>
+            <div className="rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-5 shadow-md">
+              <h3 className="font-bold text-sm mb-3 text-primary-700">สรุปการเลือก</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>จำนวนชิ้น</span><span>{totalQty}</span></div>
-                <div className="flex justify-between"><span>ยอด CNY</span><span className="font-mono">¥{totalCny.toFixed(2)}</span></div>
-                <div className="flex justify-between text-xs text-muted"><span>เรท</span><span>฿{yuanRate.toFixed(4)}</span></div>
-                <hr className="border-primary-200" />
-                <div className="flex justify-between font-bold text-base">
-                  <span>เทียบเท่า</span>
-                  <span className="font-mono">฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                <div className="flex justify-between">
+                  <span className="text-muted">จำนวนชิ้น</span>
+                  <span className="font-mono font-bold">{totalQty.toLocaleString()}</span>
+                </div>
+                <div className="rounded-lg bg-white border border-primary-100 p-3 my-2">
+                  <p className="text-[11px] text-muted mb-1">ราคารวม</p>
+                  <p className="font-mono text-sm">
+                    <span className="font-bold">{totalCny.toFixed(2)}</span>
+                    <span className="text-muted">¥</span>
+                    <span className="mx-1 text-muted">×</span>
+                    <span className="font-bold text-primary-600">{yuanRate.toFixed(2)}</span>
+                    <span className="text-muted text-[10px]">฿/¥</span>
+                  </p>
+                  <p className="mt-2 text-right">
+                    <span className="text-[11px] text-muted">= </span>
+                    <span className="font-mono font-bold text-lg text-red-600">
+                      ฿{totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
-            <Button type="button" fullWidth onClick={onAddSelected} disabled={pending || totalQty === 0}>
-              {pending ? "กำลังเพิ่ม..." : `+ หยิบใส่รถเข็น (${totalQty} ชิ้น)`}
-            </Button>
+            <button
+              type="button"
+              onClick={onAddSelected}
+              disabled={pending || totalQty === 0}
+              className={`w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-500 to-primary-700 text-white font-bold px-4 py-3 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:hover:shadow-lg ${totalQty > 0 && !pending ? "animate-pulse" : ""}`}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              {pending ? "กำลังเพิ่ม..." : `หยิบใส่รถเข็น (${totalQty} ชิ้น)`}
+            </button>
             <p className="text-[10px] text-muted text-center">
               ราคา THB คำนวณตามเรทล่าสุด — จะ lock ตอนเปิดออเดอร์
             </p>
           </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Big product hero — provider chip, image gallery on the left with thumbnails,
+ *  title + shop + price block on the right. Mirrors the legacy PCS search-detail
+ *  page layout (col-md-4 image + col-md-8 info). */
+function ProductHero({ detail, yuanRate }: { detail: ChinaProductDetail; yuanRate: number }) {
+  const gallery = detail.images && detail.images.length > 0
+    ? detail.images.slice(0, 6)
+    : (detail.main_image ? [detail.main_image] : []);
+  const [active, setActive] = useState(0);
+  const hero = gallery[active] ?? detail.main_image;
+
+  const PROVIDER_BRAND: Record<string, { label: string; bg: string }> = {
+    tmall:  { label: "TMALL",  bg: "bg-red-600" },
+    taobao: { label: "TAOBAO", bg: "bg-orange-500" },
+    "1688": { label: "1688",   bg: "bg-orange-600" },
+    other:  { label: "CHINA",  bg: "bg-gray-600" },
+  };
+  const brand = PROVIDER_BRAND[detail.provider] ?? PROVIDER_BRAND.other;
+
+  const promo = detail.promo_price_cny ?? null;
+  const base  = detail.base_price_cny ?? promo ?? 0;
+  const isDiscounted = promo != null && promo < base;
+  const displayPriceCny = promo ?? base;
+
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+      {/* Provider banner strip */}
+      <div className="px-5 py-2.5 border-b border-border bg-surface-alt/30 flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-muted">ผลการค้นหาจาก</span>
+        <span className={`inline-flex items-center rounded-md ${brand.bg} text-white text-xs font-bold px-2.5 py-1`}>
+          {brand.label}
+        </span>
+        <span className="text-xs text-muted flex-1 min-w-0 truncate">
+          <a href={detail.url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">
+            🔗 {detail.url.replace(/^https?:\/\//, "").slice(0, 60)}
+          </a>
+        </span>
+      </div>
+
+      <div className="p-5 grid md:grid-cols-[280px_1fr] gap-5">
+        {/* Image gallery */}
+        <div className="space-y-2">
+          <div className="aspect-square w-full rounded-xl overflow-hidden bg-surface-alt border border-border">
+            {hero ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={hero} alt={detail.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-4xl text-muted">📦</div>
+            )}
+          </div>
+          {gallery.length > 1 && (
+            <div className="grid grid-cols-5 gap-1.5">
+              {gallery.map((g, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActive(i)}
+                  className={`aspect-square rounded-md overflow-hidden border-2 ${i === active ? "border-primary-500" : "border-transparent"}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right: details */}
+        <div className="space-y-3 min-w-0">
+          <h3 className="font-bold text-base sm:text-lg leading-snug line-clamp-3">{detail.title}</h3>
+
+          {/* Price banner */}
+          <div className="rounded-lg bg-gradient-to-r from-primary-500 to-primary-700 text-white px-4 py-3 shadow-sm">
+            <p className="text-xs text-white/80">ราคาสินค้า</p>
+            <p className="font-mono leading-none mt-1">
+              <span className="text-3xl font-bold">¥{displayPriceCny.toFixed(2)}</span>
+              {isDiscounted && (
+                <span className="ml-3 text-sm text-white/70 line-through">¥{base.toFixed(2)}</span>
+              )}
+            </p>
+            <p className="text-xs text-white/85 mt-1">
+              ≈ <span className="font-mono font-semibold">฿{(displayPriceCny * yuanRate).toFixed(2)}</span> / ชิ้น
+              <span className="ml-2 text-white/60">(เรท ฿{yuanRate.toFixed(2)}/¥)</span>
+            </p>
+          </div>
+
+          {/* Shop + link grid */}
+          <div className="grid sm:grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg border border-border px-3 py-2">
+              <p className="text-[10px] text-muted uppercase tracking-wide">ชื่อร้าน</p>
+              <p className="font-medium truncate">{detail.shop_name ?? "—"}</p>
+            </div>
+            <div className="rounded-lg border border-border px-3 py-2">
+              <p className="text-[10px] text-muted uppercase tracking-wide">ลิงค์สินค้า</p>
+              <a href={detail.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary-600 hover:underline text-xs">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                ไปยังเว็บสินค้า
+              </a>
+            </div>
+            {detail.product_id && (
+              <div className="rounded-lg border border-border px-3 py-2">
+                <p className="text-[10px] text-muted uppercase tracking-wide">รหัสสินค้า</p>
+                <p className="font-mono text-xs">{detail.product_id}</p>
+              </div>
+            )}
+            {typeof detail.stock_total === "number" && detail.stock_total > 0 && (
+              <div className="rounded-lg border border-border px-3 py-2">
+                <p className="text-[10px] text-muted uppercase tracking-wide">สต๊อกทั้งหมด</p>
+                <p className="font-mono text-xs">{detail.stock_total.toLocaleString()} ชิ้น</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
