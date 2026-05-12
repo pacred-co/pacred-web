@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { LineIcon, FacebookIcon, YouTubeIcon } from "@/components/icons/social-icons";
+import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
 
 type ProfileLite = {
   member_code: string | null;
@@ -75,16 +75,29 @@ export function NavBar() {
           <div className="flex items-center gap-2 shrink-0">
             <span className="hidden lg:inline text-white/70 text-[12px] font-medium mr-0.5 whitespace-nowrap">ติดตามเราบน</span>
             <a href="https://lin.ee/Yg3fU0I" target="_blank" rel="noopener noreferrer"
+              aria-label="LINE Official"
               className="text-white hover:opacity-70 transition-opacity">
               <LineIcon className="h-[18px] w-[18px]" />
             </a>
-            <a href="https://www.facebook.com/PacredShippingCustomsClearanceImportExport" target="_blank" rel="noopener noreferrer"
+            <a href="https://www.facebook.com/PacredShippingCustomsClearanceImportExport/" target="_blank" rel="noopener noreferrer"
+              aria-label="Facebook"
               className="hover:opacity-70 transition-opacity">
               <FacebookIcon className="h-[18px] w-[18px] [&_path]:fill-white" />
             </a>
-            <a href="https://www.youtube.com/channel/UCBYDuWXBQsHolfwIhbvh71Q" target="_blank" rel="noopener noreferrer"
+            <a href="https://www.youtube.com/@PacredShipping" target="_blank" rel="noopener noreferrer"
+              aria-label="YouTube"
               className="text-white hover:opacity-70 transition-opacity">
               <YouTubeIcon className="h-[18px] w-[18px]" />
+            </a>
+            <a href="https://www.tiktok.com/@pacred.co" target="_blank" rel="noopener noreferrer"
+              aria-label="TikTok"
+              className="text-white hover:opacity-70 transition-opacity">
+              <TikTokIcon className="h-[18px] w-[18px]" />
+            </a>
+            <a href="https://www.instagram.com/pacred.co/" target="_blank" rel="noopener noreferrer"
+              aria-label="Instagram"
+              className="text-white hover:opacity-70 transition-opacity">
+              <InstagramIcon className="h-[18px] w-[18px]" />
             </a>
           </div>
 

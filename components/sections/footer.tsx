@@ -1,5 +1,12 @@
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
+import {
+  LineIcon,
+  FacebookIcon,
+  YouTubeIcon,
+  TikTokIcon,
+  InstagramIcon,
+} from "@/components/icons/social-icons";
 
 const COL_IMPORT = [
   { label: "นำเข้าสินค้าจากจีน LCL", href: "#" },
@@ -94,20 +101,22 @@ export function Footer() {
             {/* Social */}
             <div className="flex gap-2">
               {[
-                { label: "LINE", href: "https://lin.ee/Yg3fU0I", color: "#06C755" },
-                { label: "FB", href: "#", color: "#1877F2" },
-                { label: "YT", href: "#", color: "#FF0000" },
-              ].map((s) => (
+                { label: "LINE",      href: "https://lin.ee/Yg3fU0I",                                              color: "#06C755", Icon: LineIcon },
+                { label: "Facebook",  href: "https://www.facebook.com/PacredShippingCustomsClearanceImportExport/", color: "#1877F2", Icon: FacebookIcon },
+                { label: "YouTube",   href: "https://www.youtube.com/@PacredShipping",                              color: "#FF0000", Icon: YouTubeIcon },
+                { label: "TikTok",    href: "https://www.tiktok.com/@pacred.co",                                    color: "#000000", Icon: TikTokIcon },
+                { label: "Instagram", href: "https://www.instagram.com/pacred.co/",                                 color: "#E4405F", Icon: InstagramIcon },
+              ].map(({ label, href, color, Icon }) => (
                 <a
-                  key={s.label}
-                  href={s.href}
+                  key={label}
+                  href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={s.label}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: s.color }}
+                  aria-label={label}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: color }}
                 >
-                  {s.label.charAt(0)}
+                  <Icon className="h-3.5 w-3.5 [&_path]:fill-white" />
                 </a>
               ))}
             </div>
@@ -147,7 +156,7 @@ export function Footer() {
                 { label: "เกี่ยวกับ Pacred", href: "#" },
                 { label: "คำถามที่พบบ่อย", href: "#" },
                 { label: "โปรโมชัน", href: "#" },
-                { label: "วันหยุด PCS 2026", href: "#" },
+                { label: "วันหยุด Pacred 2026", href: "#" },
                 { label: "ร่วมงานกับเรา", href: "#" },
                 { label: "นโยบายความเป็นส่วนตัว", href: "#" },
                 { label: "เงื่อนไขการใช้บริการ", href: "#" },

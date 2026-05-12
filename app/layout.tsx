@@ -10,8 +10,21 @@ const prompt = Prompt({
 });
 
 export const metadata: Metadata = {
-  title: "Pacred",
-  description: "Pacred Web",
+  title: {
+    default: "Pacred — นำเข้า ส่งออก ชิปปิ้ง เคลียร์ศุลกากร ครบวงจร",
+    template: "%s | Pacred",
+  },
+  description:
+    "Pacred — บริการนำเข้า-ส่งออก ชิปปิ้ง เคลียร์พิธีการศุลกากร ฝากสั่งซื้อสินค้าจากจีน FCL/LCL ขนส่งทางรถ เรือ อากาศ ครบวงจรในที่เดียว",
+  applicationName: "Pacred",
+  openGraph: {
+    title: "Pacred — นำเข้า ส่งออก ชิปปิ้ง เคลียร์ศุลกากร ครบวงจร",
+    description:
+      "ผู้เชี่ยวชาญด้านนำเข้า-ส่งออก เคลียร์พิธีการกรมศุลกากรครบวงจร ฝากสั่งซื้อสินค้าจีน",
+    siteName: "Pacred",
+    locale: "th_TH",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
