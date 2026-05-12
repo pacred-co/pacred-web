@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   createAddress,
@@ -25,6 +26,7 @@ const emptyForm: AddressInput = {
 };
 
 export function AddressesManager({ initialAddresses }: Props) {
+  const t = useTranslations("addresses");
   const router = useRouter();
   const addresses = initialAddresses;
   const [editing, setEditing] = useState<{ mode: "create" } | { mode: "edit"; id: string } | null>(null);
@@ -66,8 +68,6 @@ export function AddressesManager({ initialAddresses }: Props) {
     setForm(emptyForm);
   }
 
-  // Server actions revalidatePath('/addresses') already invalidates this
-  // route's cache — router.refresh() refetches the server component data.
   function refresh() {
     router.refresh();
   }
@@ -80,7 +80,7 @@ export function AddressesManager({ initialAddresses }: Props) {
         ? await createAddress(form)
         : await updateAddress(editing.id, form);
       if (res.ok) {
-        flash("ok", editing.mode === "create" ? "เพิ่มที่อยู่แล้ว" : "บันทึกแล้ว");
+        flash("ok", editing.mode === "create" ? t("createdToast") : t("updatedToast"));
         close();
         refresh();
       } else {
@@ -93,7 +93,7 @@ export function AddressesManager({ initialAddresses }: Props) {
     startTransition(async () => {
       const res = await setDefaultAddress(id);
       if (res.ok) {
-        flash("ok", "ตั้งเป็นที่อยู่หลักแล้ว");
+        flash("ok", t("setDefaultToast"));
         refresh();
       } else {
         flash("err", res.error);
@@ -102,11 +102,11 @@ export function AddressesManager({ initialAddresses }: Props) {
   }
 
   function onDelete(a: Address) {
-    if (!confirm(`ลบที่อยู่ของ ${a.first_name} ${a.last_name}?`)) return;
+    if (!confirm(t("deleteConfirm", { name: `${a.first_name} ${a.last_name}` }))) return;
     startTransition(async () => {
       const res = await softDeleteAddress(a.id);
       if (res.ok) {
-        flash("ok", "ลบแล้ว");
+        flash("ok", t("deletedToast"));
         refresh();
       } else {
         flash("err", res.error);
@@ -126,11 +126,10 @@ export function AddressesManager({ initialAddresses }: Props) {
         </div>
       )}
 
-      {/* List */}
       <div className="space-y-3">
         {addresses.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border p-8 text-center text-muted">
-            ยังไม่มีที่อยู่จัดส่ง
+            {t("empty")}
           </div>
         )}
         {addresses.map((a) => (
@@ -141,7 +140,7 @@ export function AddressesManager({ initialAddresses }: Props) {
                   <span className="font-semibold text-foreground">{a.first_name} {a.last_name}</span>
                   {a.is_default && (
                     <span className="rounded-full bg-primary-500 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      ค่าเริ่มต้น
+                      {t("defaultBadge")}
                     </span>
                   )}
                 </div>
@@ -154,14 +153,14 @@ export function AddressesManager({ initialAddresses }: Props) {
               <div className="flex flex-wrap gap-2">
                 {!a.is_default && (
                   <Button type="button" variant="outline" size="sm" onClick={() => onSetDefault(a.id)} disabled={pending}>
-                    ตั้งเป็นหลัก
+                    {t("setAsDefault")}
                   </Button>
                 )}
                 <Button type="button" variant="outline" size="sm" onClick={() => openEdit(a)} disabled={pending}>
-                  แก้ไข
+                  {t("edit")}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => onDelete(a)} disabled={pending}>
-                  ลบ
+                  {t("delete")}
                 </Button>
               </div>
             </div>
@@ -169,55 +168,53 @@ export function AddressesManager({ initialAddresses }: Props) {
         ))}
       </div>
 
-      {/* Add button */}
       {!editing && (
         <div className="flex justify-end">
-          <Button type="button" onClick={openCreate}>+ เพิ่มที่อยู่ใหม่</Button>
+          <Button type="button" onClick={openCreate}>{t("addNew")}</Button>
         </div>
       )}
 
-      {/* Form (inline panel) */}
       {editing && (
         <form onSubmit={onSubmit} className="rounded-2xl border-2 border-primary-500/30 bg-white dark:bg-surface p-6 shadow-sm space-y-4">
           <h2 className="text-lg font-bold text-foreground">
-            {editing.mode === "create" ? "เพิ่มที่อยู่ใหม่" : "แก้ไขที่อยู่"}
+            {editing.mode === "create" ? t("formTitleCreate") : t("formTitleEdit")}
           </h2>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="ชื่อ" required>
+            <Field label={t("firstName")} required>
               <input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="นามสกุล" required>
+            <Field label={t("lastName")} required>
               <input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="เบอร์โทร" required>
+            <Field label={t("phone")} required>
               <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="เบอร์โทรสำรอง">
+            <Field label={t("phone2")}>
               <input value={form.phone2 ?? ""} onChange={(e) => setForm({ ...form, phone2: e.target.value })} className={inputCls} />
             </Field>
           </div>
 
-          <Field label="บ้านเลขที่ / ถนน / ซอย" required>
+          <Field label={t("addressLine")} required>
             <input value={form.address_line} onChange={(e) => setForm({ ...form, address_line: e.target.value })} className={inputCls} required />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="ตำบล/แขวง" required>
+            <Field label={t("subDistrict")} required>
               <input value={form.sub_district} onChange={(e) => setForm({ ...form, sub_district: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="อำเภอ/เขต" required>
+            <Field label={t("district")} required>
               <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="จังหวัด" required>
+            <Field label={t("province")} required>
               <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="รหัสไปรษณีย์" required hint="5 หลัก">
+            <Field label={t("postalCode")} required hint={t("postalCodeHint")}>
               <input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className={inputCls} required maxLength={5} />
             </Field>
           </div>
 
-          <Field label="หมายเหตุ">
+          <Field label={t("note")}>
             <textarea rows={2} value={form.note ?? ""} onChange={(e) => setForm({ ...form, note: e.target.value })} className={inputCls} />
           </Field>
 
@@ -227,15 +224,15 @@ export function AddressesManager({ initialAddresses }: Props) {
               checked={form.is_default ?? false}
               onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
             />
-            <span>ตั้งเป็นที่อยู่หลัก</span>
+            <span>{t("markAsDefault")}</span>
           </label>
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={close} disabled={pending}>
-              ยกเลิก
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "กำลังบันทึก..." : "บันทึก"}
+              {pending ? t("saving") : t("save")}
             </Button>
           </div>
         </form>

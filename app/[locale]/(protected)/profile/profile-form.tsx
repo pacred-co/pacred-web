@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { updateProfileBasic, upsertCorporate, updateNotifyChannels, unlinkLine } from "@/actions/profile";
 import type { Profile } from "@/lib/auth/get-user";
@@ -20,6 +21,7 @@ type Props = {
 };
 
 export function ProfileForm({ profile, corporate }: Props) {
+  const t = useTranslations("profile");
   const isJuristic = profile.account_type === "juristic";
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -47,7 +49,7 @@ export function ProfileForm({ profile, corporate }: Props) {
         shop_user:      formData.get("shop_user") === "on",
         note:           String(formData.get("note") ?? ""),
       });
-      flash(res.ok ? "ok" : "err", res.ok ? "บันทึกแล้ว" : res.error);
+      flash(res.ok ? "ok" : "err", res.ok ? t("savedBasic") : res.error);
     });
   }
 
@@ -58,7 +60,7 @@ export function ProfileForm({ profile, corporate }: Props) {
         company_name:    String(formData.get("company_name") ?? ""),
         company_address: String(formData.get("company_address") ?? ""),
       });
-      flash(res.ok ? "ok" : "err", res.ok ? "บันทึกข้อมูลบริษัทแล้ว" : res.error);
+      flash(res.ok ? "ok" : "err", res.ok ? t("savedCorporate") : res.error);
     });
   }
 
@@ -70,21 +72,20 @@ export function ProfileForm({ profile, corporate }: Props) {
     };
     startTransition(async () => {
       const res = await updateNotifyChannels(next);
-      flash(res.ok ? "ok" : "err", res.ok ? "อัพเดทแล้ว" : res.error);
+      flash(res.ok ? "ok" : "err", res.ok ? t("savedNotify") : res.error);
     });
   }
 
   async function onUnlinkLine() {
-    if (!confirm("ยกเลิกเชื่อม LINE? คุณจะไม่ได้รับ notification ผ่าน LINE อีก")) return;
+    if (!confirm(t("lineUnlinkConfirm"))) return;
     startTransition(async () => {
       const res = await unlinkLine();
-      flash(res.ok ? "ok" : "err", res.ok ? "ยกเลิกเชื่อม LINE แล้ว" : res.error);
+      flash(res.ok ? "ok" : "err", res.ok ? t("lineUnlinked") : res.error);
     });
   }
 
   return (
     <div className="space-y-8">
-      {/* Flash message */}
       {msg && (
         <div className={`rounded-lg px-4 py-3 text-sm ${
           msg.kind === "ok"
@@ -95,127 +96,129 @@ export function ProfileForm({ profile, corporate }: Props) {
         </div>
       )}
 
-      {/* ─── BASIC ─── */}
+      {/* BASIC */}
       <form action={onSubmitBasic} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-bold text-foreground">ข้อมูลส่วนตัว</h2>
+        <h2 className="text-lg font-bold text-foreground">{t("sectionBasic")}</h2>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="ชื่อจริง" required>
+          <FormField label={t("firstName")} required>
             <input name="first_name" defaultValue={profile.first_name ?? ""} className={inputCls} required />
           </FormField>
-          <FormField label="นามสกุล" required>
+          <FormField label={t("lastName")} required>
             <input name="last_name" defaultValue={profile.last_name ?? ""} className={inputCls} required />
           </FormField>
-          <FormField label="เบอร์โทร" required hint="ขึ้นต้น 0 ตามด้วยตัวเลข 8-9 หลัก">
+          <FormField label={t("phone")} required hint={t("phoneHint")}>
             <input name="phone" defaultValue={profile.phone ?? ""} className={inputCls} required />
           </FormField>
-          <FormField label="อีเมล">
+          <FormField label={t("email")}>
             <input name="email" type="email" defaultValue={profile.email ?? ""} className={inputCls} />
           </FormField>
-          <FormField label="เพศ">
+          <FormField label={t("sex")}>
             <select name="sex" defaultValue={profile.sex ?? ""} className={inputCls}>
-              <option value="">— ไม่ระบุ —</option>
-              <option value="male">ชาย</option>
-              <option value="female">หญิง</option>
-              <option value="other">อื่นๆ</option>
+              <option value="">{t("sexUnspecified")}</option>
+              <option value="male">{t("sexMale")}</option>
+              <option value="female">{t("sexFemale")}</option>
+              <option value="other">{t("sexOther")}</option>
             </select>
           </FormField>
-          <FormField label="วันเกิด">
+          <FormField label={t("birthday")}>
             <input name="birthday" type="date" defaultValue={profile.birthday ?? ""} className={inputCls} />
           </FormField>
-          <FormField label="LINE ID">
+          <FormField label={t("lineId")}>
             <input name="line_id" defaultValue={profile.line_id ?? ""} className={inputCls} />
           </FormField>
-          <FormField label="Facebook URL">
+          <FormField label={t("facebookUrl")}>
             <input name="facebook_url" defaultValue={profile.facebook_url ?? ""} className={inputCls} />
           </FormField>
         </div>
 
         <hr className="border-border" />
 
-        <h3 className="text-sm font-semibold text-foreground">การจัดส่ง</h3>
+        <h3 className="text-sm font-semibold text-foreground">{t("sectionShipping")}</h3>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="ประเภท Freight">
+          <FormField label={t("freightType")}>
             <select name="freight_type" defaultValue={profile.freight_type ?? ""} className={inputCls}>
-              <option value="">— ไม่ระบุ —</option>
-              <option value="cargo">Cargo</option>
-              <option value="seafreight">Sea Freight</option>
+              <option value="">{t("sexUnspecified")}</option>
+              <option value="cargo">{t("freightTypeCargo")}</option>
+              <option value="seafreight">{t("freightTypeSeafreight")}</option>
             </select>
           </FormField>
-          <FormField label="วิธีเก็บเงิน">
+          <FormField label={t("payMethod")}>
             <select name="pay_method" defaultValue={profile.pay_method ?? ""} className={inputCls}>
-              <option value="">— ไม่ระบุ —</option>
-              <option value="origin">เก็บต้นทาง</option>
-              <option value="destination">เก็บปลายทาง</option>
+              <option value="">{t("sexUnspecified")}</option>
+              <option value="origin">{t("payMethodOrigin")}</option>
+              <option value="destination">{t("payMethodDestination")}</option>
             </select>
           </FormField>
-          <FormField label="Transport type">
-            <input name="transport_type" defaultValue={profile.transport_type ?? ""} className={inputCls} placeholder="เช่น 1, 2" />
+          <FormField label={t("transportType")}>
+            <input name="transport_type" defaultValue={profile.transport_type ?? ""} className={inputCls} placeholder={t("transportTypePlaceholder")} />
           </FormField>
-          <FormField label="Ship by">
+          <FormField label={t("shipBy")}>
             <input name="ship_by" defaultValue={profile.ship_by ?? ""} className={inputCls} />
           </FormField>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="shop_user" defaultChecked={profile.shop_user} />
-            <span>ซื้อไปใช้เอง (ไม่ได้ขายต่อ)</span>
+            <span>{t("shopUser")}</span>
           </label>
         </div>
 
-        <FormField label="หมายเหตุ">
+        <FormField label={t("note")}>
           <textarea name="note" rows={3} defaultValue={profile.note ?? ""} className={inputCls} />
         </FormField>
 
         <div className="flex justify-end">
           <Button type="submit" disabled={pending}>
-            {pending ? "กำลังบันทึก..." : "บันทึกข้อมูลส่วนตัว"}
+            {pending ? t("saving") : t("saveBasic")}
           </Button>
         </div>
       </form>
 
-      {/* ─── CORPORATE (juristic only) ─── */}
+      {/* CORPORATE */}
       {isJuristic && (
         <form action={onSubmitCorporate} className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground">ข้อมูลบริษัท (นิติบุคคล)</h2>
-            {corporate && (
-              <StatusBadge status={corporate.status} />
-            )}
+            <h2 className="text-lg font-bold text-foreground">{t("sectionCorporate")}</h2>
+            {corporate && <StatusBadge status={corporate.status} t={t} />}
           </div>
           {corporate?.status === "rejected" && corporate.rejection_reason && (
             <p className="text-sm text-red-700 bg-red-50 rounded p-3">
-              เหตุผลการปฏิเสธ: {corporate.rejection_reason}
+              {t("rejectionReason")}: {corporate.rejection_reason}
             </p>
           )}
 
-          <FormField label="เลขประจำตัวผู้เสียภาษี" required hint="13 หลัก">
+          <FormField label={t("taxId")} required hint={t("taxIdHint")}>
             <input name="tax_id" defaultValue={corporate?.tax_id ?? profile.tax_id ?? ""} className={inputCls} required maxLength={13} />
           </FormField>
-          <FormField label="ชื่อบริษัท" required>
+          <FormField label={t("companyName")} required>
             <input name="company_name" defaultValue={corporate?.company_name ?? profile.company_name ?? ""} className={inputCls} required />
           </FormField>
-          <FormField label="ที่อยู่บริษัท" required>
+          <FormField label={t("companyAddress")} required>
             <textarea name="company_address" rows={3} defaultValue={corporate?.company_address ?? ""} className={inputCls} required />
           </FormField>
 
           <div className="flex justify-end">
             <Button type="submit" disabled={pending}>
-              {pending ? "กำลังบันทึก..." : "บันทึกข้อมูลบริษัท"}
+              {pending ? t("saving") : t("saveCorporate")}
             </Button>
           </div>
         </form>
       )}
 
-      {/* ─── NOTIFICATIONS ─── */}
+      {/* NOTIFY */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-bold text-foreground">การแจ้งเตือน</h2>
+        <h2 className="text-lg font-bold text-foreground">{t("sectionNotify")}</h2>
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">LINE</p>
+            <p className="font-medium">{t("lineChannelTitle")}</p>
             <p className="text-xs text-muted">
               {profile.line_user_id
-                ? `เชื่อมแล้ว ตั้งแต่ ${profile.line_linked_at ? new Date(profile.line_linked_at).toLocaleDateString("th-TH") : ""}`
-                : "ยังไม่ได้เชื่อม LINE — กดเชื่อมเพื่อรับ notification ผ่าน LINE OA @pacred"}
+                ? t("lineLinked", {
+                    date: profile.line_linked_at
+                      ? new Date(profile.line_linked_at).toLocaleDateString("th-TH")
+                      : "",
+                  })
+                : t("lineNotLinked")}
             </p>
           </div>
           {profile.line_user_id ? (
@@ -227,20 +230,20 @@ export function ProfileForm({ profile, corporate }: Props) {
                 disabled={pending}
               />
               <Button type="button" variant="outline" size="sm" onClick={onUnlinkLine} disabled={pending}>
-                ยกเลิกเชื่อม
+                {t("lineUnlinkButton")}
               </Button>
             </div>
           ) : (
-            <Button type="button" variant="outline" size="sm" disabled title="LINE Messaging API linking — coming in Phase F2">
-              เชื่อม LINE (เร็วๆนี้)
+            <Button type="button" variant="outline" size="sm" disabled>
+              {t("lineLinkButton")}
             </Button>
           )}
         </div>
 
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium">Email</p>
-            <p className="text-xs text-muted">รับ notification สำคัญทาง email (fallback)</p>
+            <p className="font-medium">{t("emailChannelTitle")}</p>
+            <p className="text-xs text-muted">{t("emailChannelDesc")}</p>
           </div>
           <input
             type="checkbox"
@@ -268,20 +271,19 @@ function FormField({ label, hint, required, children }: { label: string; hint?: 
   );
 }
 
-function StatusBadge({ status }: { status: "pending" | "verified" | "rejected" }) {
+function StatusBadge({ status, t }: { status: "pending" | "verified" | "rejected"; t: ReturnType<typeof useTranslations<"profile">> }) {
   const styles = {
     pending:  "bg-yellow-50 text-yellow-700 border-yellow-200",
     verified: "bg-green-50 text-green-700 border-green-200",
     rejected: "bg-red-50 text-red-700 border-red-200",
   };
-  const labels = {
-    pending:  "รอตรวจสอบ",
-    verified: "ยืนยันแล้ว",
-    rejected: "ปฏิเสธ",
-  };
+  const label =
+    status === "pending"  ? t("corporateStatusPending")
+  : status === "verified" ? t("corporateStatusVerified")
+  : t("corporateStatusRejected");
   return (
     <span className={`rounded-full border px-3 py-1 text-xs font-medium ${styles[status]}`}>
-      {labels[status]}
+      {label}
     </span>
   );
 }
