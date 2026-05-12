@@ -42,7 +42,7 @@ export function Promotion() {
   const t = useTranslations("promotion");
 
   return (
-    <section id="promotion" className="bg-background pb-6 pt-2">
+    <section id="promotion" className="pb-6 pt-2">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Container 1 — Section heading */}

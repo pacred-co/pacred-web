@@ -26,7 +26,7 @@ const categories = [
 
 export function ProductCategories() {
   return (
-    <section className="bg-background pt-6 pb-5">
+    <section className="pt-6 pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}
