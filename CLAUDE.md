@@ -199,6 +199,49 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 
 ---
 
+# 👥 Team & Branch workflow
+
+ทีมงานคนละ branch ทำงาน — **ก๊อต** เป็นคนรวมเข้า `main`
+
+| Branch | คน |
+|---|---|
+| `main` | **ก๊อต** (maintainer — รวมเข้า main เท่านั้น) |
+| `dave` | เดฟ |
+| `podeng` | ปอนด์ |
+| `Poom` | ภูมิ |
+
+## กติกาการทำงาน
+
+1. **ทุกคนทำงานบน branch ของตัวเอง** (อย่า commit ตรงเข้า `main`)
+2. ก่อนเริ่มงานทุกครั้ง — sync `main` เข้า branch ตัวเองก่อน เพื่อรับ update ล่าสุด:
+   ```bash
+   git checkout <my-branch>
+   git pull origin main          # ดึง main เข้า branch ตัวเอง
+   git push origin <my-branch>   # อัพ branch ตัวเอง
+   ```
+3. ทำงานเสร็จ → commit + push ขึ้น branch ตัวเอง
+4. **ก๊อต** เป็นคนเดียวที่ merge เข้า `main` (ผ่าน PR หรือ merge ตรงตาม policy)
+
+## Sync ไฟล์/เอกสารใหม่จากเพื่อน
+
+ถ้าใครอัพ MD/feature ขึ้น branch ของเขา (เช่น เดฟอัพ CLAUDE.md ขึ้น `dave`):
+```bash
+git status                  # เช็คงานตัวเองว่ามีค้างไหม (ถ้ามี → commit หรือ stash ก่อน)
+git fetch origin
+git checkout <my-branch>
+git merge origin/dave       # หรือ origin/podeng, origin/Poom — branch ที่ต้องการดึงไฟล์
+git push origin <my-branch>
+```
+
+หรือรอให้ก๊อตรวมเข้า `main` แล้วค่อย `git pull origin main` ลง branch ตัวเอง (วิธีปลอดภัยกว่า)
+
+## ⚠️ Safety rules
+- อย่าใช้ `--force` / `reset --hard` / `push --force` ถ้าไม่แน่ใจ — งานเพื่อนหายได้
+- ถ้า git ขึ้น error/conflict — หยุด ถามก่อนแก้
+- ถ้ามีไฟล์ค้างก่อน `pull` / `checkout` → `git stash` หรือ commit ก่อน
+
+---
+
 ## Working with this codebase
 
 ### Add a section to home
