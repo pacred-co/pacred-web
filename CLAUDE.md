@@ -240,6 +240,58 @@ git push origin <my-branch>
 - ถ้า git ขึ้น error/conflict — หยุด ถามก่อนแก้
 - ถ้ามีไฟล์ค้างก่อน `pull` / `checkout` → `git stash` หรือ commit ก่อน
 
+## ดึงไฟล์จาก branch เพื่อน โดยไม่ทำงานตัวเองหาย
+
+**กฎทอง:** "commit หรือ stash ก่อน merge เสมอ" → งานไม่มีทางหาย
+
+### 🅰️ ถ้างาน commit แล้ว (push หรือไม่ก็ได้) — ปลอดภัยสุด
+```bash
+git status                              # ต้องสะอาด (nothing to commit)
+git fetch origin
+git merge origin/dave                   # ดึงไฟล์จาก dave
+# ถ้ามี conflict → แก้ไฟล์ → git add . → git commit
+git push origin <my-branch>
+```
+
+### 🅱️ ถ้ายังมีไฟล์ค้าง (ยังไม่ commit) — commit ก่อน (แนะนำ)
+```bash
+git status                              # ดูว่ามีอะไรค้าง
+git add .
+git commit -m "wip: งานที่ทำอยู่"       # commit แบบ work-in-progress
+git fetch origin
+git merge origin/dave
+git push origin <my-branch>
+```
+→ อยากเปลี่ยน commit message ทีหลัง: `git commit --amend` (ก่อน push เท่านั้น)
+
+### ทางเลือกอื่น — stash (เก็บชั่วคราว)
+```bash
+git stash                               # เก็บงานค้างใส่กล่อง
+git fetch origin && git merge origin/dave
+git stash pop                           # เอางานออกจากกล่องกลับมา (อาจ conflict)
+git push origin <my-branch>
+```
+→ เร็วกว่าแต่หายได้ถ้าใช้ผิด — แนะนำ commit ทาง 🅱️ มากกว่า
+
+### 🅲 ถ้าไม่อยากเสี่ยงเลย — รอก๊อตรวมเข้า main ก่อน
+```bash
+git add . && git commit -m "wip"
+git push origin <my-branch>             # backup ขึ้น GitHub
+# รอก๊อต merge dave เข้า main แล้วค่อย:
+git pull origin main                    # ปลอดภัยกว่า เพราะ main = review แล้ว
+```
+
+### ตัวอย่าง real case (น้องปอน)
+```bash
+# น้องปอนกำลังแก้ profile.tsx ยังไม่ commit แล้วอยากได้ CLAUDE.md ใหม่จาก dave
+git status                                          # modified: profile.tsx
+git add . && git commit -m "wip: profile form"     # เซฟก่อน
+git fetch origin
+git merge origin/dave                               # ดึง CLAUDE.md ใหม่มา
+# profile.tsx ยังอยู่ครบ + ได้ CLAUDE.md ใหม่ด้วย
+git push origin podeng
+```
+
 ---
 
 ## Working with this codebase
