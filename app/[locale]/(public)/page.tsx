@@ -7,7 +7,6 @@ import { Sales } from "@/components/sections/sales";
 import { Blog } from "@/components/sections/blog";
 import { Partner } from "@/components/sections/partner";
 import { Footer } from "@/components/sections/footer";
-import { FloatingTabs } from "@/components/sections/floating-tabs";
 
 export default function Home() {
   return (
@@ -23,7 +22,6 @@ export default function Home() {
         <Partner />
       </main>
       <Footer />
-      <FloatingTabs />
     </>
   );
 }

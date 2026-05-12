@@ -7,7 +7,6 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
-import { FloatingTabs } from "@/components/sections/floating-tabs";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 import { signIn, signInWithOAuth } from "@/actions/auth";
 
@@ -216,7 +215,6 @@ export default function LoginPage() {
         </div>
       </main>
       <Footer />
-      <FloatingTabs />
     </>
   );
 }

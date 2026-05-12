@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
-import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { createOrder } from "@/actions/orders";
 import { SERVICE_TYPES } from "@/lib/validators/orders";
@@ -50,7 +49,6 @@ export default function NewOrderPage() {
 
   return (
     <>
-      <NavBar />
       <main className="mx-auto w-full max-w-[640px] px-4 py-12">
         <Link
           href="/orders"
