@@ -52,6 +52,7 @@ export function JuristicActions({ profileId, status, docUrls }: Props) {
           {preview.mime === "application/pdf" ? (
             <iframe src={preview.url} className="w-full h-64" title="เอกสาร" />
           ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- signed Supabase URL; admin preview only, not LCP
             <img src={preview.url} alt="เอกสาร" className="max-h-64 w-full object-contain bg-surface-alt" />
           )}
         </div>

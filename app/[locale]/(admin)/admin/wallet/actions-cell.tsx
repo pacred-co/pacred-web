@@ -41,6 +41,7 @@ export function WalletTxActions({ id, status, kind, slipUrl }: { id: string; sta
           </button>
           {showSlip && (
             <div className="mt-1 rounded-lg border border-border overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase URL; admin preview only */}
               <img
                 src={slipUrl}
                 alt="slip"

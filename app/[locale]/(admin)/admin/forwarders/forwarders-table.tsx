@@ -55,7 +55,8 @@ export function ForwardersTable({ rows }: { rows: Row[] }) {
   function toggle(fNo: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(fNo) ? next.delete(fNo) : next.add(fNo);
+      if (next.has(fNo)) next.delete(fNo);
+      else next.add(fNo);
       return next;
     });
   }

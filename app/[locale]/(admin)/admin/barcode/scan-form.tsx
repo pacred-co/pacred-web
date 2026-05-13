@@ -73,11 +73,46 @@ export function ScanForm({
   const lastCodeRef  = useRef<string>("");
   const lastCodeTimeRef = useRef<number>(0);
   const submittingRef = useRef(false);
+  // Ref to latest handleSubmitCode so the camera detection loop can invoke
+  // it without forcing startCamera to recreate (and tear the camera down).
+  const handleSubmitCodeRef = useRef<((raw: string) => void) | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     if (!cameraOn) inputRef.current?.focus();
   }, [mode, cameraOn]);
+
+  // ── Submit logic ─────────────────────────────────────────────────────────
+
+  const handleSubmitCode = useCallback((raw: string) => {
+    if (!raw || submittingRef.current) return;
+    submittingRef.current = true;
+    setCode(raw);
+    startTransition(async () => {
+      const res = await adminBarcodeScan({ mode, code: raw });
+      const entry: LogEntry = {
+        ts:     new Date().toLocaleTimeString("th-TH"),
+        code:   raw,
+        ok:     res.ok,
+        msg:    res.ok ? (res.data?.message ?? "บันทึกแล้ว") : (res.error ?? "error"),
+        detail: res.ok ? (res.data ?? null) : null,
+      };
+      playBeep(res.ok);
+      setLog((prev) => [entry, ...prev.slice(0, 49)]);
+      setLastResult(entry);
+      setCode("");
+      submittingRef.current = false;
+      if (res.ok) router.refresh();
+      if (!cameraOn) inputRef.current?.focus();
+    });
+  }, [mode, cameraOn, router]);
+
+  // Keep ref pointing at latest handleSubmitCode — lets startCamera's
+  // detection loop call it without listing it as a dep (which would
+  // rebuild startCamera on every mode/cameraOn change → camera flicker).
+  useEffect(() => {
+    handleSubmitCodeRef.current = handleSubmitCode;
+  }, [handleSubmitCode]);
 
   // ── Camera controls ──────────────────────────────────────────────────────
 
@@ -92,11 +127,13 @@ export function ScanForm({
   }, []);
 
   const startCamera = useCallback(async () => {
-    setCameraErr(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 } },
       });
+      // Clear any previous error AFTER first await so setState happens
+      // in a microtask (avoids React Compiler "setState sync in effect").
+      setCameraErr(null);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -127,7 +164,7 @@ export function ScanForm({
 
           lastCodeRef.current = raw;
           lastCodeTimeRef.current = now;
-          handleSubmitCode(raw);
+          handleSubmitCodeRef.current?.(raw);
         } catch {}
       }, 200);
     } catch (err) {
@@ -135,41 +172,18 @@ export function ScanForm({
       setCameraErr(msg.includes("Permission") ? "ไม่ได้รับอนุญาตเปิดกล้อง — กรุณาอนุญาตใน browser settings" : msg);
       setCameraOn(false);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (cameraOn) {
-      startCamera();
-    } else {
-      stopCamera();
+      // Defer startCamera to a macrotask — even though it's async, the
+      // synchronous prelude (any setState before first await) would be
+      // flagged by React Compiler as "setState sync within effect".
+      const id = setTimeout(() => { startCamera(); }, 0);
+      return () => { clearTimeout(id); stopCamera(); };
     }
-    return stopCamera;
+    stopCamera();
   }, [cameraOn, startCamera, stopCamera]);
-
-  // ── Submit logic ─────────────────────────────────────────────────────────
-
-  const handleSubmitCode = useCallback((raw: string) => {
-    if (!raw || submittingRef.current) return;
-    submittingRef.current = true;
-    setCode(raw);
-    startTransition(async () => {
-      const res = await adminBarcodeScan({ mode, code: raw });
-      const entry: LogEntry = {
-        ts:     new Date().toLocaleTimeString("th-TH"),
-        code:   raw,
-        ok:     res.ok,
-        msg:    res.ok ? (res.data?.message ?? "บันทึกแล้ว") : (res.error ?? "error"),
-        detail: res.ok ? (res.data ?? null) : null,
-      };
-      playBeep(res.ok);
-      setLog((prev) => [entry, ...prev.slice(0, 49)]);
-      setLastResult(entry);
-      setCode("");
-      submittingRef.current = false;
-      if (res.ok) router.refresh();
-      if (!cameraOn) inputRef.current?.focus();
-    });
-  }, [mode, cameraOn, router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();

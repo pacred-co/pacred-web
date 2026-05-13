@@ -545,22 +545,6 @@ export default async function AdminReportsPage({
   );
 }
 
-async function sumThb(
-  admin: ReturnType<typeof createAdminClient>,
-  table: string,
-  col:  string,
-  statuses: string[],
-  sinceIso: string,
-  kindFilter?: string,
-): Promise<number> {
-  let q = admin.from(table).select(col).gte("created_at", sinceIso);
-  if (statuses.length > 0) q = q.in("status", statuses);
-  if (kindFilter) q = q.eq("kind", kindFilter);
-  const { data } = await q;
-  if (!data) return 0;
-  return (data as unknown as Array<Record<string, number>>).reduce((s, r) => s + Number(r[col] ?? 0), 0);
-}
-
 // ── Shared sub-components ───────────────────────────────────────────────────
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone?: "green" | "red" }) {

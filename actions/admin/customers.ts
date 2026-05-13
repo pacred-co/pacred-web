@@ -3,10 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
-
-type ActionResult = { ok: true } | { ok: false; error: string };
+import { sendNotification } from "@/lib/notifications";
 
 const editCustomerSchema = z.object({
   id:              z.string().uuid(),
@@ -100,30 +98,81 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
 
 /** Set profiles.status = 'active' (lifts both 'incomplete' new sign-ups
  *  and previously suspended accounts). */
-export async function approveCustomer(id: string): Promise<ActionResult> {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ status: "active" })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/admin/customers");
-  revalidatePath("/admin/customers/pending");
-  revalidatePath(`/admin/customers/${id}`);
-  return { ok: true };
+export async function approveCustomer(id: string): Promise<AdminActionResult> {
+  if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
+
+  return withAdmin(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: before } = await admin
+      .from("profiles")
+      .select("id, status, member_code")
+      .eq("id", id)
+      .maybeSingle<{ id: string; status: string; member_code: string | null }>();
+    if (!before) return { ok: false, error: "not_found" };
+    if (before.status === "active") return { ok: true };  // no-op
+
+    const { error } = await admin
+      .from("profiles")
+      .update({ status: "active" })
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "customer.approve", "profile", id, {
+      before: { status: before.status },
+      after:  { status: "active" },
+    });
+
+    void sendNotification(id, {
+      category: "system",
+      severity: "success",
+      title:    "บัญชีของคุณได้รับการอนุมัติแล้ว",
+      body:     before.member_code
+        ? `ยินดีต้อนรับ! รหัสสมาชิก: ${before.member_code}`
+        : "ยินดีต้อนรับเข้าใช้งาน Pacred",
+      link_href: "/dashboard",
+    });
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/customers/pending");
+    revalidatePath(`/admin/customers/${id}`);
+    return { ok: true };
+  });
 }
 
 /** Suspend an active customer. */
-export async function suspendCustomer(id: string): Promise<ActionResult> {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("profiles")
-    .update({ status: "suspended" })
-    .eq("id", id);
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/admin/customers");
-  revalidatePath(`/admin/customers/${id}`);
-  return { ok: true };
+export async function suspendCustomer(id: string): Promise<AdminActionResult> {
+  if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
+
+  return withAdmin(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: before } = await admin
+      .from("profiles")
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle<{ id: string; status: string }>();
+    if (!before) return { ok: false, error: "not_found" };
+    if (before.status === "suspended") return { ok: true };  // no-op
+
+    const { error } = await admin
+      .from("profiles")
+      .update({ status: "suspended" })
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "customer.suspend", "profile", id, {
+      before: { status: before.status },
+      after:  { status: "suspended" },
+    });
+
+    void sendNotification(id, {
+      category: "system",
+      severity: "warning",
+      title:    "บัญชีของคุณถูกระงับการใช้งาน",
+      body:     "กรุณาติดต่อเจ้าหน้าที่หากต้องการสอบถามเพิ่มเติม",
+    });
+
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${id}`);
+    return { ok: true };
+  });
 }
