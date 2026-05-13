@@ -12,16 +12,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
 import {
+  confirmResetByPhoneSchema,
   juristicStep2Schema,
   registerJuristicStep1Schema,
   registerPersonalSchema,
+  resetByEmailSchema,
+  resetByPhoneSchema,
   signInSchema,
+  updatePasswordSchema,
+  type ConfirmResetByPhoneInput,
   type JuristicStep2Input,
   type RegisterJuristicStep1Input,
   type RegisterPersonalInput,
   type SignInInput,
 } from "@/lib/validators/auth";
-import { verifyOtp } from "./otp";
+import { requestOtp, verifyOtp } from "./otp";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -315,6 +320,119 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
     .eq("id", user.id);
   if (error) return { ok: false, error: "update_failed" };
 
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// PASSWORD RESET — Phone OTP path (P-2)
+// ─────────────────────────────────────────────────────────────
+// Two-step: request OTP, then verify+set-new-password. We never reveal
+// whether the phone is registered (account enumeration defense) — the
+// first step always returns ok even if no profile matches.
+export async function requestPasswordResetByPhone(
+  phoneRaw: string,
+): Promise<ActionResult> {
+  const parsed = resetByPhoneSchema.safeParse({ phone: phoneRaw });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid_phone" };
+  }
+  const phone = normalizePhone(parsed.data.phone);
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("phone", phone)
+    .maybeSingle<{ id: string }>();
+
+  // Silent ok for unknown phone — don't leak existence
+  if (!profile) return { ok: true };
+
+  const res = await requestOtp(phone, "reset");
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true };
+}
+
+export async function confirmPasswordResetByPhone(
+  input: ConfirmResetByPhoneInput,
+): Promise<ActionResult> {
+  const parsed = confirmResetByPhoneSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+  const phone = normalizePhone(d.phone);
+
+  const otpOk = await verifyOtp(phone, d.otp, "reset");
+  if (!otpOk) return { ok: false, error: "invalid_otp" };
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("phone", phone)
+    .maybeSingle<{ id: string }>();
+
+  if (!profile) return { ok: false, error: "user_not_found" };
+
+  const { error: updErr } = await admin.auth.admin.updateUserById(profile.id, {
+    password: d.password,
+  });
+  if (updErr) return { ok: false, error: "update_failed" };
+
+  // Sign in with the new password so user lands authenticated
+  const supabase = await createClient();
+  const { error: signInErr } = await supabase.auth.signInWithPassword({
+    phone,
+    password: d.password,
+  });
+  if (signInErr) return { ok: false, error: "signin_failed" };
+
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// PASSWORD RESET — Email magic link path (P-2)
+// ─────────────────────────────────────────────────────────────
+// Supabase sends the email; link redirects through /auth/callback
+// (handles PKCE exchange) and then to /reset-password where the user
+// completes the flow. Requires SMTP configured on Supabase project.
+export async function requestPasswordResetByEmail(
+  emailRaw: string,
+): Promise<ActionResult> {
+  const parsed = resetByEmailSchema.safeParse({ email: emailRaw });
+  if (!parsed.success) {
+    return { ok: false, error: "invalid_email" };
+  }
+
+  const supabase = await createClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+    redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
+  });
+
+  // Supabase doesn't surface "email not found" — it silently succeeds, which
+  // is also what we want for enumeration defense. Treat any error as transient.
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// Called from /reset-password form after the user lands via magic link
+// (session is already set by the /auth/callback exchange).
+export async function updatePasswordAfterRecovery(
+  newPassword: string,
+): Promise<ActionResult> {
+  const parsed = updatePasswordSchema.safeParse({ password: newPassword });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_password" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

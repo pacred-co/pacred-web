@@ -77,3 +77,26 @@ export const requestOtpSchema = z.object({
   purpose: z.enum(["register", "login", "reset"]),
 });
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
+
+// ── password reset (P-2) ──
+export const resetByPhoneSchema = z.object({
+  phone: phoneSchema,
+});
+export type ResetByPhoneInput = z.infer<typeof resetByPhoneSchema>;
+
+export const confirmResetByPhoneSchema = z.object({
+  phone:    phoneSchema,
+  otp:      z.string().min(1, "กรอก OTP"),
+  password: passwordSchema,
+});
+export type ConfirmResetByPhoneInput = z.infer<typeof confirmResetByPhoneSchema>;
+
+export const resetByEmailSchema = z.object({
+  email: z.email("อีเมลไม่ถูกต้อง"),
+});
+export type ResetByEmailInput = z.infer<typeof resetByEmailSchema>;
+
+export const updatePasswordSchema = z.object({
+  password: passwordSchema,
+});
+export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
