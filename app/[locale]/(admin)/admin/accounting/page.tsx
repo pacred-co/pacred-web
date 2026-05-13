@@ -281,16 +281,24 @@ export default async function AdminAccountingPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">ระบบบัญชี</h1>
-        {(dateFrom || dateTo) && (
-          <p className="text-sm text-muted mt-0.5">
-            {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
-            {" — "}
-            {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
-          </p>
-        )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <h1 className="mt-1 text-2xl font-bold">ระบบบัญชี</h1>
+          {(dateFrom || dateTo) && (
+            <p className="text-sm text-muted mt-0.5">
+              {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
+              {" — "}
+              {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
+            </p>
+          )}
+        </div>
+        <Link
+          href="/admin/accounting/closing"
+          className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+        >
+          📋 ปิดงบฝากนำเข้ารายเดือน →
+        </Link>
       </div>
 
       {/* Tab nav */}
