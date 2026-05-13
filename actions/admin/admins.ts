@@ -127,3 +127,55 @@ export async function adminAssignSalesRep(input: z.infer<typeof assignRepSchema>
     return { ok: true };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// Bulk transfer sales rep across many customers in one shot.
+// Ports legacy transferSalesCustomers.php — used when a rep leaves
+// or for portfolio rebalancing between reps.
+// ────────────────────────────────────────────────────────────
+const bulkTransferRepSchema = z.object({
+  customer_ids:       z.array(z.string().uuid()).min(1, "เลือกอย่างน้อย 1 ลูกค้า").max(500),
+  new_sales_admin_id: z.string().uuid().nullable(),    // null = unassign
+});
+
+export async function adminBulkTransferSalesRep(
+  input: z.infer<typeof bulkTransferRepSchema>,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const parsed = bulkTransferRepSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["sales_admin"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // If a target rep is given, verify it's an active sales_admin/super to
+    // prevent accidentally pointing customers at a non-admin profile.
+    if (d.new_sales_admin_id) {
+      const { data: target } = await admin
+        .from("admins")
+        .select("profile_id, role, is_active")
+        .eq("profile_id", d.new_sales_admin_id)
+        .in("role", ["sales_admin", "super"])
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!target) return { ok: false, error: "target_not_active_sales_admin" };
+    }
+
+    const { error, count } = await admin
+      .from("profiles")
+      .update({ sales_admin_id: d.new_sales_admin_id }, { count: "exact" })
+      .in("id", d.customer_ids);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "customer.bulk_transfer_rep", "profile", `${d.customer_ids.length}_customers`, {
+      customer_ids:       d.customer_ids,
+      new_sales_admin_id: d.new_sales_admin_id,
+    });
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/customers/transfer-rep");
+    return { ok: true, data: { updated: count ?? d.customer_ids.length } };
+  });
+}
