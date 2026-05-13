@@ -52,6 +52,36 @@ export function AdminForwarderUpdateForm(p: Props) {
     });
   }
 
+  const STATUS_FLOW = [
+    { value: "pending_payment",  label: "รอชำระเงิน" },
+    { value: "shipped_china",    label: "ออกจากจีน" },
+    { value: "in_transit",       label: "กลางทาง" },
+    { value: "arrived_thailand", label: "เข้าโกดังไทย" },
+    { value: "out_for_delivery", label: "จัดส่ง" },
+    { value: "delivered",        label: "ส่งสำเร็จ" },
+  ] as const;
+
+  const currentIdx = STATUS_FLOW.findIndex((s) => s.value === status);
+  const nextStatus = currentIdx >= 0 && currentIdx < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIdx + 1] : null;
+
+  function quickSet(value: string) {
+    setMsg(null); setError(null);
+    startTransition(async () => {
+      const res = await adminUpdateForwarder({
+        f_no: p.fNo,
+        status: value as Parameters<typeof adminUpdateForwarder>[0]["status"],
+      });
+      if (res.ok) {
+        setStatus(value);
+        setMsg("อัพเดทสถานะแล้ว — ลูกค้าได้รับการแจ้งเตือน");
+        router.refresh();
+        setTimeout(() => setMsg(null), 4000);
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
   return (
     <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4">
       <h3 className="font-bold text-sm">อัพเดทสถานะ + เลข tracking</h3>
@@ -59,8 +89,38 @@ export function AdminForwarderUpdateForm(p: Props) {
       {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-700">{msg}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
 
+      {/* Quick workflow buttons */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted">เปลี่ยนสถานะด่วน</p>
+        <div className="flex flex-wrap gap-2">
+          {nextStatus && (
+            <button type="button" onClick={() => quickSet(nextStatus.value)} disabled={pending}
+              className="rounded-lg bg-primary-500 text-white px-3 py-1.5 text-xs font-medium hover:bg-primary-600 disabled:opacity-50">
+              → {nextStatus.label}
+            </button>
+          )}
+          {status !== "cancelled" && (
+            <button type="button" onClick={() => quickSet("cancelled")} disabled={pending}
+              className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs hover:bg-red-50 disabled:opacity-50">
+              ❌ ยกเลิก
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          {STATUS_FLOW.map((s, i) => (
+            <span key={s.value} className={`text-[10px] px-2 py-0.5 rounded-full border ${
+              s.value === status
+                ? "bg-primary-500 text-white border-primary-500"
+                : i < currentIdx
+                  ? "bg-surface-alt text-muted border-border line-through"
+                  : "text-muted border-border"
+            }`}>{s.label}</span>
+          ))}
+        </div>
+      </div>
+
       <label className="block space-y-1">
-        <span className="text-xs font-medium">สถานะ</span>
+        <span className="text-xs font-medium">สถานะ (แก้ตรง)</span>
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
           <option value="pending_payment">รอชำระเงิน</option>
           <option value="shipped_china">ออกจากจีน</option>

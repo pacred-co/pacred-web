@@ -1,9 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { JuristicActions } from "./juristic-actions";
 
-/** Juristic-person check — admin reviews customer's company affidavit
- * + VAT doc uploads, then sets corporate.status to verified/rejected.
- * Mirrors legacy "เช็คข้อมูลลูกค้านิติบุคคล" extension. */
 export default async function AdminJuristicCheckPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const sp = await searchParams;
   const admin = createAdminClient();
@@ -26,6 +24,37 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
     ...r,
     profile_row: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));
+
+  // Fetch documents for all profiles in one query
+  const profileIds = rows.map((r) => r.profile_id);
+  const { data: docs } = profileIds.length > 0
+    ? await admin
+        .from("documents")
+        .select("profile_id, doc_type, storage_path, mime_type")
+        .in("profile_id", profileIds)
+    : { data: [] };
+
+  // Get signed URLs for each document
+  const docMap: Record<string, { label: string; url: string; mime: string }[]> = {};
+  if (docs && docs.length > 0) {
+    const DOC_LABELS: Record<string, string> = {
+      company_affidavit: "หนังสือรับรอง",
+      vat:               "ภ.พ.20",
+      national_id:       "บัตรประชาชน",
+    };
+    for (const doc of docs) {
+      const { data: signed } = await admin.storage
+        .from("member-docs")
+        .createSignedUrl(doc.storage_path, 3600);
+      if (!signed?.signedUrl) continue;
+      if (!docMap[doc.profile_id]) docMap[doc.profile_id] = [];
+      docMap[doc.profile_id].push({
+        label: DOC_LABELS[doc.doc_type] ?? doc.doc_type,
+        url:   signed.signedUrl,
+        mime:  doc.mime_type,
+      });
+    }
+  }
 
   const counts = rows.reduce<Record<string, number>>((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {});
 
@@ -70,16 +99,17 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
                 <th className="px-4 py-3">ชื่อบริษัท</th>
                 <th className="px-4 py-3">สถานะ</th>
                 <th className="px-4 py-3">วันที่ส่ง</th>
-                <th className="px-4 py-3">การจัดการ</th>
+                <th className="px-4 py-3 min-w-[200px]">เอกสาร + การจัดการ</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.profile_id} className="border-t border-border">
+                <tr key={r.profile_id} className="border-t border-border align-top">
                   <td className="px-4 py-3 text-xs">
                     <div className="font-mono">{r.profile_row?.member_code ?? "—"}</div>
                     <div>{r.profile_row?.first_name} {r.profile_row?.last_name}</div>
                     <div className="text-muted">{r.profile_row?.phone}</div>
+                    <Link href={`/admin/customers/${r.profile_id}`} className="text-primary-500 hover:underline text-[10px]">→ ดูโปรไฟล์</Link>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">{r.tax_id}</td>
                   <td className="px-4 py-3 text-xs">{r.company_name}</td>
@@ -89,19 +119,21 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
                     </span>
                     {r.rejection_reason && <div className="text-[10px] text-red-700 mt-1">{r.rejection_reason}</div>}
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
-                  <td className="px-4 py-3 text-xs">
-                    <Link href={`/admin/customers/${r.profile_id}`} className="text-primary-500 hover:underline">→ ดูโปรไฟล์</Link>
+                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                    {new Date(r.created_at).toLocaleDateString("th-TH")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <JuristicActions
+                      profileId={r.profile_id}
+                      status={r.status}
+                      docUrls={docMap[r.profile_id] ?? []}
+                    />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
-
-      <div className="rounded-2xl border border-dashed border-border p-6 text-center text-xs text-muted">
-        เร็วๆนี้: เปิดดูเอกสารหนังสือรับรอง + ภ.พ.20 จาก Storage โดยตรง + ปุ่มยืนยัน/ปฏิเสธ inline + DBD juristic API auto-fetch
       </div>
     </main>
   );

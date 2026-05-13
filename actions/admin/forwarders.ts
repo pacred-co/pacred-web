@@ -102,3 +102,64 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
     return { ok: true };
   });
 }
+
+// ── Bulk status update ────────────────────────────────────────────────────────
+
+const bulkSchema = z.object({
+  f_nos:  z.array(z.string()).min(1).max(100),
+  status: z.enum(STATUSES),
+});
+
+export async function adminBulkUpdateForwarderStatus(
+  input: z.infer<typeof bulkSchema>,
+): Promise<AdminActionResult & { updated?: number }> {
+  const parsed = bulkSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { f_nos, status } = parsed.data;
+
+  return withAdmin(["ops"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: existing } = await admin
+      .from("forwarders")
+      .select("id, f_no, profile_id, status")
+      .in("f_no", f_nos);
+
+    if (!existing || existing.length === 0) return { ok: false, error: "not_found" };
+
+    const dateCol = STATUS_DATE_COL[status];
+    const update: Record<string, unknown> = {
+      status,
+      admin_id_update: adminId,
+      ...(dateCol ? { [dateCol]: new Date().toISOString() } : {}),
+    };
+
+    const { error } = await admin
+      .from("forwarders")
+      .update(update)
+      .in("f_no", f_nos);
+
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "forwarder.bulk_update", "forwarder", "bulk", {
+      f_nos, before_statuses: existing.map((r) => ({ f_no: r.f_no, status: r.status })), after: { status },
+    });
+
+    // Notify each customer
+    for (const row of existing) {
+      if (row.status === status) continue;
+      void sendNotification(row.profile_id, {
+        category: "forwarder",
+        severity: status === "cancelled" ? "warning" : "info",
+        title:    `ฝากนำเข้า ${row.f_no} อัพเดทแล้ว`,
+        body:     `สถานะ: ${STATUS_LABEL[status] ?? status}`,
+        link_href: `/service-import/${row.f_no}`,
+        reference_type: "forwarder",
+        reference_id:   row.id,
+      });
+    }
+
+    revalidatePath("/admin/forwarders");
+    return { ok: true, updated: existing.length };
+  });
+}

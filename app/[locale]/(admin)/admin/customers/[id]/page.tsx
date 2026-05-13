@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AssignRepForm } from "./assign-rep";
+import { CustomerActions } from "./customer-actions";
 
 export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -88,6 +89,21 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
         <WalletCard label="Cashback" value={w.cashback_balance} tone="orange" />
         <WalletCard label="เครดิต" value={w.credit_balance} tone="blue" />
       </section>
+
+      {/* Approve / Suspend / Edit */}
+      <CustomerActions
+        id={p.id}
+        status={p.status}
+        firstName={p.first_name}
+        lastName={p.last_name}
+        email={p.email}
+        phone={p.phone}
+        customerGroup={p.customer_group}
+        sex={p.sex}
+        birthday={p.birthday}
+        lineId={p.line_id}
+        recommendedBy={p.recommended_by}
+      />
 
       {/* Assign sales rep */}
       <AssignRepForm
