@@ -94,7 +94,7 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>{r.status}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <WalletTxActions id={r.id} status={r.status} kind={r.kind} />
+                      <WalletTxActions id={r.id} status={r.status} kind={r.kind} slipUrl={r.slip_url} />
                     </td>
                   </tr>
                 ))}

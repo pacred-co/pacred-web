@@ -1039,6 +1039,7 @@
       "reports": "Reports",
       "rates": "Service Rates",
       "inventory": "Inventory",
+      "barcode": "Barcode Scanner",
       "settings": "Settings"
     }
   }

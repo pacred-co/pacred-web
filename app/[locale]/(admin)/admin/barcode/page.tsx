@@ -1,16 +1,70 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
 import { ScanForm } from "./scan-form";
 
-export default function AdminBarcodePage() {
+export default async function AdminBarcodePage() {
+  const admin = createAdminClient();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayIso = today.toISOString();
+
+  const [arrivedRes, outRes, deliveredRes] = await Promise.all([
+    admin.from("forwarders").select("id", { count: "exact", head: true })
+      .eq("status", "arrived_thailand").gte("date_arrived_thailand", todayIso),
+    admin.from("forwarders").select("id", { count: "exact", head: true })
+      .eq("status", "out_for_delivery"),
+    admin.from("forwarders").select("id", { count: "exact", head: true })
+      .eq("status", "delivered").gte("date_delivered", todayIso),
+  ]);
+
+  const arrivedToday   = arrivedRes.count   ?? 0;
+  const outForDelivery = outRes.count        ?? 0;
+  const deliveredToday = deliveredRes.count  ?? 0;
+
   return (
     <main className="p-6 lg:p-8 max-w-2xl mx-auto space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
-        <h1 className="mt-1 text-2xl font-bold">📸 ระบบบาร์โค้ด</h1>
-        <p className="mt-1 text-sm text-muted">
-          สแกนบาร์โค้ดบน package เพื่อ <strong>รับเข้าโกดัง</strong> / <strong>เตรียมส่ง</strong> / <strong>ปล่อยคนขับ</strong> — เลขที่รองรับคือ f_no, h_no, tracking CN/TH, หรือเลขตู้
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
+          <h1 className="mt-1 text-2xl font-bold">สแกนรับเข้าโกดัง</h1>
+          <p className="text-sm text-muted mt-0.5">
+            สแกนบาร์โค้ดหรือ tracking เพื่ออัพเดทสถานะ
+          </p>
+        </div>
+        <Link
+          href="/admin/barcode/driver"
+          className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-surface-alt"
+        >
+          🛻 หน้าคนขับ →
+        </Link>
       </div>
-      <ScanForm />
+
+      {/* Today stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-2xl border border-border bg-white p-4 text-center shadow-sm">
+          <p className="text-xs text-muted">รับเข้าวันนี้</p>
+          <p className="mt-1 text-2xl font-bold text-purple-700">{arrivedToday}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-white p-4 text-center shadow-sm">
+          <p className="text-xs text-muted">รอส่ง</p>
+          <p className="mt-1 text-2xl font-bold text-orange-600">{outForDelivery}</p>
+        </div>
+        <div className="rounded-2xl border border-border bg-white p-4 text-center shadow-sm">
+          <p className="text-xs text-muted">ส่งแล้ววันนี้</p>
+          <p className="mt-1 text-2xl font-bold text-green-700">{deliveredToday}</p>
+        </div>
+      </div>
+
+      {/* Workflow guide */}
+      <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-xs text-muted space-y-1">
+        <p className="font-semibold text-foreground">workflow</p>
+        <p>📦 <strong>รับเข้าโกดัง</strong> → สแกนเมื่อของถึงโกดังไทย → สถานะเปลี่ยนเป็น "ถึงไทย"</p>
+        <p>🚚 <strong>เตรียมส่ง</strong> → สแกนเมื่อจัดของขึ้นรถ → สถานะเปลี่ยนเป็น "กำลังส่ง"</p>
+        <p>รองรับ: f_no · tracking CN/TH · เลขตู้ · h_no (ฝากสั่ง)</p>
+      </div>
+
+      <ScanForm defaultMode="intake" availableModes={["intake", "prepare"]} />
     </main>
   );
 }
