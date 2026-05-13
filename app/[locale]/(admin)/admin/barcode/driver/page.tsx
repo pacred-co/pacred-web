@@ -59,8 +59,8 @@ export default async function AdminBarcodeDriverPage() {
       {/* Workflow guide */}
       <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-xs text-muted space-y-1">
         <p className="font-semibold text-foreground">workflow คนขับ</p>
-        <p>🛻 <strong>สแกนครั้งแรก</strong> → ของออกจากโกดัง → สถานะ "กำลังส่ง"</p>
-        <p>✅ <strong>สแกนครั้งที่สอง</strong> → ส่งถึงลูกค้าแล้ว → สถานะ "ส่งสำเร็จ" + แจ้งลูกค้า</p>
+        <p>🛻 <strong>สแกนครั้งแรก</strong> → ของออกจากโกดัง → สถานะ &quot;กำลังส่ง&quot;</p>
+        <p>✅ <strong>สแกนครั้งที่สอง</strong> → ส่งถึงลูกค้าแล้ว → สถานะ &quot;ส่งสำเร็จ&quot; + แจ้งลูกค้า</p>
         <p>รองรับ: f_no · tracking CN/TH · เลขตู้</p>
       </div>
 

@@ -59,8 +59,8 @@ export default async function AdminBarcodePage() {
       {/* Workflow guide */}
       <div className="rounded-xl border border-border bg-surface-alt/30 px-4 py-3 text-xs text-muted space-y-1">
         <p className="font-semibold text-foreground">workflow</p>
-        <p>📦 <strong>รับเข้าโกดัง</strong> → สแกนเมื่อของถึงโกดังไทย → สถานะเปลี่ยนเป็น "ถึงไทย"</p>
-        <p>🚚 <strong>เตรียมส่ง</strong> → สแกนเมื่อจัดของขึ้นรถ → สถานะเปลี่ยนเป็น "กำลังส่ง"</p>
+        <p>📦 <strong>รับเข้าโกดัง</strong> → สแกนเมื่อของถึงโกดังไทย → สถานะเปลี่ยนเป็น &quot;ถึงไทย&quot;</p>
+        <p>🚚 <strong>เตรียมส่ง</strong> → สแกนเมื่อจัดของขึ้นรถ → สถานะเปลี่ยนเป็น &quot;กำลังส่ง&quot;</p>
         <p>รองรับ: f_no · tracking CN/TH · เลขตู้ · h_no (ฝากสั่ง)</p>
       </div>
 
