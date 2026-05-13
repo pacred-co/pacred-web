@@ -204,7 +204,7 @@ export default async function AdminHRTrainingPage() {
               </div>
 
               {ces.length === 0 ? (
-                <p className="px-5 py-4 text-xs text-muted italic">— ยังไม่มีผู้เรียน — กดปุ่ม "Enroll ทุกคน" หรือเลือกรายคน</p>
+                <p className="px-5 py-4 text-xs text-muted italic">— ยังไม่มีผู้เรียน — กดปุ่ม &ldquo;Enroll ทุกคน&rdquo; หรือเลือกรายคน</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

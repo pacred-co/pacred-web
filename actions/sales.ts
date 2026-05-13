@@ -117,28 +117,32 @@ export async function listMyCommissions(opts?: {
   const { data, error } = await q;
   if (error) return { ok: false, error: error.message };
 
+  type CustomerLite = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };
   type Row = Omit<SalesCommission, "customer_member_code" | "customer_name"> & {
-    customer: { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null } | null;
+    customer: CustomerLite | CustomerLite[] | null;
   };
-  const out = (data ?? []).map((r: Row) => ({
-    id: r.id,
-    team_leader_id: r.team_leader_id,
-    reference_type: r.reference_type,
-    reference_id: r.reference_id,
-    customer_profile_id: r.customer_profile_id,
-    base_amount: Number(r.base_amount),
-    commission_pct: Number(r.commission_pct),
-    commission_amount: Number(r.commission_amount),
-    status: r.status,
-    earned_at: r.earned_at,
-    paid_at: r.paid_at,
-    payout_id: r.payout_id,
-    customer_member_code: r.customer?.member_code ?? null,
-    customer_name:
-      r.customer?.first_name || r.customer?.last_name
-        ? `${r.customer?.first_name ?? ""} ${r.customer?.last_name ?? ""}`.trim()
-        : r.customer?.company_name ?? null,
-  })) as SalesCommission[];
+  const out = ((data ?? []) as unknown as Row[]).map((r) => {
+    const cust = Array.isArray(r.customer) ? r.customer[0] ?? null : r.customer;
+    return {
+      id: r.id,
+      team_leader_id: r.team_leader_id,
+      reference_type: r.reference_type,
+      reference_id: r.reference_id,
+      customer_profile_id: r.customer_profile_id,
+      base_amount: Number(r.base_amount),
+      commission_pct: Number(r.commission_pct),
+      commission_amount: Number(r.commission_amount),
+      status: r.status,
+      earned_at: r.earned_at,
+      paid_at: r.paid_at,
+      payout_id: r.payout_id,
+      customer_member_code: cust?.member_code ?? null,
+      customer_name:
+        cust?.first_name || cust?.last_name
+          ? `${cust?.first_name ?? ""} ${cust?.last_name ?? ""}`.trim()
+          : cust?.company_name ?? null,
+    };
+  }) as SalesCommission[];
 
   return { ok: true, data: out };
 }

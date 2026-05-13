@@ -99,7 +99,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
   ]);
 
   if (!postingRes.data) notFound();
-  const posting = postingRes.data as Posting;
+  const posting = postingRes.data as unknown as Posting;
   const pos = Array.isArray(posting.position) ? posting.position[0] ?? null : posting.position;
   const sec = pos?.section ? (Array.isArray(pos.section) ? pos.section[0] ?? null : pos.section) : null;
   const br  = sec?.branch  ? (Array.isArray(sec.branch)  ? sec.branch[0]  ?? null : sec.branch)  : null;

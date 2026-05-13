@@ -32,7 +32,12 @@
       "Bash(node node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx 'app/[locale]/\\(admin\\)/admin/reports/page.tsx' 'app/[locale]/\\(admin\\)/admin/accounting/page.tsx' 'app/[locale]/\\(admin\\)/admin/hr/page.tsx' 'app/[locale]/\\(admin\\)/admin/learning/page.tsx' 'app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx')",
       "PowerShell($env:PATHEXT += \";.CMD;.JS\"; & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx \"app/[locale]/\\(admin\\)/admin/reports/page.tsx\" \"app/[locale]/\\(admin\\)/admin/accounting/page.tsx\" \"app/[locale]/\\(admin\\)/admin/hr/page.tsx\" \"app/[locale]/\\(admin\\)/admin/learning/page.tsx\" \"app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx\" 2>&1 | Select-Object -Last 80)",
       "Bash(cd \"/c/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7\" && ls \"app/[locale]/\\(protected\\)\")",
-      "Bash(git -C \"C:/Users/devvork/pacred-web\" log --oneline supabase/migrations/0016_phase_h_upgrades.sql)"
+      "Bash(git -C \"C:/Users/devvork/pacred-web\" log --oneline supabase/migrations/0016_phase_h_upgrades.sql)",
+      "Bash(ls \"C:/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7/app/[locale]/\\(protected\\)\" 2>&1 && echo \"---\" && ls \"C:/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7/app/[locale]/\\(auth\\)\" 2>&1 && echo \"---\" && ls \"C:/xampp/htdocs/pcscargo/member\" 2>&1 | head -80)",
+      "Bash(cd /c/Users/devvork/pacred-web && find . -type f -name \"*.php\" | head -20)",
+      "Bash(xargs grep -l \"china-address\\\\|warehouseAddress\\\\|googleMaps\\\\|google-maps\\\\|verify-tel\\\\|line-notify\\\\|@react-pdf\\\\|jsPDF\")",
+      "Bash(git -c user.name='deffeyameh' -c user.email='tadsakorn.n@gmail.com' merge origin/main --no-commit --no-ff)",
+      "Bash(git checkout *)"
     ]
   }
 }

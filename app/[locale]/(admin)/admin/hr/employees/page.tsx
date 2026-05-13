@@ -313,7 +313,7 @@ export default async function AdminHREmployeesPage({
                           <div className="min-w-0">
                             <p className="font-medium text-foreground text-sm truncate">{p.fullName}</p>
                             {p.contact?.display_name && (
-                              <p className="text-[11px] text-muted truncate">"{p.contact.display_name}"</p>
+                              <p className="text-[11px] text-muted truncate">&ldquo;{p.contact.display_name}&rdquo;</p>
                             )}
                           </div>
                         </div>

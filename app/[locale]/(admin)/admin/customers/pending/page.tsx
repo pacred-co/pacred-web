@@ -75,9 +75,10 @@ export default async function AdminCustomersPendingPage() {
                 </tr>
               )}
               {rows.map((c) => {
+                const personalName = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—";
                 const name = c.account_type === "juristic"
-                  ? (c.company_name ?? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—")
-                  : (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—");
+                  ? (c.company_name ?? personalName)
+                  : personalName;
                 const date = new Date(c.created_at).toLocaleDateString("th-TH", {
                   day: "numeric", month: "short", year: "2-digit",
                 });

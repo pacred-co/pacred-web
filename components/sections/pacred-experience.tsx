@@ -31,12 +31,12 @@ export function PacredExperience() {
           </p>
 
           <p className="pl-4 md:pl-6 border-l-2 md:border-l-[3px] border-border hover:border-primary-600 hover:translate-x-1.5 transition-all duration-300 text-[13.5px] md:text-[16px] leading-[1.7] md:leading-[1.85] text-[#4b5563] dark:text-white/80">
-            Pacred มุ่งเน้นการบริการที่ <strong className="text-primary-600 font-extrabold">"เร็ว ไว ไม่มีคำว่าทำไม่ได้"</strong> ทุกขั้นตอน พร้อมทีมงานมืออาชีพที่มีประสบการณ์มากกว่า 14 ปี นำเข้า–ส่งออก เคลียร์ ฝากสั่งซื้อ — เราพร้อมรับจบหมดทุกปัญหา
+            Pacred มุ่งเน้นการบริการที่ <strong className="text-primary-600 font-extrabold">&ldquo;เร็ว ไว ไม่มีคำว่าทำไม่ได้&rdquo;</strong> ทุกขั้นตอน พร้อมทีมงานมืออาชีพที่มีประสบการณ์มากกว่า 14 ปี นำเข้า–ส่งออก เคลียร์ ฝากสั่งซื้อ — เราพร้อมรับจบหมดทุกปัญหา
           </p>
 
           <p className="md:col-span-2 pl-4 md:pl-6 border-l-2 md:border-l-[3px] border-border hover:border-primary-600 hover:translate-x-1.5 transition-all duration-300 text-[13.5px] md:text-[16px] leading-[1.7] md:leading-[1.85] text-[#4b5563] dark:text-white/80">
             ไม่ว่าจะนำเข้าสินค้าจากจีน หรือส่งออกไปทั่วโลก จะสั่งซื้อ ฝากโอน หรือขยายธุรกิจไปต่างประเทศ — ให้ Pacred Shipping ดูแล แล้วคุณจะเข้าใจคำว่า{" "}
-            <strong className="text-primary-600 font-extrabold">"ครบจบจริงในที่เดียว"</strong>
+            <strong className="text-primary-600 font-extrabold">&ldquo;ครบจบจริงในที่เดียว&rdquo;</strong>
           </p>
         </div>
       </div>

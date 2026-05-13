@@ -139,7 +139,7 @@ export function NewPostingForm({ positions }: { positions: PositionOption[] }) {
         <legend className="text-xs font-semibold text-muted px-1">สถานะตอนเผยแพร่</legend>
         <label className="flex items-start gap-2 text-sm cursor-pointer">
           <input type="radio" checked={form.status === "open"} onChange={() => setForm((f) => ({ ...f, status: "open" }))} className="mt-0.5" />
-          <span><b>เปิดรับเลย</b> — ประกาศจะแสดงเป็น "เปิดรับ" + บันทึก posted_at วันนี้</span>
+          <span><b>เปิดรับเลย</b> — ประกาศจะแสดงเป็น &ldquo;เปิดรับ&rdquo; + บันทึก posted_at วันนี้</span>
         </label>
         <label className="flex items-start gap-2 text-sm cursor-pointer">
           <input type="radio" checked={form.status === "draft"} onChange={() => setForm((f) => ({ ...f, status: "draft" }))} className="mt-0.5" />

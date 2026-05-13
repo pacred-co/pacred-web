@@ -424,11 +424,11 @@ function JuristicForm() {
     setError(null);
     startTransition(async () => {
       const r1 = await uploadOne(docCompany, "company_affidavit");
-      if (!r1.ok) return setError(ERR[(r1 as any).error] ?? (r1 as any).error);
+      if (!r1.ok) { const e = (r1 as { error: string }).error; return setError(ERR[e] ?? e); }
       const r2 = await uploadOne(docVAT, "vat");
-      if (!r2.ok) return setError(ERR[(r2 as any).error] ?? (r2 as any).error);
+      if (!r2.ok) { const e = (r2 as { error: string }).error; return setError(ERR[e] ?? e); }
       const r3 = await uploadOne(docID, "national_id");
-      if (!r3.ok) return setError(ERR[(r3 as any).error] ?? (r3 as any).error);
+      if (!r3.ok) { const e = (r3 as { error: string }).error; return setError(ERR[e] ?? e); }
       const done = await completeJuristicRegistration();
       if (done.ok) { router.replace("/"); router.refresh(); }
       else setError(ERR[done.error] ?? done.error);
@@ -609,8 +609,6 @@ function StyledInput(props: React.InputHTMLAttributes<HTMLInputElement> & { extr
     />
   );
 }
-
-const INPUT = "";
 
 function FieldWrap({ label, children, className = "" }: { label: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (

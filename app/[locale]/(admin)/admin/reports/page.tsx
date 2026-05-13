@@ -112,7 +112,7 @@ async function sumThb(
   if (kindFilter) q = q.eq("kind", kindFilter);
   const { data } = await q;
   if (!data) return 0;
-  return (data as Array<Record<string, number>>).reduce((s, r) => s + Number(r[col] ?? 0), 0);
+  return (data as unknown as Array<Record<string, number>>).reduce((s, r) => s + Number(r[col] ?? 0), 0);
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
