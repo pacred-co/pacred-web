@@ -19,6 +19,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logger, redactId } from "@/lib/logger";
 import type { NotifyPayload } from "./types";
 
 const LINE_BYPASS = process.env.LINE_PUSH_BYPASS !== "false";  // default true (safe)
@@ -47,13 +48,17 @@ export async function sendNotification(
 
   if (error || !row) {
     // Don't crash the caller — log and return a dummy
-    console.error("[notifications] insert failed:", error);
+    logger.error("notifications", "insert failed", error, { profileId: redactId(profileId) });
     return { id: "", deliveredLine: false, deliveredEmail: false };
   }
 
   if (LINE_BYPASS) {
-    // Dev / staging path — just log
-    console.log("[notifications:bypass]", profileId, payload);
+    // Dev / staging path — log redacted profile id + category/title only (no body)
+    logger.info("notifications", "bypass — would send", {
+      profileId: redactId(profileId),
+      category:  payload.category,
+      title:     payload.title,
+    });
     return { id: row.id, deliveredLine: false, deliveredEmail: false };
   }
 
@@ -99,7 +104,7 @@ export async function sendNotification(
 async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise<boolean> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) {
-    console.warn("[notifications] LINE_CHANNEL_ACCESS_TOKEN not set — skipping push");
+    logger.warn("notifications", "LINE_CHANNEL_ACCESS_TOKEN not set — skipping push");
     return false;
   }
   try {
@@ -121,7 +126,7 @@ async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise
     });
     return res.ok;
   } catch (e) {
-    console.error("[notifications] LINE push failed:", e);
+    logger.error("notifications", "LINE push failed", e, { lineUserId: redactId(lineUserId) });
     return false;
   }
 }
@@ -132,7 +137,7 @@ async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise
 async function sendEmail(toEmail: string, payload: NotifyPayload): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[notifications] RESEND_API_KEY not set — skipping email");
+    logger.warn("notifications", "RESEND_API_KEY not set — skipping email");
     return false;
   }
   try {
@@ -151,7 +156,7 @@ async function sendEmail(toEmail: string, payload: NotifyPayload): Promise<boole
     });
     return res.ok;
   } catch (e) {
-    console.error("[notifications] email send failed:", e);
+    logger.error("notifications", "email send failed", e);
     return false;
   }
 }

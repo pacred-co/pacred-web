@@ -10,6 +10,7 @@ import {
 } from "@/lib/validators/wallet";
 import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
 import { sendNotification } from "@/lib/notifications";
+import { validateStoredFile } from "@/lib/file-validation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -102,6 +103,18 @@ export async function createDeposit(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
+
+  // Server-side slip validation — guard against spoofed MIME / oversized
+  // / path traversal. Client already validated for UX, but never trust client.
+  if (d.slip_url) {
+    if (!d.slip_url.startsWith(`${user.id}/`)) {
+      return { ok: false, error: "slip_path_mismatch" };
+    }
+    const check = await validateStoredFile("slips", d.slip_url, ["image", "pdf"]);
+    if (!check.ok) {
+      return { ok: false, error: `slip_invalid:${check.error}` };
+    }
+  }
 
   const { data: created, error } = await supabase
     .from("wallet_transactions")

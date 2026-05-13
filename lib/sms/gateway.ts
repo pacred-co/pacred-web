@@ -6,6 +6,7 @@
  */
 
 import "server-only";
+import { logger, redactPhone } from "@/lib/logger";
 
 export interface SmsResult {
   ok: boolean;
@@ -14,9 +15,12 @@ export interface SmsResult {
 }
 
 export async function sendSms(phone: string, message: string): Promise<SmsResult> {
-  // Dev bypass — log to server console instead of sending real SMS
+  // Dev bypass — log a redacted line so we can see in dev without leaking PII
   if (process.env.OTP_BYPASS === "true") {
-    console.log(`[SMS BYPASS] → ${phone}: ${message}`);
+    logger.info("sms", "bypass — would send SMS", {
+      phone: redactPhone(phone),
+      length: message.length,
+    });
     return { ok: true, messageId: "bypass" };
   }
 

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin, type AdminRole } from "@/lib/auth/require-admin";
+import { logger, redactId } from "@/lib/logger";
 
 export type AdminActionResult<T = void> =
   | { ok: true; data?: T }
@@ -29,7 +30,12 @@ export async function logAdminAction(
       payload:     payload ?? null,
     });
   } catch (e) {
-    console.error("[admin_audit_log] failed:", e);
+    logger.error("audit", "admin_audit_log insert failed", e, {
+      adminId:    redactId(adminId),
+      action,
+      targetType,
+      targetId:   redactId(targetId),
+    });
   }
 }
 

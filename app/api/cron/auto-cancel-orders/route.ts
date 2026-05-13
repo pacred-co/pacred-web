@@ -16,10 +16,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * defense-in-depth check that protects against accidental exposure.
  */
 export async function GET(request: Request) {
-  // Defense-in-depth: require a shared secret from Vercel cron config
-  const authHeader = request.headers.get("authorization");
-  const secret     = process.env.CRON_SECRET;
-  if (secret && authHeader !== `Bearer ${secret}`) {
+  // Auth: accept either Vercel's built-in cron header OR an explicit
+  // Bearer ${CRON_SECRET}. In production at least one MUST be present
+  // (no silent open access). In dev (`NODE_ENV !== 'production'`) we
+  // still allow unauth requests for manual testing.
+  const isProd       = process.env.NODE_ENV === "production";
+  const vercelCron   = request.headers.get("x-vercel-cron") === "1";
+  const authHeader   = request.headers.get("authorization");
+  const secret       = process.env.CRON_SECRET;
+  const bearerOk     = !!secret && authHeader === `Bearer ${secret}`;
+
+  if (isProd && !vercelCron && !bearerOk) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
