@@ -66,17 +66,16 @@ export function ContactSales() {
 
       <div className="relative mx-auto w-full max-w-[1140px] px-[10px]">
         {/* Heading */}
-        <div className="mx-auto w-full max-w-[1120px] text-center">
-          <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.12em] uppercase">
-            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
+        <div className="mx-auto w-full max-w-[1120px]">
+          <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5 text-primary-600 text-[10.5px] md:text-[13px] font-black tracking-[0.08em] uppercase">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
             CONTACT OUR SALES TEAM
-            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
           </div>
-          <h2 className="text-[20px] md:text-[40px] leading-[1.2] md:leading-[1.12] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            ทักทีมเซลล์
-            <span className="text-primary-600"> Pacred</span> ได้เลย
+          <h2 className="text-[20px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
+            ทักทีมเซลล์{" "}
+            <span className="text-primary-600">Pacred</span> ได้เลย
           </h2>
-          <p className="mt-1.5 text-[12px] md:text-[15.5px] leading-[1.5] md:leading-[1.6] font-medium text-muted max-w-[680px] mx-auto">
+          <p className="mt-2 text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted max-w-[680px]">
             เลือกผู้เชี่ยวชาญตามบริการที่คุณต้องการ — ตอบเร็วทุกช่องทาง ตลอด 24 ชม.
           </p>
         </div>
