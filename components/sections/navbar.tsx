@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
 import { NotificationBell } from "@/components/notification-bell";
+import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
 
 type ProfileLite = {
@@ -101,6 +102,7 @@ export function NavBar() {
           <div className="hidden xl:flex items-center gap-2 shrink-0">
             {authReady && user ? (
               <>
+                <CartBadge />
                 <NotificationBell />
                 <UserMenu user={user} profile={profile} />
               </>
