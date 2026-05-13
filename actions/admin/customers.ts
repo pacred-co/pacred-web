@@ -139,6 +139,115 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
   });
 }
 
+// ────────────────────────────────────────────────────────────
+// Convert a personal account to juristic
+// Port of legacy `pcs-admin/api/customers-move-to-juristic/` — used when
+// a customer started as บุคคลธรรมดา then later opened a company and
+// wants the same wallet/history to roll under the corporate identity.
+//
+// Trigger `guard_corporate_account_type` enforces that corporate rows
+// can only exist where profiles.account_type='juristic', so the update
+// order is non-negotiable:
+//   1. Flip profiles.account_type → 'juristic'
+//   2. Upsert corporate row (insert if absent, else refresh)
+// If step 2 fails, revert step 1 so the two stay consistent.
+// ────────────────────────────────────────────────────────────
+const convertToJuristicSchema = z.object({
+  profile_id:      z.string().uuid(),
+  tax_id:          z.string().trim().regex(/^\d{13}$/, "เลขผู้เสียภาษีต้อง 13 หลัก"),
+  company_name:    z.string().trim().min(1, "กรอกชื่อบริษัท").max(255),
+  company_address: z.string().trim().max(1000).optional().or(z.literal("").transform(() => undefined)),
+  // Admin-issued conversions are treated as already verified (the admin
+  // is the verifier). Skip DBD round-trip; payload field stays null.
+  mark_verified:   z.boolean().default(true),
+});
+export type ConvertToJuristicInput = z.infer<typeof convertToJuristicSchema>;
+
+export async function adminConvertToJuristic(
+  input: ConvertToJuristicInput,
+): Promise<AdminActionResult> {
+  const parsed = convertToJuristicSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: before } = await admin
+      .from("profiles")
+      .select("id, account_type, member_code, first_name, last_name")
+      .eq("id", d.profile_id)
+      .maybeSingle<{ id: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+    if (!before) return { ok: false, error: "not_found" };
+    if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
+
+    // Block duplicate tax_id collisions early — the partial unique index
+    // on corporate(tax_id) only covers 'verified' rows, so we double-check.
+    const { data: clash } = await admin
+      .from("corporate")
+      .select("profile_id")
+      .eq("tax_id", d.tax_id)
+      .neq("profile_id", d.profile_id)
+      .maybeSingle();
+    if (clash) return { ok: false, error: "tax_id_already_used" };
+
+    // Step 1 — flip account_type so the corporate trigger lets the insert through
+    const { error: profErr } = await admin
+      .from("profiles")
+      .update({ account_type: "juristic" })
+      .eq("id", d.profile_id);
+    if (profErr) return { ok: false, error: profErr.message };
+
+    // Step 2 — upsert the corporate row
+    const corporatePayload: Record<string, unknown> = {
+      profile_id:      d.profile_id,
+      tax_id:          d.tax_id,
+      company_name:    d.company_name,
+      company_address: d.company_address ?? null,
+      status:          d.mark_verified ? "verified" : "pending",
+      verified_at:     d.mark_verified ? new Date().toISOString() : null,
+      verified_by:     d.mark_verified ? adminId : null,
+      rejection_reason: null,
+    };
+    const { error: corpErr } = await admin
+      .from("corporate")
+      .upsert(corporatePayload, { onConflict: "profile_id" });
+
+    if (corpErr) {
+      // Rollback the account_type flip — best effort, so the trigger
+      // doesn't end up rejecting future updates from a half-state.
+      await admin
+        .from("profiles")
+        .update({ account_type: before.account_type })
+        .eq("id", d.profile_id);
+      return { ok: false, error: corpErr.message };
+    }
+
+    const display = `${before.first_name ?? ""} ${before.last_name ?? ""}`.trim()
+      || d.company_name;
+
+    await logAdminAction(adminId, "customer.convert_to_juristic", "profile", d.profile_id, {
+      previous_account_type: before.account_type,
+      tax_id:                d.tax_id,
+      company_name:          d.company_name,
+      mark_verified:         d.mark_verified,
+    });
+
+    void sendNotification(d.profile_id, {
+      category: "system",
+      severity: "success",
+      title:    "บัญชีของท่านถูกอัพเกรดเป็นนิติบุคคล",
+      body:     `${display} — ใบเสร็จและใบกำกับภาษีในระบบจะออกในชื่อ "${d.company_name}" นับจากนี้`,
+      link_href: "/profile",
+    });
+
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${d.profile_id}`);
+    revalidatePath(`/admin/customers/${d.profile_id}/convert-to-juristic`);
+    return { ok: true };
+  });
+}
+
 /** Suspend an active customer. */
 export async function suspendCustomer(id: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };

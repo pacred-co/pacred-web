@@ -105,6 +105,24 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
         recommendedBy={p.recommended_by}
       />
 
+      {/* Convert to juristic (only relevant while account_type='personal') */}
+      {p.account_type === "personal" && (
+        <Link
+          href={`/admin/customers/${p.id}/convert-to-juristic`}
+          className="block rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 hover:bg-amber-100 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-amber-900">เปลี่ยนเป็นบัญชีนิติบุคคล →</p>
+              <p className="text-xs text-amber-800/80 mt-0.5">
+                ใช้เมื่อลูกค้าเปิดบริษัทและต้องการให้ใบเสร็จออกในชื่อบริษัท — wallet + history เดิมจะตามไป
+              </p>
+            </div>
+            <span className="text-xs font-mono uppercase text-amber-700">PERSONAL → JURISTIC</span>
+          </div>
+        </Link>
+      )}
+
       {/* Assign sales rep */}
       <AssignRepForm
         customerId={p.id}
