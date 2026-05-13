@@ -31,7 +31,8 @@
       "Bash(pnpm lint *)",
       "Bash(node node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx 'app/[locale]/\\(admin\\)/admin/reports/page.tsx' 'app/[locale]/\\(admin\\)/admin/accounting/page.tsx' 'app/[locale]/\\(admin\\)/admin/hr/page.tsx' 'app/[locale]/\\(admin\\)/admin/learning/page.tsx' 'app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx')",
       "PowerShell($env:PATHEXT += \";.CMD;.JS\"; & \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" node_modules/eslint/bin/eslint.js components/sections/admin-sidebar.tsx \"app/[locale]/\\(admin\\)/admin/reports/page.tsx\" \"app/[locale]/\\(admin\\)/admin/accounting/page.tsx\" \"app/[locale]/\\(admin\\)/admin/hr/page.tsx\" \"app/[locale]/\\(admin\\)/admin/learning/page.tsx\" \"app/[locale]/\\(admin\\)/admin/juristic-check/page.tsx\" 2>&1 | Select-Object -Last 80)",
-      "Bash(cd \"/c/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7\" && ls \"app/[locale]/\\(protected\\)\")"
+      "Bash(cd \"/c/Users/devvork/pacred-web/.claude/worktrees/jolly-taussig-7132d7\" && ls \"app/[locale]/\\(protected\\)\")",
+      "Bash(git -C \"C:/Users/devvork/pacred-web\" log --oneline supabase/migrations/0016_phase_h_upgrades.sql)"
     ]
   }
 }

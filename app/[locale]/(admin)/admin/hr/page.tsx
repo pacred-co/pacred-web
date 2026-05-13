@@ -82,13 +82,16 @@ export default async function AdminHRPage() {
             <p className="text-xs text-muted mt-0.5">RBAC role + contact extras</p>
           </div>
         </Link>
-        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">📝</div>
+        <Link
+          href="/admin/hr/recruitment"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500 text-white text-lg shrink-0">📝</div>
           <div className="min-w-0">
             <p className="font-bold text-foreground">สรรหา / รับสมัครงาน</p>
-            <p className="text-xs text-muted mt-0.5">Phase 2 — ลงประกาศ · นัดสัมภาษณ์ · รอเข้าทำงาน</p>
+            <p className="text-xs text-muted mt-0.5">ลงประกาศ · รับใบสมัคร · นัดสัมภาษณ์ · รับเข้าทำงาน</p>
           </div>
-        </div>
+        </Link>
         <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">⏰</div>
           <div className="min-w-0">
