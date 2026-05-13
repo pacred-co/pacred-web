@@ -27,14 +27,14 @@ export function StatsBar() {
   ];
 
   return (
-    <section className="bg-background pt-4 pb-1">
-      <div className="mx-auto w-full max-w-[1140px] px-[10px]">
-        <div className="flex gap-5 justify-center flex-wrap">
+    <section className="pt-4 pb-1">
+      <div className="mx-auto w-full max-w-[1140px] px-[10px] relative">
+        <div className="flex overflow-x-auto gap-3 md:gap-5 md:justify-center md:flex-wrap pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 snap-x snap-mandatory md:snap-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {stats.map((s) => (
             <Link
               key={s.label}
               href="/register"
-              className="group relative flex w-[350px] h-[90px] shrink-0 items-center gap-3 rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-4 cursor-pointer transition-all duration-300 hover:border-primary-600 hover:shadow-[0_0_0_3px_rgba(179,0,0,0.12),0_4px_20px_rgba(179,0,0,0.15)] hover:-translate-y-0.5"
+              className="group relative flex w-[62%] max-w-[280px] md:w-[350px] md:max-w-none h-[68px] md:h-[90px] shrink-0 snap-start items-center gap-2 md:gap-3 rounded-xl border border-border bg-white dark:bg-surface shadow-sm px-2.5 md:px-4 cursor-pointer transition-all duration-300 hover:border-primary-600 hover:shadow-[0_0_0_3px_rgba(179,0,0,0.12),0_4px_20px_rgba(179,0,0,0.15)] hover:-translate-y-0.5"
             >
               {/* red left accent bar */}
               <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-primary-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-300 origin-center" />
@@ -44,19 +44,23 @@ export function StatsBar() {
                 alt=""
                 width={56}
                 height={56}
-                className="h-14 w-14 shrink-0 object-contain transition-transform duration-300 group-hover:scale-110"
+                className="h-9 w-9 md:h-14 md:w-14 shrink-0 object-contain transition-transform duration-300 group-hover:scale-110"
               />
-              <div className="flex flex-1 items-center justify-between gap-2">
-                <span className="text-sm font-medium text-[#171717] dark:text-white">{s.label}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-3xl font-bold tracking-tight text-primary-600">
+              <div className="flex flex-1 items-center justify-between gap-1 md:gap-2 min-w-0">
+                <span className="text-[11px] md:text-sm font-medium text-[#171717] dark:text-white">{s.label}</span>
+                <div className="flex items-center gap-0.5 md:gap-1.5">
+                  <span className="text-[17px] md:text-3xl font-bold tracking-tight text-primary-600 leading-none">
                     {s.value}
                   </span>
-                  <span className="text-sm text-[#171717] dark:text-white">{s.unit}</span>
+                  <span className="text-[10px] md:text-sm text-[#171717] dark:text-white">{s.unit}</span>
                 </div>
               </div>
             </Link>
           ))}
+        </div>
+        {/* Swipe indicator — mobile only */}
+        <div className="md:hidden pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-background via-background/85 to-transparent flex items-center justify-end pr-1">
+          <svg className="w-4 h-4 text-primary-600 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </div>
       </div>
     </section>

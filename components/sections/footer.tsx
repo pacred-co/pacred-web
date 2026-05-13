@@ -1,184 +1,227 @@
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 
-const COL_IMPORT = [
-  { label: "นำเข้าสินค้าจากจีน LCL", href: "#" },
-  { label: "นำเข้าสินค้าจากจีน FCL", href: "#" },
-  { label: "ขนส่งทางรถ DDP จีน-ไทย", href: "#" },
-  { label: "ขนส่งทางอากาศ Air Freight", href: "#" },
-  { label: "นำเข้าสินค้าจากญี่ปุ่น", href: "#" },
-  { label: "นำเข้าสินค้าจากอเมริกา", href: "#" },
-  { label: "นำเข้าสินค้าจากเกาหลี", href: "#" },
-  { label: "ส่งออกสินค้าไปจีน LCL", href: "#" },
-  { label: "ส่งออกสินค้าไปจีน FCL", href: "#" },
-  { label: "Freight Forwarder", href: "#" },
-  { label: "Door to Door นำเข้าจีน", href: "#" },
-];
-
-const COL_CUSTOMS = [
-  { label: "พิธีการศุลกากรขาเข้า", href: "#" },
-  { label: "พิธีการศุลกากรขาออก", href: "#" },
-  { label: "เคลียร์สินค้าติดด่าน", href: "#" },
-  { label: "เคลียร์ใบอนุญาติ อย.", href: "#" },
-  { label: "เคลียร์ มอก. / สมอ.", href: "#" },
-  { label: "เคลียร์สินค้าเกษตร-ประมง", href: "#" },
-  { label: "HS Code / ภาษีนำเข้า", href: "#" },
-  { label: "นำเข้าในนามชิปปิ้ง", href: "#" },
-  { label: "Customs Clearance", href: "#" },
-  { label: "Import Clearance", href: "#" },
-];
-
-const COL_ORDER = [
-  { label: "ฝากสั่งซื้อสินค้าจาก 1688", href: "#" },
-  { label: "ฝากสั่งซื้อสินค้าจาก Taobao", href: "#" },
-  { label: "ฝากสั่งซื้อสินค้าจาก Alibaba", href: "#" },
-  { label: "ฝากสั่งซื้อสินค้าจาก Tmall", href: "#" },
-  { label: "ฝากโอนชำระค่าสินค้า CNY", href: "#" },
-  { label: "ฝากโอนชำระค่าสินค้า JPY", href: "#" },
-  { label: "ฝากโอนชำระค่าสินค้า USD", href: "#" },
-  { label: "ล่ามภาษาจีน เจรจาโรงงาน", href: "#" },
-  { label: "QC สินค้าที่โกดัง", href: "#" },
-  { label: "ขนส่งภายในประเทศ 50 บาท", href: "#" },
-];
-
-const COL_KNOWLEDGE = [
-  { label: "นำเข้าสินค้าจากจีน LCL", href: "#" },
-  { label: "นำเข้าสินค้าจากจีน FCL", href: "#" },
-  { label: "Freight Forwarder คืออะไร", href: "#" },
-  { label: "Shipping จีนคืออะไร", href: "#" },
-  { label: "พิธีการศุลกากรขาเข้า", href: "#" },
-  { label: "Import Clearance", href: "#" },
-  { label: "Customs Clearance", href: "#" },
-  { label: "HS Code / ภาษีนำเข้า", href: "#" },
-  { label: "ตรวจเอกสารนำเข้า", href: "#" },
-  { label: "นำเข้าสินค้าจากจีนทางเรือ", href: "#" },
-];
-
-function LinkCol({ heading, links }: { heading: string; links: { label: string; href: string }[] }) {
+// Brand SVG icons (inline เพื่อเลี่ยง lucide brand icons ที่ไม่มีในเวอร์ชันนี้)
+function IconYoutube({ className }: { className?: string }) {
   return (
-    <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-bold text-white">{heading}</h3>
-      <nav className="flex flex-col gap-1.5">
-        {links.map((l) => (
-          <a key={l.label} href={l.href} className="text-xs text-white/60 hover:text-white transition-colors leading-relaxed">
-            {l.label}
-          </a>
-        ))}
-      </nav>
-    </div>
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+function IconFacebook({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+    </svg>
+  );
+}
+function IconLine({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z"/>
+    </svg>
   );
 }
 
+const LINE_URL = "https://lin.ee/Yg3fU0I";
+const YOUTUBE_URL = "https://www.youtube.com/@PacredShipping";
+const FACEBOOK_URL = "https://www.facebook.com";
+
+const CONTACT_LINKS = [
+  { label: "ฝ่ายบริการลูกค้า",  href: "/contact" },
+  { label: "บริการของเรา",      href: "/services" },
+  { label: "ที่อยู่โกดังจีน",      href: "/warehouses/china" },
+  { label: "ที่อยู่โกดังไทย",     href: "/warehouses/thailand" },
+];
+
+const ABOUT_LINKS = [
+  { label: "เกี่ยวกับ Pacred",            href: "/about" },
+  { label: "สาระน่ารู้",                  href: "/knowledge" },
+  { label: "คำถามที่พบบ่อย",              href: "/faq" },
+  { label: "ร่วมใช้งาน กับ Pacred",       href: "/register" },
+  { label: "ข้อกำหนดและเงื่อนไข",          href: "/terms" },
+  { label: "นโยบายความเป็นส่วนตัว",        href: "/privacy" },
+  { label: "พื้นที่จัดส่ง Pacred เหมาๆ",   href: "/delivery-areas" },
+  { label: "วันหยุดประจำปี Pacred",        href: "/holidays" },
+];
+
+const SERVICE_LINKS = [
+  { label: "นำเข้าสินค้าจากจีน FCL ปิดตู้/เหมาตู้", href: "/services/import-china-fcl" },
+  { label: "นำเข้าสินค้าจากจีน LCL แชร์ตู้/รวมตู้", href: "/services/import-china-lcl" },
+  { label: "ส่งออกสินค้าทั่วโลก",                 href: "/services/export-worldwide" },
+  { label: "ชิปปิ้งเคลียร์พิธีการศุลกากร",          href: "/services/customs-clearance" },
+  { label: "สั่งซื้อสินค้าจากจีน 1688 taobao",     href: "/services/china-shopping" },
+];
+
+const PARTNERS = [
+  { file: "upspartner.png",         url: "https://www.ups.com/th" },
+  { file: "fedexpartner.png",       url: "https://www.fedex.com/th" },
+  { file: "coscopartner.png",       url: "https://lines.coscoshipping.com" },
+  { file: "alibabapartner.png",     url: "https://www.alibaba.com" },
+  { file: "dhlpartner.png",         url: "https://www.dhl.com/th" },
+  { file: "tntpartner.png",         url: "https://www.tnt.com" },
+  { file: "maerskpartner.png",      url: "https://www.maersk.com" },
+  { file: "tmallpartner.png",       url: "https://www.tmall.com" },
+  { file: "taobaopartner.png",      url: "https://world.taobao.com" },
+  { file: "bkp.png",                url: "https://www.bkp.co.th" },
+  { file: "patpartner.png",         url: "https://www.port.co.th" },
+  { file: "aotpartner.png",         url: "https://www.airportthai.co.th" },
+  { file: "thaicargo.png",          url: "https://www.thaicargo.com" },
+  { file: "bfs.png",                url: "https://www.bfs.co.th" },
+  { file: "etracking.png",          url: "https://e-tracking.customs.go.th" },
+  { file: "laemchabangpartner.png", url: "https://www.port.co.th" },
+];
+
 export function Footer() {
   return (
-    <footer id="contact" className="bg-[#1a0000]">
-      <div className="mx-auto w-full max-w-[1140px] px-[10px]">
+    <footer id="contact" className="bg-white dark:bg-surface border-t border-border">
+      <div className="mx-auto w-full max-w-[1140px] px-[16px] md:px-[20px]">
 
-        {/* Main grid */}
-        <div className="grid grid-cols-6 gap-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 py-6 md:py-14">
 
-          {/* Col 1 — Brand */}
-          <div className="col-span-1 flex flex-col gap-4">
-            <Link href="/">
-              <Image
-                src="/images/pacred-logo-white.png"
-                alt="Pacred"
-                width={80}
-                height={32}
-                className="object-contain"
-              />
-            </Link>
-            <p className="text-xs text-white/60 leading-relaxed">
-              ผู้เชี่ยวชาญด้านนำเข้า-ส่งออก เคลียร์พิธีการกรมศุลกากรครบวงจร มากกว่า 14 ปี
-            </p>
-            {/* Social */}
-            <div className="flex gap-2">
-              {[
-                { label: "LINE", href: "https://lin.ee/Yg3fU0I", color: "#06C755" },
-                { label: "FB", href: "#", color: "#1877F2" },
-                { label: "YT", href: "#", color: "#FF0000" },
-              ].map((s) => (
+          {/* Col 1 — ติดต่อเรา */}
+          <div className="md:col-span-3">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
+              ติดต่อ<span className="text-primary-600">เรา</span>
+            </h3>
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 mb-4 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {CONTACT_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* Social icons */}
+            <div className="flex items-center gap-2 mb-5">
+              <a
+                href={YOUTUBE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="YouTube"
+                className="w-9 h-9 rounded-full bg-[#111827] dark:bg-white/10 text-white flex items-center justify-center hover:bg-primary-600 transition-colors"
+              >
+                <IconYoutube className="w-[18px] h-[18px]" />
+              </a>
+              <a
+                href={FACEBOOK_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook"
+                className="w-9 h-9 rounded-full bg-[#111827] dark:bg-white/10 text-white flex items-center justify-center hover:bg-primary-600 transition-colors"
+              >
+                <IconFacebook className="w-[18px] h-[18px]" />
+              </a>
+              <a
+                href={LINE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="LINE"
+                className="w-9 h-9 rounded-full bg-[#111827] dark:bg-white/10 text-white flex items-center justify-center hover:bg-primary-600 transition-colors"
+              >
+                <IconLine className="w-[18px] h-[18px]" />
+              </a>
+            </div>
+
+            {/* QR code */}
+            <a
+              href={LINE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block group"
+            >
+              <div className="relative w-[100px] h-[100px] bg-white border border-border rounded-lg p-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] group-hover:shadow-[0_6px_18px_rgba(179,0,0,0.15)] group-hover:border-primary-300 transition-all">
+                <Image
+                  src="/images/contact/L_gainfriends_2dbarcodes_BW.png"
+                  alt="LINE QR Code Pacred"
+                  fill
+                  className="object-contain p-1"
+                />
+              </div>
+              <p className="mt-2 text-[11px] font-black text-[#111827] dark:text-white text-center tracking-wider">
+                066-131-0253
+              </p>
+            </a>
+          </div>
+
+          {/* Col 2 — เกี่ยวกับ */}
+          <div className="md:col-span-3">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
+              เกี่ยว<span className="text-primary-600">กับ</span>
+            </h3>
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {ABOUT_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Col 3 — บริการ */}
+          <div className="md:col-span-2">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
+              บริ<span className="text-primary-600">การ</span>
+            </h3>
+            <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {SERVICE_LINKS.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className="shrink-0 md:shrink whitespace-nowrap md:whitespace-normal text-[12px] md:text-[14px] text-muted hover:text-primary-600 transition-colors px-2.5 md:px-0 py-1 md:py-0 rounded-full md:rounded-none bg-surface md:bg-transparent border border-border md:border-0 w-fit"
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Col 4 — พาร์ทเนอร์ของเรา */}
+          <div className="md:col-span-4">
+            <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
+              พาร์ทเนอร์<span className="text-primary-600">ของเรา</span>
+            </h3>
+            <div className="grid grid-cols-4 gap-3 md:gap-4">
+              {PARTNERS.map((p) => (
                 <a
-                  key={s.label}
-                  href={s.href}
+                  key={p.file}
+                  href={p.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={s.label}
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: s.color }}
+                  className="flex items-center justify-center h-10 md:h-12 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:scale-110 transition-all duration-300"
                 >
-                  {s.label.charAt(0)}
+                  <Image
+                    src={`/images/partners/${p.file}`}
+                    alt=""
+                    width={80}
+                    height={36}
+                    className="max-h-full max-w-full object-contain"
+                  />
                 </a>
               ))}
             </div>
-            {/* Contact */}
-            <div className="flex flex-col gap-1.5 text-xs text-white/60">
-              <p>📞 066-131-0253</p>
-              <p>✉️ contact@pacred.co</p>
-              <p>📍 เพชรเกษม 77 กรุงเทพฯ</p>
-            </div>
-          </div>
-
-          {/* Col 2 — นำเข้า-ส่งออก */}
-          <div className="col-span-1">
-            <LinkCol heading="นำเข้า-ส่งออก" links={COL_IMPORT} />
-          </div>
-
-          {/* Col 3 — เคลียร์ศุลกากร */}
-          <div className="col-span-1">
-            <LinkCol heading="เคลียร์ศุลกากร" links={COL_CUSTOMS} />
-          </div>
-
-          {/* Col 4 — ฝากสั่งซื้อ / โอนเงิน */}
-          <div className="col-span-1">
-            <LinkCol heading="ฝากสั่งซื้อ / โอนเงิน" links={COL_ORDER} />
-          </div>
-
-          {/* Col 5 — บทความ */}
-          <div className="col-span-1">
-            <LinkCol heading="บทความและความรู้" links={COL_KNOWLEDGE} />
-          </div>
-
-          {/* Col 6 — บริษัท */}
-          <div className="col-span-1">
-            <LinkCol
-              heading="บริษัท"
-              links={[
-                { label: "เกี่ยวกับ Pacred", href: "#" },
-                { label: "คำถามที่พบบ่อย", href: "#" },
-                { label: "โปรโมชัน", href: "#" },
-                { label: "วันหยุด PCS 2026", href: "#" },
-                { label: "ร่วมงานกับเรา", href: "#" },
-                { label: "นโยบายความเป็นส่วนตัว", href: "#" },
-                { label: "เงื่อนไขการใช้บริการ", href: "#" },
-                { label: "ติดต่อเรา", href: "#" },
-              ]}
-            />
           </div>
 
         </div>
 
-        {/* Partner logos row */}
-        <div className="border-t border-white/10 py-6">
-          <div className="flex flex-wrap items-center justify-center gap-4 opacity-50">
-            {["1688", "alibaba", "taobao", "tmall", "dhlpartner", "fedexpartner", "upspartner", "maerskpartner", "coscopartner"].map((name) => (
-              <img
-                key={name}
-                src={`/images/partners/${name}.png`}
-                alt={name}
-                className="h-6 w-auto object-contain grayscale invert"
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/10 py-5 text-xs text-white/40">
-          <span>© 2026 Pacred CO., LTD. สงวนลิขสิทธิ์ตามกฎหมาย</span>
-          <div className="flex gap-4">
-            <a href="#" className="hover:text-white transition-colors">นโยบายความเป็นส่วนตัว</a>
-            <a href="#" className="hover:text-white transition-colors">เงื่อนไขการใช้บริการ</a>
-          </div>
+        {/* Bottom copyright */}
+        <div className="border-t border-border py-5 text-center text-[11.5px] md:text-[12.5px] text-muted leading-relaxed">
+          <p>
+            © 2026 Pacred. All rights reserved Ltd. สงวนลิขสิทธิ์ตามกฎหมาย
+          </p>
+          <p>
+            ผู้ให้บริการเว็บไซต์:{" "}
+            <span className="font-black text-[#111827] dark:text-white">Pacred CO., LTD.</span>
+          </p>
         </div>
 
       </div>

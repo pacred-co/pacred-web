@@ -8,14 +8,15 @@ import { Link } from "@/i18n/navigation";
 const LINE_URL = "https://lin.ee/Yg3fU0I";
 
 const SALES = [
-  { name: "แบม",  slogan: "ตู้เล็ก ตู้ใหญ่จะตู้ไหน ก็พร้อมปิดให้ได้หมด", phone: "066-125-3007", image: "/images/theme/2026/salebam.png",  alt: "เซลล์แบม",  button: "ทักแบมเลย" },
-  { name: "ยีนส์", slogan: "ของไม่ค้าง ด่านไม่ติด การันตีถึงมือแน่นอน",   phone: "066-090-1217", image: "/images/theme/2026/salejean.png", alt: "เซลล์ยีนส์", button: "ทักยีนส์เลย" },
-  { name: "พลอย", slogan: "จะ Port ไหน Term ไหน ก็พร้อมลุย",              phone: "062-719-1998", image: "/images/theme/2026/saleploy.png", alt: "เซลล์พลอย", button: "ทักพลอยเลย" },
+  { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "066-125-3007", image: "/images/Character_Icon/win.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },
+  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-125-3007", image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
+  { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "066-090-1217", image: "/images/Character_Icon/ploy.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
 ];
 
 const FEATURES = [
   "ดูแลตั้งแต่สั่งซื้อจนถึงนำเข้า",
   "โปร่งใส ตรวจสอบได้ทุกขั้นตอน",
+  "เปลี่ยนเซลล์ได้ตลอด 24 ชม.",
 ];
 
 export function PurchaseBanner() {
@@ -23,7 +24,7 @@ export function PurchaseBanner() {
 
   return (
     <>
-      <section className="bg-background py-5">
+      <section className="py-5">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
           {/* Banner card */}
@@ -53,6 +54,16 @@ export function PurchaseBanner() {
               />
             </a>
 
+            {/* Dark gradient overlay — left side for text readability */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-[2]"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.40) 40%, rgba(0,0,0,0.12) 70%, rgba(0,0,0,0) 95%)",
+              }}
+            />
+
             {/* Content overlay */}
             <div className="relative z-[3] min-h-[220px] md:min-h-[220px] w-[72%] md:w-[64%] flex flex-col justify-center px-[14px] py-[16px] md:px-[34px] md:py-[32px]">
 
@@ -74,11 +85,26 @@ export function PurchaseBanner() {
                 ))}
               </div>
 
+              {/* Contact phone */}
+              <a
+                href="tel:0661253007"
+                className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
+                style={{ textShadow: "1px 1px 0 rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.28)" }}
+              >
+                <Phone
+                  className="w-3 h-3 md:w-4 md:h-4 shrink-0"
+                  strokeWidth={3}
+                  style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
+                />
+                ติดต่อ: 066-125-3007
+              </a>
+
               {/* Buttons */}
               <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setOpen(true)}
+                  suppressHydrationWarning
                   className="inline-flex items-center gap-[7px] h-[34px] md:h-[42px] px-4 md:px-5 rounded-[9px] md:rounded-[11px] text-[11.5px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{ background: "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)", boxShadow: "0 8px 18px rgba(185,28,28,0.25)" }}
                 >
@@ -141,8 +167,8 @@ export function PurchaseBanner() {
                   <div className="absolute top-0 left-0 right-0 h-[70px] bg-gradient-to-br from-red-600 to-red-800 z-0" />
 
                   {/* Avatar */}
-                  <div className="relative z-[1] w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-[0_6px_15px_rgba(0,0,0,0.1)] bg-gray-50 mt-[10px] mb-3">
-                    <Image src={card.image} alt={card.alt} fill className="object-cover" />
+                  <div className="relative z-[1] w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-[0_6px_15px_rgba(0,0,0,0.1)] bg-white mt-[10px] mb-3">
+                    <Image src={card.image} alt={card.alt} fill className={card.useContain ? "object-contain p-3" : "object-cover"} />
                   </div>
 
                   <p className="relative z-[1] text-[18px] font-black text-[#111827] mb-1">{card.name}</p>

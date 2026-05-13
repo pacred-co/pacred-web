@@ -45,9 +45,9 @@ const services = [
     alt: "บริการฝากสั่งซื้อสินค้า 1688 taobao tmall",
   },
   {
-    title: "เคลียร์ภาษี",         sub: "พิธีการศุลกากร",
-    titleMobile: "เคลียร์ติดด่าน", subMobile: "พิธีการศุลกากร",
-    href: "/register",
+    title: "เคลียร์สินค้า",        sub: "พิธีการศุลกากร",
+    titleMobile: "เคลียร์สินค้า",   subMobile: "พิธีการศุลกากร",
+    href: "/services/customs-clearance",
     bgDesktop:   "/images/ourservices/custom.png",
     bgMobile:    "/images/ourservices/mobile/custom.png",
     iconDesktop: "",
@@ -174,7 +174,10 @@ export function OurService() {
                 >
                   <span
                     className="text-[#111827] text-[36px] leading-[1] font-black tracking-[-0.04em] whitespace-nowrap"
-                    style={{ textShadow: "0 2px 10px rgba(255,255,255,0.45)" }}
+                    style={{
+                      textShadow:
+                        "0 0 18px rgba(255,255,255,0.95), 0 0 10px rgba(255,255,255,0.85), 0 0 4px rgba(255,255,255,0.7), 0 2px 6px rgba(255,255,255,0.5)",
+                    }}
                   >
                     {s.title}
                   </span>
@@ -191,7 +194,13 @@ export function OurService() {
                   className="absolute z-[5] flex md:hidden flex-col items-center justify-end text-center"
                   style={{ left: "6px", right: "6px", bottom: "22px" }}
                 >
-                  <span className="text-[#111827] text-[12px] leading-[1.05] font-black tracking-[-0.02em] truncate max-w-full">
+                  <span
+                    className="text-[#111827] text-[12px] leading-[1.05] font-black tracking-[-0.02em] truncate max-w-full"
+                    style={{
+                      textShadow:
+                        "0 0 10px rgba(255,255,255,0.95), 0 0 6px rgba(255,255,255,0.85), 0 0 3px rgba(255,255,255,0.7), 0 1px 3px rgba(255,255,255,0.5)",
+                    }}
+                  >
                     {s.titleMobile}
                   </span>
                   <span

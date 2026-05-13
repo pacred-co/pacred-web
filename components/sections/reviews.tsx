@@ -1,0 +1,504 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import Image from "next/image";
+import {
+  ThumbsUp,
+  Star,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+
+type ServiceType = "import" | "export" | "clearance";
+
+const ICON_BASE = "/images/hero-section/icon-draf";
+
+const FILTERS: Array<{ id: "all" | ServiceType; label: string }> = [
+  { id: "all",       label: "ทั้งหมด"         },
+  { id: "import",    label: "นำเข้า"          },
+  { id: "clearance", label: "ชิปปิ้งเคลียร์สินค้า" },
+];
+
+const TYPE_CONFIG: Record<
+  ServiceType,
+  {
+    label: string;
+    iconSrc: string;
+    badge: string;
+    hoverRing: string;
+  }
+> = {
+  import:    { label: "นำเข้า",         iconSrc: `${ICON_BASE}/transfast.png`,       badge: "bg-primary-500/95 text-white border-primary-400/40", hoverRing: "group-hover:ring-primary-300/70" },
+  export:    { label: "ส่งออก",         iconSrc: `${ICON_BASE}/pcs-forwarder.png`,   badge: "bg-orange-500/95 text-white border-orange-400/40",   hoverRing: "group-hover:ring-orange-300/70" },
+  clearance: { label: "ชิปปิ้งเคลียร์สินค้า", iconSrc: `${ICON_BASE}/customclearance.png`, badge: "bg-blue-500/95 text-white border-blue-400/40",       hoverRing: "group-hover:ring-blue-300/70" },
+};
+
+type Review = {
+  id: string;
+  type: ServiceType;
+  title: string;
+  rating: number;
+  tags: string[];
+  image?: string;
+};
+
+const REVIEWS: Review[] = [
+  // ─── FCL (นำเข้า) ──────────────────────────────────────
+  { id: "fcl-1",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/1.jpg"  },
+  { id: "fcl-2",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "รถ", "DDP"],  image: "/images/review/fcl/2.jpg"  },
+  { id: "fcl-3",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/3.jpg"  },
+  { id: "fcl-4",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/4.jpg"  },
+  { id: "fcl-5",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/5.jpg"  },
+  { id: "fcl-6",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/6.jpg"  },
+  { id: "fcl-7",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/7.jpg"  },
+  { id: "fcl-8",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/8.jpg"  },
+  { id: "fcl-9",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/9.jpg"  },
+  { id: "fcl-10", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/10.jpg" },
+  { id: "fcl-11", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/11.jpg" },
+  { id: "fcl-12", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/12.jpg" },
+
+  // ─── LCL (นำเข้า) ──────────────────────────────────────
+  { id: "lcl-1",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/1.jpg"  },
+  { id: "lcl-2",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/2.jpg"  },
+  { id: "lcl-3",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/3.jpg"  },
+  { id: "lcl-4",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/4.jpg"  },
+  { id: "lcl-5",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "รถ", "CIF"],  image: "/images/review/lcl/5.jpg"  },
+  { id: "lcl-6",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "รถ", "DDP"],  image: "/images/review/lcl/6.jpg"  },
+  { id: "lcl-7",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/7.jpg"  },
+  { id: "lcl-8",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/8.jpg"  },
+
+  // ─── Clearance (เคลียร์สินค้าติดด่าน) ────────────────────
+  { id: "clr-1",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ", "CIF"], image: "/images/review/clearance/1.jpg"  },
+  { id: "clr-2",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/2.jpg"  },
+  { id: "clr-3",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/3.jpg"  },
+  { id: "clr-4",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/4.jpg"  },
+  { id: "clr-5",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/5.jpg"  },
+  { id: "clr-7",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/7.jpg"  },
+  { id: "clr-10", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/10.jpg" },
+  { id: "clr-11", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ", "CIF"],  image: "/images/review/clearance/11.jpg" },
+  { id: "clr-12", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ"],        image: "/images/review/clearance/12.jpg" },
+
+  // ─── Air Clearance (อยู่ในหมวดเคลียร์ — ติดแท็ก แอร์ + ด่วน) ───
+  { id: "clr-air-6", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/6.jpg" },
+  { id: "clr-air-8", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/8.jpg" },
+  { id: "clr-air-9", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/9.jpg" },
+];
+
+export function Reviews() {
+  const [filter, setFilter] = useState<"all" | ServiceType>("all");
+
+  const filtered = filter === "all" ? REVIEWS : REVIEWS.filter((r) => r.type === filter);
+  // ถ้ารีวิวน้อย (≤4) แสดงแถวเดียว / ถ้าเยอะให้แบ่ง 2 แถว
+  const splitInto2 = filtered.length > 4;
+  const half = splitInto2 ? Math.ceil(filtered.length / 2) : filtered.length;
+  const row1 = filtered.slice(0, half);
+  const row2 = splitInto2 ? filtered.slice(half) : [];
+
+  return (
+    <section className="pt-6 md:pt-10 pb-10 md:pb-14">
+      <div className="mx-auto w-full max-w-[1140px] px-[10px]">
+
+        {/* Heading */}
+        <div className="mx-auto w-full max-w-[1120px]">
+          <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
+            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
+            Services Reviews
+          </div>
+          <h2 className="text-[24px] md:text-[34px] leading-[1.2] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+            <span className="text-primary-600">P ดิวะ !</span>{" "}
+            นำเข้า–ส่งออก ชิปปิ้งเคลียร์ของ{" "}
+            <span className="text-primary-600">มีครบจบทุกบริการ</span>
+          </h2>
+        </div>
+
+        {/* Filter chips */}
+        <div className="mx-auto mt-5 md:mt-6 w-full max-w-[1120px] flex flex-wrap gap-1.5 md:gap-2">
+          {FILTERS.map((f) => {
+            const active = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                suppressHydrationWarning
+                className={[
+                  "inline-flex items-center h-8 md:h-9 px-4 md:px-4.5 rounded-full text-[11.5px] md:text-[12.5px] font-black transition-all border",
+                  active
+                    ? "bg-primary-600 text-white border-primary-600 shadow-[0_6px_14px_rgba(179,0,0,0.25)] scale-[1.02]"
+                    : "bg-white dark:bg-surface text-[#111827] dark:text-white border-border hover:border-primary-300",
+                ].join(" ")}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Carousels */}
+        <div className="mx-auto mt-5 md:mt-6 w-full max-w-[1120px] space-y-3 md:space-y-4">
+          {row1.length > 0 ? (
+            <ReviewsCarousel reviews={row1} />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-white/40 dark:bg-surface/40 py-10 text-center text-muted text-[13px] font-bold">
+              ยังไม่มีรีวิวในหมวดนี้
+            </div>
+          )}
+          {row2.length > 0 && <ReviewsCarousel reviews={row2} />}
+        </div>
+
+      </div>
+    </section>
+  );
+}
+
+// ─────────── Carousel ───────────
+function ReviewsCarousel({ reviews }: { reviews: Review[] }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canPrev, setCanPrev] = useState(false);
+  const [canNext, setCanNext] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ isDown: false, startX: 0, scrollLeft: 0 });
+
+  const updateButtons = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    if (max <= 5) {
+      setCanPrev(false);
+      setCanNext(false);
+      return;
+    }
+    setCanPrev(el.scrollLeft > 5);
+    setCanNext(el.scrollLeft < max - 5);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    updateButtons();
+    const t1 = window.setTimeout(updateButtons, 80);
+    const t2 = window.setTimeout(updateButtons, 500);
+    el.addEventListener("scroll", updateButtons, { passive: true });
+    window.addEventListener("resize", updateButtons);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      el.removeEventListener("scroll", updateButtons);
+      window.removeEventListener("resize", updateButtons);
+    };
+  }, [updateButtons, reviews.length]);
+
+  const scrollAmount = () => {
+    const el = scrollerRef.current;
+    const card = el?.querySelector<HTMLDivElement>("[data-review-card]");
+    // เลื่อนทีละ 2 การ์ดเพื่อให้ดูสนุกขึ้น
+    return card ? (card.offsetWidth + 12) * 2 : 400;
+  };
+
+  // Native scrollBy + CSS scroll-behavior smooth — GPU-accelerated by browser, ลื่นกว่า custom rAF มาก
+  const goPrev = () => scrollerRef.current?.scrollBy({ left: -scrollAmount(), behavior: "smooth" });
+  const goNext = () => scrollerRef.current?.scrollBy({ left:  scrollAmount(), behavior: "smooth" });
+
+  const onMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 767) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    dragRef.current.isDown = true;
+    dragRef.current.startX = e.pageX - el.offsetLeft;
+    dragRef.current.scrollLeft = el.scrollLeft;
+    setIsDragging(true);
+  };
+  const onMouseUp = () => {
+    dragRef.current.isDown = false;
+    setIsDragging(false);
+  };
+  const onMouseLeave = () => {
+    dragRef.current.isDown = false;
+    setIsDragging(false);
+  };
+  const onMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    if (!dragRef.current.isDown) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    const walk = (x - dragRef.current.startX) * 1.2;
+    el.scrollLeft = dragRef.current.scrollLeft - walk;
+  };
+
+  return (
+    <div className="relative">
+      {/* Edge fade gradient — left */}
+      <div
+        aria-hidden
+        className={[
+          "pointer-events-none absolute left-0 top-0 bottom-0 w-12 md:w-16 z-[5] transition-opacity duration-500",
+          canPrev ? "opacity-100" : "opacity-0",
+        ].join(" ")}
+        style={{
+          background: "linear-gradient(90deg, var(--color-background) 0%, transparent 100%)",
+        }}
+      />
+
+      {/* Edge fade gradient — right */}
+      <div
+        aria-hidden
+        className={[
+          "pointer-events-none absolute right-0 top-0 bottom-0 w-12 md:w-16 z-[5] transition-opacity duration-500",
+          canNext ? "opacity-100" : "opacity-0",
+        ].join(" ")}
+        style={{
+          background: "linear-gradient(270deg, var(--color-background) 0%, transparent 100%)",
+        }}
+      />
+
+      <button
+        type="button"
+        aria-label="เลื่อนซ้าย"
+        onClick={goPrev}
+        suppressHydrationWarning
+        className={[
+          "hidden md:flex absolute left-[-14px] top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white text-[#111827] items-center justify-center cursor-pointer z-10",
+          "shadow-[0_10px_22px_rgba(0,0,0,0.16)] border border-black/5",
+          "transition-all duration-300 ease-out",
+          "hover:bg-primary-600 hover:text-white hover:scale-110 hover:shadow-[0_14px_28px_rgba(179,0,0,0.30)] hover:border-primary-600",
+          "active:scale-90",
+          canPrev ? "opacity-100 visible translate-x-0" : "opacity-0 invisible -translate-x-2 pointer-events-none",
+        ].join(" ")}
+      >
+        <ChevronLeft className="w-5 h-5" strokeWidth={2.6} />
+      </button>
+
+      <div
+        ref={scrollerRef}
+        onMouseDown={onMouseDown}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseLeave}
+        onMouseMove={onMouseMove}
+        className={[
+          "flex gap-2.5 md:gap-3 overflow-x-auto overflow-y-visible [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-2 snap-x snap-proximity",
+          isDragging ? "md:cursor-grabbing md:select-none" : "md:cursor-grab",
+        ].join(" ")}
+        style={{
+          scrollBehavior: isDragging ? "auto" : "smooth",
+          WebkitOverflowScrolling: "touch",
+          willChange: "scroll-position",
+          scrollbarGutter: "stable",
+        }}
+      >
+        {reviews.map((r, i) => (
+          <ReviewCard key={r.id} review={r} index={i} />
+        ))}
+      </div>
+
+      <button
+        type="button"
+        aria-label="เลื่อนขวา"
+        onClick={goNext}
+        suppressHydrationWarning
+        className={[
+          "hidden md:flex absolute right-[-14px] top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white text-[#111827] items-center justify-center cursor-pointer z-10",
+          "shadow-[0_10px_22px_rgba(0,0,0,0.16)] border border-black/5",
+          "transition-all duration-300 ease-out",
+          "hover:bg-primary-600 hover:text-white hover:scale-110 hover:shadow-[0_14px_28px_rgba(179,0,0,0.30)] hover:border-primary-600",
+          "active:scale-90",
+          canNext ? "opacity-100 visible translate-x-0" : "opacity-0 invisible translate-x-2 pointer-events-none",
+        ].join(" ")}
+      >
+        <ChevronRight className="w-5 h-5" strokeWidth={2.6} />
+      </button>
+    </div>
+  );
+}
+
+// ─────────── Card ───────────
+function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
+  const cfg = TYPE_CONFIG[review.type];
+  const [liked, setLiked] = useState(false);
+  const [popKey, setPopKey] = useState(0);
+
+  const onLike = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setLiked((v) => !v);
+    setPopKey((k) => k + 1);
+  };
+
+  return (
+    <div
+      data-review-card
+      style={{
+        animation: "card-in 0.55s cubic-bezier(0.22,0.61,0.36,1) both",
+        animationDelay: `${Math.min(index, 8) * 60}ms`,
+        contain: "layout paint",
+      }}
+      className="group relative shrink-0 w-[220px] sm:w-[240px] md:w-[260px] aspect-[3/4] rounded-[22px] overflow-hidden bg-gradient-to-br from-gray-200 via-gray-400 to-gray-700 dark:from-surface-alt dark:via-surface dark:to-background shadow-[0_8px_22px_rgba(15,23,42,0.10)] hover:shadow-[0_22px_44px_rgba(15,23,42,0.22)] hover:-translate-y-1.5 transition-[transform,box-shadow,ring-color] duration-300 cursor-pointer ring-1 ring-black/5 hover:ring-primary-400/30 snap-start transform-gpu backface-hidden"
+    >
+      {/* Background — placeholder pattern or image */}
+      {review.image ? (
+        <Image
+          src={review.image}
+          alt={review.title}
+          fill
+          sizes="(max-width: 767px) 50vw, 260px"
+          className="object-cover transition-transform duration-700 group-hover:scale-110"
+        />
+      ) : (
+        <>
+          {/* Decorative dot pattern */}
+          <div
+            aria-hidden
+            className="absolute inset-0 opacity-[0.10]"
+            style={{
+              backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+              backgroundSize: "18px 18px",
+            }}
+          />
+          {/* Soft radial accent */}
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              background: "radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.18) 0%, transparent 55%)",
+            }}
+          />
+          {/* Center "P" watermark */}
+          <div
+            aria-hidden
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          >
+            <div className="relative">
+              <div className="text-white/15 font-black text-[110px] leading-none tracking-tighter select-none">
+                P
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-white/30 text-[9px] font-black tracking-[0.3em] mt-[110px]">
+                  PACRED
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Gradient overlay — bottom dark for tag readability */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.85) 100%)",
+        }}
+      />
+
+      {/* Top-left: type icon badge — grayscale offline → color on hover */}
+      <div
+        className={[
+          "absolute top-3 left-3 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-[0_6px_14px_rgba(0,0,0,0.25)] border-[3px] border-white transition-all duration-400 group-hover:scale-110 group-hover:-rotate-6 ring-2 ring-gray-300/60 z-[2]",
+          cfg.hoverRing,
+        ].join(" ")}
+      >
+        <Image
+          src={cfg.iconSrc}
+          alt=""
+          width={40}
+          height={40}
+          className="w-8 h-8 object-contain grayscale opacity-50 saturate-0 transition-all duration-400 group-hover:grayscale-0 group-hover:opacity-100 group-hover:saturate-100 group-hover:scale-110"
+        />
+      </div>
+
+      {/* Top-right: Like button with pop + burst animation */}
+      <button
+        type="button"
+        onClick={onLike}
+        suppressHydrationWarning
+        aria-label={liked ? "Unlike" : "Like"}
+        className={[
+          "group/like absolute top-3 right-3 w-9 h-9 rounded-full backdrop-blur flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.20)] transition-all duration-300 hover:scale-110 cursor-pointer z-[2] overflow-visible",
+          liked ? "bg-primary-600 shadow-[0_6px_16px_rgba(179,0,0,0.45)]" : "bg-white/95 hover:bg-primary-50",
+        ].join(" ")}
+      >
+        {/* Burst ring effect when liking */}
+        {liked && popKey > 0 && (
+          <span
+            key={`burst-${popKey}`}
+            aria-hidden
+            className="absolute inset-0 rounded-full border-2 border-primary-400 pointer-events-none"
+            style={{ animation: "like-burst 0.6s ease-out forwards" }}
+          />
+        )}
+        <ThumbsUp
+          key={`icon-${popKey}`}
+          className={[
+            "w-[18px] h-[18px] transition-colors duration-200",
+            liked ? "text-white fill-white" : "text-gray-500 group-hover/like:text-primary-600",
+          ].join(" ")}
+          strokeWidth={2.3}
+          style={popKey > 0 ? { animation: "like-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) both" } : undefined}
+        />
+      </button>
+
+      {/* Top accent line — shows on hover */}
+      <div
+        aria-hidden
+        className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-primary-400 to-transparent opacity-0 group-hover:opacity-100 -translate-x-full group-hover:translate-x-0 transition-all duration-700 z-[3]"
+      />
+
+      {/* Title overlay — only when no image (mockup mode) */}
+      {!review.image && (
+        <div className="absolute top-[60px] left-3 right-3 z-[1]">
+          <p
+            className="text-white text-[13px] md:text-[14px] font-black leading-[1.3] line-clamp-2 tracking-tight"
+            style={{ textShadow: "0 2px 6px rgba(0,0,0,0.65)" }}
+          >
+            {review.title}
+          </p>
+        </div>
+      )}
+
+      {/* Bottom: rating + tags + status */}
+      <div className="absolute bottom-3 left-3 right-3 z-[2] space-y-2">
+        {/* Stars */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={i}
+                className={[
+                  "w-3.5 h-3.5",
+                  i < review.rating ? "text-yellow-400 fill-yellow-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" : "text-white/40 fill-white/20",
+                ].join(" ")}
+                strokeWidth={1.8}
+              />
+            ))}
+          </div>
+          <span className="text-white text-[10.5px] font-black tabular-nums" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
+            {review.rating}.0
+          </span>
+        </div>
+
+        {/* Tags + status badge */}
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1 flex-wrap min-w-0">
+            {review.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/95 text-[#111827] text-[9.5px] font-black shadow-[0_2px_4px_rgba(0,0,0,0.20)] backdrop-blur"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+          <span
+            className={[
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9.5px] font-black border whitespace-nowrap shrink-0 shadow-[0_2px_4px_rgba(0,0,0,0.20)]",
+              cfg.badge,
+            ].join(" ")}
+          >
+            <span className="w-1 h-1 rounded-full bg-white" />
+            {cfg.label}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}

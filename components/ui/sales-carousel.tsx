@@ -1,19 +1,47 @@
 "use client";
 
+import Image from "next/image";
+
 const GAP = 20;
 const CARD_WIDTH = 240;
 
-const TEAM = [
-  { name: "แบม", role: "LCL / FCL นำเข้า-ส่งออก", tagline: "ตู้เล็ก ตู้ใหญ่จะตู้ไหน ก็พร้อมปิดให้ได้หมด", phone: "066-125-3007" },
-  { name: "ยีนส์", role: "นำเข้า-ส่งออก ชิปปิ้ง", tagline: "ของไม่ค้าง ด่านไม่ติด การันตีถึงมือแน่นอน", phone: "066-090-1217" },
-  { name: "พลอย", role: "เคลียร์ศุลกากร", tagline: "จะท่าไหน เทิร์มไหน ก็พร้อมลุย", phone: "062-719-1998" },
-  { name: "แป้ง", role: "ฝากสั่งซื้อ 1688 / Taobao", tagline: "สั่งครบ จบในที่เดียว P ดิวะ !", phone: "092-XXX-XXXX" },
-  { name: "โจ้", role: "โอนเงินต่างประเทศ", tagline: "เรทดีกว่าธนาคาร ปลอดภัย โปร่งใส", phone: "089-XXX-XXXX" },
+type SalesPerson = {
+  name: string;
+  role: string;
+  tagline: string;
+  phone: string;
+  image?: string;
+  useContain?: boolean;
+};
+
+const TEAM: SalesPerson[] = [
+  {
+    name: "วิน",
+    role: "นำเข้า–ส่งออก จีน-ทั่วโลก",
+    tagline: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
+    phone: "066-125-3007",
+    image: "/images/Character_Icon/win.png",
+  },
+  {
+    name: "แนท",
+    role: "นำเข้า-สั่งซื้อ 1688/Taobao/Tmall",
+    tagline: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
+    phone: "066-125-3007",
+    image: "/images/pacred-logo-red.png",
+    useContain: true,
+  },
+  {
+    name: "พลอย",
+    role: "ชิปปิ้งเคลียร์สินค้าติดด่าน",
+    tagline: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",
+    phone: "066-090-1217",
+    image: "/images/Character_Icon/ploy.png",
+  },
 ];
 
-const ITEMS = [...TEAM, ...TEAM];
+const ITEMS = [...TEAM, ...TEAM, ...TEAM, ...TEAM];
 
-function SalesCard({ person }: { person: typeof TEAM[number] }) {
+function SalesCard({ person }: { person: SalesPerson }) {
   return (
     <div
       style={{ width: CARD_WIDTH }}
@@ -24,8 +52,18 @@ function SalesCard({ person }: { person: typeof TEAM[number] }) {
 
       {/* Avatar */}
       <div className="absolute top-[90px] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-        <div className="w-[92px] h-[92px] rounded-full border-4 border-white dark:border-surface bg-surface dark:bg-background flex items-center justify-center">
-          <span className="text-2xl font-bold text-primary-600">{person.name.charAt(0)}</span>
+        <div className="w-[92px] h-[92px] rounded-full border-4 border-white dark:border-surface bg-white dark:bg-background overflow-hidden flex items-center justify-center">
+          {person.image ? (
+            <Image
+              src={person.image}
+              alt={`เซลล์${person.name} Pacred`}
+              width={92}
+              height={92}
+              className={person.useContain ? "w-full h-full object-contain p-3" : "w-full h-full object-cover"}
+            />
+          ) : (
+            <span className="text-2xl font-bold text-primary-600">{person.name.charAt(0)}</span>
+          )}
         </div>
       </div>
 
@@ -41,7 +79,7 @@ function SalesCard({ person }: { person: typeof TEAM[number] }) {
           rel="noopener noreferrer"
           className="mt-auto w-full rounded-xl bg-[#06C755] py-2 text-xs font-semibold text-white text-center hover:bg-[#05a548] transition-colors"
         >
-          ทักด่วน LINE
+          ทัก{person.name}เลย
         </a>
       </div>
     </div>
@@ -57,8 +95,8 @@ export function SalesCarousel() {
         className="flex hover:[animation-play-state:paused]"
         style={{
           gap: GAP,
-          width: `${totalWidth * 2}px`,
-          animation: "marquee 40s linear infinite",
+          width: `${totalWidth * 4}px`,
+          animation: "marquee 80s linear infinite",
         }}
       >
         {ITEMS.map((person, i) => (
