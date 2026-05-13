@@ -1,7 +1,11 @@
 import type { CalcResult, LCLForm, FCLForm, TruckForm, AirForm, Term, FclSize, TruckSub } from '@/types/booking';
 
+// Translation function — scoped to `bookingCalc.calc.*` keys.
+// Used to localize labels/notes returned in `CalcResult`.
+type Translator = (key: string, vars?: Record<string, string | number>) => string;
+
 function fmt(n: number) {
-  return n.toLocaleString('th-TH');
+  return n.toLocaleString('en-US');
 }
 
 const PRODUCT_SURCHARGE: Record<string, number> = {
@@ -20,19 +24,33 @@ const PRODUCT_SURCHARGE_FCL: Record<string, number> = {
   special:  -1,
 };
 
-export function calcLCL(form: LCLForm, term: Term, doc: string): CalcResult | null {
+function termLabelKey(term: Term): string {
+  return term === 'ddp' ? 'termDdp' : term === 'exw' ? 'termExw' : 'termFob';
+}
+
+export function calcLCL(
+  form: LCLForm,
+  term: Term,
+  doc: string,
+  t: Translator,
+  // t for `bookingCalc` (to resolve termDdp etc.)
+  tRoot: Translator,
+): CalcResult | null {
   const cbm    = parseFloat(form.cbm)    || 0;
   const weight = parseFloat(form.weight) || 0;
   const cif    = parseFloat(form.cif)    || 0;
 
   if (cbm <= 0 && weight <= 0) return null;
 
+  const baht = t('baht');
+  const bahtSuffix = t('bahtSuffix');
+
   const surcharge = PRODUCT_SURCHARGE[form.productType] ?? 0;
   if (surcharge === -1) {
     return {
-      amount: 0, currency: 'บาท',
-      label: 'สินค้าพิเศษ — กรุณาติดต่อเจ้าหน้าที่เพื่อขอใบเสนอราคา',
-      rows: [], note: 'สินค้าประเภทนี้ต้องผ่านการพิจารณาพิเศษ ราคาขึ้นอยู่กับชนิดสินค้าและเอกสาร',
+      amount: 0, currency: baht,
+      label: t('labelSpecialLcl'),
+      rows: [], note: t('noteSpecialLcl'),
     };
   }
 
@@ -42,39 +60,33 @@ export function calcLCL(form: LCLForm, term: Term, doc: string): CalcResult | nu
   const docFee     = doc === 'none' ? 0 : doc === 'customs' ? 1200 : 600;
 
   let total = seaFreight + thc + docFee + surcharge;
-  let rows = [
-    { label: 'ค่าระวางเรือ', value: `${fmt(Math.round(seaFreight))} บาท` },
-    { label: 'THC ปลายทาง', value: `${fmt(thc)} บาท` },
+  const rows = [
+    { label: t('rowSeaFreight'), value: `${fmt(Math.round(seaFreight))} ${bahtSuffix}` },
+    { label: t('rowThc'), value: `${fmt(thc)} ${bahtSuffix}` },
   ];
 
   if (surcharge > 0) {
-    rows.push({ label: 'ค่าดำเนินการพิเศษ', value: `${fmt(surcharge)} บาท` });
+    rows.push({ label: t('rowProductSurcharge'), value: `${fmt(surcharge)} ${bahtSuffix}` });
   }
 
   if (term === 'ddp') {
     const customsFee = 3500;
     const duty = cif > 0 ? Math.round(cif * 0.07) : 0;
     total += customsFee + duty;
-    rows.push({ label: 'ค่าเคลียร์ศุลกากร', value: `${fmt(customsFee)} บาท` });
-    if (duty > 0) rows.push({ label: 'ภาษีนำเข้าโดยประมาณ', value: `${fmt(duty)} บาท` });
+    rows.push({ label: t('rowCustomsFee'), value: `${fmt(customsFee)} ${bahtSuffix}` });
+    if (duty > 0) rows.push({ label: t('rowImportDuty'), value: `${fmt(duty)} ${bahtSuffix}` });
   }
 
   if (docFee > 0) {
-    rows.push({ label: 'ค่าเอกสาร', value: `${fmt(docFee)} บาท` });
+    rows.push({ label: t('rowDocFee'), value: `${fmt(docFee)} ${bahtSuffix}` });
   }
-
-  const termLabel: Record<Term, string> = {
-    ddp: 'DDP (ครบจบรวมภาษี)',
-    exw: 'EXW (ยกเว้นภาษี)',
-    fob: 'FOB (ถึงท่าเรือไทย)',
-  };
 
   return {
     amount:   Math.round(total),
-    currency: 'บาท',
-    label:    `ราคาประเมินเบื้องต้น · LCL แชร์ตู้ · ${termLabel[term]}`,
+    currency: baht,
+    label:    t('lclLabel', { term: tRoot(termLabelKey(term)) }),
     rows,
-    note:     'ราคานี้เป็นการประเมินเบื้องต้น — ราคาจริงขึ้นอยู่กับช่วงเวลา เส้นทาง และน้ำหนักจริงหน้าโกดัง ทีมงานจะยืนยันราคาภายใน 5 นาที',
+    note:     t('lclNote'),
   };
 }
 
@@ -83,15 +95,24 @@ const FCL_BASE: Record<FclSize, Record<Term, number>> = {
   '40ft': { ddp: 82000, exw: 55000, fob: 65000 },
 };
 
-export function calcFCL(form: FCLForm, size: FclSize, term: Term): CalcResult | null {
+export function calcFCL(
+  form: FCLForm,
+  size: FclSize,
+  term: Term,
+  t: Translator,
+  tRoot: Translator,
+): CalcResult | null {
   const cif = parseFloat(form.cif) || 0;
+  const baht = t('baht');
+  const bahtPerContainer = t('bahtPerContainer');
+  const bahtSuffix = t('bahtSuffix');
 
   const surcharge = PRODUCT_SURCHARGE_FCL[form.productType] ?? 0;
   if (surcharge === -1) {
     return {
-      amount: 0, currency: 'บาท / ตู้',
-      label: 'สินค้าพิเศษ — กรุณาติดต่อเจ้าหน้าที่',
-      rows: [], note: 'สินค้าพิเศษ/อันตราย ราคาขึ้นอยู่กับชนิดและมาตรฐานการขนส่ง',
+      amount: 0, currency: bahtPerContainer,
+      label: t('labelSpecialFcl'),
+      rows: [], note: t('noteSpecialFcl'),
     };
   }
 
@@ -101,37 +122,41 @@ export function calcFCL(form: FCLForm, size: FclSize, term: Term): CalcResult | 
   const total = base + surcharge + duty;
 
   const rows = [
-    { label: `ค่าระวาง + ดำเนินการ (${size})`, value: `${fmt(base)} บาท` },
+    { label: t('rowFclLane', { size }), value: `${fmt(base)} ${bahtSuffix}` },
   ];
-  if (surcharge > 0) rows.push({ label: 'ค่าดำเนินการพิเศษ', value: `${fmt(surcharge)} บาท` });
-  if (duty > 0)      rows.push({ label: 'ภาษีนำเข้าโดยประมาณ', value: `${fmt(duty)} บาท` });
-
-  const termLabel: Record<Term, string> = {
-    ddp: 'DDP (ครบจบรวมภาษี)',
-    exw: 'EXW (ยกเว้นภาษี)',
-    fob: 'FOB (ถึงท่าเรือไทย)',
-  };
+  if (surcharge > 0) rows.push({ label: t('rowProductSurcharge'), value: `${fmt(surcharge)} ${bahtSuffix}` });
+  if (duty > 0)      rows.push({ label: t('rowImportDuty'), value: `${fmt(duty)} ${bahtSuffix}` });
 
   return {
     amount:   total,
-    currency: 'บาท / ตู้',
-    label:    `ราคาประเมิน · FCL ${size} · ${termLabel[term]}`,
+    currency: bahtPerContainer,
+    label:    t('fclLabel', { size, term: tRoot(termLabelKey(term)) }),
     rows,
-    note:     'ราคาขึ้นอยู่กับเส้นทาง ท่าเรือ และช่วงเวลา — ผู้เชี่ยวชาญจะยืนยันราคาภายใน 15 นาที',
+    note:     t('fclNote'),
   };
+  // Note: `baht` is only used in the early-return branch above.
+  void baht;
 }
 
-export function calcTruck(form: TruckForm, sub: TruckSub): CalcResult | null {
+export function calcTruck(
+  form: TruckForm,
+  sub: TruckSub,
+  t: Translator,
+): CalcResult | null {
   const weight = parseFloat(form.weight) || 0;
   const cbm    = parseFloat(form.cbm)    || 0;
 
   if (weight <= 0 && cbm <= 0) return null;
 
+  const baht = t('baht');
+  const bahtSuffix = t('bahtSuffix');
+  const kg = t('kg');
+
   if (sub === 'full') {
     return {
-      amount: 0, currency: 'บาท',
-      label: 'เหมารถ — กรุณาติดต่อเจ้าหน้าที่เพื่อรับใบเสนอราคา',
-      rows: [], note: 'เหมารถขึ้นอยู่กับขนาดรถ ประเภทสินค้า และเส้นทางจริง',
+      amount: 0, currency: baht,
+      label: t('labelSpecialTruck'),
+      rows: [], note: t('noteSpecialTruck'),
     };
   }
 
@@ -145,22 +170,25 @@ export function calcTruck(form: TruckForm, sub: TruckSub): CalcResult | null {
   const total = freight + destSurcharge + (productSurcharge === -1 ? 0 : productSurcharge);
 
   const rows = [
-    { label: 'น้ำหนักที่คิดค่าบริการ', value: `${fmt(Math.round(chargeWeight))} กก.` },
-    { label: 'ค่าขนส่งแชร์รถ',         value: `${fmt(freight)} บาท` },
+    { label: t('rowChargeWeight'), value: `${fmt(Math.round(chargeWeight))} ${kg}` },
+    { label: t('rowTruckFreight'), value: `${fmt(freight)} ${bahtSuffix}` },
   ];
-  if (destSurcharge > 0) rows.push({ label: 'ค่าส่งต่างจังหวัด', value: `${fmt(destSurcharge)} บาท` });
-  if (productSurcharge > 0) rows.push({ label: 'ค่าดำเนินการพิเศษ', value: `${fmt(productSurcharge)} บาท` });
+  if (destSurcharge > 0) rows.push({ label: t('rowUpcountryFee'), value: `${fmt(destSurcharge)} ${bahtSuffix}` });
+  if (productSurcharge > 0) rows.push({ label: t('rowProductSurcharge'), value: `${fmt(productSurcharge)} ${bahtSuffix}` });
 
   return {
     amount:   total,
-    currency: 'บาท',
-    label:    'ราคาประเมิน · ทางรถ DDP · แชร์รถ',
+    currency: baht,
+    label:    t('truckLabel'),
     rows,
-    note:     'DDP จ่ายครั้งเดียวรวมภาษี ส่งถึงหน้าบ้าน — ผู้เชี่ยวชาญยืนยันราคาจริงใน 5 นาที',
+    note:     t('truckNote'),
   };
 }
 
-export function calcAir(form: AirForm): CalcResult | null {
+export function calcAir(
+  form: AirForm,
+  t: Translator,
+): CalcResult | null {
   const weight = parseFloat(form.weight) || 0;
   const w      = parseFloat(form.w)      || 0;
   const l      = parseFloat(form.l)      || 0;
@@ -168,28 +196,32 @@ export function calcAir(form: AirForm): CalcResult | null {
 
   if (weight <= 0 && (w <= 0 || l <= 0 || h <= 0)) return null;
 
+  const baht = t('baht');
+  const kg = t('kg');
+  const bahtPerKg = t('bahtPerKg');
+
   const volWeight       = w > 0 && l > 0 && h > 0 ? (w * l * h) / 6000 : 0;
   const chargeableWeight = Math.max(weight, volWeight);
 
   const origin = form.origin.toLowerCase();
   let ratePerKg = 300;
-  if (origin.includes('จีน') || origin.includes('china') || origin.includes('ฮ่องกง')) ratePerKg = 220;
+  if (origin.includes('จีน') || origin.includes('china') || origin.includes('ฮ่องกง') || origin.includes('hong kong')) ratePerKg = 220;
   else if (origin.includes('ญี่ปุ่น') || origin.includes('japan')) ratePerKg = 260;
 
   const freight = Math.max(Math.round(chargeableWeight * ratePerKg), 1800);
 
   const rows = [
-    { label: 'น้ำหนักจริง',             value: `${weight} กก.` },
-    { label: 'น้ำหนักปริมาตร',          value: volWeight > 0 ? `${volWeight.toFixed(2)} กก.` : '—' },
-    { label: 'Chargeable Weight',        value: `${chargeableWeight.toFixed(2)} กก.` },
-    { label: 'อัตรา',                   value: `${ratePerKg} บาท/กก.` },
+    { label: t('rowActualWeight'),     value: `${weight} ${kg}` },
+    { label: t('rowVolWeight'),        value: volWeight > 0 ? `${volWeight.toFixed(2)} ${kg}` : '—' },
+    { label: t('rowChargeableWeight'), value: `${chargeableWeight.toFixed(2)} ${kg}` },
+    { label: t('rowRate'),             value: `${ratePerKg} ${bahtPerKg}` },
   ];
 
   return {
     amount:   freight,
-    currency: 'บาท',
-    label:    'ราคาประเมิน · ทางอากาศ',
+    currency: baht,
+    label:    t('airLabel'),
     rows,
-    note:     'Chargeable Weight = Max(น้ำหนักจริง, กว้าง×ยาว×สูง÷6000) · ราคาอาจเปลี่ยนแปลงตาม Airline Surcharge',
+    note:     t('airNote'),
   };
 }

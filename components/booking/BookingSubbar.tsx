@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { TabMode, SeaMode, Term, LclDoc, FclSize, TruckSub } from "@/types/booking";
 
 interface Chip { label: string; active: boolean; onClick: () => void }
@@ -46,6 +49,7 @@ interface BookingSubbarProps {
 }
 
 export function BookingSubbar(props: BookingSubbarProps) {
+  const t = useTranslations("bookingCalc");
   const { activeTab, seaMode } = props;
 
   const visible = activeTab === "sea" || activeTab === "truck" || activeTab === "sourcing";
@@ -70,7 +74,7 @@ export function BookingSubbar(props: BookingSubbarProps) {
                     : "text-gray-500"
                 }`}
               >
-                {m === "lcl" ? "LCL แชร์ตู้" : "FCL เหมาตู้"}
+                {m === "lcl" ? t("modeLcl") : t("modeFcl")}
               </button>
             ))}
           </div>
@@ -79,20 +83,20 @@ export function BookingSubbar(props: BookingSubbarProps) {
         {seaMode === "lcl" && (
           <div className="flex flex-wrap gap-3 items-center justify-center">
             <div className="flex items-center gap-2.5">
-              <span className="text-[12px] font-bold text-gray-600">ขอบเขตบริการ</span>
+              <span className="text-[12px] font-bold text-gray-600">{t("scopeLabel")}</span>
               <ChipRow chips={[
-                { label: "DDP (ครบจบรวมภาษี)", active: props.lclTerm === "ddp", onClick: () => props.onLclTermChange("ddp") },
-                { label: "EXW (ยกเว้นภาษี)",   active: props.lclTerm === "exw", onClick: () => props.onLclTermChange("exw") },
-                { label: "FOB (ถึงท่าเรือไทย)",  active: props.lclTerm === "fob", onClick: () => props.onLclTermChange("fob") },
+                { label: t("termDdp"), active: props.lclTerm === "ddp", onClick: () => props.onLclTermChange("ddp") },
+                { label: t("termExw"), active: props.lclTerm === "exw", onClick: () => props.onLclTermChange("exw") },
+                { label: t("termFob"), active: props.lclTerm === "fob", onClick: () => props.onLclTermChange("fob") },
               ]} />
             </div>
             <Divider />
             <div className="flex items-center gap-2.5">
-              <span className="text-[12px] font-bold text-gray-600">เอกสาร</span>
+              <span className="text-[12px] font-bold text-gray-600">{t("docLabel")}</span>
               <ChipRow chips={[
-                { label: "ขอเอกสารกำกับภาษี", active: props.lclDoc === "invoice", onClick: () => props.onLclDocChange("invoice") },
-                { label: "ขอใบขนสินค้า",      active: props.lclDoc === "customs", onClick: () => props.onLclDocChange("customs") },
-                { label: "ไม่รับเอกสาร",       active: props.lclDoc === "none",    onClick: () => props.onLclDocChange("none") },
+                { label: t("docInvoice"), active: props.lclDoc === "invoice", onClick: () => props.onLclDocChange("invoice") },
+                { label: t("docCustoms"), active: props.lclDoc === "customs", onClick: () => props.onLclDocChange("customs") },
+                { label: t("docNone"),    active: props.lclDoc === "none",    onClick: () => props.onLclDocChange("none") },
               ]} />
             </div>
           </div>
@@ -101,19 +105,19 @@ export function BookingSubbar(props: BookingSubbarProps) {
         {seaMode === "fcl" && (
           <div className="flex flex-wrap gap-3 items-center justify-center">
             <div className="flex items-center gap-2.5">
-              <span className="text-[12px] font-bold text-gray-600">ขนาดตู้</span>
+              <span className="text-[12px] font-bold text-gray-600">{t("sizeLabel")}</span>
               <ChipRow chips={[
-                { label: "20ft (32 CBM)", active: props.fclSize === "20ft", onClick: () => props.onFclSizeChange("20ft") },
-                { label: "40ft (68 CBM)", active: props.fclSize === "40ft", onClick: () => props.onFclSizeChange("40ft") },
+                { label: t("size20"), active: props.fclSize === "20ft", onClick: () => props.onFclSizeChange("20ft") },
+                { label: t("size40"), active: props.fclSize === "40ft", onClick: () => props.onFclSizeChange("40ft") },
               ]} />
             </div>
             <Divider />
             <div className="flex items-center gap-2.5">
-              <span className="text-[12px] font-bold text-gray-600">ขอบเขตบริการ</span>
+              <span className="text-[12px] font-bold text-gray-600">{t("scopeLabel")}</span>
               <ChipRow chips={[
-                { label: "DDP (ครบจบรวมภาษี)", active: props.fclTerm === "ddp", onClick: () => props.onFclTermChange("ddp") },
-                { label: "EXW (ยกเว้นภาษี)",   active: props.fclTerm === "exw", onClick: () => props.onFclTermChange("exw") },
-                { label: "FOB (ถึงท่าเรือไทย)",  active: props.fclTerm === "fob", onClick: () => props.onFclTermChange("fob") },
+                { label: t("termDdp"), active: props.fclTerm === "ddp", onClick: () => props.onFclTermChange("ddp") },
+                { label: t("termExw"), active: props.fclTerm === "exw", onClick: () => props.onFclTermChange("exw") },
+                { label: t("termFob"), active: props.fclTerm === "fob", onClick: () => props.onFclTermChange("fob") },
               ]} />
             </div>
           </div>
@@ -125,10 +129,10 @@ export function BookingSubbar(props: BookingSubbarProps) {
   if (activeTab === "truck") {
     return (
       <div className={`${baseWrap} flex flex-wrap gap-3 items-center justify-center`}>
-        <span className="text-[12px] font-bold text-gray-600">รูปแบบขนส่ง</span>
+        <span className="text-[12px] font-bold text-gray-600">{t("truckSubLabel")}</span>
         <ChipRow chips={[
-          { label: "แชร์รถ (ประหยัด)", active: props.truckSub === "share", onClick: () => props.onTruckSubChange("share") },
-          { label: "เหมารถ (รวดเร็ว)", active: props.truckSub === "full",  onClick: () => props.onTruckSubChange("full") },
+          { label: t("truckShare"), active: props.truckSub === "share", onClick: () => props.onTruckSubChange("share") },
+          { label: t("truckFull"),  active: props.truckSub === "full",  onClick: () => props.onTruckSubChange("full") },
         ]} />
       </div>
     );
@@ -137,11 +141,11 @@ export function BookingSubbar(props: BookingSubbarProps) {
   if (activeTab === "sourcing") {
     return (
       <div className={`${baseWrap} flex flex-wrap gap-3 items-center justify-center`}>
-        <span className="text-[12px] font-bold text-gray-600">เอกสาร</span>
+        <span className="text-[12px] font-bold text-gray-600">{t("docLabel")}</span>
         <ChipRow chips={[
-          { label: "ขอเอกสารกำกับภาษี", active: props.srcDoc === "invoice", onClick: () => props.onSrcDocChange("invoice") },
-          { label: "ขอใบขนสินค้า",      active: props.srcDoc === "customs", onClick: () => props.onSrcDocChange("customs") },
-          { label: "ไม่รับเอกสาร",       active: props.srcDoc === "none",    onClick: () => props.onSrcDocChange("none") },
+          { label: t("docInvoice"), active: props.srcDoc === "invoice", onClick: () => props.onSrcDocChange("invoice") },
+          { label: t("docCustoms"), active: props.srcDoc === "customs", onClick: () => props.onSrcDocChange("customs") },
+          { label: t("docNone"),    active: props.srcDoc === "none",    onClick: () => props.onSrcDocChange("none") },
         ]} />
       </div>
     );

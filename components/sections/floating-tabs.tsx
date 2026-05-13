@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
 
-const floatingTabs = [
-  { label: "หน้าแรก",    icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
-  { label: "บริการ",     icon: "/images/home/iconfloating/pcs-shop.png",         href: "#services" },
-  { label: "โปรโมชั่น", icon: "/images/home/iconfloating/ranka.png",             href: "#promotions" },
-  { label: "บทความ",    icon: "/images/home/iconfloating/checklistred.png",      href: "/knowledge" },
-  { label: "พาร์ทเนอร์",icon: "/images/home/iconfloating/people.png",            href: "#partner" },
-  { label: "ติดต่อ",    icon: "/images/home/iconfloating/pcs-call-center.png",   href: "#contact" },
-];
-
 export function FloatingTabs() {
+  const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
+
+  const floatingTabs = [
+    { label: t("home"),       icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
+    { label: t("services"),   icon: "/images/home/iconfloating/pcs-shop.png",         href: "#services" },
+    { label: t("promotions"), icon: "/images/home/iconfloating/ranka.png",            href: "#promotions" },
+    { label: t("blog"),       icon: "/images/home/iconfloating/checklistred.png",     href: "/knowledge" },
+    { label: t("partner"),    icon: "/images/home/iconfloating/people.png",           href: "#partner" },
+    { label: t("contact"),    icon: "/images/home/iconfloating/pcs-call-center.png",  href: "#contact" },
+  ];
 
   return (
     <>
@@ -99,7 +101,7 @@ export function FloatingTabs() {
       {/* Floating LINE bubble — sits above mobile bottom nav */}
       <div className="fixed bottom-[78px] right-3 md:bottom-6 md:right-6 z-[51] flex items-center gap-2 md:gap-3">
         <span className="hidden sm:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
-          สอบถามเพิ่มเติม
+          {t("askMore")}
         </span>
         <a
           href="https://lin.ee/Yg3fU0I"
@@ -107,7 +109,7 @@ export function FloatingTabs() {
           rel="noopener noreferrer"
           suppressHydrationWarning
           className="w-[52px] h-[52px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
-          aria-label="Chat on LINE"
+          aria-label={t("chatAria")}
         >
           <LineIcon className="h-7 w-7 md:h-9 md:w-9" />
         </a>

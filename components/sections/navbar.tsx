@@ -63,7 +63,7 @@ export function NavBar() {
 
           {/* Social follow */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden lg:inline text-white/70 text-[12px] font-medium mr-0.5 whitespace-nowrap">ติดตามเราบน</span>
+            <span className="hidden lg:inline text-white/70 text-[12px] font-medium mr-0.5 whitespace-nowrap">{t("followUs")}</span>
             <a href="https://lin.ee/Yg3fU0I" target="_blank" rel="noopener noreferrer"
               className="text-white hover:opacity-70 transition-opacity">
               <LineIcon className="h-[18px] w-[18px]" />
