@@ -61,14 +61,14 @@ export function OurService() {
   ];
 
   return (
-    <section className="relative z-[5] bg-transparent pt-6 pb-5">
+    <section className="relative z-[5] bg-transparent pt-3 md:pt-6 pb-4 md:pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}
-        <div className="mx-auto w-full max-w-[1120px] mb-[30px]">
-          {/* Eyebrow — desktop only */}
-          <div className="hidden md:flex items-center gap-2 mb-3 text-red-600 text-[13px] font-black tracking-[0.08em] uppercase">
-            <span className="w-2 h-2 rounded-full bg-red-600 shrink-0" />
+        <div className="mx-auto w-full max-w-[1120px] mb-4 md:mb-[30px]">
+          {/* Eyebrow — both mobile + desktop now (smaller on mobile) */}
+          <div className="flex md:flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-3 text-red-600 text-[10.5px] md:text-[13px] font-black tracking-[0.08em] uppercase md:justify-start justify-center">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-600 shrink-0" />
             {t("eyebrow")}
           </div>
 
@@ -80,10 +80,10 @@ export function OurService() {
 
           {/* Mobile title */}
           <div className="md:hidden text-center">
-            <h2 className="text-[31px] leading-[1.08] font-black tracking-[-0.04em] text-[#111827]">
+            <h2 className="text-[22px] leading-[1.12] font-black tracking-[-0.03em] text-[#111827]">
               {t("titleMobile")}
             </h2>
-            <div className="w-[52px] h-[5px] rounded-full bg-red-600 mx-auto mt-3" />
+            <div className="w-[40px] h-[3px] rounded-full bg-red-600 mx-auto mt-2" />
           </div>
 
           {/* Subtitle */}
@@ -91,7 +91,7 @@ export function OurService() {
             {t("subtitlePrefix")}
             <span className="text-red-600 font-black">{t("subtitleHighlight")}</span>
           </p>
-          <p className="mt-3 font-bold text-gray-500 md:hidden text-[13px] leading-[1.2] text-center">
+          <p className="mt-1.5 font-bold text-gray-500 md:hidden text-[11.5px] leading-[1.3] text-center">
             {t("subtitlePrefix")}
             <span className="text-red-600 font-black">{t("subtitleMobile")}</span>
           </p>

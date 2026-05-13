@@ -48,12 +48,15 @@ export function Promotion() {
 
         {/* Container 1 — Section heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
-            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
+          <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5 text-primary-600 text-[10.5px] md:text-[13px] font-black tracking-[0.08em] uppercase">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
             {t("sectionBadge").toUpperCase() === "PROMOTIONS" ? "PROMOTION" : t("sectionBadge")}
           </div>
-          <h2 className="text-[22px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            <span className="md:hidden">{t("title")}{t("titleHighlight")}</span>
+          <h2 className="text-[19px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
+            <span className="md:hidden">
+              {t("title")}
+              <span className="text-primary-600">{t("titleHighlight")}</span>
+            </span>
             <span className="hidden md:inline">
               {t("title")}
               <span className="text-primary-600">{t("titleHighlight")}</span>

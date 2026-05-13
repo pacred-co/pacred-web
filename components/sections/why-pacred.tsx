@@ -91,7 +91,7 @@ export function WhyPacred() {
 
   return (
     <>
-      <section id="why-pacred" className="relative py-8 md:py-12">
+      <section id="why-pacred" className="relative py-5 md:py-12">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
           {/* ─── Header ─── */}
@@ -100,17 +100,17 @@ export function WhyPacred() {
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
               WHY PACRED SHIPPING
             </div>
-            <h2 className="text-[26px] md:text-[38px] leading-[1.18] md:leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+            <h2 className="text-[20px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
               นำเข้า–ส่งออก ของติดด่าน Port ไหน Term ใด{" "}
               <span className="text-primary-600">ก็ไว้ใจเราได้</span>
             </h2>
-            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.55] font-medium text-muted md:whitespace-nowrap md:overflow-hidden md:text-ellipsis">
+            <p className="mt-1.5 text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted md:whitespace-nowrap md:overflow-hidden md:text-ellipsis">
               สั่งซื้อจีน · QC · ขนส่ง FCL/LCL · เคลียร์ภาษี · สินค้าติดด่าน — Pacred Shipping ดูแลครบ จบในที่เดียว
             </p>
           </div>
 
           {/* ─── Feature grid 6 cards (horizontal swipe on mobile) ─── */}
-          <div className="mx-auto mt-6 md:mt-8 w-full max-w-[1120px] relative">
+          <div className="mx-auto mt-4 md:mt-8 w-full max-w-[1120px] relative">
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-3 md:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FEATURES.map((f, i) => {
                 const num = String(i + 1).padStart(2, "0");
