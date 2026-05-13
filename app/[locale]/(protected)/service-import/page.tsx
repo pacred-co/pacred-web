@@ -61,7 +61,13 @@ export default async function ServiceImportPage({ searchParams }: { searchParams
                 <p className="text-xs text-muted mt-0.5">นำเข้าสินค้าจีน-ไทย ทางรถ/เรือ/อากาศ — ลงทะเบียน Tracking แล้วติดตามได้ทันที</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link
+                href="/service-import/warehouse-addresses"
+                className="rounded-lg border border-border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
+              >
+                🇨🇳 ที่อยู่โกดังจีน
+              </Link>
               <Link
                 href="/service-import/receipts"
                 className="rounded-lg border border-border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
