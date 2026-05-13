@@ -102,13 +102,36 @@ export default async function AdminHRPage() {
             <p className="text-xs text-muted mt-0.5">TAS · clock-in/out · กรอกขาด-ลา · นับชั่วโมงงาน</p>
           </div>
         </Link>
-        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">📚</div>
+        <Link
+          href="/admin/hr/training"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500 text-white text-lg shrink-0">🎓</div>
           <div className="min-w-0">
-            <p className="font-bold text-foreground">อบรม / นโยบาย / Audit</p>
-            <p className="text-xs text-muted mt-0.5">Phase 3 — Training · Policies · ออดิทพนักงาน</p>
+            <p className="font-bold text-foreground">หลักสูตรอบรม</p>
+            <p className="text-xs text-muted mt-0.5">Training · enrollment + completion tracking</p>
           </div>
-        </div>
+        </Link>
+        <Link
+          href="/admin/hr/policies"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-pink-200 bg-gradient-to-br from-pink-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-pink-500 text-white text-lg shrink-0">📜</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">นโยบายบริษัท</p>
+            <p className="text-xs text-muted mt-0.5">Policy library + พนักงานกดรับทราบ</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/hr/audit"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500 text-white text-lg shrink-0">📋</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">ออดิทพนักงาน</p>
+            <p className="text-xs text-muted mt-0.5">ชมเชย · ตักเตือน · โทษวินัย · ประเมินผล</p>
+          </div>
+        </Link>
       </div>
 
       <div className="border-t border-border pt-4 mt-2">

@@ -33,6 +33,7 @@
 | 18 | [0018_hr_employees.sql](0018_hr_employees.sql) | admin_contact_extras extras: nickname + company + employee_type + work_email + work_phone + hired_at + suspended_at (powers /admin/hr/employees data-table) | **H · HR** |
 | 19 | [0019_hr_recruitment.sql](0019_hr_recruitment.sql) | job_postings + job_applicants + resumes bucket + seed 3 sample postings (powers /admin/hr/recruitment pipeline: applied → screening → interviewing → offered → hired / rejected) | **H · HR** |
 | 20 | [0020_hr_attendance.sql](0020_hr_attendance.sql) | attendance_logs + leave_requests + trigger that auto-computes late_minutes/worked_minutes and applies approved leaves to attendance (powers /admin/hr/attendance + /admin/hr/attendance/leaves) | **H · HR** |
+| 21 | [0021_hr_learning_policies_audit.sql](0021_hr_learning_policies_audit.sql) | training_courses + training_enrollments + policies + policy_acknowledgments + employee_audit_entries + seed (3 courses, 4 policies). Powers /admin/hr/training + /admin/hr/policies + /admin/hr/audit | **H · HR** |
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 
