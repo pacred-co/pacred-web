@@ -8,7 +8,7 @@ const LINE_URL = "https://lin.ee/r3b1BuOC";
 
 const SALES = [
   { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "066-125-3007", image: "/images/Character_Icon/win.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },
-  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-125-3007", image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
+  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "02-421-3325",  image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
   { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "066-090-1217", image: "/images/Character_Icon/ploy.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
 ];
 

@@ -31,7 +31,7 @@ export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'butto
 
 export const SALES_CARDS_DATA: SalesCardData[] = [
   { personKey: 'win',  name: 'วิน',  phone: '066-125-3007', image: '/images/Character_Icon/win.png',  link: 'https://lin.ee/Yg3fU0I' },
-  { personKey: 'nat',  name: 'แนท',  phone: '066-125-3007', image: '/images/pacred-logo-red.png',     link: 'https://lin.ee/Yg3fU0I' },
+  { personKey: 'nat',  name: 'แนท',  phone: '02-421-3325',  image: '/images/pacred-logo-red.png',     link: 'https://lin.ee/Yg3fU0I' },
   { personKey: 'ploy', name: 'พลอย', phone: '066-090-1217', image: '/images/Character_Icon/ploy.png', link: 'https://lin.ee/Yg3fU0I' },
 ];
 

@@ -18,7 +18,7 @@ type SalesCardLocal = {
 
 const SALES_DATA: SalesCardLocal[] = [
   { personKey: "win",  name: "วิน",  phone: "066-125-3007", image: "/images/Character_Icon/win.png",  useContain: false },
-  { personKey: "nat",  name: "แนท",  phone: "066-125-3007", image: "/images/pacred-logo-red.png",     useContain: true  },
+  { personKey: "nat",  name: "แนท",  phone: "02-421-3325",  image: "/images/pacred-logo-red.png",     useContain: true  },
   { personKey: "ploy", name: "พลอย", phone: "066-090-1217", image: "/images/Character_Icon/ploy.png", useContain: false },
 ];
 
