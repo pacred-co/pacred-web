@@ -926,3 +926,68 @@ RESEND_API_KEY=<from resend.com>
 **Last update:** 2026-05-13 by Claude (Opus 4.7) on branch `claude/jolly-taussig-7132d7`
 **Next review:** ทุก sprint (1 สัปดาห์)
 **File maintained by:** เดฟ (เพิ่ม/แก้ตาม progress)
+
+---
+
+# Part L — Merge State Snapshot (2026-05-13)
+
+> หลัง merge main เข้า dave (commit `12dc7ae`) — เพื่อให้ทุกคน sync จาก main ได้คลีน
+
+## L1. ที่ main นำเข้ามาเพิ่ม (อยู่ใน dave/main ตอนนี้)
+
+### New admin pages (placeholder ส่วนใหญ่ — มาจาก ภูม branch `Poom`)
+- `/admin/dashboard` (alternate dashboard — duplicate กับ `/admin/page.tsx`)
+- `/admin/forwarder` + `/admin/forwarder/pending` (note: singular — duplicate กับ `/admin/forwarders/` plural)
+- `/admin/freight/{air,sea,truck}` (placeholder)
+- `/admin/inventory` (placeholder)
+- `/admin/orders` + `/admin/orders/{import,shop,transfer,pending}` (placeholder)
+- `/admin/payment` (placeholder)
+- `/admin/rates` (placeholder)
+- `/admin/wallet/deposit` (placeholder)
+- `/admin/withdrawals` (placeholder)
+
+### New customer pages (มาจาก ปอน branch `podeng`)
+- `/how-to-use` — guide
+- `/payment/{1688,alipay,taobao}` — landing pages
+- `/services/import-china-{fcl,lcl}` — service detail pages
+- `/services/customs-clearance` (updated)
+- `/warehouses/{china,guangzhou,yiwu}` — warehouse info pages
+- `/about` (updated)
+- `/knowledge` (updated)
+
+### New components
+- `components/admin/admin-navbar.tsx` (orphan — เราใช้ AdminSidebar เดิม)
+- `components/admin/admin-sidebar.tsx` (orphan — duplicate กับ `components/sections/admin-sidebar.tsx`)
+- `components/booking/*` (booking calculator)
+- `components/sections/clearance-{documents,faq,permits,process}.tsx`
+- `components/sections/top-menu.tsx` (ใช้ใน navbar.tsx)
+
+### New API routes
+- `/api/dbd/[taxId]` — Department of Business Development lookup (Tax-ID verify)
+
+## L2. ที่ตัดออก (ไม่ใช้)
+
+- `supabase/migrations/0003_admin_role.sql` — เก่า (legacy `profiles.role`)
+- `supabase/migrations/0004_full_system.sql` — duplicate schema (`wallets` plural, `exchange_rates`)
+- `actions/admin-customers.ts` — legacy path (ใช้ `actions/admin/customers.ts` แทน)
+
+## L3. งานทำความสะอาดที่ทิ้งให้ทีม
+
+| # | Task | ความสำคัญ | เจ้าของ |
+|---|---|---|---|
+| L-1 | ตัด `/admin/dashboard` ออก หรือ redirect ไป `/admin` | medium | เดฟ |
+| L-2 | ตัด `/admin/forwarder/*` (singular) → ใช้ `/admin/forwarders/*` (plural) | medium | ภูม |
+| L-3 | รวม `/admin/orders/*` กับ `/admin/service-orders/*` ให้เป็นเส้นเดียว | high | ภูม |
+| L-4 | ตัด `/admin/wallet/deposit` (mockup) → ใช้ flow ใน `/admin/wallet/page.tsx` | low | ภูม |
+| L-5 | ลบ orphan components/admin/admin-{navbar,sidebar}.tsx ถ้าไม่ใช้ | low | เดฟ |
+| L-6 | ตัดสินใจ: `/admin/freight/*` ทำต่อหรือลบ | medium | เดฟ (ปรึกษากับ Pacred ecosystem plan ใน CLAUDE.md) |
+| L-7 | `/admin/rates`, `/admin/inventory`, `/admin/payment`, `/admin/withdrawals` ทุกอันยังเป็น stub — เลือก: รวมเข้า admin pages เก่าหรือ keep แล้วทำต่อ | low | ภูม |
+
+## L4. State สำคัญหลัง merge
+
+✅ **HR module** — ครบ 100% ยังทำงานได้  
+✅ **Admin schema** — RBAC ผ่าน `admins` table (ไม่ใช้ profiles.role)  
+✅ **Customer modules** — ครบ + ปอนเพิ่ม landing pages ใหม่  
+🟡 **Admin pages duplicate** — ต้อง cleanup ตาม L1-L7 ก่อน production launch
+
+**กติกาสำคัญ:** อย่าใช้ `profiles.role` ที่ไหนใหม่ — ใช้ `is_admin()` หรือ `admins` table queries เท่านั้น

@@ -71,16 +71,18 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   if (error) return { ok: false, error: "invalid_credentials" };
 
   // Check if admin to return correct redirect target
+  // (queries admins table — RBAC approach replaced legacy profiles.role)
   const supabase2 = await createClient();
   const { data: { user: signedInUser } } = await supabase2.auth.getUser();
   let isAdmin = false;
   if (signedInUser) {
-    const { data: profile } = await supabase2
-      .from("profiles")
+    const { data: adminRows } = await supabase2
+      .from("admins")
       .select("role")
-      .eq("id", signedInUser.id)
-      .maybeSingle<{ role: string | null }>();
-    isAdmin = profile?.role === "admin";
+      .eq("profile_id", signedInUser.id)
+      .eq("is_active", true)
+      .limit(1);
+    isAdmin = (adminRows?.length ?? 0) > 0;
   }
 
   return { ok: true, data: { isAdmin } };
