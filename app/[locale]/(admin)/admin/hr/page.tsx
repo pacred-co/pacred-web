@@ -92,13 +92,16 @@ export default async function AdminHRPage() {
             <p className="text-xs text-muted mt-0.5">ลงประกาศ · รับใบสมัคร · นัดสัมภาษณ์ · รับเข้าทำงาน</p>
           </div>
         </Link>
-        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">⏰</div>
+        <Link
+          href="/admin/hr/attendance"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500 text-white text-lg shrink-0">⏰</div>
           <div className="min-w-0">
-            <p className="font-bold text-foreground">เข้างาน / ลา / KPI</p>
-            <p className="text-xs text-muted mt-0.5">Phase 3 — TAS · วันลา · KPI · โบนัส · เงินเดือน</p>
+            <p className="font-bold text-foreground">เข้างาน / ลา</p>
+            <p className="text-xs text-muted mt-0.5">TAS · clock-in/out · กรอกขาด-ลา · นับชั่วโมงงาน</p>
           </div>
-        </div>
+        </Link>
         <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-border bg-surface-alt/30 p-4 opacity-60">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-300 text-white text-lg shrink-0">📚</div>
           <div className="min-w-0">
