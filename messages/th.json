@@ -561,7 +561,30 @@
     "newPasswordHint": "6-30 ตัวอักษร",
     "confirmPassword": "ยืนยันรหัสผ่านใหม่",
     "changePassword": "เปลี่ยนรหัสผ่าน",
-    "passwordChanged": "เปลี่ยนรหัสผ่านแล้ว"
+    "passwordChanged": "เปลี่ยนรหัสผ่านแล้ว",
+    "changePhoneLink": "เปลี่ยนเบอร์โทร →"
+  },
+  "change_phone": {
+    "kicker": "ความปลอดภัย",
+    "title": "เปลี่ยนเบอร์โทรศัพท์",
+    "subtitle": "ยืนยันรหัสผ่านปัจจุบัน + รหัส OTP ที่ส่งไปยังเบอร์ใหม่ ระบบจะอัปเดตทั้งเบอร์เข้าสู่ระบบและในโปรไฟล์พร้อมกัน",
+    "backToProfile": "กลับโปรไฟล์",
+    "currentPhone": "เบอร์ปัจจุบัน",
+    "currentPasswordLabel": "รหัสผ่านปัจจุบัน",
+    "newPhoneLabel": "เบอร์โทรใหม่",
+    "newPhoneHint": "ขึ้นต้น 0 ตามด้วยตัวเลข 8-9 หลัก",
+    "otpLabel": "รหัส OTP (6 หลัก)",
+    "otpSentTo": "ส่งรหัส OTP ไปยัง {phone} แล้ว (หมดอายุใน 5 นาที)",
+    "bypassNotice": "โหมดทดสอบเปิดอยู่ — สามารถกรอกรหัสใดก็ได้ (รวมถึง 000000) เพื่อยืนยันได้",
+    "requestOtp": "ขอรหัส OTP",
+    "confirmChange": "ยืนยันเปลี่ยนเบอร์",
+    "backToRequest": "← แก้ไขเบอร์ใหม่",
+    "sending": "กำลังส่ง...",
+    "saving": "กำลังบันทึก...",
+    "successTitle": "เปลี่ยนเบอร์โทรเรียบร้อย",
+    "successBody": "กำลังพากลับไปหน้าโปรไฟล์...",
+    "noPasswordTitle": "บัญชีนี้ใช้ Social Login",
+    "noPasswordBody": "บัญชีที่สมัครผ่าน Google / Facebook / LINE ยังไม่มีรหัสผ่าน หากต้องการเปลี่ยนเบอร์โทร กรุณาติดต่อทีมงาน Pacred"
   },
   "addresses": {
     "kicker": "ที่อยู่จัดส่ง",

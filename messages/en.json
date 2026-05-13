@@ -561,7 +561,30 @@
     "newPasswordHint": "6-30 characters",
     "confirmPassword": "Confirm new password",
     "changePassword": "Change password",
-    "passwordChanged": "Password updated."
+    "passwordChanged": "Password updated.",
+    "changePhoneLink": "Change phone number →"
+  },
+  "change_phone": {
+    "kicker": "SECURITY",
+    "title": "Change phone number",
+    "subtitle": "Verify your current password and an OTP sent to your new phone. Both your sign-in phone and profile phone are updated together.",
+    "backToProfile": "Back to profile",
+    "currentPhone": "Current phone",
+    "currentPasswordLabel": "Current password",
+    "newPhoneLabel": "New phone number",
+    "newPhoneHint": "Starts with 0 followed by 8-9 digits",
+    "otpLabel": "OTP code (6 digits)",
+    "otpSentTo": "OTP sent to {phone} (expires in 5 minutes)",
+    "bypassNotice": "Test mode is active — any code (including 000000) is accepted.",
+    "requestOtp": "Send OTP",
+    "confirmChange": "Confirm phone change",
+    "backToRequest": "← Edit phone",
+    "sending": "Sending...",
+    "saving": "Saving...",
+    "successTitle": "Phone number updated",
+    "successBody": "Redirecting back to your profile...",
+    "noPasswordTitle": "Social-login account",
+    "noPasswordBody": "Accounts signed up via Google / Facebook / LINE do not have a password yet. Please contact the Pacred team to change your phone number."
   },
   "addresses": {
     "kicker": "SHIPPING",

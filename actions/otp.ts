@@ -17,7 +17,7 @@ const OTP_TTL_MS = 5 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
 const MAX_ATTEMPTS = 5;
 
-type Purpose = "register" | "login" | "reset";
+type Purpose = "register" | "login" | "reset" | "change_phone";
 
 function hashCode(code: string) {
   const pepper = process.env.OTP_PEPPER ?? "default-pepper";

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { changePassword } from "@/actions/security";
 
@@ -60,7 +61,13 @@ export function SecurityPanel() {
         <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputCls} required autoComplete="new-password" />
       </label>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/profile/security/change-phone"
+          className="text-sm font-medium text-primary-600 hover:text-primary-700"
+        >
+          {t("changePhoneLink")}
+        </Link>
         <Button type="submit" disabled={pending || !current || !next || !confirm}>
           {pending ? t("saving") : t("changePassword")}
         </Button>
