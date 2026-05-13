@@ -1,0 +1,183 @@
+import { notFound } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+import { TransferRepForm } from "./transfer-rep-form";
+
+export default async function TransferRepPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const admin = createAdminClient();
+
+  // Customer + current rep + stats (mirrors PHP transferSalesCustomers
+  // home.php aggregates: shop count/total, forwarder count/total + last
+  // date, payment count/total). Done in parallel — none depend on each other.
+  const [
+    { data: profile },
+    { data: shopAgg },
+    { data: forwarderAgg },
+    { data: forwarderLast },
+    { data: yuanAgg },
+    { data: repProfiles },
+  ] = await Promise.all([
+    admin
+      .from("profiles")
+      .select(
+        "id, member_code, account_type, first_name, last_name, company_name, phone, email, sales_admin_id, created_at",
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    admin
+      .from("service_orders")
+      .select("total_thb")
+      .eq("profile_id", id)
+      .neq("status", "cancelled"),
+    admin
+      .from("forwarders")
+      .select("total_price")
+      .eq("profile_id", id)
+      .neq("status", "cancelled"),
+    admin
+      .from("forwarders")
+      .select("f_no, created_at")
+      .eq("profile_id", id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("yuan_payments")
+      .select("thb_amount")
+      .eq("profile_id", id)
+      .eq("status", "completed"),
+    admin
+      .from("admins")
+      .select(
+        `profile_id, role,
+         profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
+         contact:admin_contact_extras!profile_id ( display_name, direct_phone )`,
+      )
+      .in("role", ["sales_admin", "super"])
+      .eq("is_active", true),
+  ]);
+
+  if (!profile) notFound();
+
+  type Profile = {
+    id: string; member_code: string | null; account_type: "personal" | "juristic";
+    first_name: string | null; last_name: string | null; company_name: string | null;
+    phone: string | null; email: string | null; sales_admin_id: string | null;
+    created_at: string;
+  };
+  const p = profile as unknown as Profile;
+
+  const sum = <T extends Record<string, unknown>>(rows: T[] | null | undefined, key: keyof T) =>
+    (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
+
+  const shopCount       = (shopAgg ?? []).length;
+  const shopTotal       = sum(shopAgg, "total_thb");
+  const forwarderCount  = (forwarderAgg ?? []).length;
+  const forwarderTotal  = sum(forwarderAgg, "total_price");
+  const yuanCount       = (yuanAgg ?? []).length;
+  const yuanTotal       = sum(yuanAgg, "thb_amount");
+  const forwarderLastDate = (forwarderLast as { created_at?: string } | null)?.created_at ?? null;
+
+  const customerDisplay = p.account_type === "juristic" && p.company_name
+    ? p.company_name
+    : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
+
+  // Reps dropdown — same shape as the existing AssignRepForm uses.
+  type RepRow = {
+    profile_id: string;
+    profile:    { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }
+              | { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }[] | null;
+    contact:    { display_name: string | null; direct_phone: string | null }
+              | { display_name: string | null; direct_phone: string | null }[] | null;
+  };
+  const seen = new Set<string>();
+  const reps: { profile_id: string; display: string }[] = [];
+  for (const r of (repProfiles ?? []) as RepRow[]) {
+    if (seen.has(r.profile_id)) continue;
+    seen.add(r.profile_id);
+    const prof    = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+    const contact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
+    const name    = contact?.display_name ?? `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() ?? "—";
+    const phone   = contact?.direct_phone ?? prof?.phone ?? "—";
+    reps.push({
+      profile_id: r.profile_id,
+      display:    `${name} · ${prof?.member_code ?? ""} · ${phone}`,
+    });
+  }
+  const currentRep = p.sales_admin_id
+    ? reps.find((r) => r.profile_id === p.sales_admin_id) ?? null
+    : null;
+
+  return (
+    <main className="p-6 lg:p-8 space-y-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · โอนเซลล์</p>
+          <h1 className="mt-1 text-2xl font-bold text-foreground">โอนเซลล์ที่ดูแลลูกค้า</h1>
+          <p className="text-sm text-muted mt-1">
+            {customerDisplay} · <span className="font-mono">{p.member_code ?? "—"}</span>
+          </p>
+        </div>
+        <Link
+          href={`/admin/customers/${id}`}
+          className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
+        >
+          ← กลับโปรไฟล์ลูกค้า
+        </Link>
+      </div>
+
+      {/* Stat strip — customer's lifetime numbers (decision support for the admin) */}
+      <section className="grid sm:grid-cols-3 gap-3">
+        <Stat label="จำนวนรายการฝากสั่ง" sub={`฿${shopTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}     value={String(shopCount)} />
+        <Stat label="จำนวนรายการฝากนำเข้า" sub={`฿${forwarderTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`} value={String(forwarderCount)} />
+        <Stat label="จำนวนรายการโอนหยวน" sub={`฿${yuanTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}        value={String(yuanCount)} />
+      </section>
+
+      {/* Current state */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <h2 className="font-bold text-sm mb-3">สถานะปัจจุบัน</h2>
+        <dl className="grid sm:grid-cols-2 gap-y-2 text-sm">
+          <Field label="ลูกค้า"            value={customerDisplay} />
+          <Field label="รหัสสมาชิก"        value={p.member_code ?? "—"} mono />
+          <Field label="เบอร์"              value={p.phone ?? "—"} />
+          <Field label="ลูกค้าใหม่เมื่อ"    value={new Date(p.created_at).toLocaleDateString("th-TH")} />
+          <Field label="รายการฝากนำเข้าล่าสุด" value={forwarderLastDate ? new Date(forwarderLastDate).toLocaleDateString("th-TH") : "—"} />
+          <Field label="เซลล์ปัจจุบัน"      value={currentRep?.display ?? "— ไม่มีเซลล์ที่ดูแล —"} />
+        </dl>
+      </section>
+
+      {/* Transfer form */}
+      <TransferRepForm
+        customerId={p.id}
+        currentRepId={p.sales_admin_id}
+        currentRepDisplay={currentRep?.display ?? null}
+        reps={reps}
+      />
+    </main>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+      <p className="text-xs font-medium text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold font-mono text-foreground">{value}</p>
+      <p className="text-xs text-muted">{sub}</p>
+    </div>
+  );
+}
+
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <>
+      <dt className="text-muted">{label}</dt>
+      <dd className={mono ? "font-mono font-medium" : "font-medium"}>{value}</dd>
+    </>
+  );
+}

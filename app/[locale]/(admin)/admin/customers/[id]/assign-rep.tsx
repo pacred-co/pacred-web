@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { adminAssignSalesRep } from "@/actions/admin/admins";
 
@@ -40,7 +41,15 @@ export function AssignRepForm({ customerId, currentRepId, reps }: {
 
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-      <h3 className="font-bold text-sm">เซลล์ที่ดูแลลูกค้า</h3>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-bold text-sm">เซลล์ที่ดูแลลูกค้า</h3>
+        <Link
+          href={`/admin/customers/${customerId}/transfer-rep`}
+          className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+        >
+          ใช้โอนแบบ workflow (มีเหตุผล + notify) →
+        </Link>
+      </div>
       {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-700">{msg}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
       <select

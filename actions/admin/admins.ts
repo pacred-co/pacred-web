@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { sendNotification } from "@/lib/notifications";
 
 const ROLE = z.enum(["super", "ops", "accounting", "sales_admin"]);
 
@@ -124,6 +125,105 @@ export async function adminAssignSalesRep(input: z.infer<typeof assignRepSchema>
 
     await logAdminAction(adminId, "customer.assign_rep", "profile", parsed.data.customer_id, parsed.data);
     revalidatePath(`/admin/customers/${parsed.data.customer_id}`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Transfer a customer's sales rep WITH a reason and dual-side notification.
+// Port of legacy PHP `transferSalesCustomers.php` for the single-customer
+// case. Bulk transfer is a separate workflow.
+//
+// Difference from adminAssignSalesRep():
+//   • mandatory non-empty `reason` (audited)
+//   • surfaces who the previous rep was in the audit payload
+//   • fires three in-app notifications:
+//       - the old rep ("ลูกค้า X ถูกย้ายออกจากทีมของท่าน")
+//       - the new rep ("ลูกค้า X ถูกย้ายเข้าทีมของท่าน")
+//       - the customer    ("ทีมเซลล์ของท่านถูกย้ายไปดูแลโดย Y")
+//     (the second + third skip silently if either id is null)
+// ────────────────────────────────────────────────────────────
+const transferRepSchema = z.object({
+  customer_id:        z.string().uuid(),
+  new_sales_admin_id: z.string().uuid().nullable(),         // null = unassign (released to pool)
+  reason:             z.string().trim().min(3, "กรุณาระบุเหตุผล").max(500),
+});
+export type TransferSalesRepInput = z.infer<typeof transferRepSchema>;
+
+export async function adminTransferSalesRep(input: TransferSalesRepInput): Promise<AdminActionResult> {
+  const parsed = transferRepSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["sales_admin"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Load current state so we can notify the previous rep and audit the delta
+    const { data: before } = await admin
+      .from("profiles")
+      .select("id, member_code, first_name, last_name, company_name, account_type, sales_admin_id")
+      .eq("id", d.customer_id)
+      .maybeSingle<{
+        id: string; member_code: string | null; first_name: string | null; last_name: string | null;
+        company_name: string | null; account_type: "personal" | "juristic"; sales_admin_id: string | null;
+      }>();
+
+    if (!before) return { ok: false, error: "customer_not_found" };
+
+    const previous_sales_admin_id = before.sales_admin_id;
+    if (previous_sales_admin_id === d.new_sales_admin_id) {
+      return { ok: false, error: "same_rep_no_change" };
+    }
+
+    const { error: updErr } = await admin
+      .from("profiles")
+      .update({ sales_admin_id: d.new_sales_admin_id })
+      .eq("id", d.customer_id);
+    if (updErr) return { ok: false, error: updErr.message };
+
+    await logAdminAction(adminId, "customer.transfer_rep", "profile", d.customer_id, {
+      previous_sales_admin_id,
+      new_sales_admin_id: d.new_sales_admin_id,
+      reason:             d.reason,
+    });
+
+    const customerDisplay = before.account_type === "juristic"
+      ? (before.company_name ?? "ลูกค้า")
+      : `${before.first_name ?? ""} ${before.last_name ?? ""}`.trim() || "ลูกค้า";
+    const customerLabel = `${customerDisplay}${before.member_code ? ` (${before.member_code})` : ""}`;
+
+    // Notify old rep (silently skipped if unassigned)
+    if (previous_sales_admin_id) {
+      void sendNotification(previous_sales_admin_id, {
+        category: "sales",
+        severity: "info",
+        title:    "ลูกค้าถูกย้ายออกจากทีม",
+        body:     `${customerLabel} ถูกย้ายไปทีมอื่น — เหตุผล: ${d.reason}`,
+      });
+    }
+    // Notify new rep
+    if (d.new_sales_admin_id) {
+      void sendNotification(d.new_sales_admin_id, {
+        category:  "sales",
+        severity:  "info",
+        title:     "ลูกค้าถูกย้ายเข้าทีมท่าน",
+        body:      `${customerLabel} ถูกย้ายมาดูแลในทีมท่าน — เหตุผล: ${d.reason}`,
+        link_href: `/admin/customers/${d.customer_id}`,
+      });
+    }
+    // Notify customer (only if newly assigned to someone — unassign isn't worth notifying)
+    if (d.new_sales_admin_id) {
+      void sendNotification(d.customer_id, {
+        category: "system",
+        severity: "info",
+        title:    "ทีมเซลล์ที่ดูแลถูกเปลี่ยน",
+        body:     "ทีม Pacred ได้มอบหมายเซลล์ใหม่ให้ดูแลบัญชีของท่าน",
+      });
+    }
+
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${d.customer_id}`);
+    revalidatePath(`/admin/customers/${d.customer_id}/transfer-rep`);
     return { ok: true };
   });
 }
