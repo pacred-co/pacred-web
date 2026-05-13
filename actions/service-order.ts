@@ -121,6 +121,205 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
 }
 
 // ────────────────────────────────────────────────────────────
+// READ ONE for PDF receipt (full data: profile + corporate + items with per-item china shipping)
+// ────────────────────────────────────────────────────────────
+export type ShopOrderReceiptData = {
+  // header
+  h_no:                  string | null;
+  status:                ServiceOrderSummary["status"];
+  created_at:            string;
+  date_awaiting_payment: string | null;
+  payment_due_at:        string | null;
+  date_completed:        string | null;
+
+  // pricing (snapshotted at submit)
+  yuan_rate_locked:      number | null;
+  subtotal_cny:          number;
+  domestic_china_cny:    number;
+  service_fee:           number;
+  total_thb:             number;
+  free_shipping:         boolean;
+  crate:                 boolean;
+
+  // shipment
+  warehouse_china:       "guangzhou" | "yiwu" | null;
+  transport_type:        string;
+
+  // shipping address snapshot
+  ship_first_name:       string | null;
+  ship_last_name:        string | null;
+  ship_phone:            string | null;
+  ship_phone2:           string | null;
+  ship_address_line:     string | null;
+  ship_sub_district:     string | null;
+  ship_district:         string | null;
+  ship_province:         string | null;
+  ship_postal_code:      string | null;
+
+  // customer
+  customer: {
+    member_code:  string | null;
+    first_name:   string | null;
+    last_name:    string | null;
+    email:        string | null;
+    phone:        string | null;
+    account_type: "personal" | "juristic" | null;
+    company_name: string | null;
+    tax_id:       string | null;
+    company_address: string | null;
+  };
+
+  // items (grouped by provider → shop on the PDF side)
+  items: Array<{
+    id:                  string;
+    provider:            Provider;
+    shop_name:           string;
+    title:               string | null;
+    color:               string | null;
+    size:                string | null;
+    price_cny:           number;          // per unit
+    amount:              number;
+    domestic_china_cny:  number;          // per-item china domestic shipping (CNY)
+    shipping_number:     string | null;   // เลขออเดอร์ร้านจีน
+    tracking_number:     string | null;
+  }>;
+};
+
+export async function getServiceOrderForReceipt(
+  hNo: string,
+): Promise<ActionResult<ShopOrderReceiptData>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. Header (RLS guarantees we only see our own)
+  const { data: order, error: orderErr } = await supabase
+    .from("service_orders")
+    .select(
+      `id, h_no, status, created_at, date_awaiting_payment, payment_due_at, date_completed,
+       yuan_rate_locked, subtotal_cny, domestic_china_cny, service_fee, total_thb,
+       free_shipping, crate, warehouse_china, transport_type,
+       ship_first_name, ship_last_name, ship_phone, ship_phone2,
+       ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
+       profile_id`,
+    )
+    .eq("h_no", hNo)
+    .maybeSingle();
+
+  if (orderErr) return { ok: false, error: orderErr.message };
+  if (!order)   return { ok: false, error: "not_found" };
+
+  const o = order as unknown as {
+    id: string;
+    profile_id: string;
+    status: ServiceOrderSummary["status"];
+  } & Omit<ShopOrderReceiptData, "customer" | "items">;
+
+  // Legacy PHP refused to print receipts on cancelled orders + on pending
+  // (status=1) — we adopt the same rule. Status 2..5 only.
+  if (o.status === "pending" || o.status === "cancelled") {
+    return { ok: false, error: "receipt_not_available" };
+  }
+
+  // 2. Customer (profile + optional corporate)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("member_code, first_name, last_name, email, phone, account_type")
+    .eq("id", o.profile_id)
+    .maybeSingle<{
+      member_code:  string | null;
+      first_name:   string | null;
+      last_name:    string | null;
+      email:        string | null;
+      phone:        string | null;
+      account_type: "personal" | "juristic" | null;
+    }>();
+
+  let company_name: string | null    = null;
+  let tax_id:       string | null    = null;
+  let company_address: string | null = null;
+
+  if (profile?.account_type === "juristic") {
+    const { data: corp } = await supabase
+      .from("corporate")
+      .select("company_name, tax_id, company_address")
+      .eq("profile_id", o.profile_id)
+      .maybeSingle<{
+        company_name:    string | null;
+        tax_id:          string | null;
+        company_address: string | null;
+      }>();
+    company_name    = corp?.company_name    ?? null;
+    tax_id          = corp?.tax_id          ?? null;
+    company_address = corp?.company_address ?? null;
+  }
+
+  // 3. Items — include per-item china shipping + shipping/tracking numbers
+  const { data: items } = await supabase
+    .from("service_order_items")
+    .select(
+      "id, provider, shop_name, title, color, size, price_cny, amount, domestic_china_cny, shipping_number, tracking_number",
+    )
+    .eq("service_order_id", o.id)
+    .eq("re_wallet", false)                       // exclude refunded lines (PHP cReWallet filter)
+    .order("created_at", { ascending: true });
+
+  return {
+    ok: true,
+    data: {
+      h_no:                  o.h_no,
+      status:                o.status,
+      created_at:            o.created_at,
+      date_awaiting_payment: o.date_awaiting_payment,
+      payment_due_at:        o.payment_due_at,
+      date_completed:        o.date_completed,
+      yuan_rate_locked:      o.yuan_rate_locked,
+      subtotal_cny:          Number(o.subtotal_cny),
+      domestic_china_cny:    Number(o.domestic_china_cny),
+      service_fee:           Number(o.service_fee),
+      total_thb:             Number(o.total_thb),
+      free_shipping:         o.free_shipping,
+      crate:                 o.crate,
+      warehouse_china:       o.warehouse_china,
+      transport_type:        o.transport_type,
+      ship_first_name:       o.ship_first_name,
+      ship_last_name:        o.ship_last_name,
+      ship_phone:            o.ship_phone,
+      ship_phone2:           o.ship_phone2,
+      ship_address_line:     o.ship_address_line,
+      ship_sub_district:     o.ship_sub_district,
+      ship_district:         o.ship_district,
+      ship_province:         o.ship_province,
+      ship_postal_code:      o.ship_postal_code,
+      customer: {
+        member_code:  profile?.member_code  ?? null,
+        first_name:   profile?.first_name   ?? null,
+        last_name:    profile?.last_name    ?? null,
+        email:        profile?.email        ?? null,
+        phone:        profile?.phone        ?? null,
+        account_type: profile?.account_type ?? null,
+        company_name,
+        tax_id,
+        company_address,
+      },
+      items: (items ?? []).map((it) => ({
+        id:                 (it as { id: string }).id,
+        provider:           (it as { provider: Provider }).provider,
+        shop_name:          (it as { shop_name: string }).shop_name,
+        title:              (it as { title: string | null }).title,
+        color:              (it as { color: string | null }).color,
+        size:               (it as { size: string | null }).size,
+        price_cny:          Number((it as { price_cny: number }).price_cny),
+        amount:             Number((it as { amount: number }).amount),
+        domestic_china_cny: Number((it as { domestic_china_cny: number }).domestic_china_cny),
+        shipping_number:    (it as { shipping_number: string | null }).shipping_number,
+        tracking_number:    (it as { tracking_number: string | null }).tracking_number,
+      })),
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────
 // PLACE ORDER from cart
 // ────────────────────────────────────────────────────────────
 const PAYMENT_DUE_HOURS = 24;       // legacy hDatePayment timer (24h)

@@ -26,6 +26,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   const o = res.data;
 
   const canCancel = o.status === "pending" || o.status === "awaiting_payment";
+  const canPrintReceipt = o.status !== "pending" && o.status !== "cancelled";   // mirrors PHP printShop.php (status 2..5 only)
   const itemsTotalCny = o.items.reduce((s, it) => s + Number(it.price_cny) * Number(it.amount), 0);
 
   return (
@@ -47,6 +48,16 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
             <Link href="/service-order" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
               ← {t("backToList")}
             </Link>
+            {canPrintReceipt && o.h_no && (
+              <a
+                href={`/api/pdf/shop-order/${o.h_no}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+              >
+                {o.status === "completed" ? "📄 ดาวน์โหลดใบเสร็จ PDF" : "📄 ดาวน์โหลดใบแจ้งหนี้ PDF"}
+              </a>
+            )}
             {canCancel && <CancelButton hNo={o.h_no!} />}
           </div>
         </div>
