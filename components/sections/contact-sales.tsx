@@ -32,7 +32,7 @@ const SALES: SalesPerson[] = [
     name: "แนท",
     role: "Cargo Specialist",
     tagline: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
-    phone: "066-125-3007",
+    phone: "02-421-3325",
     image: "/images/pacred-logo-red.png",
     useContain: true,
     badge: "China Cargo Expert",
