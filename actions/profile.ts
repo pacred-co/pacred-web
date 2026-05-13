@@ -2,13 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { CURRENT_TOS_VERSION } from "@/lib/tos";
 import {
   profileBasicSchema,
   corporateSchema,
   notifyChannelsSchema,
+  completeProfileSchema,
   type ProfileBasicInput,
   type CorporateInput,
   type NotifyChannels,
+  type CompleteProfileInput,
 } from "@/lib/validators/profile";
 
 type ActionResult<T = void> =
@@ -156,6 +159,63 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
 
   revalidatePath("/profile");
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// COMPLETE PROFILE (P-1) — first-time OAuth user finishing signup.
+// Folds TOS acceptance into the same write so completion is atomic
+// and the (protected) layout doesn't immediately re-prompt with TosGate.
+// ────────────────────────────────────────────────────────────
+export async function completeProfile(
+  input: CompleteProfileInput,
+): Promise<ActionResult> {
+  const parsed = completeProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("status, account_type")
+    .eq("id", user.id)
+    .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
+
+  if (!existing) return { ok: false, error: "profile_not_found" };
+  if (existing.status === "suspended") return { ok: false, error: "account_suspended" };
+  // Juristic must use the 3-step register flow — guard at server even if
+  // the page redirects them client-side.
+  if (existing.account_type === "juristic") {
+    return { ok: false, error: "juristic_use_register_flow" };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      first_name:           d.first_name,
+      last_name:            d.last_name,
+      phone:                d.phone,
+      sex:                  d.sex ?? null,
+      birthday:             d.birthday ?? null,
+      tos_accepted_version: CURRENT_TOS_VERSION,
+      tos_accepted_at:      new Date().toISOString(),
+      status:               "active",
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    if (error.message?.includes("schema cache") || error.message?.includes("tos_accepted")) {
+      return { ok: false, error: "ระบบยังไม่พร้อม — โปรดให้แอดมินรัน migration 0006_tos_acceptance.sql ก่อน" };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

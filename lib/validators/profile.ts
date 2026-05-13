@@ -62,3 +62,20 @@ export const notifyChannelsSchema = z.object({
   email: z.boolean(),
 });
 export type NotifyChannels = z.infer<typeof notifyChannelsSchema>;
+
+// ── complete-profile (P-1) ──
+// Minimum fields a personal OAuth user must fill before status flips to 'active'.
+// TOS is folded in here so completion + acceptance happen atomically.
+export const completeProfileSchema = z.object({
+  first_name: z.string().trim().min(1, "กรุณากรอกชื่อ").max(200),
+  last_name:  z.string().trim().min(1, "กรุณากรอกนามสกุล").max(200),
+  phone:      thaiPhone,
+  sex:        z.enum(["male", "female", "other"]).optional(),
+  birthday:   z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันเกิดต้องเป็น YYYY-MM-DD")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  agreed:     z.boolean().refine((v) => v === true, "ต้องยอมรับข้อกำหนด"),
+});
+export type CompleteProfileInput = z.infer<typeof completeProfileSchema>;
