@@ -75,13 +75,13 @@ export function SearchBar() {
 
         </div>
 
-        {/* Quick keywords */}
-        <div className="flex items-center justify-center flex-wrap gap-0 pt-2">
+        {/* Quick keywords — scrollable on mobile */}
+        <div className="flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {QUICK_KEYS.map((kw, i) => (
             <Link
               key={kw}
               href={`/service-order/add?q=${encodeURIComponent(kw)}`}
-              className="relative px-[10px] text-[11.5px] font-medium text-gray-500 hover:text-red-600 transition-colors duration-200 whitespace-nowrap leading-none first:pl-0"
+              className="relative shrink-0 px-[10px] text-[11.5px] font-medium text-gray-500 hover:text-red-600 transition-colors duration-200 whitespace-nowrap leading-none first:pl-0"
             >
               {i > 0 && (
                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-[10px] bg-gray-300 dark:bg-border" />

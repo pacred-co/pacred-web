@@ -1,13 +1,15 @@
 import { type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
-import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
-
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { ClearanceBanner } from "@/components/sections/clearance-banner";
+import { PurchaseBanner } from "@/components/sections/purchase-banner";
 
 export type Breadcrumb = { label: string; href?: string };
+export type StubBanner = "import-export" | "clearance" | "purchase";
 
 export function StubPage({
   eyebrow,
@@ -15,6 +17,7 @@ export function StubPage({
   highlight,
   description,
   breadcrumb,
+  banner = "import-export",
   children,
 }: {
   eyebrow: string;
@@ -22,6 +25,7 @@ export function StubPage({
   highlight?: string;
   description?: string;
   breadcrumb?: Breadcrumb[];
+  banner?: StubBanner;
   children?: ReactNode;
 }) {
   return (
@@ -79,31 +83,17 @@ export function StubPage({
               {children ?? <DefaultPlaceholder />}
             </div>
 
-            {/* CTA card */}
-            <div className="mx-auto mt-10 md:mt-14 w-full max-w-[1120px]">
-              <div className="rounded-2xl bg-gradient-to-br from-primary-50 via-white to-primary-50/40 dark:from-primary-950/30 dark:via-surface dark:to-primary-950/10 border border-primary-100 dark:border-primary-900/40 p-5 md:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white leading-tight tracking-tight">
-                    มีคำถาม? ปรึกษาทีม Pacred Shipping ฟรี
-                  </h3>
-                  <p className="mt-1 text-[12.5px] md:text-[14px] text-muted">
-                    ตอบทุกเรื่องนำเข้า-ส่งออก เคลียร์ด่าน — โดยมืออาชีพ 14+ ปี
-                  </p>
-                </div>
-                <a
-                  href={LINE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 h-[44px] px-5 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] md:text-[14px] font-black shadow-[0_8px_20px_rgba(179,0,0,0.28)] hover:shadow-[0_12px_26px_rgba(179,0,0,0.38)] hover:-translate-y-0.5 transition-all duration-300"
-                >
-                  ทักไลน์เลย
-                  <ArrowRight className="w-4 h-4" strokeWidth={3} />
-                </a>
-              </div>
-            </div>
-
           </div>
         </section>
+
+        {/* Banner CTA — แทน CTA card เล็ก */}
+        {banner === "clearance" ? (
+          <ClearanceBanner />
+        ) : banner === "purchase" ? (
+          <PurchaseBanner />
+        ) : (
+          <ImportExportBanner />
+        )}
       </main>
       <Footer />
     </>

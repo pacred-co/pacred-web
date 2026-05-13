@@ -22,10 +22,10 @@ export function SalesModal({ open, onClose, cards }: SalesModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[999999] flex items-center justify-center p-5"
+      className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[999999] flex items-center justify-center p-3 md:p-5"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-3xl w-full max-w-[900px] p-10 relative animate-[pfIn_0.2s_ease]">
+      <div className="bg-white rounded-2xl md:rounded-3xl w-full max-w-[900px] max-h-[90vh] overflow-y-auto p-5 md:p-10 relative animate-[pfIn_0.2s_ease]">
         <button
           type="button"
           onClick={onClose}

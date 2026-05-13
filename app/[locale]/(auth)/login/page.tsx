@@ -34,7 +34,7 @@ export default function LoginPage() {
     startTransition(async () => {
       const res = await signIn({ identifier, password });
       if (res.ok) {
-        router.replace("/");
+        router.replace(res.data?.isAdmin ? "/admin/dashboard" : "/");
         router.refresh();
       } else {
         setError(ERROR_MESSAGES[res.error] ?? res.error);

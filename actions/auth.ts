@@ -30,7 +30,7 @@ type ActionResult<T = void> =
 // ─────────────────────────────────────────────────────────────
 // Sign In
 // ─────────────────────────────────────────────────────────────
-export async function signIn(input: SignInInput): Promise<ActionResult> {
+export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin: boolean }>> {
   const parsed = signInSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -70,7 +70,20 @@ export async function signIn(input: SignInInput): Promise<ActionResult> {
 
   if (error) return { ok: false, error: "invalid_credentials" };
 
-  return { ok: true };
+  // Check if admin to return correct redirect target
+  const supabase2 = await createClient();
+  const { data: { user: signedInUser } } = await supabase2.auth.getUser();
+  let isAdmin = false;
+  if (signedInUser) {
+    const { data: profile } = await supabase2
+      .from("profiles")
+      .select("role")
+      .eq("id", signedInUser.id)
+      .maybeSingle<{ role: string | null }>();
+    isAdmin = profile?.role === "admin";
+  }
+
+  return { ok: true, data: { isAdmin } };
 }
 
 // ─────────────────────────────────────────────────────────────

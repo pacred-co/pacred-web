@@ -24,18 +24,19 @@ export function CustomDropdown({ label, displayValue, sections, onSelect }: Cust
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[13px] font-bold text-gray-800 leading-none">{label}</label>
+      <label className="text-[12px] md:text-[13px] font-bold text-gray-800 leading-none">{label}</label>
       <div className="relative" ref={ref}>
         <button
           type="button"
+          suppressHydrationWarning
           onClick={() => setOpen(v => !v)}
-          className={`flex items-center gap-2.5 w-full h-[42px] border rounded-lg px-3.5 bg-white cursor-pointer transition-all ${
+          className={`flex items-center gap-2 md:gap-2.5 w-full h-10 md:h-[42px] border rounded-lg px-3 md:px-3.5 bg-white cursor-pointer transition-all ${
             open
               ? "border-red-600 shadow-[0_0_0_3px_rgba(220,38,38,0.12)]"
               : "border-gray-200 hover:border-red-300"
           }`}
         >
-          <span className="flex-1 text-sm font-semibold text-gray-800 text-left truncate">{displayValue}</span>
+          <span className="flex-1 text-[13px] md:text-sm font-semibold text-gray-800 text-left truncate">{displayValue}</span>
           <svg
             viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
             className={`w-4 h-4 shrink-0 transition-transform ${open ? "rotate-180 text-red-600" : "text-gray-400"}`}
@@ -105,6 +106,7 @@ export function TextDropdown({ label, value, onChange, suggestions, placeholder 
         >
           <input
             type="text"
+            suppressHydrationWarning
             value={value}
             onChange={e => onChange(e.target.value)}
             onFocus={() => setOpen(true)}

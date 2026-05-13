@@ -23,6 +23,7 @@ export function ThemeToggle({ variant = "default" }: { variant?: "default" | "on
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
+      suppressHydrationWarning
       aria-label="Toggle theme"
       className={`flex items-center justify-center w-9 h-9 rounded-lg border transition-colors ${styles}`}
     >

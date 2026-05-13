@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
 import { NotificationBell } from "@/components/notification-bell";
+import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
 
 type ProfileLite = {
   member_code: string | null;
@@ -54,17 +55,6 @@ export function NavBar() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const navItems = [
-    { href: "#quick-service", label: t("quickService") },
-    { href: "#import",        label: t("import") },
-    { href: "#export",        label: t("export") },
-    { href: "#order",         label: t("order") },
-    { href: "#how-to-use",    label: t("howToUse") },
-    { href: "#pricing",       label: t("pricing") },
-    { href: "#warehouse",     label: t("warehouse") },
-    { href: "#about",         label: t("about") },
-  ];
-
   return (
     <header className="sticky top-0 z-50 w-full shadow-lg">
 
@@ -102,18 +92,10 @@ export function NavBar() {
             </a>
           </div>
 
-          {/* Desktop nav */}
-          <nav className="hidden xl:flex items-center gap-0.5 flex-1 justify-center">
-            {navItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="whitespace-nowrap rounded-lg px-3 py-1.5 text-[13.5px] font-semibold text-white/90 hover:bg-white/15 hover:text-white transition-colors"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
+          {/* Desktop nav — TopMenu with dropdowns */}
+          <div className="hidden xl:flex flex-1 justify-center">
+            <TopMenu />
+          </div>
 
           {/* Right: auth + lang + theme */}
           <div className="hidden xl:flex items-center gap-2 shrink-0">
@@ -165,16 +147,7 @@ export function NavBar() {
       {menuOpen && (
         <div className="xl:hidden border-t border-white/20 bg-[#991b1b]">
           <nav className="flex w-full flex-col px-4 py-3 gap-0.5">
-            {navItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10 hover:text-white transition-colors"
-              >
-                {item.label}
-              </a>
-            ))}
+            <TopMenuMobile onClose={() => setMenuOpen(false)} />
             <div className="my-2 border-t border-white/20" />
             {authReady && user ? (
               <MobileUserMenu profile={profile} onClose={() => setMenuOpen(false)} />

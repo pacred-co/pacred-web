@@ -232,7 +232,7 @@ export function PricingSection() {
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             ประเทศต้นทาง
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex overflow-x-auto md:flex-wrap gap-2 pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
             {COUNTRIES.map((c) => {
               const selected = country === c.code && c.active;
               const disabled = c.soon || !c.active;
@@ -314,7 +314,7 @@ export function PricingSection() {
               <Anchor className="w-3.5 h-3.5" strokeWidth={2.5} />
               ท่าเรือต้นทาง (จีน)
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex overflow-x-auto md:flex-wrap gap-2 pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               {PORTS.map((p) => {
                 const selected = port === p.code;
                 return (
@@ -347,7 +347,7 @@ export function PricingSection() {
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             Term การให้บริการ
           </div>
-          <div className={`grid grid-cols-1 ${visibleTerms.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} gap-2`}>
+          <div className={`flex overflow-x-auto gap-2 pb-1 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid ${visibleTerms.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} [&>*]:shrink-0 [&>*]:w-[78%] [&>*]:min-w-[240px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
             {visibleTerms.map((t) => {
               const active = term === t.id;
               return (
@@ -417,16 +417,16 @@ export function PricingSection() {
           </div>
         )}
 
-        {/* ─── Price cards (3 ใบ) ─── */}
+        {/* ─── Price cards (3 ใบ) — horizontal swipe on mobile ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           {mode === "cargo" ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-stretch">
+            <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {CARGO_CARDS.map((card) => (
                 <CargoPriceCard key={card.id} card={card} />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-stretch">
+            <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FREIGHT_CARDS.map((card) => (
                 <FreightPriceCard key={card.id} card={card} term={term} />
               ))}
