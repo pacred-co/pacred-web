@@ -1,8 +1,34 @@
 @AGENTS.md
 
+---
+
+# 👉 START HERE — ทีมงานทุกคน อ่านก่อนเริ่ม
+
+📘 **[`docs/PORT_PLAN.md`](docs/PORT_PLAN.md)** = single source of truth สำหรับ:
+- งานที่ทำเสร็จแล้ว vs ที่ยังขาด (audit ครบทุก feature PHP → Next.js)
+- แผนแบ่งงาน **ปอน / ภูม / เดฟ** พร้อม acceptance criteria รายงาน
+- ลำดับความสำคัญ P0/P1/P2/P3
+- workflow + branch policy + migration checklist
+
+**ทำงานครั้งแรก:**
+1. อ่าน [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — Part E (Per-Dev Assignment) หาส่วนของตัวเอง
+2. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
+3. Sync branch ตัวเองตามวิธีใน [Team Workflow](#-team--branch-workflow) ด้านล่าง
+4. เริ่ม task แรกในส่วนของตัวเอง
+
+**MD ไฟล์อื่นๆ ใน repo (ไม่ต้องอ่านก่อน — open เมื่อจำเป็น):**
+- [`AGENTS.md`](AGENTS.md) — Next 16 breaking changes (สำหรับ Claude/AI agents)
+- [`docs/architecture.md`](docs/architecture.md) — full system diagrams + auth flow
+- [`docs/decisions/*.md`](docs/decisions/) — ADRs (architecture decisions)
+- [`docs/setup/*.md`](docs/setup/) — setup guides (OAuth, Supabase, Vercel, etc.)
+- [`supabase/migrations/README.md`](supabase/migrations/README.md) — migration runbook
+- [`README.md`](README.md) — Next.js boilerplate (ไม่ต้องอ่าน)
+
+---
+
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-10
+Last updated: 2026-05-13
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
 > Marketing site + landing pages + (incoming) member portal
