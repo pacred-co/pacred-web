@@ -2,47 +2,35 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { HeroTabs } from "@/components/ui/hero-tabs";
 
 const Y = "#FDE047";
 
-const TABS_CONTENT = [
-  {
-    image: "/images/hero-section/banner/shipbanner.png",
-    title: ["นำเข้าสินค้าจากจีนทางเรือ LCL ", "แชร์ตู้"],
-    subtitle: "FOB · EXW · DDP · โกดัง Pacred กวางโจว + อี้อู",
-  },
-  {
-    image: "/images/hero-section/banner/leac.png",
-    title: ["ขนส่งสินค้าจากจีนทางรถ ", "DDP ส่งถึงบ้าน 5–7 วัน"],
-    subtitle: "จ่ายครั้งเดียว รวมขนส่ง ภาษี ศุลกากร ส่งถึงหน้าบ้าน — ไม่มีค่าแอบแฝง",
-  },
-  {
-    image: "/images/hero-section/banner/airbanner.png",
-    title: ["ขนส่งทางอากาศ นำเข้า-ส่งออก ", "เร็วสุด 3–5 วัน"],
-    subtitle: "AWB Real-time · เคลียร์ศุลกากร · รับ-ส่งทุกสนามบิน · ทั้งนำเข้าและส่งออก",
-  },
-  {
-    image: "/images/hero-section/banner/sulakabanner.png",
-    title: ["เคลียร์สินค้าติดด่าน ศุลกากร ", "ทุกด่านทั่วไทย"],
-    subtitle: "บริการเคลียร์สินค้าติดด่านแบบครบวงจร ราคาชัดเจน พร้อมให้คำปรึกษา",
-  },
-  {
-    image: "/images/hero-section/banner/saofire.png",
-    title: ["ฝากสั่งซื้อสินค้าจากจีน ", "1688 · Taobao · โรงงาน"],
-    subtitle: "เรทหยวนพิเศษ · ตรวจสินค้าก่อนส่ง · ขนส่งครบวงจร",
-  },
-  {
-    image: "/images/hero-section/banner/heropay.png",
-    title: ["โอนชำระค่าสินค้าต่างประเทศ ", "T/T Wire Transfer"],
-    subtitle: "ไม่ต้องมีบัญชีธนาคารจีน · เงินถึงโรงงาน 1–2 วันทำการ · มีสัญญารับรอง",
-  },
+const TAB_IMAGES = [
+  "/images/hero-section/banner/shipbanner.png",
+  "/images/hero-section/banner/leac.png",
+  "/images/hero-section/banner/airbanner.png",
+  "/images/hero-section/banner/sulakabanner.png",
+  "/images/hero-section/banner/saofire.png",
+  "/images/hero-section/banner/heropay.png",
+];
+
+const TAB_KEYS: { title1: string; title2: string; sub: string }[] = [
+  { title1: "tab1Title1", title2: "tab1Title2", sub: "tab1Sub" },
+  { title1: "tab2Title1", title2: "tab2Title2", sub: "tab2Sub" },
+  { title1: "tab3Title1", title2: "tab3Title2", sub: "tab3Sub" },
+  { title1: "tab4Title1", title2: "tab4Title2", sub: "tab4Sub" },
+  { title1: "tab5Title1", title2: "tab5Title2", sub: "tab5Sub" },
+  { title1: "tab6Title1", title2: "tab6Title2", sub: "tab6Sub" },
 ];
 
 export function HeroClient() {
+  const t = useTranslations("heroBanner");
   const [activeTab, setActiveTab] = useState<number>(0);
 
-  const { image, title, subtitle } = TABS_CONTENT[activeTab];
+  const image = TAB_IMAGES[activeTab];
+  const k = TAB_KEYS[activeTab];
 
   return (
     <div className="mx-auto w-full max-w-[1120px]">
@@ -58,14 +46,14 @@ export function HeroClient() {
         {/* Text overlay */}
         <div className="relative z-10 flex h-full flex-col items-center justify-center gap-3 text-center px-10">
           <h1 className="text-3xl font-bold leading-snug text-white md:text-4xl">
-            {title[0]}
-            <span style={{ color: Y }}>{title[1]}</span>
+            {t(k.title1)}
+            <span style={{ color: Y }}>{t(k.title2)}</span>
           </h1>
           <p
             className="text-base leading-relaxed text-white"
             style={{ textShadow: "0 1px 6px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.5)" }}
           >
-            {subtitle}
+            {t(k.sub)}
           </p>
         </div>
       </div>

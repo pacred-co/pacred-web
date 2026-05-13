@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import {
   Lock,
   Phone,
@@ -25,10 +26,10 @@ const HOTLINE = "066-125-3007";
 type Mode = "cargo" | "freight";
 type Term = "DDP" | "EXW" | "FOB";
 
-// ───────────── Country ─────────────
+// ───────────── Country (data — labels resolved via i18n) ─────────────
 type Country = {
   code: string;
-  name: string;
+  nameKey: string;
   flag: string;
   active?: boolean;
   locked?: boolean;
@@ -36,51 +37,43 @@ type Country = {
 };
 
 const COUNTRIES: Country[] = [
-  { code: "cn", name: "จีน",      flag: "🇨🇳", active: true, locked: true },
-  { code: "jp", name: "ญี่ปุ่น",    flag: "🇯🇵", soon: true },
-  { code: "kr", name: "เกาหลี",   flag: "🇰🇷", soon: true },
-  { code: "vn", name: "เวียดนาม", flag: "🇻🇳", soon: true },
-  { code: "us", name: "อเมริกา",  flag: "🇺🇸", soon: true },
+  { code: "cn", nameKey: "countryCn", flag: "🇨🇳", active: true, locked: true },
+  { code: "jp", nameKey: "countryJp", flag: "🇯🇵", soon: true },
+  { code: "kr", nameKey: "countryKr", flag: "🇰🇷", soon: true },
+  { code: "vn", nameKey: "countryVn", flag: "🇻🇳", soon: true },
+  { code: "us", nameKey: "countryUs", flag: "🇺🇸", soon: true },
 ];
 
 // ───────────── China ports (Freight) ─────────────
 const PORTS = [
-  { code: "ningbo",    name: "หนิงโบว",  en: "Ningbo" },
-  { code: "nansha",    name: "หนานชา",  en: "Nansha" },
-  { code: "guangzhou", name: "กวางโจว", en: "Guangzhou" },
+  { code: "ningbo",    nameKey: "portNingboName",    en: "Ningbo" },
+  { code: "nansha",    nameKey: "portNanshaName",    en: "Nansha" },
+  { code: "guangzhou", nameKey: "portGuangzhouName", en: "Guangzhou" },
 ];
 
-// ───────────── Mode (Cargo / Freight) ─────────────
-const MODES: Record<Mode, {
-  id: Mode;
-  title: string;
-  badge: string;
-  icon: typeof Ship;
-}> = {
-  cargo:   { id: "cargo",   title: "Cargo",   badge: "Warehouse to Warehouse", icon: Warehouse },
-  freight: { id: "freight", title: "Freight", badge: "Port to Port",           icon: Ship      },
-};
-
 // ───────────── Term ─────────────
-const TERMS: { id: Term; label: string; desc: string; modes: Mode[] }[] = [
-  { id: "DDP", label: "DDP", desc: "ดูแลครบ ขนส่ง + เคลียร์ด่าน + ภาษี ส่งถึงปลายทาง", modes: ["cargo", "freight"] },
-  { id: "EXW", label: "EXW", desc: "เข้ารับจากโรงงาน / โกดังต้นทาง",                   modes: ["cargo", "freight"] },
-  { id: "FOB", label: "FOB", desc: "รับช่วงต่อจากท่าเรือต้นทาง",                          modes: ["freight"] },
+const TERMS: { id: Term; label: string; descKey: string; modes: Mode[] }[] = [
+  { id: "DDP", label: "DDP", descKey: "termDdpDesc", modes: ["cargo", "freight"] },
+  { id: "EXW", label: "EXW", descKey: "termExwDesc", modes: ["cargo", "freight"] },
+  { id: "FOB", label: "FOB", descKey: "termFobDesc", modes: ["freight"] },
 ];
 
 // ───────────── Cargo cards (dual price: รถ + เรือ) ─────────────
+type CargoPriceMode = "road" | "sea";
+
 type CargoCard = {
   id: string;
-  badge: string;
+  badgeKey?: string;
+  comingBadgeKey?: string;
   title: string;
-  subtitle: string;
+  subtitleKey: string;
   prices: {
-    mode: "รถ" | "เรือ";
+    mode: CargoPriceMode;
     cbm: string;
     kg: string;
-    transit: string;
+    transitKey: string;
   }[];
-  note: string;
+  noteKey: string;
   popular?: boolean;
   comingSoon?: boolean;
   bgImages?: string[];
@@ -89,14 +82,14 @@ type CargoCard = {
 const CARGO_CARDS: CargoCard[] = [
   {
     id: "yiwu",
-    badge: "อี้อู",
+    badgeKey: "yiwuBadge",
     title: "Yiwu",
-    subtitle: "โกดังอี้อู → โกดังไทย",
+    subtitleKey: "yiwuSubtitle",
     prices: [
-      { mode: "รถ",  cbm: "5,200", kg: "18", transit: "5–7 วัน"  },
-      { mode: "เรือ", cbm: "3,200", kg: "11", transit: "12–15 วัน" },
+      { mode: "road", cbm: "5,200", kg: "18", transitKey: "transit5to7"  },
+      { mode: "sea",  cbm: "3,200", kg: "11", transitKey: "transit12to15" },
     ],
-    note: "ตลาดส่งจิปาถะใหญ่สุดในจีน — ของชำร่วย ของขวัญ เครื่องเขียน ของเล่น ของแต่งบ้าน อุปกรณ์ปาร์ตี้ ของแม่และเด็ก",
+    noteKey: "yiwuNote",
     bgImages: [
       "/images/catagory/kidtoy.png",
       "/images/catagory/homeuse.png",
@@ -105,14 +98,13 @@ const CARGO_CARDS: CargoCard[] = [
   },
   {
     id: "guangzhou",
-    badge: "ยอดนิยม",
     title: "Guangzhou",
-    subtitle: "โกดังกวางโจว → โกดังไทย",
+    subtitleKey: "guangzhouSubtitle",
     prices: [
-      { mode: "รถ",  cbm: "4,900", kg: "18", transit: "5–7 วัน"  },
-      { mode: "เรือ", cbm: "2,900", kg: "11", transit: "12–15 วัน" },
+      { mode: "road", cbm: "4,900", kg: "18", transitKey: "transit5to7"  },
+      { mode: "sea",  cbm: "2,900", kg: "11", transitKey: "transit12to15" },
     ],
-    note: "แหล่งแฟชั่นใหญ่สุดในจีนใต้ — เสื้อผ้า รองเท้า กระเป๋า เครื่องหนัง เครื่องสำอาง เครื่องประดับ อะไหล่รถยนต์",
+    noteKey: "guangzhouNote",
     popular: true,
     bgImages: [
       "/images/catagory/handbag.png",
@@ -122,14 +114,14 @@ const CARGO_CARDS: CargoCard[] = [
   },
   {
     id: "shenzhen",
-    badge: "เร็วๆนี้",
+    comingBadgeKey: "shenzhenComingBadge",
     title: "Shenzhen",
-    subtitle: "โกดังเซินเจิ้น → โกดังไทย",
+    subtitleKey: "shenzhenSubtitle",
     prices: [
-      { mode: "รถ",  cbm: "—", kg: "—", transit: "—" },
-      { mode: "เรือ", cbm: "—", kg: "—", transit: "—" },
+      { mode: "road", cbm: "—", kg: "—", transitKey: "transitDash" },
+      { mode: "sea",  cbm: "—", kg: "—", transitKey: "transitDash" },
     ],
-    note: "ศูนย์รวมเทคโนโลยีของจีน — มือถือ คอมพิวเตอร์ gadget โดรน กล้อง อะไหล่อิเล็กทรอนิกส์ IT",
+    noteKey: "shenzhenNote",
     comingSoon: true,
     bgImages: [
       "/images/catagory/phone.png",
@@ -142,60 +134,64 @@ const CARGO_CARDS: CargoCard[] = [
 // ───────────── Freight cards (Term-varied) ─────────────
 type FreightCard = {
   id: string;
-  badge: string;
+  badgeKey?: string;
   title: string;
-  subtitle: string;
-  unit: string;
+  subtitleKey: string;
+  unitKey: string;
   price: Record<Term, string>;
-  stats: { label: string; value: string }[];
-  note: string;
+  stats: { labelKey: string; valueKey: string }[];
+  noteKey: string;
   popular?: boolean;
 };
 
 const FREIGHT_CARDS: FreightCard[] = [
   {
     id: "lcl",
-    badge: "ตู้รวม",
+    badgeKey: "lclBadge",
     title: "LCL Freight",
-    subtitle: "Less than Container Load",
-    unit: "บาท / CBM",
+    subtitleKey: "lclSubtitle",
+    unitKey: "lclUnit",
     price: { DDP: "5,500", EXW: "4,200", FOB: "3,500" },
     stats: [
-      { label: "Transit", value: "12–18 วัน" },
-      { label: "ขั้นต่ำ",  value: "1 CBM" },
+      { labelKey: "statTransit", valueKey: "lclTransit" },
+      { labelKey: "statMin",     valueKey: "lclMin" },
     ],
-    note: "เหมาะกับสินค้าน้อย ไม่ถึงตู้ จัดส่งรวมหลายเจ้า",
+    noteKey: "lclNote",
   },
   {
     id: "fcl20",
-    badge: "ยอดนิยม",
     title: "FCL 20ft",
-    subtitle: "ตู้คอนเทนเนอร์ 20 ฟุต",
-    unit: "บาท / Container",
+    subtitleKey: "fcl20Subtitle",
+    unitKey: "fcl20Unit",
     price: { DDP: "72,000", EXW: "63,000", FOB: "55,000" },
     stats: [
-      { label: "Transit", value: "10–14 วัน" },
-      { label: "ความจุ",  value: "≈ 28 CBM" },
+      { labelKey: "statTransit",  valueKey: "fcl20Transit" },
+      { labelKey: "statCapacity", valueKey: "fcl20Capacity" },
     ],
-    note: "เหมาะกับสินค้าหนัก ปริมาณกลาง คุ้มสุดต่อ CBM",
+    noteKey: "fcl20Note",
     popular: true,
   },
   {
     id: "fcl40hq",
-    badge: "ตู้ใหญ่",
+    badgeKey: "fcl40Badge",
     title: "FCL 40HQ",
-    subtitle: "ตู้คอนเทนเนอร์ 40 High Cube",
-    unit: "บาท / Container",
+    subtitleKey: "fcl40Subtitle",
+    unitKey: "fcl40Unit",
     price: { DDP: "98,000", EXW: "86,000", FOB: "75,000" },
     stats: [
-      { label: "Transit", value: "10–14 วัน" },
-      { label: "ความจุ",  value: "≈ 68 CBM" },
+      { labelKey: "statTransit",  valueKey: "fcl40Transit" },
+      { labelKey: "statCapacity", valueKey: "fcl40Capacity" },
     ],
-    note: "เหมาะกับสินค้าเยอะ จุเต็มที่ ต้นทุนต่อชิ้นต่ำสุด",
+    noteKey: "fcl40Note",
   },
 ];
 
 export function PricingSection() {
+  const t = useTranslations("pricing");
+  const MODES: Record<Mode, { id: Mode; title: string; badge: string; icon: typeof Ship }> = {
+    cargo:   { id: "cargo",   title: t("modeCargoTitle"),   badge: t("modeCargoBadge"),   icon: Warehouse },
+    freight: { id: "freight", title: t("modeFreightTitle"), badge: t("modeFreightBadge"), icon: Ship      },
+  };
   const [mode, setMode] = useState<Mode>("cargo");
   const [term, setTerm] = useState<Term>("DDP");
   const [country, setCountry] = useState<string>("cn");
@@ -222,15 +218,15 @@ export function PricingSection() {
             PRICING
           </div>
           <h2 className="text-[28px] md:text-[38px] leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-            ราคาชัดเจน โปร่งใส ต้อง{" "}
-            <span className="text-primary-600">Pacred Shipping</span>
+            {t("titlePrefix")}
+            <span className="text-primary-600">{t("titleHighlight")}</span>
           </h2>
         </div>
 
         {/* ─── Country picker ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
-            ประเทศต้นทาง
+            {t("originCountry")}
           </div>
           <div className="flex overflow-x-auto md:flex-wrap gap-2 pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
             {COUNTRIES.map((c) => {
@@ -256,7 +252,7 @@ export function PricingSection() {
                     <span aria-hidden className="absolute inset-y-0 -left-1/2 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[shimmer_2.5s_infinite]" />
                   )}
                   <span className="text-[18px] leading-none relative">{c.flag}</span>
-                  <span className="relative">{c.name}</span>
+                  <span className="relative">{t(c.nameKey)}</span>
                   {selected && c.locked && (
                     <span className="relative inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/25 ml-0.5">
                       <Lock className="w-3 h-3" strokeWidth={3} />
@@ -264,7 +260,7 @@ export function PricingSection() {
                   )}
                   {c.soon && (
                     <span className="ml-1 inline-flex items-center text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
-                      COMING SOON
+                      {t("comingSoon")}
                     </span>
                   )}
                 </button>
@@ -312,7 +308,7 @@ export function PricingSection() {
           <div className="mx-auto mt-4 w-full max-w-[1120px]">
             <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
               <Anchor className="w-3.5 h-3.5" strokeWidth={2.5} />
-              ท่าเรือต้นทาง (จีน)
+              {t("portOriginLabel")}
             </div>
             <div className="flex overflow-x-auto md:flex-wrap gap-2 pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
               {PORTS.map((p) => {
@@ -331,7 +327,7 @@ export function PricingSection() {
                     ].join(" ")}
                   >
                     <Anchor className="w-3.5 h-3.5" strokeWidth={2.5} />
-                    <span>{p.name}</span>
+                    <span>{t(p.nameKey)}</span>
                     <span className={`text-[10px] font-bold ${selected ? "text-white/80" : "text-muted/80"}`}>
                       {p.en}
                     </span>
@@ -345,16 +341,16 @@ export function PricingSection() {
         {/* ─── Term toggle ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
-            Term การให้บริการ
+            {t("termLabel")}
           </div>
           <div className={`flex overflow-x-auto gap-2 pb-1 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid ${visibleTerms.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} [&>*]:shrink-0 [&>*]:w-[78%] [&>*]:min-w-[240px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
-            {visibleTerms.map((t) => {
-              const active = term === t.id;
+            {visibleTerms.map((termItem) => {
+              const active = term === termItem.id;
               return (
                 <button
-                  key={t.id}
+                  key={termItem.id}
                   type="button"
-                  onClick={() => setTerm(t.id)}
+                  onClick={() => setTerm(termItem.id)}
                   suppressHydrationWarning
                   className={[
                     "group relative text-left p-3 md:p-3.5 rounded-2xl border transition-all duration-300 overflow-hidden",
@@ -375,9 +371,9 @@ export function PricingSection() {
                           : "bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600 dark:from-primary-900/40 dark:to-primary-900/20",
                       ].join(" ")}
                     >
-                      {t.label}
+                      {termItem.label}
                     </span>
-                    <span className="text-[14px] font-black">{t.label}</span>
+                    <span className="text-[14px] font-black">{termItem.label}</span>
                     {active && (
                       <span className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/20">
                         <Check className="w-3.5 h-3.5" strokeWidth={3} />
@@ -385,7 +381,7 @@ export function PricingSection() {
                     )}
                   </div>
                   <p className={`relative text-[12px] mt-1.5 leading-[1.45] ${active ? "text-white/90" : "text-muted"}`}>
-                    {t.desc}
+                    {t(termItem.descKey)}
                   </p>
                 </button>
               );
@@ -407,11 +403,11 @@ export function PricingSection() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-600 text-white text-[10px] font-black tracking-[0.08em]">
                     <ShieldCheck className="w-3 h-3" strokeWidth={2.5} />
-                    เงื่อนไข Cargo
+                    {t("cargoNoticeBadge")}
                   </span>
-                  <span className="font-black text-[#111827] dark:text-white">เปิดใบขน / ใบกำกับ เท่านั้น</span>
+                  <span className="font-black text-[#111827] dark:text-white">{t("cargoNoticeTitle")}</span>
                 </div>
-                <p className="text-muted mt-0.5">ทุก Shipment ออกเอกสารตามจริง ภาษีถูกต้อง โปร่งใส ตรวจสอบได้</p>
+                <p className="text-muted mt-0.5">{t("cargoNoticeDesc")}</p>
               </div>
             </div>
           </div>
@@ -422,21 +418,20 @@ export function PricingSection() {
           {mode === "cargo" ? (
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {CARGO_CARDS.map((card) => (
-                <CargoPriceCard key={card.id} card={card} />
+                <CargoPriceCard key={card.id} card={card} t={t} />
               ))}
             </div>
           ) : (
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FREIGHT_CARDS.map((card) => (
-                <FreightPriceCard key={card.id} card={card} term={term} />
+                <FreightPriceCard key={card.id} card={card} term={term} t={t} />
               ))}
             </div>
           )}
 
           {/* Footnote */}
           <p className="mt-3 text-[11px] md:text-[12px] text-muted text-center leading-[1.5]">
-            * ราคาเริ่มต้นต่อหน่วยและอาจปรับตามชนิดสินค้า ปริมาณ และฤดูกาล —
-            ติดต่อสอบถาม อาจได้เรทที่ดีกว่าเรทดังกล่าว
+            {t("footnote")}
           </p>
         </div>
 
@@ -446,7 +441,9 @@ export function PricingSection() {
 }
 
 // ────────────────── Cargo card (dual price) ──────────────────
-function CargoPriceCard({ card }: { card: CargoCard }) {
+type PricingT = ReturnType<typeof useTranslations<"pricing">>;
+
+function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
   const popular = card.popular;
   const comingSoon = card.comingSoon;
 
@@ -552,7 +549,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
           <div className="absolute -top-px left-5 z-[2]">
             <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
               <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
-              ยอดนิยม · TOP #1
+              {t("popularBadge")}
             </div>
           </div>
         )}
@@ -560,15 +557,15 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
         {comingSoon && (
           <div className="absolute top-4 right-4 z-[2] inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-600 text-white text-[10px] font-black tracking-[0.08em]">
             <Lock className="w-3 h-3" strokeWidth={3} />
-            COMING SOON
+            {t("comingSoon")}
           </div>
         )}
 
         <div className="relative p-5 md:p-6 pb-4 md:pb-5">
           {/* Badge */}
-          {card.badge && !popular && !comingSoon && (
+          {card.badgeKey && !popular && !comingSoon && (
             <span className="inline-flex items-center text-[10px] font-black px-2 py-1 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 tracking-[0.08em] mb-2">
-              {card.badge}
+              {t(card.badgeKey)}
             </span>
           )}
 
@@ -578,15 +575,16 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
               {card.title}
             </h3>
             <p className={`text-[12px] md:text-[13px] mt-0.5 leading-snug ${popular ? "text-white/85" : "text-muted"}`}>
-              {card.subtitle}
+              {t(card.subtitleKey)}
             </p>
           </div>
 
           {/* Dual prices: รถ + เรือ */}
           <div className="mt-4 space-y-2">
             {card.prices.map((p) => {
-              const isCar = p.mode === "รถ";
+              const isCar = p.mode === "road";
               const Icon = isCar ? Truck : Ship;
+              const modeLabel = isCar ? t("modeRoad") : t("modeSea");
               return (
                 <div
                   key={p.mode}
@@ -613,9 +611,9 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] ${popular ? "text-white/75" : "text-muted"}`}>
-                      <span>{p.mode}</span>
+                      <span>{modeLabel}</span>
                       <span className="opacity-50">·</span>
-                      <span>{p.transit}</span>
+                      <span>{t(p.transitKey)}</span>
                     </div>
                     <div className="flex items-baseline gap-2.5 flex-wrap mt-0.5">
                       <div className="flex items-baseline gap-1">
@@ -623,7 +621,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                           {p.cbm}
                         </span>
                         <span className={`text-[10px] font-bold ${popular ? "text-white/80" : "text-muted"}`}>
-                          ฿/คิว
+                          {t("perCbm")}
                         </span>
                       </div>
                       <span className={`w-px h-3 ${popular ? "bg-white/25" : "bg-border"}`} />
@@ -632,7 +630,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                           {p.kg}
                         </span>
                         <span className={`text-[10px] font-bold ${popular ? "text-white/80" : "text-muted"}`}>
-                          ฿/กก.
+                          {t("perKg")}
                         </span>
                       </div>
                     </div>
@@ -655,7 +653,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                 : "bg-white dark:bg-surface text-primary-600 border border-primary-200 dark:border-primary-900",
           ].join(" ")}>
             <BadgePercent className="w-2.5 h-2.5" strokeWidth={2.5} />
-            ดูแลครบ
+            {t("carePill")}
           </div>
         </div>
 
@@ -677,7 +675,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
             ].join(" ")}>
               <Sparkles className="w-3 h-3" strokeWidth={2.5} />
             </div>
-            <span className="pt-0.5">{card.note}</span>
+            <span className="pt-0.5">{t(card.noteKey)}</span>
           </div>
 
           {/* CTAs */}
@@ -690,7 +688,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                 className="w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black bg-surface-alt dark:bg-background/60 text-muted border border-dashed border-border cursor-not-allowed"
               >
                 <Lock className="w-4 h-4" strokeWidth={2.5} />
-                ยังไม่เปิดให้บริการ
+                {t("notServingYet")}
               </button>
             ) : (
               <>
@@ -709,7 +707,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                   <svg className="w-4 h-4 shrink-0 relative" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
                   </svg>
-                  <span className="relative">ขอใบเสนอราคา</span>
+                  <span className="relative">{t("ctaQuote")}</span>
                   <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
                 </a>
 
@@ -723,7 +721,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
                   ].join(" ")}
                 >
                   <Phone className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  โทร {HOTLINE}
+                  {t("ctaCallPrefix")} {HOTLINE}
                 </a>
               </>
             )}
@@ -735,7 +733,7 @@ function CargoPriceCard({ card }: { card: CargoCard }) {
 }
 
 // ────────────────── Freight card (Term-varied) ──────────────────
-function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
+function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t: PricingT }) {
   const popular = card.popular;
   const price = card.price[term];
 
@@ -768,15 +766,15 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
           <div className="absolute -top-px left-5 z-[2]">
             <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
               <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
-              ยอดนิยม · TOP #1
+              {t("popularBadge")}
             </div>
           </div>
         )}
 
         <div className="relative p-5 md:p-6 pb-4 md:pb-5">
-          {card.badge && !popular && (
+          {card.badgeKey && !popular && (
             <span className="inline-flex items-center text-[10px] font-black px-2 py-1 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 tracking-[0.08em] mb-2">
-              {card.badge}
+              {t(card.badgeKey)}
             </span>
           )}
 
@@ -785,14 +783,14 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
               {card.title}
             </h3>
             <p className={`text-[12px] md:text-[13px] mt-0.5 leading-snug ${popular ? "text-white/85" : "text-muted"}`}>
-              {card.subtitle}
+              {t(card.subtitleKey)}
             </p>
           </div>
 
           <div className="mt-4 flex items-baseline gap-1.5">
             <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full ${popular ? "bg-white/20 text-white" : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"}`}>
               <Star className="w-2.5 h-2.5" fill="currentColor" strokeWidth={0} />
-              เริ่มต้น
+              {t("startsFrom")}
             </span>
           </div>
           <div className="flex items-baseline gap-1.5 mt-1">
@@ -800,11 +798,11 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
               {price}
             </span>
             <span className={`text-[12px] font-bold ${popular ? "text-white/85" : "text-muted"}`}>
-              {card.unit}
+              {t(card.unitKey)}
             </span>
           </div>
           <div className={`mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md ${popular ? "bg-white/15 text-white" : "bg-surface text-muted"}`}>
-            Term: <span className={popular ? "text-yellow-200" : "text-primary-600 font-black"}>{term}</span>
+            {t("termPrefix")} <span className={popular ? "text-yellow-200" : "text-primary-600 font-black"}>{term}</span>
           </div>
         </div>
 
@@ -818,7 +816,7 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
               : "bg-white dark:bg-surface text-primary-600 border border-primary-200 dark:border-primary-900",
           ].join(" ")}>
             <Ship className="w-2.5 h-2.5" strokeWidth={2.5} />
-            Port to Port
+            {t("portToPort")}
           </div>
         </div>
 
@@ -826,7 +824,7 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
           <div className="grid grid-cols-2 gap-2 mb-3">
             {card.stats.map((s) => (
               <div
-                key={s.label}
+                key={s.labelKey}
                 className={[
                   "rounded-xl px-3 py-2 border",
                   popular
@@ -835,10 +833,10 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
                 ].join(" ")}
               >
                 <div className={`text-[10px] font-bold uppercase tracking-[0.08em] ${popular ? "text-white/75" : "text-muted"}`}>
-                  {s.label}
+                  {t(s.labelKey)}
                 </div>
                 <div className={`text-[13px] font-black mt-0.5 tabular-nums ${popular ? "text-white" : "text-[#111827] dark:text-white"}`}>
-                  {s.value}
+                  {t(s.valueKey)}
                 </div>
               </div>
             ))}
@@ -858,7 +856,7 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
             ].join(" ")}>
               <Sparkles className="w-3 h-3" strokeWidth={2.5} />
             </div>
-            <span className="pt-0.5">{card.note}</span>
+            <span className="pt-0.5">{t(card.noteKey)}</span>
           </div>
 
           <div className="mt-auto flex flex-col gap-2">
@@ -877,7 +875,7 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
               <svg className="w-4 h-4 shrink-0 relative" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
               </svg>
-              <span className="relative">ขอใบเสนอราคา</span>
+              <span className="relative">{t("ctaQuote")}</span>
               <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
             </a>
 
@@ -891,7 +889,7 @@ function FreightPriceCard({ card, term }: { card: FreightCard; term: Term }) {
               ].join(" ")}
             >
               <Phone className="w-3.5 h-3.5" strokeWidth={2.5} />
-              โทร {HOTLINE}
+              {t("ctaCallPrefix")} {HOTLINE}
             </a>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Sparkles } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
@@ -28,6 +29,7 @@ export function StubPage({
   banner?: StubBanner;
   children?: ReactNode;
 }) {
+  const tPl = useTranslations("placeholders");
   return (
     <>
       <NavBar />
@@ -40,7 +42,7 @@ export function StubPage({
             {breadcrumb && breadcrumb.length > 0 && (
               <nav className="mx-auto w-full max-w-[1120px] flex items-center gap-1 text-[11.5px] md:text-[12.5px] text-muted mb-4 md:mb-5 flex-wrap">
                 <Link href="/" className="hover:text-primary-600 transition-colors font-bold">
-                  หน้าหลัก
+                  {tPl("homeBreadcrumb")}
                 </Link>
                 {breadcrumb.map((b, i) => (
                   <span key={i} className="inline-flex items-center gap-1">
@@ -101,16 +103,17 @@ export function StubPage({
 }
 
 function DefaultPlaceholder() {
+  const t = useTranslations("placeholders");
   return (
     <div className="relative rounded-2xl md:rounded-3xl border border-dashed border-border bg-gradient-to-br from-surface to-white dark:from-surface dark:to-background p-10 md:p-16 text-center">
       <div className="mx-auto w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-[0_10px_24px_rgba(179,0,0,0.25)] mb-4">
         <Sparkles className="w-7 h-7 md:w-8 md:h-8" fill="currentColor" strokeWidth={0} />
       </div>
       <h2 className="text-[20px] md:text-[26px] font-black text-[#111827] dark:text-white tracking-tight">
-        กำลังเตรียมข้อมูลให้คุณ
+        {t("stubPreparing")}
       </h2>
       <p className="mt-2 text-[13px] md:text-[15px] text-muted max-w-[520px] mx-auto leading-[1.6]">
-        เนื้อหาส่วนนี้กำลังอยู่ระหว่างการอัปเดต — ระหว่างนี้คุณสามารถปรึกษาทีม Pacred Shipping ได้ผ่าน LINE หรือเบอร์โทรด้านล่าง
+        {t("stubBody")}
       </p>
     </div>
   );

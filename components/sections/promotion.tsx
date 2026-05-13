@@ -3,43 +3,44 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { PromoCarousel } from "@/components/ui/promo-carousel";
 
-const benefits = [
-  {
-    title: "ผู้ใช้ใหม่รับส่วนลดเพิ่ม",
-    description: "ลูกค้าใหม่รับสิทธิ์ทันที",
-    highlight: "",
-    image: "/images/hero-section/icon-draf/people.png",
-    href: "https://line.me/ti/p/@pacred",
-    first: true,
-  },
-  {
-    title: "ล่ามปิดดีลโรงงาน",
-    description: "ล่ามจีนฝากสั่งซื้อปิดดีลโรงงาน",
-    highlight: "ฟรี",
-    image: "/images/hero-section/icon-draf/pcs-sales.png",
-    href: "https://line.me/ti/p/@pacred",
-    first: false,
-  },
-  {
-    title: "เรทคุ้มเบากระเป๋า",
-    description: "ฝากโอนหยวนชำระค่าสินค้า",
-    highlight: "ถูก",
-    image: "/images/hero-section/icon-draf/ongkorn.png",
-    href: "https://line.me/ti/p/@pacred",
-    first: false,
-  },
-  {
-    title: "บาทขนส่งเหมาๆ",
-    description: "ขนส่งทั่วกทม.ปริมณฑล 100",
-    highlight: "100",
-    image: "/images/hero-section/icon-draf/caricon.png",
-    href: "https://line.me/ti/p/@pacred",
-    first: false,
-  },
-];
-
 export function Promotion() {
   const t = useTranslations("promotion");
+  const tExt = useTranslations("promotionExtras");
+
+  const benefits = [
+    {
+      title: tExt("newUserTitle"),
+      description: tExt("newUserDesc"),
+      highlight: "",
+      image: "/images/hero-section/icon-draf/people.png",
+      href: "https://line.me/ti/p/@pacred",
+      first: true,
+    },
+    {
+      title: tExt("interpreterTitle"),
+      description: tExt("interpreterDesc"),
+      highlight: tExt("interpreterHighlight"),
+      image: "/images/hero-section/icon-draf/pcs-sales.png",
+      href: "https://line.me/ti/p/@pacred",
+      first: false,
+    },
+    {
+      title: tExt("rateTitle"),
+      description: tExt("rateDesc"),
+      highlight: tExt("rateHighlight"),
+      image: "/images/hero-section/icon-draf/ongkorn.png",
+      href: "https://line.me/ti/p/@pacred",
+      first: false,
+    },
+    {
+      title: tExt("shippingTitle"),
+      description: tExt("shippingDesc"),
+      highlight: tExt("shippingHighlight"),
+      image: "/images/hero-section/icon-draf/caricon.png",
+      href: "https://line.me/ti/p/@pacred",
+      first: false,
+    },
+  ];
 
   return (
     <section id="promotion" className="pb-6 pt-2">
@@ -47,12 +48,15 @@ export function Promotion() {
 
         {/* Container 1 — Section heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
-            <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-            PROMOTION
+          <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-1.5 text-primary-600 text-[10.5px] md:text-[13px] font-black tracking-[0.08em] uppercase">
+            <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
+            {t("sectionBadge").toUpperCase() === "PROMOTIONS" ? "PROMOTION" : t("sectionBadge")}
           </div>
-          <h2 className="text-[22px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-            <span className="md:hidden">โปรโมชั่นสิทธิ์พิเศษ</span>
+          <h2 className="text-[19px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
+            <span className="md:hidden">
+              {t("title")}
+              <span className="text-primary-600">{t("titleHighlight")}</span>
+            </span>
             <span className="hidden md:inline">
               {t("title")}
               <span className="text-primary-600">{t("titleHighlight")}</span>
@@ -122,7 +126,7 @@ export function Promotion() {
                           : "bg-red-50 text-primary-600 group-hover:bg-primary-600 group-hover:text-white",
                       ].join(" ")}
                     >
-                      รับสิทธิ์
+                      {tExt("claim")}
                     </Link>
                   </div>
 

@@ -1,6 +1,7 @@
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
+import { MobileTrustRibbon } from "@/components/sections/mobile-trust-ribbon";
 import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
 import { OurService } from "@/components/sections/our-service";
@@ -11,6 +12,7 @@ import { ClearanceBanner } from "@/components/sections/clearance-banner";
 import { ClearanceCards } from "@/components/sections/clearance-cards";
 import { WhyPacred } from "@/components/sections/why-pacred";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { ContactSales } from "@/components/sections/contact-sales";
 import { Reviews } from "@/components/sections/reviews";
 import { Sales } from "@/components/sections/sales";
 import { Blog } from "@/components/sections/blog";
@@ -24,6 +26,7 @@ export default function Home() {
       <SearchBar />
       <main>
         <BookingCalculator />
+        <MobileTrustRibbon />
         <StatsBar />
         <Promotion />
         <OurService />
@@ -33,6 +36,7 @@ export default function Home() {
         <ClearanceBanner />
         <ClearanceCards />
         <WhyPacred />
+        <ContactSales />
         <ImportExportBanner />
         <Reviews />
         <Sales />

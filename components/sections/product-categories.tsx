@@ -1,30 +1,39 @@
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
-const categories = [
-  { title: "ผลิตภัณฑ์ความงาม",          image: "/images/catagory/beaty.png" },
-  { title: "เสื้อผ้าแฟชั่นผู้ชาย",       image: "/images/catagory/maleclothes.png" },
-  { title: "กระเป๋าถือ",                image: "/images/catagory/handbag.png" },
-  { title: "รองเท้าผู้หญิง",             image: "/images/catagory/girlshoe.png" },
-  { title: "เครื่องจักร",               image: "/images/catagory/machine.png" },
-  { title: "อุปกรณ์อิเล็กทรอนิกส์",    image: "/images/catagory/electronic.png" },
-  { title: "เฟอร์นิเจอร์",              image: "/images/catagory/medic.png" },
-  { title: "กล้องและอุปกรณ์ถ่ายภาพ",   image: "/images/catagory/camera.png" },
-  { title: "ของเล่น สินค้าแม่และเด็ก",  image: "/images/catagory/kidtoy.png" },
-  { title: "สัตว์เลี้ยง",              image: "/images/catagory/pet.png" },
-  { title: "อุปกรณ์ทางการแพทย์",       image: "/images/catagory/heartpump.png" },
-  { title: "เสื้อผ้าแฟชั่นผู้หญิง",    image: "/images/catagory/girlfashion.png" },
-  { title: "รองเท้าผู้ชาย",            image: "/images/catagory/shoe.png" },
-  { title: "เครื่องประดับ",            image: "/images/catagory/necklace.png" },
-  { title: "เครื่องใช้ในบ้าน",         image: "/images/catagory/homeuse.png" },
-  { title: "มือถือ และแท็บเล็ต",       image: "/images/catagory/phone.png" },
-  { title: "คอมพิวเตอร์และแล็ปท็อป",   image: "/images/catagory/comlaptop.png" },
-  { title: "อาหารและเครื่องดื่ม",      image: "/images/catagory/food.png" },
-  { title: "กีฬาและกิจกรรมกลางแจ้ง",   image: "/images/catagory/racket.png" },
-  { title: "เกมและอุปกรณ์เสริม",       image: "/images/catagory/ps5.png" },
+const CATEGORY_IMAGES = [
+  "/images/catagory/beaty.png",
+  "/images/catagory/maleclothes.png",
+  "/images/catagory/handbag.png",
+  "/images/catagory/girlshoe.png",
+  "/images/catagory/machine.png",
+  "/images/catagory/electronic.png",
+  "/images/catagory/medic.png",
+  "/images/catagory/camera.png",
+  "/images/catagory/kidtoy.png",
+  "/images/catagory/pet.png",
+  "/images/catagory/heartpump.png",
+  "/images/catagory/girlfashion.png",
+  "/images/catagory/shoe.png",
+  "/images/catagory/necklace.png",
+  "/images/catagory/homeuse.png",
+  "/images/catagory/phone.png",
+  "/images/catagory/comlaptop.png",
+  "/images/catagory/food.png",
+  "/images/catagory/racket.png",
+  "/images/catagory/ps5.png",
 ];
 
 export function ProductCategories() {
+  const tCat = useTranslations("service");
+  const tPc = useTranslations("productCategories");
+
+  const categories = CATEGORY_IMAGES.map((image, i) => ({
+    title: tCat(`cat${i + 1}`),
+    image,
+  }));
+
   return (
     <section className="pt-6 pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
@@ -33,17 +42,17 @@ export function ProductCategories() {
         <div className="mx-auto w-full max-w-[1120px] mb-5">
           <div className="flex items-center gap-2 mb-1 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-            PRODUCT CATEGORIES
+            {tPc("eyebrow")}
           </div>
           <h2 className="text-[32px] md:text-[36px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white relative pl-[18px]">
             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[7px] h-[34px] rounded-full bg-gradient-to-b from-red-600 to-red-800" />
-            ฝากสั่งซื้อสินค้าจากจีน{" "}
-            <span className="text-primary-600">1688 · Taobao · Tmall</span>
+            {tPc("titlePrefix")}
+            <span className="text-primary-600">{tPc("titleHighlight")}</span>
           </h2>
           <p className="mt-1.5 text-[15px] md:text-[17px] font-bold text-gray-500">
-            โรงงานไหน ประเทศอะไร{" "}
-            <span className="text-primary-600 font-black">Pacred</span>{" "}
-            จัดให้... ง่ายแค่ปลายนิ้ว !
+            {tPc("subtitlePrefix")}
+            <span className="text-primary-600 font-black">{tPc("subtitleBrand")}</span>
+            {tPc("subtitleSuffix")}
           </p>
         </div>
 

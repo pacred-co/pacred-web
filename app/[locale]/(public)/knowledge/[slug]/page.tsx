@@ -135,7 +135,7 @@ export default async function ArticlePage({
 
             {/* Article content */}
             <div className="mx-auto w-full max-w-[760px]">
-              <ArticleContent text={content} />
+              <ArticleContent text={content} title={article.title} />
             </div>
 
           </div>

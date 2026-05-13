@@ -41,67 +41,68 @@ interface HeroTabsProps {
 
 export function HeroTabs({ onActiveChange }: HeroTabsProps) {
   const t = useTranslations("heroTabs");
+  const f = useTranslations("heroForm");
   const [active, setActive] = useState<number | null>(null);
 
   const tabs: TabConfig[] = [
     {
       title: t("tab1Title"), sub: t("tab1Sub"), icon: Anchor,
-      submitLabel: "ขอใบเสนอราคา",
+      submitLabel: f("quoteSubmit"),
       fields: [
-        { label: "ประเภท", placeholder: "เลือกประเภท", type: "select", options: ["LCL", "FCL"] },
-        { label: "ต้นทาง", placeholder: "เช่น Shanghai, China" },
-        { label: "ปลายทาง", placeholder: "เช่น กรุงเทพฯ, ไทย" },
-        { label: "น้ำหนัก / CBM", placeholder: "เช่น 500 kg / 2 CBM" },
+        { label: f("type"), placeholder: f("typeChoose"), type: "select", options: ["LCL", "FCL"] },
+        { label: f("origin"), placeholder: f("originPh1") },
+        { label: f("destination"), placeholder: f("destinationPh1") },
+        { label: f("weightCbm"), placeholder: f("weightCbmPh") },
       ],
     },
     {
       title: t("tab2Title"), sub: t("tab2Sub"), icon: TruckMoving,
-      submitLabel: "ขอใบเสนอราคา",
+      submitLabel: f("quoteSubmit"),
       fields: [
-        { label: "ต้นทาง", placeholder: "เช่น กวางโจว, จีน" },
-        { label: "ปลายทาง", placeholder: "เช่น กรุงเทพฯ, ไทย" },
-        { label: "ประเภทสินค้า", placeholder: "เช่น สินค้าทั่วไป" },
-        { label: "น้ำหนัก (kg)", placeholder: "เช่น 1,000 kg" },
+        { label: f("origin"), placeholder: f("originPh2") },
+        { label: f("destination"), placeholder: f("destinationPh1") },
+        { label: f("productType"), placeholder: f("productTypePh1") },
+        { label: f("weightKg"), placeholder: f("weightKgPh1") },
       ],
     },
     {
       title: t("tab3Title"), sub: t("tab3Sub"), icon: PlaneTakeoff,
-      submitLabel: "ขอใบเสนอราคา",
+      submitLabel: f("quoteSubmit"),
       fields: [
-        { label: "ประเภท", placeholder: "เลือกประเภท", type: "select", options: ["นำเข้า", "ส่งออก"] },
-        { label: "ต้นทาง", placeholder: "เช่น Beijing, China" },
-        { label: "ปลายทาง", placeholder: "เช่น Suvarnabhumi, TH" },
-        { label: "น้ำหนัก (kg)", placeholder: "เช่น 200 kg" },
+        { label: f("type"), placeholder: f("typeChoose"), type: "select", options: [f("typeImport"), f("typeExport")] },
+        { label: f("origin"), placeholder: f("originPh3") },
+        { label: f("destination"), placeholder: f("destinationPh2") },
+        { label: f("weightKg"), placeholder: f("weightKgPh2") },
       ],
     },
     {
       title: t("tab4Title"), sub: t("tab4Sub"), icon: ClipboardList,
-      submitLabel: "ติดต่อเจ้าหน้าที่",
+      submitLabel: f("contactSubmit"),
       fields: [
-        { label: "ด่านศุลกากร", placeholder: "เช่น ท่าเรือแหลมฉบัง" },
-        { label: "ประเภทสินค้า", placeholder: "เช่น อิเล็กทรอนิกส์" },
-        { label: "เลขที่ใบขนสินค้า", placeholder: "เช่น 1101-XXXXXXXX" },
-        { label: "เบอร์โทรติดต่อ", placeholder: "เช่น 08X-XXX-XXXX" },
+        { label: f("customsPort"), placeholder: f("customsPortPh") },
+        { label: f("productType"), placeholder: f("productTypePh2") },
+        { label: f("awb"), placeholder: f("awbPh") },
+        { label: f("phone"), placeholder: f("phonePh") },
       ],
     },
     {
       title: t("tab5Title"), sub: t("tab5Sub"), icon: ShoppingCart,
-      submitLabel: "ส่งรายการสั่งซื้อ",
+      submitLabel: f("sourcingSubmit"),
       fields: [
-        { label: "แพลตฟอร์ม", placeholder: "เลือกแพลตฟอร์ม", type: "select", options: ["1688", "Taobao", "Tmall", "Alibaba"] },
-        { label: "ลิงก์สินค้า", placeholder: "วางลิงก์สินค้าที่นี่" },
-        { label: "จำนวน (ชิ้น)", placeholder: "เช่น 100" },
-        { label: "งบประมาณ (บาท)", placeholder: "เช่น 50,000" },
+        { label: f("platform"), placeholder: f("platformPh"), type: "select", options: ["1688", "Taobao", "Tmall", "Alibaba"] },
+        { label: f("productLink"), placeholder: f("productLinkPh") },
+        { label: f("qty"), placeholder: f("qtyPh") },
+        { label: f("budget"), placeholder: f("budgetPh") },
       ],
     },
     {
       title: t("tab6Title"), sub: t("tab6Sub"), icon: Banknote,
-      submitLabel: "ขอใบเสนอราคา",
+      submitLabel: f("quoteSubmit"),
       fields: [
-        { label: "สกุลเงิน", placeholder: "เลือกสกุลเงิน", type: "select", options: ["CNY (หยวน)", "USD (ดอลลาร์)", "EUR (ยูโร)", "JPY (เยน)"] },
-        { label: "จำนวนเงิน", placeholder: "เช่น 10,000" },
-        { label: "ประเทศปลายทาง", placeholder: "เช่น จีน" },
-        { label: "วัตถุประสงค์", placeholder: "เช่น ชำระค่าสินค้า" },
+        { label: f("currency"), placeholder: f("currencyPh"), type: "select", options: [f("currencyCny"), f("currencyUsd"), f("currencyEur"), f("currencyJpy")] },
+        { label: f("amount"), placeholder: f("amountPh") },
+        { label: f("destCountry"), placeholder: f("destCountryPh") },
+        { label: f("purpose"), placeholder: f("purposePh") },
       ],
     },
   ];
@@ -123,7 +124,6 @@ export function HeroTabs({ onActiveChange }: HeroTabsProps) {
             <button
               key={tab.title}
               onClick={() => handleTabClick(i)}
-              suppressHydrationWarning
               className={`group flex flex-1 min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors border-b-2 ${
                 active === i
                   ? "border-primary-500 bg-primary-50 dark:bg-primary-950"
