@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { ChevronDown } from "lucide-react";
 
@@ -8,109 +9,94 @@ type SubItem = { label: string; href: string; hot?: boolean };
 type Group = { title?: string; items: SubItem[] };
 type Item = { label: string; href?: string; groups?: Group[] };
 
-const MAIN_MENU: Item[] = [
-  {
-    label: "บริการด่วน",
-    groups: [
-      {
-        items: [
-          { label: "ชิปปิ้งเคลียร์สินค้าติดด่าน", href: "/services/customs-clearance" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "นำเข้า",
-    groups: [
-      {
-        title: "LCL (แชร์ตู้ / รวมตู้)",
-        items: [
-          { label: "นำเข้าสินค้าจากจีน", href: "/services/import-china", hot: true },
-        ],
-      },
-      {
-        title: "FCL (เหมาตู้ / ปิดตู้)",
-        items: [
-          { label: "นำเข้าสินค้าจากจีน", href: "/services/import-china" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "ส่งออก",
-    href: "/services/export-worldwide",
-  },
-  {
-    label: "สั่งซื้อสินค้า",
-    groups: [
-      {
-        title: "ประเทศจีน",
-        items: [
-          { label: "1688",    href: "https://www.1688.com" },
-          { label: "Taobao",  href: "https://world.taobao.com" },
-          { label: "Alibaba", href: "https://www.alibaba.com" },
-          { label: "Tmall",   href: "https://www.tmall.com" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "วิธีการใช้บริการ",
-    href: "/how-to-use",
-  },
-  {
-    label: "เรทราคาบริการ",
-    href: "/#pricing",
-  },
-  {
-    label: "ฝากโอนชำระ",
-    groups: [
-      {
-        title: "ประเทศจีน",
-        items: [
-          { label: "1688",    href: "/payment/1688" },
-          { label: "Taobao",  href: "/payment/taobao" },
-          { label: "Alipay",  href: "/payment/alipay" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "ที่อยู่โกดังเรา",
-    groups: [
-      {
-        title: "โกดังไทย",
-        items: [
-          { label: "โกดังเพชรเกษม 118", href: "/warehouses/thailand" },
-        ],
-      },
-      {
-        title: "โกดังจีน",
-        items: [
-          { label: "โกดังกวางโจว", href: "/warehouses/guangzhou" },
-          { label: "โกดังอี้อู",    href: "/warehouses/yiwu" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "เกี่ยวกับเรา",
-    groups: [
-      {
-        items: [
-          { label: "เกี่ยวกับ Pacred",          href: "/about" },
-          { label: "สาระน่ารู้",                 href: "/knowledge" },
-          { label: "คำถามที่พบบ่อย",             href: "/faq" },
-          { label: "ร่วมใช้งาน กับ Pacred",     href: "/register" },
-          { label: "ข้อกำหนดและเงื่อนไข",        href: "/terms" },
-          { label: "นโยบายความเป็นส่วนตัว",      href: "/privacy" },
-          { label: "พื้นที่จัดส่ง Pacred เหมาๆ", href: "/delivery-areas" },
-          { label: "วันหยุดประจำปี Pacred",      href: "/holidays" },
-        ],
-      },
-    ],
-  },
-];
+type Translator = (key: string) => string;
+
+function buildMenu(t: Translator): Item[] {
+  return [
+    {
+      label: t("quick"),
+      groups: [
+        { items: [{ label: t("customsHot"), href: "/services/customs-clearance" }] },
+      ],
+    },
+    {
+      label: t("import"),
+      groups: [
+        {
+          title: t("lclTitle"),
+          items: [{ label: t("importChina"), href: "/services/import-china", hot: true }],
+        },
+        {
+          title: t("fclTitle"),
+          items: [{ label: t("importChina"), href: "/services/import-china" }],
+        },
+      ],
+    },
+    { label: t("export"), href: "/services/export-worldwide" },
+    {
+      label: t("order"),
+      groups: [
+        {
+          title: t("china"),
+          items: [
+            { label: "1688",    href: "https://www.1688.com" },
+            { label: "Taobao",  href: "https://world.taobao.com" },
+            { label: "Alibaba", href: "https://www.alibaba.com" },
+            { label: "Tmall",   href: "https://www.tmall.com" },
+          ],
+        },
+      ],
+    },
+    { label: t("howToUse"), href: "/how-to-use" },
+    { label: t("pricing"),  href: "/#pricing" },
+    {
+      label: t("payment"),
+      groups: [
+        {
+          title: t("china"),
+          items: [
+            { label: "1688",   href: "/payment/1688" },
+            { label: "Taobao", href: "/payment/taobao" },
+            { label: "Alipay", href: "/payment/alipay" },
+          ],
+        },
+      ],
+    },
+    {
+      label: t("warehouse"),
+      groups: [
+        {
+          title: t("whTh"),
+          items: [{ label: t("whThPhetkasem"), href: "/warehouses/thailand" }],
+        },
+        {
+          title: t("whCn"),
+          items: [
+            { label: t("whGuangzhou"), href: "/warehouses/guangzhou" },
+            { label: t("whYiwu"),      href: "/warehouses/yiwu" },
+          ],
+        },
+      ],
+    },
+    {
+      label: t("about"),
+      groups: [
+        {
+          items: [
+            { label: t("aboutPacred"), href: "/about" },
+            { label: t("knowledge"),   href: "/knowledge" },
+            { label: t("faq"),         href: "/faq" },
+            { label: t("join"),        href: "/register" },
+            { label: t("terms"),       href: "/terms" },
+            { label: t("privacy"),     href: "/privacy" },
+            { label: t("delivery"),    href: "/delivery-areas" },
+            { label: t("holidays"),    href: "/holidays" },
+          ],
+        },
+      ],
+    },
+  ];
+}
 
 function isExternal(href: string) {
   return href.startsWith("http") || href.startsWith("//");
@@ -223,9 +209,11 @@ function MenuItem({ item }: { item: Item }) {
 }
 
 export function TopMenu() {
+  const t = useTranslations("topMenu");
+  const menu = buildMenu(t);
   return (
     <nav className="flex items-center justify-center gap-0.5">
-      {MAIN_MENU.map((item) => (
+      {menu.map((item) => (
         <MenuItem key={item.label} item={item} />
       ))}
     </nav>
@@ -234,9 +222,11 @@ export function TopMenu() {
 
 /* ─────────── Mobile menu (flat list) ─────────── */
 export function TopMenuMobile({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("topMenu");
+  const menu = buildMenu(t);
   return (
     <div className="flex flex-col">
-      {MAIN_MENU.map((item) => (
+      {menu.map((item) => (
         <MobileMenuItem key={item.label} item={item} onClose={onClose} />
       ))}
     </div>

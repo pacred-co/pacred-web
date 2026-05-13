@@ -284,7 +284,12 @@
   "partner": {
     "sectionBadge": "Partners",
     "title": "Partnering with Leading Organizations",
-    "subtitle": "We are trusted by leading organizations and companies both domestically and internationally."
+    "subtitle": "We are trusted by leading organizations and companies both domestically and internationally.",
+    "eyebrowEn": "OUR PARTNERS",
+    "headingPart1": "Our ",
+    "headingPart2": "partners",
+    "lead": "Working with a global network of leading importers, exporters, carriers, shipping lines, ports, and customs partners",
+    "etrackingName": "Customs e-Tracking"
   },
   "login": {
     "title": "Sign In",
@@ -798,6 +803,35 @@
     "shippingTitle": "Baht flat-rate shipping",
     "shippingDesc": "All Bangkok & metropolitan area, 100 THB",
     "shippingHighlight": "100"
+  },
+  "topMenu": {
+    "quick": "Quick service",
+    "import": "Import",
+    "export": "Export",
+    "order": "Order",
+    "howToUse": "How to use",
+    "pricing": "Pricing",
+    "payment": "Supplier payment",
+    "warehouse": "Warehouses",
+    "about": "About us",
+    "lclTitle": "LCL (shared / consolidated)",
+    "fclTitle": "FCL (full container)",
+    "china": "China",
+    "whTh": "Thailand warehouses",
+    "whCn": "China warehouses",
+    "customsHot": "Customs clearance for stuck cargo",
+    "importChina": "Import from China",
+    "whThPhetkasem": "Phetkasem 118 warehouse",
+    "whGuangzhou": "Guangzhou warehouse",
+    "whYiwu": "Yiwu warehouse",
+    "aboutPacred": "About Pacred",
+    "knowledge": "Articles & insights",
+    "faq": "FAQ",
+    "join": "Sign up with Pacred",
+    "terms": "Terms & conditions",
+    "privacy": "Privacy policy",
+    "delivery": "Pacred flat-rate delivery zones",
+    "holidays": "Pacred annual holidays"
   },
   "footerNew": {
     "contactHeading1": "Contact ",

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 
 type Partner = {
   file: string;
@@ -35,6 +36,11 @@ const PARTNERS: Partner[] = [
 ];
 
 export function Partner() {
+  const t = useTranslations("partner");
+  // Translate the one partner name that has Thai (e-Tracking)
+  const partners = PARTNERS.map((p) =>
+    p.file === "etracking.png" ? { ...p, name: t("etrackingName") } : p,
+  );
   return (
     <section id="partner" className="py-8 md:py-12">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
@@ -43,14 +49,14 @@ export function Partner() {
         <div className="mx-auto w-full max-w-[1120px]">
           <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-            OUR PARTNERS
+            {t("eyebrowEn")}
           </div>
           <h2 className="text-[24px] md:text-[34px] leading-[1.2] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-            พาร์ทเนอร์{" "}
-            <span className="text-primary-600">ของเรา</span>
+            {t("headingPart1")}{" "}
+            <span className="text-primary-600">{t("headingPart2")}</span>
           </h2>
           <p className="mt-2 text-[13px] md:text-[15px] leading-[1.55] font-medium text-muted md:whitespace-nowrap md:overflow-hidden md:text-ellipsis">
-            ทำงานกับเครือข่ายผู้นำเข้า–ส่งออก ขนส่ง สายเดินเรือ ท่าเรือ และศุลกากรชั้นนำทั่วโลก
+            {t("lead")}
           </p>
         </div>
 
@@ -73,10 +79,10 @@ export function Partner() {
             style={{
               gap: 28,
               animation: "marquee 60s linear infinite",
-              width: `${PARTNERS.length * 2 * (170 + 28)}px`,
+              width: `${partners.length * 2 * (170 + 28)}px`,
             }}
           >
-            {[...PARTNERS, ...PARTNERS].map((p, i) => (
+            {[...partners, ...partners].map((p, i) => (
               <a
                 key={i}
                 href={p.url}
