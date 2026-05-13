@@ -23,9 +23,9 @@ export const HERO_CONTENT: Record<string, { title: string; sub: string }> = {
 };
 
 export const SALES_CARDS: SalesCard[] = [
-  { name: 'แบม',  slogan: 'ตู้เล็ก ตู้ใหญ่จะตู้ไหน ก็พร้อมปิดให้ได้หมด', phone: '066-125-3007', image: '/images/theme/2026/salebam.png',  alt: 'เซลล์แบม',  link: 'https://lin.ee/t7xphTi', button: 'ทักแบมเลย' },
-  { name: 'ยีนส์', slogan: 'ของไม่ค้าง ด่านไม่ติด การันตีถึงมือแน่นอน',   phone: '066-090-1217', image: '/images/theme/2026/salejean.png', alt: 'เซลล์ยีนส์', link: 'https://lin.ee/t7xphTi', button: 'ทักยีนส์เลย' },
-  { name: 'พลอย', slogan: 'จะPortไหน Termไหน ก็พร้อมลุย',                phone: '062-719-1998', image: '/images/theme/2026/saleploy.png', alt: 'เซลล์พลอย', link: 'https://lin.ee/t7xphTi', button: 'ทักพลอยเลย' },
+  { name: 'วิน',  slogan: 'นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว', phone: '066-125-3007', image: '/images/Character_Icon/win.png',  alt: 'เซลล์วิน Pacred',  link: 'https://lin.ee/Yg3fU0I', button: 'ทักวินเลย' },
+  { name: 'แนท',  slogan: 'นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว', phone: '066-125-3007', image: '/images/pacred-logo-red.png',     alt: 'เซลล์แนท Pacred',  link: 'https://lin.ee/Yg3fU0I', button: 'ทักแนทเลย' },
+  { name: 'พลอย', slogan: 'เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ',    phone: '066-090-1217', image: '/images/Character_Icon/ploy.png', alt: 'เซลล์พลอย Pacred', link: 'https://lin.ee/Yg3fU0I', button: 'ทักพลอยเลย' },
 ];
 
 export const ORIGIN_SECTIONS: DropdownSection[] = [
