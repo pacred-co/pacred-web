@@ -319,7 +319,7 @@ function JuristicForm() {
 
   /* step 2 */
   const [taxId, setTaxId]               = useState("");
-  const [taxStatus, setTaxStatus]       = useState<"idle" | "loading" | "found" | "notfound">("idle");
+  const [taxStatus, setTaxStatus]       = useState<"idle" | "loading" | "found" | "notfound" | "unavailable">("idle");
   const [companyName, setCompanyName]   = useState("");
   const [addressLine, setAddressLine]   = useState("");
   const [subdistrict, setSubdistrict]   = useState("");
@@ -356,9 +356,14 @@ function JuristicForm() {
       `https://opendata.dbd.go.th/api/v1/nameAndAddress?JuristicID=${id}`,
       `https://opendata.dbd.go.th/api/v1/juristicNameAll?JuristicID=${id}`,
     ];
+    // Track whether *any* endpoint behaved like a real API. If every call
+    // failed with a network error / 5xx, the API is down — don't gaslight
+    // the user with "ไม่พบข้อมูล" when their tax ID may be perfectly valid.
+    let sawApiError = false;
     for (const url of endpoints) {
       try {
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (res.status >= 500) { sawApiError = true; continue; }
         if (!res.ok) continue;
         const json = await res.json();
         const d = json?.data?.[0] || json?.result?.[0] || json?.[0] || null;
@@ -373,9 +378,18 @@ function JuristicForm() {
         setPostcode(d.postcode || d.PostCode || d.zipcode || "");
         setTaxStatus("found");
         return;
-      } catch { /* try next */ }
+      } catch {
+        sawApiError = true;
+      }
     }
-    setTaxStatus("notfound");
+    setTaxStatus(sawApiError ? "unavailable" : "notfound");
+  }
+
+  function retryTaxLookup() {
+    if (taxId.length === 13) {
+      setTaxStatus("loading");
+      fetchCompany(taxId);
+    }
   }
 
   /* step navigation */
@@ -494,6 +508,18 @@ function JuristicForm() {
             {taxStatus === "loading" && <span className="text-amber-500">⏳ กำลังค้นหาข้อมูลบริษัท...</span>}
             {taxStatus === "found"   && <span className="text-green-600">✅ พบข้อมูลบริษัท กรุณาตรวจสอบความถูกต้อง</span>}
             {taxStatus === "notfound"&& <span className="text-red-500">❌ ไม่พบข้อมูล กรุณากรอกด้วยตนเอง</span>}
+            {taxStatus === "unavailable" && (
+              <span className="text-amber-600">
+                ⚠️ ระบบค้นหาข้อมูลบริษัทไม่พร้อมใช้งาน กรุณากรอกด้วยตนเอง
+                <button
+                  type="button"
+                  onClick={retryTaxLookup}
+                  className="ml-2 underline hover:text-amber-700"
+                >
+                  ลองอีกครั้ง
+                </button>
+              </span>
+            )}
             {taxStatus === "idle" && taxId.length > 0 && taxId.length < 13 &&
               <span className="text-[#8A8F9B]">กรอก 13 หลัก ({taxId.length}/13)</span>}
           </div>
