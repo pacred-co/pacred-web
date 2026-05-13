@@ -991,3 +991,225 @@ RESEND_API_KEY=<from resend.com>
 🟡 **Admin pages duplicate** — ต้อง cleanup ตาม L1-L7 ก่อน production launch
 
 **กติกาสำคัญ:** อย่าใช้ `profiles.role` ที่ไหนใหม่ — ใช้ `is_admin()` หรือ `admins` table queries เท่านั้น
+
+---
+
+# Part M — Audit Update 2026-05-13 (post-Poom-merge full sweep)
+
+> **Scope:** อ่าน MD ทั้งหมดใน repo + กวาด PHP ที่ `C:\xampp\htdocs\pcscargo` (≈400+ ไฟล์) + เทียบกับ Next.js state ปัจจุบัน (post-merge `7a93cb5` บน `dave`)
+> **เจอ gaps ใหญ่ที่ไม่อยู่ใน Part B/C/E** — บันทึกแยกใน Part M เพื่อ trace ง่าย จะค่อย integrate เข้า Part B/C/E ใน iteration ถัดไป
+
+## M1. Branch + Code State (2026-05-13)
+
+### Branches snapshot
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `facd03a` | ก๊อตยังไม่ได้ merge งานล่าสุดของทีม |
+| `dave` (local + remote) | `7a93cb5` | **มี Poom Sprint 1-3 + lint fix entity** |
+| `origin/Poom` | `6f192e4` | A-7/8/13/14/15 + L-7 (รวมเข้า dave แล้ว) |
+| `origin/podeng` | `facd03a` | ยังไม่มี commit ใหม่หลัง merge ก๊อต |
+
+### Coverage หลัง merge
+- ✅ **Customer modules:** auth, profile (view+edit), addresses, wallet, service-order, service-import, service-payment, sales, notifications, dashboard, knowledge, FAQ, holidays, contact (form pending), booking calculator
+- ✅ **Admin Sprint 1-3:** A-1 ถึง A-15 ครบ (workflow buttons, approvals, accounting 7-tab, reports 5-tab, barcode scan + driver, advanced search + bulk)
+- ✅ **HR module:** ครบ (employees, attendance, leaves, recruitment, training, policies, audit)
+- 🟡 **complete-profile/page.tsx:** ยัง placeholder — OAuth new users ที่ profile ไม่ครบจะเจอหน้าว่าง (ดู `M2.5a`)
+- 🟡 **3 React Compiler errors + 5 warnings** ใน `scan-form.tsx` ของภูม (อยู่ใน Poom branch — ภูมแก้บน Poom + dave จะ merge ใหม่)
+
+## M2. ระบบที่พบใหม่จาก PHP audit (NOT in Part B)
+
+### 🔴 M2.1 — Payment Gateway (Omise / 2C2P card payments)
+**CRITICAL gap.** ไม่อยู่ใน plan เลย
+
+**PHP source:** `pcs-admin/gateway.php`, `gateway-prepare.php`, `gatway-receipt-forwarder.php`
+
+PHP รองรับ card payment (credit/debit) ผ่าน payment gateway — Pacred ปัจจุบันรองรับแค่:
+- ✓ PromptPay QR (deposit only)
+- ✓ Slip upload + admin manual approve
+
+❌ ไม่มี:
+- Card payment automated
+- Realtime confirm
+- Webhook ตอบกลับจาก gateway
+- Refund automation
+
+**Migration ที่ต้องเพิ่ม:**
+- `payment_gateway_transactions` table — `id, profile_id, provider, provider_ref, amount, currency, status, raw_response, created_at, captured_at, refunded_at`
+- `payment_gateway_webhooks_log` — audit incoming webhooks
+- Update `wallet_transactions` / `service_orders` ให้ link กลับ gateway_tx
+
+**Code ที่ต้องเพิ่ม:**
+- `lib/payment-gateway/` — adapter layer (Omise / 2C2P / Stripe TH)
+- `app/api/webhooks/payment-gateway/[provider]/route.ts` — webhook handler
+- Server actions: `initiatePayment()`, `verifyPayment()`, `refundPayment()`
+- UI integration: wallet deposit form + service-order checkout
+
+**Estimated:** 40-60h (gateway adapter + webhook + UI + reconciliation + refund + test)
+**Owner:** เดฟ (infra/integration) — รอ D-7 decision ก่อน
+
+### 🔴 M2.2 — Payroll / Salary Module
+**HR gap.** Current HR มี attendance/leaves/training/policies/audit แต่ **ไม่มี payroll**
+
+**PHP source:** `pcs-admin/salary-hs.php`, `withdraw-commission-sale.php`, `withdraw-commission-interpreter.php`
+
+**Migration:**
+- `salary_components` — base/ot/bonus/deduction per employee
+- `payroll_runs` — รอบจ่าย (monthly/biweekly)
+- `payslips` — generated per employee per run
+- Link กับ attendance_logs (วันทำงาน) + leave_requests (วันลา)
+
+**Estimated:** 30-40h
+**Owner:** ภูม (admin/HR) — รอ D-9 decision
+
+### 🟡 M2.3 — Customer Bulk Transfer (personal → juristic)
+**PHP source:** `pcs-admin/api/customers-move-to-juristic/index.php`
+
+Bulk admin tool — เลือกหลายลูกค้าทีเดียวเปลี่ยน `account_type` (เช่นลูกค้าเปิดบริษัทใหม่)
+
+**Estimated:** 4-6h
+**Owner:** ภูม
+
+### 🟡 M2.4 — HS (High-Section) Variants — DESIGN DECISION
+**PHP source:** `hs-forwarder-invoice.php`, `salary-hs.php`, `post-job-hs.php`, `hs-customrate.php`, `receipt-f-hs.php`
+
+PHP มี variant "HS" แยกออกจาก main flow — มี invoice, salary, job posting, rate, receipt แยก
+
+**Decision needed (D-8):**
+- (A) HS = product line แยก (เช่น VIP tier) → keep แยกใน Pacred
+- (B) Deprecate → merge เข้า main flow + ใช้ tier ใน Pacred แทน *(recommend — Pacred = บริษัทใหม่ ออกแบบจากกระดาษเปล่าได้)*
+
+**Owner decision:** Pacred owner + ก๊อต
+
+### 🟡 M2.5 — Misc small items
+
+| # | Item | PHP source | Impact | Est | Owner |
+|---|---|---|---|---|---|
+| M2.5a | **complete-profile form** | profile.php (incomplete users branch) | OAuth new users blocked | 5-6h | ปอน (C-0) |
+| M2.5b | **Forwarder month-end closing** | closingAccReportForwarder.php | Accounting periodic close | 6-8h | ภูม |
+| M2.5c | **Forwarder sale tracking** | forwarder-sale.php | Sales attribution | 4-6h | ภูม |
+| M2.5d | **Driver work shifts** | forwarder-driver-w.php | HR/Ops shifts | 6-8h | ภูม (after payroll decision) |
+| M2.5e | **Image search (reverse)** | searchIMG.php | UX nice-to-have | 6-8h | ปอน (low pri) |
+| M2.5f | **Job flowchart viz** | jobFlowchart.php | HR doc viz | 4-6h | ปอน (low pri) |
+| M2.5g | **CMS static admin pages** | businessPlan.php, corporateCulture.php, training-regulations.php | replace mPDF | 4-6h | เดฟ (MDX or Sanity decision) |
+| M2.5h | **Recently imported customers cache** | recently-used-imported-customers.php | Admin UX | 2-3h | ภูม |
+
+## M3. Helper functions ยังไม่ port (จาก include/function.php × 2)
+
+| Helper | จาก | สำหรับ | Priority |
+|---|---|---|---|
+| `ReadNumber()` | customer | Thai number → text ("หนึ่งร้อยยี่สิบบาท") — สำหรับ PDF receipt | 🔴 HIGH (blocker for C-7/C-2) |
+| `image_resize()` | admin | Server-side image scaling | 🟡 MED (upload optimization) |
+| `flashRemoteArea()` | admin | Remote area surcharge calculation | 🟡 MED (pricing accuracy) |
+| `calFlashPriceCBM/KG()` | admin | Flash sale variants | 🟢 LOW (promo specific) |
+| `calPriceForwarderCostCNT()` | admin | Container-specific cost | 🟡 MED (container ops) |
+| `getDatesFromRange()` | admin | Date range expansion | 🟢 LOW |
+| `csvProductType()` | admin | CSV export format | 🟢 LOW |
+| `breadcrumbAdmin()` | admin | Admin breadcrumbs | 🟢 LOW (UI helper) |
+| `extractSubstringAdminID()` | admin | Parse admin ID | 🟢 LOW (one-off) |
+
+## M4. ไฟล์ PHP ที่ลบทิ้งได้ (deprecated — ไม่ต้อง port)
+
+### Customer side (43 ไฟล์ → deprecate ≥ 4)
+- `forwarderBackUp.php` (3144 LOC older copy)
+- `payment20231213.php` (1457 LOC backup)
+- `20260311wallet.php` (849 LOC — verify ก่อนลบ ว่าใหม่กว่าหรือ A/B test)
+- `wallet-notblank.php` (820 LOC — duplicate กับ wallet variants)
+
+### Admin side (200+ ไฟล์ → deprecate ≈ 35)
+- `*Old.php`, `*BackUp.php`, `* copy.php`, `*-test.php`
+- `addmail-test.php`, `a-Test-*.php`, `test-*.php`, `testAPITTP.php`
+- `forwarderBackUp.php` (admin)
+- `payment20231213.php`
+- `report-driver-2023.php` (เก่า)
+- Time-bound promos: `user-pro1212.php`, `user-pro-valentine.php`, `report-pro-3-year-anniversary.php`, `oh-my-ghost`, `survey202306`
+- Static skeletons: `blank.php`, `blank-new.php`, `code-templet.php`, `descriptionBTN.php`
+
+## M5. Decisions ที่ยังต้องล็อค (รอ Stakeholder)
+
+| # | Decision | Owner | Blocks |
+|---|---|---|---|
+| **D-7** | Payment Gateway provider — Omise / 2C2P / Stripe TH | เดฟ + Pacred owner | M2.1 implementation |
+| **D-8** | HS variants — keep แยกหรือ merge เข้า tier | Pacred owner + ก๊อต | M2.4 design |
+| **D-9** | Payroll — standalone module หรือ extend HR | ภูม + เดฟ | M2.2 design |
+| D-2 | ✅ PDF library = `@react-pdf/renderer` | ล็อคแล้ว | C-7 unblocked |
+| D-3 | ✅ Barcode = native `BarcodeDetector` + fallback | ล็อคแล้ว (ภูมเลือก) | A-14/15 done |
+| D-4 | Background jobs — Vercel Cron (มีแล้ว) + Supabase pg_cron? | เดฟ | M2 cron items |
+| D-5 | CSV import — server-side process or edge fn | เดฟ | A-18 |
+
+## M6. Sprint 4 — Next Work Assignment (post-merge)
+
+### 👤 ปอน (podeng) — Sprint 4
+**Status:** `origin/podeng` == `origin/main` — ยังไม่มี commit ใหม่หลัง merge ก๊อต → เริ่มต่อได้ทันที
+
+ลำดับงาน:
+1. **🔴 NEW C-0** `/complete-profile/page.tsx` — รื้อ placeholder + สร้าง form จริง (5-6h)
+   - Form: ถ้า personal → first/last/phone/sex/dob; ถ้า juristic → ส่งไปหน้า juristic register flow
+   - Server action: `completeProfile()` ใน `actions/profile.ts`
+   - Acceptance: OAuth user new → กรอกเสร็จ → `profile.status='active'` → redirect `/dashboard`
+2. **C-3** Sales claim form (`/sales/report/add`) (2-3h)
+3. **C-4** Phone change OTP (`/profile/security/change-phone`) (2-3h)
+4. **C-5** China warehouse addresses (`/service-import/warehouse-addresses`) (1h)
+5. **C-6** Cart counter navbar badge (30m)
+6. **C-8** Contact form submit handler (1h)
+7. **🟡 รอ:** C-2 PDF shop receipt — รอ C-7 + ReadNumber helper จากเดฟ
+8. **🟢 Optional:** M2.5e (image search), M2.5f (job flowchart viz) — ถ้ามีเวลาเหลือ
+
+**Estimated:** 13-18h → ~2 สัปดาห์ part-time
+
+### 👤 ภูม (Poom) — Sprint 4
+**Status:** Sprint 1-3 เสร็จเต็มที่ — มี lint cleanup ก่อน เพิ่มงานใหม่ได้
+
+ลำดับงาน:
+1. **🔴 cleanup-1** Fix 3 React Compiler errors + 5 warnings ใน `scan-form.tsx` (ดู ping message จาก dave) (2-3h)
+2. **A-17** Transfer sales rep ownership (`/admin/customers/[id]/transfer-rep`) (2-3h) — re-assign ให้ภูม (เดฟอยู่กับ C-7)
+3. **🆕 M2.3** Customer bulk transfer (personal→juristic) — `/admin/customers/bulk-transfer` (4-6h)
+4. **🆕 M2.5b** Forwarder month-end closing report — `/admin/accounting/closing` (6-8h)
+5. **🆕 M2.5c** Forwarder sale tracking — `/admin/forwarder-sales` (4-6h)
+6. **🆕 M2.5h** Recently imported customers cache (admin UX) (2-3h)
+7. **🟡 รอ design:** M2.2 Payroll, M2.4 HS variants, M2.5d Driver shifts (รอ decision D-8/D-9)
+
+**Estimated:** 20-29h → 2-3 สัปดาห์ part-time
+
+### 👤 เดฟ (dave) — Sprint 4 (self)
+ลำดับงาน:
+1. **🔴 helper-1** Port `ReadNumber()` Thai-num-to-text → `lib/utils/thai-number.ts` (2-3h) — blocker for C-2/C-7
+2. **🔴 C-7** PDF receipt infrastructure (`@react-pdf/renderer` + Sarabun font) (8-12h) — blocker for C-2
+3. **A-9** Settings edit UI (4-6h)
+4. **A-10** Team leaders commission edit (4-6h)
+5. **A-11** Sales payouts approve actions (3-4h)
+6. **A-12** Containers workflow + ETA (6-8h)
+7. **D-7 decision call** — Payment Gateway provider (กับ Pacred owner) — schedule meeting
+8. **🆕 M2.1 design phase** — Payment gateway architecture (หลัง D-7 ล็อค) — design only, implementation Sprint 5+
+
+**Estimated:** 29-41h → 3 สัปดาห์ part-time
+
+### 👤 ก๊อต (main maintainer) — Sprint 4
+1. **Review + merge** `dave` → `main` (Poom Sprint 1-3 + dave's lint fix + Part M audit)
+2. **Review + merge** `Poom` (หลังภูม fix React Compiler) → `main`
+3. **Schedule decision calls:**
+   - D-7 Payment Gateway provider (กับ Pacred owner)
+   - D-8 HS variants keep/merge
+   - D-9 Payroll module scope
+4. (optional) cleanup orphan claude branches `claude/*` หลัง confirm worktrees ปิดแล้ว
+
+---
+
+## M7. End-of-audit summary
+
+**📊 Progress overall:**
+- Customer portal: ~85% complete (core ครบ + เหลือ complete-profile + sales claim + change phone + cart counter + contact + maps + PDF receipt)
+- Admin back office: ~75% complete (Sprint 1-3 ของ Poom เสร็จ + ขาด settings UI/team leaders/sales payouts/containers/rates/csv import/transfer rep + ใหม่ M2.x)
+- HR module: ~95% complete (เหลือ payroll = M2.2)
+- Infra: ~70% complete (เหลือ PDF infra/payment gateway/cron jobs/3rd-party APIs)
+- Phase I (Pacred ecosystem services #1, #5-13): ~0% — ยังไม่เริ่ม
+
+**🔴 Critical blockers (must resolve):**
+1. D-7 Payment Gateway decision — block customer payment automation
+2. D-8 HS variants decision — block schema design
+3. ReadNumber() helper port — block C-2/C-7
+4. complete-profile form — block OAuth new users
+
+**🟡 Recommended sequence:**
+- Sprint 4 (this): ปอน clear customer P1 backlog + ภูม clear admin extras + เดฟ infra (C-7 + helpers)
+- Sprint 5: ก๊อต host decision calls → ภูม starts Payroll + เดฟ starts Payment Gateway
+- Sprint 6: Phase I landing pages (Pacred ecosystem) — start with services #5-9 (freight ops)
