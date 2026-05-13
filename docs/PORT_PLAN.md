@@ -1196,20 +1196,263 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 ## M7. End-of-audit summary
 
-**📊 Progress overall:**
-- Customer portal: ~85% complete (core ครบ + เหลือ complete-profile + sales claim + change phone + cart counter + contact + maps + PDF receipt)
-- Admin back office: ~75% complete (Sprint 1-3 ของ Poom เสร็จ + ขาด settings UI/team leaders/sales payouts/containers/rates/csv import/transfer rep + ใหม่ M2.x)
-- HR module: ~95% complete (เหลือ payroll = M2.2)
-- Infra: ~70% complete (เหลือ PDF infra/payment gateway/cron jobs/3rd-party APIs)
-- Phase I (Pacred ecosystem services #1, #5-13): ~0% — ยังไม่เริ่ม
+> ⚠️ **PART M ถูก SUPERSEDE โดย Part N (2026-05-13 deep audit)** — Part M ใช้ method "ดูไฟล์มีอยู่ + lint pass" ซึ่งพลาด **silent degraded modes** จำนวนมาก เลขที่เคยบอกใน M7 (85%/75% etc.) **ไม่แม่นยำ** — ดู Part N สำหรับสภาพจริง
 
-**🔴 Critical blockers (must resolve):**
-1. D-7 Payment Gateway decision — block customer payment automation
-2. D-8 HS variants decision — block schema design
-3. ReadNumber() helper port — block C-2/C-7
-4. complete-profile form — block OAuth new users
+---
 
-**🟡 Recommended sequence:**
-- Sprint 4 (this): ปอน clear customer P1 backlog + ภูม clear admin extras + เดฟ infra (C-7 + helpers)
-- Sprint 5: ก๊อต host decision calls → ภูม starts Payroll + เดฟ starts Payment Gateway
-- Sprint 6: Phase I landing pages (Pacred ecosystem) — start with services #5-9 (freight ops)
+# Part N — Production-Readiness Deep Audit (2026-05-13, post-Poom-merge + post-podeng-merge)
+
+> **Method:** 4 parallel deep-audit agents traced full code path (route → action → validator → DB → trigger → notification) for every feature, checked every `process.env.X`, compared with legacy PHP behavior. This is the **first audit ที่ลึกพอจะ ship ลูกค้าได้** — Part M เป็น file-existence audit ที่ตื้นเกินไป
+
+## N1. Code state ตอนนี้
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `facd03a` | ก๊อตยังไม่ได้ merge งานใหม่ |
+| `dave` (local + remote) | `9602e74` | **มี Poom Sprint 1-3 + ปอน i18n Phase 1-4a + lint fixes + Part M+N audit** |
+| `origin/Poom` | `6f192e4` | merge เข้า dave แล้ว — ภูมเหลือแก้ scan-form.tsx React Compiler |
+| `origin/podeng` | `4059ab0` | merge เข้า dave แล้ว — ปอนเหลือเริ่ม C-0/C-3/C-4 |
+
+## N2. Real coverage (จาก deep audit, ไม่ใช่ "file-exists" audit)
+
+| Domain | True % | สถานะ |
+|---|---|---|
+| **Customer portal** | **~65%** | Auth/profile/wallet ledger/addresses ok แต่ **OTP bypass / no forgot-password / complete-profile = stub / LINE login = stub / URL-paste demo mode / search broken / PromptPay QR broken** |
+| **Admin back office** | **~80%** | Sprint 1-3 ภูมทำงานจริง แต่ **approveCustomer/suspendCustomer ไม่มี audit log + notification + ใช้ guard ผิด** + LINE bypass = ลูกค้าไม่ได้รับ notify |
+| **HR module** | **~95%** | ครบ ขาด Payroll (M2.2) |
+| **Infrastructure** | **~50%** | ขาด env vars 8 ตัว · ไม่มี payment gateway · ไม่มี Sentry · ไม่มี rate limit · ไม่มี CAPTCHA · ไม่มี CSP · console.log leak PII 7 จุด · file upload ไม่ validate size/MIME |
+| **Phase I ecosystem (#1,#5-13)** | **~0%** | ยังไม่เริ่ม |
+
+## N3. 🔴 CRITICAL BLOCKERS — ห้าม launch ลูกค้าก่อนแก้
+
+### N3.1 — Silent degraded modes (ดูเหมือนทำงาน แต่ใช้งานจริงไม่ได้)
+ประเภทอันตรายที่สุด — UI render ปกติ แต่ backend ทำงานในโหมด demo/bypass/mock เงียบๆ:
+
+| # | Feature | Trigger | สิ่งที่ลูกค้าเห็น |
+|---|---|---|---|
+| 1 | **OTP registration** | `OTP_BYPASS=true` ใน .env.local | กรอก OTP อะไรก็ผ่าน — phone never verified → ลูกค้าปลอมเข้าได้ |
+| 2 | **URL→cart converter** (1688/Taobao/Tmall) | `PACRED_RCGROUP_API_URL` unset | demo product ราคา ¥0 "Taobao Shop" — ลูกค้ากรอกราคาเอง สับสน |
+| 3 | **Keyword search 1688** | `PACRED_TAMIT_API_URL` unset | yellow banner "API ไม่พร้อม" — search ใช้ไม่ได้ |
+| 4 | **Image reverse search** | `PACRED_RCGROUP_API_URL` unset | banner "ไม่พร้อม" |
+| 5 | **LINE push notification** | `LINE_PUSH_BYPASS` defaults true (ถ้า unset = bypass) + `LINE_CHANNEL_ACCESS_TOKEN` unset | console.log เท่านั้น — ลูกค้าไม่ได้รับแจ้งสถานะ order |
+| 6 | **Email notification fallback** | `RESEND_API_KEY` unset | console.warn เท่านั้น — เมล์ไม่ส่งจริง |
+| 7 | **DBD Tax-ID lookup** | DBD API down/rate-limited | silently shows "notfound" — ไม่บอกว่าเป็น API issue |
+| 8 | **ThaiBulkSMS** | API key placeholder "YOUR_API_KEY" | return `missing_credentials` แต่ UI โชว์ error generic |
+
+### N3.2 — Hard blockers (ใช้ไม่ได้เลย)
+
+| # | Feature | สาเหตุ | Fix |
+|---|---|---|---|
+| 9 | **Wallet deposit QR** | `PROMPTPAY_ID` unset → throw error | set env var |
+| 10 | **OAuth (Google/Facebook)** | ต้อง verify provider config ใน Supabase Dashboard | verify + test |
+| 11 | **`/complete-profile`** | placeholder page (มีไฟล์แต่ไม่มี form จริง) | ปอนสร้าง C-0 |
+| 12 | **`/forgot-password`** | ไม่มี page เลย | ปอนสร้าง (new task C-10) |
+| 13 | **LINE login** | stub "coming soon" — กดแล้ว error | ตัดปุ่มออก หรือ build จริง |
+| 14 | **Payment gateway (Omise/2C2P)** | ไม่มีโค้ดเลย | dave M2.1 (40-60h) |
+
+### N3.3 — Code bugs (ใน admin actions ของภูม)
+
+| # | Bug | File:Line | Severity |
+|---|---|---|---|
+| 15 | `approveCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~103` | 🔴 audit gap |
+| 16 | `suspendCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~118` | 🔴 audit gap |
+| 17 | `approveCustomer()` ใช้ `requireAdmin()` (any admin) — ควรเป็น `withAdmin(["ops"])` | same file | 🔴 RBAC weak |
+| 18 | `suspendCustomer()` same | same | 🔴 RBAC weak |
+| 19 | approve/suspend ไม่ call `sendNotification()` | same file | 🟡 customer ไม่รู้ว่าถูก approve |
+| 20 | React Compiler errors 3 ตัวใน `scan-form.tsx` (line 130/142/151) | scan-form.tsx | 🟡 ภูม fix แล้วยังไม่ push |
+
+## N4. Missing env vars — definitive list
+
+| Var | ต้อง set เป็น | Feature ที่ break | Priority |
+|---|---|---|---|
+| `PACRED_RCGROUP_API_URL` | `https://rcgroup-th.com/api-china/get` (legacy) — verify endpoint pattern อาจต้องปรับ | URL→cart converter + image search | 🔴 P0 |
+| `PACRED_TAMIT_API_URL` | `https://tamit-cloud.com/api-product/api-search` (legacy — verify ยัง alive) | Keyword search | 🔴 P0 |
+| `PROMPTPAY_ID` | phone หรือ tax-id ของบริษัท Pacred | Wallet deposit QR | 🔴 P0 |
+| `THAIBULKSMS_API_KEY` | real key (now placeholder "YOUR_API_KEY") | OTP send | 🔴 P0 |
+| `THAIBULKSMS_API_SECRET` | real secret | OTP send | 🔴 P0 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | จาก Pacred LINE OA (channel access token) | LINE push notification | 🔴 P0 |
+| `LINE_PUSH_BYPASS` | `false` (production) — ตอนนี้ default `true` = bypass | LINE notification actual delivery | 🔴 P0 |
+| `RESEND_API_KEY` | จาก Resend account | Email fallback | 🟡 P1 |
+| `RESEND_FROM` | `Pacred <noreply@pacred.co>` (เปลี่ยน domain ตามจริง) | Email from header | 🟡 P1 |
+| `CRON_SECRET` | random secret | Protect cron endpoint | 🟡 P1 |
+| `OTP_BYPASS` | `false` (production) — ตอนนี้ `true` ใน dev | OTP verification actually runs | 🔴 P0 |
+| `OTP_PEPPER` | random 32-char string (ตอนนี้ placeholder) | OTP hash security | 🔴 P0 |
+| `NEXT_PUBLIC_SITE_URL` | `https://pacred.co` (prod) — ตอนนี้ localhost:3000 | OAuth callbacks + notification links | 🔴 P0 |
+
+## N5. Missing code (ที่เคยคิดว่ามี แต่จริงๆ stub/ขาด)
+
+| Feature | สถานะ | Owner |
+|---|---|---|
+| `/complete-profile` form | **STUB** (placeholder text) | ปอน C-0 |
+| `/forgot-password` | **MISSING** | ปอน C-10 (new) |
+| `/profile/security/change-phone` (atomic auth.phone + profiles.phone) | **MISSING** | ปอน C-4 |
+| `/service-order/[hNo]/receipt` PDF | **MISSING** (forwarder receipt มี แต่ shop ไม่มี) | ปอน C-2 (รอ C-7) |
+| Payment gateway integration | **MISSING entire module** | dave M2.1 |
+| `ReadNumber()` Thai number→text helper | **MISSING** | dave (blocker C-7/C-2) |
+| Sentry / error tracking | **MISSING** | dave (new task D-11) |
+| Rate limiting on Server Actions | **MISSING** (มีแค่ OTP per-phone 3/hr) | dave (new task D-12) |
+| CAPTCHA / bot protection บน signup | **MISSING** | dave (new task D-13) |
+| CSP / security headers | **MISSING** | dave (new task D-14) |
+| File upload size/MIME server-side validation | **WEAK** (UI check only) | dave (new task D-15) |
+| 4 PHP cron jobs ports: `send-line-sales`, `update-active-customers`, `update-sheet-sang`, `check-apprentice` | **MISSING** | dave/ภูม split |
+
+## N6. Hardening / observability gaps (ต้องมีก่อน production launch)
+
+- [ ] Sentry หรือ Vercel Analytics สำหรับ error tracking
+- [ ] Structured logging (เลิก console.log — leak PII ใน lib/sms/gateway.ts:19, lib/notifications/index.ts:50,56,102,125,135,154)
+- [ ] Rate limiting (signup/OTP/password-reset/payment endpoints)
+- [ ] CAPTCHA / hCaptcha บน signup
+- [ ] CSP + security headers (`X-Frame-Options`, `Strict-Transport-Security`, etc.)
+- [ ] File upload: server-side size + MIME validation + virus scan optional
+- [ ] DB backup strategy (Supabase auto-backup verify)
+- [ ] Audit log retention policy
+- [ ] CRON_SECRET protect cron endpoint
+- [ ] Monitoring: SMS delivery rate, LINE push delivery, OAuth success rate
+- [ ] Mobile responsive QA (ยังไม่ verify)
+- [ ] i18n completeness — missing keys crash pages, ยังไม่ audit ทุก namespace
+
+## N7. Things ที่ทำงานจริงดี ✅ (production ready)
+
+ให้ credit ส่วนที่ผ่าน audit รอบนี้:
+
+- ✅ Login (email/phone/password)
+- ✅ Profile view/edit/avatar/security panels
+- ✅ Address CRUD (RLS + soft delete + auto-default)
+- ✅ Sales team view + commission history
+- ✅ Notifications list/mark-read (badge ไม่ realtime แต่ functional)
+- ✅ TOS gate
+- ✅ Public landing pages (home/about/services/booking calculator/FAQ/knowledge/etc.)
+- ✅ Service-order: manual cart add, cart edit/remove, place order (h_no gen), pending list, detail view
+- ✅ Cart 151-item cap (DB trigger)
+- ✅ Service-import (forwarder): create with rate engine (waterfall + tier + juristic discount + service fee), list, detail, **PDF receipt** (HTML print)
+- ✅ Forwarder rate engine — verified vs PHP `calPriceForwarderSumCompany`
+- ✅ Service-payment yuan transfer (rate fallback 5.00 OK)
+- ✅ Wallet balance display (3 buckets: main/cashback/credit)
+- ✅ Wallet history ledger
+- ✅ Wallet deposit slip upload + admin approve flow
+- ✅ Wallet withdraw request
+- ✅ Wallet recompute trigger (idempotent re-sum)
+- ✅ Admin: Forwarder workflow + bulk update (with audit + customer notify)
+- ✅ Admin: Service-orders update
+- ✅ Admin: Wallet/Yuan/Sales-payouts approve flows (all withAdmin + audit + notify)
+- ✅ Admin: Team-leaders CRUD
+- ✅ Admin: Barcode scan (3 modes: intake/prepare/driver)
+- ✅ Admin: Settings, Containers, Rates, Admins RBAC
+- ✅ Admin: Accounting 7-tab + Reports 5-tab + CSV export
+- ✅ HR: org chart, employees, attendance, leaves, recruitment, training, policies, audit
+- ✅ DB schema: 6 storage buckets created (avatars, member-docs, slips, forwarder-covers, carts, resumes)
+- ✅ DB triggers: cart cap, h_no/f_no/c_no gen, wallet recompute, sales commission emit, leave→attendance
+- ✅ Vercel cron config: auto-cancel-orders every 15 min
+- ✅ DBD Tax-ID lookup (public API, no key)
+- ✅ Supabase Auth (email/phone/password + OAuth Google/FB ระดับโค้ด)
+- ✅ RLS policies on all 30+ customer-facing tables
+
+## N8. Sprint 5 — Real plan (อิงสภาพจริงจาก audit)
+
+### 👤 ดาด (dave) — Infrastructure rescue mode (~50-70h)
+
+ลำดับสำคัญ (P0 ทำก่อน):
+1. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h)
+   - Test RCGroup URL ตาม PHP `dataAPI.php` pattern (อาจต้องปรับโค้ดให้ใช้ `/get/?id=` แทน `/?q=`)
+   - Test TAMIT API ว่ายัง alive มั้ย ถ้าไม่ก็หา replacement หรือ build scraper
+   - หา PromptPay ID จากบริษัท
+   - หา ThaiBulkSMS real API key + secret
+2. 🔴 **D-7b** LINE Messaging API setup (3-4h)
+   - Get `LINE_CHANNEL_ACCESS_TOKEN` จาก Pacred OA
+   - Set `LINE_PUSH_BYPASS=false` ใน production env
+   - Test push end-to-end
+3. 🔴 **helper-1** Port `ReadNumber()` → `lib/utils/thai-number.ts` (2-3h)
+4. 🔴 **C-7** PDF receipt infrastructure (`@react-pdf/renderer` + Sarabun font) (8-12h)
+5. 🟡 **D-11** Sentry / error tracking setup (3-4h)
+6. 🟡 **D-12** Rate limiting (Upstash Redis หรือ Vercel KV) (4-6h)
+7. 🟡 **D-13** CAPTCHA บน signup (hCaptcha invisible) (2-3h)
+8. 🟡 **D-14** Security headers in `next.config.ts` (1-2h)
+9. 🟡 **D-15** File upload server-side validation (size + MIME magic bytes) (3-4h)
+10. 🟡 **D-16** Replace 7 `console.log` PII leaks with structured logger (2-3h)
+11. 🟡 **D-17** CRON_SECRET protect endpoint (30m)
+12. 🟢 **A-9** Settings edit UI (4-6h) — keep from M
+13. 🟢 **A-10** Team leaders commission edit (4-6h)
+14. 🟢 **A-11** Sales payouts approve (3-4h)
+15. 🟢 **A-12** Containers ETA workflow (6-8h)
+16. ⚪ **D-7c** Decision: D-7 Payment Gateway provider (Omise/2C2P) + M2.1 design (no code yet)
+
+### 👤 ภูม (Poom) — Bug fixes + admin extras (~20-30h)
+
+1. 🔴 **bug-1** Fix `approveCustomer()` + `suspendCustomer()` ใน `actions/admin/customers.ts`:
+   - เพิ่ม `withAdmin(["ops"])` แทน `requireAdmin()` (capture adminId)
+   - เพิ่ม `await logAdminAction(adminId, "customer.approve"|"customer.suspend", ...)`
+   - เพิ่ม `sendNotification()` ลูกค้าหลัง approve/suspend
+   - (1-2h, blocker for compliance)
+2. 🔴 **bug-2** Fix 3 React Compiler errors + 5 warnings ใน `scan-form.tsx` (2-3h)
+3. 🟡 **bug-3** Verify containers RLS policy (`containers_admin_all` policy) + เพิ่มถ้าขาด (30m)
+4. 🟡 **bug-4** Fix service-order status date column naming (`awaiting_chn_dispatch` → consistent column name) (30m)
+5. 🟢 **A-17** Transfer sales rep workflow (`/admin/customers/[id]/transfer-rep`) (2-3h)
+6. 🆕 **M2.3** Customer bulk transfer personal→juristic (4-6h)
+7. 🆕 **M2.5b** Forwarder month-end closing report (6-8h)
+8. 🆕 **M2.5c** Forwarder sale tracking (4-6h)
+9. 🆕 **M2.5h** Recently imported customers cache (2-3h)
+10. ⚪ รอ decision D-8/D-9: M2.2 Payroll · M2.4 HS variants · M2.5d Driver shifts
+
+### 👤 ปอน (podeng) — Customer auth completion + i18n polish (~15-20h)
+
+1. 🔴 **C-0** `/complete-profile/page.tsx` — รื้อ stub สร้าง form จริง (5-6h)
+   - Personal: first_name + last_name + phone + sex + birthday + TOS
+   - Juristic: redirect ไป register juristic flow + tax_id
+   - Server action `completeProfile()` ใน `actions/profile.ts`
+   - Acceptance: OAuth user new → submit → `profile.status='active'` → /dashboard
+2. 🔴 **C-10 (new)** `/forgot-password` — สร้างใหม่ (3-4h)
+   - Page: input phone หรือ email → ส่ง OTP → reset password
+   - Server action `requestPasswordReset()` + `confirmPasswordReset()`
+3. 🟡 **C-4** Change phone atomic (auth.phone + profiles.phone) (2-3h)
+4. 🟢 **C-3** Sales claim form `/sales/report/add` (2-3h)
+5. 🟢 **C-5** China warehouse addresses page (1h)
+6. 🟢 **C-6** Cart counter badge ใน navbar (30m)
+7. 🟢 **C-8** Contact form submit handler (1h)
+8. 🟡 **decision** LINE login: ตัดปุ่มออก หรือ build จริง (รอเดฟ verify Supabase LINE OAuth + channel)
+9. 🟡 **i18n audit** หา missing translation keys ทั้งโปรเจกต์ (ตามรอบ Phase 4b/5 ของปอน)
+10. ⚪ รอเดฟ C-7 → ทำ **C-2** PDF shop receipt
+
+### 👤 ก๊อต — coordination + decisions (~5-10h)
+
+1. Schedule 3 decision calls:
+   - **D-7** Payment gateway provider (กับ Pacred owner)
+   - **D-8** HS variants keep/merge
+   - **D-9** Payroll scope
+2. Review + merge `dave` → `main` (Poom + ปอน + Part M+N + lint fix)
+3. Review + merge ภูม's bug fixes when ready
+4. Coordinate: ปอน + เดฟ on LINE login decision
+
+## N9. Production launch checklist (gate ก่อน customer #1)
+
+**ต้องเสร็จทุกข้อก่อน open ลูกค้าจริง:**
+
+- [ ] OTP_BYPASS=false (production)
+- [ ] ทุก env vars ใน N4 ตั้งครบ
+- [ ] LINE_PUSH_BYPASS=false + token verified work
+- [ ] OAuth Google/Facebook provider config verified ใน Supabase Dashboard
+- [ ] LINE login decided (build หรือ remove)
+- [ ] complete-profile real form (C-0)
+- [ ] forgot-password flow (C-10)
+- [ ] Payment gateway integrated (M2.1) **OR** PromptPay-only launch (with PROMPTPAY_ID)
+- [ ] approveCustomer/suspendCustomer audit + notify bugs fixed
+- [ ] Sentry / error tracking online
+- [ ] Rate limiting on signup/OTP/payment
+- [ ] CAPTCHA on signup
+- [ ] CSP headers
+- [ ] CRON_SECRET set
+- [ ] PII console.log purged
+- [ ] File upload server-side validation
+- [ ] Production domain set in NEXT_PUBLIC_SITE_URL
+- [ ] DB backup verified
+- [ ] Mobile responsive QA on top 10 pages
+- [ ] End-to-end customer flow test (register → cart → checkout → pay → receive)
+
+**สิ่งที่ launch beta ได้ก่อน ถ้ายอม:**
+- ไม่มี payment gateway (PromptPay-only ผ่าน slip + admin approve manual)
+- ไม่มี keyword search (ปิด tab)
+- ไม่มี LINE login (เหลือ Google/FB + email/password)
+- ไม่มี service-order PDF receipt (browser print)
+
+---
+
+**End of Part N.** Part M/N รวมกันเป็น authoritative state of project ณ 2026-05-13 — Part M สำหรับ PHP feature inventory + Sprint 4 plan, Part N สำหรับ production readiness state.
