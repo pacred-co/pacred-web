@@ -1597,24 +1597,28 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 ## O4. 👤 เดฟ (dave) — Sprint 5 (INFRASTRUCTURE LEAD)
 
-(unchanged from Part N6 — copied here for completeness)
+### ✅ COMPLETED (Sprint 5 Days 1-2)
+1. ✅ **helper-1** `lib/utils/thai-number.ts` — port of PHP ReadNumber + 50 unit tests passed (commit `8f6d9c3`)
+2. ✅ **C-7** PDF receipt infrastructure — `@react-pdf/renderer` + Sarabun font + `lib/pdf/register-fonts.ts` + `components/pdf/{styles,forwarder-receipt}.tsx` + `app/api/pdf/forwarder/[fNo]/route.tsx` + HTML receipt has "ดาวน์โหลด PDF" button (commit `8f6d9c3`)
+3. ✅ **D-14** Security headers in `next.config.ts` — HSTS + X-Frame + CSP + Referrer + Permissions (commit `c973ef5`)
+4. ✅ **D-15** Server-side file validation — `lib/file-validation.ts` magic bytes check + wired in `actions/wallet.ts createDeposit()` (commit `c973ef5`)
+5. ✅ **D-16** Structured logger — `lib/logger.ts` + PII redaction helpers + replaced 8 console.log/warn/error spots (commit `c973ef5`)
+6. ✅ **D-17** CRON_SECRET hardening — `/api/cron/auto-cancel-orders` now requires `x-vercel-cron` OR `Bearer ${CRON_SECRET}` in production (commit `c973ef5`)
+7. ✅ **A-9** Settings edit UI — **already built by ภูม** (yuan_rate + service_fee + QC + crate + juristic + free-ship)
+8. ✅ **A-10** Team Leaders commission edit — **already built by ภูม** (inline % editor + toggle active)
+9. ✅ **A-11** Sales Payouts approve actions — **already built by ภูม** (approve/reject/paid + rejection reason)
+10. ✅ **A-12** Containers ETA workflow — new `/admin/containers/[id]` detail page with full edit form (ETA + carrier + vessel + note) + linked forwarders list with unlink + "Link forwarders" multi-select (filtered by origin+transport+unlinked) + bulk-link action + status timeline. New server actions `adminLinkForwardersToContainer` + `adminUnlinkForwarder` (with audit logs)
 
-ลำดับสำคัญ (P0):
-1. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h)
-2. 🔴 **D-7b** LINE Messaging API setup (3-4h)
-3. 🔴 **helper-1** Port `ReadNumber()` → `lib/utils/thai-number.ts` (2-3h)
-4. 🔴 **C-7** PDF receipt infrastructure (`@react-pdf/renderer` + Sarabun font) (8-12h) — **blocker for ภูม P-14**
-5. 🟡 **D-11** Sentry / error tracking setup (3-4h)
-6. 🟡 **D-12** Rate limiting (Upstash Redis หรือ Vercel KV) (4-6h)
-7. 🟡 **D-13** CAPTCHA บน signup (hCaptcha invisible) (2-3h)
-8. 🟡 **D-14** Security headers in `next.config.ts` (1-2h)
-9. 🟡 **D-15** File upload server-side validation (size + MIME magic bytes) (3-4h)
-10. 🟡 **D-16** Replace 7 `console.log` PII leaks with structured logger (2-3h)
-11. 🟡 **D-17** CRON_SECRET protect endpoint (30m)
-12. 🟢 **A-9 / A-10 / A-11 / A-12** admin extras (settings UI, team leaders, sales payouts, containers)
-13. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
+### 🟡 REMAINING (Sprint 5 Days 3+)
+11. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h) — **blocked: need real credentials** (RCGroup URL, TAMIT URL, ThaiBulkSMS keys, PromptPay ID)
+12. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
+13. 🟡 **D-11** Sentry / error tracking setup (3-4h) — **blocked: need Sentry account + DSN**
+14. 🟡 **D-12** Rate limiting (Upstash Redis or Vercel KV) (4-6h) — **blocked: need Upstash/Vercel KV setup**
+15. 🟡 **D-13** CAPTCHA on signup (hCaptcha invisible) (2-3h) — **blocked: need hCaptcha site key**
+16. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
 
-**Estimated total:** 50-70h → 3 weeks part-time
+**Estimated remaining:** ~14-21h once credentials/decisions are in hand
+**Sprint 5 Days 1-2 actual:** ~3-4 commits, lint clean, build pass, 50/50 tests
 
 ## O5. 👤 ก๊อต — co-merger + advisor
 

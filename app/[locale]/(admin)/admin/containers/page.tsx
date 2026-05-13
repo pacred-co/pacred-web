@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
 import { CreateContainerForm, StatusActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -76,7 +77,12 @@ export default async function AdminContainersPage() {
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border align-top">
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono font-bold text-primary-600">{r.container_no ?? "—"}</div>
+                      <Link
+                        href={`/admin/containers/${r.id}` as Parameters<typeof Link>[0]["href"]}
+                        className="font-mono font-bold text-primary-600 hover:text-primary-700 hover:underline"
+                      >
+                        {r.container_no ?? "—"}
+                      </Link>
                       {r.vendor_container_id && <div className="text-muted">↳ {r.vendor_container_id}</div>}
                     </td>
                     <td className="px-4 py-3 text-xs">
