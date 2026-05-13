@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import {
   ThumbsUp,
   Star,
@@ -13,79 +14,80 @@ type ServiceType = "import" | "export" | "clearance";
 
 const ICON_BASE = "/images/hero-section/icon-draf";
 
-const FILTERS: Array<{ id: "all" | ServiceType; label: string }> = [
-  { id: "all",       label: "ทั้งหมด"         },
-  { id: "import",    label: "นำเข้า"          },
-  { id: "clearance", label: "ชิปปิ้งเคลียร์สินค้า" },
-];
-
-const TYPE_CONFIG: Record<
-  ServiceType,
-  {
-    label: string;
-    iconSrc: string;
-    badge: string;
-    hoverRing: string;
-  }
-> = {
-  import:    { label: "นำเข้า",         iconSrc: `${ICON_BASE}/transfast.png`,       badge: "bg-primary-500/95 text-white border-primary-400/40", hoverRing: "group-hover:ring-primary-300/70" },
-  export:    { label: "ส่งออก",         iconSrc: `${ICON_BASE}/pcs-forwarder.png`,   badge: "bg-orange-500/95 text-white border-orange-400/40",   hoverRing: "group-hover:ring-orange-300/70" },
-  clearance: { label: "ชิปปิ้งเคลียร์สินค้า", iconSrc: `${ICON_BASE}/customclearance.png`, badge: "bg-blue-500/95 text-white border-blue-400/40",       hoverRing: "group-hover:ring-blue-300/70" },
-};
+type TitleKey = "titleFcl" | "titleLcl" | "titleClearance" | "titleAirClearance";
+type TagKey = "tagFcl" | "tagLcl" | "tagSea" | "tagRoad" | "tagAir" | "tagExpress" | "tagDdp" | "tagCif";
 
 type Review = {
   id: string;
   type: ServiceType;
-  title: string;
+  titleKey: TitleKey;
   rating: number;
-  tags: string[];
+  tagKeys: TagKey[];
   image?: string;
 };
 
 const REVIEWS: Review[] = [
-  // ─── FCL (นำเข้า) ──────────────────────────────────────
-  { id: "fcl-1",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/1.jpg"  },
-  { id: "fcl-2",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "รถ", "DDP"],  image: "/images/review/fcl/2.jpg"  },
-  { id: "fcl-3",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/3.jpg"  },
-  { id: "fcl-4",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/4.jpg"  },
-  { id: "fcl-5",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/5.jpg"  },
-  { id: "fcl-6",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/6.jpg"  },
-  { id: "fcl-7",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/7.jpg"  },
-  { id: "fcl-8",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/8.jpg"  },
-  { id: "fcl-9",  type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/9.jpg"  },
-  { id: "fcl-10", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/10.jpg" },
-  { id: "fcl-11", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "DDP"], image: "/images/review/fcl/11.jpg" },
-  { id: "fcl-12", type: "import", title: "FCL นำเข้าสินค้าจากจีน เหมาตู้", rating: 5, tags: ["FCL", "เรือ", "CIF"], image: "/images/review/fcl/12.jpg" },
+  // ─── FCL (Import) ──────────────────────────────────────
+  { id: "fcl-1",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/1.jpg"  },
+  { id: "fcl-2",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagRoad", "tagDdp"], image: "/images/review/fcl/2.jpg"  },
+  { id: "fcl-3",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/3.jpg"  },
+  { id: "fcl-4",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/4.jpg"  },
+  { id: "fcl-5",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/5.jpg"  },
+  { id: "fcl-6",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/6.jpg"  },
+  { id: "fcl-7",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/7.jpg"  },
+  { id: "fcl-8",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/8.jpg"  },
+  { id: "fcl-9",  type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/9.jpg"  },
+  { id: "fcl-10", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/10.jpg" },
+  { id: "fcl-11", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagDdp"],  image: "/images/review/fcl/11.jpg" },
+  { id: "fcl-12", type: "import", titleKey: "titleFcl", rating: 5, tagKeys: ["tagFcl", "tagSea", "tagCif"],  image: "/images/review/fcl/12.jpg" },
 
-  // ─── LCL (นำเข้า) ──────────────────────────────────────
-  { id: "lcl-1",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/1.jpg"  },
-  { id: "lcl-2",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/2.jpg"  },
-  { id: "lcl-3",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/3.jpg"  },
-  { id: "lcl-4",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/4.jpg"  },
-  { id: "lcl-5",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "รถ", "CIF"],  image: "/images/review/lcl/5.jpg"  },
-  { id: "lcl-6",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "รถ", "DDP"],  image: "/images/review/lcl/6.jpg"  },
-  { id: "lcl-7",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "CIF"], image: "/images/review/lcl/7.jpg"  },
-  { id: "lcl-8",  type: "import", title: "LCL นำเข้าสินค้าจากจีน เปิดใบขน", rating: 5, tags: ["LCL", "เรือ", "DDP"], image: "/images/review/lcl/8.jpg"  },
+  // ─── LCL (Import) ──────────────────────────────────────
+  { id: "lcl-1",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/1.jpg"  },
+  { id: "lcl-2",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/2.jpg"  },
+  { id: "lcl-3",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/3.jpg"  },
+  { id: "lcl-4",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/4.jpg"  },
+  { id: "lcl-5",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagRoad", "tagCif"], image: "/images/review/lcl/5.jpg"  },
+  { id: "lcl-6",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagRoad", "tagDdp"], image: "/images/review/lcl/6.jpg"  },
+  { id: "lcl-7",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagCif"],  image: "/images/review/lcl/7.jpg"  },
+  { id: "lcl-8",  type: "import", titleKey: "titleLcl", rating: 5, tagKeys: ["tagLcl", "tagSea", "tagDdp"],  image: "/images/review/lcl/8.jpg"  },
 
-  // ─── Clearance (เคลียร์สินค้าติดด่าน) ────────────────────
-  { id: "clr-1",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ", "CIF"], image: "/images/review/clearance/1.jpg"  },
-  { id: "clr-2",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/2.jpg"  },
-  { id: "clr-3",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/3.jpg"  },
-  { id: "clr-4",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/4.jpg"  },
-  { id: "clr-5",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/5.jpg"  },
-  { id: "clr-7",  type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ"],         image: "/images/review/clearance/7.jpg"  },
-  { id: "clr-10", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ", "CIF"], image: "/images/review/clearance/10.jpg" },
-  { id: "clr-11", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "รถ", "CIF"],  image: "/images/review/clearance/11.jpg" },
-  { id: "clr-12", type: "clearance", title: "เคลียร์สินค้าติดด่าน Pacred", rating: 5, tags: ["DDP", "เรือ"],        image: "/images/review/clearance/12.jpg" },
+  // ─── Clearance ────────────────────
+  { id: "clr-1",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad", "tagCif"], image: "/images/review/clearance/1.jpg"  },
+  { id: "clr-2",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/2.jpg"  },
+  { id: "clr-3",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/3.jpg"  },
+  { id: "clr-4",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/4.jpg"  },
+  { id: "clr-5",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/5.jpg"  },
+  { id: "clr-7",  type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad"],            image: "/images/review/clearance/7.jpg"  },
+  { id: "clr-10", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea", "tagCif"],   image: "/images/review/clearance/10.jpg" },
+  { id: "clr-11", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagRoad", "tagCif"],  image: "/images/review/clearance/11.jpg" },
+  { id: "clr-12", type: "clearance", titleKey: "titleClearance", rating: 5, tagKeys: ["tagDdp", "tagSea"],             image: "/images/review/clearance/12.jpg" },
 
-  // ─── Air Clearance (อยู่ในหมวดเคลียร์ — ติดแท็ก แอร์ + ด่วน) ───
-  { id: "clr-air-6", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/6.jpg" },
-  { id: "clr-air-8", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/8.jpg" },
-  { id: "clr-air-9", type: "clearance", title: "เคลียร์สินค้าแอร์ด่วน Pacred", rating: 5, tags: ["แอร์", "ด่วน", "DDP"], image: "/images/review/clearance/9.jpg" },
+  // ─── Air Clearance ───
+  { id: "clr-air-6", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/6.jpg" },
+  { id: "clr-air-8", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/8.jpg" },
+  { id: "clr-air-9", type: "clearance", titleKey: "titleAirClearance", rating: 5, tagKeys: ["tagAir", "tagExpress", "tagDdp"], image: "/images/review/clearance/9.jpg" },
 ];
 
+type ReviewsT = ReturnType<typeof useTranslations<"reviews">>;
+
 export function Reviews() {
+  const t = useTranslations("reviews");
   const [filter, setFilter] = useState<"all" | ServiceType>("all");
+
+  const FILTERS: Array<{ id: "all" | ServiceType; label: string }> = [
+    { id: "all",       label: t("filterAll")        },
+    { id: "import",    label: t("filterImport")     },
+    { id: "clearance", label: t("filterClearance")  },
+  ];
+
+  const TYPE_CONFIG: Record<
+    ServiceType,
+    { label: string; iconSrc: string; badge: string; hoverRing: string }
+  > = {
+    import:    { label: t("labelImport"),    iconSrc: `${ICON_BASE}/transfast.png`,       badge: "bg-primary-500/95 text-white border-primary-400/40", hoverRing: "group-hover:ring-primary-300/70" },
+    export:    { label: t("labelExport"),    iconSrc: `${ICON_BASE}/pcs-forwarder.png`,   badge: "bg-orange-500/95 text-white border-orange-400/40",   hoverRing: "group-hover:ring-orange-300/70" },
+    clearance: { label: t("labelClearance"), iconSrc: `${ICON_BASE}/customclearance.png`, badge: "bg-blue-500/95 text-white border-blue-400/40",       hoverRing: "group-hover:ring-blue-300/70" },
+  };
 
   const filtered = filter === "all" ? REVIEWS : REVIEWS.filter((r) => r.type === filter);
   // ถ้ารีวิวน้อย (≤4) แสดงแถวเดียว / ถ้าเยอะให้แบ่ง 2 แถว
@@ -105,9 +107,9 @@ export function Reviews() {
             Services Reviews
           </div>
           <h2 className="text-[24px] md:text-[34px] leading-[1.2] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-            <span className="text-primary-600">P ดิวะ !</span>{" "}
-            นำเข้า–ส่งออก ชิปปิ้งเคลียร์ของ{" "}
-            <span className="text-primary-600">มีครบจบทุกบริการ</span>
+            <span className="text-primary-600">{t("titleHighlight1")}</span>{" "}
+            {t("titleMiddle")}{" "}
+            <span className="text-primary-600">{t("titleHighlight2")}</span>
           </h2>
         </div>
 
@@ -137,13 +139,13 @@ export function Reviews() {
         {/* Carousels */}
         <div className="mx-auto mt-5 md:mt-6 w-full max-w-[1120px] space-y-3 md:space-y-4">
           {row1.length > 0 ? (
-            <ReviewsCarousel reviews={row1} />
+            <ReviewsCarousel reviews={row1} t={t} typeConfig={TYPE_CONFIG} />
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-white/40 dark:bg-surface/40 py-10 text-center text-muted text-[13px] font-bold">
-              ยังไม่มีรีวิวในหมวดนี้
+              {t("empty")}
             </div>
           )}
-          {row2.length > 0 && <ReviewsCarousel reviews={row2} />}
+          {row2.length > 0 && <ReviewsCarousel reviews={row2} t={t} typeConfig={TYPE_CONFIG} />}
         </div>
 
       </div>
@@ -152,7 +154,9 @@ export function Reviews() {
 }
 
 // ─────────── Carousel ───────────
-function ReviewsCarousel({ reviews }: { reviews: Review[] }) {
+type TypeConfig = Record<ServiceType, { label: string; iconSrc: string; badge: string; hoverRing: string }>;
+
+function ReviewsCarousel({ reviews, t, typeConfig }: { reviews: Review[]; t: ReviewsT; typeConfig: TypeConfig }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
@@ -254,7 +258,7 @@ function ReviewsCarousel({ reviews }: { reviews: Review[] }) {
 
       <button
         type="button"
-        aria-label="เลื่อนซ้าย"
+        aria-label={t("scrollLeftAria")}
         onClick={goPrev}
         suppressHydrationWarning
         className={[
@@ -287,13 +291,13 @@ function ReviewsCarousel({ reviews }: { reviews: Review[] }) {
         }}
       >
         {reviews.map((r, i) => (
-          <ReviewCard key={r.id} review={r} index={i} />
+          <ReviewCard key={r.id} review={r} index={i} t={t} typeConfig={typeConfig} />
         ))}
       </div>
 
       <button
         type="button"
-        aria-label="เลื่อนขวา"
+        aria-label={t("scrollRightAria")}
         onClick={goNext}
         suppressHydrationWarning
         className={[
@@ -312,8 +316,9 @@ function ReviewsCarousel({ reviews }: { reviews: Review[] }) {
 }
 
 // ─────────── Card ───────────
-function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
-  const cfg = TYPE_CONFIG[review.type];
+function ReviewCard({ review, index = 0, t, typeConfig }: { review: Review; index?: number; t: ReviewsT; typeConfig: TypeConfig }) {
+  const cfg = typeConfig[review.type];
+  const title = t(review.titleKey);
   const [liked, setLiked] = useState(false);
   const [popKey, setPopKey] = useState(0);
 
@@ -337,7 +342,7 @@ function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
       {review.image ? (
         <Image
           src={review.image}
-          alt={review.title}
+          alt={title}
           fill
           sizes="(max-width: 767px) 50vw, 260px"
           className="object-cover transition-transform duration-700 group-hover:scale-110"
@@ -411,7 +416,7 @@ function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
         type="button"
         onClick={onLike}
         suppressHydrationWarning
-        aria-label={liked ? "Unlike" : "Like"}
+        aria-label={liked ? t("unlikeAria") : t("likeAria")}
         className={[
           "group/like absolute top-3 right-3 w-9 h-9 rounded-full backdrop-blur flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.20)] transition-all duration-300 hover:scale-110 cursor-pointer z-[2] overflow-visible",
           liked ? "bg-primary-600 shadow-[0_6px_16px_rgba(179,0,0,0.45)]" : "bg-white/95 hover:bg-primary-50",
@@ -450,7 +455,7 @@ function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
             className="text-white text-[13px] md:text-[14px] font-black leading-[1.3] line-clamp-2 tracking-tight"
             style={{ textShadow: "0 2px 6px rgba(0,0,0,0.65)" }}
           >
-            {review.title}
+            {title}
           </p>
         </div>
       )}
@@ -479,12 +484,12 @@ function ReviewCard({ review, index = 0 }: { review: Review; index?: number }) {
         {/* Tags + status badge */}
         <div className="flex items-center justify-between gap-1.5">
           <div className="flex items-center gap-1 flex-wrap min-w-0">
-            {review.tags.map((tag) => (
+            {review.tagKeys.map((tagKey) => (
               <span
-                key={tag}
+                key={tagKey}
                 className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/95 text-[#111827] text-[9.5px] font-black shadow-[0_2px_4px_rgba(0,0,0,0.20)] backdrop-blur"
               >
-                {tag}
+                {t(tagKey)}
               </span>
             ))}
           </div>

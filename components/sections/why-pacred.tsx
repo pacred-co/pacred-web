@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowRight,
@@ -10,80 +11,37 @@ import {
 } from "lucide-react";
 
 // ─────────────── Feature cards ───────────────
+type FeatureKey = "f1" | "f2" | "f3" | "f4" | "f5" | "f6";
 type Feature = {
+  key: FeatureKey;
   iconSrc: string;
-  title: string;
-  subtitle: string;
-  description: string;
 };
 
 const ICON_BASE = "/images/home/iconfloating";
 
 const FEATURES: Feature[] = [
-  {
-    iconSrc: `${ICON_BASE}/pcs-shop.png`,
-    title: "ตรวจสอบร้านค้าจีนทุกครั้ง",
-    subtitle: "1688, Taobao, Alibaba, Tmall เราพร้อมเช็คให้",
-    description:
-      "ไม่ว่าจะสั่งซื้อจากร้านไหน เราช่วยตรวจสอบร้านค้า เช็คสินค้า ประสานงาน ปิดดีลให้ครบ จบทุกงาน — การันตีของถึงมือแน่นอน",
-  },
-  {
-    iconSrc: `${ICON_BASE}/people.png`,
-    title: "ทีมงานมืออาชีพ",
-    subtitle: "ทีมคุณภาพ ประสบการณ์กว่า 14 ปี",
-    description:
-      "FCL, LCL, นำเข้า–ส่งออก, ชิปปิ้งเคลียร์ภาษี, สินค้าติดด่าน — ทีมงานคุณภาพดูแลครบทุกขั้นตอน เร็ว ไว ไม่มีคำว่าทำไม่ได้",
-  },
-  {
-    iconSrc: `${ICON_BASE}/checklistred.png`,
-    title: "QC ทุกจุด การันตีคุณภาพ",
-    subtitle: "ตรวจสินค้าได้ตั้งแต่โกดังต้นทาง",
-    description:
-      "มั่นใจได้ทุกระดับธุรกิจ ตั้งแต่ SME รายเล็กไปจนถึงรายใหญ่ บริการ QC สินค้าที่โกดัง การันตีคุณภาพก่อนจัดส่งทุกครั้ง",
-  },
-  {
-    iconSrc: `${ICON_BASE}/transfast.png`,
-    title: "รวดเร็ว ฉับไว พร้อมส่งสินค้า",
-    subtitle: "เร็ว ไว ไม่มีคำว่าทำไม่ได้",
-    description:
-      "นำเข้าล่าช้า สินค้าติดด่านศุลกากร เจอปัญหาไหนก็เคลียร์ได้ Pacred Shipping พร้อมจัดการอย่างรวดเร็วและเป็นระบบ",
-  },
-  {
-    iconSrc: `${ICON_BASE}/pcs-wallet.png`,
-    title: "โปรโมชันขนส่ง",
-    subtitle: "ขนส่งไว ราคาคุ้มค่า",
-    description:
-      "นำเข้ากับเราวันนี้ รับโปรโมชันส่งเหมาๆ เริ่มต้น 100 บาท ทั่วกรุงเทพฯ และปริมณฑล ประหยัดต้นทุนวางแผนค่าใช้จ่ายง่ายขึ้น",
-  },
-  {
-    iconSrc: `${ICON_BASE}/pcs-line-notify.png`,
-    title: "SMS แจ้งเตือนยอดชำระเงิน",
-    subtitle: "ค่าใช้จ่ายชัดเจน ตรวจสอบง่าย",
-    description:
-      "ระบบ SMS แจ้งเตือนยอดชำระเงินทุกครั้ง ลดความสับสน ตรวจสอบค่าใช้จ่ายได้โปร่งใส ทุกบิลทุกออเดอร์",
-  },
+  { key: "f1", iconSrc: `${ICON_BASE}/pcs-shop.png` },
+  { key: "f2", iconSrc: `${ICON_BASE}/people.png` },
+  { key: "f3", iconSrc: `${ICON_BASE}/checklistred.png` },
+  { key: "f4", iconSrc: `${ICON_BASE}/transfast.png` },
+  { key: "f5", iconSrc: `${ICON_BASE}/pcs-wallet.png` },
+  { key: "f6", iconSrc: `${ICON_BASE}/pcs-line-notify.png` },
 ];
 
 // ─────────────── Company Certificate ───────────────
-const COMPANY_CERT = {
-  title: "หนังสือรับรองบริษัท",
-  subtitle: "Company Certificate · กรมพัฒนาธุรกิจการค้า",
-  description:
-    "เอกสารรับรองนิติบุคคล ใช้ยืนยันข้อมูลบริษัทอย่างเป็นทางการ — รองรับการทำงานกับลูกค้าธุรกิจ SME บริษัท และองค์กรทุกขนาด",
-  tags: ["นิติบุคคล", "กรมพัฒนาธุรกิจการค้า", "ราชการ", "เอกสารตัวจริง"],
-  pages: [
-    "/images/dbd/page-0001.jpg",
-    "/images/dbd/page-0002.jpg",
-    "/images/dbd/page-0003.jpg",
-    "/images/dbd/page-0004.jpg",
-  ] as string[],
-};
+const COMPANY_CERT_PAGES = [
+  "/images/dbd/page-0001.jpg",
+  "/images/dbd/page-0002.jpg",
+  "/images/dbd/page-0003.jpg",
+  "/images/dbd/page-0004.jpg",
+];
 
 const TOTAL_MOCKUP_PAGES = 5;
 
 export function WhyPacred() {
-  const totalPages = COMPANY_CERT.pages.length || TOTAL_MOCKUP_PAGES;
-  const hasRealImages = COMPANY_CERT.pages.length > 0;
+  const t = useTranslations("whyPacred");
+  const totalPages = COMPANY_CERT_PAGES.length || TOTAL_MOCKUP_PAGES;
+  const hasRealImages = COMPANY_CERT_PAGES.length > 0;
   const [page, setPage] = useState(0);
 
   const prev = () => setPage((p) => (p - 1 + totalPages) % totalPages);
@@ -91,34 +49,37 @@ export function WhyPacred() {
 
   return (
     <>
-      <section id="why-pacred" className="relative py-5 md:py-12">
+      <section id="why-pacred" className="relative py-8 md:py-12">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
           {/* ─── Header ─── */}
           <div className="mx-auto w-full max-w-[1120px]">
             <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              WHY PACRED SHIPPING
+              {t("eyebrow")}
             </div>
-            <h2 className="text-[20px] md:text-[38px] leading-[1.2] md:leading-[1.15] font-black tracking-[-0.03em] md:tracking-[-0.04em] text-[#111827] dark:text-white">
-              นำเข้า–ส่งออก ของติดด่าน Port ไหน Term ใด{" "}
-              <span className="text-primary-600">ก็ไว้ใจเราได้</span>
+            <h2 className="text-[26px] md:text-[38px] leading-[1.18] md:leading-[1.15] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
+              {t("titlePart1")}{" "}
+              <span className="text-primary-600">{t("titleHighlight")}</span>
             </h2>
-            <p className="mt-1.5 text-[12px] md:text-[15px] leading-[1.5] md:leading-[1.55] font-medium text-muted md:whitespace-nowrap md:overflow-hidden md:text-ellipsis">
-              สั่งซื้อจีน · QC · ขนส่ง FCL/LCL · เคลียร์ภาษี · สินค้าติดด่าน — Pacred Shipping ดูแลครบ จบในที่เดียว
+            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.55] font-medium text-muted md:whitespace-nowrap md:overflow-hidden md:text-ellipsis">
+              {t("subtitle")}
             </p>
           </div>
 
           {/* ─── Feature grid 6 cards (horizontal swipe on mobile) ─── */}
-          <div className="mx-auto mt-4 md:mt-8 w-full max-w-[1120px] relative">
+          <div className="mx-auto mt-6 md:mt-8 w-full max-w-[1120px] relative">
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 lg:grid-cols-3 md:gap-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {FEATURES.map((f, i) => {
                 const num = String(i + 1).padStart(2, "0");
+                const fTitle = t(`${f.key}Title`);
+                const fSub = t(`${f.key}Sub`);
+                const fDesc = t(`${f.key}Desc`);
                 return (
                   <Link
-                    key={i}
+                    key={f.key}
                     href="/register"
-                    aria-label={`สมัครเลย · ${f.title}`}
+                    aria-label={t("registerAria", { title: fTitle })}
                     className="group relative shrink-0 w-[78%] min-w-[260px] sm:w-auto sm:min-w-0 snap-start block bg-white dark:bg-surface rounded-2xl border border-border p-5 md:p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_24px_50px_-12px_rgba(179,0,0,0.18)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400 overflow-hidden cursor-pointer"
                   >
                     {/* Decorative dot pattern — appears on hover */}
@@ -164,26 +125,26 @@ export function WhyPacred() {
 
                     {/* Title */}
                     <h3 className="relative text-[15px] md:text-[17px] font-black text-[#111827] dark:text-white leading-tight tracking-tight mb-1 group-hover:text-primary-700 dark:group-hover:text-primary-300 transition-colors duration-300">
-                      {f.title}
+                      {fTitle}
                     </h3>
 
                     {/* Subtitle */}
                     <p className="relative text-[12px] md:text-[12.5px] font-bold text-muted group-hover:text-primary-600 leading-snug mb-2 transition-colors duration-300">
-                      {f.subtitle}
+                      {fSub}
                     </p>
 
                     {/* Description */}
                     <p className="relative text-[12.5px] md:text-[13px] leading-[1.55] text-muted">
-                      {f.description}
+                      {fDesc}
                     </p>
 
-                    {/* Bottom accent — "สมัครเลย →" reveal on hover */}
+                    {/* Bottom accent — Register CTA reveal on hover */}
                     <div className="relative mt-4 flex items-center justify-between gap-2">
                       <div className="h-[2px] flex-1 bg-border overflow-hidden rounded-full">
                         <div className="h-full w-0 group-hover:w-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all duration-500 ease-out rounded-full" />
                       </div>
                       <div className="flex items-center gap-1 text-[11px] font-black text-primary-600 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300 whitespace-nowrap">
-                        สมัครเลย
+                        {t("registerCta")}
                         <ArrowRight className="w-3 h-3" strokeWidth={3} />
                       </div>
                     </div>
@@ -201,11 +162,11 @@ export function WhyPacred() {
           <div className="mx-auto mt-10 md:mt-14 w-full max-w-[1120px]">
             <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[13px] font-black tracking-[0.08em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              VERIFIED COMPANY
+              {t("certEyebrow")}
             </div>
             <h3 className="text-[22px] md:text-[30px] leading-[1.22] md:leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-white">
-              หนังสือรับรองบริษัท{" "}
-              <span className="text-primary-600">ตรวจสอบได้จริง</span>
+              {t("certTitlePart1")}{" "}
+              <span className="text-primary-600">{t("certTitleHighlight")}</span>
             </h3>
 
             {/* Slider (left) + article (right) */}
@@ -229,8 +190,8 @@ export function WhyPacred() {
                       <div key={idx} className="w-full h-full shrink-0 relative">
                         {hasRealImages ? (
                           <Image
-                            src={COMPANY_CERT.pages[idx]}
-                            alt={`หนังสือรับรองบริษัท หน้า ${idx + 1}`}
+                            src={COMPANY_CERT_PAGES[idx]}
+                            alt={t("certPageAlt", { n: idx + 1 })}
                             fill
                             className="object-contain"
                           />
@@ -258,7 +219,7 @@ export function WhyPacred() {
                 <button
                   type="button"
                   onClick={prev}
-                  aria-label="หน้าก่อนหน้า"
+                  aria-label={t("certPagePrev")}
                   suppressHydrationWarning
                   className="absolute -left-3 sm:-left-5 top-1/2 -translate-y-1/2 w-8 h-8 md:w-9 md:h-9 rounded-full bg-white dark:bg-surface border border-border text-[#111827] dark:text-white flex items-center justify-center shadow-[0_6px_14px_rgba(15,23,42,0.15)] hover:bg-primary-600 hover:text-white hover:border-primary-600 hover:scale-110 transition-all duration-300 z-10"
                 >
@@ -267,7 +228,7 @@ export function WhyPacred() {
                 <button
                   type="button"
                   onClick={next}
-                  aria-label="หน้าถัดไป"
+                  aria-label={t("certPageNext")}
                   suppressHydrationWarning
                   className="absolute -right-3 sm:-right-5 top-1/2 -translate-y-1/2 w-8 h-8 md:w-9 md:h-9 rounded-full bg-white dark:bg-surface border border-border text-[#111827] dark:text-white flex items-center justify-center shadow-[0_6px_14px_rgba(15,23,42,0.15)] hover:bg-primary-600 hover:text-white hover:border-primary-600 hover:scale-110 transition-all duration-300 z-10"
                 >
@@ -283,7 +244,7 @@ export function WhyPacred() {
                       key={idx}
                       type="button"
                       onClick={() => setPage(idx)}
-                      aria-label={`ไปหน้า ${idx + 1}`}
+                      aria-label={t("certPageGoto", { n: idx + 1 })}
                       suppressHydrationWarning
                       className={[
                         "transition-all duration-300 rounded-full",
@@ -303,30 +264,39 @@ export function WhyPacred() {
             {/* ── Article column ── */}
             <article className="text-[13px] md:text-[14px] leading-[1.75] text-muted space-y-3 md:space-y-3.5">
               <h4 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white leading-[1.25] tracking-tight">
-                <span className="text-primary-600">Pacred Shipping</span> ผู้เชี่ยวชาญด้านนำเข้า–ส่งออกครบวงจร
+                <span className="text-primary-600">{t("articleHeading1")}</span> {t("articleHeading2")}
               </h4>
 
               <p>
-                <span className="font-black text-primary-600">Pacred Shipping</span> เปิดประสบการณ์ผู้เชี่ยวชาญด้านชิปปิ้งนำเข้า–ส่งออก เคลียร์พิธีการกรมศุลกากรครบวงจร มากกว่า <span className="font-black text-[#111827] dark:text-white">14 ปี</span> ดูแลตั้งแต่ต้นน้ำถึงปลายน้ำ จบในที่เดียว หากคุณกำลังต้องการสั่งซื้อสินค้าจากจีนหรือต่างประเทศทั่วโลก ไม่ว่าจะเป็น <span className="font-black text-[#111827] dark:text-white">1688 / Taobao / Tmall</span> เราพร้อมให้บริการฝากโอนชำระค่าสินค้าอย่างปลอดภัย พร้อมเรทคุ้มค่า โปร่งใส ตรวจสอบได้
+                <span className="font-black text-primary-600">{t("articleP1Brand")}</span>
+                {t("articleP1Body1")}
+                <span className="font-black text-[#111827] dark:text-white">{t("articleYears")}</span>
+                {t("articleP1Body2")}
+                <span className="font-black text-[#111827] dark:text-white">{t("articleP1Marketplaces")}</span>
+                {t("articleP1Body3")}
               </p>
 
               <p>
-                ไม่เพียงเท่านั้น เรายังมีทีมล่ามจีนมืออาชีพช่วยติดต่อ เจรจา และปิดดีลโรงงานให้ฟรี ช่วยให้คุณลดต้นทุนค่าสินค้า เราทำราคาดีที่สุดได้แน่นอน พร้อมบริการนำเข้าสินค้าแบบ <span className="font-black text-[#111827] dark:text-white">Door to Door</span> ครบทุกขั้นตอน ตั้งแต่จัดหา สั่งซื้อ ขนส่ง ไปจนถึงเคลียร์ศุลกากรและจัดส่งถึงมือคุณ
+                {t("articleP2Body1")}
+                <span className="font-black text-[#111827] dark:text-white">{t("articleP2DoorToDoor")}</span>
+                {t("articleP2Body2")}
               </p>
 
               <p>
-                สำหรับผู้ที่มีสินค้าอยู่แล้ว ไม่ว่าคุณจะเป็นบุคคลทั่วไป นิติบุคคล หรือผู้ประกอบการ เราพร้อมช่วยขยายตลาดให้คุณ ด้วยบริการตัวแทนจำหน่ายและส่งออกสินค้าไปต่างประเทศ ดูแลเอกสาร โลจิสติกส์ และขั้นตอนทั้งหมดให้ครบ
+                {t("articleP3")}
               </p>
 
               <p>
-                Pacred มุ่งเน้นการบริการที่{" "}
-                <span className="font-black text-primary-600">&ldquo;เร็ว ไว ไม่มีคำว่าทำไม่ได้&rdquo;</span>{" "}
-                ทุกขั้นตอน พร้อมทีมงานมืออาชีพที่มีประสบการณ์มากกว่า 14 ปี — นำเข้า–ส่งออก เคลียร์ สั่งซื้อ เราพร้อมรับจบหมดทุกปัญหา
+                {t("articleP4Prefix")}
+                <span className="font-black text-primary-600">{t("articleP4Quote")}</span>
+                {t("articleP4Suffix")}
               </p>
 
               <p>
-                ไม่ว่าจะนำเข้าสินค้าจากจีน หรือส่งออกไปทั่วโลก จะสั่งซื้อ ฝากโอน หรือขยายธุรกิจไปต่างประเทศ ให้ <span className="font-black text-primary-600">Pacred Shipping</span> ดูแล แล้วคุณจะเข้าใจคำว่า{" "}
-                <span className="font-black text-primary-600">&ldquo;ครบจบจริงในที่เดียว&rdquo;</span>
+                {t("articleP5Body1")}
+                <span className="font-black text-primary-600">{t("articleP5Brand")}</span>
+                {t("articleP5Body2")}
+                <span className="font-black text-primary-600">{t("articleP5Quote")}</span>
               </p>
             </article>
 
