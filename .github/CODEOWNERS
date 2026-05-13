@@ -1,0 +1,66 @@
+# ════════════════════════════════════════════════════════════════
+# Pacred — Code Owners (GitHub auto-review assignment)
+# ════════════════════════════════════════════════════════════════
+# Canonical role doc: docs/team.md
+#
+# Permission ladder:
+#   dave + got = full owners (can merge to main)
+#   podeng     = owns frontend / landing / SEO
+#   Poom       = owns backend / cargo port / admin
+#
+# Main branch is protected — every PR to main needs review from
+# @deffeyameh (dave) OR a future got account.
+# ════════════════════════════════════════════════════════════════
+
+# Default — anything not matched falls here, requires lead review
+*                                @deffeyameh
+
+# Project plan + canonical docs — lead-only
+/CLAUDE.md                       @deffeyameh
+/AGENTS.md                       @deffeyameh
+/README.md                       @deffeyameh
+/docs/team.md                    @deffeyameh
+/docs/conventions.md             @deffeyameh
+/docs/env.md                     @deffeyameh
+/docs/versions.md                @deffeyameh
+/docs/HANDBOOK.md                @deffeyameh
+/docs/PORT_PLAN.md               @deffeyameh
+/docs/architecture.md            @deffeyameh
+/docs/decisions/                 @deffeyameh
+
+# Infra / config — lead-only
+/package.json                    @deffeyameh
+/pnpm-lock.yaml                  @deffeyameh
+/pnpm-workspace.yaml             @deffeyameh
+/.nvmrc                          @deffeyameh
+/.env.example                    @deffeyameh
+/next.config.ts                  @deffeyameh
+/eslint.config.mjs               @deffeyameh
+/proxy.ts                        @deffeyameh
+/vercel.json                     @deffeyameh
+/.github/                        @deffeyameh
+/supabase/migrations/            @deffeyameh
+
+# Frontend / public — ปอน owns, lead reviews
+/app/[locale]/(public)/          @deffeyameh
+/components/sections/            @deffeyameh
+/components/booking/             @deffeyameh
+/components/knowledge/           @deffeyameh
+/components/ui/                  @deffeyameh
+/messages/                       @deffeyameh
+/public/                         @deffeyameh
+
+# Backend / admin / cargo port — ภูม owns, lead reviews
+/actions/                        @deffeyameh
+/app/[locale]/(auth)/            @deffeyameh
+/app/[locale]/(protected)/       @deffeyameh
+/app/[locale]/(admin)/           @deffeyameh
+/app/[locale]/complete-profile/  @deffeyameh
+/app/auth/                       @deffeyameh
+/app/api/                        @deffeyameh
+/lib/                            @deffeyameh
+/components/admin/               @deffeyameh
+
+# NOTE: Add @got-jirayus and individual contributor accounts
+# (@podeng, @Poom) to this file as their GitHub accounts are confirmed.
+# Until then, every change funnels through @deffeyameh by default.

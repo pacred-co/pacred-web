@@ -2,6 +2,11 @@
   "name": "pacred-web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

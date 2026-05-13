@@ -4,25 +4,30 @@
 
 # 👉 START HERE — ทีมงานทุกคน อ่านก่อนเริ่ม
 
-📘 **[`docs/PORT_PLAN.md`](docs/PORT_PLAN.md)** = single source of truth สำหรับ:
-- งานที่ทำเสร็จแล้ว vs ที่ยังขาด (audit ครบทุก feature PHP → Next.js)
-- แผนแบ่งงาน **ปอน / ภูม / เดฟ** พร้อม acceptance criteria รายงาน
-- ลำดับความสำคัญ P0/P1/P2/P3
-- workflow + branch policy + migration checklist
+📘 **[`docs/HANDBOOK.md`](docs/HANDBOOK.md)** = entry point — มี documentation map + quick start
+
+**Canonical docs (อ่านครั้งเดียว ใช้ตลอด):**
+- 👥 [`docs/team.md`](docs/team.md) — roles + permissions + branch + merge policy + daily workflow
+- 📐 [`docs/conventions.md`](docs/conventions.md) — code style + commit format + naming + DB rules
+- 🔐 [`docs/env.md`](docs/env.md) — every env var explained + production checklist
+
+**Living docs (เดฟ updates):**
+- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness audit (Parts A-N)
+- 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
+- 🧠 [`docs/PACRED-SECOND-BRAIN.md`](docs/PACRED-SECOND-BRAIN.md) — context notes + gotchas
+
+**Reference (open เมื่อจำเป็น):**
+- [`AGENTS.md`](AGENTS.md) — Next 16 breaking changes (สำหรับ Claude/AI)
+- [`docs/decisions/*.md`](docs/decisions/) — ADRs
+- [`docs/setup/*.md`](docs/setup/) — onboarding guides (OAuth/Supabase/Vercel/LINE)
+- [`supabase/migrations/README.md`](supabase/migrations/README.md) — migration runbook
 
 **ทำงานครั้งแรก:**
-1. อ่าน [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — Part E (Per-Dev Assignment) หาส่วนของตัวเอง
-2. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
-3. Sync branch ตัวเองตามวิธีใน [Team Workflow](#-team--branch-workflow) ด้านล่าง
-4. เริ่ม task แรกในส่วนของตัวเอง
-
-**MD ไฟล์อื่นๆ ใน repo (ไม่ต้องอ่านก่อน — open เมื่อจำเป็น):**
-- [`AGENTS.md`](AGENTS.md) — Next 16 breaking changes (สำหรับ Claude/AI agents)
-- [`docs/architecture.md`](docs/architecture.md) — full system diagrams + auth flow
-- [`docs/decisions/*.md`](docs/decisions/) — ADRs (architecture decisions)
-- [`docs/setup/*.md`](docs/setup/) — setup guides (OAuth, Supabase, Vercel, etc.)
-- [`supabase/migrations/README.md`](supabase/migrations/README.md) — migration runbook
-- [`README.md`](README.md) — Next.js boilerplate (ไม่ต้องอ่าน)
+1. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
+2. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
+3. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
+4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part E (general) + Part N6 (current sprint)
+5. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 — เริ่ม task แรก
 
 ---
 
@@ -227,145 +232,25 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 
 # 👥 Team & Branch workflow
 
-ทีมงานคนละ branch ทำงาน — **ก๊อต** เป็นคนรวมเข้า `main`
+> ⚠️ **CANONICAL doc moved to [`docs/team.md`](docs/team.md)** — full role/branch/merge policy + daily workflow + safety rules
+> ห้าม duplicate รายละเอียดที่นี่ — อ่านที่ `docs/team.md` ครั้งเดียว ที่เดียว
 
-| Branch | คน |
-|---|---|
-| `main` | **ก๊อต** (maintainer — รวมเข้า main เท่านั้น) |
-| `dave` | เดฟ |
-| `podeng` | ปอนด์ |
-| `Poom` | ภูมิ |
+**TL;DR:**
 
-## กติกาการทำงาน
+| คน | บทบาท | Branch | Push to main |
+|---|---|---|---|
+| **ก๊อต** | Senior Advisor | (review only) | ✅ |
+| **เดฟ** | Project Lead | `dave` | ✅ |
+| **ปอน** | Frontend & SEO | `podeng` | ❌ (own branch) |
+| **ภูม** | Backend & Cargo Port | `Poom` | ❌ (own branch) |
 
-1. **ทุกคนทำงานบน branch ของตัวเอง** (อย่า commit ตรงเข้า `main`)
-2. **ก่อนเริ่มงานทุกครั้ง** — sync 2 ขั้นตอน เพื่อให้ตรงกับเพื่อนทุกคน:
-   ```bash
-   # ── ขั้นที่ 1: อัพเดท main ก่อน (รับแพชใหม่ของก๊อต) ──
-   git checkout main
-   git pull origin main
-
-   # ── ขั้นที่ 2: กลับ branch ตัวเอง + sync branch ตัวเอง + รวม main เข้ามา ──
-   git checkout <my-branch>
-   git status                    # ต้องสะอาด — ถ้ามีไฟล์ค้างให้ commit หรือ stash ก่อน
-   git pull origin <my-branch>   # ดึง branch ตัวเองล่าสุด (เผื่อ push ไว้จากเครื่องอื่น)
-   git merge main                # รวม main เข้ามาใน branch ตัวเอง
-   git push origin <my-branch>   # อัพ branch ตัวเอง
-   ```
-   → **ทำไมแยก 2 ขั้น?** จะได้เห็นชัดว่า main มีอะไรใหม่ก่อนค่อย merge เข้า branch ตัวเอง (ไม่ blind pull)
-3. ทำงานเสร็จ → commit + push ขึ้น branch ตัวเอง
-4. **ก๊อต** เป็นคนเดียวที่ merge เข้า `main` (ผ่าน PR หรือ merge ตรงตาม policy)
-
-## ทำไมต้อง sync main เป็นประจำ
-
-- **กันโค้ดเก่า** — ถ้าไม่ pull main นานๆ branch ตัวเองจะตามหลัง = ตอน merge จะ conflict เยอะ
-- **รับ patch ใหม่** — ถ้าก๊อต fix bug ใน main แล้วเราไม่ดึง = เราจะแก้ของเก่าซ้ำ หรือใช้โค้ดที่ผิดอยู่
-- **ทุกคนเห็นภาพเดียวกัน** — เดฟ/ปอน/ภูมิ pull main มาเหมือนกัน = ไม่ทำงานชนกัน
-- **conflict น้อย** — แก้ conflict วันละนิดทุกวัน ดีกว่าสะสมไปแก้ก้อนใหญ่ตอน merge
-
-**แนะนำ:** sync main ทุกเช้าก่อนเริ่มงาน (หรืออย่างน้อย 1 ครั้ง/วัน)
-
-## รอบการทำงานต่อเนื่อง (loop)
-
-```
-        ┌─────────────────────────────────────┐
-        │ เช้า ขั้นที่ 1:                      │
-        │   checkout main → pull main         │
-        │   (เช็คว่าก๊อต merge อะไรใหม่)       │
-        └────────────────┬────────────────────┘
-                         ↓
-        ┌─────────────────────────────────────┐
-        │ เช้า ขั้นที่ 2:                      │
-        │   checkout branch ตัวเอง            │
-        │   pull branch ตัวเอง                │
-        │   merge main เข้า branch ตัวเอง     │
-        │   push branch ตัวเอง                │
-        └────────────────┬────────────────────┘
-                         ↓
-        ┌─────────────────────────────────────┐
-        │   ทำงาน + commit เป็นระยะ           │
-        └────────────────┬────────────────────┘
-                         ↓
-        ┌─────────────────────────────────────┐
-        │  เย็น: push branch ขึ้น git         │
-        └────────────────┬────────────────────┘
-                         ↓
-        ┌─────────────────────────────────────┐
-        │   ก๊อต review + merge → main        │
-        └────────────────┬────────────────────┘
-                         ↓
-        (วันรุ่งขึ้น) เริ่ม loop ใหม่ที่ขั้น 1 ←┘
-```
-
-## Sync ไฟล์/เอกสารใหม่จากเพื่อน
-
-ถ้าใครอัพ MD/feature ขึ้น branch ของเขา (เช่น เดฟอัพ CLAUDE.md ขึ้น `dave`):
+**Daily sync (every morning):**
 ```bash
-git status                  # เช็คงานตัวเองว่ามีค้างไหม (ถ้ามี → commit หรือ stash ก่อน)
-git fetch origin
-git checkout <my-branch>
-git merge origin/dave       # หรือ origin/podeng, origin/Poom — branch ที่ต้องการดึงไฟล์
-git push origin <my-branch>
+git checkout main && git pull origin main
+git checkout <my-branch> && git merge main && git push origin <my-branch>
 ```
 
-หรือรอให้ก๊อตรวมเข้า `main` แล้วค่อย `git pull origin main` ลง branch ตัวเอง (วิธีปลอดภัยกว่า)
-
-## ⚠️ Safety rules
-- อย่าใช้ `--force` / `reset --hard` / `push --force` ถ้าไม่แน่ใจ — งานเพื่อนหายได้
-- ถ้า git ขึ้น error/conflict — หยุด ถามก่อนแก้
-- ถ้ามีไฟล์ค้างก่อน `pull` / `checkout` → `git stash` หรือ commit ก่อน
-
-## ดึงไฟล์จาก branch เพื่อน โดยไม่ทำงานตัวเองหาย
-
-**กฎทอง:** "commit หรือ stash ก่อน merge เสมอ" → งานไม่มีทางหาย
-
-### 🅰️ ถ้างาน commit แล้ว (push หรือไม่ก็ได้) — ปลอดภัยสุด
-```bash
-git status                              # ต้องสะอาด (nothing to commit)
-git fetch origin
-git merge origin/dave                   # ดึงไฟล์จาก dave
-# ถ้ามี conflict → แก้ไฟล์ → git add . → git commit
-git push origin <my-branch>
-```
-
-### 🅱️ ถ้ายังมีไฟล์ค้าง (ยังไม่ commit) — commit ก่อน (แนะนำ)
-```bash
-git status                              # ดูว่ามีอะไรค้าง
-git add .
-git commit -m "wip: งานที่ทำอยู่"       # commit แบบ work-in-progress
-git fetch origin
-git merge origin/dave
-git push origin <my-branch>
-```
-→ อยากเปลี่ยน commit message ทีหลัง: `git commit --amend` (ก่อน push เท่านั้น)
-
-### ทางเลือกอื่น — stash (เก็บชั่วคราว)
-```bash
-git stash                               # เก็บงานค้างใส่กล่อง
-git fetch origin && git merge origin/dave
-git stash pop                           # เอางานออกจากกล่องกลับมา (อาจ conflict)
-git push origin <my-branch>
-```
-→ เร็วกว่าแต่หายได้ถ้าใช้ผิด — แนะนำ commit ทาง 🅱️ มากกว่า
-
-### 🅲 ถ้าไม่อยากเสี่ยงเลย — รอก๊อตรวมเข้า main ก่อน
-```bash
-git add . && git commit -m "wip"
-git push origin <my-branch>             # backup ขึ้น GitHub
-# รอก๊อต merge dave เข้า main แล้วค่อย:
-git pull origin main                    # ปลอดภัยกว่า เพราะ main = review แล้ว
-```
-
-### ตัวอย่าง real case (น้องปอน)
-```bash
-# น้องปอนกำลังแก้ profile.tsx ยังไม่ commit แล้วอยากได้ CLAUDE.md ใหม่จาก dave
-git status                                          # modified: profile.tsx
-git add . && git commit -m "wip: profile form"     # เซฟก่อน
-git fetch origin
-git merge origin/dave                               # ดึง CLAUDE.md ใหม่มา
-# profile.tsx ยังอยู่ครบ + ได้ CLAUDE.md ใหม่ด้วย
-git push origin podeng
-```
+**Conflict / safety:** อย่าใช้ `--force` / `reset --hard` ถ้าไม่แน่ใจ — full safety rules ใน [`docs/team.md`](docs/team.md) §5
 
 ---
 

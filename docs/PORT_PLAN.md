@@ -1456,3 +1456,183 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 ---
 
 **End of Part N.** Part M/N รวมกันเป็น authoritative state of project ณ 2026-05-13 — Part M สำหรับ PHP feature inventory + Sprint 4 plan, Part N สำหรับ production readiness state.
+
+> 🔁 **Sprint plan in Part N6 SUPERSEDED by Part O** (role restructure 2026-05-13 evening) — ดู Part O ด้านล่าง
+
+---
+
+# Part O — Sprint 5+ Plan with Role Restructure (2026-05-13 evening)
+
+> **Role restructure decision (Pacred owner):** ทีมแบ่งงานชัดเจนตามความเชี่ยวชาญ — ดู [`docs/team.md`](team.md) สำหรับ full role definition
+>
+> - **ปอน (podeng):** 100% frontend / landing / SEO / acquisition
+> - **ภูม (Poom):** 100% backend — เชื่อม frontend ↔ customer backend ↔ admin backend; phase 1 = port PHP cargo 100%; phase 2 = DPX ERP
+> - **เดฟ:** project lead + infrastructure
+> - **ก๊อต:** senior advisor + co-merger
+
+## O1. งาน ปอน + ภูม โอนใหม่ (จาก Part N6)
+
+### โอนจาก ปอน → ภูม (customer portal คือ backend scope)
+| Task | เดิม Part N6 ปอน | ใหม่ Part O ภูม |
+|---|---|---|
+| C-0 complete-profile form | ปอน 5-6h | ✅ ภูม |
+| C-2 PDF shop receipt | ปอน 3-4h (รอ C-7) | ✅ ภูม (รอ C-7) |
+| C-3 sales claim form | ปอน 2-3h | ✅ ภูม |
+| C-4 phone change OTP atomic | ปอน 2-3h | ✅ ภูม |
+| C-5 China warehouse addresses page | ปอน 1h | ✅ ภูม |
+| C-6 cart counter navbar badge | ปอน 30m | ✅ ภูม |
+| C-8 contact form submit handler | ปอน 1h | ✅ ภูม |
+| C-10 forgot-password flow (NEW) | ปอน 3-4h | ✅ ภูม |
+| Bug-1 approve/suspend audit | ภูม 1-2h | ✅ already fixed by dave (commit `1a470ee`) |
+| Bug-2 scan-form.tsx React Compiler | ภูม 2-3h | ✅ already fixed by dave (commit `1a470ee`) |
+
+### โอนจาก ปอน → ปอน (เน้น frontend/SEO อย่างเดียว)
+| Task | เดิม | ใหม่ |
+|---|---|---|
+| All public/landing/SEO work | — | ✅ ปอน เป็น primary owner |
+| i18n keys ทุก namespace | ปอน | ✅ ปอน (continue) |
+| Phase I ecosystem landing pages (#1, #5-13) | TBD | ✅ ปอน (new primary owner) |
+| Mobile responsive QA | TBD | ✅ ปอน |
+| Lighthouse / SEO scores | TBD | ✅ ปอน |
+| `app/sitemap.ts` / `app/robots.ts` | (missing) | ✅ ปอน (new task L-1) |
+
+## O2. 👤 ภูม (Poom) — Sprint 5 (CARGO PORT FOCUS)
+
+**Strategy:** Port PHP cargo system → Pacred 100% ก่อน DPX ERP. ทุก feature ที่ PHP เดิมมี ต้อง work ใน Pacred ก่อน
+
+**Status check:**
+- ✅ Bug fixes ของ Sprint 1-3 (approve/suspend, scan-form, etc.) — แก้แล้วบน dave commit `1a470ee`
+- ✅ Sprint 1-3 admin features ครบ (A-1 ถึง A-15 + L-cleanup)
+- 🟡 ลำดับงานใหม่:
+
+### Priority 0 (block customer launch — must finish first)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **P-1** | C-0 `/complete-profile` real form | 5-6h | OAuth new users blocked without this. Personal: first_name + last_name + phone + sex + birthday + TOS. Juristic: redirect to register flow. Server action `completeProfile()`. Acceptance: OAuth user → submit → `profile.status='active'` → /dashboard |
+| **P-2** | C-10 `/forgot-password` flow | 3-4h | Input phone/email → request OTP → verify → reset password. Server actions `requestPasswordReset()` + `confirmPasswordReset()`. **BLOCKER** — current customers can't recover accounts |
+| **P-3** | C-4 phone change atomic | 2-3h | Update both `auth.phone` + `profiles.phone` atomically with OTP verify. Page `/profile/security/change-phone` |
+| **P-4** | Fix DBD silent fail | 1-2h | `actions/auth.ts:355-379` — when DBD API down, show "API ไม่พร้อม กรุณากรอกข้อมูลเอง" instead of "notfound". Add retry |
+| **P-5** | C-6 cart counter navbar badge | 30m | Add to `components/sections/navbar.tsx` — fetch count + badge |
+| **P-6** | C-8 contact form submit | 1h | `actions/contact.ts` → save to `contact_messages` table + admin notify |
+| **P-7** | C-3 sales claim form | 2-3h | `/sales/report/add` — form + server action `createSalesClaim()` |
+
+### Priority 1 (cargo system completeness)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **P-8** | C-5 China warehouse addresses page | 1h | `/service-import/warehouse-addresses` — list with copy buttons |
+| **P-9** | A-17 transfer sales rep | 2-3h | `/admin/customers/[id]/transfer-rep` workflow |
+| **P-10** | M2.3 customer bulk transfer (personal→juristic) | 4-6h | Admin tool from PHP `customers-move-to-juristic` |
+| **P-11** | M2.5b forwarder month-end closing | 6-8h | `/admin/accounting/closing` report from PHP `closingAccReportForwarder` |
+| **P-12** | M2.5c forwarder sale tracking | 4-6h | `/admin/forwarder-sales` from PHP |
+| **P-13** | M2.5h recently imported customers cache | 2-3h | Admin UX feature |
+
+### Priority 2 (after C-7 from เดฟ lands)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **P-14** | C-2 PDF shop order receipt | 3-4h | Uses `@react-pdf/renderer` infrastructure + `ReadNumber()` helper from เดฟ |
+
+### Priority 3 (waiting for owner decision)
+
+- M2.2 Payroll module (decision D-9 with owner)
+- M2.4 HS variants keep/merge (decision D-8 with owner)
+- M2.5d Driver work shifts (after payroll decision)
+
+**Estimated total P0+P1+P2:** 40-55h → 3-4 weeks part-time
+
+## O3. 👤 ปอน (podeng) — Sprint 5 (FRONTEND/SEO/LANDING FOCUS)
+
+**Strategy:** ทำ landing pages ทุก service + push SEO + acquisition funnel ให้แรง — เป้า Lighthouse 95+ ทุก public page
+
+### Priority 0 (SEO foundation — must do first)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **L-1** | `app/sitemap.ts` | 2h | Dynamic sitemap covering all public routes + i18n alt links. Use Next 16 metadata API |
+| **L-2** | `app/robots.ts` | 30m | Allow all public, disallow `/admin`, `/auth`, `/(protected)` |
+| **L-3** | Structured data on all landing pages | 4-6h | JSON-LD: Organization, LocalBusiness, Service, BreadcrumbList. Add to `app/[locale]/(public)/**/page.tsx` `generateMetadata` or inline `<script type="application/ld+json">` |
+| **L-4** | Open Graph + Twitter card meta | 2-3h | Every public page gets `openGraph`, `twitter` in `generateMetadata`. OG images per service |
+
+### Priority 1 (landing page polish + completion)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/customs-clearance`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX |
+| **L-6** | Knowledge base SEO + content | 3-4h | Article meta, internal linking, RSS feed |
+| **L-7** | FAQ page + structured data | 2h | FAQPage JSON-LD schema |
+| **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools |
+| **L-9** | i18n audit Phase 4b/5 | 4-6h | Find missing keys, normalize namespaces, EN translation polish |
+
+### Priority 2 (Phase I — Pacred Ecosystem expansion landing pages)
+
+11 new service landing pages (#1, #5-13 ตาม CLAUDE.md service catalogue):
+
+| # | Service | slug | Est |
+|---|---|---|---|
+| **L-10** | customs broker matching | `/services/customs-broker-matching` | 4-6h |
+| **L-11** | tax refund | `/services/tax-refund` | 3-4h |
+| **L-12** | customs clearance (expand existing) | `/services/customs-clearance` | 2-3h |
+| **L-13** | tax invoice issuance | `/services/tax-invoice` | 3-4h |
+| **L-14** | shipping document | `/services/shipping-document` | 3-4h |
+| **L-15** | export | `/services/export` | 3-4h |
+| **L-16** | fumigation | `/services/fumigation` | 3-4h |
+| **L-17** | consignment | `/services/consignment` | 3-4h |
+| **L-18** | bill payment | `/services/bill-payment` | 3-4h |
+| **L-19** | logistics + messenger | `/services/logistics` | 4-6h |
+| **L-20** | services hub page redesign | `/services` | 4-6h |
+
+### Priority 3 (performance + acquisition)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **L-21** | Image optimization (lazy + WebP) | 4-6h | Audit `<Image>` usage, use proper sizes, lazy load below-fold |
+| **L-22** | Conversion tracking (GTM/GA4) | 3-4h | Setup events: page_view, cta_click, register_start, register_complete |
+| **L-23** | Heatmap (Microsoft Clarity or Hotjar) | 1-2h | Setup tracking |
+| **L-24** | A/B test infrastructure | TBD | If GrowthBook or similar chosen |
+
+**Estimated total P0+P1:** 30-40h → 2-3 weeks part-time
+**Phase I (P2):** +40-50h → ขึ้นกับ priority ของ Pacred owner
+
+## O4. 👤 เดฟ (dave) — Sprint 5 (INFRASTRUCTURE LEAD)
+
+(unchanged from Part N6 — copied here for completeness)
+
+ลำดับสำคัญ (P0):
+1. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h)
+2. 🔴 **D-7b** LINE Messaging API setup (3-4h)
+3. 🔴 **helper-1** Port `ReadNumber()` → `lib/utils/thai-number.ts` (2-3h)
+4. 🔴 **C-7** PDF receipt infrastructure (`@react-pdf/renderer` + Sarabun font) (8-12h) — **blocker for ภูม P-14**
+5. 🟡 **D-11** Sentry / error tracking setup (3-4h)
+6. 🟡 **D-12** Rate limiting (Upstash Redis หรือ Vercel KV) (4-6h)
+7. 🟡 **D-13** CAPTCHA บน signup (hCaptcha invisible) (2-3h)
+8. 🟡 **D-14** Security headers in `next.config.ts` (1-2h)
+9. 🟡 **D-15** File upload server-side validation (size + MIME magic bytes) (3-4h)
+10. 🟡 **D-16** Replace 7 `console.log` PII leaks with structured logger (2-3h)
+11. 🟡 **D-17** CRON_SECRET protect endpoint (30m)
+12. 🟢 **A-9 / A-10 / A-11 / A-12** admin extras (settings UI, team leaders, sales payouts, containers)
+13. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
+
+**Estimated total:** 50-70h → 3 weeks part-time
+
+## O5. 👤 ก๊อต — co-merger + advisor
+
+1. Code review สำหรับ feature ใหญ่ + ADR
+2. Co-merge เข้า main (เดฟ + ก๊อต = highest)
+3. Schedule decision calls: D-7 payment gateway, D-8 HS variants, D-9 payroll
+4. Architecture consultation: DPX ERP phase 2 planning
+
+---
+
+## O6. Sprint coordination rules
+
+- **ภูม** must finish P-1 (complete-profile) + P-2 (forgot-password) before customer beta
+- **เดฟ** must finish C-7 PDF infra before ภูม can start P-14
+- **ปอน** L-1/L-2 SEO foundation can ship anytime (independent)
+- **All:** sync main daily (per [`team.md`](team.md) §3)
+- **PR turnaround:** review within 24h target
+
+---
+
+**End of Part O.** Part O supersedes Part N6 Sprint 5 plan with proper role mapping.
