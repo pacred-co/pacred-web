@@ -42,6 +42,13 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">ลูกค้า</h1>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/customers/recently-active"
+            className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-700 hover:bg-primary-100"
+          >
+            📈 ลูกค้า active ล่าสุด
+          </Link>
         <form action="/admin/customers" className="flex gap-2">
           <input
             name="q"
@@ -56,6 +63,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
           </select>
           <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 text-sm">ค้นหา</button>
         </form>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
