@@ -1,7 +1,8 @@
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
-// Brand SVG icons (inline เพื่อเลี่ยง lucide brand icons ที่ไม่มีในเวอร์ชันนี้)
+// Brand SVG icons (inline)
 function IconYoutube({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
@@ -28,32 +29,6 @@ const LINE_URL = "https://lin.ee/Yg3fU0I";
 const YOUTUBE_URL = "https://www.youtube.com/@PacredShipping";
 const FACEBOOK_URL = "https://www.facebook.com";
 
-const CONTACT_LINKS = [
-  { label: "ฝ่ายบริการลูกค้า",  href: "/contact" },
-  { label: "บริการของเรา",      href: "/services" },
-  { label: "ที่อยู่โกดังจีน",      href: "/warehouses/china" },
-  { label: "ที่อยู่โกดังไทย",     href: "/warehouses/thailand" },
-];
-
-const ABOUT_LINKS = [
-  { label: "เกี่ยวกับ Pacred",            href: "/about" },
-  { label: "สาระน่ารู้",                  href: "/knowledge" },
-  { label: "คำถามที่พบบ่อย",              href: "/faq" },
-  { label: "ร่วมใช้งาน กับ Pacred",       href: "/register" },
-  { label: "ข้อกำหนดและเงื่อนไข",          href: "/terms" },
-  { label: "นโยบายความเป็นส่วนตัว",        href: "/privacy" },
-  { label: "พื้นที่จัดส่ง Pacred เหมาๆ",   href: "/delivery-areas" },
-  { label: "วันหยุดประจำปี Pacred",        href: "/holidays" },
-];
-
-const SERVICE_LINKS = [
-  { label: "นำเข้าสินค้าจากจีน FCL ปิดตู้/เหมาตู้", href: "/services/import-china-fcl" },
-  { label: "นำเข้าสินค้าจากจีน LCL แชร์ตู้/รวมตู้", href: "/services/import-china-lcl" },
-  { label: "ส่งออกสินค้าทั่วโลก",                 href: "/services/export-worldwide" },
-  { label: "ชิปปิ้งเคลียร์พิธีการศุลกากร",          href: "/services/customs-clearance" },
-  { label: "สั่งซื้อสินค้าจากจีน 1688 taobao",     href: "/services/china-shopping" },
-];
-
 const PARTNERS = [
   { file: "upspartner.png",         url: "https://www.ups.com/th" },
   { file: "fedexpartner.png",       url: "https://www.fedex.com/th" },
@@ -74,19 +49,47 @@ const PARTNERS = [
 ];
 
 export function Footer() {
+  const t = useTranslations("footerNew");
+
+  const contactLinks = [
+    { label: t("contactCustomer"), href: "/contact" },
+    { label: t("contactServices"), href: "/services" },
+    { label: t("contactWhCn"),     href: "/warehouses/china" },
+    { label: t("contactWhTh"),     href: "/warehouses/thailand" },
+  ];
+
+  const aboutLinks = [
+    { label: t("aboutPacred"),    href: "/about" },
+    { label: t("aboutKnowledge"), href: "/knowledge" },
+    { label: t("aboutFaq"),       href: "/faq" },
+    { label: t("aboutJoin"),      href: "/register" },
+    { label: t("aboutTerms"),     href: "/terms" },
+    { label: t("aboutPrivacy"),   href: "/privacy" },
+    { label: t("aboutDelivery"),  href: "/delivery-areas" },
+    { label: t("aboutHolidays"),  href: "/holidays" },
+  ];
+
+  const serviceLinks = [
+    { label: t("svcFcl"),     href: "/services/import-china-fcl" },
+    { label: t("svcLcl"),     href: "/services/import-china-lcl" },
+    { label: t("svcExport"),  href: "/services/export-worldwide" },
+    { label: t("svcCustoms"), href: "/services/customs-clearance" },
+    { label: t("svcShop"),    href: "/services/china-shopping" },
+  ];
+
   return (
     <footer id="contact" className="bg-white dark:bg-surface border-t border-border">
       <div className="mx-auto w-full max-w-[1140px] px-[16px] md:px-[20px]">
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 py-6 md:py-14">
 
-          {/* Col 1 — ติดต่อเรา */}
+          {/* Col 1 — Contact */}
           <div className="md:col-span-3">
             <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
-              ติดต่อ<span className="text-primary-600">เรา</span>
+              {t("contactHeading1")}<span className="text-primary-600">{t("contactHeading2")}</span>
             </h3>
             <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 mb-4 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {CONTACT_LINKS.map((l) => (
+              {contactLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
@@ -138,7 +141,7 @@ export function Footer() {
               <div className="relative w-[100px] h-[100px] bg-white border border-border rounded-lg p-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] group-hover:shadow-[0_6px_18px_rgba(179,0,0,0.15)] group-hover:border-primary-300 transition-all">
                 <Image
                   src="/images/contact/L_gainfriends_2dbarcodes_BW.png"
-                  alt="LINE QR Code Pacred"
+                  alt={t("qrAlt")}
                   fill
                   className="object-contain p-1"
                 />
@@ -149,13 +152,13 @@ export function Footer() {
             </a>
           </div>
 
-          {/* Col 2 — เกี่ยวกับ */}
+          {/* Col 2 — About */}
           <div className="md:col-span-3">
             <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
-              เกี่ยว<span className="text-primary-600">กับ</span>
+              {t("aboutHeading1")}<span className="text-primary-600">{t("aboutHeading2")}</span>
             </h3>
             <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {ABOUT_LINKS.map((l) => (
+              {aboutLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
@@ -167,13 +170,13 @@ export function Footer() {
             </nav>
           </div>
 
-          {/* Col 3 — บริการ */}
+          {/* Col 3 — Services */}
           <div className="md:col-span-2">
             <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
-              บริ<span className="text-primary-600">การ</span>
+              {t("serviceHeading1")}<span className="text-primary-600">{t("serviceHeading2")}</span>
             </h3>
             <nav className="flex overflow-x-auto md:flex-col gap-2 md:gap-2.5 pb-1 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {SERVICE_LINKS.map((l) => (
+              {serviceLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
@@ -185,10 +188,10 @@ export function Footer() {
             </nav>
           </div>
 
-          {/* Col 4 — พาร์ทเนอร์ของเรา */}
+          {/* Col 4 — Partners */}
           <div className="md:col-span-4">
             <h3 className="text-[15px] md:text-[22px] font-black text-[#111827] dark:text-white mb-2.5 md:mb-5 tracking-tight">
-              พาร์ทเนอร์<span className="text-primary-600">ของเรา</span>
+              {t("partnerHeading1")}<span className="text-primary-600">{t("partnerHeading2")}</span>
             </h3>
             <div className="grid grid-cols-4 gap-3 md:gap-4">
               {PARTNERS.map((p) => (
@@ -215,11 +218,9 @@ export function Footer() {
 
         {/* Bottom copyright */}
         <div className="border-t border-border py-5 text-center text-[11.5px] md:text-[12.5px] text-muted leading-relaxed">
+          <p>{t("copyright")}</p>
           <p>
-            © 2026 Pacred. All rights reserved Ltd. สงวนลิขสิทธิ์ตามกฎหมาย
-          </p>
-          <p>
-            ผู้ให้บริการเว็บไซต์:{" "}
+            {t("operator")}{" "}
             <span className="font-black text-[#111827] dark:text-white">Pacred CO., LTD.</span>
           </p>
         </div>

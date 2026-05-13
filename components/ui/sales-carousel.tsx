@@ -1,47 +1,33 @@
 "use client";
 
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 
 const GAP = 20;
 const CARD_WIDTH = 240;
 
-type SalesPerson = {
+type SalesPersonData = {
+  personKey: "win" | "nat" | "ploy";
   name: string;
-  role: string;
-  tagline: string;
   phone: string;
   image?: string;
   useContain?: boolean;
 };
 
-const TEAM: SalesPerson[] = [
-  {
-    name: "วิน",
-    role: "นำเข้า–ส่งออก จีน-ทั่วโลก",
-    tagline: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
-    phone: "066-125-3007",
-    image: "/images/Character_Icon/win.png",
-  },
-  {
-    name: "แนท",
-    role: "นำเข้า-สั่งซื้อ 1688/Taobao/Tmall",
-    tagline: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
-    phone: "066-125-3007",
-    image: "/images/pacred-logo-red.png",
-    useContain: true,
-  },
-  {
-    name: "พลอย",
-    role: "ชิปปิ้งเคลียร์สินค้าติดด่าน",
-    tagline: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",
-    phone: "066-090-1217",
-    image: "/images/Character_Icon/ploy.png",
-  },
+const TEAM_DATA: SalesPersonData[] = [
+  { personKey: "win",  name: "วิน",  phone: "066-125-3007", image: "/images/Character_Icon/win.png" },
+  { personKey: "nat",  name: "แนท",  phone: "066-125-3007", image: "/images/pacred-logo-red.png", useContain: true },
+  { personKey: "ploy", name: "พลอย", phone: "066-090-1217", image: "/images/Character_Icon/ploy.png" },
 ];
 
-const ITEMS = [...TEAM, ...TEAM, ...TEAM, ...TEAM];
+type ResolvedPerson = SalesPersonData & {
+  role: string;
+  tagline: string;
+  alt: string;
+  button: string;
+};
 
-function SalesCard({ person }: { person: SalesPerson }) {
+function SalesCard({ person }: { person: ResolvedPerson }) {
   return (
     <div
       style={{ width: CARD_WIDTH }}
@@ -56,7 +42,7 @@ function SalesCard({ person }: { person: SalesPerson }) {
           {person.image ? (
             <Image
               src={person.image}
-              alt={`เซลล์${person.name} Pacred`}
+              alt={person.alt}
               width={92}
               height={92}
               className={person.useContain ? "w-full h-full object-contain p-3" : "w-full h-full object-cover"}
@@ -79,7 +65,7 @@ function SalesCard({ person }: { person: SalesPerson }) {
           rel="noopener noreferrer"
           className="mt-auto w-full rounded-xl bg-[#06C755] py-2 text-xs font-semibold text-white text-center hover:bg-[#05a548] transition-colors"
         >
-          ทัก{person.name}เลย
+          {person.button}
         </a>
       </div>
     </div>
@@ -87,7 +73,18 @@ function SalesCard({ person }: { person: SalesPerson }) {
 }
 
 export function SalesCarousel() {
-  const totalWidth = TEAM.length * (CARD_WIDTH + GAP);
+  const t = useTranslations("salesTeam");
+
+  const team: ResolvedPerson[] = TEAM_DATA.map((p) => ({
+    ...p,
+    role:    t(`${p.personKey}.role`),
+    tagline: t(`${p.personKey}.slogan`),
+    alt:     t(`${p.personKey}.alt`),
+    button:  t(`${p.personKey}.button`),
+  }));
+
+  const items = [...team, ...team, ...team, ...team];
+  const totalWidth = team.length * (CARD_WIDTH + GAP);
 
   return (
     <div className="w-full overflow-hidden">
@@ -99,7 +96,7 @@ export function SalesCarousel() {
           animation: "marquee 80s linear infinite",
         }}
       >
-        {ITEMS.map((person, i) => (
+        {items.map((person, i) => (
           <SalesCard key={i} person={person} />
         ))}
       </div>

@@ -425,7 +425,7 @@
     "orderSubMobile": "1688 Taobao",
     "orderAlt": "Purchase agent service for 1688, Taobao, Tmall",
     "customsTitle": "Customs clearance",
-    "customsTitleMobile": "Clear stuck cargo",
+    "customsTitleMobile": "Customs clearance",
     "customsSub": "customs procedures",
     "customsAlt": "Customs clearance for stuck cargo"
   },
@@ -443,6 +443,8 @@
     "titlePart2": "from anywhere",
     "feature1": "Full care from purchase to import",
     "feature2": "Transparent — traceable every step",
+    "feature3": "Switch sales contact 24/7",
+    "contactPrefix": "Contact",
     "ctaSales": "Choose sales",
     "ctaRegister": "Sign up now",
     "lineAria": "Contact Pacred on LINE",
@@ -455,19 +457,19 @@
       "slogan": "Any port, any term — we close the deal in one place",
       "alt": "Sales — Win (Pacred)",
       "button": "Chat with Win",
-      "role": "LCL / FCL import-export"
+      "role": "Import & export — China and worldwide"
     },
     "nat": {
       "slogan": "Source from any China platform — one-stop import",
       "alt": "Sales — Nat (Pacred)",
       "button": "Chat with Nat",
-      "role": "Purchase agent — 1688 / Taobao"
+      "role": "Imports & sourcing — 1688/Taobao/Tmall"
     },
     "ploy": {
       "slogan": "Stuck cargo cleared fast, safely, guaranteed",
       "alt": "Sales — Ploy (Pacred)",
       "button": "Chat with Ploy",
-      "role": "Customs clearance"
+      "role": "Customs clearance for stuck cargo"
     },
     "lineCta": "Quick chat on LINE"
   },
@@ -797,6 +799,36 @@
     "shippingDesc": "All Bangkok & metropolitan area, 100 THB",
     "shippingHighlight": "100"
   },
+  "footerNew": {
+    "contactHeading1": "Contact ",
+    "contactHeading2": "us",
+    "aboutHeading1": "About ",
+    "aboutHeading2": "us",
+    "serviceHeading1": "Servi",
+    "serviceHeading2": "ces",
+    "partnerHeading1": "Our ",
+    "partnerHeading2": "partners",
+    "contactCustomer": "Customer service",
+    "contactServices": "Our services",
+    "contactWhCn": "China warehouse address",
+    "contactWhTh": "Thailand warehouse address",
+    "aboutPacred": "About Pacred",
+    "aboutKnowledge": "Articles & insights",
+    "aboutFaq": "FAQ",
+    "aboutJoin": "Sign up with Pacred",
+    "aboutTerms": "Terms & conditions",
+    "aboutPrivacy": "Privacy policy",
+    "aboutDelivery": "Pacred flat-rate delivery zones",
+    "aboutHolidays": "Pacred annual holidays",
+    "svcFcl": "FCL container import from China",
+    "svcLcl": "LCL shared-container import from China",
+    "svcExport": "Worldwide export",
+    "svcCustoms": "Shipping & customs clearance",
+    "svcShop": "Order from China — 1688 / Taobao",
+    "copyright": "© 2026 Pacred. All rights reserved.",
+    "operator": "Website operated by:",
+    "qrAlt": "Pacred LINE QR code"
+  },
   "footerExtras": {
     "tagline": "End-to-end import-export and customs clearance specialists — over 14 years of experience",
     "phone": "066-131-0253",
@@ -861,7 +893,10 @@
     "bottomTerms": "Terms of service"
   },
   "placeholders": {
-    "pageWip": "This page is a placeholder — feature coming in a later phase."
+    "pageWip": "This page is a placeholder — feature coming in a later phase.",
+    "homeBreadcrumb": "Home",
+    "stubPreparing": "We're preparing this content for you",
+    "stubBody": "This section is being updated — in the meantime, reach out to the Pacred Shipping team on LINE or by phone below."
   },
   "serviceData": {
     "badge20": "Import",

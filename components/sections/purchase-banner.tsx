@@ -3,24 +3,37 @@
 import { useState } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
 const LINE_URL = "https://lin.ee/Yg3fU0I";
 
-const SALES = [
-  { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "066-125-3007", image: "/images/Character_Icon/win.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },
-  { name: "แนท",  slogan: "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",       phone: "066-125-3007", image: "/images/pacred-logo-red.png",     useContain: true,  alt: "เซลล์แนท Pacred",  button: "ทักแนทเลย"  },
-  { name: "พลอย", slogan: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",          phone: "066-090-1217", image: "/images/Character_Icon/ploy.png", useContain: false, alt: "เซลล์พลอย Pacred", button: "ทักพลอยเลย" },
-];
+type SalesCardLocal = {
+  personKey: "win" | "nat" | "ploy";
+  name: string;
+  phone: string;
+  image: string;
+  useContain: boolean;
+};
 
-const FEATURES = [
-  "ดูแลตั้งแต่สั่งซื้อจนถึงนำเข้า",
-  "โปร่งใส ตรวจสอบได้ทุกขั้นตอน",
-  "เปลี่ยนเซลล์ได้ตลอด 24 ชม.",
+const SALES_DATA: SalesCardLocal[] = [
+  { personKey: "win",  name: "วิน",  phone: "066-125-3007", image: "/images/Character_Icon/win.png",  useContain: false },
+  { personKey: "nat",  name: "แนท",  phone: "066-125-3007", image: "/images/pacred-logo-red.png",     useContain: true  },
+  { personKey: "ploy", name: "พลอย", phone: "066-090-1217", image: "/images/Character_Icon/ploy.png", useContain: false },
 ];
 
 export function PurchaseBanner() {
+  const t = useTranslations("purchaseBanner");
+  const tSales = useTranslations("salesTeam");
   const [open, setOpen] = useState(false);
+
+  const features = [t("feature1"), t("feature2"), t("feature3")];
+  const sales = SALES_DATA.map((c) => ({
+    ...c,
+    slogan: tSales(`${c.personKey}.slogan`),
+    alt:    tSales(`${c.personKey}.alt`),
+    button: tSales(`${c.personKey}.button`),
+  }));
 
   return (
     <>
@@ -30,12 +43,12 @@ export function PurchaseBanner() {
           {/* Banner card */}
           <div className="relative w-full min-h-[220px] md:min-h-[220px] rounded-[28px] overflow-hidden bg-[#06c755] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
 
-            {/* Background — desktop */}
+            {/* Background */}
             <a
               href={LINE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="ติดต่อ Pacred ทาง LINE"
+              aria-label={t("lineAria")}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -69,14 +82,14 @@ export function PurchaseBanner() {
 
               <h2 className="text-[20px] md:text-[clamp(30px,3.1vw,44px)] font-black text-white leading-[1.15] tracking-[-0.04em] mb-[8px] md:mb-[10px]"
                 style={{ textShadow: "0 3px 12px rgba(0,0,0,0.16)" }}>
-                สั่งซื้อทั่วโลก{" "}
-                <span className="text-white">Pดิวะ !</span>{" "}
-                ที่ไหนก็สั่งได้
+                {t("titlePart1")}{" "}
+                <span className="text-white">{t("titleBrand")}</span>{" "}
+                {t("titlePart2")}
               </h2>
 
               {/* Features — desktop only */}
               <div className="hidden md:flex flex-wrap gap-x-4 gap-y-2 mb-[14px]">
-                {FEATURES.map((f) => (
+                {features.map((f) => (
                   <div key={f} className="flex items-center gap-[7px] text-white text-[13px] font-bold"
                     style={{ textShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
                     <Check className="w-4 h-4 shrink-0" strokeWidth={3} />
@@ -96,7 +109,7 @@ export function PurchaseBanner() {
                   strokeWidth={3}
                   style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
                 />
-                ติดต่อ: 066-125-3007
+                {t("contactPrefix")}: 066-125-3007
               </a>
 
               {/* Buttons */}
@@ -111,7 +124,7 @@ export function PurchaseBanner() {
                   <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
-                  เลือกเซลล์
+                  {t("ctaSales")}
                 </button>
 
                 <Link
@@ -122,7 +135,7 @@ export function PurchaseBanner() {
                   <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
                   </svg>
-                  สมัครเลย
+                  {t("ctaRegister")}
                 </Link>
               </div>
 
@@ -144,7 +157,7 @@ export function PurchaseBanner() {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="ปิด"
+              aria-label={t("closeAria")}
               className="absolute top-5 right-5 w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-500 flex items-center justify-center hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -152,13 +165,13 @@ export function PurchaseBanner() {
 
             {/* Header */}
             <div className="text-center mb-7">
-              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">เลือกเซลล์ที่ต้องการติดต่อ</h3>
-              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">ทีมงานมืออาชีพพร้อมให้คำปรึกษาและดูแลทุกขั้นตอน</p>
+              <h3 className="text-[22px] md:text-[28px] font-black text-[#111827]">{t("modalTitle")}</h3>
+              <p className="text-[14px] md:text-[15px] text-gray-500 mt-1">{t("modalSubtitle")}</p>
             </div>
 
             {/* Sales grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-              {SALES.map((card) => (
+              {sales.map((card) => (
                 <div
                   key={card.name}
                   className="relative flex flex-col items-center text-center rounded-[20px] px-4 py-5 border border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden"

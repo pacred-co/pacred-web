@@ -424,8 +424,8 @@
     "orderSub": "จีน-ไทย ทั่วโลก",
     "orderSubMobile": "1688 Taobao",
     "orderAlt": "บริการฝากสั่งซื้อสินค้า 1688 taobao tmall",
-    "customsTitle": "เคลียร์ภาษี",
-    "customsTitleMobile": "เคลียร์ติดด่าน",
+    "customsTitle": "เคลียร์สินค้า",
+    "customsTitleMobile": "เคลียร์สินค้า",
     "customsSub": "พิธีการศุลกากร",
     "customsAlt": "บริการเคลียร์สินค้าติดด่านศุลกากร"
   },
@@ -443,6 +443,8 @@
     "titlePart2": "ที่ไหนก็สั่งได้",
     "feature1": "ดูแลตั้งแต่สั่งซื้อจนถึงนำเข้า",
     "feature2": "โปร่งใส ตรวจสอบได้ทุกขั้นตอน",
+    "feature3": "เปลี่ยนเซลล์ได้ตลอด 24 ชม.",
+    "contactPrefix": "ติดต่อ",
     "ctaSales": "เลือกเซลล์",
     "ctaRegister": "สมัครเลย",
     "lineAria": "ติดต่อ Pacred ทาง LINE",
@@ -455,19 +457,19 @@
       "slogan": "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
       "alt": "เซลล์วิน Pacred",
       "button": "ทักวินเลย",
-      "role": "LCL / FCL นำเข้า-ส่งออก"
+      "role": "นำเข้า–ส่งออก จีน-ทั่วโลก"
     },
     "nat": {
       "slogan": "นำเข้าสั่งซื้อจีน ทุกแพลตฟอร์ม ครบจบในที่เดียว",
       "alt": "เซลล์แนท Pacred",
       "button": "ทักแนทเลย",
-      "role": "ฝากสั่งซื้อ 1688 / Taobao"
+      "role": "นำเข้า-สั่งซื้อ 1688/Taobao/Tmall"
     },
     "ploy": {
       "slogan": "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",
       "alt": "เซลล์พลอย Pacred",
       "button": "ทักพลอยเลย",
-      "role": "เคลียร์ศุลกากร"
+      "role": "ชิปปิ้งเคลียร์สินค้าติดด่าน"
     },
     "lineCta": "ทักด่วน LINE"
   },
@@ -797,6 +799,36 @@
     "shippingDesc": "ขนส่งทั่วกทม.ปริมณฑล 100",
     "shippingHighlight": "100"
   },
+  "footerNew": {
+    "contactHeading1": "ติดต่อ",
+    "contactHeading2": "เรา",
+    "aboutHeading1": "เกี่ยว",
+    "aboutHeading2": "กับ",
+    "serviceHeading1": "บริ",
+    "serviceHeading2": "การ",
+    "partnerHeading1": "พาร์ทเนอร์",
+    "partnerHeading2": "ของเรา",
+    "contactCustomer": "ฝ่ายบริการลูกค้า",
+    "contactServices": "บริการของเรา",
+    "contactWhCn": "ที่อยู่โกดังจีน",
+    "contactWhTh": "ที่อยู่โกดังไทย",
+    "aboutPacred": "เกี่ยวกับ Pacred",
+    "aboutKnowledge": "สาระน่ารู้",
+    "aboutFaq": "คำถามที่พบบ่อย",
+    "aboutJoin": "ร่วมใช้งาน กับ Pacred",
+    "aboutTerms": "ข้อกำหนดและเงื่อนไข",
+    "aboutPrivacy": "นโยบายความเป็นส่วนตัว",
+    "aboutDelivery": "พื้นที่จัดส่ง Pacred เหมาๆ",
+    "aboutHolidays": "วันหยุดประจำปี Pacred",
+    "svcFcl": "นำเข้าสินค้าจากจีน FCL ปิดตู้/เหมาตู้",
+    "svcLcl": "นำเข้าสินค้าจากจีน LCL แชร์ตู้/รวมตู้",
+    "svcExport": "ส่งออกสินค้าทั่วโลก",
+    "svcCustoms": "ชิปปิ้งเคลียร์พิธีการศุลกากร",
+    "svcShop": "สั่งซื้อสินค้าจากจีน 1688 taobao",
+    "copyright": "© 2026 Pacred. All rights reserved Ltd. สงวนลิขสิทธิ์ตามกฎหมาย",
+    "operator": "ผู้ให้บริการเว็บไซต์:",
+    "qrAlt": "LINE QR Code Pacred"
+  },
   "footerExtras": {
     "tagline": "ผู้เชี่ยวชาญด้านนำเข้า-ส่งออก เคลียร์พิธีการกรมศุลกากรครบวงจร มากกว่า 14 ปี",
     "phone": "066-131-0253",
@@ -861,7 +893,10 @@
     "bottomTerms": "เงื่อนไขการใช้บริการ"
   },
   "placeholders": {
-    "pageWip": "หน้านี้ยังเป็น placeholder — feature จะถูกเพิ่มในเฟสถัดไป"
+    "pageWip": "หน้านี้ยังเป็น placeholder — feature จะถูกเพิ่มในเฟสถัดไป",
+    "homeBreadcrumb": "หน้าหลัก",
+    "stubPreparing": "กำลังเตรียมข้อมูลให้คุณ",
+    "stubBody": "เนื้อหาส่วนนี้กำลังอยู่ระหว่างการอัปเดต — ระหว่างนี้คุณสามารถปรึกษาทีม Pacred Shipping ได้ผ่าน LINE หรือเบอร์โทรด้านล่าง"
   },
   "serviceData": {
     "badge20": "นำเข้า",

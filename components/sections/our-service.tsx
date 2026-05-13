@@ -1,62 +1,65 @@
 import { ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
-const services = [
-  // ── บนซ้าย (span 3 — ใหญ่) ──────────────────────────────────────
-  {
-    title: "นำเข้าสินค้า",         sub: "จากต่างประเทศ",
-    titleMobile: "นำเข้าสินค้า",  subMobile: "จากต่างประเทศ",
-    href: "/register",
-    bgDesktop:   "/images/ourservices/import.png",
-    bgMobile:    "/images/ourservices/mobile/import.png",
-    iconDesktop: "",
-    iconMobile:  "",
-    alt: "บริการนำเข้าสินค้าจากต่างประเทศ",
-  },
-  {
-    title: "ส่งออกสินค้า",         sub: "ไปต่างประเทศ",
-    titleMobile: "ส่งออกสินค้า",  subMobile: "ไปต่างประเทศ",
-    href: "/register",
-    bgDesktop:   "/images/ourservices/export.png",
-    bgMobile:    "/images/ourservices/mobile/export.png",
-    iconDesktop: "",
-    iconMobile:  "",
-    alt: "บริการส่งออกสินค้าไปต่างประเทศ",
-  },
-  // ── ล่าง (span 2 — เล็ก) ────────────────────────────────────────
-  {
-    title: "ฝากโอน",         sub: "ชำระค่าสินค้า",
-    titleMobile: "ฝากโอน",  subMobile: "ชำระค่าสินค้า",
-    href: "/register",
-    bgDesktop:   "/images/ourservices/exchange.png",
-    bgMobile:    "/images/ourservices/mobile/exchange.png",
-    iconDesktop: "",
-    iconMobile:  "",
-    alt: "บริการฝากโอนค่าสินค้าจีน ฝากโอนหยวน",
-  },
-  {
-    title: "ฝากสั่งซื้อ",         sub: "จีน-ไทย ทั่วโลก",
-    titleMobile: "ฝากสั่งซื้อ",  subMobile: "1688 Taobao",
-    href: "/register",
-    bgDesktop:   "/images/ourservices/shop.png",
-    bgMobile:    "/images/ourservices/mobile/shop.png",
-    iconDesktop: "",
-    iconMobile:  "",
-    alt: "บริการฝากสั่งซื้อสินค้า 1688 taobao tmall",
-  },
-  {
-    title: "เคลียร์สินค้า",        sub: "พิธีการศุลกากร",
-    titleMobile: "เคลียร์สินค้า",   subMobile: "พิธีการศุลกากร",
-    href: "/services/customs-clearance",
-    bgDesktop:   "/images/ourservices/custom.png",
-    bgMobile:    "/images/ourservices/mobile/custom.png",
-    iconDesktop: "",
-    iconMobile:  "",
-    alt: "บริการเคลียร์สินค้าติดด่านศุลกากร",
-  },
-];
-
 export function OurService() {
+  const t = useTranslations("ourService");
+
+  const services = [
+    // ── Top row (span 3 — large) ──────────────────────────────────────
+    {
+      title: t("importTitle"),       sub: t("importSub"),
+      titleMobile: t("importTitle"), subMobile: t("importSub"),
+      href: "/register",
+      bgDesktop:   "/images/ourservices/import.png",
+      bgMobile:    "/images/ourservices/mobile/import.png",
+      iconDesktop: "",
+      iconMobile:  "",
+      alt: t("importAlt"),
+    },
+    {
+      title: t("exportTitle"),       sub: t("exportSub"),
+      titleMobile: t("exportTitle"), subMobile: t("exportSub"),
+      href: "/register",
+      bgDesktop:   "/images/ourservices/export.png",
+      bgMobile:    "/images/ourservices/mobile/export.png",
+      iconDesktop: "",
+      iconMobile:  "",
+      alt: t("exportAlt"),
+    },
+    // ── Bottom row (span 2 — small) ────────────────────────────────────
+    {
+      title: t("transferTitle"),       sub: t("transferSub"),
+      titleMobile: t("transferTitle"), subMobile: t("transferSub"),
+      href: "/register",
+      bgDesktop:   "/images/ourservices/exchange.png",
+      bgMobile:    "/images/ourservices/mobile/exchange.png",
+      iconDesktop: "",
+      iconMobile:  "",
+      alt: t("transferAlt"),
+    },
+    {
+      title: t("orderTitle"),       sub: t("orderSub"),
+      titleMobile: t("orderTitle"), subMobile: t("orderSubMobile"),
+      href: "/register",
+      bgDesktop:   "/images/ourservices/shop.png",
+      bgMobile:    "/images/ourservices/mobile/shop.png",
+      iconDesktop: "",
+      iconMobile:  "",
+      alt: t("orderAlt"),
+    },
+    {
+      title: t("customsTitle"),         sub: t("customsSub"),
+      titleMobile: t("customsTitleMobile"), subMobile: t("customsSub"),
+      href: "/services/customs-clearance",
+      bgDesktop:   "/images/ourservices/custom.png",
+      bgMobile:    "/images/ourservices/mobile/custom.png",
+      iconDesktop: "",
+      iconMobile:  "",
+      alt: t("customsAlt"),
+    },
+  ];
+
   return (
     <section className="relative z-[5] bg-transparent pt-6 pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
@@ -66,31 +69,31 @@ export function OurService() {
           {/* Eyebrow — desktop only */}
           <div className="hidden md:flex items-center gap-2 mb-3 text-red-600 text-[13px] font-black tracking-[0.08em] uppercase">
             <span className="w-2 h-2 rounded-full bg-red-600 shrink-0" />
-            Our Services
+            {t("eyebrow")}
           </div>
 
           {/* Desktop title */}
           <h2 className="hidden md:block text-[42px] leading-[1.22] font-black tracking-[-0.04em] text-[#111827]">
-            Pacred Shipping : เปลี่ยนการ{" "}
-            <span className="text-red-600">นำเข้า-ส่งออก</span>
+            {t("titlePrefix")}
+            <span className="text-red-600">{t("titleHighlight")}</span>
           </h2>
 
           {/* Mobile title */}
           <div className="md:hidden text-center">
             <h2 className="text-[31px] leading-[1.08] font-black tracking-[-0.04em] text-[#111827]">
-              Pacred Shipping
+              {t("titleMobile")}
             </h2>
             <div className="w-[52px] h-[5px] rounded-full bg-red-600 mx-auto mt-3" />
           </div>
 
           {/* Subtitle */}
           <p className="mt-3 font-bold text-gray-500 hidden md:block text-[22px] leading-[1.45]">
-            ให้คนไทยเข้าถึง ง่ายแค่ปลายนิ้ว...{" "}
-            <span className="text-red-600 font-black">เร็ว ไว ไม่มีคำว่าทำไม่ได้ !</span>
+            {t("subtitlePrefix")}
+            <span className="text-red-600 font-black">{t("subtitleHighlight")}</span>
           </p>
           <p className="mt-3 font-bold text-gray-500 md:hidden text-[13px] leading-[1.2] text-center">
-            ให้คนไทยเข้าถึง ง่ายแค่ปลายนิ้ว...{" "}
-            <span className="text-red-600 font-black">เร็ว ไว !</span>
+            {t("subtitlePrefix")}
+            <span className="text-red-600 font-black">{t("subtitleMobile")}</span>
           </p>
         </div>
 
