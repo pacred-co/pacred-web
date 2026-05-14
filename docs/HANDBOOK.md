@@ -2,7 +2,23 @@
 
 > Entry point for everyone on the team — start here.
 
-Last updated: 2026-05-15
+Last updated: 2026-05-16
+
+---
+
+## 🛑 Force-read your brief FIRST
+
+Before anything else, every Claude Code agent + every human dev opens THEIR role brief:
+
+| You are… | Open this brief |
+|---|---|
+| **ก๊อต** (Senior Advisor / Production Watcher) | [`briefs/got.md`](briefs/got.md) |
+| **เดฟ** (Project Lead / Integrator) | [`briefs/dave.md`](briefs/dave.md) |
+| **ภูม** (Backend / Customer Portal / Admin) | [`briefs/poom.md`](briefs/poom.md) |
+| **ปอน** (Frontend / Landing / SEO / Marketing) | [`briefs/podeng.md`](briefs/podeng.md) |
+| Anyone designing STAFF admin / RBAC | [`briefs/ops-roles.md`](briefs/ops-roles.md) |
+
+📂 Routing map: [`briefs/INDEX.md`](briefs/INDEX.md) · enforced from [`/CLAUDE.md`](/CLAUDE.md) top section.
 
 ---
 
@@ -42,13 +58,24 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 ## 🗺️ Documentation map
 
-### ⭐ Canonical (read first, in this order)
+### 🧑‍💻 Role briefs (force-read — open YOUR file first)
+
+| File | คืออะไร | ใครอ่าน |
+|---|---|---|
+| [`briefs/INDEX.md`](briefs/INDEX.md) | Routing map — which brief is yours + onboarding flow | ทุกคน — ครั้งแรก |
+| [`briefs/got.md`](briefs/got.md) | ก๊อต — Senior Advisor / Production Watcher (P0/P1, ADRs, partner picks) | ก๊อต |
+| [`briefs/dave.md`](briefs/dave.md) | เดฟ — Project Lead / Integrator (landing pivot, backend prep) | เดฟ |
+| [`briefs/poom.md`](briefs/poom.md) | ภูม — Backend / Customer Portal / Admin (container model, tax invoice) | ภูม |
+| [`briefs/podeng.md`](briefs/podeng.md) | ปอน — Frontend / Landing / SEO / Marketing (owner critiques, L-5, SEO) | ปอน |
+| [`briefs/ops-roles.md`](briefs/ops-roles.md) | 14 STAFF role workspaces — admin UI / RBAC design input | ภูม + ก๊อต (system design) |
+
+### ⭐ Canonical (read after your brief)
 
 | File | คืออะไร | ใครต้องอ่าน |
 |---|---|---|
-| [`team.md`](team.md) | **Roles + permissions + branch flow (น้อง pull from `dave`!) + §3.0 push-frequency cost rule + §6 self-directed mode + §9 Claude Code async collab** | ทุกคน — ครั้งแรก |
+| [`team.md`](team.md) | **Roles + permissions + branch flow (น้อง pull from `dave`!) + §3.0 push-frequency cost rule (save-points only) + §6 self-directed mode + §9 Claude Code async collab** | ทุกคน — ครั้งแรก |
 | [`conventions.md`](conventions.md) | Code style + commit format + i18n + DB rules | ทุกคน |
-| [`env.md`](env.md) | Every env var explained + production checklist (16 sections covering Supabase / OTP / SMS / China search / PromptPay / LINE+LIFF / Sentry / Upstash / hCaptcha / etc.) | เดฟ + ภูม |
+| [`env.md`](env.md) | Every env var explained + production checklist (17 sections covering Supabase / OTP / SMS / China search / PromptPay / LINE+LIFF / Sentry / Upstash / hCaptcha / **MOMO JMF**) | เดฟ + ภูม + ก๊อต |
 | [`pacred-info.md`](pacred-info.md) | Company info SOT — addresses, phones, emails, LINE OA, sales reps | ทุกคน — when touching contact UI |
 | [`HANDBOOK.md`](HANDBOOK.md) | ไฟล์นี้ — entry/index |
 
@@ -56,12 +83,15 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 | File | คืออะไร |
 |---|---|
-| [`PORT_PLAN.md`](PORT_PLAN.md) | Master plan — Parts A-N (PHP audit + early sprints) · O (per-role assignments) · P (latest snapshot) · 🚨 Q (production blockers) · 🚨 R (vendor cutoff decisions) · 🤝 S (เดฟ→ก๊อต async hand-off batch) |
+| [`PORT_PLAN.md`](PORT_PLAN.md) | Current sprints + hand-off batches — Parts O (per-role assignments) · P (snapshot) · Q (production blockers) · R (vendor cutoff) · S (เดฟ↔ก๊อต async hand-off). ~1435 lines, under 2000-line agent ceiling. |
+| [`sprints/archive-a-to-n.md`](sprints/archive-a-to-n.md) | Historic survey + earlier sprint plans (Parts A–N — moved out for size, kept for reference) |
 | [`architecture.md`](architecture.md) | System architecture — diagrams, DB schema, auth flow, security |
+| [`architecture/container-centric-model.md`](architecture/container-centric-model.md) | **NEW** warehouse / container / shipment data spine — 4 tables, RLS, status enums, CT-1..CT-8 implementation |
+| [`integrations/momo-jmf.md`](integrations/momo-jmf.md) | MOMO partner API spec — JWT auth, endpoint inventory TBD, ก๊อต MOMO-1..MOMO-3 |
 | [`PACRED-SECOND-BRAIN.md`](PACRED-SECOND-BRAIN.md) | Context notes + gotchas |
-| [`decisions/*.md`](decisions/) | Architecture Decision Records (ADRs) — `0001-line-notify-replacement` · `0002-admin-architecture` |
-| [`audit/*.md`](audit/) | Deep audits — `php-pcscargo-integrations.md` (legacy PHP source mapping) |
-| [`runbook/*.md`](runbook/) | Operational runbooks — `vercel-cron-plan.md` (cron count + tier check) |
+| [`decisions/*.md`](decisions/) | ADRs 0001–0010 — LINE Notify replacement · admin architecture · china-search vendor · payment gateway · launch ops · tax invoice · analytics+A/B · DPX ERP phase 2 · ERP schema sketch · **V2/V3 version strategy** |
+| [`audit/*.md`](audit/) | Deep audits — `php-pcscargo-integrations.md` (legacy PHP mapping) · `owasp-2026-05.md` (pre-launch OWASP Top-10) |
+| [`runbook/*.md`](runbook/) | Operational runbooks — `vercel-cron-plan.md` · `pcs-scrub-plan.md` · `otp-pepper-rotation.md` |
 
 ### 🛠️ Setup guides
 
@@ -95,14 +125,14 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 ## 👥 Team at a glance
 
-| คน | บทบาท | สโคป | Push to main |
-|---|---|---|---|
-| **ก๊อต** | Senior Advisor | code review · architecture | ✅ |
-| **เดฟ** | Project Lead | runs sprint · infra · integrations | ✅ |
-| **ปอน** | Frontend & SEO | landing pages · marketing · SEO | ❌ (own branch only) |
-| **ภูม** | Backend & Cargo Port | auth · portal · admin · PHP → Pacred | ❌ (own branch only) |
+| คน | บทบาท | สโคป | Branch | Push to main |
+|---|---|---|---|---|
+| **ก๊อต** | Senior Advisor / Production Watcher | decisions · ADRs · tool/partner picks · security audit | (operates from `main`, review-only) | ✅ |
+| **เดฟ** | Project Lead / Integrator | runs sprint · infra · prep work for ภูม · cover landing | `dave` (staging) | ✅ |
+| **ภูม** | Backend / Customer Portal / Admin | auth · portal · admin · cargo port · container model | `Poom` (own) | ❌ (via เดฟ→ก๊อต) |
+| **ปอน** | Frontend / Landing / SEO / Marketing | landing · SEO #1 target · marketing research · WFH 3 days | `podeng` (own) | ❌ (via เดฟ→ก๊อต) |
 
-→ Full role detail in [`team.md`](team.md)
+→ Full role detail in [`team.md`](team.md) + per-role pickup list in [`briefs/`](briefs/)
 
 ---
 
@@ -156,28 +186,43 @@ git push origin <my-branch>
 
 ## 🎯 Current state (2026-05-16)
 
-- **Active phase:** Landing pivot (Part P4) + Sprint 6.5 backend follow-ups. เดฟ + Claude เคลื่อนงานไปลุย acquisition/landing; ภูม ทำ backend self-directed (Track A tests next); ปอน Phase D i18n polish + L-5 หน้า service landings
-- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging) · `Poom` + `podeng` = น้อง working branches. ก๊อต operates from `main`, runs dave→main approval gate
-- **Production readiness:** ~88% customer · ~98% admin · ~85% infra · ~80% SEO/landing (analytics foundation just landed)
-- **Landing analytics foundation (2026-05-16, commits 632e028 → f1f1856):** complete observability substrate — L-22 GTM container + 9 conversion events (sign_up/login/logout/generate_lead/place_order × 3/wallet_deposit/wallet_withdraw_request) + L-23 Microsoft Clarity heatmap+replay + L-24 cookie-based deterministic A/B bucketing + first live experiment `home_hero_cta` telemetry-only via `<ExperimentBeacon>` + 13 cta_click surfaces wired across home banners + CI workflow (.github/workflows/ci.yml) + 240 unit-test assertions across 8 files. Design docs: [ADR-0007](decisions/0007-analytics-and-ab-testing.md). All stacks silent until env vars activate (K-12 GTM_ID + K-13 CLARITY_ID = ก๊อต batch)
-- **R1+R2 decisions locked 2026-05-16:** R1 = Option E (hybrid — keep Track G code, don't activate env vars in Vercel) · R2 = scrub PCS branding from code/comments · D-7 = PromptPay-only ก่อน beta. Pending ก๊อต ADRs (K-1, K-2, K-3) to formalise
-- **🚨 Critical blockers:** Pacred owner provides 5 sets of creds (PromptPay + ThaiBulkSMS + Sentry DSN + Upstash + hCaptcha + LIFF ID + bank acct) + ก๊อต activates K-12 GTM + K-13 Clarity. See [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (3 bundles) + Part R (vendor cutoff Option A-E) + Part S (เดฟ→ก๊อต hand-off batch)
-- **Track G blocker:** ภูม shipped P-50..P-53 china-search rewire ✅ but ก๊อต flagged vendor cutoff (TAM/AkuCargo/Laonet = ไอแต้ม) — DON'T set Track G env vars in Vercel until R1 ADR ships
+- **Active phase:** Brief-driven async execution. ทุกคนเริ่ม session ด้วยการเปิด brief ตัวเอง → pickup จาก priority list → ส่ง hand-off ตาม brief. Push only at save-points (sleep / machine change / batch done).
+- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging — Poom + podeng consolidated) · `Poom` + `podeng` = น้อง working branches.
+- **Production readiness:** ~88% customer · ~98% admin HR / ~50% admin ops · ~85% infra · ~85% SEO/landing (analytics substrate live)
+- **Recent landmarks (2026-05-16):**
+  - L-22 GTM + L-23 Clarity + L-24 cookie A/B substrate shipped (silent until ก๊อต K-12/K-13 lands env vars)
+  - 9 conversion events + 13 CTA surfaces + first live experiment `home_hero_cta` telemetry
+  - OWASP Top-10 desk audit + PCS scrub sweep + OTP dual-pepper rotation support
+  - Sentry SDK (D-11) + Upstash rate-limit (D-12) + hCaptcha (D-13) wired — awaiting creds from ก๊อต
+  - Cron jobs (5) + CRON_SECRET hardening + footer i18n + LINE_OA constants centralized
+  - Migrations 0028–0032 + Track A integration tests (P-28..P-31) consolidated
+  - Doc restructure: 6 role briefs (`docs/briefs/`) + container-centric model (`docs/architecture/`) + MOMO JMF spec (`docs/integrations/`) + V2/V3 strategy ADR-0010 + PORT_PLAN split (Parts A–N archived)
+  - MOMO JMF partner token captured in 5 worktrees + `.env.example`; endpoint inventory TBD (ก๊อต MOMO-1..MOMO-3)
+- **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo, employee masterpiece). V3 wishlist appends to `docs/v3-wishlist.md` (TBD) — don't refactor V2 into V3 mid-flight.
+- **🚨 Critical blockers (production beta):**
+  - ก๊อต batch: K-12 GTM signup · K-13 Clarity signup · DV-1a Sentry DSN · DV-1b Upstash · DV-1c hCaptcha (5 creds → Vercel env)
+  - Pacred owner: PromptPay account + ThaiBulkSMS keys + LIFF ID + bank acct + legal tax-ID
+  - MOMO partner: endpoint inventory call (ก๊อต MOMO-1) + webhook signature decision (MOMO-3)
+- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) — don't re-derive from PORT_PLAN
 
 ---
 
 ## ⚠️ Things that bite
 
-1. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
-2. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
-3. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
-4. **China-search vendor cutoff (Track G)** — Pacred lib/china-search wired to TAMIT-cloud per audit, BUT vendor = ไอแต้ม which Pacred wants to cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต picks replacement (Option A-E in [`PORT_PLAN.md`](PORT_PLAN.md) Part R1). Code degrades to demo mode when env unset — that's the intended interim
-5. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
-6. **i18n key missing** crashes the page — always add both th + en. Audit script: `node scripts/i18n-audit.mjs`
-7. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))
-8. **Push to `main` directly = bypass mode** — only เดฟ for urgent hotfix. Normal flow: น้อง→own branch→เดฟ→`dave`→ก๊อต→`main`
-9. **Push frequency = $$** — Vercel builds cost. Commit local often, push at save-points only (~1-3/day). See [`team.md`](team.md) §3.0
-10. **`profiles.line_user_id`** stays NULL until D-1-LIFF customer linkage runs — every LINE push to customer is silent no-op until LIFF activated
+1. **Skipping your brief = wandering session.** Open [`briefs/<your-name>.md`](briefs/) FIRST. CLAUDE.md top section enforces this.
+2. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
+3. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
+4. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
+5. **China-search vendor cutoff (Track G)** — `lib/china-search` wired but vendor (ไอแต้ม) being cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต ADR-0003 R1 lands replacement. Code degrades to demo mode when env unset — intended interim.
+6. **MOMO JMF token in `.env.local`** — captured 2026-05-16, but `MOMO_JMF_BASE_URL` + endpoint inventory still TBD (ก๊อต MOMO-1). Don't write integration code referencing endpoints until inventory locks.
+7. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
+8. **i18n key missing** crashes the page — always add both th + en. Audit script: `pnpm audit:i18n`
+9. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))
+10. **Push to `main` directly = bypass mode** — only เดฟ for urgent hotfix. Normal flow: น้อง→own branch→เดฟ→`dave`→ก๊อต→`main`
+11. **Push frequency = save-points only** — Vercel builds cost + push churn distracts the team. Commit local often, push at sleep / machine change / location change / big batch done. ~1 push per session. See [`team.md`](team.md) §3.0.
+12. **`profiles.line_user_id`** stays NULL until D-1-LIFF customer linkage runs — every LINE push to customer is silent no-op until LIFF activated
+13. **V2 ≠ V3** — this repo is V2 owner-pleaser. Don't refactor V2 into your ideal architecture; that's V3 (`pacred-DPX`) territory. See [ADR-0010](decisions/0010-v2-v3-version-strategy.md).
+14. **Admin sidebar bg = white** (per เดฟ 2026-05-16 brief) — rest of admin chrome uses landing theme tokens. Don't introduce a dark admin variant.
 
 ---
 

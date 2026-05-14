@@ -429,4 +429,29 @@ import {
 
 ---
 
+---
+
+## 19. MOMO JMF — Thailand warehouse cargo partner 🟡
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `MOMO_JMF_TOKEN` | required for cargo container sync | MOMO dev — JWT issued 2026-05-16 (in `.env.local`) | Request rotation via LINE/partner channel when needed |
+| `MOMO_JMF_BASE_URL` | required | Confirm with MOMO dev — currently commented out in `.env.example` | Endpoint root for sync + webhook |
+| `MOMO_JMF_WEBHOOK_SECRET` | optional (recommended) | Request from MOMO if they sign webhooks | For inbound `/api/webhooks/momo-jmf/status` verification |
+
+**Behaviour by env:**
+- **Unset, any env** — MOMO sync paused; warehouse staff input container status manually in admin UI (planned banner: "MOMO sync paused — using manual entry"). Customer-side container view still works using whatever's in DB.
+- **Set, any env** — `lib/integrations/momo-jmf/*.ts` consumes container-status API + webhooks. Sync cron runs every 15 min per `vercel.json`.
+
+**Code (when implemented per [`docs/integrations/momo-jmf.md`](integrations/momo-jmf.md)):**
+- `lib/integrations/momo-jmf/client.ts` — typed REST client
+- `app/api/cron/momo-jmf-sync/route.ts` — periodic sync
+- `app/api/webhooks/momo-jmf/route.ts` — webhook receiver
+
+**See also:**
+- [`docs/integrations/momo-jmf.md`](integrations/momo-jmf.md) — full integration spec + endpoint inventory + implementation roadmap
+- [`docs/architecture/container-centric-model.md`](architecture/container-centric-model.md) — DB schema MOMO writes into
+
+---
+
 **End of env.md** — ถามเดฟถ้าได้ค่า credential แล้วจะตั้งที่ไหน

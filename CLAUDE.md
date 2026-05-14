@@ -2,35 +2,69 @@
 
 ---
 
+# 🛑 STOP — Read your role brief FIRST (force-read every Claude Code session)
+
+ทุก dev ใช้ Claude Code Windows ทำงาน async บน worktree ของตัวเอง. ก่อนแตะ code หรือตอบคำถาม — **เปิด brief ของคุณก่อน**:
+
+| ถ้าคุณคือ… | เปิดไฟล์นี้ก่อนทุกอย่าง | คุณจะรู้ทันที |
+|---|---|---|
+| **ก๊อต** (Senior Advisor / Production Watcher) | [`docs/briefs/got.md`](docs/briefs/got.md) | P0/P1, ADRs ที่ต้อง lock, partner/tools picks |
+| **เดฟ** (Project Lead / Integrator) | [`docs/briefs/dave.md`](docs/briefs/dave.md) | landing pivot, backend prep for ภูม, hardening |
+| **ภูม** (Backend / Customer Portal / Admin) | [`docs/briefs/poom.md`](docs/briefs/poom.md) | container model, tax invoice, admin workflows |
+| **ปอน** (Frontend / Landing / SEO / Marketing) | [`docs/briefs/podeng.md`](docs/briefs/podeng.md) | owner critiques, L-5 polish, SEO research |
+
+📂 [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md) — routing map + onboarding flow + brief shape
+📋 [`docs/briefs/ops-roles.md`](docs/briefs/ops-roles.md) — 14 STAFF role workspaces (admin UI / RBAC system design)
+
+**Why force-read?** แต่ละ brief สรุปว่า:
+- คุณ own อะไร / ห้ามแตะอะไร (scope boundaries)
+- งานต่อไปลำดับไหน (priority list — ไม่ต้อง re-derive จาก PORT_PLAN ทุกครั้ง)
+- ติดอะไรอยู่ → ทำอะไรแทน (blockers + alternatives)
+- Hand-off เข้า/ออก คุยกับใคร
+
+อ่าน brief ก่อน → conversation รอบนี้ตรงเป้าตั้งแต่ tool call แรก. ข้าม brief = หลงเดิน.
+
+---
+
 # 👉 START HERE — ทีมงานทุกคน อ่านก่อนเริ่ม
 
 📘 **[`docs/HANDBOOK.md`](docs/HANDBOOK.md)** = entry point — มี documentation map + quick start
 
 **Canonical docs (อ่านครั้งเดียว ใช้ตลอด):**
-- 👥 [`docs/team.md`](docs/team.md) — roles + permissions + branch + merge policy + daily workflow + §3.0 push-frequency cost rule + §6 self-directed mode + §9 Claude Code async collab
+- 👥 [`docs/team.md`](docs/team.md) — roles + permissions + branch + merge policy + daily workflow + §3.0 push-frequency cost rule (STRICTER — save-points only) + §6 self-directed mode + §9 Claude Code async collab
 - 📐 [`docs/conventions.md`](docs/conventions.md) — code style + commit format + naming + DB rules
-- 🔐 [`docs/env.md`](docs/env.md) — every env var explained + production checklist
+- 🔐 [`docs/env.md`](docs/env.md) — every env var explained + production checklist (incl. §19 MOMO JMF)
 - 🏢 [`docs/pacred-info.md`](docs/pacred-info.md) — company info SOT (addresses + phones + emails + LINE OA + sales reps)
 
+**Role briefs (force-read — see top of file):**
+- 🧑‍💻 [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md) — routing map for which brief is yours
+- [`docs/briefs/got.md`](docs/briefs/got.md) · [`docs/briefs/dave.md`](docs/briefs/dave.md) · [`docs/briefs/poom.md`](docs/briefs/poom.md) · [`docs/briefs/podeng.md`](docs/briefs/podeng.md)
+- 👷 [`docs/briefs/ops-roles.md`](docs/briefs/ops-roles.md) — 14 STAFF role workspaces (system design input)
+
 **Living docs (เดฟ updates):**
-- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness (Parts A-Q + 🚨 Part R vendor cutoff + 🤝 Part S เดฟ↔ก๊อต async hand-off)
+- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — current sprints + hand-off batches (Parts O–S only; ~1435 lines)
+- 📚 [`docs/sprints/archive-a-to-n.md`](docs/sprints/archive-a-to-n.md) — historic survey (Parts A–N — moved out to keep PORT_PLAN under 2000-line agent ceiling)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
+- 🏗 [`docs/architecture/container-centric-model.md`](docs/architecture/container-centric-model.md) — **NEW** warehouse/container/shipment spine (4 tables, RLS, status enums, CT-1..CT-8 implementation)
+- 🤝 [`docs/integrations/momo-jmf.md`](docs/integrations/momo-jmf.md) — MOMO partner API spec (JWT, endpoint inventory TBD)
 - 🧠 [`docs/PACRED-SECOND-BRAIN.md`](docs/PACRED-SECOND-BRAIN.md) — context notes + gotchas
 
 **Reference (open เมื่อจำเป็น):**
 - [`AGENTS.md`](AGENTS.md) — Next 16 breaking changes (สำหรับ Claude/AI)
-- [`docs/decisions/*.md`](docs/decisions/) — ADRs (LINE Notify replacement, admin architecture)
-- [`docs/audit/*.md`](docs/audit/) — deep audits (PHP `pcscargo` integrations + future OWASP/RLS)
-- [`docs/runbook/*.md`](docs/runbook/) — operational runbooks (Vercel cron plan + future deploy/restore/Sentry alerts)
+- [`docs/decisions/*.md`](docs/decisions/) — ADRs (incl. 0010 V2/V3 version strategy, 0006 tax invoice, 0007 analytics)
+- [`docs/audit/owasp-2026-05.md`](docs/audit/owasp-2026-05.md) — pre-launch security posture
+- [`docs/audit/php-pcscargo-integrations.md`](docs/audit/php-pcscargo-integrations.md) — deep legacy PHP audit
+- [`docs/runbook/*.md`](docs/runbook/) — operational runbooks (PCS scrub + OTP rotation + cron)
 - [`docs/setup/*.md`](docs/setup/) — onboarding guides (OAuth/Supabase/Vercel/LINE)
 - [`supabase/migrations/README.md`](supabase/migrations/README.md) — migration runbook
 
 **ทำงานครั้งแรก:**
-1. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
-2. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
-3. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
-4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part O (per-role assignments) + Part P (latest snapshot) + Part Q/R/S (urgent items + hand-off batch)
-5. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 (น้อง pull จาก `dave` ไม่ใช่ `main`!) + §3.0 push-frequency rule
+1. **เปิด YOUR brief จาก [`docs/briefs/`](docs/briefs/)** ก่อนทุกอย่าง (force-read — see top of file)
+2. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
+3. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
+4. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
+5. หางานของตัวเอง: brief ของคุณ + [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part S (current hand-off batch)
+6. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 (น้อง pull จาก `dave` ไม่ใช่ `main`!) + §3.0 push-frequency rule (save-points only — sleep / machine change / location change / big batch done; per memory `push_frequency_strict`)
 
 ---
 
