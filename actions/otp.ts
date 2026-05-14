@@ -19,9 +19,28 @@ const MAX_ATTEMPTS = 5;
 
 type Purpose = "register" | "login" | "reset" | "change_phone";
 
-function hashCode(code: string) {
-  const pepper = process.env.OTP_PEPPER ?? "default-pepper";
+function hashCodeWith(code: string, pepper: string): string {
   return createHash("sha256").update(code + pepper).digest("hex");
+}
+
+/** Hash for STORING a new code — always uses the primary pepper. */
+function hashCode(code: string): string {
+  const pepper = process.env.OTP_PEPPER ?? "default-pepper";
+  return hashCodeWith(code, pepper);
+}
+
+/**
+ * Peppers VERIFY should accept. Returns both `OTP_PEPPER` and
+ * `OTP_PEPPER_NEXT` (when present) so codes minted under the old pepper
+ * keep verifying for up to OTP_TTL_MS after a rotation — see
+ * `docs/runbook/otp-pepper-rotation.md` for the 6-step dual-pepper
+ * accept-window procedure.
+ */
+function activeVerifyPeppers(): string[] {
+  const peppers = [process.env.OTP_PEPPER, process.env.OTP_PEPPER_NEXT].filter(
+    (p): p is string => Boolean(p),
+  );
+  return peppers.length > 0 ? peppers : ["default-pepper"];
 }
 
 function genCode() {
@@ -97,8 +116,11 @@ export async function verifyOtp(
   if (!otp) return false;
   if (otp.attempts >= MAX_ATTEMPTS) return false;
 
-  const submittedHash = hashCode(code);
-  const valid = submittedHash === otp.code_hash;
+  // Accept hashes under either OTP_PEPPER or OTP_PEPPER_NEXT during a
+  // rotation accept-window. New mints use the primary pepper only.
+  const valid = activeVerifyPeppers().some(
+    (p) => hashCodeWith(code, p) === otp.code_hash,
+  );
 
   if (!valid) {
     const nextAttempts = otp.attempts + 1;

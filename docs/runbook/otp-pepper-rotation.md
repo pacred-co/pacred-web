@@ -61,16 +61,11 @@ Redeploy. Server now accepts codes hashed under EITHER pepper (per
 `actions/otp.ts::verifyOtp` — if the `OTP_PEPPER_NEXT` env is present,
 it tries both hashes).
 
-> **NOTE (impl prerequisite):** `actions/otp.ts::verifyOtp` must be
-> extended to read `OTP_PEPPER_NEXT` and try both hashes. As of
-> 2026-05-16 this is NOT yet implemented. Track as `actions/otp.ts`
-> follow-up before the first rotation. The current code uses only
-> `OTP_PEPPER`. ADR-style proposal:
-> ```ts
-> const peppers = [process.env.OTP_PEPPER, process.env.OTP_PEPPER_NEXT].filter(Boolean) as string[];
-> const candidates = peppers.map(p => sha256(input.code + p));
-> if (!candidates.includes(row.code_hash)) return { ok: false, error: "invalid_otp" };
-> ```
+> ✅ **IMPLEMENTED 2026-05-16** in commit landing this runbook + `actions/otp.ts`.
+> `activeVerifyPeppers()` returns both `OTP_PEPPER` and `OTP_PEPPER_NEXT`
+> (when present) and verify-time tries each in turn. New mints still use
+> the primary `OTP_PEPPER` only — that's the dual-pepper accept-window
+> design.
 
 ### Step 3 — Wait the TTL window
 
