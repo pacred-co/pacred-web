@@ -2751,6 +2751,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | **K-9** | K-CODEOWNERS setup (`.github/CODEOWNERS`) | 30m | Auto-route PR reviews to ก๊อต — reduces overhead long-term |
 | **K-10** | K-tooling-1: CI workflow `.github/workflows/ci.yml` (lint + test + build on PR) | 2-3h | Quality gate before manual review |
 | **K-11** | K-sec-1: OWASP Top 10 audit | 4-6h | `docs/audit/owasp-2026-05.md` — launch confidence |
+| **K-12 🆕** | **L-22 GTM activation** — สมัคร GTM container + GA4 + ตั้ง `NEXT_PUBLIC_GTM_ID` ใน Vercel | 30-45m | Quick run: (1) tagmanager.google.com → New Container → Web → copy `GTM-XXXXXXX` (2) inside GTM connect GA4 property → publish container (3) `vercel env add NEXT_PUBLIC_GTM_ID` for Production + Preview (4) redeploy (5) smoke: open prod + GTM Preview Mode → verify sign_up/login/generate_lead/place_order dataLayer events fire. **Code shipped 2026-05-16 ([`08685b3`]); ทุกอย่างพร้อมแล้ว แค่ต่อท่อ Google ปลายทาง** |
 
 ### Priority 4 — Nice-to-have (after Priority 1-3)
 
@@ -2785,7 +2786,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | **DV-2** | Create LIFF app ใน LINE Console (use Channel ID `2009931373`) → set `NEXT_PUBLIC_LIFF_ID` ใน Vercel | 30m | None |
 | **DV-3** | ThaiBulkSMS account apply + API keys → Vercel env | 30m | None (paid per SMS) |
 | **DV-4** | Pacred owner ติดต่อ ขอ PromptPay # + bank acct | 15m + รอ | Pacred legal |
-| **DV-5** | Landing pivot: L-22 GTM/GA4 conversion tracking | 3-4h | None — เดฟ self-directed |
+| **DV-5** | ✅ **DONE 2026-05-16** — L-22 GTM/GA4 scaffold + 4 events wired (commits `632e028` + `08685b3`). Activation = K-12 ของก๊อต | done | — |
 | **DV-6** | Landing pivot: L-23 heatmap integration (Microsoft Clarity = ฟรี, recommended) | 2-3h | None |
 | **DV-7** | Landing pivot: L-24 A/B infra scaffold (GrowthBook free tier or Vercel Edge Config) | 3-4h | None |
 | **DV-8** | Help ปอน Phase B L-5 — เดฟ confirm priority page order + scaffold helpers | 6-8h | ปอน sync |
@@ -2794,4 +2795,36 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 ---
 
-**End of Part S.** เดฟ→ก๊อต hand-off pattern: ทุกครั้งที่เดฟต้อง offload งานสำคัญให้ก๊อต → append entry ใน Part S ใหม่ (new section S5, S6, ...) พร้อม commit message `docs(port-plan): hand-off batch to ก๊อต — <topics>`. ก๊อต tick off ใน follow-up commit.
+---
+
+## S5. 📊 Priority order — Claude + เดฟ ทำได้ทันที (no external blocker)
+
+> Updated 2026-05-16 หลัง L-22 landed. งานที่ **ทำได้เลยไม่ต้องรอใครก่อน**:
+
+| Rank | Task | Effort | Who unblocks | Why this order |
+|---|---|---|---|---|
+| 1 | **DV-6 L-23 Microsoft Clarity scaffold** | 2-3h | Claude implement → user signup clarity.microsoft.com ทีหลัง (free) | Smaller than L-22 (1 script tag + env var). Pairs กับ L-22 — heatmap + session recording ให้รู้ว่าลูกค้าใช้หน้าไหนติด หน้าไหนเสีย — landing pivot data ครบ |
+| 2 | **DV-8 L-5 home page polish** | 3-4h chunk | Claude audit + propose → เดฟ confirm direction → implement | Strategic shift Part P4 = "เดฟ + Claude pivot landing/acquisition". Home = highest-traffic acquisition page. ปอน suggest order: home → import-china → china-shopping → customs-clearance |
+| 3 | **DV-7 L-24 A/B infra scaffold** | 3-4h | Claude scaffold + recommend default → เดฟ confirm provider | Decision-heavy (GrowthBook vs Vercel Edge Config). Less urgent กว่า 2 อันบน — A/B ต้องการ traffic เยอะก่อนจะมี significant data |
+| 4 | **Track G label-change UI** (per R1 Option E) | ~1h | ปอน normally — Claude สามารถจัดให้ได้ถ้าต้องการ unblock | Tiny UI change ที่ทำได้ก่อนก๊อต ADR ลง — bench-warm |
+
+### งานที่ต้องรอ external (defer; ส่งต่อก๊อต/Pacred owner):
+
+| Task | Blocked by | Hand-off ที่ไหน |
+|---|---|---|
+| K-12 L-22 **GTM activation** | ก๊อต ทำ Google account signup + Vercel env | Part S2 Priority 3 (เพิ่งเพิ่ม) |
+| DV-1 Sentry/Upstash/hCaptcha signups | เดฟ/ก๊อต ทำ external signups | Part S4 DV-1 |
+| DV-2 LIFF app creation | เดฟ/ก๊อต ใน LINE Console | Part S4 DV-2 |
+| DV-3 ThaiBulkSMS keys | เดฟ ทำ external signup | Part S4 DV-3 |
+| DV-4 PromptPay + bank | Pacred owner provision | Part S4 DV-4 |
+| K-1..K-7 ADRs / decisions | ก๊อต senior advisor scope | Part S2 |
+
+### Hand-off triggers (เมื่ออันบน landed):
+
+- **เมื่อ K-12 (GTM) activate:** → DV-6 Clarity scaffold พร้อมเข้า config เดียวกัน (สามารถใช้ GTM container ปูทาง Clarity ก็ได้)
+- **เมื่อ DV-2 LIFF app created:** → ปอน drop "เพิ่ม LINE OA" CTA ที่ landing pages
+- **เมื่อ K-1 ADR vendor-cutoff:** → ภูม Track G label-change + ปอน strip "ไอแต้ม" references จาก landing copy
+
+---
+
+**End of Part S.** เดฟ→ก๊อต hand-off pattern: ทุกครั้งที่เดฟต้อง offload งานสำคัญให้ก๊อต → append entry ใน Part S ใหม่ (new section S6, S7, ...) พร้อม commit message `docs(port-plan): hand-off batch to ก๊อต — <topics>`. ก๊อต tick off ใน follow-up commit.
