@@ -327,6 +327,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
 - [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
 - [ ] `NEXT_PUBLIC_LIFF_ID` set (D-1-LIFF) — without it `/liff/link` shows error + customers can't link → no LINE push reaches customers
+- [ ] `NEXT_PUBLIC_GTM_ID` set (L-22) — without it conversion tracking silently disabled; landing pivot acquisition metrics missing
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
@@ -341,6 +342,48 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 | Production | Vercel Dashboard → Settings → Env Vars (Production env) | เดฟ/ก๊อต |
 
 ห้าม commit `.env.local` หรือ `.env.production` — gitignored. ใช้ `.env.example` (committed) เป็น template.
+
+---
+
+---
+
+## 17. Analytics — Google Tag Manager 🟡 (L-22)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_GTM_ID` | optional (recommended for prod) | https://tagmanager.google.com → New Container → Web → copy `GTM-XXXXXXX` | Public — inlined into client bundle. `NEXT_PUBLIC_` prefix required. |
+
+**Behaviour by env:**
+- **Unset, dev** — `lib/analytics.ts` `track()` calls `console.log("[analytics:no-gtm]", ...)` so wiring is verifiable without an account. `<GtmScript />` renders nothing.
+- **Unset, prod** — silent no-op (no console noise for end users). Acquisition metrics missing.
+- **Set, any env** — `<GtmScript />` injects the container loader in `<head>` + `<GtmNoscript />` iframe near top of `<body>`. `track()` pushes to `window.dataLayer` for GTM to consume.
+
+**Code:** `lib/analytics.ts` (helpers) · `components/analytics/gtm-script.tsx` (loader) · `app/layout.tsx` (injection).
+
+**Helpers exported** (GA4 recommended event names — map cleanly inside GTM):
+
+```ts
+import {
+  track,                  // generic — for one-offs
+  trackSignUp,            // registration completed
+  trackLogin,             // successful sign-in
+  trackGenerateLead,      // contact / lead form submitted
+  trackPlaceOrder,        // service order / forwarder / yuan payment placed
+  trackWalletDeposit,     // admin approved a deposit slip
+} from "@/lib/analytics";
+```
+
+**Activation order (when ready):**
+1. Pacred owner creates GTM container (free) → copy `GTM-XXXXXXX` ID
+2. Inside GTM container: connect GA4 property (also free) → publish container
+3. เดฟ sets `NEXT_PUBLIC_GTM_ID` in Vercel env (Production + Preview if desired)
+4. Redeploy → GTM tag starts firing on all client navigations
+5. Smoke: open https://pacred.co with GTM Preview mode → confirm dataLayer events emit on sign_up / login / lead / place_order
+
+**Why GTM (vs gtag.js direct):**
+- Marketing/ภูม can add/edit tags via GTM UI without redeploys
+- One container supports future Meta Pixel, TikTok Pixel, hotjar, conversion goals, etc.
+- Same conversion events power both GA4 reporting and ad-platform attribution
 
 ---
 

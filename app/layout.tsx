@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
+import { GtmScript, GtmNoscript } from "@/components/analytics/gtm-script";
 import { SITE_NAME, SITE_URL } from "@/components/seo/site";
 import "./globals.css";
 
@@ -93,8 +94,10 @@ export default function RootLayout({
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
+        <GtmScript />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
+        <GtmNoscript />
         {/* Light theme default per ปอน's first-visit lock UX (commit da60747).
             ปอน wanted enableSystem={false} + disableTransitionOnChange too —
             current `theme-provider.tsx` (ภูม commit 0da2e71) doesn't yet
