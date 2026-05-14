@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
+import { ExperimentBeacon } from "@/components/analytics/experiment-beacon";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
@@ -95,6 +96,7 @@ export default async function Home({
   return (
     <>
       <JsonLd data={services} />
+      <ExperimentBeacon experimentKey="home_hero_cta" />
       <NavBar />
       <SearchBar />
       <main>

@@ -28,12 +28,15 @@ export const VISITOR_COOKIE = "pacred_vid";
  * disabled experiments return.
  */
 export const EXPERIMENTS = {
-  // Example experiment — keep at least 1 entry so TS infers the type.
-  // Not wired into any UI yet; `active: false` = always returns "control".
+  // First live experiment — bucketing-only (no UI variant yet). Drop
+  // `<ExperimentBeacon experimentKey="home_hero_cta" />` on a page and
+  // GTM/Clarity receive `experiment_exposure` events tagged with the
+  // assigned variant. Wire the actual UI fork later once the GA4
+  // funnel confirms exposures are flowing as expected.
   home_hero_cta: {
-    description: "Home hero CTA copy + colour test (control = current red, variant_a = larger white-on-red)",
+    description: "Home hero CTA copy + colour test (control = current red, variant_a = larger white-on-red). Currently telemetry-only (no UI fork) — used to validate the L-24 pipeline end-to-end before risking a real fork.",
     variants: ["control", "variant_a"] as const,
-    active: false,
+    active: true,
   },
 } as const;
 

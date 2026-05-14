@@ -87,10 +87,27 @@ truthy(
 
 // ── (d) pickVariant — registry integration ───────────────────────
 console.log("\n(d) pickVariant — registry integration");
-// home_hero_cta is the only registered exp, active=false → always "control"
-eq("inactive exp → control (visitor 1)", pickVariant("home_hero_cta", "vid-1"), "control");
-eq("inactive exp → control (visitor 2)", pickVariant("home_hero_cta", "completely-different-visitor"), "control");
-eq("inactive exp → control (empty visitor)", pickVariant("home_hero_cta", ""), "control");
+// home_hero_cta is `active: true` now — pickVariant uses hash → variant.
+// Verify determinism + that variant is one of the declared options.
+const v1 = pickVariant("home_hero_cta", "vid-1");
+const v2 = pickVariant("home_hero_cta", "vid-1");
+eq("active exp → deterministic for same visitor", v1, v2);
+truthy(
+  "active exp → variant is one of declared values",
+  (["control", "variant_a"] as const).includes(v1 as "control" | "variant_a"),
+  `got=${v1}`,
+);
+
+// Distribution sanity — across many visitors, both variants should appear
+const seen = new Set<string>();
+for (let i = 0; i < 50; i++) {
+  seen.add(pickVariant("home_hero_cta", `v-${i}`));
+}
+truthy(
+  "active 2-variant exp → both variants surface across 50 visitors",
+  seen.has("control") && seen.has("variant_a"),
+  `seen=${JSON.stringify([...seen])}`,
+);
 
 // ── (e) newVisitorId — format ────────────────────────────────────
 console.log("\n(e) newVisitorId — format");
