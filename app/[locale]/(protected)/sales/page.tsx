@@ -41,9 +41,13 @@ export default async function SalesPage() {
             <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
           </div>
           <div className="flex gap-2">
-            <Link href="/sales/report"
+            <Link href="/sales/report/add"
               className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
               {t("requestPayout")}
+            </Link>
+            <Link href="/sales/report"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-alt">
+              {t("viewReport")}
             </Link>
             <Link href="/sales/history"
               className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-alt">
