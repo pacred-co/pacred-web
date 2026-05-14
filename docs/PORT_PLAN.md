@@ -2790,7 +2790,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | **DV-5** | ✅ **DONE 2026-05-16** — L-22 GTM/GA4 scaffold + 4 events wired (commits `632e028` + `08685b3`). Activation = K-12 ของก๊อต | done | — |
 | **DV-6** | ✅ **DONE 2026-05-16** — L-23 Clarity scaffold (`components/analytics/clarity-script.tsx` + `clarityTag/clarityEvent/clarityIdentify` helpers). Activation = K-13 ของก๊อต | done | — |
 | **DV-7** | ✅ **DONE 2026-05-16** — L-24 A/B infra (cookie-based deterministic bucketing via `pacred_vid` + FNV-1a; `lib/experiments.ts` pure primitives + `lib/experiments-server.ts` for RSC). No external activation needed; flip experiment `active: true` in registry to start traffic-splitting | done | — |
-| **DV-8** | Help ปอน Phase B L-5 — เดฟ confirm priority page order + scaffold helpers | 6-8h | ปอน sync |
+| **DV-8** | 🟡 **Phase 1 DONE 2026-05-16** — analytics wired on top-3 home CTAs (BookingCalculator × 4 calc modes + ContactSales × 3 reps × 2 channels + ImportExportBanner × 3 surfaces). Phase 2 (visual polish per ปอน page-order suggestion) remains | phase 1 done | ปอน sync for phase 2 |
 
 **Estimate รวม:** ~16-22h งานเดฟ this week. หลัง creds เข้าจาก DV-1..DV-4 → activate Sentry/Upstash/hCaptcha ใน Vercel + redeploy = unblock production hardening
 
@@ -2805,9 +2805,11 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | Rank | Task | Effort | Who unblocks | Why this order |
 |---|---|---|---|---|
 | ~~1~~ ✅ | ~~DV-6 L-23 Microsoft Clarity scaffold~~ | done | — | Landed 2026-05-16 |
-| ~~3~~ ✅ | ~~DV-7 L-24 A/B infra scaffold~~ | done | — | Landed 2026-05-16 (cookie-based bucketing, no external SaaS) |
-| 1 | **DV-8 L-5 home page polish** | 3-4h chunk | Claude audit + propose → เดฟ confirm direction → implement | Strategic shift Part P4 = "เดฟ + Claude pivot landing/acquisition". Home = highest-traffic acquisition page. ปอน suggest order: home → import-china → china-shopping → customs-clearance |
+| ~~2~~ ✅ | ~~DV-7 L-24 A/B infra scaffold~~ | done | — | Landed 2026-05-16 (cookie-based bucketing, no external SaaS) |
+| ~~3~~ 🟡 | DV-8 L-5 home **Phase 1 analytics wiring** | done | — | Landed 2026-05-16 — top-3 home CTAs emit `cta_click` events |
+| 1 | **DV-8 L-5 home Phase 2 — visual polish** | 3-4h chunk | ปอน sync (priority page order) → Claude implement | Strategic shift Part P4. ปอน suggest order: home → import-china → china-shopping → customs-clearance. Now has analytics data to inform changes |
 | 2 | **Track G label-change UI** (per R1 Option E) | ~1h | ปอน normally — Claude สามารถจัดให้ได้ถ้าต้องการ unblock | Tiny UI change ที่ทำได้ก่อนก๊อต ADR ลง — bench-warm |
+| 3 | **Wire remaining home CTAs to events** | 1-2h | Claude self-directed | PurchaseBanner / ClearanceBanner / Reviews / Sales cards / Promotion / Blog still untracked — easy follow-up to DV-8 Phase 1 |
 
 ### งานที่ต้องรอ external (defer; ส่งต่อก๊อต/Pacred owner):
 

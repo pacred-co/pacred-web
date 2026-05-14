@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
+import { trackCtaClick } from "@/lib/analytics";
 
 const LINE_URL = "/line";
 
@@ -61,6 +62,7 @@ export function ImportExportBanner() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="ติดต่อ Pacred ทาง LINE"
+              onClick={() => trackCtaClick("banner_line", "home_importexport_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -167,7 +169,10 @@ export function ImportExportBanner() {
                 <div className="grid grid-cols-2 md:flex md:items-center gap-2 md:gap-3 flex-1 md:flex-initial max-w-[220px] md:max-w-none">
                   <button
                     type="button"
-                    onClick={() => setOpen(true)}
+                    onClick={() => {
+                      trackCtaClick("banner_select_sales", "home_importexport_banner", { surface: "primary_cta" });
+                      setOpen(true);
+                    }}
                     suppressHydrationWarning
                     className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                     style={{
@@ -185,6 +190,7 @@ export function ImportExportBanner() {
                     href={LINE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackCtaClick("banner_line", "home_importexport_banner", { surface: "secondary_cta" })}
                     className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                     style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
                   >

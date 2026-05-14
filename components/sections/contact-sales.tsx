@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Phone, Sparkles, Headset, Award, MessageCircle } from "lucide-react";
+import { trackCtaClick } from "@/lib/analytics";
 
 const LINE_URL = "/line";
 
@@ -195,6 +196,7 @@ export function ContactSales() {
                   <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2">
                     <a
                       href={`tel:${s.phone.replace(/-/g, "")}`}
+                      onClick={() => trackCtaClick("sales_phone", `home_sales_${s.name}`, { rep: s.name, role: s.role })}
                       className={[
                         "inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[12px] md:text-[12.5px] font-black border transition-all duration-300",
                         featured
@@ -209,6 +211,7 @@ export function ContactSales() {
                       href={LINE_URL}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => trackCtaClick("sales_line", `home_sales_${s.name}`, { rep: s.name, role: s.role })}
                       className={[
                         "relative inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[12px] md:text-[12.5px] font-black transition-all duration-300 overflow-hidden",
                         featured

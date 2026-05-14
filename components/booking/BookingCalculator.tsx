@@ -9,6 +9,7 @@ import { SalesModal }    from "./SalesModal";
 import { CustomDropdown, TextDropdown } from "./CustomDropdown";
 import { ResultBox }     from "./ResultBox";
 import { calcLCL, calcFCL, calcTruck, calcAir } from "@/lib/booking-calculator";
+import { trackCtaClick } from "@/lib/analytics";
 import {
   SALES_CARDS_DATA,
   ORIGIN_SECTIONS_KEYS,
@@ -181,20 +182,24 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   function doCalcLCL() {
     if (!lclForm.cbm && !lclForm.weight) return showAlert(t("alertWeightCbm"));
     setLclResult(calcLCL(lclForm, lclTerm, lclDoc, tCalc, t));
+    trackCtaClick("booking_calculate", "home_booking", { mode: "lcl", term: lclTerm, doc: lclDoc });
   }
 
   function doCalcFCL() {
     setFclResult(calcFCL(fclForm, fclSize, fclTerm, tCalc, t));
+    trackCtaClick("booking_calculate", "home_booking", { mode: "fcl", size: fclSize, term: fclTerm });
   }
 
   function doCalcTruck() {
     if (!truckForm.cbm && !truckForm.weight) return showAlert(t("alertWeightCbm"));
     setTruckResult(calcTruck(truckForm, truckSub, tCalc));
+    trackCtaClick("booking_calculate", "home_booking", { mode: "truck", sub: truckSub });
   }
 
   function doCalcAir() {
     if (!airForm.weight && (!airForm.w || !airForm.l || !airForm.h)) return showAlert(t("alertAirSize"));
     setAirResult(calcAir(airForm, tCalc));
+    trackCtaClick("booking_calculate", "home_booking", { mode: "air" });
   }
 
   return (

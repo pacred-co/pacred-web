@@ -88,6 +88,21 @@ export function trackWalletDeposit(valueTHB: number): void {
   track("wallet_deposit", { value: valueTHB, currency: "THB" });
 }
 
+/**
+ * Generic CTA click — for buttons / links where a richer event helper
+ * doesn't yet exist. Use `label` for the action (e.g., "booking_calculate",
+ * "sales_phone") and `location` for the page section (e.g., "home_hero",
+ * "home_sales_win"). Keep both as stable snake_case keys so GA4
+ * segmentation works without renames.
+ */
+export function trackCtaClick(
+  label: string,
+  location: string,
+  extra: DataLayerEntry = {},
+): void {
+  track("cta_click", { label, location, ...extra });
+}
+
 // ── Microsoft Clarity helpers (L-23) ─────────────────────────────
 // Clarity is loaded by `components/analytics/clarity-script.tsx`. These
 // helpers are no-op on server + safe to call before the tag finishes
