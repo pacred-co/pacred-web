@@ -342,4 +342,99 @@ git push origin <my-branch>
 
 ---
 
+## 10. Daily Integration Cycle (NEW 2026-05-15 — formalised)
+
+> **Why this section exists:** ทีม 4 คน + Claude Code agents ทำงาน async บน 3 branches (`dave` · `podeng` · `Poom`). ถ้าไม่มี cadence ที่ชัดเจน → branches drift → merge conflicts → ภูม/ปอน ทำงานบน stale code. Section นี้ define cadence + ใครทำอะไรเมื่อไร.
+
+### 10.1 The loop (one full cycle = 1 day)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Morning (each role, ~5 min)                                    │
+│  1. fetch origin                                                │
+│  2. pull `main` into own branch (น้อง pull main; เดฟ pull dave)   │
+│  3. resolve any merge conflicts (stop + ask if unsure)          │
+│  4. read your brief at docs/briefs/<your-name>.md               │
+│  5. work T-* emergency tasks                                    │
+│                                                                 │
+│  During work (each role)                                        │
+│  6. commit local often (per session — 5-15 commits OK)          │
+│  7. DON'T push every commit (Vercel cost + churn)               │
+│                                                                 │
+│  Save-point (1-2× per day per role)                             │
+│  8. squash WIP if needed                                        │
+│  9. push to OWN branch (origin/podeng / origin/Poom / dave)     │
+│ 10. notify เดฟ (LINE / commit-message-as-signal)                 │
+│                                                                 │
+│  Integration window (เดฟ — at least 1× per day)                  │
+│ 11. fetch origin                                                │
+│ 12. for each น้อง-branch with new commits:                       │
+│      a. git log dave..origin/<branch> --stat — read intent       │
+│      b. git merge origin/<branch> into dave                     │
+│      c. resolve conflicts (in scope-overlap zones)              │
+│ 13. verify gates: pnpm lint + tsc + test:unit + audit:all       │
+│ 14. fix any failures (or push back to น้อง if their fault)        │
+│ 15. push dave                                                   │
+│ 16. push dave→main (เดฟ bypass per §3 — ก๊อต async approves)    │
+│ 17. (optional) notify team that main has shipped X commits      │
+│                                                                 │
+│  Loop back to morning the next day                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 Who pulls from where
+
+| Role | Pulls from | Pushes to | Reason |
+|---|---|---|---|
+| ปอน | `main` (not dave — dave drifts faster) | `podeng` only | Stable base. main only ships after เดฟ verify |
+| ภูม | `main` | `Poom` only | Same |
+| เดฟ | `dave` + integrates `podeng`/`Poom` | `dave` then `dave→main` | Staging + production gate |
+| ก๊อต | `main` | `main` (own commits) | Senior advisor + production approver |
+
+### 10.3 What to look for during integration review (เดฟ)
+
+When merging `origin/<น้อง-branch>` into `dave`:
+
+1. **Read every commit message first** — `git log dave..origin/<branch>` — establish intent
+2. **Check file-stat scope:** are changes in the role's scope per [`team.md`](team.md) §1.3? If out-of-scope → block + ask
+3. **i18n parity:** if `messages/*.json` touched, run `pnpm audit:i18n` after merge (must = th == en count)
+4. **Hardcoded values:** scan diff for phone numbers / emails / addresses — should import from `components/seo/site.ts`. If found → flag for L-contact-refactor follow-up (don't block — track in PORT_PLAN)
+5. **No backend touch from podeng / no frontend touch from Poom** — boundary violation = revert + ask
+6. **Test gates pass:** `pnpm lint` + `pnpm exec tsc --noEmit` + `pnpm test:unit` + `pnpm audit:all`
+7. **Smoke-test for emergency P0:** if the change touches a Part T cargo-revenue surface (admin workflow / landing / receipt / checkout) → manually click through once. Other changes = trust the gates.
+
+### 10.4 What "ready to push main" means
+
+Every push from dave→main must satisfy:
+
+- [ ] `pnpm verify` (umbrella: lint + tsc + test:unit + audit:all) — exit 0
+- [ ] No `--no-verify`, `--no-gpg-sign`, `--force` flags used in merge
+- [ ] All commits in the push have descriptive messages (no "wip" / "fix" alone)
+- [ ] If schema migration included → migration is forward-only OR rollback documented
+- [ ] If env var added → declared in `.env.example` + documented in `docs/env.md`
+- [ ] If new feature → has at least one entry in role brief or PORT_PLAN Part T
+- [ ] If Part T task progressed → tick off in `docs/PORT_PLAN.md` Part T2 table
+
+### 10.5 Emergency cadence override (Cargo Revenue Sprint 2026-05-15+)
+
+During emergency:
+- น้อง push to own branch **end of each work block** (not just end of day) — เดฟ has more chances to integrate
+- เดฟ integrate **2× per day** instead of 1× (morning + evening windows)
+- เดฟ push main after each integration window (not just save-point) — แต่ละ push = revenue path advances
+- ก๊อต async approve in flight (review after-the-fact during integration cycle)
+
+When emergency cleared (Part T checklist 100%) → revert to 10.1 default cadence.
+
+### 10.6 If something breaks
+
+| Symptom | First action | Escalate to |
+|---|---|---|
+| Merge conflict in scope-overlap file | Stop, ask owner (e.g., contact-sales.tsx → ปอน) | LINE direct |
+| Verify gate fails after merge | `git revert` the merge commit, push back to น้อง for fix | LINE direct |
+| Build fails on main | เดฟ bypass force-revert main → previous good commit | ก๊อต post-mortem |
+| Test fails intermittently | Don't ignore — add to `docs/PORT_PLAN.md` Part T as flaky-test debt | Track + fix during emergency lull |
+| Type error from Next 16 update | Read `node_modules/next/dist/docs/` for new API per AGENTS.md | ก๊อต ADR if API change |
+
+---
+
 **End of team.md** — questions ถามเดฟ

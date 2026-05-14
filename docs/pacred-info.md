@@ -168,6 +168,7 @@ Last updated: 2026-05-15 (full DNA refresh per เดฟ + พี่ป๊อป
 | `components/sections/clearance-promo.tsx` | (verify) | `CONTACT.*` | ปอน |
 | `components/sections/footer.tsx` | (verify) | `CONTACT.emailContactPair` for the dual-email row | ปอน |
 | `components/sections/warehouse-detail.tsx` | (verify — warehouse address) | `ADDRESSES.warehouseTh.full` | ปอน |
+| `components/sections/floating-tabs.tsx` | `SALES_PHONES = ["0660901217", "0661253007", "024213325"]` (mobile FAB random-dial) | `CONTACT.phoneSalesDisplay` (already de-formatted) — import directly | ปอน |
 | `messages/th.json` · `messages/en.json` | `contact@pacred.co` strings | drop strings; render via `CONTACT.emailContactPair` directly | ปอน |
 | JSON-LD generators (sitemap / page-level metadata) | mostly use constants; verify `slogan` field absent → add via `SLOGAN` | + `taxID` field via `TAX_ID` | ปอน + ภูม |
 

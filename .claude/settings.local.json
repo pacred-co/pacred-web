@@ -74,7 +74,8 @@
       "Bash(tsc --noEmit)",
       "Bash(echo \"exit: $?\")",
       "Bash(node scripts/split-port-plan.mjs)",
-      "Bash(pnpm audit:md)"
+      "Bash(pnpm audit:md)",
+      "Bash(pnpm audit:i18n)"
     ]
   }
 }

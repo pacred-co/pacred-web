@@ -67,12 +67,15 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 ```
 
 **Need help:**
+- งานของฉันคืออะไร → YOUR brief at [`briefs/<your-name>.md`](briefs/) (emergency section ทับ priority ปกติ)
+- 🔥 cargo revenue sprint progress? → [`PORT_PLAN.md`](PORT_PLAN.md) Part T (per-role T-* tasks + DoD checklist)
+- Daily integration cycle (pull/push cadence, review checklist) → [`team.md`](team.md) §10
 - ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
-- งานของฉันคืออะไร → [`team.md`](team.md) + [`PORT_PLAN.md`](PORT_PLAN.md) Part O (assignments) + Part P (snapshot)
-- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part R (vendor cutoff) + Part S (เดฟ↔ก๊อต hand-off batch)
+- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part S (เดฟ↔ก๊อต hand-off)
 - เขียน code ยังไง → [`conventions.md`](conventions.md)
-- Architecture → [`architecture.md`](architecture.md)
+- Architecture → [`architecture.md`](architecture.md) + [`architecture/container-centric-model.md`](architecture/container-centric-model.md)
 - ที่อยู่ / เบอร์ Pacred / LINE OA IDs → [`pacred-info.md`](pacred-info.md)
+- "main มีอะไรใหม่?" → `git log --oneline origin/main..origin/dave` (เดฟ integrate daily 1-2×)
 
 ---
 
@@ -209,14 +212,16 @@ git push origin <my-branch>
 - **Active phase:** 🔥 **Cargo Revenue Sprint** (Part T). Brief-driven async execution but priorities are revenue-first. ทุกคนเริ่ม session ด้วยเปิด brief → emergency section → ทำงาน T-* tasks → push at save-points.
 - **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging — Poom + podeng consolidated) · `Poom` + `podeng` = น้อง working branches.
 - **Production readiness:** ~88% customer · ~98% admin HR / ~50% admin ops · ~85% infra · ~85% SEO/landing (analytics substrate live)
-- **Recent landmarks (2026-05-16):**
+- **Recent landmarks (latest first):**
+  - **2026-05-15 evening (ปอน landed):** Customs page v2 banner+breadcrumb+new copy · shared section tweaks (ContactSales reusable + mobile swipe + shorter SalesCarousel) · mobile FloatingTabs center call FAB
+  - **2026-05-15 (DNA + emergency):** Company DNA embed across CLAUDE.md/AGENTS.md/site.ts (tax-ID `0105564077716` + slogan + 7 dept emails + sales/docs footer pair) · PORT_PLAN Part T cargo revenue sprint · brand-cleanup gate doc · daily integration cycle §10 in team.md
+  - 6 role briefs (`docs/briefs/`) + container-centric model (`docs/architecture/`) + MOMO JMF spec (`docs/integrations/`) + V2/V3 strategy ADR-0010 + PORT_PLAN split (Parts A–N archived)
   - L-22 GTM + L-23 Clarity + L-24 cookie A/B substrate shipped (silent until ก๊อต K-12/K-13 lands env vars)
   - 9 conversion events + 13 CTA surfaces + first live experiment `home_hero_cta` telemetry
   - OWASP Top-10 desk audit + PCS scrub sweep + OTP dual-pepper rotation support
   - Sentry SDK (D-11) + Upstash rate-limit (D-12) + hCaptcha (D-13) wired — awaiting creds from ก๊อต
   - Cron jobs (5) + CRON_SECRET hardening + footer i18n + LINE_OA constants centralized
   - Migrations 0028–0032 + Track A integration tests (P-28..P-31) consolidated
-  - Doc restructure: 6 role briefs (`docs/briefs/`) + container-centric model (`docs/architecture/`) + MOMO JMF spec (`docs/integrations/`) + V2/V3 strategy ADR-0010 + PORT_PLAN split (Parts A–N archived)
   - MOMO JMF partner token captured in 5 worktrees + `.env.example`; endpoint inventory TBD (ก๊อต MOMO-1..MOMO-3)
 - **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo, employee masterpiece). V3 wishlist appends to `docs/v3-wishlist.md` (TBD) — don't refactor V2 into V3 mid-flight.
 - **🔥 Revenue path blockers (block customer-receiving cargo system — Part T):**
