@@ -40,7 +40,7 @@ const items: NavItem[] = [
   // Customer & sales
   { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
   { href: "/admin/customers/pending",         label: "รอ Approve",        icon: <Clock className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
-  { href: "/admin/customers/recently-active", label: "Active ล่าสุด",      icon: <Activity className="w-5 h-5" />,        group: "ลูกค้า · ขาย" },
+  { href: "/admin/customers/recently-active", label: "Active ล่าสุด",      icon: <Activity className="w-5 h-5" />,        roles: ["sales_admin","accounting"], group: "ลูกค้า · ขาย" },
   { href: "/admin/customers/transfer-rep",    label: "โอนทีมขาย (กลุ่ม)",   icon: <ArrowRightLeft className="w-5 h-5" />,  roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
   { href: "/admin/juristic-check",            label: "เช็คนิติบุคคล",       icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ลูกค้า · ขาย" },
   { href: "/admin/contact-messages",          label: "ข้อความติดต่อ",       icon: <MessageSquare className="w-5 h-5" />,   roles: ["ops"], group: "ลูกค้า · ขาย" },
