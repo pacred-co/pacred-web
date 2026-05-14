@@ -1707,6 +1707,23 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 ภูม audit codebase ตอน free time → propose new tracks via `docs/decisions/00XX-<theme>.md` ADR + ping เดฟ. Keep this section as a reminder that the runway is intentionally open-ended
 
+### Track G — China search rewire + carrier APIs (URGENT — from PHP audit 2026-05-14)
+
+> **Source:** `docs/audit/php-pcscargo-integrations.md` (deep audit ของ legacy PHP) — เปิดเผยว่า Pacred lib/china-search/index.ts wired ผิด. RCGroup-TH = dead code in PHP! Real flow = TAMIT (detail) + tam-i-t (cache) + AkuCargo (keyword) + Laonet (image)
+>
+> **Why CRITICAL:** Pacred URL-paste converter, keyword search, image search ทุกอันใช้ `PACRED_RCGROUP_API_URL` ที่ไม่มี response → fallback demo mode → ลูกค้ากรอกราคาเอง สับสน
+
+| # | Task | Est | Decision? | Description |
+|---|---|---|---|---|
+| **P-50** 🔴 | Rewire `lib/china-search/index.ts` to TAMIT-cloud | 4-6h | No | Replace `convertProductUrl` + `convertProductUrlDetail` to use `PACRED_TAMIT_DETAIL_URL` + endpoint pattern `/get/{1688\|taobao}/?id={productID}`. Keep `buildDemoDetail()` fallback. Update `normaliseDetail` to consume actual TAMIT response shape (`json.status==200 → json.data.{title,vendor,listImage,mainImage,sku,skuMap,priceRanges,referencePrice,mainVedio,detail}`). **Acceptance:** paste real Taobao URL locally → see real product title + image + SKU axes |
+| **P-51** | Add tam-i-t.com short-URL cache layer | 2-3h | No | New helper `lib/china-search/short-url-cache.ts`. Before TAMIT call: `GET {PACRED_TAMIT_CACHE_URL}/get[/taobao]/?tk={tk}` → if 204, fetch URL with desktop UA spoof, scrape productID via regex (`Id%3D` / `Foffer%2F` / `id=`), `POST` back to `/save/?tk=...&provider={1\|2}&productID=...`. Cache the result in-memory + DB (cart_items url field already serves as poor-man's cache). **Acceptance:** paste short Taobao URL `m.tb.cn/{tk}` → resolves to detail. Spec verbatim in `docs/audit/php-pcscargo-integrations.md` §3b |
+| **P-52** | Add AkuCargo keyword search adapter | 2-3h | No | New `lib/china-search/akucargo.ts`. Replace `searchKeyword()` to call `{PACRED_AKUCARGO_API_URL}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` with desktop Firefox UA. Response shape `json.items.item[i].{detail_url,pic_url,title,price,promotion_price,sales}`. **Acceptance:** type Thai or Chinese keyword → get hits with real prices |
+| **P-53** | Add Laonet image search adapter | 2-3h | No | New `lib/china-search/laonet.ts`. Replace `searchByImage(file)` to: (a) upload file as base64 → `{PACRED_LAONET_API_URL}/index.php?route=api_tester/call&api_name=upload_img&imgcode={b64}&key={PACRED_LAONET_KEY}` returns `imgid` (b) search → `?api_name=item_search_img&imgid={imgid}&key={PACRED_LAONET_KEY}` returns hits. **Acceptance:** upload product photo → get similar 1688 products |
+| **P-54** ✅ | LINE Messaging API ACTIVATED — creds in `.env.local` | done by เดฟ | — | All 3 vars set 2026-05-14: `LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`. Production needs same in Vercel env + `LINE_PUSH_BYPASS=false`. ภูม: P-15 dispatch wiring (already done in `e440a31`) → real LINE pushes when bypass off. Future task: webhook receiver for LINE OA (signature verify uses `LINE_CHANNEL_SECRET`) |
+| **P-55** | Verify Vercel egress IP allowlist with TAMIT/AkuCargo/Laonet/tam-i-t | 1h | ภูม + เดฟ | Vercel function egress IP differs from legacy XAMPP/cPanel. Check after P-50 lands — if real API returns 403/blocked, contact vendor (likely all 4 services owned by same vendor `tam011plus@gmail.com`) to allowlist Vercel. Document Vercel egress IP block in `docs/runbook/vendor-allowlist.md` |
+| **P-56** | (Future) JMFCARGO carrier sync port | 6-8h | เดฟ + ก๊อต | Two-way sync over HTTP. PCS↔JMF via `JMF_CARGO_TOKEN` (concat of legacy Tiso key+secret). Receiving endpoint at `/api/integrations/jmf-cargo/inbound/route.ts`. Outbound calls in admin actions. Lower priority — only if Pacred wants JMF integration. Spec in audit §9a |
+| **P-57** | (Future) CargoThai TTP/CN container API port | 4-6h | เดฟ + ก๊อต | Active legacy carrier (`a807f4fe...`, `aea07c4d...` query-string `_token`). Endpoint `https://cargothai.tech/api/service/{GetContainer,GetDetail}`. Lower priority — only if Pacred uses these carriers. Spec in audit §9b |
+
 ---
 
 **Sprint 7+ estimate:** ~60-90h → 4-8 weeks part-time. Combined with Sprint 6.5 (~2-3h follow-ups), ภูม has ~70-95h runway
@@ -1956,12 +1973,15 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 | Var / Account | Status | Blocks |
 |---|---|---|
-| `PACRED_RCGROUP_API_URL` | unset | URL→cart converter, image search (silent demo) |
-| `PACRED_TAMIT_API_URL` | unset | Keyword search 1688 (yellow banner) |
-| `PROMPTPAY_ID` | unset | Wallet deposit QR (throws error) |
+| ~~`PACRED_RCGROUP_API_URL`~~ | DEAD (was dead in PHP too — see audit §2) | — |
+| `PACRED_TAMIT_DETAIL_URL` | unset (need to set + verify) | URL→cart product detail (P-50) |
+| `PACRED_TAMIT_CACHE_URL` | unset | Short-URL resolution (P-51) |
+| `PACRED_AKUCARGO_API_URL` | unset | Keyword search (P-52) |
+| `PACRED_LAONET_API_URL` + `_KEY` | unset | Image search (P-53) |
+| `PROMPTPAY_ID` | unset (PCS Cargo legacy `064-174-3836` — Pacred ต้อง new acct) | Wallet deposit QR (throws error) |
 | `THAIBULKSMS_API_KEY` + `_SECRET` | placeholder | OTP send |
-| `LINE_CHANNEL_ACCESS_TOKEN` | unset | LINE push + P-15 dispatch |
-| `LINE_PUSH_BYPASS=false` | bypass | Real LINE delivery production |
+| `LINE_CHANNEL_ID` + `_SECRET` + `_ACCESS_TOKEN` | ✅ **set in `.env.local` 2026-05-14** (Channel ID 2009931373) — Vercel env ยังต้องตั้ง | LINE push + P-15 dispatch (P-54 activated) |
+| `LINE_PUSH_BYPASS=false` | bypass (dev keeps true for safety) | Real LINE delivery production |
 | `OTP_BYPASS=false` + `OTP_PEPPER` | bypass + placeholder | Real OTP production |
 | `NEXT_PUBLIC_SITE_URL=https://pacred.co` | localhost:3000 | OAuth callback + notification deep links |
 | Sentry DSN | none (SDK scaffolded D-11 ✅; need DSN to activate) | Production error tracking activation |
@@ -1980,7 +2000,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 - ก๊อต: review + merge audit (ongoing — เดฟ self-merge in §9 mode)
 
 **Remaining:**
-- **ภูม:** Sprint 6 follow-ups (6 items, ~2-3h) + Priority 2 P-21..P-24 (~9-12h) + Priority 3 P-25..P-27 (~5-9h) — all self-directed
+- **ภูม:** Sprint 6 follow-ups (6 items, ~2-3h) + Sprint 7+ Tracks A-G (~70-100h) — all self-directed. **NEW priority injection:** Track G P-50..P-53 (china-search rewire, ~10-15h) is most-leveraged because URL paste / search / image search are core customer flows — recommend doing P-50 + P-51 first (highest user-visible impact)
 - **ปอน:** Bonus 6+7 merged ✅ — next = L-5 + L-9b/c + Phase C+ ecosystem (ต้อง decision)
 - **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire = 1-2h each (could do now)
 - **ก๊อต:** schedule Pacred owner call to unblock D-7 + 4 sets of creds (Sentry DSN, Upstash, hCaptcha, 3rd-party APIs)
@@ -2004,10 +2024,11 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
    - Coordinate with ปอน on division of labor (ปอน lead design/copy; เดฟ + Claude assist with structure/scaffolding/scripts)
 4. **ก๊อต:** schedule Pacred owner call (~30m bundle):
    - D-7 payment gateway choice
-   - LINE OA channel access token
+   - ✅ ~~LINE OA channel access token~~ — **DONE 2026-05-14** (Channel ID 2009931373 + Secret + Long-lived token in `.env.local`)
    - Sentry DSN + Upstash creds + hCaptcha keys
-   - ThaiBulkSMS real keys + PromptPay ID + RCGroup/TAMIT URLs
+   - ThaiBulkSMS real keys + PromptPay ID (Pacred new bank acct — PCS Cargo legacy `064-174-3836` ใช้ไม่ได้)
    - **NEW:** approval to pivot to landing-first focus (confirm with owner that beta launch priority order = customer acquisition channels working > more backend features)
+   - **NEW:** Track G china-search rewire — verify with vendor (`tam011plus@gmail.com` likely owns TAMIT/AkuCargo/Laonet/tam-i-t) that Vercel egress IP is allowlisted
 5. **Optional เดฟ work** (between landing assists): D-12-wire + D-13-wire (~2-4h ทั้งคู่) — drop into signup/contact/password-reset
 
 **Estimate production beta-ready:** 1-2 weeks ถ้า creds + 1 owner call ได้ในweek นี้ · 3-4 weeks ถ้าไม่

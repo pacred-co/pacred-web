@@ -61,16 +61,31 @@ Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links 
 
 ---
 
-## 5. China Product Search 🟡
+## 5. China Product Search 🟡 (P-50 audit 2026-05-14)
 
-| Var | Value | Powers |
-|---|---|---|
-| `PACRED_RCGROUP_API_URL` | `https://rcgroup-th.com/api-china/api-search` (legacy — verify alive) | `/service-order/add` URL-paste converter + image search |
-| `PACRED_TAMIT_API_URL` | `https://tamit-cloud.com/api-product/api-search` (legacy — verify alive) | `/service-order/add` keyword search |
+⚠️ **Pacred lib/china-search/index.ts is currently MISWIRED to RCGroup-TH (dead code in PHP).** See `docs/audit/php-pcscargo-integrations.md` §17 for full rewire spec. Tracked as **P-50 (CRITICAL)** in `PORT_PLAN.md` Sprint 7+ Track G.
 
-⚠️ **Degraded mode:** ไม่ตั้ง = URL paste returns demo product (price ¥0, "Taobao Shop") — ลูกค้าสับสน ไม่รู้ว่า API broken
+**The ACTIVE PHP integrations** (verbatim from legacy production):
 
-**Code:** `lib/china-search/index.ts`. Legacy PHP `member/include/pages/search/dataAPI.php` ใช้ endpoint เดียวกัน — verify pattern (current code expects `?q=` but legacy uses `?id=`).
+| Var | Value | Powers | Auth |
+|---|---|---|---|
+| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}` | None |
+| `PACRED_TAMIT_CACHE_URL` | `https://tam-i-t.com/api/convert-link-china` | Short-URL cache (1688 `qr.1688.com/s/{tk}` + Taobao `m.tb.cn/{tk}` → productID). Endpoint shape: `{base}/get[/taobao]/?tk={tk}` + `/save/?tk=...&provider={1\|2}&productID=...` | None |
+| `PACRED_AKUCARGO_API_URL` | `https://akucargo.com/api3/api-2022` | Keyword search (1688 + Taobao). Endpoint shape: `{base}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` | None (UA spoof to desktop Firefox) |
+| `PACRED_LAONET_API_URL` | `https://laonet.online` | Image search (reverse-image) + product detail fallback. Endpoint shape: `{base}/index.php?route=api_tester/call&api_name={item_search_img\|item_get\|upload_img}&...&key={key}` | Email-as-key (`PACRED_LAONET_KEY`) |
+| `PACRED_LAONET_KEY` | `tam011plus@gmail.com` (legacy) | API key for Laonet — literally an email | — |
+
+**Degraded mode (any unset):** URL paste returns demo product (price ¥0, generic shop name) — `lib/china-search/index.ts` `convertProductUrlDetail` falls back to `buildDemoDetail()` so flow still works.
+
+**DEAD code (kept commented for reference):**
+- `PACRED_RCGROUP_API_URL=https://rcgroup-th.com/api-china/api-search` — RCGroup branch in PHP `convertURL.php` is gated by `$APIKEY` flag that's never assigned anywhere → never executes in production. Pacred port should drop this entirely after P-50 lands
+
+**Why "API blocked" symptom:**
+1. Pacred's `lib/china-search/index.ts:104,127,277` use `PACRED_RCGROUP_API_URL` for product detail + image — but RCGroup is dead
+2. Vercel function egress IP differs from legacy XAMPP/cPanel — TAMIT/AkuCargo/Laonet may need vendor IP allowlist
+3. PHP disables `CURLOPT_SSL_VERIFYPEER` — Vercel/Node fetch defaults to verify; some vendor certs have issues, may need explicit https.Agent
+
+See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 
 ---
 
@@ -86,16 +101,20 @@ Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links 
 
 ---
 
-## 7. LINE Messaging API (push notifications) 🟡
+## 7. LINE Messaging API (push notifications) 🟡 ✅ creds set 2026-05-14
 
 | Var | Value | Powers |
 |---|---|---|
 | `LINE_PUSH_BYPASS` | `true` (dev, default) / `false` (prod) | If true, push skipped — only console.log |
-| `LINE_CHANNEL_ACCESS_TOKEN` | https://developers.line.biz → Pacred OA → Messaging API → Channel access token | Push to LINE users who linked account |
+| `LINE_CHANNEL_ID` | `2009931373` (Pacred OA) | Used for webhook signature verification (future LINE OA bot) |
+| `LINE_CHANNEL_SECRET` | (set in `.env.local` 2026-05-14) | Same — webhook signature |
+| `LINE_CHANNEL_ACCESS_TOKEN` | (long-lived token set in `.env.local` 2026-05-14) | Push to LINE users who linked account via `api.line.me/v2/bot/message/push` |
 
-⚠️ **Default is bypass=true** (safe for dev). Production needs `LINE_PUSH_BYPASS=false` + valid token.
+✅ **Pacred credentials landed** 2026-05-14 evening (เดฟ provided via chat). All 3 LINE vars set in `.env.local` (gitignored). For production, set the same 3 vars in Vercel env + flip `LINE_PUSH_BYPASS=false`.
 
-LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging API push + email fallback.
+⚠️ **Default in dev is bypass=true** (safe — no spam to test users). To activate dev push: edit `.env.local` set `LINE_PUSH_BYPASS=false` then restart `pnpm dev`.
+
+LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging API push + email fallback. Pacred uses Messaging API push (NOT Notify) — see `lib/notifications/index.ts:104-132`.
 
 **Code:** `lib/notifications/index.ts:24,100`.
 
