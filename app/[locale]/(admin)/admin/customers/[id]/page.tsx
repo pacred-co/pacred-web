@@ -123,6 +123,22 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
         </Link>
       )}
 
+      {/* Transfer sales rep (P-9) — single-customer flow with reason + dual-side notify */}
+      <Link
+        href={`/admin/customers/${p.id}/transfer-rep`}
+        className="block rounded-2xl border border-blue-300 bg-blue-50 px-5 py-4 hover:bg-blue-100 transition-colors"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-blue-900">โอนทีมขายผู้ดูแล →</p>
+            <p className="text-xs text-blue-800/80 mt-0.5">
+              เปลี่ยน sales rep เจ้าของลูกค้าคนนี้ — บันทึก audit log + แจ้งทั้ง rep เก่าและใหม่
+            </p>
+          </div>
+          <span className="text-xs font-mono uppercase text-blue-700">TRANSFER REP</span>
+        </div>
+      </Link>
+
       {/* Assign sales rep */}
       <AssignRepForm
         customerId={p.id}
