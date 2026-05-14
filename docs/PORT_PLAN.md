@@ -2749,7 +2749,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 | # | Task | Est | Output |
 |---|---|---|---|
-| **K-8** | ADR-0006: Tax invoice flow + numbering (build on K-6 decision) | 2-3h | `docs/decisions/0006-tax-invoice.md` — lock before ภูม implements |
+| **K-8** | ✅ **DONE 2026-05-16** — ADR-0006 tax invoice flow [`docs/decisions/0006-tax-invoice-flow.md`](decisions/0006-tax-invoice-flow.md). Full design contract: schema (tax_invoices + tax_invoice_lines + tax_invoice_seq) + RLS + numbering generator function + PDF template plan + cancellation/credit-note flow + VAT mode (inclusive default) + RBAC gate (super+accounting per K-7) + 6-phase implementation breakdown (G2a-G2f, ~14-19h). WHT noted as out-of-scope. Pacred-side pre-issuance checklist included | done | — |
 | **K-9** | ✅ **DONE pre-2026-05-16** — `.github/CODEOWNERS` exists with default-funnel-to-deffeyameh + TODO note to add @got-jirayus + @Poom + @podeng as accounts confirmed | done | — |
 | **K-10** | ✅ **DONE 2026-05-16** — `.github/workflows/ci.yml` (lint + tsc + `pnpm test:unit`) on PR + push to main/dave. Concurrency-cancels in-flight runs. Skips `pnpm build` (Vercel covers) + placement integration test (needs `.env.local`). New `pnpm test:unit` script (env-independent suite) | done | — |
 | **K-11** | ✅ **DONE 2026-05-16** — OWASP Top 10 (2021) desk audit [`docs/audit/owasp-2026-05.md`](audit/owasp-2026-05.md). Summary: 8× 🟢 strong / 2× 🟡 (A05 CSP unsafe-inline, A06 transitive postcss). Recommendations sorted P0-P3; P0 items map to existing K-12/K-13/DV-1 activation tasks. Re-audit triggers documented (quarterly + on RBAC/SDK change) | done | — |
