@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Phone, Sparkles, Headset, Award, MessageCircle } from "lucide-react";
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 
 type SalesPerson = {
   name: string;

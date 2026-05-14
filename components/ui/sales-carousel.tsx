@@ -60,7 +60,7 @@ function SalesCard({ person }: { person: ResolvedPerson }) {
         <p className="text-xs text-muted leading-relaxed line-clamp-2">{person.tagline}</p>
         <p className="text-sm font-semibold text-foreground mt-1">{person.phone}</p>
         <a
-          href="https://lin.ee/Yg3fU0I"
+          href="/line"
           target="_blank"
           rel="noopener noreferrer"
           className="mt-auto w-full rounded-xl bg-[#06C755] py-2 text-xs font-semibold text-white text-center hover:bg-[#05a548] transition-colors"

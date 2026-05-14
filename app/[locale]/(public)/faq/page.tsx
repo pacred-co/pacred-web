@@ -112,7 +112,7 @@ const FAQ_GROUPS_TH: FaqGroup[] = [
     items: [
       {
         q: "ติดต่อทีม Pacred ได้ทางไหนบ้าง?",
-        a: "LINE OA: lin.ee/Yg3fU0I (เร็วสุด ตอบภายใน 5 นาที), โทร 066-131-0253, อีเมล contact@pacred.co, Facebook / TikTok / Instagram / YouTube @PacredShipping",
+        a: "LINE OA: pacred.co/line (เร็วสุด ตอบภายใน 5 นาที), โทร 066-131-0253, อีเมล contact@pacred.co, Facebook / TikTok / Instagram / YouTube @PacredShipping",
       },
       {
         q: "เปิดทำการวันไหน เวลาอะไร?",
@@ -217,7 +217,7 @@ const FAQ_GROUPS_EN: FaqGroup[] = [
     items: [
       {
         q: "How do I reach the Pacred team?",
-        a: "LINE OA: lin.ee/Yg3fU0I (fastest — replies within 5 minutes), phone 066-131-0253, email contact@pacred.co, plus Facebook / TikTok / Instagram / YouTube @PacredShipping.",
+        a: "LINE OA: pacred.co/line (fastest — replies within 5 minutes), phone 066-131-0253, email contact@pacred.co, plus Facebook / TikTok / Instagram / YouTube @PacredShipping.",
       },
       {
         q: "What are your hours?",
