@@ -325,10 +325,10 @@
 ### G8 — Cron / Automation
 | PHP file | ทำอะไร | Port status |
 |---|---|---|
-| `api/autorun/check-apprentice.php` | auto-check ใหม่ | 🔴 |
-| `api/autorun/send-line-sales.php` | send LINE ขาย | 🔴 |
-| `api/autorun/update-active-customers.php` | update active status | 🔴 |
-| `api/autorun/update-sheet-sang.php` | sync sheet | 🔴 |
+| `api/autorun/check-apprentice.php` | admin probation expiry + driver assignment 17h timeout | 🟡 deferred — needs `employees.contract_end_date` (admin half) + `forwarder_driver` table (driver half) before scaffolding |
+| `api/autorun/send-line-sales.php` | daily 00:05 LINE digest of yesterday's paid sales | 🟡 scaffolded by เดฟ at `/api/cron/sales-daily-digest` (auth + queries done; ภูม wires recipient/dispatch — see P-15) |
+| `api/autorun/update-active-customers.php` | mark `profiles.is_active=true` based on activity | ✅ scaffolded by เดฟ at `/api/cron/refresh-active-customers` (full implementation; ภูม verify + enable schedule — see P-16) |
+| `api/autorun/update-sheet-sang.php` | sync to "Sang" Google Sheet | ⚪ obsolete — replaced by Pacred admin dashboards; do not port |
 | auto-cancel orders | — | ✅ ที่ `/api/cron/auto-cancel-orders` |
 
 ### G9 — Rate Management
@@ -1294,7 +1294,7 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | CAPTCHA / bot protection บน signup | **MISSING** | dave (new task D-13) |
 | CSP / security headers | **MISSING** | dave (new task D-14) |
 | File upload size/MIME server-side validation | **WEAK** (UI check only) | dave (new task D-15) |
-| 4 PHP cron jobs ports: `send-line-sales`, `update-active-customers`, `update-sheet-sang`, `check-apprentice` | **MISSING** | dave/ภูม split |
+| 4 PHP cron jobs ports: `send-line-sales`, `update-active-customers`, `update-sheet-sang`, `check-apprentice` | **2/4 SCAFFOLDED** by เดฟ (sales-daily-digest + refresh-active-customers); update-sheet-sang dropped as obsolete; check-apprentice deferred (schema work first) | dave (scaffolding) → ภูม P-15/P-16 (finish + verify) |
 
 ## N6. Hardening / observability gaps (ต้องมีก่อน production launch)
 
@@ -1500,10 +1500,29 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 **Strategy:** Port PHP cargo system → Pacred 100% ก่อน DPX ERP. ทุก feature ที่ PHP เดิมมี ต้อง work ใน Pacred ก่อน
 
-**Status check:**
+**Status check (2026-05-14):**
+- ✅ P-1 ถึง P-14 เสร็จหมด (รายละเอียดใน commit log `bb747bf`..`1700144`)
 - ✅ Bug fixes ของ Sprint 1-3 (approve/suspend, scan-form, etc.) — แก้แล้วบน dave commit `1a470ee`
 - ✅ Sprint 1-3 admin features ครบ (A-1 ถึง A-15 + L-cleanup)
+- 🟡 4 commits cleanup ค้าง `origin/Poom` (ยังไม่ merge เข้า main) — ต้องผ่าน Phase 0 review fixes ก่อน
 - 🟡 ลำดับงานใหม่:
+
+### ✅ Phase 0 — Pre-merge fixes (DONE 2026-05-14 by ภูม)
+
+เดฟ review 4 commits (8db9140, 07535a5, 5cf2499, b8dd259) → flagged 3 fixes → ภูม ship ทั้ง 3 commits ก่อนเดฟกลับจากกินข้าว 🎯
+
+| # | Fix | Resolution commit |
+|---|---|---|
+| ✅ **rev-1** | inline `<script>` ใน server `<head>` แทน `next/script beforeInteractive` (FOUC fix) — ภูม เพิ่ม `suppressHydrationWarning` ดีกว่าที่แนะนำด้วย | `0da2e71` |
+| ✅ **rev-2** | Transfer Rep card ย้ายหลัง `AssignRepForm` | `ee63068` |
+| ✅ **rev-3** | "Active ล่าสุด" sidebar gate `roles: ["sales_admin","accounting"]` | `8ad80d8` |
+
+Bonus 5 commits ที่ภูมทำเพิ่ม (ไม่ได้ขอ — ดี proactive):
+- `45205ba` cleanup misleading freight stubs + expose `/admin/rates`
+- `a2d2e25` wire `contact_message` reference_type end-to-end (close P-6 follow-up gap)
+- `ce5792e` support phone-only accounts in password/phone change
+- `3f8b887` close minor finds from P-7 + P-9 audit
+- `66c8fec` merge main into Poom (sync)
 
 ### Priority 0 (block customer launch — must finish first)
 
@@ -1534,17 +1553,28 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 |---|---|---|---|
 | **P-14** | C-2 PDF shop order receipt | 3-4h | Uses `@react-pdf/renderer` infrastructure + `ReadNumber()` helper from เดฟ |
 
-### Priority 3 (waiting for owner decision)
+### Priority 3 (cron-jobs port — เดฟ scaffolded, ภูม finishes)
+
+เดฟวางโครงไว้ที่ `app/api/cron/{sales-daily-digest,refresh-active-customers}/route.ts` + `vercel.json` อัปเดตแล้ว
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **P-15** | Wire `sales-daily-digest` recipient/dispatch | 2-3h | Route at `app/api/cron/sales-daily-digest/route.ts` already computes yesterday + MTD totals across order_payment / import_payment / yuan_payment. Need: (a) extend `profiles.notify_channels` jsonb with `daily_digest` flag (new migration), (b) loop admins where `role IN ('super','sales_admin')` with flag on, (c) call `sendNotification()` per admin with the formatted message. See TODO block at end of route.ts |
+| **P-16** | Verify + enable `refresh-active-customers` schedule | 1h | Route already implements full PHP behaviour (3 activity streams → flip `profiles.is_active=true`). Need: (a) confirm forwarder status enum exclusion is right (only `pending_payment` excluded, not `'rejected'` etc.), (b) confirm doesn't conflict with P-13 recently-active dashboard logic, (c) flip on the daily 01:00 UTC cron in production. Vercel cron entry already added |
+| **P-17** | Port `check-apprentice` (deferred) | 4-6h | Two halves: (i) admin probation expiry — needs new column `employees.contract_end_date date`, then sweep employees where date passed → set `is_active=false`. (ii) driver assignment 17h timeout — blocked entirely on `forwarder_driver` table (not yet ported in cargo schema). Recommend splitting into two route handlers when ready |
+
+### Priority 4 (waiting for owner decision)
 
 - M2.2 Payroll module (decision D-9 with owner)
 - M2.4 HS variants keep/merge (decision D-8 with owner)
 - M2.5d Driver work shifts (after payroll decision)
 
-**Estimated total P0+P1+P2:** 40-55h → 3-4 weeks part-time
+**Estimated total P0+P1+P2+P3:** 43-64h → 3-4 weeks part-time
 
 ## O3. 👤 ปอน (podeng) — Sprint 5 (FRONTEND/SEO/LANDING FOCUS)
 
-**Strategy:** ทำ landing pages ทุก service + push SEO + acquisition funnel ให้แรง — เป้า Lighthouse 95+ ทุก public page
+**Strategy:** ทำงานเป็น phase สั้นๆ — เสร็จ 1 phase → ส่งเดฟ confirm → เริ่ม phase ถัดไป (feedback จากเดฟ 2026-05-14: "เริ่มคิดนานนะ ลองแบ่งเฟส คิด หรือ แยก หัวคิด แล้ว ให้คอนเฟิม")
+**สถานะ 2026-05-14 evening:** Phase A (SEO foundation L-1..L-9 + 5 bonus) ✅ shipped — ดูตาราง ✅ COMPLETED ด้านล่าง. งานต่อ = Phase B (L-5 landing polish, ต้อง decision) + L-8 mobile QA (blocked) + Phase D L-9b/c i18n polish + Phase C+ ecosystem expansion (L-10..L-20, ต้อง decision)
 
 ### ✅ COMPLETED (Sprint 5 Day 3 — claude session `great-banzai-0675e6` → merged into `podeng` 2026-05-14)
 
@@ -1570,9 +1600,52 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | 🟡 **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX. (`/services/customs-clearance` already has full content via existing `Clearance*` components.) Recommendation: replace `StubPage` with real layout per service |
 | 🔴 **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools. **Blocked: needs real device or BrowserStack testing — Claude session can only spot-check via curl/CSS** |
 
-### Priority 2 (Phase I — Pacred Ecosystem expansion landing pages)
+> ✅ **Phase A1+A2+A3 finished as one bundle** by ปอน 2026-05-14 (commit `a0d9d83`) — pattern below applies to remaining work (L-5/L-8/L-10..L-20)
 
-11 new service landing pages (#1, #5-13 ตาม CLAUDE.md service catalogue):
+> **กฎ checkpoint สำหรับ phase ที่เหลือ:** ทุกเฟสจบ → ส่ง output ให้เดฟใน LINE → รอ "go" ก่อนเริ่ม phase ถัดไป — ห้ามทำหลาย phase พร้อมกัน ถ้ายังไม่ได้ confirm
+
+---
+
+### Phase B — Landing page polish (DECISION CHECKPOINT FIRST)
+
+**🛑 ก่อนเริ่ม Phase B ขอเดฟ confirm 2 ข้อใน LINE:**
+1. **Priority pages** — page ไหน polish ก่อน? (ปอน suggest: home → import-china → china-shopping → customs-clearance ตามลำดับ)
+2. **Style update** — มี design tokens ใหม่หรือยังใช้ของเดิม?
+
+หลัง confirm:
+- [ ] **L-5a** Polish page #1 ที่เดฟเลือก (2-3h)
+- [ ] **L-5b** Polish page #2 (2-3h)
+- ... (ทำทีละ page → checkpoint after each)
+
+ส่วนของ L-5 อื่นๆ:
+- [ ] **L-7** FAQ + FAQPage JSON-LD (2h)
+- [ ] **L-8** Mobile responsive QA top 10 pages (4-6h) — ใช้ browser devtools / Playwright
+
+**🛑 CHECKPOINT B-final:** หลังทุก page โดน polish — Lighthouse score แต่ละ page > 90 mobile + 95 desktop
+
+---
+
+### Phase D — i18n polish (~2-3h, partial — script done by ปอน)
+
+- [x] ✅ **L-9a script** — `scripts/i18n-audit.mjs` ports diff (committed by ปอน in `a0d9d83`); current state = 1770 keys × 2 locales, 0 missing
+- [ ] **L-9b** Normalize namespace pattern (`page.section.element`) — refactor existing keys
+- [ ] **L-9c** EN translation polish — run script ออก same-value list → review machine TL
+
+**🛑 CHECKPOINT D:** PR diff ของ messages/*.json — เดฟ review
+
+---
+
+### Phase C+ — Pacred Ecosystem expansion landing pages (DECISION REQUIRED FIRST)
+
+11 new service landing pages (L-10 ถึง L-20) — ต้องถามเดฟ + Pacred owner ก่อน:
+
+**🛑 BEFORE STARTING ANY of L-10..L-20:**
+1. **Style guide** — ใช้ของเดิม (red/dark) หรือ design ใหม่?
+2. **Content** — ปอนเขียน copy เอง / marketing person / AI draft + edit?
+3. **Images** — มี asset library / use stock / commission?
+4. **Priority order** — services ไหนสำคัญก่อน? (ปอน suggest: customs-clearance + export ก่อน เพราะ ecosystem ใหม่ไม่ครอบเดิม + revenue สูง)
+
+หลัง decisions ครบ → ทำทีละ service → checkpoint after each
 
 | # | Service | slug | Est |
 |---|---|---|---|
@@ -1588,7 +1661,9 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | **L-19** | logistics + messenger | `/services/logistics` | 4-6h |
 | **L-20** | services hub page redesign | `/services` | 4-6h |
 
-### Priority 3 (performance + acquisition)
+---
+
+### Phase E — Performance + analytics (สุดท้าย — เมื่อ landing เสร็จแล้ว)
 
 | # | Task | Est | Description |
 |---|---|---|---|
@@ -1597,8 +1672,15 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | **L-23** | Heatmap (Microsoft Clarity or Hotjar) | 1-2h | Setup tracking |
 | **L-24** | A/B test infrastructure | TBD | If GrowthBook or similar chosen |
 
-**Estimated total P0+P1:** 30-40h → 2-3 weeks part-time
-**Phase I (P2):** +40-50h → ขึ้นกับ priority ของ Pacred owner
+**🛑 ก่อน Phase E:** ขอเดฟยืนยันว่า analytics tools เลือกอะไร (GA4? GTM? Clarity? Hotjar?)
+
+---
+
+**Estimated:**
+- Phase A1+A2+A3: ~9-12h → 2-3 sessions ของปอน
+- Phase B + D: ~15-20h → 4-5 sessions
+- Phase C+ (11 services): +40-50h → ขึ้นกับ owner priority + content readiness
+- Phase E: +10-15h
 
 ## O4. 👤 เดฟ (dave) — Sprint 5 (INFRASTRUCTURE LEAD)
 
@@ -1613,17 +1695,19 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 8. ✅ **A-10** Team Leaders commission edit — **already built by ภูม** (inline % editor + toggle active)
 9. ✅ **A-11** Sales Payouts approve actions — **already built by ภูม** (approve/reject/paid + rejection reason)
 10. ✅ **A-12** Containers ETA workflow — new `/admin/containers/[id]` detail page with full edit form (ETA + carrier + vessel + note) + linked forwarders list with unlink + "Link forwarders" multi-select (filtered by origin+transport+unlinked) + bulk-link action + status timeline. New server actions `adminLinkForwardersToContainer` + `adminUnlinkForwarder` (with audit logs)
+11. ✅ **cron-scaffold** Cron jobs port (Part N5 row 4 of 4) — scaffolded `/api/cron/sales-daily-digest` (auth + aggregations done; ภูม wires dispatch — P-15) + `/api/cron/refresh-active-customers` (full impl; ภูม verifies + enables — P-16). Dropped `update-sheet-sang` as obsolete. `check-apprentice` deferred (needs schema). vercel.json updated with 2 new entries.
 
 ### 🟡 REMAINING (Sprint 5 Days 3+)
-11. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h) — **blocked: need real credentials** (RCGroup URL, TAMIT URL, ThaiBulkSMS keys, PromptPay ID)
-12. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
-13. 🟡 **D-11** Sentry / error tracking setup (3-4h) — **blocked: need Sentry account + DSN**
-14. 🟡 **D-12** Rate limiting (Upstash Redis or Vercel KV) (4-6h) — **blocked: need Upstash/Vercel KV setup**
-15. 🟡 **D-13** CAPTCHA on signup (hCaptcha invisible) (2-3h) — **blocked: need hCaptcha site key**
-16. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
+12. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h) — **blocked: need real credentials** (RCGroup URL, TAMIT URL, ThaiBulkSMS keys, PromptPay ID)
+13. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
+14. 🟡 **D-11** Sentry / error tracking setup (3-4h) — **blocked: need Sentry account + DSN**
+15. 🟡 **D-12** Rate limiting (Upstash Redis or Vercel KV) (4-6h) — **blocked: need Upstash/Vercel KV setup**
+16. 🟡 **D-13** CAPTCHA on signup (hCaptcha invisible) (2-3h) — **blocked: need hCaptcha site key**
+17. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
 
 **Estimated remaining:** ~14-21h once credentials/decisions are in hand
 **Sprint 5 Days 1-2 actual:** ~3-4 commits, lint clean, build pass, 50/50 tests
+**Sprint 5 Day 3:** cron scaffolding committed (this branch) — passes to ภูม via P-15/P-16
 
 ## O5. 👤 ก๊อต — co-merger + advisor
 
@@ -1664,3 +1748,89 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 ---
 
 **End of Part O.** Part O supersedes Part N6 Sprint 5 plan with proper role mapping.
+
+---
+
+# Part P — Day 3 evening checkpoint (2026-05-14)
+
+> **What changed since afternoon:** ภูม + ปอน ใช้ Claude Code pattern (ตาม `team.md` §9) ทำงานคู่ขนานขณะที่เดฟไปกินข้าว — ภูม fix Phase 0 รีวิว 3 ข้อ + 5 bonus polish, ปอน ship SEO bundle L-1..L-9 + bonus 5 items. รวม 14 commits landed ใน merge นี้
+> **Branch state ละเอียด:** ดู §O7 (ปอน maintain). **Per-person tasks:** O2/O3/O4
+
+## P1. ของที่ landed Day 3 evening merge
+
+| Branch | Commits | Highlights |
+|---|---|---|
+| `origin/Poom` (ภูม) | 8 commits | Phase 0 ✅ rev-1/2/3 (theme + UX + RBAC) + bonus: rates cleanup, contact_message ref wiring, phone-only password fix, P-7/P-9 audit fixes, main sync |
+| `origin/podeng` (ปอน) | 3 commits | L-1 sitemap, L-2 robots, L-3 JSON-LD, L-4 OG/Twitter+dynamic image, L-6 RSS, L-7 FAQ, L-9 i18n script, +5 bonus (seo ns, HomeArticle 14yr, HorizontalScroller, red-cloud bg, cleanup) |
+| `claude/ecstatic-bhabha-8c289a` (เดฟ) | 3 commits | cron scaffold (sales-daily-digest + refresh-active-customers), Part O3/P restructure + Part P snapshot, team.md §9 async collab pattern |
+
+**Validation Claude Code collab pattern:** ภูม commit `0da2e71` อ้างอิง "per Part P review (เดฟ, 2026-05-14)" — ภูม pulled `claude/ecstatic-bhabha-8c289a` branch + อ่าน Part P review notes แล้ว fix ตามนั้น exact + เพิ่ม `suppressHydrationWarning` ดีกว่าที่แนะนำด้วย → pattern ใช้งานจริงได้ ✅
+
+## P2. Decisions ที่ยัง outstanding
+
+### 🆕 New
+
+| # | Decision | Owner | Blocks | Recommended |
+|---|---|---|---|---|
+| **D-18** | P-13 `recently-active customers dashboard` vs `/api/cron/refresh-active-customers` overlap | เดฟ + ภูม | ภูม P-16 enable cron | คงทั้งคู่ — cron flips `is_active` flag (cheap query later); P-13 is real-time aggregate. ภูม confirm ว่า P-13 query depend ที่ flag หรือ on-the-fly aggregate |
+
+### Carried forward
+
+| # | Decision | Owner | Blocks |
+|---|---|---|---|
+| D-7 | Payment Gateway provider (Omise / 2C2P / Stripe TH) | เดฟ + Pacred owner | M2.1 implementation (40-60h) |
+| D-8 | HS variants — keep แยก หรือ merge เข้า tier | Pacred owner + ก๊อต | M2.4 design |
+| D-9 | Payroll module — standalone หรือ extend HR | ภูม + เดฟ | M2.2 design + M2.5d driver shifts |
+
+### Credentials / external setup รอ Pacred owner
+
+| Var / Account | Status | Blocks |
+|---|---|---|
+| `PACRED_RCGROUP_API_URL` | unset | URL→cart converter, image search (silent demo) |
+| `PACRED_TAMIT_API_URL` | unset | Keyword search 1688 (yellow banner) |
+| `PROMPTPAY_ID` | unset | Wallet deposit QR (throws error) |
+| `THAIBULKSMS_API_KEY` + `_SECRET` | placeholder | OTP send |
+| `LINE_CHANNEL_ACCESS_TOKEN` | unset | LINE push + P-15 dispatch |
+| `LINE_PUSH_BYPASS=false` | bypass | Real LINE delivery production |
+| `OTP_BYPASS=false` + `OTP_PEPPER` | bypass + placeholder | Real OTP production |
+| `NEXT_PUBLIC_SITE_URL=https://pacred.co` | localhost:3000 | OAuth callback + notification deep links |
+| Sentry DSN | none | D-11 error tracking |
+| Upstash Redis / Vercel KV | none | D-12 rate limiting |
+| hCaptcha keys | none | D-13 signup CAPTCHA |
+| Resend API key | none | Email fallback |
+
+→ **Action:** ก๊อต schedule Pacred owner call 15-30 นาที — D-7 payment gateway · LINE OA token request · Sentry account · 3rd-party cred consolidation
+
+## P3. Sprint 5 burndown (refreshed)
+
+**Done:**
+- ภูม: P-1..P-14 + Phase 0 review fix (rev-1/2/3) + 5 bonus polish = 22 deliverables
+- ปอน: L-1, L-2, L-3, L-4, L-6, L-7, L-9 (script) + 5 bonus = 12 deliverables (Day 3 alone)
+- เดฟ: helper-1, C-7, D-14, D-15, D-16, D-17, A-12, cron-scaffold + collab pattern docs = 9 deliverables
+- ก๊อต: review + merge admin (ongoing)
+
+**Remaining:**
+- ภูม: P-15 dispatch wiring + P-16 verify enable cron + P-17 deferred (schema) = 3 items, ~3-4h actionable + P-17 blocked
+- ปอน: L-5 service landing polish (decision needed) + L-8 mobile QA (blocked) + L-9b/c i18n polish + Phase C+ ecosystem (decision needed)
+- เดฟ: D-7a/b/c/d + D-11/D-12/D-13 = 7 items ALL blocked on creds/owner decisions
+- ก๊อต: review + merge งาน Day 3 evening (this batch) into main · schedule Pacred owner call
+
+**Real coverage estimate (post-merge):**
+- Customer portal: ~85% (P-1/P-2 closed; SEO foundation in)
+- Admin: ~94% (contact_message wiring + Phase 0 fixes done)
+- Infrastructure: ~72% (cron scaffold done; observability still blocked)
+- SEO/landing: ~70% (Phase A done; L-5/L-10..L-20 pending)
+- Phase I ecosystem: ~0% (decision-blocked)
+
+## P4. ลำดับสำคัญ Day 4+
+
+1. **เดฟ → main:** push Day 3 evening merge → tell น้อง+ก๊อต ว่า main updated
+2. **ภูม:** P-15 sales-daily-digest dispatch wiring (TODO block ใน route.ts มี spec ครบ) → P-16 verify + enable cron (discuss D-18 ก่อน)
+3. **ปอน:** Phase B L-5 polish (ส่งเดฟ confirm priority pages + style ก่อนเริ่ม) — แนะนำ home → import-china → china-shopping ตามลำดับ
+4. **ก๊อต:** review main batch · schedule Pacred owner call (D-7 + creds)
+
+**Estimate production beta-ready:** 1-2 weeks ถ้า creds/decisions เข้ามาในweek นี้ · 3-4 weeks ถ้าไม่
+
+---
+
+**End of Part P.** Snapshot ณ 2026-05-14 evening หลัง Day 3 merge (เดฟ + ภูม + ปอน parallel-ship via Claude Code collab pattern §9)

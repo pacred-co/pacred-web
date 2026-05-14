@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/auto-cancel-orders",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/sales-daily-digest",
+      "schedule": "5 17 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-active-customers",
+      "schedule": "0 1 * * *"
     }
   ]
 }

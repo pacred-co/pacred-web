@@ -9,12 +9,12 @@ Last updated: 2026-05-13
 
 ## 1. Roles & Responsibilities
 
-| คน | บทบาท | สโคปงาน | สิทธิ์ main |
-|---|---|---|---|
-| **ก๊อต** (got) | Senior Advisor / Co-Lead | ที่ปรึกษา · code review · architectural decisions · backup merger | ✅ Push to main |
-| **เดฟ** (dave) | **Project Lead** | คุมงาน · จ่ายงาน · run sprint · merge to main · infrastructure · integrations · coordination | ✅ Push to main |
-| **ปอน** (podeng) | Frontend & SEO Specialist | **100% หน้าบ้าน** — landing pages ทุก service · marketing · SEO · acquisition funnel · i18n · mobile UX · Lighthouse scores | ❌ Push only to `podeng` branch |
-| **ภูม** (Poom) | Backend & Cargo Port Specialist | **100% หลังบ้าน** — auth/customer portal/admin · เชื่อม frontend ↔ customer backend ↔ admin backend · port PHP cargo 100% (phase 1) · DPX ERP upgrade (phase 2) | ❌ Push only to `Poom` branch |
+| คน | บทบาท | Primary branch (operating point) | สโคปงาน | สิทธิ์ main |
+|---|---|---|---|---|
+| **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` | ที่ปรึกษา · code review · architectural decisions · ผสานงานน้องๆ กับเดฟ · คุม production · backup merger | ✅ Push to main |
+| **เดฟ** (dave) | **Project Lead / Integrator** | `dave` | คุมทิศทางโปรเจคทั้งหมด · จ่ายงาน · run sprint · คนกลางรวม ภูม + ปอน ให้เสถียรก่อนขึ้น main · infrastructure · 3rd-party integrations · ไม่ปิดกั้นไอเดียน้อง ขอแค่ direction ไปทางเดียวกัน | ✅ Push to main |
+| **ปอน** (podeng) | Frontend & SEO Specialist | `podeng` | **100% หน้าบ้าน** — landing pages ทุก service · acquisition funnel · SEO · marketing support · mobile UX · ทำให้ลูกค้าใช้ง่าย · ระบบอำนวยให้ลูกค้าเข้ามาง่าย+น่าใช้สุด · i18n · Lighthouse scores | ❌ Push only to `podeng` branch |
+| **ภูม** (Poom) | Backend & Cargo Port Specialist | `Poom` | **100% หลังบ้าน** — auth/customer portal/admin · เชื่อม frontend ↔ customer backend ↔ admin backend · port PHP cargo 100% (phase 1) · DPX ERP upgrade (phase 2) | ❌ Push only to `Poom` branch |
 
 ### Phase mapping ของภูม
 - **Phase 1 (ปัจจุบัน):** Port PHP cargo system → Pacred Next.js ให้ครบ 100% (auth, profile, wallet, service-order, service-import, service-payment, sales, admin ops)
@@ -176,10 +176,81 @@ git push origin <my-branch>
 2. อ่าน [`docs/team.md`](team.md) (ไฟล์นี้) — role + workflow
 3. อ่าน [`docs/conventions.md`](conventions.md) — code style + commit format
 4. อ่าน [`docs/env.md`](env.md) — env vars ที่ต้องตั้ง
-5. อ่าน [`docs/PORT_PLAN.md`](PORT_PLAN.md) Part E + Part N6 — งานที่ assign
+5. อ่าน [`docs/PORT_PLAN.md`](PORT_PLAN.md) Part O (ของตัวเอง O2/O3/O4) + Part P (current snapshot) — งานที่ assign
 6. Setup: clone → `pnpm install` → `cp .env.example .env.local` → fill values → `pnpm dev`
 7. Test: เปิด `http://localhost:3000` + เปิด `/admin` (need admin role) — ตรวจว่า boot ok
-8. แจ้งเดฟ/ก๊อต — ทำ task แรกได้
+8. Setup Claude Code (ดู §9 ด้านล่าง) — coordinate กับทีมผ่าน docs canonical
+9. แจ้งเดฟ/ก๊อต — ทำ task แรกได้
+
+---
+
+## 9. Async collaboration via Claude Code (NEW 2026-05-14)
+
+> **Pattern:** ทุกคนใช้ Claude Code instance ของตัวเอง — coordinate ผ่าน docs canonical (PORT_PLAN.md, team.md, conventions.md) แทน real-time chat. "Shared brain" = repo docs ใน main
+
+### กฎ pattern นี้
+
+1. **ทุกคนทำงานใน branch ของตัวเอง:**
+   - ก๊อต operate จาก `main` (review + production watch)
+   - เดฟ operate จาก `dave` (consolidation + integration)
+   - ภูม operate จาก `Poom`
+   - ปอน operate จาก `podeng`
+
+2. **Docs canonical ใน main = single source of truth:**
+   - งาน assign → [`docs/PORT_PLAN.md`](PORT_PLAN.md) Part O2 (ภูม) / O3 (ปอน) / O4 (เดฟ) + Part P (latest snapshot)
+   - Role/workflow → ไฟล์นี้ (`docs/team.md`)
+   - Code style → [`docs/conventions.md`](conventions.md)
+   - Env → [`docs/env.md`](env.md)
+   - Architecture → [`docs/architecture.md`](architecture.md) + [`docs/decisions/`](decisions/)
+
+3. **Workflow ผ่าน Claude Code (ทำทุกครั้งที่กลับมาทำงาน):**
+   ```
+   Step 1 (เปิด Claude Code):
+     - cd ไปยัง branch ของตัวเอง (~/pacred-web)
+     - Sync main เข้า branch ตัวเองตาม §3
+     - บอก Claude Code ว่า "เช็คงานใน main แล้วทำใน <ของตัวเอง>"
+   
+   Step 2 (Claude Code อ่าน docs):
+     - Claude Code อ่าน CLAUDE.md → docs/PORT_PLAN.md Part P (latest snapshot) → ส่วน O2/O3/O4 ของตัวเอง
+     - แสดง pending tasks + recent state
+   
+   Step 3 (ทำงาน):
+     - Claude Code ช่วย implement task ตาม spec ใน PORT_PLAN
+     - Lint+TS check + commit ตาม conventions
+   
+   Step 4 (ส่งงาน):
+     - Push ขึ้น branch ตัวเอง
+     - Claude Code อัพเดท PORT_PLAN Part P snapshot ว่าทำอะไรเสร็จ + ที่เหลือ
+     - Commit doc update บน branch ตัวเอง
+   
+   Step 5 (เดฟ/ก๊อต integrate):
+     - เดฟ pull งานทุกคนเข้า dave → verify → push main
+     - ก๊อต watch main → review → ผ่าน
+     - PORT_PLAN Part P snapshot บน main update เป็นตัวล่าสุด
+     - คนถัดไปที่กลับมา → sync main → เห็น context ใหม่ทันที
+   ```
+
+4. **Etiquette:**
+   - **ห้าม edit docs canonical (PORT_PLAN/team.md/conventions.md/env.md) บน branch ตัวเอง** ยกเว้น Part P snapshot ที่อัพเดทสถานะตัวเอง — ที่อื่นเป็น lead-only
+   - ถ้าจะเสนอแก้ doc/architecture → propose ใน PR description หรือสร้าง ADR ใน `docs/decisions/`
+   - Tag ในcommit message: `docs(port-plan): <name> Sprint X update — <what changed>` เพื่อให้ค้นย้อนได้
+   - ถ้า Claude Code ของคุณบอกอะไรขัดกับ Claude Code ของเพื่อน → ดูว่า main มีอะไรใหม่ที่ตัวเองยัง sync ไม่ทัน
+
+5. **เมื่อขัดกัน / decision ต้องการ:**
+   - Tag เดฟ ใน LINE → เดฟ decide หรือ escalate ก๊อต
+   - ห้าม Claude Code ของน้องตัดสินใจเรื่อง architectural / scope expansion เอง — ถ้า Claude Code ถาม "ควรทำ X หรือ Y?" → ตอบให้ Claude Code ส่งคำถามมาที่เดฟผ่านการ commit doc proposal
+
+### ทำไม pattern นี้ดี
+
+- **Async-friendly:** ไม่ต้อง online พร้อมกัน — sync state ผ่าน docs ใน main
+- **Auditable:** ทุก decision อยู่ใน git history
+- **Onboarding cheap:** new dev เปิด Claude Code → docs ใน main ตอบทุกอย่างให้
+- **AI-native:** Claude Code instance ของแต่ละคน follow docs เดียวกัน → coordinate convergent โดยไม่ต้อง chat
+
+### ข้อจำกัด
+
+- Docs ต้อง up-to-date — ถ้า Part P snapshot stale → Claude Code จะแนะนำผิด → ทุกคนรับผิดชอบอัพเดท snapshot หลังจบ session
+- Real-time emergencies (production down, urgent customer issue) → LINE direct ก่อน Claude Code
 
 ---
 
