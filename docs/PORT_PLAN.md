@@ -2736,12 +2736,14 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 ### Priority 2 — Quick decisions (~1h batched)
 
-| # | Task | Recommended | Rationale |
+✅ **DONE 2026-05-16** — all 4 locked + formalised in [ADR-0005](decisions/0005-launch-operational-decisions.md):
+
+| # | Task | Decision | Rationale |
 |---|---|---|---|
-| **K-4** | D-8 HS variants — แยก / merge เข้า tier? | (ก๊อต lock) | ภูม P-20 ship `hs_codes` + `container_hs_lines` แล้ว — review schema + decide |
-| **K-5** | D-9 Payroll module — standalone / extend HR? | (ก๊อต lock) | Affects ภูม P-22 attendance + future Phase 2 ERP |
-| **K-6** | Tax invoice numbering format | (ก๊อต lock) | `INV-YYYYMM-NNNN` sequential ดูสมเหตุสมผล — confirm |
-| **K-7** | Wallet deposit approver role | (ก๊อต lock) | `super` only / `accounting` role / both? — affects RLS policy |
+| **K-4** ✅ | D-8 HS variants — แยก / merge เข้า tier? | **Keep separate** | ภูม P-20 schema is live; merging conflates customer-volume discount (tier) with product-classification surcharge (HS) — different reviewers, different change frequencies |
+| **K-5** ✅ | D-9 Payroll module — standalone / extend HR? | **Extend HR** | Pacred team is small (~8-15 staff); HR already owns canonical employee record + `is_admin(["accounting"])` gate. Re-evaluate at ~50 staff |
+| **K-6** ✅ | Tax invoice numbering format | **`INV-YYYYMM-NNNN`** with monthly reset | Matches Thai `ภ.พ. 30` monthly filing convention; 4-digit suffix = 9999/month headroom; lexicographically sortable |
+| **K-7** ✅ | Wallet deposit approver role | **`super` OR `accounting`** (not ops, not sales_admin) | `super` = full powers; `accounting` = primary work. Ops shouldn't touch money flows (compliance risk) |
 
 ### Priority 3 — Deep work (when time permits)
 
