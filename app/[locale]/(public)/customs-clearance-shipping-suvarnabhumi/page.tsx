@@ -460,8 +460,9 @@ export default async function CustomsClearancePage({
         <BookingCalculator landing="customs" />
 
         {/* ═══════ 1. Hero intro ═══════ */}
-        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
-          <div aria-hidden className="absolute inset-x-0 top-0 h-[420px] md:h-[560px] overflow-hidden pointer-events-none">
+        <section className="relative pt-2 md:pt-14 pb-2 md:pb-4">
+          {/* Desktop-only faded customs bg */}
+          <div aria-hidden className="hidden md:block absolute inset-x-0 top-0 h-[560px] overflow-hidden pointer-events-none">
             <Image
               src="/images/hero-section/banner/customs.png"
               alt=""
@@ -472,18 +473,48 @@ export default async function CustomsClearancePage({
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
           </div>
 
-          <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
+          {/* Mobile-only banner image (full-bleed) */}
+          <div className="md:hidden relative aspect-[768/360] overflow-hidden">
+            <Image
+              src="/images/bannermobile/clearacnebanner.png"
+              alt="Pacred Shipping · เคลียร์สินค้าติดด่านศุลกากร"
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover"
+            />
+          </div>
+
+          <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-6 md:pt-0">
             <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11.5px] md:text-[12.5px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(179,0,0,0.10)]">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.8} />
               CUSTOMS CLEARANCE · ALL PORTS · ✈️🚢📦
             </div>
-            <h1 className="text-[26px] md:text-[48px] leading-[1.12] font-black tracking-[-0.035em] text-[#111827] dark:text-white max-w-[920px]">
-              สินค้าติดด่าน? Pacred Shipping เคลียร์ให้{" "}
-              <span className="text-primary-600">เร็ว ไว ไม่มีคำว่าทำไม่ได้</span>{" "}
-              จบทุกเคส รู้ผลภายใน <span className="text-primary-600">1 ชั่วโมง</span>
+            <h1 className="text-[32px] md:text-[56px] leading-[1.05] font-black tracking-[-0.04em] text-[#111827] dark:text-white max-w-[920px]">
+              <span className="text-yellow-500 dark:text-yellow-400 drop-shadow-[0_2px_8px_rgba(234,179,8,0.30)]">เคลียร์</span>
+              <span>สินค้าติดด่าน</span>
+              <span className="block mt-2 md:mt-3 text-[18px] md:text-[28px] text-muted font-bold tracking-tight">
+                เร็ว ไว ไม่มีคำว่าทำไม่ได้ · รู้ผลภายใน <span className="text-primary-600 font-black">1 ชั่วโมง</span>
+              </span>
             </h1>
-            <p className="mt-3 md:mt-5 text-[14px] md:text-[17px] leading-[1.65] font-medium text-muted max-w-[820px]">
-              บริการ Customs Clearance เคลียร์สินค้าติดด่านศุลกากรแบบครบวงจร · ราคาชัดเจน เริ่มต้น <span className="font-black text-primary-600">฿2,800</span> · รองรับ Air Freight · Sea Freight · Truck · LCL · FCL และด่านหลักทั่วไทย
+
+            {/* Prominent price line */}
+            <div className="mt-4 md:mt-6 inline-flex items-center gap-2.5 md:gap-3 px-4 md:px-5 py-2.5 md:py-3 rounded-2xl bg-gradient-to-br from-yellow-100 to-yellow-50 dark:from-yellow-900/30 dark:to-yellow-900/10 border-2 border-yellow-400 dark:border-yellow-700/70 shadow-[0_8px_22px_rgba(234,179,8,0.22)]">
+              <span className="inline-flex w-8 h-8 md:w-9 md:h-9 items-center justify-center rounded-xl bg-yellow-400 text-yellow-900 shadow-[0_3px_8px_rgba(234,179,8,0.40)]">
+                <BadgePercent className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
+              </span>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-[16px] md:text-[22px] font-black text-yellow-900 dark:text-yellow-100 leading-none tracking-tight">
+                  เริ่มต้น 2,800 บาท
+                </span>
+                <span className="text-[11px] md:text-[13px] font-bold text-yellow-700 dark:text-yellow-300/90">
+                  ครบจบในใบเดียว · ไม่บวกแอบแฝง
+                </span>
+              </div>
+            </div>
+
+            <p className="mt-4 md:mt-5 text-[14px] md:text-[17px] leading-[1.65] font-medium text-muted max-w-[820px]">
+              บริการ Customs Clearance เคลียร์สินค้าติดด่านศุลกากรแบบครบวงจร · รองรับ Air Freight · Sea Freight · Truck · LCL · FCL และด่านหลักทั่วไทย
             </p>
 
             <div className="mt-6 md:mt-8 flex flex-wrap gap-3">
