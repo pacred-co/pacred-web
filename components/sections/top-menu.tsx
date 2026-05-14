@@ -16,7 +16,7 @@ function buildMenu(t: Translator): Item[] {
     {
       label: t("quick"),
       groups: [
-        { items: [{ label: t("customsHot"), href: "/services/customs-clearance" }] },
+        { items: [{ label: t("customsHot"), href: "/customs-clearance-shipping-suvarnabhumi" }] },
       ],
     },
     {

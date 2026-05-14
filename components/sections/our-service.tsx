@@ -51,7 +51,7 @@ export function OurService() {
     {
       title: t("customsTitle"),         sub: t("customsSub"),
       titleMobile: t("customsTitleMobile"), subMobile: t("customsSub"),
-      href: "/services/customs-clearance",
+      href: "/customs-clearance-shipping-suvarnabhumi",
       bgDesktop:   "/images/ourservices/custom.png",
       bgMobile:    "/images/ourservices/mobile/custom.png",
       iconDesktop: "",

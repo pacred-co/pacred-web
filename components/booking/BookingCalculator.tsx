@@ -110,7 +110,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   const [activeTab,  setActiveTab]  = useState<TabMode | null>(landing ?? null);
   // Form panel stays closed by default — tab is highlighted via `activeTab` but
   // user has to click the tab to expand the form. Lets landing pages (eg.
-  // /services/customs-clearance) pre-highlight a tab without forcing the form open.
+  // /customs-clearance-shipping-suvarnabhumi) pre-highlight a tab without forcing the form open.
   const [panelOpen,  setPanelOpen]  = useState(false);
   const [seaMode,    setSeaMode]    = useState<SeaMode>("lcl");
   const [lclTerm,    setLclTerm]    = useState<Term>("ddp");

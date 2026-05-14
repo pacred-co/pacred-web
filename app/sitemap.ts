@@ -16,7 +16,7 @@ const STATIC_ROUTES: Route[] = [
   { path: "/services/import-china",       priority: 0.9, changeFrequency: "monthly" },
   { path: "/services/import-china-fcl",   priority: 0.9, changeFrequency: "monthly" },
   { path: "/services/import-china-lcl",   priority: 0.9, changeFrequency: "monthly" },
-  { path: "/services/customs-clearance",  priority: 0.9, changeFrequency: "monthly" },
+  { path: "/customs-clearance-shipping-suvarnabhumi",  priority: 0.9, changeFrequency: "monthly" },
   { path: "/services/export-worldwide",   priority: 0.9, changeFrequency: "monthly" },
   { path: "/services/china-shopping",     priority: 0.9, changeFrequency: "monthly" },
   { path: "/about",                       priority: 0.7, changeFrequency: "monthly" },

@@ -116,7 +116,7 @@ export function HomeArticle({ locale }: { locale: "th" | "en" }) {
                 {t("p2Body1")}
                 <span className="font-black text-[#111827] dark:text-white">{t("p2DoorToDoor")}</span>
                 {t("p2Body2")}
-                <Link href="/services/customs-clearance" className="font-bold text-primary-600 hover:underline underline-offset-4 decoration-2">
+                <Link href="/customs-clearance-shipping-suvarnabhumi" className="font-bold text-primary-600 hover:underline underline-offset-4 decoration-2">
                   {t("p2ClearanceLink")}
                 </Link>
                 {t("p2Body3")}
@@ -272,7 +272,7 @@ export function HomeArticle({ locale }: { locale: "th" | "en" }) {
             {ports.map((port) => (
               <Link
                 key={port}
-                href="/services/customs-clearance"
+                href="/customs-clearance-shipping-suvarnabhumi"
                 className="shrink-0 snap-start inline-flex items-center gap-1.5 px-3 md:px-3.5 h-9 md:h-10 rounded-lg bg-white dark:bg-surface border border-border text-[12px] md:text-[13px] font-black text-[#111827] dark:text-white whitespace-nowrap hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 dark:hover:bg-primary-900/30 transition-all duration-300"
               >
                 <MapPin className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.6} />
