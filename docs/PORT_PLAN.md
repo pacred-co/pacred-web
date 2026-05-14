@@ -1225,41 +1225,56 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 ## N3. 🔴 CRITICAL BLOCKERS — ห้าม launch ลูกค้าก่อนแก้
 
+> **Re-audit 2026-05-15 (P-25 ภูม):** 20/20 rows verified —
+> **9 ✅ FIXED in code**, **8 ⏳ BLOCKED on external creds**,
+> **2 ⏳ BLOCKED on owner decisions**, **1 🟡 INTENTIONAL dev toggle**
+> (OTP_BYPASS — flips at production deploy time when ThaiBulkSMS
+> creds land). Code-level audit was direct grep + git log walk;
+> env-level status was direct .env.local read.
+
 ### N3.1 — Silent degraded modes (ดูเหมือนทำงาน แต่ใช้งานจริงไม่ได้)
 ประเภทอันตรายที่สุด — UI render ปกติ แต่ backend ทำงานในโหมด demo/bypass/mock เงียบๆ:
 
-| # | Feature | Trigger | สิ่งที่ลูกค้าเห็น |
-|---|---|---|---|
-| 1 | **OTP registration** | `OTP_BYPASS=true` ใน .env.local | กรอก OTP อะไรก็ผ่าน — phone never verified → ลูกค้าปลอมเข้าได้ |
-| 2 | **URL→cart converter** (1688/Taobao/Tmall) | `PACRED_RCGROUP_API_URL` unset | demo product ราคา ¥0 "Taobao Shop" — ลูกค้ากรอกราคาเอง สับสน |
-| 3 | **Keyword search 1688** | `PACRED_TAMIT_API_URL` unset | yellow banner "API ไม่พร้อม" — search ใช้ไม่ได้ |
-| 4 | **Image reverse search** | `PACRED_RCGROUP_API_URL` unset | banner "ไม่พร้อม" |
-| 5 | **LINE push notification** | `LINE_PUSH_BYPASS` defaults true (ถ้า unset = bypass) + `LINE_CHANNEL_ACCESS_TOKEN` unset | console.log เท่านั้น — ลูกค้าไม่ได้รับแจ้งสถานะ order |
-| 6 | **Email notification fallback** | `RESEND_API_KEY` unset | console.warn เท่านั้น — เมล์ไม่ส่งจริง |
-| 7 | **DBD Tax-ID lookup** | DBD API down/rate-limited | silently shows "notfound" — ไม่บอกว่าเป็น API issue |
-| 8 | **ThaiBulkSMS** | API key placeholder "YOUR_API_KEY" | return `missing_credentials` แต่ UI โชว์ error generic |
+| # | Feature | Trigger | สิ่งที่ลูกค้าเห็น | Status (2026-05-15) |
+|---|---|---|---|---|
+| 1 | **OTP registration** | `OTP_BYPASS=true` ใน .env.local | กรอก OTP อะไรก็ผ่าน — phone never verified → ลูกค้าปลอมเข้าได้ | 🔴 still degraded — confirmed `OTP_BYPASS=true` ใน .env.local. Intentional for dev. Production prep: flip to `false` + ต้องมี ThaiBulkSMS creds พร้อมใช้ก่อน (ดู #8) |
+| 2 | **URL→cart converter** (1688/Taobao/Tmall) | `PACRED_RCGROUP_API_URL` unset | demo product ราคา ¥0 "Taobao Shop" — ลูกค้ากรอกราคาเอง สับสน | ⏳ blocked on D-7a — env var ตั้งแล้ววันนี้แต่ legacy URL ดูเหมือน dead. ภูม shipped 8s timeout (commit `77d4c44`) → graceful fallback to demo. รอเดฟ + Pacred owner verify URL หรือเลือก provider ใหม่ |
+| 3 | **Keyword search 1688** | `PACRED_TAMIT_API_URL` unset | yellow banner "API ไม่พร้อม" — search ใช้ไม่ได้ | ⏳ blocked on D-7a — same as #2 |
+| 4 | **Image reverse search** | `PACRED_RCGROUP_API_URL` unset | banner "ไม่พร้อม" | ⏳ blocked on D-7a — same RCGroup endpoint |
+| 5 | **LINE push notification** | `LINE_PUSH_BYPASS` defaults true (ถ้า unset = bypass) + `LINE_CHANNEL_ACCESS_TOKEN` unset | console.log เท่านั้น — ลูกค้าไม่ได้รับแจ้งสถานะ order | ⏳ blocked on D-7b — `LINE_PUSH_BYPASS=true` ใน .env.local (intentional dev). `LINE_CHANNEL_ACCESS_TOKEN` ยัง unset. รอ Pacred OA setup |
+| 6 | **Email notification fallback** | `RESEND_API_KEY` unset | console.warn เท่านั้น — เมล์ไม่ส่งจริง | ⏳ blocked on D-7d — `RESEND_API_KEY` + `RESEND_FROM` ทั้งคู่ unset. รอเดฟสร้าง Resend account |
+| 7 | **DBD Tax-ID lookup** | DBD API down/rate-limited | silently shows "notfound" — ไม่บอกว่าเป็น API issue | ✅ FIXED P-4 (commit `ceac3e5`) — distinguishes API down (sawApiError flag) from real notfound. Shows "ระบบค้นหาไม่พร้อม" + retry button when 5xx/network |
+| 8 | **ThaiBulkSMS** | API key placeholder "YOUR_API_KEY" | return `missing_credentials` แต่ UI โชว์ error generic | ⏳ blocked on D-7a — `THAIBULKSMS_API_KEY=YOUR_API_KEY` confirmed in .env.local. Real key needed before OTP_BYPASS=false flip |
 
 ### N3.2 — Hard blockers (ใช้ไม่ได้เลย)
 
-| # | Feature | สาเหตุ | Fix |
-|---|---|---|---|
-| 9 | **Wallet deposit QR** | `PROMPTPAY_ID` unset → throw error | set env var |
-| 10 | **OAuth (Google/Facebook)** | ต้อง verify provider config ใน Supabase Dashboard | verify + test |
-| 11 | **`/complete-profile`** | placeholder page (มีไฟล์แต่ไม่มี form จริง) | ปอนสร้าง C-0 |
-| 12 | **`/forgot-password`** | ไม่มี page เลย | ปอนสร้าง (new task C-10) |
-| 13 | **LINE login** | stub "coming soon" — กดแล้ว error | ตัดปุ่มออก หรือ build จริง |
-| 14 | **Payment gateway (Omise/2C2P)** | ไม่มีโค้ดเลย | dave M2.1 (40-60h) |
+| # | Feature | สาเหตุ | Fix | Status (2026-05-15) |
+|---|---|---|---|---|
+| 9 | **Wallet deposit QR** | `PROMPTPAY_ID` unset → throw error | set env var | ⏳ blocked on Pacred owner — `PROMPTPAY_ID` ยัง unset (commented placeholder ใน .env.local) |
+| 10 | **OAuth (Google/Facebook)** | ต้อง verify provider config ใน Supabase Dashboard | verify + test | ⏳ blocked on verification — ก๊อต/เดฟ ต้อง check Supabase project settings (no code change needed) |
+| 11 | **`/complete-profile`** | placeholder page (มีไฟล์แต่ไม่มี form จริง) | ปอนสร้าง C-0 | ✅ FIXED P-1 (commit `0ff8725`, ภูม) — full personal form + juristic redirect + atomic TOS write. Reassigned ปอน→ภูม per Part O1 |
+| 12 | **`/forgot-password`** | ไม่มี page เลย | ปอนสร้าง (new task C-10) | ✅ FIXED P-2 (commit `b7a6ba4`, ภูม) — phone OTP + email magic link both paths. Reassigned ปอน→ภูม per Part O1 |
+| 13 | **LINE login** | stub "coming soon" — กดแล้ว error | ตัดปุ่มออก หรือ build จริง | ⏳ blocked on owner decision — ยังเป็น stub, ตัดสินใจ remove vs build เป็น D-7-equivalent |
+| 14 | **Payment gateway (Omise/2C2P)** | ไม่มีโค้ดเลย | dave M2.1 (40-60h) | ⏳ blocked on D-7c — Pacred owner เลือก provider ก่อน. Until decided: PromptPay-only beta launch is viable per Part N9 |
 
 ### N3.3 — Code bugs (ใน admin actions ของภูม)
 
-| # | Bug | File:Line | Severity |
-|---|---|---|---|
-| 15 | `approveCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~103` | 🔴 audit gap |
-| 16 | `suspendCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~118` | 🔴 audit gap |
-| 17 | `approveCustomer()` ใช้ `requireAdmin()` (any admin) — ควรเป็น `withAdmin(["ops"])` | same file | 🔴 RBAC weak |
-| 18 | `suspendCustomer()` same | same | 🔴 RBAC weak |
-| 19 | approve/suspend ไม่ call `sendNotification()` | same file | 🟡 customer ไม่รู้ว่าถูก approve |
-| 20 | React Compiler errors 3 ตัวใน `scan-form.tsx` (line 130/142/151) | scan-form.tsx | 🟡 ภูม fix แล้วยังไม่ push |
+| # | Bug | File:Line | Severity | Status (2026-05-15) |
+|---|---|---|---|---|
+| 15 | `approveCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~103` | 🔴 audit gap | ✅ FIXED (เดฟ commit `1a470ee`, line 121 verified) |
+| 16 | `suspendCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~118` | 🔴 audit gap | ✅ FIXED (เดฟ commit `1a470ee` — `customer.suspend` audit row written) |
+| 17 | `approveCustomer()` ใช้ `requireAdmin()` (any admin) — ควรเป็น `withAdmin(["ops"])` | same file | 🔴 RBAC weak | ✅ FIXED (เดฟ commit `1a470ee`, line 105: `withAdmin(["ops","super"])`) |
+| 18 | `suspendCustomer()` same | same | 🔴 RBAC weak | ✅ FIXED (เดฟ commit `1a470ee`, line 245: `withAdmin(["ops","super"])`) |
+| 19 | approve/suspend ไม่ call `sendNotification()` | same file | 🟡 customer ไม่รู้ว่าถูก approve | ✅ FIXED — both call `sendNotification()` now (refactored to `notify.customerApproved()` / `notify.customerSuspended()` templates per P-21 commit `8532f30`) |
+| 20 | React Compiler errors 3 ตัวใน `scan-form.tsx` (line 130/142/151) | scan-form.tsx | 🟡 ภูม fix แล้วยังไม่ push | ✅ FIXED (เดฟ commit `1a470ee` — handleSubmitCode reorder + Ref pattern + setCameraErr placement) |
+
+**Re-audit summary (P-25, 2026-05-15) — 20 items grouped by next-action owner:**
+- ✅ **FIXED in code** (no further work needed): #7, #11, #12, #15, #16, #17, #18, #19, #20 = **9 items**
+- ⏳ **BLOCKED on external creds** (D-7a/b/d, เดฟ + Pacred owner): #2, #3, #4, #5, #6, #8, #9, #10 = **8 items**
+- ⏳ **BLOCKED on owner decisions**: #13 (LINE login keep/remove), #14 (payment gateway provider) = **2 items**
+- 🟡 **INTENTIONAL dev toggle**: #1 (`OTP_BYPASS=true` in dev — flips false at production deploy. Pure operational; no code change needed) = **1 item**
+
+→ **Zero items remain "internally broken"**. All ⏳ badges trace to external dependencies (creds / 3rd-party signup / business decision). Production launch gate (Part N9) cannot proceed until 10 external-blocked items resolve, but they're all in เดฟ + Pacred owner court — no further ภูม code work required for N3.
 
 ## N4. Missing env vars — definitive list
 
