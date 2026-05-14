@@ -240,6 +240,13 @@ git push origin <my-branch>
    - Tag เดฟ ใน LINE → เดฟ decide หรือ escalate ก๊อต
    - ห้าม Claude Code ของน้องตัดสินใจเรื่อง architectural / scope expansion เอง — ถ้า Claude Code ถาม "ควรทำ X หรือ Y?" → ตอบให้ Claude Code ส่งคำถามมาที่เดฟผ่านการ commit doc proposal
 
+6. **Self-directed mode (NEW 2026-05-14 evening):**
+   - **เมื่อไหร่:** task ใน PORT_PLAN.md ที่ marked `Decision? = No` หรือ marked `<name> decide` พร้อม recommended default — ลุยได้เลย ไม่ต้องรอ
+   - **เมื่อไหร่ห้าม:** task ที่ marked `Decision? = Pacred owner` / `เดฟ + ก๊อต` หรือ scope expansion (เพิ่ม feature นอกเหนือสเปคของ task) → ห้าม implement
+   - **กฎทอง:** ถ้าระหว่างทางเจอเรื่อง trade-off ที่ไม่แน่ใจ → ใช้ default ที่ง่ายกว่า + log decision ใน commit message ใต้ "DECISION:" header (เดฟ/ก๊อต ปรับย้อนหลังได้); อย่าหยุดเพื่อรอ
+   - **Hand-off rule:** หลังจบ task — push branch + commit อัพเดท PORT_PLAN Part P snapshot (มี ✅ ของ task ที่เพิ่งจบ + note สั้นๆ) → next sync เห็นทันที
+   - **Trigger limit:** ห้ามทำหลาย task ของ Priority 0 พร้อมกัน (lock contention เสี่ยง schema migration); Priority 1+ ทำคู่ขนานได้
+
 ### ทำไม pattern นี้ดี
 
 - **Async-friendly:** ไม่ต้อง online พร้อมกัน — sync state ผ่าน docs ใน main
