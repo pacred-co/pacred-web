@@ -86,7 +86,7 @@ export async function searchKeyword(
     ? `${base}/?words=${encodeURIComponent(words)}&page=${page}&order=${order}`
     : `${base}/${platform}/?words=${encodeURIComponent(words)}&page=${page}&order=${order}`;
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
     const json = await res.json();
     return { available: true, hits: normaliseHits(json, platform), page, has_more: Boolean(json?.has_more) };
@@ -109,7 +109,7 @@ export async function convertProductUrl(url: string): Promise<ChinaSearchResult>
   const path = platform === "taobao" || platform === "tmall" ? "/taobao/" : "/";
   const endpoint = `${base}${path}?q=${encodeURIComponent(url)}&page=1`;
   try {
-    const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
     const json = await res.json();
     return { available: true, hits: normaliseHits(json, platform), page: 1, has_more: false };
@@ -139,7 +139,7 @@ export async function convertProductUrlDetail(url: string): Promise<ConvertProdu
   const path = platform === "taobao" || platform === "tmall" ? "/taobao/" : "/";
   const endpoint = `${base}${path}?q=${encodeURIComponent(url)}&page=1`;
   try {
-    const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const res = await fetch(endpoint, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (!res.ok) return { available: true, detail: buildDemoDetail(url, platform) };
     const json = await res.json();
     return { available: true, detail: normaliseDetail(json, platform, url) };
@@ -281,7 +281,7 @@ export async function searchByImage(file: Blob): Promise<ChinaSearchResult> {
   const fd = new FormData();
   fd.append("image", file);
   try {
-    const res = await fetch(`${base}/image-search/`, { method: "POST", body: fd, cache: "no-store" });
+    const res = await fetch(`${base}/image-search/`, { method: "POST", body: fd, cache: "no-store", signal: AbortSignal.timeout(15000) });
     if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
     const json = await res.json();
     return { available: true, hits: normaliseHits(json, "1688"), page: 1, has_more: false };
