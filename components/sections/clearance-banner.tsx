@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
 import { LINE_OA } from "@/components/seo/site";
+import { trackCtaClick } from "@/lib/analytics";
 
 // Was hardcoded to `https://lin.ee/r3b1BuOC` (PCS Cargo legacy clearance
 // short URL — different from the main `Yg3fU0I`). Standardised to the
@@ -67,6 +68,7 @@ export function ClearanceBanner() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="ติดต่อ Pacred ทาง LINE"
+              onClick={() => trackCtaClick("banner_line", "home_clearance_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -144,6 +146,7 @@ export function ClearanceBanner() {
               {/* Contact phone */}
               <a
                 href="tel:0660901217"
+                onClick={() => trackCtaClick("banner_phone", "home_clearance_banner", { surface: "inline_phone" })}
                 className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
                 style={{ textShadow: FEATURE_TEXT_SHADOW }}
               >
@@ -174,7 +177,10 @@ export function ClearanceBanner() {
                 <div className="grid grid-cols-2 md:flex md:items-center gap-2 md:gap-3 flex-1 md:flex-initial max-w-[220px] md:max-w-none">
                 <button
                   type="button"
-                  onClick={() => setOpen(true)}
+                  onClick={() => {
+                    trackCtaClick("banner_select_sales", "home_clearance_banner", { surface: "primary_cta" });
+                    setOpen(true);
+                  }}
                   suppressHydrationWarning
                   className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{
@@ -192,6 +198,7 @@ export function ClearanceBanner() {
                   href={LINE_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackCtaClick("banner_line", "home_clearance_banner", { surface: "secondary_cta" })}
                   className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
                 >

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { trackCtaClick } from "@/lib/analytics";
 
 const LINE_URL = "/line";
 
@@ -49,6 +50,7 @@ export function PurchaseBanner() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={t("lineAria")}
+              onClick={() => trackCtaClick("banner_line", "home_purchase_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -101,6 +103,7 @@ export function PurchaseBanner() {
               {/* Contact phone */}
               <a
                 href="tel:0661253007"
+                onClick={() => trackCtaClick("banner_phone", "home_purchase_banner", { surface: "inline_phone" })}
                 className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
                 style={{ textShadow: "1px 1px 0 rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.28)" }}
               >
@@ -116,7 +119,10 @@ export function PurchaseBanner() {
               <div className="flex items-center gap-2 md:gap-3 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => setOpen(true)}
+                  onClick={() => {
+                    trackCtaClick("banner_select_sales", "home_purchase_banner", { surface: "primary_cta" });
+                    setOpen(true);
+                  }}
                   suppressHydrationWarning
                   className="inline-flex items-center gap-[7px] h-[34px] md:h-[42px] px-4 md:px-5 rounded-[9px] md:rounded-[11px] text-[11.5px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{ background: "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)", boxShadow: "0 8px 18px rgba(185,28,28,0.25)" }}
@@ -129,6 +135,7 @@ export function PurchaseBanner() {
 
                 <Link
                   href="/register"
+                  onClick={() => trackCtaClick("banner_register", "home_purchase_banner", { surface: "secondary_cta" })}
                   className="inline-flex items-center gap-[7px] h-[34px] md:h-[42px] px-4 md:px-5 rounded-[9px] md:rounded-[11px] text-[11.5px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                   style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
                 >

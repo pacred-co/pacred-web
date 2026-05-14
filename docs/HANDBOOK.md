@@ -140,13 +140,15 @@ git push origin <my-branch>
 
 ---
 
-## 🎯 Current state (2026-05-15)
+## 🎯 Current state (2026-05-16)
 
-- **Active phase:** Sprint 6.5 + Sprint 7+ (per [`PORT_PLAN.md`](PORT_PLAN.md) Part O — per-role assignments + Part P snapshot). ภูม shipped P-15..P-26 + Track G china-search; ปอน Phase A SEO + 7 bonus + customs-clearance rebuild; เดฟ D-11/12/13 scaffolds + D-12-wire/D-13-wire + D-1-LIFF scaffold + LINE creds + LINE_OA constants
-- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging) · `Poom` + `podeng` = น้อง working branches. ก๊อต now operates from `main`, runs dave→main approval gate
-- **Production readiness:** ~88% customer · ~98% admin · ~85% infra · ~75% SEO/landing (per [`PORT_PLAN.md`](PORT_PLAN.md) §P3)
-- **🚨 Critical blockers:** Pacred owner provides 7 sets of creds (PromptPay + ThaiBulkSMS + Sentry DSN + Upstash + hCaptcha + LIFF ID + bank acct) + 7 decisions (D-7 payment gateway / D-1 LINE linkage / D-8 HS / etc.) — see [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (3 bundles) + Part R (vendor cutoff Option A-E)
-- **Track G blocker:** ภูม shipped P-50..P-53 china-search rewire ✅ but ก๊อต flagged vendor cutoff (TAM/AkuCargo/Laonet = ไอแต้ม) — DON'T set Track G env vars in Vercel until ก๊อต/เดฟ pick replacement strategy
+- **Active phase:** Landing pivot (Part P4) + Sprint 6.5 backend follow-ups. เดฟ + Claude เคลื่อนงานไปลุย acquisition/landing; ภูม ทำ backend self-directed (Track A tests next); ปอน Phase D i18n polish + L-5 หน้า service landings
+- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging) · `Poom` + `podeng` = น้อง working branches. ก๊อต operates from `main`, runs dave→main approval gate
+- **Production readiness:** ~88% customer · ~98% admin · ~85% infra · ~80% SEO/landing (analytics foundation just landed)
+- **Landing analytics foundation (2026-05-16, commits 632e028 → c4a5b53):** L-22 GTM container + 4 conversion events (sign_up/login/generate_lead/place_order) + L-23 Microsoft Clarity heatmap + L-24 cookie-based A/B bucketing + DV-8 Phase 1 wire CTA events on 5 home sections (BookingCalculator + ContactSales + ImportExportBanner + PurchaseBanner + ClearanceBanner). All silent until env vars activate (K-12 GTM_ID + K-13 CLARITY_ID = ก๊อต batch)
+- **R1+R2 decisions locked 2026-05-16:** R1 = Option E (hybrid — keep Track G code, don't activate env vars in Vercel) · R2 = scrub PCS branding from code/comments · D-7 = PromptPay-only ก่อน beta. Pending ก๊อต ADRs (K-1, K-2, K-3) to formalise
+- **🚨 Critical blockers:** Pacred owner provides 5 sets of creds (PromptPay + ThaiBulkSMS + Sentry DSN + Upstash + hCaptcha + LIFF ID + bank acct) + ก๊อต activates K-12 GTM + K-13 Clarity. See [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (3 bundles) + Part R (vendor cutoff Option A-E) + Part S (เดฟ→ก๊อต hand-off batch)
+- **Track G blocker:** ภูม shipped P-50..P-53 china-search rewire ✅ but ก๊อต flagged vendor cutoff (TAM/AkuCargo/Laonet = ไอแต้ม) — DON'T set Track G env vars in Vercel until R1 ADR ships
 
 ---
 

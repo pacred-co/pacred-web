@@ -178,6 +178,7 @@ supabase/
 - **R1 china-search vendor cutoff:** **Option E (hybrid)** ✅ locked 2026-05-16 — Track G code (TAMIT/AkuCargo/Laonet) อยู่ใน repo แต่อย่าเซ็ต Vercel env vars; prod = demo mode. ดู [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part R1 + S1
 - **R2 PCS branding cutoff:** **scrub** ✅ locked 2026-05-16 — ลบ "PCS Cargo" / "pcscargo.co.th" / "legacy PHP" mentions ออกจาก code/comments; `docs/audit/php-pcscargo-integrations.md` คงไว้เป็น internal-only
 - **D-7 Payment Gateway:** **PromptPay-only ก่อน beta** ✅ locked 2026-05-16 — defer Omise/2C2P/Stripe TH → post-beta
+- **L-22 GTM (Tag Manager) + L-23 Microsoft Clarity + L-24 A/B (cookie-based):** ✅ scaffolded + 4 conversion events wired + 5 home sections wired with CTA events (2026-05-16). Activation = ก๊อต K-12 + K-13 hand-off. Helpers: `track*` / `clarity*` / `getVariantClient` / `getVariantServer` in `lib/analytics.ts` + `lib/experiments.ts`
 
 ---
 
