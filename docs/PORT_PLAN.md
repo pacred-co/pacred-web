@@ -1918,12 +1918,90 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 **Sprint 5 Day 3:** cron scaffolding + collab pattern docs (3 commits) → merged into main `eec4b69`
 **Sprint 5 Day 3 evening:** D-11 Sentry + audit fix + D-12 rate-limit + D-13 hCaptcha all scaffolded on dave (4 commits) — เดฟ blocked items down to D-7a/b + decisions; activations only need creds
 
-## O5. 👤 ก๊อต — co-merger + advisor
+## O5. 👤 ก๊อต — Production Watcher + Senior Advisor (expanded scope 2026-05-15)
 
-1. Code review สำหรับ feature ใหญ่ + ADR
-2. Co-merge เข้า main (เดฟ + ก๊อต = highest)
-3. Schedule decision calls: D-7 payment gateway, D-8 HS variants, D-9 payroll
-4. Architecture consultation: DPX ERP phase 2 planning
+**Primary role:** Production gatekeeper — every dave→main merge passes through ก๊อต. Beyond that: architectural review, security audits, upgrades, and ADRs that need senior judgment.
+
+> **เดฟ บอก 2026-05-15:** "ก๊อตบอกไม่มีงาน — คนเก่งๆ อย่าให้เสียของ ให้ upgrade/refactor". Below = substantial track ก๊อต self-direct ก่อน reach for new work.
+
+### Track K1 — Production gatekeeping (continuous)
+
+| # | Task | Cadence |
+|---|---|---|
+| **K-merge** | Review `dave→main` per `team.md` §3 ก๊อต flow | Per-batch (every 1-3 days) |
+| **K-runbook** | Maintain `docs/runbook/` — oncall + deploy + restore + Sentry alerts (per P-45) | Continuous as new infra lands |
+| **K-CODEOWNERS** | Set up `.github/CODEOWNERS` so PRs auto-request ก๊อต review | One-time, ~30m |
+
+### Track K2 — Architectural reviews + ADRs (~12-18h)
+
+ก๊อต = senior architect → write ADRs that lock direction before น้อง implements.
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-ADR-vendor-cutoff** 🚨 | ADR for Part R1 (china-search vendor cutoff strategy) — Option A/B/C/D/E choice + rationale | 2-3h | New `docs/decisions/0003-china-search-vendor.md`. Lock ก๊อต+เดฟ choice. ภูม unblocked |
+| **K-ADR-payment-gateway** 🚨 | ADR for D-7 (Omise / 2C2P / Stripe TH / PromptPay-only) | 2-3h | New `docs/decisions/0004-payment-gateway.md`. Once locked, เดฟ leads M2.1 (~40-60h) |
+| **K-ADR-erp-phase-2** | Co-author with ภูม (P-27 Sprint 7+ Track D) | 4-6h | DPX ERP phase 2 design — what's in scope vs phase 1 cargo |
+| **K-ADR-rbac-future** | Audit current `admins` table + `is_admin()` flow → propose ERP role expansion (P-38 Sprint 7+ Track D) | 2-3h | New ADR; shapes DPX phase 2 auth |
+| **K-ADR-tax-invoice** | Lock numbering format (`INV-YYYYMM-NNNN`?) + flow design before ภูม implements | 2-3h | New ADR; needed before tax invoice port |
+
+### Track K3 — Security + production audit (~10-15h)
+
+ก๊อต = production safety lens. ตรวจสอบสิ่งที่ team อาจมองข้าม.
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-sec-1** | OWASP Top 10 audit on Pacred — go through each: SQL injection (Zod validators), XSS (React+Tailwind = mostly safe), CSRF (Server Actions native), auth (Supabase + RLS), broken access control (admin RBAC), security misconfiguration (CSP+headers), etc. | 4-6h | Output: `docs/audit/owasp-2026-05.md` with status per item + open risks |
+| **K-sec-2** | RLS policy comprehensive audit — every Supabase table: who can read/write? — match against `actions/admin/*` callers | 3-4h | Output: `docs/audit/rls-coverage.md`. Critical: missing RLS = data leak |
+| **K-sec-3** | Audit log coverage — every admin mutation in `actions/admin/*` calls `logAdminAction()`? | 1-2h | Output: gap report + commits to fix |
+| **K-sec-4** | Penetration testing prep — coordinate external pen test (vendor recommendation + scope + timeline) | 2-3h | Plan only, exec post-launch |
+
+### Track K4 — Tech upgrade + tooling (~8-12h, ก๊อต self-direct)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-upgrade-1** | Audit Next 16 → 17 upgrade path — dependencies, breaking changes, est effort | 2-3h | Doc only. Don't upgrade yet (Next 16 stable enough for beta) |
+| **K-upgrade-2** | Audit Tailwind v4 → future + config strategy | 1-2h | Doc only |
+| **K-upgrade-3** | Supabase upgrade strategy (CLI version, migration tooling, plan tier) | 2-3h | Doc + estimate |
+| **K-tooling-1** | Set up `.github/workflows/ci.yml` — auto run lint+test+build on PR | 2-3h | CI quality gate before manual review |
+| **K-tooling-2** | Renovate / Dependabot setup — automated dep PRs | 1h | Reduces ก๊อต overhead long-term |
+
+### Track K5 — Code quality + refactor (~10-15h)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-quality-1** | Read every file in `actions/admin/*` — propose extract-helper / DRY opportunities | 4-5h | Output: refactor proposals; ภูม executes if approved |
+| **K-quality-2** | Audit `lib/` for duplicated patterns — e.g., 3 similar fetch wrappers? Consolidate | 3-4h | Output: consolidation proposals |
+| **K-quality-3** | TypeScript strictness audit — any `any` slipping through? Loose nullable types? | 2-3h | Output: gap list |
+| **K-quality-4** | Bundle size deep dive (alongside ภูม P-43) — identify shared bloat | 2-3h | Co-audit with ภูม Track C |
+
+### Track K6 — Documentation strategy (~5-8h)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-docs-1** | Audit `docs/HANDBOOK.md` — is the entry point still accurate after 2 weeks of churn? | 1-2h | Update if drift |
+| **K-docs-2** | Audit `docs/PORT_PLAN.md` size (3000+ lines) — propose split into `docs/sprints/` if too long | 1-2h | Don't split yet, but flag threshold |
+| **K-docs-3** | Onboarding test — fresh clone + follow `docs/team.md` §8 → does it work? | 2-3h | Output: gap fix; critical for new team members |
+| **K-docs-4** | Customer-facing FAQ + product docs strategy (separate from `docs/sop/admin-operations.md` from P-46) | 1-2h | Plan only |
+
+### Track K7 — Strategic / business-side (consulting hours, async)
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **K-strat-1** | Pacred owner call agenda runner — ดู Part Q + Part R outstanding | per-call | Schedule + lead |
+| **K-strat-2** | Pricing strategy review — booking calculator output vs competitor pricing | 2-3h | Marketing input for ปอน landing |
+| **K-strat-3** | DPX ERP phase 2 stakeholder alignment | TBD | Coordinate with Pacred owner + เดฟ |
+
+---
+
+**ก๊อต total runway:** ~50-80h across 7 tracks. Self-directed via §6. Async — no hard sequencing except K2 ADRs that unblock น้อง.
+
+**Recommended start order (high-impact first):**
+1. **K-ADR-vendor-cutoff** (2-3h) — unblocks ภูม Track G + production-readiness
+2. **K-ADR-payment-gateway** (2-3h) — unblocks เดฟ M2.1
+3. **K-tooling-1** CI workflow (2-3h) — quality multiplier going forward
+4. **K-sec-1** OWASP audit (4-6h) — production launch confidence
+5. **K-CODEOWNERS** (30m) — automates review routing
+6. Then K3/K4/K5/K6 in any order
 
 ---
 

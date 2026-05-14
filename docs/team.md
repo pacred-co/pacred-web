@@ -48,57 +48,98 @@ Last updated: 2026-05-13
 
 ---
 
-## 3. Daily workflow
+## 3. Daily workflow (CORRECTED 2026-05-15 — เดฟ clarified flow)
 
-### ทุกคน (ปอน/ภูม/เดฟ) — ก่อนเริ่มงาน
+> **Pacred branch flow:**
+> ```
+> ปอน (podeng) ──┐
+>                ├──► เดฟ pulls + merges into ► dave (consolidation/staging)
+> ภูม  (Poom)  ──┘                                │
+>                                                 ▼
+>                                       ก๊อต reviews + merges ► main (production)
+>                                                 ▲
+>                                                 └── เดฟ bypass (urgent only)
+> ```
+> **Key:** น้อง pull from `dave` (NOT `main`). `dave` = staging. `main` = production. ก๊อต = production gatekeeper.
+
+### น้อง (ปอน + ภูม) — ก่อนเริ่มงานทุกครั้ง
 
 ```bash
-# Step 1: อัพเดท main ก่อน
-git checkout main
-git pull origin main
+# Step 1: ดึง dave ล่าสุดมาเป็นต้นทาง (NOT main — main is approved-by-ก๊อต only)
+git fetch origin
+git checkout dave
+git pull --ff-only origin dave    # fast-forward only — dave ห้ามมีงาน local แทรก
 
-# Step 2: กลับ branch ตัวเอง + merge main เข้ามา
-git checkout <my-branch>          # dave / podeng / Poom
+# Step 2: กลับ branch ตัวเอง + merge dave เข้ามา
+git checkout <my-branch>          # podeng หรือ Poom
 git status                        # ต้องสะอาด — ถ้ามีไฟล์ค้างให้ commit/stash ก่อน
 git pull origin <my-branch>       # ดึง branch ตัวเองล่าสุด
-git merge main                    # รวม main เข้ามา
-git push origin <my-branch>       # อัพ branch ตัวเอง
+git merge dave                    # รวม dave เข้ามา (รวม main + งานเพื่อนที่เดฟ approve แล้ว)
+git push origin <my-branch>
 ```
 
-→ ทำไมแยก 2 ขั้น? จะได้เห็นชัดว่า main มีอะไรใหม่ก่อน merge เข้า branch ตัวเอง
+→ **ทำไม dave ไม่ใช่ main?** dave = "เดฟ approved" (เร็ว, integration ทันสมัย). main = "ก๊อต approved" (ช้ากว่า, production-stable). น้อง รับงานจาก dave ทันสมัยกว่า + ไม่กระทบ ก๊อต production cycle.
 
 **แนะนำ:** sync ทุกเช้าก่อนเริ่มงาน หรืออย่างน้อย 1 ครั้ง/วัน
 
-### ตอนทำงาน
-
-- Commit เป็นระยะ (อย่ารอเย็น) — pattern: `<type>(<scope>): <message>` (ดู [`conventions.md`](conventions.md))
-- ทำงานเสร็จ feature → push ขึ้น branch ตัวเอง
-- แจ้งเดฟ/ก๊อตให้ review (LINE/Slack/PR comment)
-
-### ตอนเดฟ/ก๊อต merge เข้า main
+### เดฟ — สำหรับ consolidation work
 
 ```bash
-# จาก dave branch (lead working tree)
+# จาก dave branch
 git checkout dave
 git pull origin dave
 
-# Merge งานคนอื่นเข้า dave (ถ้ามี)
+# Merge งานน้องเข้า dave (เป็น staging)
 git fetch origin
 git merge origin/podeng   # ถ้ามีงาน ปอน ใหม่
 git merge origin/Poom     # ถ้ามีงาน ภูม ใหม่
 
-# Verify
+# Verify (ดู §5 pre-merge checklist)
 pnpm install --frozen-lockfile
 pnpm lint
+pnpm test
 pnpm build
 
-# ถ้า pass — push dave + merge เข้า main
+# ถ้า pass — push dave (NOT main)
 git push origin dave
+
+# 🛑 หยุดที่นี่ — ห้าม push เข้า main เอง
+# ก๊อต รับ baton ต่อ → review dave + merge → main
+```
+
+### ก๊อต — production approval (operates from main)
+
+```bash
+git fetch origin
 git checkout main
-git pull origin main
-git merge dave
+git pull --ff-only origin main
+
+# ดู diff dave→main เพื่อ review สิ่งที่จะ ship
+git log main..origin/dave --oneline
+git diff main origin/dave --stat
+
+# ถ้า OK — merge dave → main
+git merge --ff-only origin/dave   # หรือ no-ff ถ้าต้องการ merge commit
 git push origin main
 ```
+
+**เกณฑ์ approve (ก๊อต gate):**
+- pnpm install + lint + test + build pass บน dave (เดฟ verify ไปแล้ว)
+- ดู diff: ไม่มี breaking change ที่ไม่ documented
+- ADR ใน `docs/decisions/` ถ้ามี architectural change
+- Production safety: migration plan, rollback path documented if applicable
+
+### เดฟ bypass — urgent / hotfix only
+
+```bash
+# เฉพาะกรณี: production bug + ก๊อต ไม่ available + bug fix verified
+git checkout dave && git pull
+# (fix + verify)
+git push origin dave
+git push origin dave:main      # bypass — ขึ้น main ตรง
+```
+
+**กฎ bypass:** หลัง bypass — ส่ง LINE แจ้งก๊อตทันที + เขียน reason ใน commit message + log ใน Part P snapshot. ห้ามใช้บ่อย
 
 ---
 
