@@ -2,7 +2,7 @@
 
 > Entry point for everyone on the team — start here.
 
-Last updated: 2026-05-13
+Last updated: 2026-05-15
 
 ---
 
@@ -17,10 +17,12 @@ pnpm dev                           # http://localhost:3000
 ```
 
 **Need help:**
-- ค่า env เอาจากไหน → ถามเดฟ
-- งานของฉันคืออะไร → [`team.md`](team.md) + [`PORT_PLAN.md`](PORT_PLAN.md) Part E + Part N6
+- ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
+- งานของฉันคืออะไร → [`team.md`](team.md) + [`PORT_PLAN.md`](PORT_PLAN.md) Part O (assignments) + Part P (snapshot)
+- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part R (vendor cutoff)
 - เขียน code ยังไง → [`conventions.md`](conventions.md)
 - Architecture → [`architecture.md`](architecture.md)
+- ที่อยู่ / เบอร์ Pacred / LINE OA IDs → [`pacred-info.md`](pacred-info.md)
 
 ---
 
@@ -30,26 +32,30 @@ pnpm dev                           # http://localhost:3000
 
 | File | คืออะไร | ใครต้องอ่าน |
 |---|---|---|
-| [`team.md`](team.md) | **Roles + permissions + branch + merge policy** | ทุกคน — ครั้งแรก |
+| [`team.md`](team.md) | **Roles + permissions + branch flow (น้อง pull from `dave`!) + §3.0 push-frequency cost rule + §6 self-directed mode + §9 Claude Code async collab** | ทุกคน — ครั้งแรก |
 | [`conventions.md`](conventions.md) | Code style + commit format + i18n + DB rules | ทุกคน |
-| [`env.md`](env.md) | Every env var explained + production checklist | เดฟ + ภูม |
+| [`env.md`](env.md) | Every env var explained + production checklist (16 sections covering Supabase / OTP / SMS / China search / PromptPay / LINE+LIFF / Sentry / Upstash / hCaptcha / etc.) | เดฟ + ภูม |
+| [`pacred-info.md`](pacred-info.md) | Company info SOT — addresses, phones, emails, LINE OA, sales reps | ทุกคน — when touching contact UI |
 | [`HANDBOOK.md`](HANDBOOK.md) | ไฟล์นี้ — entry/index |
 
 ### 📋 Work tracking (living docs — เดฟ updates)
 
 | File | คืออะไร |
 |---|---|
-| [`PORT_PLAN.md`](PORT_PLAN.md) | Master plan — PHP feature inventory + sprints + audit results (Part A-N) |
+| [`PORT_PLAN.md`](PORT_PLAN.md) | Master plan — Parts A-N (PHP audit + early sprints) · O (per-role assignments) · P (latest snapshot) · 🚨 Q (production blockers) · 🚨 R (vendor cutoff decisions) |
 | [`architecture.md`](architecture.md) | System architecture — diagrams, DB schema, auth flow, security |
 | [`PACRED-SECOND-BRAIN.md`](PACRED-SECOND-BRAIN.md) | Context notes + gotchas |
-| [`decisions/*.md`](decisions/) | Architecture Decision Records (ADRs) |
+| [`decisions/*.md`](decisions/) | Architecture Decision Records (ADRs) — `0001-line-notify-replacement` · `0002-admin-architecture` |
+| [`audit/*.md`](audit/) | Deep audits — `php-pcscargo-integrations.md` (legacy PHP source mapping) |
+| [`runbook/*.md`](runbook/) | Operational runbooks — `vercel-cron-plan.md` (cron count + tier check) |
 
 ### 🛠️ Setup guides
 
 | File | คืออะไร |
 |---|---|
-| [`setup/`](setup/) | OAuth, Supabase, Vercel, LINE, etc. — onboarding |
+| [`setup/`](setup/) | OAuth (Facebook + Google), Supabase, Vercel, LINE, ThaiBulkSMS, local-dev — onboarding |
 | [`/supabase/migrations/README.md`](/supabase/migrations/README.md) | DB migration runbook |
+| [`/legacy-schema/README.md`](legacy-schema/README.md) | Legacy MySQL schema reference for PHP→Pacred port |
 
 ### 🤖 AI agent specific
 
@@ -86,27 +92,32 @@ pnpm dev                           # http://localhost:3000
 
 ---
 
-## 🚦 Daily workflow (TL;DR)
+## 🚦 Daily workflow (TL;DR — UPDATED 2026-05-15 + cost discipline)
+
+> **Branch flow:** ปอน/ภูม → push to own branch → เดฟ merges into `dave` (staging) → **ก๊อต** approves + merges into `main` (production). น้อง pull from **`dave`** not `main`. เดฟ bypass dave→main only for urgent hotfix.
 
 ```bash
-# Morning — sync main
-git checkout main && git pull origin main
+# Morning — sync DAVE (not main!)
+git fetch origin
+git checkout dave && git pull --ff-only origin dave
 
-# Switch to your branch + merge main
-git checkout <my-branch>          # dave / podeng / Poom
-git merge main
-git push origin <my-branch>
+# Switch to your branch + merge dave
+git checkout <my-branch>          # podeng / Poom (or dave for เดฟ)
+git merge dave
+git push origin <my-branch>       # if needed; usually skip until save-point
 
-# ทำงาน + commit (เป็นระยะ ไม่รอเย็น)
-git commit -m "<type>(<scope>): <message>"
+# ทำงาน + commit local-only ฟรี (per §3.0 cost rule — Vercel builds = $$)
+git commit -m "<type>(<scope>): <message>"        # commit หลายตัวระหว่างวัน OK
+git commit -m "wip: ..."
 
-# เสร็จ feature → push
+# เสร็จ feature / save point → squash + push 1 ครั้ง (target ~1-3 push/day)
+git rebase -i origin/<my-branch>                  # squash WIP commits
 git push origin <my-branch>
 
 # แจ้งเดฟ/ก๊อต review (LINE / Slack / PR)
 ```
 
-→ Full detail in [`team.md`](team.md) §3
+→ Full detail in [`team.md`](team.md) §3 + §3.0 push-frequency cost rule
 
 ---
 
@@ -129,12 +140,13 @@ git push origin <my-branch>
 
 ---
 
-## 🎯 Current state (2026-05-13)
+## 🎯 Current state (2026-05-15)
 
-- **Active sprint:** Sprint 5 (per [`PORT_PLAN.md`](PORT_PLAN.md) Part N6 + Part N — to be updated with new role mapping)
-- **Branch state:** `dave` consolidates `Poom` + `podeng` + own work → ready for review → main
-- **Production readiness:** ~65% customer / ~80% admin / 95% HR / 50% infra (see [`PORT_PLAN.md`](PORT_PLAN.md) Part N2)
-- **Critical blockers:** 8 env vars unset, 6 missing features, ~10 hardening gaps (see [`PORT_PLAN.md`](PORT_PLAN.md) Part N3 + N9)
+- **Active phase:** Sprint 6.5 + Sprint 7+ (per [`PORT_PLAN.md`](PORT_PLAN.md) Part O — per-role assignments + Part P snapshot). ภูม shipped P-15..P-26 + Track G china-search; ปอน Phase A SEO + 7 bonus + customs-clearance rebuild; เดฟ D-11/12/13 scaffolds + D-12-wire/D-13-wire + D-1-LIFF scaffold + LINE creds + LINE_OA constants
+- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging) · `Poom` + `podeng` = น้อง working branches. ก๊อต now operates from `main`, runs dave→main approval gate
+- **Production readiness:** ~88% customer · ~98% admin · ~85% infra · ~75% SEO/landing (per [`PORT_PLAN.md`](PORT_PLAN.md) §P3)
+- **🚨 Critical blockers:** Pacred owner provides 7 sets of creds (PromptPay + ThaiBulkSMS + Sentry DSN + Upstash + hCaptcha + LIFF ID + bank acct) + 7 decisions (D-7 payment gateway / D-1 LINE linkage / D-8 HS / etc.) — see [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (3 bundles) + Part R (vendor cutoff Option A-E)
+- **Track G blocker:** ภูม shipped P-50..P-53 china-search rewire ✅ but ก๊อต flagged vendor cutoff (TAM/AkuCargo/Laonet = ไอแต้ม) — DON'T set Track G env vars in Vercel until ก๊อต/เดฟ pick replacement strategy
 
 ---
 
@@ -142,21 +154,30 @@ git push origin <my-branch>
 
 1. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
 2. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
-3. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console (see [`env.md`](env.md) §7)
-4. **`PACRED_RCGROUP_API_URL` unset** → URL paste returns demo product silently (see [`env.md`](env.md) §5)
+3. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
+4. **China-search vendor cutoff (Track G)** — Pacred lib/china-search wired to TAMIT-cloud per audit, BUT vendor = ไอแต้ม which Pacred wants to cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต picks replacement (Option A-E in [`PORT_PLAN.md`](PORT_PLAN.md) Part R1). Code degrades to demo mode when env unset — that's the intended interim
 5. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
-6. **i18n key missing** crashes the page — always add both th + en
+6. **i18n key missing** crashes the page — always add both th + en. Audit script: `node scripts/i18n-audit.mjs`
 7. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))
+8. **Push to `main` directly = bypass mode** — only เดฟ for urgent hotfix. Normal flow: น้อง→own branch→เดฟ→`dave`→ก๊อต→`main`
+9. **Push frequency = $$** — Vercel builds cost. Commit local often, push at save-points only (~1-3/day). See [`team.md`](team.md) §3.0
+10. **`profiles.line_user_id`** stays NULL until D-1-LIFF customer linkage runs — every LINE push to customer is silent no-op until LIFF activated
 
 ---
 
 ## 🔗 Quick links
 
 - Repo: https://github.com/pacred-co/pacred-web
-- Production: https://pacred.co (TBD)
+- Production: https://pacred.co (TBD — `NEXT_PUBLIC_SITE_URL` ใน Vercel env)
 - Supabase Dashboard: https://supabase.com/dashboard (link with เดฟ)
-- LINE OA: https://lin.ee/Yg3fU0I
-- Legacy PHP source (read-only ref): `C:\xampp\htdocs\pcscargo\` (เดฟ's machine)
+- **LINE OA Pacred:**
+  - Channel ID: `2009931373` (Messaging API — for push notifications)
+  - Premium ID: `@pacred` · Basic ID: `@683wolja`
+  - Short URL: https://lin.ee/Yg3fU0I
+  - Add-friend: https://line.me/R/ti/p/%40pacred
+  - Code: import `LINE_OA` from `components/seo/site.ts`
+- **Pacred company info:** [`docs/pacred-info.md`](pacred-info.md) (addresses + phones + emails + sales reps)
+- Legacy PHP source (read-only ref): `C:\xampp\htdocs\pcscargo\` (เดฟ's machine — full audit at [`docs/audit/php-pcscargo-integrations.md`](audit/php-pcscargo-integrations.md))
 
 ---
 

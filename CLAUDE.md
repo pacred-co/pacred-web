@@ -7,18 +7,21 @@
 📘 **[`docs/HANDBOOK.md`](docs/HANDBOOK.md)** = entry point — มี documentation map + quick start
 
 **Canonical docs (อ่านครั้งเดียว ใช้ตลอด):**
-- 👥 [`docs/team.md`](docs/team.md) — roles + permissions + branch + merge policy + daily workflow
+- 👥 [`docs/team.md`](docs/team.md) — roles + permissions + branch + merge policy + daily workflow + §3.0 push-frequency cost rule + §6 self-directed mode + §9 Claude Code async collab
 - 📐 [`docs/conventions.md`](docs/conventions.md) — code style + commit format + naming + DB rules
 - 🔐 [`docs/env.md`](docs/env.md) — every env var explained + production checklist
+- 🏢 [`docs/pacred-info.md`](docs/pacred-info.md) — company info SOT (addresses + phones + emails + LINE OA + sales reps)
 
 **Living docs (เดฟ updates):**
-- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness audit (Parts A-N)
+- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness (Parts A-Q + 🚨 Part R vendor cutoff)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
 - 🧠 [`docs/PACRED-SECOND-BRAIN.md`](docs/PACRED-SECOND-BRAIN.md) — context notes + gotchas
 
 **Reference (open เมื่อจำเป็น):**
 - [`AGENTS.md`](AGENTS.md) — Next 16 breaking changes (สำหรับ Claude/AI)
-- [`docs/decisions/*.md`](docs/decisions/) — ADRs
+- [`docs/decisions/*.md`](docs/decisions/) — ADRs (LINE Notify replacement, admin architecture)
+- [`docs/audit/*.md`](docs/audit/) — deep audits (PHP `pcscargo` integrations + future OWASP/RLS)
+- [`docs/runbook/*.md`](docs/runbook/) — operational runbooks (Vercel cron plan + future deploy/restore/Sentry alerts)
 - [`docs/setup/*.md`](docs/setup/) — onboarding guides (OAuth/Supabase/Vercel/LINE)
 - [`supabase/migrations/README.md`](supabase/migrations/README.md) — migration runbook
 
@@ -26,8 +29,8 @@
 1. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
 2. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
 3. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
-4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part E (general) + Part N6 (current sprint)
-5. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 — เริ่ม task แรก
+4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part O (per-role assignments) + Part P (latest snapshot) + Part Q/R (urgent items)
+5. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 (น้อง pull จาก `dave` ไม่ใช่ `main`!) + §3.0 push-frequency rule
 
 ---
 
