@@ -8,7 +8,7 @@ import {
   type DepositInput,
   type WithdrawInput,
 } from "@/lib/validators/wallet";
-import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
+import { buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
@@ -88,7 +88,12 @@ export async function getDepositQr(amountThb: number): Promise<ActionResult<{ da
     const dataUrl = await buildPromptPayQrDataUrl(amountThb);
     return { ok: true, data: { dataUrl } };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "qr_failed" };
+    // Forward stable error codes so the UI can render a localised message
+    // instead of the raw server message (OWASP A05 / 2026-05-16 audit P1).
+    if (e instanceof PromptPayConfigError) {
+      return { ok: false, error: e.code };
+    }
+    return { ok: false, error: "qr_failed" };
   }
 }
 

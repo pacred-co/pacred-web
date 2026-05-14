@@ -954,6 +954,8 @@
     "amountHint": "Min 1 THB, max 1,000,000 THB",
     "amountInvalid": "Invalid amount",
     "amountExceedsBalance": "Amount exceeds balance",
+    "promptpayNotConfigured": "Top-up is not yet available — our team is setting up the account. Please contact LINE @pacred for assistance in the meantime.",
+    "qrFailedGeneric": "Couldn't generate the QR right now — please try again or contact our team.",
     "step1Title": "Step 1 — Enter amount",
     "step2Title": "Step 2 — Scan PromptPay QR",
     "step3Title": "Step 3 — Upload slip",

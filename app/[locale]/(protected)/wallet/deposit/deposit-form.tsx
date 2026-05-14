@@ -36,13 +36,19 @@ export function DepositForm() {
     startTransition(async () => {
       const res = await getDepositQr(amt);
       if (!res.ok) {
-        setError(res.error);
+        setError(QR_ERROR_MESSAGES[res.error] ?? t("qrFailedGeneric"));
         return;
       }
       setQr(res.data!.dataUrl);
       setStep("pay");
     });
   }
+
+  const QR_ERROR_MESSAGES: Record<string, string> = {
+    promptpay_not_configured: t("promptpayNotConfigured"),
+    promptpay_invalid_amount: t("amountInvalid"),
+    qr_failed: t("qrFailedGeneric"),
+  };
 
   async function onSlipFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
