@@ -57,9 +57,14 @@ export const corporateSchema = z.object({
 export type CorporateInput = z.infer<typeof corporateSchema>;
 
 // ── notification preferences ──
+// Customer-facing channel toggles + admin-only daily_digest opt-in (P-15).
+// daily_digest is read by /api/cron/sales-daily-digest as the gate per
+// admin (only super + sales_admin roles see it in UI but the schema
+// allows it on any profile so the migration default stays simple).
 export const notifyChannelsSchema = z.object({
-  line:  z.boolean(),
-  email: z.boolean(),
+  line:           z.boolean(),
+  email:          z.boolean(),
+  daily_digest:   z.boolean().optional(),  // P-15: admin opt-in to sales digest LINE push
 });
 export type NotifyChannels = z.infer<typeof notifyChannelsSchema>;
 

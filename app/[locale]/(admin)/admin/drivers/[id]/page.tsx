@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { DriverAssignmentActions } from "../actions-cell";
 
 const STATUS_BADGE: Record<number, string> = {
@@ -27,6 +28,9 @@ export default async function AdminDriverAssignmentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // P-18-followup-rbac: page-level guard (matches /admin/drivers list).
+  await requireAdmin(["ops"]);
+
   const { id } = await params;
   const admin  = createAdminClient();
 

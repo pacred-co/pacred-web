@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { DriverAssignmentActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<number, string> = {
@@ -43,6 +44,12 @@ export default async function AdminDriversPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  // P-18-followup-rbac: page-level guard so direct URL by an admin role
+  // outside "ops" gets a clean redirect (the actions/admin/drivers.ts
+  // server actions already enforce this, but the UI sidebar gate alone
+  // doesn't stop someone hitting /admin/drivers directly).
+  await requireAdmin(["ops"]);
+
   const sp    = await searchParams;
   const admin = createAdminClient();
 

@@ -2090,7 +2090,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | `01f0cc1` |
 | **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | `1dc4ed3` |
 | **P-52 (Track G)** — AkuCargo keyword search adapter | ✅ | `74db555` |
-| **P-53 (Track G)** — Laonet image search adapter (closes Track G core) | ✅ | this commit |
+| **P-53 (Track G)** — Laonet image search adapter (closes Track G core) | ✅ | `f8e1a20` |
+| **Sprint 6.5 batch (6 follow-ups)** — RLS, RBAC, batch insert, stale recovery, daily_digest UI, vercel cron doc | ✅ | this commit |
 | P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
@@ -2149,13 +2150,36 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-🎉 **Track G core closed (P-50 + P-51 + P-52 + P-53).** All three china-search surfaces (URL→detail, keyword, image) now wired to the actual production PHP backends per audit, with demo fallback preserved on every failure path.
+🎉 **Track G core closed + Sprint 6.5 follow-ups all shipped.**  Code repo is clean from low-hanging follow-ups.  Block on R1 decision (vendor cutoff strategy from ก๊อต+เดฟ — see Part R) before any further china-search work.
 
-→ **P-55 Vercel egress IP allowlist** (~1h, ภูม + เดฟ) — once production traffic hits TAMIT/AkuCargo/Laonet/tam-i-t, contact vendor `tam011plus@gmail.com` to allowlist Vercel egress IPs.  Document in `docs/runbook/vendor-allowlist.md`.
+→ **Track A tests (~7-9h)** — P-28 OTP flow + P-29 wallet ledger + P-30 auth signup + P-31 cart cap.  Pure DB/server-side coverage, doesn't touch china-search at all → safe parallel work while waiting on R1.
 
-After P-55: **Sprint 6.5 follow-ups (~2-3h)** — admin digest UI, page-level RBAC for /admin/drivers, batch insert, stale recovery, RLS tighten, vercel plan check.  Then **Track A tests (~7-9h)** for OTP / wallet ledger / signup / cart-cap coverage.
+After Track A: **Sprint 6 leftover** P-22 (HR attendance, 4-6h) + P-23 (meeting room, 2-3h) + P-27 (DPX ERP ADR, 2-4h) — or **Track B production hardening** (10-15h: SLA tracking, DB backup runbook, Web Vitals, rate limit headers, Sentry alert rules) if Pacred owner prefers ops focus.
 
-### P-53 shipped (this batch — Track G closes)
+### Sprint 6.5 batch shipped (this commit — 6 follow-ups, ~2.5h actual)
+
+| # | Task | Where | Notes |
+|---|---|---|---|
+| **P-15-followup** | Admin self-service UI for daily_digest toggle | `/admin/settings/notifications` (new page + form) | Reuses existing `updateNotifyChannels` action; `notifyChannelsSchema` extended with optional `daily_digest` field. Eligibility hint shown for non-(super/sales_admin) admins |
+| **P-18-followup-rbac** | `requireAdmin(["ops"])` page-level | `/admin/drivers/page.tsx` + `[id]/page.tsx` | Sidebar gate already filtered, but direct URL bypass closed. Defence in depth |
+| **P-19-followup-batch** | Chunked batch insert | `actions/admin/csv-imports.ts::confirmCsvImport` | 2-pass refactor: validate-then-insert in chunks of 100. 1000-row CSV: 1000 round-trips → 10 round-trips. Per-chunk failure marks whole chunk skipped (no fall-back to per-row — same FK violations would just re-fire) |
+| **P-19-followup-stale** | Stale 'importing' recovery | Migration `0032_csv_imports_started_at.sql` + `lib/admin/csv-import-sweep.ts` | Sweep-on-read at admin list page + at top of `confirmCsvImport`. 10-min threshold. Migration backfills existing zombie rows on first run. Started_at stamped when status flips to 'importing' |
+| **P-20-followup-rls** | Tighten `hs_codes_select_all` RLS | Migration `0031_hs_codes_rls_authenticated.sql` | `using (true)` → `using (auth.role() = 'authenticated')`. Low-risk reference data but matches the policy comment intent |
+| **P-vercel-plan** | Vercel plan vs cron count check | `docs/runbook/vercel-cron-plan.md` (new) | Doc-only audit: Pacred has 5 crons, Hobby plan limit is 2. Clear action items for เดฟ if on Hobby (upgrade to Pro $20/mo OR consolidate to 2 batch crons). If on Pro: ✅ no action |
+
+**Acceptance gate:**
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint <touched files>` clean ✅
+- `pnpm test` chain → 207 assertions all green (no test additions needed for these — they're plumbing changes, behaviour verified by existing P-19 manual QA path)
+- Migrations 0031 + 0032 ready for เดฟ to run on production Supabase
+
+**Migrations รอเดฟรันบน production Supabase:**
+```
+0031_hs_codes_rls_authenticated.sql   ← P-20-followup-rls
+0032_csv_imports_started_at.sql        ← P-19-followup-stale (auto-recovers any existing zombies)
+```
+
+### P-53 shipped (Track G closes)
 
 `lib/china-search/laonet.ts` (server-only) + `laonet-helpers.ts` (testable) per audit §4b:
 
@@ -2293,7 +2317,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Parallel work ที่ไม่ block: Sprint 6.5 (~2-3h) + Track A tests (~7-9h).
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G + Sprint 6.5 complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53 + 6 follow-ups).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Next parallel work: Track A tests (~7-9h).
 
 ---
 

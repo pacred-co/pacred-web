@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { sweepStaleImportingRows } from "@/lib/admin/csv-import-sweep";
 import { CsvImportRowActions } from "./row-actions";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -27,6 +28,10 @@ function normSingle<T>(x: T | T[] | null | undefined): T | null {
 
 export default async function AdminCsvImportsPage() {
   const admin = createAdminClient();
+
+  // P-19-followup-stale: opportunistic sweep so admins never see a
+  // zombie 'importing' row left behind by a crashed import process.
+  await sweepStaleImportingRows(admin);
 
   const { data } = await admin
     .from("csv_imports")
