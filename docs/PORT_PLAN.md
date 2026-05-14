@@ -2704,3 +2704,94 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 ---
 
 **End of Part R.** Single-page alert vendor cutoff + ก๊อต/เดฟ decisions.  ภูม block on R1 decision but has parallel work (Sprint 6.5 + Track A) ที่ไม่ blocked.
+
+---
+
+# 🤝 Part S — เดฟ → ก๊อต async hand-off (2026-05-16)
+
+> **Purpose:** ก๊อต = senior advisor / นานๆ ว่างที — ฉะนั้นเวลาก๊อตเปิด Claude Code/repo มาแล้ว ควรเห็น "batch of decisions + ADRs" ที่ pre-loaded ไว้ให้ลุยรวดเดียวจบ. เดฟ encode งานก๊อต ที่นี่ ก๊อต tick off ใน commit เมื่อเสร็จ.
+>
+> **Mode:** Async (per `team.md` §9). เดฟ + ก๊อต ไม่ต้องเจอกันแบบ real-time. ก๊อต อ่าน → ทำ → push → commit ปิด task. เดฟ pick up changes ใน sync ครั้งถัดไป.
+
+## S1. ✅ Decisions ที่เดฟ confirm 2026-05-16 (R1 + R2 = locked)
+
+| # | Decision | Choice | Rationale |
+|---|---|---|---|
+| **R1** | China-search vendor cutoff strategy | ✅ **Option E (hybrid)** | Track G code ภูม ship ครบ — งดงาม. Keep ใน repo, **อย่า set Track G env vars (`PACRED_TAMIT_*`/`PACRED_AKUCARGO_*`/`PACRED_LAONET_*`) ใน Vercel** prod. Prod = demo mode (UI label change). Zero throwaway work. ก๊อต/เดฟ ตัดสินใจ A/B/C parallel เป็นการบ้าน Phase H/I ไม่ rush. **ภูม unblocked** ทำ Track A tests parallel + label-change UI (~1h เมื่อพร้อม) |
+| **R2** | PCS Cargo branding cutoff | ✅ **Scrub** | ลบ "PCS Cargo" / "pcscargo.co.th" / "legacy PHP" mentions ใน code comments / test data / migrations. Replace ด้วย "legacy" generic หรือลบทิ้ง ถ้า rot context. `docs/audit/php-pcscargo-integrations.md` คงไว้เป็น **internal-only** doc (ไม่อยู่ใน landing-public scope). บัญชี `064-174-3836` ห้าม hardcode (ยังไม่อยู่ในโค้ดอยู่แล้ว ✅) |
+
+**Action:** ก๊อต confirm 2 decisions นี้ + spec ออกเป็น 2 ADRs (S2 #1 + S2 #3 ด้านล่าง) → ภูม + ปอน + เดฟ pick up
+
+---
+
+## S2. 🎯 ก๊อต batch — Priority order (~13-17h total, self-directed pace)
+
+### Priority 1 — Unblock work (do first)
+
+| # | Task | Est | Output | Unblocks |
+|---|---|---|---|---|
+| **K-1** | ✅ ADR-0003: China-search vendor cutoff (lock Option E + Phase H/I A/B/C exploration plan) | 2-3h | `docs/decisions/0003-china-search-vendor.md` | ภูม Track G label-change + future scraper work |
+| **K-2** | ✅ ADR-0004: Payment Gateway (lock D-7 = PromptPay-only ก่อน beta; defer Omise/2C2P/Stripe TH to post-beta) | 2-3h | `docs/decisions/0004-payment-gateway.md` | เดฟ ไม่ต้อง spend cycles หา gateway ก่อน launch; M2.1 deferred |
+| **K-3** | R2 PCS scrub execution plan | 1h | New section ใน `docs/decisions/0005-pcs-branding-scrub.md` หรือ inline note ที่ Part R2 — list files + grep patterns + who executes (recommend: ภูม + ปอน batch ระหว่างทำ task ปกติ) | ทีม execute scrub ได้ทันที |
+
+### Priority 2 — Quick decisions (~1h batched)
+
+| # | Task | Recommended | Rationale |
+|---|---|---|---|
+| **K-4** | D-8 HS variants — แยก / merge เข้า tier? | (ก๊อต lock) | ภูม P-20 ship `hs_codes` + `container_hs_lines` แล้ว — review schema + decide |
+| **K-5** | D-9 Payroll module — standalone / extend HR? | (ก๊อต lock) | Affects ภูม P-22 attendance + future Phase 2 ERP |
+| **K-6** | Tax invoice numbering format | (ก๊อต lock) | `INV-YYYYMM-NNNN` sequential ดูสมเหตุสมผล — confirm |
+| **K-7** | Wallet deposit approver role | (ก๊อต lock) | `super` only / `accounting` role / both? — affects RLS policy |
+
+### Priority 3 — Deep work (when time permits)
+
+| # | Task | Est | Output |
+|---|---|---|---|
+| **K-8** | ADR-0006: Tax invoice flow + numbering (build on K-6 decision) | 2-3h | `docs/decisions/0006-tax-invoice.md` — lock before ภูม implements |
+| **K-9** | K-CODEOWNERS setup (`.github/CODEOWNERS`) | 30m | Auto-route PR reviews to ก๊อต — reduces overhead long-term |
+| **K-10** | K-tooling-1: CI workflow `.github/workflows/ci.yml` (lint + test + build on PR) | 2-3h | Quality gate before manual review |
+| **K-11** | K-sec-1: OWASP Top 10 audit | 4-6h | `docs/audit/owasp-2026-05.md` — launch confidence |
+
+### Priority 4 — Nice-to-have (after Priority 1-3)
+
+- K-sec-2 RLS policy comprehensive audit (3-4h)
+- K-sec-3 Audit log coverage gap report (1-2h)
+- K-ADR-erp-phase-2 co-author with ภูม (4-6h) — see Sprint 7+ Track D
+- K-quality-* refactor proposals (Sprint 7+ Track K5)
+
+---
+
+## S3. 🔄 เดฟ → ภูม / ปอน hand-off (after R1+R2 lock)
+
+### ภูม
+- 🟢 **Continue self-directed:** Track A tests P-28..P-31 (~7-9h, no R1 dependency)
+- 🟡 **After K-1 ADR ships:** P-50 Option E label change UI (~1h) — "ใส่ข้อมูลสินค้าเอง — ระบบ search กำลังพัฒนา"
+- 🟡 **After K-3 ADR ships:** PCS scrub task list — ภูม own backend half (actions/, lib/, migrations/, supabase/)
+- 🟢 **Continue:** Sprint 6 leftover P-22 attendance + P-23 meeting room (after K-5 D-9 decision) + P-27 ADR draft
+
+### ปอน
+- 🟢 **Continue:** Phase D L-9b/c i18n polish (anytime)
+- 🟡 **After K-3 ADR ships:** PCS scrub frontend half (components/, app/, messages/) — coordinate w/ ภูม
+- 🟡 **Blocked on เดฟ confirm:** Phase B L-5 priority page order (เดฟ pick: home → import-china → china-shopping → customs-clearance per ปอน suggestion)
+- 🟡 **Blocked on เดฟ LIFF app creation:** "เพิ่ม LINE OA" CTA drop at landing pages
+
+---
+
+## S4. 🚀 เดฟ self-batch (this week, parallel with ก๊อต batch)
+
+| # | Task | Est | Blocker |
+|---|---|---|---|
+| **DV-1** | External signups: Sentry + Upstash + hCaptcha (all free tier) | 30m | None — เดฟ ทำได้ทันที |
+| **DV-2** | Create LIFF app ใน LINE Console (use Channel ID `2009931373`) → set `NEXT_PUBLIC_LIFF_ID` ใน Vercel | 30m | None |
+| **DV-3** | ThaiBulkSMS account apply + API keys → Vercel env | 30m | None (paid per SMS) |
+| **DV-4** | Pacred owner ติดต่อ ขอ PromptPay # + bank acct | 15m + รอ | Pacred legal |
+| **DV-5** | Landing pivot: L-22 GTM/GA4 conversion tracking | 3-4h | None — เดฟ self-directed |
+| **DV-6** | Landing pivot: L-23 heatmap integration (Microsoft Clarity = ฟรี, recommended) | 2-3h | None |
+| **DV-7** | Landing pivot: L-24 A/B infra scaffold (GrowthBook free tier or Vercel Edge Config) | 3-4h | None |
+| **DV-8** | Help ปอน Phase B L-5 — เดฟ confirm priority page order + scaffold helpers | 6-8h | ปอน sync |
+
+**Estimate รวม:** ~16-22h งานเดฟ this week. หลัง creds เข้าจาก DV-1..DV-4 → activate Sentry/Upstash/hCaptcha ใน Vercel + redeploy = unblock production hardening
+
+---
+
+**End of Part S.** เดฟ→ก๊อต hand-off pattern: ทุกครั้งที่เดฟต้อง offload งานสำคัญให้ก๊อต → append entry ใน Part S ใหม่ (new section S5, S6, ...) พร้อม commit message `docs(port-plan): hand-off batch to ก๊อต — <topics>`. ก๊อต tick off ใน follow-up commit.

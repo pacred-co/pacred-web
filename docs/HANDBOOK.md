@@ -19,7 +19,7 @@ pnpm dev                           # http://localhost:3000
 **Need help:**
 - ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
 - งานของฉันคืออะไร → [`team.md`](team.md) + [`PORT_PLAN.md`](PORT_PLAN.md) Part O (assignments) + Part P (snapshot)
-- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part R (vendor cutoff)
+- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part R (vendor cutoff) + Part S (เดฟ↔ก๊อต hand-off batch)
 - เขียน code ยังไง → [`conventions.md`](conventions.md)
 - Architecture → [`architecture.md`](architecture.md)
 - ที่อยู่ / เบอร์ Pacred / LINE OA IDs → [`pacred-info.md`](pacred-info.md)
@@ -42,7 +42,7 @@ pnpm dev                           # http://localhost:3000
 
 | File | คืออะไร |
 |---|---|
-| [`PORT_PLAN.md`](PORT_PLAN.md) | Master plan — Parts A-N (PHP audit + early sprints) · O (per-role assignments) · P (latest snapshot) · 🚨 Q (production blockers) · 🚨 R (vendor cutoff decisions) |
+| [`PORT_PLAN.md`](PORT_PLAN.md) | Master plan — Parts A-N (PHP audit + early sprints) · O (per-role assignments) · P (latest snapshot) · 🚨 Q (production blockers) · 🚨 R (vendor cutoff decisions) · 🤝 S (เดฟ→ก๊อต async hand-off batch) |
 | [`architecture.md`](architecture.md) | System architecture — diagrams, DB schema, auth flow, security |
 | [`PACRED-SECOND-BRAIN.md`](PACRED-SECOND-BRAIN.md) | Context notes + gotchas |
 | [`decisions/*.md`](decisions/) | Architecture Decision Records (ADRs) — `0001-line-notify-replacement` · `0002-admin-architecture` |
