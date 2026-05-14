@@ -10,15 +10,21 @@ import { logger } from "@/lib/logger";
  * pcs-admin/api/autorun/update-active-customers/index.php which
  * filtered tb_users.userActive based on order/forwarder/payment activity.
  *
- * SCAFFOLD STATE — built by เดฟ for ภูม to verify + ship.
+ * P-16 verified + shipped (ภูม, 2026-05-14):
  *   ✅ activity rules ported from PHP (3 streams)
  *   ✅ idempotent — only flips false→true (never demotes)
- *   ⚠️  ภูม: P-13 already has a "recently-active customers" admin page
- *      reading wallet_transactions directly — confirm this cron isn't
- *      duplicating/conflicting work before enabling the schedule.
+ *   ✅ forwarder exclusion list refined — added 'cancelled' to skip list
+ *      (scaffold only had 'pending_payment'; 'cancelled' shipments
+ *      shouldn't count as active activity either)
+ *   ✅ DECISION D-18 (per Sprint 6 P-16 recommendation): KEEP BOTH —
+ *      this cron flips is_active flag (cheap, daily) and P-13's
+ *      /admin/customers/recently-active dashboard reads profiles +
+ *      aggregates wallet streams directly (real-time, doesn't depend
+ *      on the flag). No overlap. No duplication. Different concerns —
+ *      cron supports future is_active=true filters across the app;
+ *      dashboard provides admin's lifetime-revenue view.
  *
- * Schedule via vercel.json (suggested daily 01:00 UTC = 08:00 ICT):
- *   { "path": "/api/cron/refresh-active-customers", "schedule": "0 1 * * *" }
+ * Schedule via vercel.json: daily 01:00 UTC = 08:00 ICT (already set).
  *
  * Authentication: same pattern as /api/cron/auto-cancel-orders.
  *
@@ -26,7 +32,9 @@ import { logger } from "@/lib/logger";
  *   - service_orders past status 2 (hStatus 3/4/5) →
  *     status IN ('ordered','awaiting_chn_dispatch','completed')
  *     equivalently NOT IN ('pending','awaiting_payment','cancelled')
- *   - forwarders past 'pending_payment' (any other status = paid+)
+ *   - forwarders past 'pending_payment' AND not 'cancelled'
+ *     (enum: pending_payment, shipped_china, in_transit,
+ *      arrived_thailand, out_for_delivery, delivered, cancelled)
  *   - yuan_payments status='completed'
  *
  * @see C:\xampp\htdocs\pcscargo\member\pcs-admin\api\autorun\update-active-customers\index.php
@@ -58,15 +66,16 @@ export async function GET(request: Request) {
     if (row.profile_id) profileIds.add(row.profile_id);
   }
 
-  // Stream 2 — forwarder activity (paid+ — past status 'pending_payment')
-  // TODO(ภูม): verify forwarder status enum — 0010_forwarder.sql shows
-  // 'pending_payment' is the initial unpaid state; everything beyond is
-  // active. If the enum has more nuance ('rejected' etc.), refine the
-  // exclusion list here.
+  // Stream 2 — forwarder activity (any status that means "money moved
+  // and shipment is happening"). Verified vs 0010_forwarder.sql enum:
+  //   pending_payment, shipped_china, in_transit, arrived_thailand,
+  //   out_for_delivery, delivered, cancelled
+  // Excluded: 'pending_payment' (unpaid initial) + 'cancelled' (no
+  // longer active). The 5 in-between states all count.
   const { data: fwdRows, error: fwdErr } = await supabase
     .from("forwarders")
     .select("profile_id")
-    .neq("status", "pending_payment");
+    .not("status", "in", "(pending_payment,cancelled)");
 
   if (fwdErr) {
     return NextResponse.json({ ok: false, stage: "forwarders", error: fwdErr.message }, { status: 500 });
