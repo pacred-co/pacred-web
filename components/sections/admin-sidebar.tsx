@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
+  MessageSquare,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -39,6 +40,7 @@ const items: NavItem[] = [
   { href: "/admin/customers",          label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
   { href: "/admin/customers/pending",  label: "รอ Approve",        icon: <Clock className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
   { href: "/admin/juristic-check",     label: "เช็คนิติบุคคล",       icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ลูกค้า · ขาย" },
+  { href: "/admin/contact-messages",   label: "ข้อความติดต่อ",       icon: <MessageSquare className="w-5 h-5" />,   roles: ["ops"], group: "ลูกค้า · ขาย" },
   { href: "/admin/team-leaders",       label: "ทีมขาย",            icon: <Coins className="w-5 h-5" />,           roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
 
   // Org & HR
