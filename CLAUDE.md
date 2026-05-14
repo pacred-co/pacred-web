@@ -13,7 +13,7 @@
 - 🏢 [`docs/pacred-info.md`](docs/pacred-info.md) — company info SOT (addresses + phones + emails + LINE OA + sales reps)
 
 **Living docs (เดฟ updates):**
-- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness (Parts A-Q + 🚨 Part R vendor cutoff)
+- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — PHP feature audit + sprints + production-readiness (Parts A-Q + 🚨 Part R vendor cutoff + 🤝 Part S เดฟ↔ก๊อต async hand-off)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
 - 🧠 [`docs/PACRED-SECOND-BRAIN.md`](docs/PACRED-SECOND-BRAIN.md) — context notes + gotchas
 
@@ -29,17 +29,19 @@
 1. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
 2. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
 3. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
-4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part O (per-role assignments) + Part P (latest snapshot) + Part Q/R (urgent items)
+4. หางานของตัวเอง: [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part O (per-role assignments) + Part P (latest snapshot) + Part Q/R/S (urgent items + hand-off batch)
 5. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 (น้อง pull จาก `dave` ไม่ใช่ `main`!) + §3.0 push-frequency rule
 
 ---
 
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-13
+Last updated: 2026-05-16
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
 > Marketing site + landing pages + (incoming) member portal
+
+> 🎯 **Live state** — ดูที่ [`docs/HANDBOOK.md`](docs/HANDBOOK.md) §"Current state" + [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part P (latest snapshot). โน้ตด้านล่าง section "Auth & Backend State" เป็น Phase 1-5 historic — ปัจจุบัน Sprint 6.5/7+ มีหน้า /service-order, /service-import, /service-payment, /wallet, /sales, /notifications, /admin/* ทำงานแล้ว
 
 ## Stack
 - Next.js **16.2.6** (App Router) — **โปรดอ่าน AGENTS.md: เวอร์ชันนี้มี breaking changes จาก training data**
@@ -166,10 +168,16 @@ supabase/
 ### Decisions (all locked)
 - Hosting: **Vercel + Supabase Cloud**
 - Phone OTP: **ThaiBulkSMS** (custom — bypass via `OTP_BYPASS=true`)
-- LINE Login: mocked UI; channel TBD
+- LINE notifications: **LINE Messaging API push** via Pacred OA (ADR-0001) — creds set ใน `.env.local` 2026-05-14 (Channel ID `2009931373`); production = ตั้ง 3 vars ใน Vercel + flip `LINE_PUSH_BYPASS=false`
+- LINE customer linkage: **LIFF** (D-1-LIFF scaffolded; รอ Pacred owner สร้าง LIFF app + `NEXT_PUBLIC_LIFF_ID` ใน Vercel)
+- LINE Login (OAuth): not yet implemented (button = stub)
 - member_code: `PR00001` (running, auto-gen via Postgres trigger) — ใหม่ทั้งระบบ ไม่ต้อง compat กับ PHP เดิม (`PCS<num>`)
 - Email verification: optional (Supabase confirm-email OFF)
 - Password: min 6 / max 30, no complexity rules
+- Admin architecture: same Next.js app + `/admin/*` route group + `admins` table + `is_admin()` SECURITY DEFINER (ADR-0002)
+- **R1 china-search vendor cutoff:** **Option E (hybrid)** ✅ locked 2026-05-16 — Track G code (TAMIT/AkuCargo/Laonet) อยู่ใน repo แต่อย่าเซ็ต Vercel env vars; prod = demo mode. ดู [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part R1 + S1
+- **R2 PCS branding cutoff:** **scrub** ✅ locked 2026-05-16 — ลบ "PCS Cargo" / "pcscargo.co.th" / "legacy PHP" mentions ออกจาก code/comments; `docs/audit/php-pcscargo-integrations.md` คงไว้เป็น internal-only
+- **D-7 Payment Gateway:** **PromptPay-only ก่อน beta** ✅ locked 2026-05-16 — defer Omise/2C2P/Stripe TH → post-beta
 
 ---
 
@@ -382,9 +390,9 @@ git checkout <my-branch> && git merge main && git push origin <my-branch>
 ### 🟢 Phase A — Foundation (ก่อนเริ่ม port feature)
 - [x] A1. ~~Decision: member_code scheme~~ → **`PR00001`** (Pacred ใหม่ ไม่ compat PHP)
 - [x] A3. ~~Decision: schema strategy~~ → **Hybrid** (rename column ให้ snake_case + drop columns ที่ deprecated + เพิ่ม FK constraints + ตัด `tb_` prefix)
-- [ ] A2. Decision: LINE Notify replacement → แนะนำ **LINE Messaging API** (มี LINE OA แล้ว: https://lin.ee/Yg3fU0I) + email digest fallback
+- [x] A2. ~~Decision: LINE Notify replacement~~ → **LINE Messaging API** (ADR-0001 ✅) + email digest fallback via Resend; LIFF for customer linkage (D-1-LIFF ✅ scaffolded)
 - [ ] A4. Extract pure schema (CREATE TABLE only) จาก dump → split เป็น file ตาม domain
-- [ ] A5. Replace social links + branding ทั้งหมดในโปรเจกต์ (PCS Cargo → Pacred, links ใหม่ทั้งหมด — ดู Decisions ด้านบน)
+- [ ] A5. Replace social links + branding ทั้งหมดในโปรเจกต์ (PCS Cargo → Pacred, links ใหม่ทั้งหมด — ดู Decisions ด้านบน) — R2 scrub plan รอ ก๊อต ADR (Part S K-3)
 
 ### 🟡 Phase B — Customer Core (1-2 sprints)
 - [ ] B1. Migration `0003_profiles_extended.sql` — เพิ่ม columns ใน profiles ที่ขาด (coID, userCompany, companyCustomer, userPayMethod, userTransportType, userShipBy, adminIDSale, userRecom, userActive, userLineNotify, userLineIDOA, channel, shopUser, etc.)
