@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 
 const STATUSES = ["pending","completed","failed","cancelled"] as const;
 
@@ -14,10 +15,6 @@ const updateSchema = z.object({
   note:      z.string().trim().max(1000).optional(),
 });
 export type AdminUpdateWalletTxInput = z.infer<typeof updateSchema>;
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "รอดำเนินการ", completed: "สำเร็จ", failed: "ไม่สำเร็จ", cancelled: "ยกเลิก",
-};
 
 /**
  * Approve / reject / complete a wallet transaction.
@@ -55,19 +52,13 @@ export async function adminUpdateWalletTransaction(input: AdminUpdateWalletTxInp
     });
 
     // Notify customer
-    const absAmount = Math.abs(Number(existing.amount));
-    const kindLabel = existing.kind === "deposit" ? "เติมเงิน"
-                    : existing.kind === "withdraw" ? "ถอนเงิน"
-                    : existing.kind;
-    void sendNotification(existing.profile_id, {
-      category: "wallet",
-      severity: d.status === "completed" ? "success" : d.status === "failed" || d.status === "cancelled" ? "warning" : "info",
-      title:    `${kindLabel} — ${STATUS_LABEL[d.status] ?? d.status}`,
-      body:     `จำนวน ฿${absAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}${d.note ? `\n${d.note}` : ""}`,
-      link_href: `/wallet/history`,
-      reference_type: "wallet_transaction",
-      reference_id:   existing.id,
-    });
+    void sendNotification(existing.profile_id, notify.walletTxStatusChanged({
+      kind:   existing.kind,
+      status: d.status,
+      amount: Number(existing.amount),
+      note:   d.note,
+      txId:   existing.id,
+    }));
 
     revalidatePath("/admin/wallet");
     return { ok: true };

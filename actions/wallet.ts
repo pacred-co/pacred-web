@@ -10,6 +10,7 @@ import {
 } from "@/lib/validators/wallet";
 import { buildPromptPayQrDataUrl } from "@/lib/promptpay";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
 
 type ActionResult<T = void> =
@@ -137,15 +138,10 @@ export async function createDeposit(
   revalidatePath("/wallet/history");
   revalidatePath("/wallet/deposit");
 
-  void sendNotification(user.id, {
-    category: "wallet",
-    severity: "info",
-    title:    `ส่งคำขอเติมเงินแล้ว`,
-    body:     `จำนวน ฿${d.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} — รอ Pacred ตรวจสลิป`,
-    link_href: `/wallet/history`,
-    reference_type: "wallet_transaction",
-    reference_id:   created.id,
-  });
+  void sendNotification(user.id, notify.walletDepositRequested({
+    amount: d.amount,
+    txId:   created.id,
+  }));
 
   return { ok: true, data: { id: created.id } };
 }
@@ -200,15 +196,10 @@ export async function createWithdraw(
   revalidatePath("/wallet/history");
   revalidatePath("/wallet/withdraw");
 
-  void sendNotification(user.id, {
-    category: "wallet",
-    severity: "info",
-    title:    `ส่งคำขอถอนเงินแล้ว`,
-    body:     `จำนวน ฿${d.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} — ภายใน 1 วันทำการ`,
-    link_href: `/wallet/history`,
-    reference_type: "wallet_transaction",
-    reference_id:   created.id,
-  });
+  void sendNotification(user.id, notify.walletWithdrawRequested({
+    amount: d.amount,
+    txId:   created.id,
+  }));
 
   return { ok: true, data: { id: created.id } };
 }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 
 const editCustomerSchema = z.object({
   id:              z.string().uuid(),
@@ -122,15 +123,7 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
       after:  { status: "active" },
     });
 
-    void sendNotification(id, {
-      category: "system",
-      severity: "success",
-      title:    "บัญชีของคุณได้รับการอนุมัติแล้ว",
-      body:     before.member_code
-        ? `ยินดีต้อนรับ! รหัสสมาชิก: ${before.member_code}`
-        : "ยินดีต้อนรับเข้าใช้งาน Pacred",
-      link_href: "/dashboard",
-    });
+    void sendNotification(id, notify.customerApproved({ memberCode: before.member_code }));
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
@@ -233,13 +226,10 @@ export async function adminConvertToJuristic(
       mark_verified:         d.mark_verified,
     });
 
-    void sendNotification(d.profile_id, {
-      category: "system",
-      severity: "success",
-      title:    "บัญชีของท่านถูกอัพเกรดเป็นนิติบุคคล",
-      body:     `${display} — ใบเสร็จและใบกำกับภาษีในระบบจะออกในชื่อ "${d.company_name}" นับจากนี้`,
-      link_href: "/profile",
-    });
+    void sendNotification(d.profile_id, notify.customerConvertedToJuristic({
+      displayName: display,
+      companyName: d.company_name,
+    }));
 
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${d.profile_id}`);
@@ -273,12 +263,7 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
       after:  { status: "suspended" },
     });
 
-    void sendNotification(id, {
-      category: "system",
-      severity: "warning",
-      title:    "บัญชีของคุณถูกระงับการใช้งาน",
-      body:     "กรุณาติดต่อเจ้าหน้าที่หากต้องการสอบถามเพิ่มเติม",
-    });
+    void sendNotification(id, notify.customerSuspended());
 
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${id}`);

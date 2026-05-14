@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 import { logger } from "@/lib/logger";
 
 /**
@@ -141,12 +142,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    await sendNotification(pid, {
-      category: "sales_digest",
-      severity: "info",
-      title:    `ยอด Pacred ${yyyymmdd}`,
-      body:     message,
-    });
+    await sendNotification(pid, notify.salesDigest({ yyyymmdd, message }));
     dispatched.push(pid);
   }
 

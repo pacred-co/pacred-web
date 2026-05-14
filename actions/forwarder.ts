@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { forwarderSchema, type ForwarderInput } from "@/lib/validators/forwarder";
 import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forwarder/calc-price";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -474,15 +475,10 @@ export async function createForwarder(
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");
 
-  void sendNotification(user.id, {
-    category: "forwarder",
-    severity: "info",
-    title:    `ฝากนำเข้าสำเร็จ ${created.f_no}`,
-    body:     `ยอดที่ต้องชำระ ฿${breakdown.total_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
-    link_href: `/service-import/${created.f_no}`,
-    reference_type: "forwarder",
-    reference_id:   created.id,
-  });
+  void sendNotification(user.id, notify.forwarderCreated({
+    fNo:         created.f_no,
+    forwarderId: created.id,
+  }));
 
   return {
     ok: true,
