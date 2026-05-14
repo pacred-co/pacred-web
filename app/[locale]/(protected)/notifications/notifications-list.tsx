@@ -23,6 +23,7 @@ const CAT_ICON: Record<NotificationRow["category"], string> = {
   sales:        "💰",
   system:       "🔔",
   promo:        "🎁",
+  sales_digest: "📊",
 };
 
 export function NotificationsList({ initial }: { initial: NotificationRow[] }) {

@@ -5,7 +5,8 @@
 
 export type NotifyCategory =
   | "order" | "payment" | "forwarder" | "yuan_payment"
-  | "wallet" | "sales" | "system" | "promo";
+  | "wallet" | "sales" | "system" | "promo"
+  | "sales_digest";
 
 export type NotifySeverity = "info" | "success" | "warning" | "error";
 

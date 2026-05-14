@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/notifications";
 import { logger } from "@/lib/logger";
 
 /**
@@ -94,44 +95,79 @@ export async function GET(request: Request) {
     totals[kind].mtd.sum = (mtdRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
   }
 
-  // ────────────────────────────────────────────────────────────
-  // TODO(ภูม): recipient strategy + LINE/email dispatch
-  //
-  // Legacy PHP broadcasts to a single LINE Notify token (now EOL).
-  // Pacred options:
-  //   (a) Loop admins where role IN ('super','sales_admin') AND
-  //       notify_channels.daily_digest === true → call sendNotification()
-  //       per admin (writes to notifications table + LINE push)
-  //   (b) Use LINE Messaging API multicast to a fixed LINE OA group
-  //       (set LINE_DIGEST_GROUP_ID env var)
-  //   (c) Email-only via Resend to a configured admin distribution list
-  //
-  // For (a), need to extend lib/notifications/types.ts NotifyPayload to
-  // accept multi-line markdown body, and add a `daily_digest` channel
-  // toggle to profiles.notify_channels jsonb.
-  //
-  // Recommend (a) — already integrates with notifications inbox so admins
-  // see the digest in-app even if LINE/email are bypassed.
-  // ────────────────────────────────────────────────────────────
-
   const message = formatDigestMessage(yyyymmdd, monthLabel, totals);
 
-  logger.info("cron.sales-daily-digest", "computed digest — dispatch not yet wired", {
+  // ────────────────────────────────────────────────────────────
+  // P-15 — recipient dispatch (option (a) per scaffold TODO):
+  // Loop admins with role IN ('super','sales_admin') + active +
+  // notify_channels.daily_digest === true. sendNotification writes
+  // to the notifications table AND triggers LINE push when
+  // LINE_PUSH_BYPASS=false in env (production).
+  //
+  // Opt-in is jsonb-keyed so missing/null/false all read as opt-out.
+  // Migration 0025 backfills existing profiles with the key set to
+  // false; admins toggle on via Supabase Table Editor (UI may come
+  // later).
+  // ────────────────────────────────────────────────────────────
+  type AdminRow = {
+    profile_id: string;
+    profile:
+      | { notify_channels: { daily_digest?: boolean } | null }
+      | { notify_channels: { daily_digest?: boolean } | null }[]
+      | null;
+  };
+  const { data: targetAdmins, error: adminErr } = await supabase
+    .from("admins")
+    .select("profile_id, profile:profiles!profile_id ( notify_channels )")
+    .in("role", ["super", "sales_admin"])
+    .eq("is_active", true);
+
+  if (adminErr) {
+    return NextResponse.json({ ok: false, error: adminErr.message, stage: "fetch_admins" }, { status: 500 });
+  }
+
+  const dispatched: string[] = [];
+  const skipped:    string[] = [];
+  const seen = new Set<string>();
+  for (const row of (targetAdmins ?? []) as AdminRow[]) {
+    const pid = row.profile_id;
+    if (!pid || seen.has(pid)) continue;     // dedupe across multiple roles
+    seen.add(pid);
+
+    const profile = Array.isArray(row.profile) ? row.profile[0] ?? null : row.profile;
+    const optedIn = profile?.notify_channels?.daily_digest === true;
+    if (!optedIn) {
+      skipped.push(pid);
+      continue;
+    }
+
+    await sendNotification(pid, {
+      category: "sales_digest",
+      severity: "info",
+      title:    `ยอด Pacred ${yyyymmdd}`,
+      body:     message,
+    });
+    dispatched.push(pid);
+  }
+
+  logger.info("cron.sales-daily-digest", "digest dispatched", {
     yyyymmdd,
     monthLabel,
-    order_yday_sum:  totals.order_payment.yday.sum,
-    import_yday_sum: totals.import_payment.yday.sum,
-    yuan_yday_sum:   totals.yuan_payment.yday.sum,
+    dispatched_count: dispatched.length,
+    skipped_count:    skipped.length,
+    order_yday_sum:   totals.order_payment.yday.sum,
+    import_yday_sum:  totals.import_payment.yday.sum,
+    yuan_yday_sum:    totals.yuan_payment.yday.sum,
   });
 
   return NextResponse.json({
     ok:        true,
-    scaffold:  true,
     yyyymmdd,
     month:     monthLabel,
     totals,
     message,
-    note:      "dispatch to admins not yet wired — see TODO in route.ts",
+    dispatched_count: dispatched.length,
+    skipped_count:    skipped.length,
   });
 }
 
