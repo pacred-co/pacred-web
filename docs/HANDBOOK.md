@@ -19,12 +19,15 @@ pnpm dev                           # http://localhost:3000
 ### Verify scripts (also run automatically in CI)
 
 ```bash
+pnpm verify         # umbrella: lint + tsc + test:unit + audit:all — run before every push
 pnpm lint           # eslint
-pnpm exec tsc --noEmit   # typecheck
+pnpm exec tsc --noEmit   # typecheck (note: .next/dev/types/* errors are hot-reload artifacts, ignore)
 pnpm test:unit      # 240+ assertions, env-independent
 pnpm test           # adds placement integration test (needs .env.local + Supabase)
-pnpm audit:all      # MD link audit + env var audit (catches doc/env drift)
-pnpm audit:i18n     # th vs en key parity
+pnpm audit:all      # MD link audit + env var audit + i18n parity (umbrella)
+pnpm audit:md       # markdown local-link target audit
+pnpm audit:env      # process.env.X references vs .env.example
+pnpm audit:i18n     # th vs en key parity + intentional-same classification
 ```
 
 **Need help:**

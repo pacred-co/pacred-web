@@ -17,7 +17,8 @@
     "audit:md": "node scripts/md-link-audit.mjs",
     "audit:env": "node scripts/env-audit.mjs",
     "audit:i18n": "node scripts/i18n-audit.mjs",
-    "audit:all": "pnpm audit:md && pnpm audit:env && pnpm audit:i18n"
+    "audit:all": "pnpm audit:md && pnpm audit:env && pnpm audit:i18n",
+    "verify": "pnpm lint && tsc --noEmit && pnpm test:unit && pnpm audit:all"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.2",
