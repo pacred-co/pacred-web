@@ -1737,13 +1737,14 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | ✅ **Bonus 6** | `pacred.co/line` short link | `app/[locale]/(public)/line/page.tsx` — server `redirect()` to `https://lin.ee/Yg3fU0I` (307) so we can print/share `pacred.co/line` and rotate the LINE OA channel from one file. Updated 11 user-facing components (footer, navbar, floating-tabs, contact-sales, clearance-promo, import-export-banner, pricing-section, purchase-banner, warehouse-detail, knowledge/article-content, ui/sales-carousel) + FAQ text to use `/line`. `SOCIAL.line` in `components/seo/site.ts` stays canonical for JSON-LD `sameAs`. **TODO for เดฟ/ก๊อต:** `lib/booking-data.ts` 3 sales reps also use `lin.ee/Yg3fU0I` — swap to `/line` from lead scope when convenient. |
 | ✅ **Bonus 7** | Mobile booking tabs + LCL/FCL split + trust-ribbon removed | `components/booking/BookingTabs.tsx` — removed `justify-center` (was hiding sea/truck on mobile because `air` is centered), added `snap-x snap-proximity` + mask-image fade + pulsing `<ChevronRight>` scroll affordance + `scrollIntoView` of active tab on change. `components/sections/pricing-section.tsx` — `FREIGHT_CARDS` now grouped `lcl`/`fcl`, prices refreshed per Google Doc rate sheet (LCL Truck DDP ฿5,500/CBM · LCL Sea DDP ฿3,500/CBM · FCL 20ft DDP ฿135,000 · FCL 40HQ DDP ฿155,000). Render split into 2 stacked `<FreightGroupRow>` sections (LCL row + FCL row), each with own eyebrow/title/sub. **`MobileTrustRibbon` polished 2×2 then dropped entirely** per Pacred owner — `components/sections/mobile-trust-ribbon.tsx` deleted; usages removed from home + customs-clearance pages. |
 
-### 🔴 BLOCKER — pending fix on `origin/podeng` before merge
+### ⚠️ L-pricing-fix — RETRACTED (audit false alarm, 2026-05-14 evening)
 
-| # | Task | Est | Source | Description |
-|---|---|---|---|---|
-| **L-pricing-fix** | Add 6 missing i18n keys (`lcl/fcl SectionEyebrow/Title/Sub`) | 15m | เดฟ audit 2026-05-14 of commit `129ef5a` | `components/sections/pricing-section.tsx:454-466` calls `t("lclSectionEyebrow|Title|Sub")` + `t("fclSectionEyebrow|Title|Sub")` — none exist in `messages/{th,en}.json` under `pricing` namespace. `scripts/i18n-audit.mjs` ไม่จับเพราะ check แค่ th-vs-en parity ไม่ scan `t()` call coverage. **Trigger:** user toggles to "Freight" tab → `MISSING_MESSAGE: Could not resolve 'lclSectionEyebrow' in 'pricing'` → page crash. **Fix:** add 6 keys × 2 locales (12 total). Also drop now-orphan `lcl{Badge,Subtitle,Transit,Note}` keys at lines 1711-1717 of both dictionaries. Optionally extend `i18n-audit.mjs` to also grep source `t()` calls — flag as `L-9d-followup` |
+เดฟ audit รอบแรกอ้างว่า 6 keys (`lcl/fcl SectionEyebrow/Title/Sub`) missing จาก `messages/{th,en}.json` ในcommit `129ef5a`. **ตรวจรอบสองหลัง merge:** keys อยู่ครบที่ line 1705-1710 ในทั้ง 2 locale ของ pricing namespace block. ปอน add ไว้แล้วใน same commit (audit agent miss). NO blocker — `129ef5a` ship-ready. **Bonus 6+7 merged into dave/main** 2026-05-14 evening (commit `<TBD>`)
 
-### 🟡 REMAINING (Sprint 5 Day 4+ — after L-pricing-fix lands)
+> **Lesson learned (เพิ่มใน team.md §6 etiquette):** อย่า trust agent audit 100% — verify directly by `grep` ก่อน flag blocker. ทุก audit ที่อ้าง "missing key/file" ต้อง paste grep output ที่แสดง absent ก่อน accept
+> **Optional follow-up:** **L-9d-followup** — ขยาย `scripts/i18n-audit.mjs` ให้ grep source `t()` calls vs key existence — ป้องกัน false negatives ในอนาคต
+
+### 🟡 REMAINING (Sprint 5 Day 4+)
 
 | # | Task | Est | Description |
 |---|---|---|---|
@@ -1921,7 +1922,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | `origin/main` | `e9da976` | latest stable — has P-1..P-20 + Sentry/rate-limit/hCaptcha + SEO bundle + Phase 0 fixes |
 | `origin/dave` | `e9da976` | == main |
 | `origin/Poom` | `dda663c` | merged into main ✅ — ภูม picks Sprint 6 follow-ups (P-15-followup..P-20-followup, ~2-3h) or Priority 2/3 next |
-| `origin/podeng` | `c6c5d58` | **NOT merged** — has Bonus 6+7 (good) + L-pricing-fix BLOCKER (needs ปอน to add 6 missing i18n keys before merge) |
+| `origin/podeng` | `c6c5d58` | merged into dave/main ✅ — L-pricing-fix was a false alarm (keys exist) |
 
 **Validation Claude Code collab pattern (§9):** ภูม commit `0da2e71` อ้างอิง "per Part P review" + ภูม Sprint 6 commits ทุกตัวมี explicit `DECISION:` blocks per §6. ปอน Bonus 6+7 ส่งเสริม Phase A. **3 contributors shipped 14-15h work each in 1 day async, zero coordination meetings** = pattern works.
 
@@ -1980,7 +1981,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 **Remaining:**
 - **ภูม:** Sprint 6 follow-ups (6 items, ~2-3h) + Priority 2 P-21..P-24 (~9-12h) + Priority 3 P-25..P-27 (~5-9h) — all self-directed
-- **ปอน:** L-pricing-fix BLOCKER (~15m) → then L-5 + L-9b/c + Phase C+ ecosystem
+- **ปอน:** Bonus 6+7 merged ✅ — next = L-5 + L-9b/c + Phase C+ ecosystem (ต้อง decision)
 - **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire = 1-2h each (could do now)
 - **ก๊อต:** schedule Pacred owner call to unblock D-7 + 4 sets of creds (Sentry DSN, Upstash, hCaptcha, 3rd-party APIs)
 
@@ -1995,7 +1996,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 > **Strategic shift (เดฟ บอก):** "หลังบ้านให้ ภูม ทำไปก่อนยาวๆ — เดฟ + ผม pivot ไปลุยแลนดิ้ง หาลูกค้าก่อน". Backend = ภูม solo (Sprint 7+ runway 60-90h). Frontend acquisition = เดฟ + Claude **assist ปอน** (ปอน ยังคง lead frontend, เดฟ + Claude join as helpers)
 
-1. **ปอน:** 🔴 fix L-pricing-fix (15m) — add 6 i18n keys + drop 4 orphan keys → push podeng → เดฟ merge
+1. **ปอน:** ✅ Bonus 6+7 merged into dave/main (L-pricing-fix was audit false alarm — keys existed)
 2. **ภูม:** open menu — Sprint 6.5 follow-ups (6 items, ~2-3h) + Sprint 7+ tracks A-F (~60-90h, 5 themed tracks). Self-directed per §6. Recommended ลำดับ: เก็บ follow-ups quick wins (P-vercel-plan + P-20-followup-rls + P-18-followup-rbac, ~30m) → Track A tests start → interleave tracks. **Goal:** keep grinding while เดฟ pivots
 3. **เดฟ + Claude pivot — landing/acquisition:**
    - Help ปอน ที่ Phase B (L-5 service landing polish) + Phase C+ (L-10..L-20 ecosystem expansion)
