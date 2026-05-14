@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts"
+    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.2",

@@ -2081,7 +2081,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | P-24 forwarder rate engine unit tests (49 assertions) | ✅ | `36ac681` |
 | P-25 re-audit Part N3 silent degraded modes | ✅ | `f39af74` |
 | P-26 service-order placement integration test (12 assertions) | ✅ | `52c7331` |
-| **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | this commit |
+| **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | `dba11a6` |
+| **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | this commit |
 | P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
@@ -2140,7 +2141,26 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-→ **P-50 china-search rewire** (TAMIT-cloud per audit, ~4-6h) — root-cause fix for the D-7a hang/not-configured surfaces ภูมเจอ. Then P-51 short-URL cache, P-52 AkuCargo keyword, P-53 Laonet image. After Track G clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+→ **P-51 short-URL cache** (tam-i-t.com, ~2-3h) — resolves `m.tb.cn/<tk>` and `qr.1688.com/s/<tk>` so customers pasting short URLs from mobile LINE share don't fall through to demo mode. Then **P-52 AkuCargo keyword** (~2-3h), **P-53 Laonet image** (~2-3h). After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+
+### P-50 shipped (this batch — Track G URGENT)
+
+`lib/china-search/index.ts` rewired to TAMIT-cloud per audit §3a:
+
+- **New env var** `PACRED_TAMIT_DETAIL_URL` (default `https://tamit-cloud.com/api-product`) — `.env.example` already had this from เดฟ audit commit; `.env.local` updated to match (RCGroup vars commented out as legacy).
+- **Endpoint pattern** changed from `?q=<full-url>` to `/get/{1688|taobao}/?id=<productID>` per the canonical PHP `convertURLChinna()` — Tmall maps to taobao at TAMIT.
+- **`extractProductId()`** extracted to its own file `lib/china-search/extract-product-id.ts` (no `server-only`) so it's tsx-testable. Handles 1688/Taobao/Tmall desktop + mobile patterns + `?offerId=` fallback + generic numeric path segments.
+- **`normaliseTamitDetail()`** parses TAMIT's actual response shape: `json.status==200 → json.data.{title, vendor, mainImage, listImage[], referencePrice, priceRanges[], sku[], skuMap[]}`.  Defensive: missing/wrong-typed fields degrade gracefully (e.g., no priceRanges → no promo price; sku_axes empty → UI single-row fallback).
+- **Demo fallback preserved** — if productID not extractable (short URLs, P-51 will fix), TAMIT unreachable, response status !== 200, or any throw → returns `available: true` with `buildDemoDetail()` so the customer can still type price/qty manually and place the order. Same posture the legacy PHP took on API outages.
+- **`searchKeyword` + `searchByImage`** kept on legacy wiring for now with explicit `TODO(P-52)` / `TODO(P-53)` comments — those rewires come next in this same Track G batch.
+- **Tests:** new `extract-product-id.test.ts` with 19 assertions across 7 areas (a-g): 1688 desktop, Taobao item.htm, Tmall, ?offerId fallback, generic path segments, short URLs return null, malformed inputs. Wired into `pnpm test` chain → total now **130 assertions** all green.
+
+**Acceptance gate:**
+- `extractProductId` unit tests green ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain green (130 assertions) ✅
+- Real TAMIT smoke test owner-blocked: needs Vercel egress IP allowlist verification (P-55) once first paste hits production. Locally a Tmall URL → demo fallback (TAMIT may not respond from dev IP) but extractProductId → correct productID, so the rewire is verified in unit tests + shape-compatible.
 
 ### D-1-LIFF shipped (this batch — URGENT from Part Q)
 
@@ -2165,7 +2185,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 Day 1-4 self-directed batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF). Next: Track G P-50 china-search rewire.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + 6.5 batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50). Next: Track G P-51 short-URL cache → P-52 keyword → P-53 image.
 
 ---
 
