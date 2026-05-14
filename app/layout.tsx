@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import "./globals.css";
 
 const prompt = Prompt({
@@ -36,15 +36,17 @@ export default function RootLayout({
       className={`${prompt.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/*
+          Pre-hydration theme script — runs synchronously before paint
+          to prevent FOUC. Lives in the Server Component head (NOT inside
+          ThemeProvider) so React 19 doesn't warn about <script> JSX
+          re-rendering on client. See components/theme-provider.tsx.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <ThemeProvider defaultTheme="system">{children}</ThemeProvider>
       </body>
     </html>
   );
