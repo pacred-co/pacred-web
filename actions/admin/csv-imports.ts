@@ -73,6 +73,17 @@ export async function uploadCsv(
         upsert: false,
       });
     if (uploadErr) {
+      // Translate the most common infra error into actionable language —
+      // "Bucket not found" = migration 0029_csv_imports.sql hasn't been
+      // run on this Supabase project yet.
+      const msg = uploadErr.message || "";
+      if (/bucket\s*not\s*found/i.test(msg)) {
+        return {
+          ok: false,
+          error:
+            "Storage bucket 'csv-imports' ยังไม่มีในโปรเจค Supabase นี้ — กรุณารัน migration `0029_csv_imports.sql` ใน SQL Editor ก่อนใช้งาน (ดู supabase/migrations/README.md)",
+        };
+      }
       return { ok: false, error: `upload_failed: ${uploadErr.message}` };
     }
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { uploadCsv } from "@/actions/admin/csv-imports";
 
-export function UploadCsvForm() {
+export function UploadCsvForm({ disabled = false }: { disabled?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +28,9 @@ export function UploadCsvForm() {
   return (
     <form
       action={onSubmit}
-      className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4"
+      className={`rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4 ${
+        disabled ? "opacity-50 pointer-events-none" : ""
+      }`}
     >
       <label className="block space-y-1">
         <span className="text-sm font-medium text-foreground">
@@ -38,6 +40,7 @@ export function UploadCsvForm() {
           name="target_table"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
+          disabled={disabled}
           className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
         >
           <option value="forwarders">forwarders (ฝากนำเข้า)</option>
@@ -53,6 +56,7 @@ export function UploadCsvForm() {
           type="file"
           accept=".csv,text/csv,application/vnd.ms-excel"
           required
+          disabled={disabled}
           className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-500 file:px-4 file:py-2 file:text-white hover:file:bg-primary-600"
         />
         <span className="block text-xs text-muted">
@@ -66,7 +70,7 @@ export function UploadCsvForm() {
         </div>
       )}
 
-      <Button type="submit" disabled={pending} fullWidth>
+      <Button type="submit" disabled={pending || disabled} fullWidth>
         {pending ? "กำลังอัปโหลด..." : "อัปโหลด → ดูพรีวิว"}
       </Button>
     </form>

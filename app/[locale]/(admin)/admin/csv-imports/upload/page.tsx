@@ -1,7 +1,16 @@
 import { Link } from "@/i18n/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { UploadCsvForm } from "./upload-form";
 
-export default function CsvImportUploadPage() {
+export default async function CsvImportUploadPage() {
+  // Pre-flight: verify the 'csv-imports' storage bucket exists. Migration
+  // 0029_csv_imports.sql creates it; without that migration applied to
+  // this Supabase project, the upload action would fail with a cryptic
+  // "Bucket not found" error.
+  const admin = createAdminClient();
+  const { data: buckets, error: listErr } = await admin.storage.listBuckets();
+  const bucketReady = !listErr && (buckets ?? []).some((b) => b.id === "csv-imports");
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-2xl">
       <Link href="/admin/csv-imports" className="text-xs text-primary-600 hover:underline">
@@ -15,6 +24,25 @@ export default function CsvImportUploadPage() {
           อัปโหลดไฟล์ → ระบบจะพรีวิว 5 แถวแรกให้ตรวจ → กดยืนยันเพื่อนำเข้าจริง
         </p>
       </div>
+
+      {!bucketReady && (
+        <div className="rounded-2xl border-2 border-red-300 bg-red-50 p-5 text-sm text-red-900 space-y-2">
+          <p className="font-bold">⚠ ฟีเจอร์ยังใช้งานไม่ได้ — ต้องรัน migration ก่อน</p>
+          <p>
+            Storage bucket{" "}
+            <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded">csv-imports</code>{" "}
+            ยังไม่มีใน Supabase project นี้
+          </p>
+          <ol className="list-decimal pl-5 space-y-1 text-xs">
+            <li>เปิด <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="underline">Supabase Dashboard</a> → SQL Editor → New query</li>
+            <li>เปิดไฟล์ <code className="font-mono">supabase/migrations/0029_csv_imports.sql</code> → copy ทั้งหมด → paste → Run</li>
+            <li>Refresh หน้านี้ — banner นี้จะหายไป</li>
+          </ol>
+          <p className="text-xs text-red-700 mt-2">
+            หรือดู <code className="font-mono">supabase/migrations/README.md</code> สำหรับขั้นตอนรัน migration ทั้งหมด
+          </p>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-900 space-y-2">
         <p className="font-bold">📋 รูปแบบ CSV ที่รองรับ (target = forwarders)</p>
@@ -35,7 +63,7 @@ export default function CsvImportUploadPage() {
         </p>
       </div>
 
-      <UploadCsvForm />
+      <UploadCsvForm disabled={!bucketReady} />
     </main>
   );
 }
