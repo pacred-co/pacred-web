@@ -6,9 +6,8 @@
  * `PACRED_RCGROUP_API_URL` was incorrect: in PHP, RCGroup is dead code
  * gated by `$APIKEY` which is never assigned.  The real flow is:
  *
- *   - Product detail (URL→cart):  TAMIT-cloud `/api-product/get/{1688|taobao}/?id=<id>`
- *   - Short-URL resolver (m.tb.cn / qr.1688.com → productID):  tam-i-t.com cache
- *     (P-51 — added in a follow-up; this file falls back to demo for short URLs)
+ *   - Product detail (URL→cart):  TAMIT-cloud `/api-product/get/{1688|taobao}/?id=<id>`  (P-50)
+ *   - Short-URL resolver (m.tb.cn / qr.1688.com → productID):  tam-i-t.com cache  (P-51)
  *   - Keyword search:  AkuCargo (P-52 — still legacy here, TODO comment)
  *   - Image reverse search:  Laonet (P-53 — still legacy here, TODO comment)
  *
@@ -25,6 +24,7 @@
 
 import "server-only";
 import { extractProductId } from "./extract-product-id";
+import { resolveShortUrl, detectShortUrl } from "./short-url-cache";
 
 const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product";
 
@@ -156,13 +156,27 @@ export async function convertProductUrl(url: string): Promise<ChinaSearchResult>
  *   5. Anything else → buildDemoDetail() so checkout flow isn't broken.
  */
 export async function convertProductUrlDetail(url: string): Promise<ConvertProductResult> {
-  const platform = guessPlatform(url);
-  const tamitPlatform = tamitPathSegment(platform);
-  const productId = extractProductId(url);
+  // Short URLs (m.tb.cn/<tk>, qr.1688.com/s/<tk>) need the tam-i-t.com
+  // cache resolver (P-51) to expose a productID — full URLs skip this.
+  const short = detectShortUrl(url);
+  let resolvedShortPlatform: ChinaProductDetail["provider"] | null = null;
+  let resolvedShortId: string | null = null;
+  if (short) {
+    resolvedShortId = await resolveShortUrl(url);
+    // Provider mapping: tam-i-t cache provider 1 = 1688, provider 2 = taobao.
+    // We don't know whether the original Taobao share was Tmall vs Taobao;
+    // safer to assume Taobao at this layer (Tmall items also work via the
+    // Taobao backend at TAMIT — same vendor, see P-50 commit).
+    resolvedShortPlatform = short.provider === "1" ? "1688" : "taobao";
+  }
 
-  // No productID extractable (most likely a short URL like m.tb.cn/<tk>) —
-  // P-51 will plug a cache-resolver before this branch.  For now serve the
-  // demo so the customer can still proceed.
+  const platform = resolvedShortPlatform ?? guessPlatform(url);
+  const tamitPlatform = tamitPathSegment(platform);
+  const productId = resolvedShortId ?? extractProductId(url);
+
+  // No productID extractable AND short-URL resolution failed (network outage
+  // / cache miss + scrape failure) — serve the demo so the customer can
+  // still proceed.  The legacy PHP took the same posture on cache outages.
   if (!productId) {
     return { available: true, detail: buildDemoDetail(url, platform) };
   }

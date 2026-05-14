@@ -2082,7 +2082,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | P-25 re-audit Part N3 silent degraded modes | ✅ | `f39af74` |
 | P-26 service-order placement integration test (12 assertions) | ✅ | `52c7331` |
 | **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | `dba11a6` |
-| **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | this commit |
+| **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | `01f0cc1` |
+| **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | this commit |
 | P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
@@ -2141,9 +2142,36 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-→ **P-51 short-URL cache** (tam-i-t.com, ~2-3h) — resolves `m.tb.cn/<tk>` and `qr.1688.com/s/<tk>` so customers pasting short URLs from mobile LINE share don't fall through to demo mode. Then **P-52 AkuCargo keyword** (~2-3h), **P-53 Laonet image** (~2-3h). After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+→ **P-52 AkuCargo keyword** (~2-3h) — replaces the legacy TAMIT keyword endpoint with the actual AkuCargo `/search/v1/[/taobao]/?q=&page_size=15&page=&lang=zh-CN` per audit §4a.  Then **P-53 Laonet image** (~2-3h).  After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
 
-### P-50 shipped (this batch — Track G URGENT)
+### P-51 shipped (this batch — Track G)
+
+`lib/china-search/short-url-cache.ts` + `short-url-helpers.ts` per audit §3b:
+
+- **Detect**: `detectShortUrl(url)` recognises `m.tb.cn/<tk>` (Taobao, provider 2, cache subpath `/get/taobao/`) and `qr.1688.com/s/<tk>` (1688, provider 1, cache subpath `/get/`).
+- **Resolve flow** (mirrors PHP `convertURLChinna()`):
+  1. In-memory LRU hit → return immediately (5-min TTL, max 200 entries, FIFO eviction)
+  2. GET tam-i-t.com cache → if 200 with productID, cache in memory + return
+  3. On 204 / network blip: fetch the short URL itself with desktop Firefox UA spoof (mobile UA returns a different DOM that hides the productID) → scrape productID from final URL + body via PHP-equivalent regex set
+  4. POST back to `/save/?tk=&provider=&productID=` (best-effort, fire-and-forget) so the next paste of the same tk skips the scrape
+- **Wired into** `convertProductUrlDetail` ahead of the `extractProductId` step — short URLs now resolve to a productID instead of falling through to demo.  Failure at any layer still falls through to demo so the customer is never blocked.
+- **Helpers split** into `short-url-helpers.ts` (no `server-only`) so tsx tests can load `detectShortUrl` + `scrapeProductId` without dragging the Next.js server-only sentinel into a node runner.  Same pattern as `extract-product-id.ts`.
+- **Tests:** 22 new assertions across 6 areas in `short-url-cache.test.ts`:
+  - (a) Taobao m.tb.cn detection (4)
+  - (b) 1688 qr.1688.com detection (4)
+  - (c) non-short URLs return null (5)
+  - (d) encoded redirect patterns (`Id%3D`, `Foffer%2F`) (2)
+  - (e) plain querystring patterns (`?id=`, `/offer/<id>.html`, `?offerId=`) (3)
+  - (f) HTML body fragments + edge cases (4)
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/short-url-cache.test.ts` → 22 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain → **152 assertions** all green (130 + 22 new)
+- Real cache+scrape flow owner-blocked: needs Vercel egress IP allowlist (P-55) before tam-i-t.com responds outside legacy XAMPP IP.  Locally short URL paste → cache miss → scrape attempt → demo fallback (graceful), but unit-tested path covers all logic branches.
+
+### P-50 shipped (Track G URGENT)
 
 `lib/china-search/index.ts` rewired to TAMIT-cloud per audit §3a:
 
@@ -2185,7 +2213,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + 6.5 batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50). Next: Track G P-51 short-URL cache → P-52 keyword → P-53 image.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50 + P-51). Next: Track G P-52 AkuCargo keyword → P-53 Laonet image.
 
 ---
 
