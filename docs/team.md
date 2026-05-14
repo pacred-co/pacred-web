@@ -48,57 +48,135 @@ Last updated: 2026-05-13
 
 ---
 
-## 3. Daily workflow
+## 3. Daily workflow (CORRECTED 2026-05-15 — เดฟ clarified flow)
 
-### ทุกคน (ปอน/ภูม/เดฟ) — ก่อนเริ่มงาน
+> **Pacred branch flow:**
+> ```
+> ปอน (podeng) ──┐
+>                ├──► เดฟ pulls + merges into ► dave (consolidation/staging)
+> ภูม  (Poom)  ──┘                                │
+>                                                 ▼
+>                                       ก๊อต reviews + merges ► main (production)
+>                                                 ▲
+>                                                 └── เดฟ bypass (urgent only)
+> ```
+> **Key:** น้อง pull from `dave` (NOT `main`). `dave` = staging. `main` = production. ก๊อต = production gatekeeper.
 
+### ⚠️ 3.0. PUSH FREQUENCY RULE (cost discipline — ก๊อต flag 2026-05-15)
+
+> **ก๊อต บอก:** "ไม่อยากให้อัพ git เยอะเพราะเดี๋ยว Vercel มันคิดตัง"
+>
+> Vercel ทุก push → trigger build (preview deploy ของ branch + production build ถ้า main). Build minutes + bandwidth + function invocations = $$. รอบ commit เยอะ ไม่จำเป็น = สิ้นเปลือง.
+
+**กฎ:**
+- 🟢 **Commit ตามใจชอบ — local-only commits ฟรี** (`git commit` only, no `push`)
+- 🔴 **Push เฉพาะ "save point" จริง** — ไม่ใช่ทุก commit:
+  - จบ feature 1 task ที่ต้องการ checkpoint
+  - จบวัน / ก่อนเลิกงาน / ก่อนเดินทาง
+  - ก่อนขอ review จาก เดฟ/ก๊อต
+  - ก่อน reboot เครื่อง / change worktree (เพื่อ safety)
+- 🎯 **Target rate:** ~1-3 push/day/คน (ไม่ใช่ 10-20)
+- 🚫 **อย่า push:**
+  - "WIP — let me save in case I lose it" (commit local แทน)
+  - "fix typo" / "fix lint" หลัง push ใหญ่ (rebase + amend ก่อน push)
+  - Doc-only commit ที่จะตามด้วย code commit ใน 5 นาที (รวม batch ก่อน push)
+
+**Local commit pattern (ทำได้ฟรี):**
 ```bash
-# Step 1: อัพเดท main ก่อน
-git checkout main
-git pull origin main
+# ระหว่างวัน — commit ละเอียดเท่าที่ต้องการ
+git add <files> && git commit -m "wip: working on X"
+git add <files> && git commit -m "wip: refactor Y"
+git add <files> && git commit -m "fix: bug from Y refactor"
 
-# Step 2: กลับ branch ตัวเอง + merge main เข้ามา
-git checkout <my-branch>          # dave / podeng / Poom
-git status                        # ต้องสะอาด — ถ้ามีไฟล์ค้างให้ commit/stash ก่อน
-git pull origin <my-branch>       # ดึง branch ตัวเองล่าสุด
-git merge main                    # รวม main เข้ามา
-git push origin <my-branch>       # อัพ branch ตัวเอง
+# จบ feature / save point — squash เป็น 1-2 commit ที่ meaningful
+git rebase -i origin/<my-branch>   # squash WIP commits
+
+# Push 1 ครั้ง
+git push origin <my-branch>
 ```
 
-→ ทำไมแยก 2 ขั้น? จะได้เห็นชัดว่า main มีอะไรใหม่ก่อน merge เข้า branch ตัวเอง
+**Apply to Claude Code automation:** ทุกคำสั่ง "commit + push" ของผม (Claude) — batch เป็น 1 push ต่อ session ถ้าทำได้. ถ้า session ทำหลาย task → commit หลายตัว แต่ push ครั้งเดียวตอน session จบ.
+
+> **เครื่องช่วยเช็ค:** Vercel dashboard → Settings → Usage. ถ้า build minutes > 80% quota = warning. Pro tier 6,000 min/month = ~50 builds/day at 4 min each.
+
+### น้อง (ปอน + ภูม) — ก่อนเริ่มงานทุกครั้ง
+
+```bash
+# Step 1: ดึง dave ล่าสุดมาเป็นต้นทาง (NOT main — main is approved-by-ก๊อต only)
+git fetch origin
+git checkout dave
+git pull --ff-only origin dave    # fast-forward only — dave ห้ามมีงาน local แทรก
+
+# Step 2: กลับ branch ตัวเอง + merge dave เข้ามา
+git checkout <my-branch>          # podeng หรือ Poom
+git status                        # ต้องสะอาด — ถ้ามีไฟล์ค้างให้ commit/stash ก่อน
+git pull origin <my-branch>       # ดึง branch ตัวเองล่าสุด
+git merge dave                    # รวม dave เข้ามา (รวม main + งานเพื่อนที่เดฟ approve แล้ว)
+git push origin <my-branch>
+```
+
+→ **ทำไม dave ไม่ใช่ main?** dave = "เดฟ approved" (เร็ว, integration ทันสมัย). main = "ก๊อต approved" (ช้ากว่า, production-stable). น้อง รับงานจาก dave ทันสมัยกว่า + ไม่กระทบ ก๊อต production cycle.
 
 **แนะนำ:** sync ทุกเช้าก่อนเริ่มงาน หรืออย่างน้อย 1 ครั้ง/วัน
 
-### ตอนทำงาน
-
-- Commit เป็นระยะ (อย่ารอเย็น) — pattern: `<type>(<scope>): <message>` (ดู [`conventions.md`](conventions.md))
-- ทำงานเสร็จ feature → push ขึ้น branch ตัวเอง
-- แจ้งเดฟ/ก๊อตให้ review (LINE/Slack/PR comment)
-
-### ตอนเดฟ/ก๊อต merge เข้า main
+### เดฟ — สำหรับ consolidation work
 
 ```bash
-# จาก dave branch (lead working tree)
+# จาก dave branch
 git checkout dave
 git pull origin dave
 
-# Merge งานคนอื่นเข้า dave (ถ้ามี)
+# Merge งานน้องเข้า dave (เป็น staging)
 git fetch origin
 git merge origin/podeng   # ถ้ามีงาน ปอน ใหม่
 git merge origin/Poom     # ถ้ามีงาน ภูม ใหม่
 
-# Verify
+# Verify (ดู §5 pre-merge checklist)
 pnpm install --frozen-lockfile
 pnpm lint
+pnpm test
 pnpm build
 
-# ถ้า pass — push dave + merge เข้า main
+# ถ้า pass — push dave (NOT main)
 git push origin dave
+
+# 🛑 หยุดที่นี่ — ห้าม push เข้า main เอง
+# ก๊อต รับ baton ต่อ → review dave + merge → main
+```
+
+### ก๊อต — production approval (operates from main)
+
+```bash
+git fetch origin
 git checkout main
-git pull origin main
-git merge dave
+git pull --ff-only origin main
+
+# ดู diff dave→main เพื่อ review สิ่งที่จะ ship
+git log main..origin/dave --oneline
+git diff main origin/dave --stat
+
+# ถ้า OK — merge dave → main
+git merge --ff-only origin/dave   # หรือ no-ff ถ้าต้องการ merge commit
 git push origin main
 ```
+
+**เกณฑ์ approve (ก๊อต gate):**
+- pnpm install + lint + test + build pass บน dave (เดฟ verify ไปแล้ว)
+- ดู diff: ไม่มี breaking change ที่ไม่ documented
+- ADR ใน `docs/decisions/` ถ้ามี architectural change
+- Production safety: migration plan, rollback path documented if applicable
+
+### เดฟ bypass — urgent / hotfix only
+
+```bash
+# เฉพาะกรณี: production bug + ก๊อต ไม่ available + bug fix verified
+git checkout dave && git pull
+# (fix + verify)
+git push origin dave
+git push origin dave:main      # bypass — ขึ้น main ตรง
+```
+
+**กฎ bypass:** หลัง bypass — ส่ง LINE แจ้งก๊อตทันที + เขียน reason ใน commit message + log ใน Part P snapshot. ห้ามใช้บ่อย
 
 ---
 
@@ -215,19 +293,22 @@ git push origin <my-branch>
      - แสดง pending tasks + recent state
    
    Step 3 (ทำงาน):
-     - Claude Code ช่วย implement task ตาม spec ใน PORT_PLAN
-     - Lint+TS check + commit ตาม conventions
+     - Claude Code ช่วย implement tasks ตาม spec ใน PORT_PLAN
+     - Lint+TS check + `git commit` LOCAL — ทำได้บ่อยตามใจ (ฟรี)
+     - ทำ task ต่อไปได้เลย โดยยังไม่ push
    
-   Step 4 (ส่งงาน):
-     - Push ขึ้น branch ตัวเอง
+   Step 4 (save point — ปลายวัน / จบ batch / ก่อนขอ review):
+     - Squash WIP commits ถ้าเยอะเกิน — keep history clean
      - Claude Code อัพเดท PORT_PLAN Part P snapshot ว่าทำอะไรเสร็จ + ที่เหลือ
      - Commit doc update บน branch ตัวเอง
+     - `git push origin <branch>` — 1 ครั้งต่อ session (cost discipline §3.0)
    
-   Step 5 (เดฟ/ก๊อต integrate):
-     - เดฟ pull งานทุกคนเข้า dave → verify → push main
-     - ก๊อต watch main → review → ผ่าน
-     - PORT_PLAN Part P snapshot บน main update เป็นตัวล่าสุด
-     - คนถัดไปที่กลับมา → sync main → เห็น context ใหม่ทันที
+   Step 5 (เดฟ integrate to dave):
+     - เดฟ pull งานทุกคนเข้า dave → verify → push origin/dave (ไม่ขึ้น main!)
+   
+   Step 6 (ก๊อต approves to main):
+     - ก๊อต fetch + review origin/dave
+     - ก๊อต merges dave → main → push origin/main (production deploys)
    ```
 
 4. **Etiquette:**
@@ -244,7 +325,7 @@ git push origin <my-branch>
    - **เมื่อไหร่:** task ใน PORT_PLAN.md ที่ marked `Decision? = No` หรือ marked `<name> decide` พร้อม recommended default — ลุยได้เลย ไม่ต้องรอ
    - **เมื่อไหร่ห้าม:** task ที่ marked `Decision? = Pacred owner` / `เดฟ + ก๊อต` หรือ scope expansion (เพิ่ม feature นอกเหนือสเปคของ task) → ห้าม implement
    - **กฎทอง:** ถ้าระหว่างทางเจอเรื่อง trade-off ที่ไม่แน่ใจ → ใช้ default ที่ง่ายกว่า + log decision ใน commit message ใต้ "DECISION:" header (เดฟ/ก๊อต ปรับย้อนหลังได้); อย่าหยุดเพื่อรอ
-   - **Hand-off rule:** หลังจบ task — push branch + commit อัพเดท PORT_PLAN Part P snapshot (มี ✅ ของ task ที่เพิ่งจบ + note สั้นๆ) → next sync เห็นทันที
+   - **Hand-off rule:** หลังจบ **batch** ของ tasks (ไม่ใช่ทุก task) — `git push origin <branch>` 1 ครั้ง + commit อัพเดท PORT_PLAN Part P snapshot. ระหว่าง batch — `git commit` local-only ฟรี (ดู §3.0 push frequency rule). ทำหลาย task ครบแล้ว push 1 ครั้งจบ
    - **Trigger limit:** ห้ามทำหลาย task ของ Priority 0 พร้อมกัน (lock contention เสี่ยง schema migration); Priority 1+ ทำคู่ขนานได้
 
 ### ทำไม pattern นี้ดี
