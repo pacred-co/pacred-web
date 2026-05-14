@@ -1,0 +1,74 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { uploadCsv } from "@/actions/admin/csv-imports";
+
+export function UploadCsvForm() {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [target, setTarget] = useState("forwarders");
+
+  function onSubmit(formData: FormData) {
+    setError(null);
+    formData.set("target_table", target);
+    startTransition(async () => {
+      const res = await uploadCsv(formData);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      router.push(`/admin/csv-imports/${res.data!.id}`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <form
+      action={onSubmit}
+      className="rounded-2xl border border-border bg-white dark:bg-surface p-6 shadow-sm space-y-4"
+    >
+      <label className="block space-y-1">
+        <span className="text-sm font-medium text-foreground">
+          ตารางเป้าหมาย<span className="ml-0.5 text-red-600">*</span>
+        </span>
+        <select
+          name="target_table"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
+        >
+          <option value="forwarders">forwarders (ฝากนำเข้า)</option>
+        </select>
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-sm font-medium text-foreground">
+          ไฟล์ CSV<span className="ml-0.5 text-red-600">*</span>
+        </span>
+        <input
+          name="file"
+          type="file"
+          accept=".csv,text/csv,application/vnd.ms-excel"
+          required
+          className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary-500 file:px-4 file:py-2 file:text-white hover:file:bg-primary-600"
+        />
+        <span className="block text-xs text-muted">
+          ขนาดสูงสุด 5 MB. UTF-8 encoding แนะนำสำหรับภาษาไทย
+        </span>
+      </label>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <Button type="submit" disabled={pending} fullWidth>
+        {pending ? "กำลังอัปโหลด..." : "อัปโหลด → ดูพรีวิว"}
+      </Button>
+    </form>
+  );
+}

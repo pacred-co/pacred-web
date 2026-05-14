@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
-  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck,
+  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -52,6 +52,7 @@ const items: NavItem[] = [
   { href: "/admin/learning",         label: "ศูนย์เรียนรู้",    icon: <BookOpen className="w-5 h-5" />,        group: "องค์กร" },
 
   // System
+  { href: "/admin/csv-imports",      label: "นำเข้า CSV",     icon: <Upload className="w-5 h-5" />,          roles: ["ops","super"], group: "ระบบ" },
   { href: "/admin/rates",            label: "ดูอัตราปัจจุบัน",   icon: <BarChart3 className="w-5 h-5" />,       group: "ระบบ" },
   { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
