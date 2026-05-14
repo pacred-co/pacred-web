@@ -292,8 +292,8 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
       </div>
 
       {unavailable && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-          {t("apiUnavailable", { reason: unavailable })}
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          {t("apiUnavailable")}
         </div>
       )}
 
@@ -630,8 +630,8 @@ function KeywordPanel({ onAdded, onError, pending, startTransition, router }: {
         </div>
       </div>
       {unavailable && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-          {t("apiUnavailable", { reason: unavailable })}
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          {t("apiUnavailable")}
         </div>
       )}
       {searched && !unavailable && hits.length === 0 && (

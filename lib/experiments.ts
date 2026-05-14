@@ -43,15 +43,28 @@ export type ExperimentVariant<K extends ExperimentKey> =
 
 /**
  * FNV-1a 32-bit hash — small, fast, uniform enough for A/B bucketing.
- * Not cryptographic; do not use for security.
+ * Not cryptographic; do not use for security. Exported for tests.
  */
-function fnv1a32(s: string): number {
+export function fnv1a32(s: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
+}
+
+/**
+ * Deterministic uniform bucket from a salted visitor ID. Pure — no registry
+ * lookup — so tests can verify distribution + stability with any inputs.
+ * Returns an integer in [0, variantCount).
+ */
+export function bucketIndex(
+  key: string,
+  visitorId: string,
+  variantCount: number,
+): number {
+  return fnv1a32(`${key}:${visitorId}`) % variantCount;
 }
 
 /**
@@ -64,8 +77,7 @@ export function pickVariant<K extends ExperimentKey>(
 ): ExperimentVariant<K> {
   const exp = EXPERIMENTS[key];
   if (!exp.active) return exp.variants[0] as ExperimentVariant<K>;
-  const idx = fnv1a32(`${key}:${visitorId}`) % exp.variants.length;
-  return exp.variants[idx] as ExperimentVariant<K>;
+  return exp.variants[bucketIndex(key, visitorId, exp.variants.length)] as ExperimentVariant<K>;
 }
 
 /**

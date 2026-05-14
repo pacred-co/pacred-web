@@ -1,0 +1,60 @@
+# Pacred CI — runs on every PR + every push to dave/main.
+#
+# Goals (per Part S2 K-10):
+#   - Catch lint / typecheck / unit-test regressions before manual review
+#   - Free for public repos / cheap for private; no Vercel build minutes used
+#   - Matches the local `pnpm` invocations exactly so dev + CI parity is high
+#
+# Out of scope this CI:
+#   - `pnpm test` (the full chain) includes a placement integration test that
+#     reads `.env.local` Supabase URL/key — runs locally only. Use `test:unit`
+#     for the env-independent suite that CI exercises here.
+#   - `pnpm build` — left out for speed; Vercel already does build on push.
+#     Add later if it catches build-only regressions (e.g., metadata typing)
+#     that tsc + lint miss.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dave]
+  push:
+    branches: [main, dave]
+
+# Cancel in-flight runs when a new commit lands on the same branch/PR
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint + typecheck + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm test:unit

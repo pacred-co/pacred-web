@@ -789,7 +789,7 @@
     "search": "Search",
     "keywordPlaceholder": "e.g. kids clothing, toys",
     "noResults": "No items match the query.",
-    "apiUnavailable": "Search service unavailable (reason: {reason}) — use manual entry instead.",
+    "apiUnavailable": "Enter product details manually — our product search is being upgraded. Our team will follow up to help price your order.",
     "status": {
       "pending": "Pending",
       "awaiting_payment": "Awaiting payment",

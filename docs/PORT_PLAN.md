@@ -2748,8 +2748,8 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | # | Task | Est | Output |
 |---|---|---|---|
 | **K-8** | ADR-0006: Tax invoice flow + numbering (build on K-6 decision) | 2-3h | `docs/decisions/0006-tax-invoice.md` — lock before ภูม implements |
-| **K-9** | K-CODEOWNERS setup (`.github/CODEOWNERS`) | 30m | Auto-route PR reviews to ก๊อต — reduces overhead long-term |
-| **K-10** | K-tooling-1: CI workflow `.github/workflows/ci.yml` (lint + test + build on PR) | 2-3h | Quality gate before manual review |
+| **K-9** | ✅ **DONE pre-2026-05-16** — `.github/CODEOWNERS` exists with default-funnel-to-deffeyameh + TODO note to add @got-jirayus + @Poom + @podeng as accounts confirmed | done | — |
+| **K-10** | ✅ **DONE 2026-05-16** — `.github/workflows/ci.yml` (lint + tsc + `pnpm test:unit`) on PR + push to main/dave. Concurrency-cancels in-flight runs. Skips `pnpm build` (Vercel covers) + placement integration test (needs `.env.local`). New `pnpm test:unit` script (env-independent suite) | done | — |
 | **K-11** | K-sec-1: OWASP Top 10 audit | 4-6h | `docs/audit/owasp-2026-05.md` — launch confidence |
 | **K-12 🆕** | **L-22 GTM activation** — สมัคร GTM container + GA4 + ตั้ง `NEXT_PUBLIC_GTM_ID` ใน Vercel | 30-45m | Quick run: (1) tagmanager.google.com → New Container → Web → copy `GTM-XXXXXXX` (2) inside GTM connect GA4 property → publish container (3) `vercel env add NEXT_PUBLIC_GTM_ID` for Production + Preview (4) redeploy (5) smoke: open prod + GTM Preview Mode → verify sign_up/login/generate_lead/place_order dataLayer events fire. **Code shipped 2026-05-16 ([`08685b3`]); ทุกอย่างพร้อมแล้ว แค่ต่อท่อ Google ปลายทาง** |
 | **K-13 🆕** | **L-23 Clarity activation** — สมัคร Microsoft Clarity + ตั้ง `NEXT_PUBLIC_CLARITY_ID` ใน Vercel | 15-30m | Quick run: (1) clarity.microsoft.com → sign in with Microsoft account → New Project → site URL `https://pacred.co` → copy 10-char project ID (2) `vercel env add NEXT_PUBLIC_CLARITY_ID` for Production + Preview (3) redeploy (4) wait ~15min then check Clarity dashboard for first recordings. **Code shipped 2026-05-16 (DV-6); free tier no quota; auto-masks form inputs** |
@@ -2808,8 +2808,10 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | ~~2~~ ✅ | ~~DV-7 L-24 A/B infra scaffold~~ | done | — | Landed 2026-05-16 (cookie-based bucketing, no external SaaS) |
 | ~~3~~ 🟡 | DV-8 L-5 home **Phase 1 analytics wiring** | done | — | Landed 2026-05-16 — top-3 home CTAs emit `cta_click` events |
 | 1 | **DV-8 L-5 home Phase 2 — visual polish** | 3-4h chunk | ปอน sync (priority page order) → Claude implement | Strategic shift Part P4. ปอน suggest order: home → import-china → china-shopping → customs-clearance. Now has analytics data to inform changes |
-| 2 | **Track G label-change UI** (per R1 Option E) | ~1h | ปอน normally — Claude สามารถจัดให้ได้ถ้าต้องการ unblock | Tiny UI change ที่ทำได้ก่อนก๊อต ADR ลง — bench-warm |
-| 3 | **Wire remaining home CTAs to events** | 1-2h | Claude self-directed | PurchaseBanner / ClearanceBanner / Reviews / Sales cards / Promotion / Blog still untracked — easy follow-up to DV-8 Phase 1 |
+| ~~2~~ ✅ | ~~Track G label-change UI~~ | done | — | Landed 2026-05-16 — i18n `apiUnavailable` rewritten to Option E messaging ("ใส่ข้อมูลสินค้าเอง — ระบบ search กำลังพัฒนา"), banner switched from yellow/warning to blue/info, `reason` interpolation dropped |
+| ~~3~~ ✅ | ~~Wire remaining home CTAs~~ | done | — | Top-5 banners covered (DV-8 Phase 1). Promotion deferred — Server Component needs "use client" refactor; Sales/Blog have no top-level click CTAs |
+| 2 | **DV-8 Phase 2 — visual polish** (home → import-china → china-shopping → customs-clearance) | 3-4h chunk | ปอน sync (priority page) → Claude implement | Now has analytics + heatmap + A/B infra to inform changes |
+| 3 | **Convert Promotion to client + wire register CTAs** | 30m | Claude self-directed | Last untracked top-level CTA on home; small refactor (extract card, add "use client") |
 
 ### งานที่ต้องรอ external (defer; ส่งต่อก๊อต/Pacred owner):
 
