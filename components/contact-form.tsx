@@ -1,16 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { submitContactMessage } from "@/actions/contact";
+import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
 
 /**
- * Drop-in contact form (P-6). Place anywhere — handles its own state +
- * submit + success/error UI. ปอน can swap this for a styled version
- * later; the action contract stays stable.
+ * Drop-in contact form (P-6) + D-13-wire (hCaptcha invisible).
+ * Place anywhere — handles its own state + submit + success/error UI.
+ * ปอน can swap this for a styled version later; the action contract
+ * stays stable.
  *
  *   <ContactForm />
+ *
+ * The CAPTCHA renders nothing in dev (no `NEXT_PUBLIC_HCAPTCHA_SITE_KEY`),
+ * `execute()` returns null, and the server-side `verifyHcaptcha` is also
+ * a no-op in dev — so the form works locally without any captcha setup.
  */
+const ERROR_MESSAGES: Record<string, string> = {
+  rate_limit:     "ส่งข้อความบ่อยเกินไป กรุณารออีกสักครู่แล้วลองใหม่",
+  captcha_failed: "ระบบตรวจสอบความปลอดภัยไม่ผ่าน กรุณาลองใหม่",
+  insert_failed:  "บันทึกข้อความไม่สำเร็จ กรุณาลองใหม่",
+};
+
 export function ContactForm() {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -19,19 +31,26 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const captchaRef = useRef<HCaptchaHandle>(null);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
+      // Get CAPTCHA token (null in dev / when site key unset — server tolerates)
+      const captchaToken = await captchaRef.current?.execute();
+
       const res = await submitContactMessage({
         name,
         contact,
         subject: subject || undefined,
         message,
+        captchaToken: captchaToken ?? null,
       });
       if (!res.ok) {
-        setError(res.error);
+        setError(ERROR_MESSAGES[res.error] ?? res.error);
+        // Reset the widget so a retry obtains a fresh token
+        captchaRef.current?.reset();
         return;
       }
       setDone(true);
@@ -111,6 +130,8 @@ export function ContactForm() {
           {error}
         </div>
       )}
+
+      <HCaptchaInvisible ref={captchaRef} />
 
       <Button type="submit" disabled={pending} fullWidth size="lg">
         {pending ? "กำลังส่ง..." : "ส่งข้อความ"}

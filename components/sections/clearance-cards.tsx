@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { LINE_OA } from "@/components/seo/site";
 
-const LINE_URL = "https://line.me/ti/p/@pacred";
+const LINE_URL = LINE_OA.addFriendUrl;
 const ICON_SRC = "/images/hero-section/icon-draf/customclearance.png";
 
 const SECTION_TITLE = "บริการชิปปิ้งเคลียร์ของ เคลียร์สินค้าติดด่าน และพิธีการศุลกากร";

@@ -2,6 +2,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { PromoCarousel } from "@/components/ui/promo-carousel";
+import { LINE_OA } from "@/components/seo/site";
 
 export function Promotion() {
   const t = useTranslations("promotion");
@@ -13,7 +14,7 @@ export function Promotion() {
       description: tExt("newUserDesc"),
       highlight: "",
       image: "/images/hero-section/icon-draf/people.png",
-      href: "https://line.me/ti/p/@pacred",
+      href: LINE_OA.addFriendUrl,
       first: true,
     },
     {
@@ -21,7 +22,7 @@ export function Promotion() {
       description: tExt("interpreterDesc"),
       highlight: tExt("interpreterHighlight"),
       image: "/images/hero-section/icon-draf/pcs-sales.png",
-      href: "https://line.me/ti/p/@pacred",
+      href: LINE_OA.addFriendUrl,
       first: false,
     },
     {
@@ -29,7 +30,7 @@ export function Promotion() {
       description: tExt("rateDesc"),
       highlight: tExt("rateHighlight"),
       image: "/images/hero-section/icon-draf/ongkorn.png",
-      href: "https://line.me/ti/p/@pacred",
+      href: LINE_OA.addFriendUrl,
       first: false,
     },
     {
@@ -37,7 +38,7 @@ export function Promotion() {
       description: tExt("shippingDesc"),
       highlight: tExt("shippingHighlight"),
       image: "/images/hero-section/icon-draf/caricon.png",
-      href: "https://line.me/ti/p/@pacred",
+      href: LINE_OA.addFriendUrl,
       first: false,
     },
   ];

@@ -7,10 +7,13 @@
  * only when bypassing RLS is required (creating users, OTP lookups).
  */
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
+import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
+import { verifyHcaptcha } from "@/lib/hcaptcha";
 import {
   confirmResetByPhoneSchema,
   juristicStep2Schema,
@@ -30,7 +33,7 @@ import { requestOtp, verifyOtp } from "./otp";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
-  | { ok: false; error: string };
+  | { ok: false; error: string; retryAfterSeconds?: number };
 
 // ─────────────────────────────────────────────────────────────
 // Sign In
@@ -40,6 +43,11 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
+
+  // D-12-wire: rate-limit login attempts per IP (10/h) — credential-stuffing defense
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("login", ip);
+  if (blocked) return blocked;
 
   const { identifier, password } = parsed.data;
   const kind = detectIdentifier(identifier);
@@ -113,6 +121,15 @@ export async function registerPersonal(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const data = parsed.data;
+
+  // D-12-wire: rate-limit signup per IP (5/h) — D-13-wire: hCaptcha invisible
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("signup", ip);
+  if (blocked) return blocked;
+
+  const captcha = await verifyHcaptcha(data.captchaToken, ip);
+  if (!captcha.success) return { ok: false, error: "captcha_failed" };
+
   const phone = normalizePhone(data.phone);
 
   // Verify OTP (bypassed if OTP_BYPASS=true)
@@ -173,6 +190,15 @@ export async function registerJuristicStep1(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const data = parsed.data;
+
+  // D-12-wire: rate-limit signup per IP — D-13-wire: hCaptcha invisible
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("signup", ip);
+  if (blocked) return blocked;
+
+  const captcha = await verifyHcaptcha(data.captchaToken, ip);
+  if (!captcha.success) return { ok: false, error: "captcha_failed" };
+
   const phone = normalizePhone(data.phone);
 
   const otpOk = await verifyOtp(phone, data.otp, "register");
@@ -331,11 +357,23 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
 // first step always returns ok even if no profile matches.
 export async function requestPasswordResetByPhone(
   phoneRaw: string,
+  captchaToken?: string | null,
 ): Promise<ActionResult> {
-  const parsed = resetByPhoneSchema.safeParse({ phone: phoneRaw });
+  const parsed = resetByPhoneSchema.safeParse({ phone: phoneRaw, captchaToken });
   if (!parsed.success) {
     return { ok: false, error: "invalid_phone" };
   }
+
+  // D-12-wire: rate-limit password-reset per IP (5/h) — D-13-wire: CAPTCHA
+  // anti-enumeration. Run BEFORE the silent-ok branch below so attackers
+  // can't probe the phone db without paying the rate-limit cost.
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("passwordReset", ip);
+  if (blocked) return blocked;
+
+  const captcha = await verifyHcaptcha(captchaToken ?? parsed.data.captchaToken, ip);
+  if (!captcha.success) return { ok: false, error: "captcha_failed" };
+
   const phone = normalizePhone(parsed.data.phone);
 
   const admin = createAdminClient();
@@ -399,11 +437,20 @@ export async function confirmPasswordResetByPhone(
 // completes the flow. Requires SMTP configured on Supabase project.
 export async function requestPasswordResetByEmail(
   emailRaw: string,
+  captchaToken?: string | null,
 ): Promise<ActionResult> {
-  const parsed = resetByEmailSchema.safeParse({ email: emailRaw });
+  const parsed = resetByEmailSchema.safeParse({ email: emailRaw, captchaToken });
   if (!parsed.success) {
     return { ok: false, error: "invalid_email" };
   }
+
+  // D-12-wire + D-13-wire — same defenses as the phone variant
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("passwordReset", ip);
+  if (blocked) return blocked;
+
+  const captcha = await verifyHcaptcha(captchaToken ?? parsed.data.captchaToken, ip);
+  if (!captcha.success) return { ok: false, error: "captcha_failed" };
 
   const supabase = await createClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";

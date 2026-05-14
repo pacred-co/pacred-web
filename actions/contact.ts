@@ -6,14 +6,22 @@ import { createClient } from "@/lib/supabase/server";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { contactMessageSchema, type ContactMessageInput } from "@/lib/validators/contact";
+import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
+import { verifyHcaptcha } from "@/lib/hcaptcha";
 
-type ActionResult = { ok: true } | { ok: false; error: string };
+type ActionResult =
+  | { ok: true }
+  | { ok: false; error: string; retryAfterSeconds?: number };
 
 /**
- * Public contact form submission (P-6).
+ * Public contact form submission (P-6) + D-12-wire (rate limit) + D-13-wire (CAPTCHA).
  * Available to anonymous and authenticated users. Stored in
  * `contact_messages`, with admin notifications fanned out to every
  * active ops/super admin so triage doesn't depend on dashboard polling.
+ *
+ * Defenses applied:
+ *   - rateLimit "contact" 5/h/IP (bypassed if Upstash unset → memory fallback)
+ *   - hCaptcha invisible token verify (no-op in dev when secret unset)
  */
 export async function submitContactMessage(
   input: ContactMessageInput,
@@ -28,9 +36,17 @@ export async function submitContactMessage(
   const h = await headers();
   const referer    = h.get("referer");
   const userAgent  = h.get("user-agent");
-  const fwdFor     = h.get("x-forwarded-for");
-  const realIp     = h.get("x-real-ip");
-  const ip         = (fwdFor?.split(",")[0] ?? realIp ?? "").trim() || null;
+  const ip         = getClientIpFromHeaders(h);
+
+  // Defense 1 — IP-based rate limit (anti-spam)
+  const blocked = await checkRateLimit("contact", ip);
+  if (blocked) return blocked;
+
+  // Defense 2 — hCaptcha invisible (anti-bot)
+  const captcha = await verifyHcaptcha(d.captchaToken, ip);
+  if (!captcha.success) {
+    return { ok: false, error: "captcha_failed" };
+  }
 
   // Attach profile_id if signed in (so the user can see their submissions)
   const supabase = await createClient();
@@ -48,7 +64,7 @@ export async function submitContactMessage(
       message:    d.message,
       source_url: referer,
       user_agent: userAgent,
-      ip,
+      ip:         ip === "unknown" ? null : ip,
     })
     .select("id")
     .single<{ id: string }>();

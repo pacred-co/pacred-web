@@ -1751,7 +1751,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | **P-52** | Add AkuCargo keyword search adapter | 2-3h | No | New `lib/china-search/akucargo.ts`. Replace `searchKeyword()` to call `{PACRED_AKUCARGO_API_URL}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` with desktop Firefox UA. Response shape `json.items.item[i].{detail_url,pic_url,title,price,promotion_price,sales}`. **Acceptance:** type Thai or Chinese keyword → get hits with real prices |
 | **P-53** | Add Laonet image search adapter | 2-3h | No | New `lib/china-search/laonet.ts`. Replace `searchByImage(file)` to: (a) upload file as base64 → `{PACRED_LAONET_API_URL}/index.php?route=api_tester/call&api_name=upload_img&imgcode={b64}&key={PACRED_LAONET_KEY}` returns `imgid` (b) search → `?api_name=item_search_img&imgid={imgid}&key={PACRED_LAONET_KEY}` returns hits. **Acceptance:** upload product photo → get similar 1688 products |
 | **P-54** ✅ | LINE Messaging API ACTIVATED — creds in `.env.local` | done by เดฟ | — | All 3 vars set 2026-05-14: `LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`. Production needs same in Vercel env + `LINE_PUSH_BYPASS=false`. ภูม: P-15 dispatch wiring (already done in `e440a31`) → real LINE pushes when bypass off. Future task: webhook receiver for LINE OA (signature verify uses `LINE_CHANNEL_SECRET`) |
-| **D-1-LIFF** 🚨 URGENT | LINE LIFF for customer→profile linkage (`profiles.line_user_id` populator) | 4-6h | No (recommended LIFF default) | **Why:** Pacred has LINE creds + push code ready, BUT no customer has `line_user_id` linked → no customer gets push. Without this, the entire LINE notification pipeline is dead-end. **Spec:** (a) Create LIFF app in LINE Developers Console (size: Compact, BOT link: ON) — uses Pacred Messaging API channel (ID 2009931373) (b) New page `app/[locale]/liff/link/page.tsx` — client component using `@line/liff` SDK: `liff.init({liffId})` → `liff.isLoggedIn() ? liff.getProfile() : liff.login()` → POST userId to server action → save to `profiles.line_user_id` (require Supabase session — user must be logged in to Pacred too) (c) Server action `actions/profile.ts` `linkLineAccount(lineUserId)` — withAuth + upsert into profiles (d) New env var `NEXT_PUBLIC_LIFF_ID` (e) UI: add "เชื่อม LINE OA" button at `/profile` + "QR เพิ่มเพื่อน + เชื่อม" CTA at landing/dashboard (ปอน assist) (f) Test: Pacred OA add friend → click LIFF link → see "เชื่อมสำเร็จ" → admin pushes test notification → see in LINE chat. **Acceptance:** 1 customer end-to-end test green |
+| **D-1-LIFF** 🟡 SCAFFOLDED by เดฟ | LINE LIFF for customer→profile linkage (`profiles.line_user_id` populator) | 4-6h spec → 1-2h remaining | No (recommended LIFF default) | **Why:** Pacred has LINE creds + push code ready, BUT no customer has `line_user_id` linked → no customer gets push. Without this, the entire LINE notification pipeline is dead-end. **เดฟ scaffolded** (a)+(b)+(c)+(d) on 2026-05-14 evening: `@line/liff` installed · `app/[locale]/liff/link/page.tsx` client component with full state machine (loading/needs_pacred_login/linking/success/error) · `actions/profile.ts:linkLineAccount(lineUserId)` with U-prefix validation + 23505 unique-constraint error mapping · `NEXT_PUBLIC_LIFF_ID` env var documented. **ภูม pickup remaining:** (e) UI hookup — add "เชื่อม LINE OA" button at `/profile` + landing CTA (could ask ปอน to do landing CTA part) (f) End-to-end test on real device with real LIFF ID after Pacred owner creates LIFF app in console. **Activation order:** owner creates LIFF in LINE Console → Vercel env `NEXT_PUBLIC_LIFF_ID` → ภูม wire CTAs → ship |
 | **P-55** | Verify Vercel egress IP allowlist with TAMIT/AkuCargo/Laonet/tam-i-t | 1h | ภูม + เดฟ | Vercel function egress IP differs from legacy XAMPP/cPanel. Check after P-50 lands — if real API returns 403/blocked, contact vendor (likely all 4 services owned by same vendor `tam011plus@gmail.com`) to allowlist Vercel. Document Vercel egress IP block in `docs/runbook/vendor-allowlist.md` |
 | **P-56** | (Future) JMFCARGO carrier sync port | 6-8h | เดฟ + ก๊อต | Two-way sync over HTTP. PCS↔JMF via `JMF_CARGO_TOKEN` (concat of legacy Tiso key+secret). Receiving endpoint at `/api/integrations/jmf-cargo/inbound/route.ts`. Outbound calls in admin actions. Lower priority — only if Pacred wants JMF integration. Spec in audit §9a |
 | **P-57** | (Future) CargoThai TTP/CN container API port | 4-6h | เดฟ + ก๊อต | Active legacy carrier (`a807f4fe...`, `aea07c4d...` query-string `_token`). Endpoint `https://cargothai.tech/api/service/{GetContainer,GetDetail}`. Lower priority — only if Pacred uses these carriers. Spec in audit §9b |
@@ -1799,6 +1799,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 |---|---|---|---|
 | 🟡 **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX. (`/services/customs-clearance` already has full content via existing `Clearance*` components.) Recommendation: replace `StubPage` with real layout per service |
 | 🔴 **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools. **Blocked: needs real device or BrowserStack testing — Claude session can only spot-check via curl/CSS** |
+| ✅ **L-line-refactor** DONE 2026-05-14 by เดฟ | Centralise LINE OA URLs from hardcoded strings → `LINE_OA` constants | done | Audit revealed only 5 real refactor targets (most components already used the local `/line` redirect indirection ✅): `app/[locale]/(public)/line/page.tsx` (the redirect itself) + `clearance-banner.tsx` (mismatch `r3b1BuOC` standardised to canonical) + `clearance-cards.tsx` + `promotion.tsx` (4 sites) + `lib/booking-data.ts` (3 sales-rep entries with same default URL). All now import `LINE_OA.shortUrl` or `LINE_OA.addFriendUrl`. Verify: `grep -rn 'lin\.ee\|line\.me/ti/p'` returns only the constant definitions in `components/seo/site.ts` + 1 traceability comment in `clearance-banner.tsx` |
 
 > ✅ **Phase A1+A2+A3 finished as one bundle** by ปอน 2026-05-14 (commit `a0d9d83`) — pattern below applies to remaining work (L-5/L-8/L-10..L-20)
 > 🟢 **Bonus 6+7 shipped** 2026-05-14 evening — pacred.co/line shortlink + booking tabs mobile fix + LCL/FCL pricing split + drop MobileTrustRibbon
@@ -1907,9 +1908,9 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 16. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
 17. 🟡 **D-11-activate** Get Sentry account + DSN → drop in Vercel env (15-30m) — **blocked: need Pacred owner to create Sentry account / authorize use**
 18. 🟡 **D-12-activate** Create Upstash Redis DB + drop creds in Vercel env (15-30m) — **blocked: need Pacred owner to authorize**
-19. 🟡 **D-12-wire** Wire `checkRateLimit` into actual endpoints (signup / login / contact / password reset) (1-2h) — could do now; deferred so callers can pick ergonomic UX response per endpoint
+19. ✅ **D-12-wire** DONE 2026-05-14 evening — `checkRateLimit` wired into 6 server actions: `submitContactMessage` (contact 5/h/IP) + `signIn` (login 10/h/IP) + `registerPersonal` + `registerJuristicStep1` (signup 5/h/IP) + `requestPasswordResetByPhone` + `requestPasswordResetByEmail` (passwordReset 5/h/IP). New helper `getClientIpFromHeaders` in `lib/rate-limit.ts` for Server Action use. Returns `{ ok:false, error:'rate_limit', retryAfterSeconds }` — UI shows friendly Thai error
 20. 🟡 **D-13-activate** Create hCaptcha site (Type=Invisible) → drop site/secret in Vercel env (15-30m) — **blocked: need Pacred owner to create hCaptcha account**
-21. 🟡 **D-13-wire** Drop `<HCaptchaInvisible />` into target forms + call `verifyHcaptcha` in their server actions (1-2h)
+21. ✅ **D-13-wire** DONE 2026-05-14 evening — `<HCaptchaInvisible />` widget added to `components/contact-form.tsx` + `app/[locale]/(auth)/register/page.tsx` (PersonalForm + JuristicForm step 1) + `app/[locale]/(auth)/forgot-password/page.tsx` (shared between phone+email request flows). Token passed via `captchaToken` field added to validators (`registerPersonalSchema`, `registerJuristicStep1Schema`, `resetByPhoneSchema`, `resetByEmailSchema`, `contactMessageSchema`). Server-side `verifyHcaptcha(token, ip)` enforces in 5 server actions (`signIn` opted out — too friction for credential-stuffing UX). Reset on error so retry obtains fresh token. Dev no-op when site key + secret unset (`HCaptchaInvisible` renders null + `verifyHcaptcha` returns success)
 22. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
 
 **Estimated remaining:** ~14-21h once credentials/decisions are in hand
@@ -2034,7 +2035,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 **Remaining:**
 - **ภูม:** Sprint 6 follow-ups (6 items, ~2-3h) + Sprint 7+ Tracks A-G (~70-100h) — all self-directed. **NEW priority injection:** Track G P-50..P-53 (china-search rewire, ~10-15h) is most-leveraged because URL paste / search / image search are core customer flows — recommend doing P-50 + P-51 first (highest user-visible impact)
 - **ปอน:** Bonus 6+7 merged ✅ — next = L-5 + L-9b/c + Phase C+ ecosystem (ต้อง decision)
-- **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire = 1-2h each (could do now)
+- **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire ✅ DONE 2026-05-14 (forms + auth actions all wired, dev no-op until creds activate)
 - **ก๊อต:** schedule Pacred owner call to unblock D-7 + 4 sets of creds (Sentry DSN, Upstash, hCaptcha, 3rd-party APIs)
 
 **Real coverage estimate (post-Day-3-evening main):**
@@ -2061,7 +2062,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
    - ThaiBulkSMS real keys + PromptPay ID (Pacred new bank acct — PCS Cargo legacy `064-174-3836` ใช้ไม่ได้)
    - **NEW:** approval to pivot to landing-first focus (confirm with owner that beta launch priority order = customer acquisition channels working > more backend features)
    - **NEW:** Track G china-search rewire — verify with vendor (`tam011plus@gmail.com` likely owns TAMIT/AkuCargo/Laonet/tam-i-t) that Vercel egress IP is allowlisted
-5. **Optional เดฟ work** (between landing assists): D-12-wire + D-13-wire (~2-4h ทั้งคู่) — drop into signup/contact/password-reset
+5. ✅ **เดฟ work DONE 2026-05-14:** D-12-wire + D-13-wire — rate-limit + hCaptcha both wired into 5 server actions + 3 form components (no-op until Vercel creds set)
 
 **Estimate production beta-ready:** 1-2 weeks ถ้า creds + 1 owner call ได้ในweek นี้ · 3-4 weeks ถ้าไม่
 **Estimate to first 10 paying customers:** depends entirely on landing/acquisition push (เดฟ pivot focus) — backend is ahead of demand
@@ -2349,8 +2350,8 @@ Spec from Part Q + Part O2 line 1749. What's in:
 |---|---|
 | **LINE push** | ✅ creds ใน `.env.local` → ตั้ง 3 vars (`LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`) ใน Vercel env + flip `LINE_PUSH_BYPASS=false` |
 | **Sentry** | SDK scaffolded → ตั้ง `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel |
-| **Rate limit** | lib scaffolded → ตั้ง `UPSTASH_REDIS_REST_URL` + `_TOKEN` + ภูม wire (D-12-wire ~1-2h) |
-| **CAPTCHA** | scaffold ready → ตั้ง `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` + ภูม drop ลง forms (D-13-wire ~1-2h) |
+| **Rate limit** | lib scaffolded + ✅ **wired into 6 actions** (D-12-wire DONE 2026-05-14) → ตั้ง `UPSTASH_REDIS_REST_URL` + `_TOKEN` ใน Vercel = production-grade |
+| **CAPTCHA** | scaffold ready + ✅ **wired into 3 forms + 5 actions** (D-13-wire DONE 2026-05-14) → ตั้ง `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` ใน Vercel = bot protection live |
 
 ### 🔴 BLOCKED — รอ Pacred owner ก่อน beta launch
 
@@ -2437,7 +2438,11 @@ Spec from Part Q + Part O2 line 1749. What's in:
 ### Bundle 3 — ✅ landed already (ไม่ต้องคุย)
 ```
 ✅ LINE OA channel access token (Pacred provided 2026-05-14)
+✅ LINE OA Basic ID (@683wolja) + Premium ID (@pacred) provided 2026-05-14
+   → in components/seo/site.ts as LINE_OA.{basicId, premiumId, addFriendUrl}
+   → premium ID add-friend URL = https://line.me/R/ti/p/%40pacred
 ✅ Sentry SDK + Rate limit + hCaptcha — scaffolded รอ creds เท่านั้น
+✅ D-12-wire + D-13-wire — rate-limit + CAPTCHA wired into 6 actions + 3 forms
 ```
 
 ## Q3. Production launch checklist (priority order)
@@ -2464,7 +2469,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 - [ ] D-7 payment gateway intro — owner discuss + เลือก provider
 
 ### เดฟ (URGENT — ตอนนี้ pivot landing แต่ยังต้อง track)
-- [ ] D-12-wire + D-13-wire (~2-4h ทั้งคู่) เมื่อ creds มา
+- [x] ✅ D-12-wire + D-13-wire DONE 2026-05-14 (no-op until creds activated in Vercel env)
 - [ ] หลัง D-7 lock → lead M2.1 payment gateway implementation (~40-60h)
 - [ ] Continue landing pivot กับ Claude (current pivot focus)
 

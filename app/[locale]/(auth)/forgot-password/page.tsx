@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { Button } from "@/components/ui/button";
+import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
 import {
   requestPasswordResetByPhone,
   confirmPasswordResetByPhone,
@@ -21,7 +22,8 @@ const ERR: Record<string, string> = {
   invalid_email:   "อีเมลไม่ถูกต้อง",
   invalid_otp:     "OTP ไม่ถูกต้องหรือหมดอายุ",
   invalid_input:   "ข้อมูลไม่ครบหรือไม่ถูกต้อง",
-  rate_limit:      "ส่ง OTP เกิน 3 ครั้งใน 1 ชม. กรุณารอสักครู่",
+  rate_limit:      "ขอรีเซ็ตเกินจำนวนครั้งที่กำหนด กรุณารออีกสักครู่แล้วลองใหม่",
+  captcha_failed:  "ระบบตรวจสอบความปลอดภัยไม่ผ่าน กรุณาลองใหม่",
   sms_failed:      "ส่ง SMS ไม่สำเร็จ ลองอีกครั้ง",
   db_error:        "ระบบขัดข้อง กรุณาลองใหม่",
   user_not_found:  "ไม่พบบัญชีนี้ในระบบ",
@@ -47,12 +49,17 @@ export default function ForgotPasswordPage() {
   const [emailStep, setEmailStep] = useState<EmailStep>("request");
   const [email, setEmail] = useState("");
 
+  // Shared CAPTCHA widget for the password-reset request flows
+  const captchaRef = useRef<HCaptchaHandle>(null);
+
   function submitPhoneRequest() {
     setError(null);
     startTransition(async () => {
-      const res = await requestPasswordResetByPhone(phone);
+      const captchaToken = await captchaRef.current?.execute();
+      const res = await requestPasswordResetByPhone(phone, captchaToken ?? null);
       if (!res.ok) {
         setError(ERR[res.error] ?? res.error);
+        captchaRef.current?.reset();
         return;
       }
       setPhoneStep("verify");
@@ -75,9 +82,11 @@ export default function ForgotPasswordPage() {
   function submitEmailRequest() {
     setError(null);
     startTransition(async () => {
-      const res = await requestPasswordResetByEmail(email);
+      const captchaToken = await captchaRef.current?.execute();
+      const res = await requestPasswordResetByEmail(email, captchaToken ?? null);
       if (!res.ok) {
         setError(ERR[res.error] ?? res.error);
+        captchaRef.current?.reset();
         return;
       }
       setEmailStep("sent");
@@ -253,6 +262,8 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
       </main>
+      {/* Invisible CAPTCHA — shared by both phone+email request flows */}
+      <HCaptchaInvisible ref={captchaRef} />
       <Footer />
     </>
   );
