@@ -225,10 +225,9 @@ export function ClearanceCards() {
             onMouseUp={onMouseUp}
             onMouseMove={onMouseMove}
             className={[
-              // Mobile = grid 2 cols
-              "grid grid-cols-2 gap-2.5 overflow-visible p-0",
-              // Desktop = horizontal scroller
-              "md:flex md:gap-4 md:overflow-x-auto md:overflow-y-visible md:[scrollbar-width:none] md:[-ms-overflow-style:none] md:[&::-webkit-scrollbar]:hidden md:scroll-smooth md:pt-2.5 md:pb-5 md:px-0.5",
+              // Horizontal scroller on both mobile + desktop
+              "flex gap-2.5 md:gap-4 overflow-x-auto overflow-y-visible scroll-smooth pt-2 md:pt-2.5 pb-3 md:pb-5 px-0.5",
+              "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
               isDragging ? "md:cursor-grabbing md:select-none" : "md:cursor-grab",
             ].join(" ")}
           >
@@ -242,7 +241,7 @@ export function ClearanceCards() {
                 onMouseEnter={onCardEnter}
                 onMouseLeave={onCardLeave}
                 onMouseMove={onCardMove}
-                className="group relative block min-w-0 md:min-w-[285px] md:max-w-[285px] md:flex-[0_0_285px] bg-white text-inherit no-underline rounded-2xl md:rounded-3xl overflow-hidden border border-[rgba(229,231,235,0.95)] shadow-[0_6px_16px_rgba(15,23,42,0.08)] md:shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-all duration-300 hover:shadow-[0_18px_42px_rgba(15,23,42,0.15)] hover:border-[rgba(220,38,38,0.28)] will-change-transform"
+                className="group relative block min-w-[240px] max-w-[240px] flex-[0_0_240px] md:min-w-[285px] md:max-w-[285px] md:flex-[0_0_285px] bg-white text-inherit no-underline rounded-2xl md:rounded-3xl overflow-hidden border border-[rgba(229,231,235,0.95)] shadow-[0_6px_16px_rgba(15,23,42,0.08)] md:shadow-[0_10px_28px_rgba(15,23,42,0.08)] transition-all duration-300 hover:shadow-[0_18px_42px_rgba(15,23,42,0.15)] hover:border-[rgba(220,38,38,0.28)] will-change-transform"
               >
                 {/* Image */}
                 <div className="relative w-full aspect-[1.18/1] md:aspect-[16/9] overflow-hidden bg-[#f3f4f6]">

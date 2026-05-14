@@ -31,21 +31,21 @@ function SalesCard({ person }: { person: ResolvedPerson }) {
   return (
     <div
       style={{ width: CARD_WIDTH }}
-      className="shrink-0 h-[360px] rounded-2xl border border-border bg-white dark:bg-surface shadow-sm relative flex flex-col"
+      className="shrink-0 h-[270px] rounded-2xl border border-border bg-white dark:bg-surface shadow-sm relative flex flex-col"
     >
       {/* Header */}
-      <div className="h-[90px] bg-primary-500 rounded-t-2xl shrink-0" />
+      <div className="h-[68px] bg-primary-500 rounded-t-2xl shrink-0" />
 
       {/* Avatar */}
-      <div className="absolute top-[90px] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-        <div className="w-[92px] h-[92px] rounded-full border-4 border-white dark:border-surface bg-white dark:bg-background overflow-hidden flex items-center justify-center">
+      <div className="absolute top-[68px] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+        <div className="w-[78px] h-[78px] rounded-full border-4 border-white dark:border-surface bg-white dark:bg-background overflow-hidden flex items-center justify-center">
           {person.image ? (
             <Image
               src={person.image}
               alt={person.alt}
-              width={92}
-              height={92}
-              className={person.useContain ? "w-full h-full object-contain p-3" : "w-full h-full object-cover"}
+              width={78}
+              height={78}
+              className={person.useContain ? "w-full h-full object-contain p-2.5" : "w-full h-full object-cover"}
             />
           ) : (
             <span className="text-2xl font-bold text-primary-600">{person.name.charAt(0)}</span>
@@ -54,16 +54,16 @@ function SalesCard({ person }: { person: ResolvedPerson }) {
       </div>
 
       {/* Content */}
-      <div className="flex flex-col items-center text-center px-4 pt-[56px] pb-5 gap-1.5 grow rounded-b-2xl">
-        <p className="font-bold text-sm">{person.name}</p>
-        <p className="text-[11px] font-medium text-primary-600">{person.role}</p>
-        <p className="text-xs text-muted leading-relaxed line-clamp-2">{person.tagline}</p>
-        <p className="text-sm font-semibold text-foreground mt-1">{person.phone}</p>
+      <div className="flex flex-col items-center text-center px-3 pt-[44px] pb-3 gap-1 grow rounded-b-2xl">
+        <p className="font-bold text-sm leading-tight">{person.name}</p>
+        <p className="text-[11px] font-medium text-primary-600 leading-tight">{person.role}</p>
+        <p className="text-[11px] text-muted leading-snug line-clamp-1">{person.tagline}</p>
+        <p className="text-[13px] font-semibold text-foreground">{person.phone}</p>
         <a
           href="/line"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-auto w-full rounded-xl bg-[#06C755] py-2 text-xs font-semibold text-white text-center hover:bg-[#05a548] transition-colors"
+          className="mt-auto w-full rounded-lg bg-[#06C755] py-1.5 text-[11px] font-semibold text-white text-center hover:bg-[#05a548] transition-colors"
         >
           {person.button}
         </a>

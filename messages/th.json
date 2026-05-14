@@ -1127,7 +1127,8 @@
     "partner": "พาร์ทเนอร์",
     "contact": "ติดต่อ",
     "askMore": "สอบถามเพิ่มเติม",
-    "chatAria": "พูดคุยทาง LINE"
+    "chatAria": "พูดคุยทาง LINE",
+    "callAria": "โทรหาเซลล์ Pacred"
   },
   "ourService": {
     "eyebrow": "Our Services",
@@ -1315,8 +1316,8 @@
       "truckSub": "รถบรรทุกจีน–ไทย ส่งถึงหน้าบ้าน · แชร์รถประหยัด · เหมารถรวดเร็ว",
       "airTitle": "ขนส่งทางอากาศ <em>นำเข้า–ส่งออก</em>",
       "airSub": "Air Freight ด่วน จากจีน ญี่ปุ่น และทั่วโลก · คำนวณ Chargeable Weight",
-      "customsTitle": "บริการเคลียร์ <em>พิธีการกรมศุลกากร</em> รถ เรือ แอร์",
-      "customsSub": "เริ่มต้น <em>2,800 บาท</em>",
+      "customsTitle": "<em>บริการ</em>เคลียร์ พิธีการกรมศุลกากร <nowrap><em>รถ</em> เรือ แอร์</nowrap>",
+      "customsSub": "<hl>เริ่มต้น</hl> <em><hl>2</hl>,800 บาท</em>",
       "sourcingTitle": "ฝากสั่งซื้อสินค้า <em>จากจีน</em>",
       "sourcingSub": "1688 · Taobao · Alibaba · Tmall — ฝากซื้อ ชำระ นำส่ง ครบในที่เดียว",
       "remitTitle": "โอนเงินชำระ <em>ต่างประเทศ</em>",

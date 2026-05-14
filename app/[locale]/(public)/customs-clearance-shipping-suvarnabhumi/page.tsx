@@ -54,6 +54,8 @@ import {
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
+import { ClearanceCards } from "@/components/sections/clearance-cards";
+import { ContactSales } from "@/components/sections/contact-sales";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -82,17 +84,6 @@ const PORTS = [
   { name: "แหลมฉบัง",         sub: "Container Port · FCL",  image: "/images/cardclearance/laemport.png" },
   { name: "ICD ลาดกระบัง",    sub: "Inland Depot · Sea",    image: "/images/cardclearance/laemport.png" },
   { name: "ด่านชายแดน",       sub: "Truck · มุก/หนอง/แม่",  image: "/images/cardclearance/mukdahanport.png" },
-];
-
-const HERO_TICKS = [
-  "เคลียร์สินค้านำเข้า–ส่งออก Air Cargo / Sea Freight / Truck ครบทุกช่องทาง",
-  "ลงทะเบียนผู้นำเข้า–ส่งออก จับคู่ (YY) กรมศุลกากร ภายใน 30 นาที",
-  "ดูแลเอกสารครบ AWB / B/L · D/O · INVOICE + PACKING · ใบขนสินค้า · ใบเสร็จภาษี · ใบอนุญาตนำเข้า",
-  "แก้ปัญหาสินค้าติดด่าน · ภาษีเกิน · พิกัดศุลกากรไม่ตรง · เอกสารไม่ครบ · ไม่มีใบอนุญาต",
-  "เคลียร์ใบอนุญาต มอก. / สมอ. / กสทช. / กรมเกษตร / กรมประมง / หน่วยงานราชการอื่น ๆ",
-  "ผู้เชี่ยวชาญพิธีการศุลกากร Shipping ประสบการณ์ 15+ ปี",
-  "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) ถูกต้องตามกฎหมาย",
-  "ชำระภาษีและอากรถูกต้อง 100% — หมดปัญหากรมศุล / ตำรวจ / สรรพากร",
 ];
 
 type Channel = {
@@ -251,13 +242,6 @@ const TRUST_BADGES = [
   { icon: FileBadge, label: "หนังสือรับรองบริษัท", sub: "มีตัวตน ตรวจสอบได้จริง" },
   { icon: Receipt,   label: "ภพ.20",                sub: "ออกใบกำกับภาษีถูกต้อง" },
   { icon: Award,     label: "หนังสือสมาคมชิปปิ้ง",  sub: "Shipping License ตามกฎหมาย" },
-];
-
-const STATS = [
-  { value: "15+",   label: "ปี · เคสจริง" },
-  { value: "50K+",  label: "ตู้/บิลที่ดูแล" },
-  { value: "1 ชม.", label: "รู้ผลภายใน" },
-  { value: "100%",  label: "ถูกกฎหมาย" },
 ];
 
 const EXPERTISE = [
@@ -464,7 +448,7 @@ export default async function CustomsClearancePage({
         {/* Breadcrumb — under booking tabs, links back to home */}
         <nav
           aria-label="Breadcrumb"
-          className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-4 md:pt-6"
+          className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-3 md:pt-4"
         >
           <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px]">
             <li>
@@ -479,104 +463,145 @@ export default async function CustomsClearancePage({
             <li aria-hidden className="text-gray-300 dark:text-border">
               <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
             </li>
-            <li aria-current="page" className="font-bold text-foreground">
-              เคลียร์ศุลกากร สุวรรณภูมิ
+            <li aria-current="page" className="font-bold text-foreground truncate">
+              บริการเคลียร์ พิธีการกรมศุลกากร รถ เรือ แอร์
             </li>
           </ol>
         </nav>
 
         {/* ═══════ 1. Hero intro ═══════ */}
-        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
+        <section className="relative pt-3 md:pt-5 pb-2 md:pb-4">
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11.5px] md:text-[12.5px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(179,0,0,0.10)]">
-              <Sparkles className="w-3.5 h-3.5" strokeWidth={2.8} />
-              CUSTOMS CLEARANCE · ทุกด่าน ทุก Term
-            </div>
-            <h1 className="text-[28px] md:text-[48px] leading-[1.15] font-black tracking-[-0.03em] text-[#111827] dark:text-white max-w-[920px]">
-              บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์สินค้าติดด่าน{" "}
-              <span className="text-yellow-500 dark:text-yellow-400 drop-shadow-[0_2px_8px_rgba(234,179,8,0.30)]">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>
-              <span className="block mt-2 md:mt-3 text-[16px] md:text-[22px] text-muted font-bold tracking-tight">
-                | Pacred Shipping
-              </span>
+            <h1 className="text-[20px] md:text-[44px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.02em] text-[#111827] dark:text-white max-w-[980px]">
+              บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์สินค้าติดด่าน สุวรรณภูมิ คลองเตย แหลมฉบัง <span className="hidden md:inline text-primary-600"> | Pacred Shipping</span>
             </h1>
 
-            {/* Prominent price line */}
-            <div className="mt-4 md:mt-6 inline-flex items-center gap-2.5 md:gap-3 px-4 md:px-5 py-2.5 md:py-3 rounded-2xl bg-gradient-to-br from-yellow-100 to-yellow-50 dark:from-yellow-900/30 dark:to-yellow-900/10 border-2 border-yellow-400 dark:border-yellow-700/70 shadow-[0_8px_22px_rgba(234,179,8,0.22)]">
-              <span className="inline-flex w-8 h-8 md:w-9 md:h-9 items-center justify-center rounded-xl bg-yellow-400 text-yellow-900 shadow-[0_3px_8px_rgba(234,179,8,0.40)]">
-                <BadgePercent className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
+            <h2 className="mt-1.5 md:mt-2 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px] md:max-w-none md:whitespace-nowrap">
+              เคลียร์สินค้าติดด่านศุลกากรแบบครบวงจร ราคาชัดเจน <span className="text-primary-600/80 font-semibold">เริ่มต้น 2,800 บาท</span> รองรับ Air Freight, Sea Freight, Truck, LCL, FCL และด่านหลักทั่วไทย
+            </h2>
+
+            {/* Attention banner — fast clearance CTA, clicks through to LINE */}
+            <a
+              href={LINE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="ติดต่อ Pacred Shipping ทาง LINE — เคลียร์ศุลกากรด่วน 1 ชม."
+              className="group block mt-4 md:mt-6 relative pt-3 md:pt-4 pr-4 md:pr-8 max-w-[1100px] no-underline"
+            >
+              {/* Floating dark tag — pulses to draw attention, overflows banner top */}
+              <span className="absolute top-0 left-3 md:left-5 z-20 inline-flex items-center gap-1.5 bg-slate-900 dark:bg-black text-white text-[11.5px] md:text-[13px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.45)] tracking-tight transition-transform duration-300 group-hover:-translate-y-0.5">
+                <span className="relative flex w-2 h-2">
+                  <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
+                  <span className="relative inline-flex w-2 h-2 rounded-full bg-red-500" />
+                </span>
+                สินค้าติดด่าน?
               </span>
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-[16px] md:text-[22px] font-black text-yellow-900 dark:text-yellow-100 leading-none tracking-tight">
-                  เริ่มต้น 2,800 บาท
-                </span>
-                <span className="text-[11px] md:text-[13px] font-bold text-yellow-700 dark:text-yellow-300/90">
-                  ครบจบในใบเดียว · ไม่บวกแอบแฝง
-                </span>
-              </div>
-            </div>
 
-            <p className="mt-4 md:mt-5 text-[14px] md:text-[17px] leading-[1.65] font-medium text-muted max-w-[820px]">
-              บริการ Customs Clearance เคลียร์สินค้าติดด่านศุลกากรแบบครบวงจร · รองรับ Air Freight · Sea Freight · Truck · LCL · FCL และด่านหลักทั่วไทย
-            </p>
-
-            <div className="mt-6 md:mt-8 flex flex-wrap gap-3">
-              <a
-                href={LINE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-[52px] px-6 md:px-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13.5px] md:text-[15px] font-black shadow-[0_12px_30px_rgba(179,0,0,0.32)] hover:scale-[1.03] transition-transform"
+              <div
+                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
+                style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
               >
-                <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                ทักไลน์ปรึกษาฟรี · ตอบไว 5 นาที
-              </a>
-              <a
-                href={`tel:${HOTLINE.replace(/-/g, "")}`}
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-[52px] px-6 md:px-7 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[13.5px] md:text-[15px] font-black hover:border-primary-400 hover:text-primary-700 transition-colors shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
-              >
-                <Phone className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                {HOTLINE}
-              </a>
-            </div>
+                {/* Decorative diagonal sheen */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-50 mix-blend-overlay"
+                  style={{ background: "radial-gradient(circle at 75% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
+                />
+                {/* Subtle dot pattern */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.08]"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(circle, white 1px, transparent 1px)",
+                    backgroundSize: "16px 16px",
+                  }}
+                />
 
-            {/* Stats banner */}
-            <div className="mt-7 md:mt-10 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-              {STATS.map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-2xl border border-primary-100 dark:border-primary-900/40 bg-gradient-to-br from-white via-primary-50/30 to-white dark:from-surface dark:via-primary-900/10 dark:to-surface px-4 py-3 md:py-4 text-center shadow-[0_6px_16px_rgba(179,0,0,0.06)]"
-                >
-                  <div className="text-[22px] md:text-[32px] font-black text-primary-600 leading-none tracking-tight">
-                    {s.value}
+                {/* Hour stamp — lifted up so it overflows the banner TOP edge for drama */}
+                <div className="absolute right-[-22px] md:right-[-32px] top-[-18px] md:top-[-46px] z-10 transition-transform duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                  {/* Radial glow behind the hour */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 -m-6 rounded-full bg-white/15 blur-2xl"
+                  />
+                  <p className="relative text-[48px] md:text-[120px] font-black text-white leading-none tracking-tight whitespace-nowrap [-webkit-text-stroke:2px_#1a0303] md:[-webkit-text-stroke:4.5px_#1a0303] [paint-order:stroke_fill] [text-shadow:0_8px_24px_rgba(0,0,0,0.7),0_0_44px_rgba(255,255,255,0.35)]">
+                    1<span className="text-[26px] md:text-[64px] tracking-tight">ชม.</span>
+                  </p>
+                </div>
+
+                <div className="relative grid grid-cols-[auto_1fr] items-center gap-2 md:gap-5 pl-3 md:pl-6 pr-3 md:pr-[80px] pt-7 md:pt-7 pb-4 md:pb-5">
+                  {/* Brand block — yellow leading letter on each word */}
+                  <div className="leading-none shrink-0">
+                    <p className="text-[16px] md:text-[32px] font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
+                      <span className="text-yellow-300">P</span><span className="text-white">acred</span>
+                    </p>
+                    <p className="mt-0.5 text-[7.5px] md:text-[12px] font-bold tracking-[0.30em]">
+                      <span className="text-yellow-300">S</span><span className="text-white">HIPPING</span>
+                    </p>
                   </div>
-                  <div className="mt-1 text-[10.5px] md:text-[11.5px] font-bold text-muted tracking-wider uppercase">
-                    {s.label}
+
+                  {/* Center messages — quoted, single line, large on desktop */}
+                  <div className="min-w-0">
+                    <p className="text-[12px] md:text-[39px] font-bold text-white leading-snug whitespace-nowrap">
+                      เคลียร์ให้จบ รวดเร็ว ราคาคุ้มค่า ถูกต้อง รู้ผลใน
+                    </p>
+                    <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
+                      ทีมผู้เชี่ยวชาญพิธีการศุลกากร ครบทุกขั้นตอน — เอกสาร เคลียร์ภาษี ปล่อยสินค้า รองรับ Air · Sea · Truck
+                    </p>
+                    {/* CTA hint — yellow accent matches the site theme (paired with red banner) */}
+                    <p className="mt-1.5 md:mt-2 inline-flex items-center gap-1 text-[9.5px] md:text-[12px] font-bold tracking-wide">
+                      <MessageCircle className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300" strokeWidth={2.6} />
+                      <span className="text-yellow-300">ทักไลน์</span>
+                      <span className="text-white/85">ปรึกษาฟรี — ตอบไว 5 นาที</span>
+                      <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            </a>
 
-            <ul className="mt-7 md:mt-10 grid grid-cols-1 md:grid-cols-2 gap-x-6 md:gap-x-10 gap-y-2.5 md:gap-y-3">
-              {HERO_TICKS.map((tick) => (
-                <li key={tick} className="flex items-start gap-2.5 md:gap-3">
-                  <span className="mt-0.5 inline-flex w-5 h-5 md:w-6 md:h-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-white shadow-[0_3px_8px_rgba(179,0,0,0.25)]">
-                    <CheckCircle2 className="w-3 h-3 md:w-3.5 md:h-3.5" strokeWidth={3} />
-                  </span>
-                  <span className="text-[13px] md:text-[14.5px] leading-[1.5] text-[#111827] dark:text-white font-medium">
-                    {tick}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {/* ─── Detailed service list — Pacred Shipping clearance scope ─── */}
+            <div className="mt-5 md:mt-7 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)] max-w-[1100px]">
+              <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
+                <span className="shrink-0">🚨</span>
+                <span>บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน ✈️🚢📦</span>
+              </h3>
 
-            {/* Guarantee strip */}
-            <div className="mt-7 md:mt-10 flex items-center gap-3 rounded-2xl border border-primary-200 dark:border-primary-900/60 bg-gradient-to-r from-primary-50 via-white to-primary-50/40 dark:from-primary-950/30 dark:via-surface dark:to-primary-950/10 px-4 md:px-5 py-3 md:py-4 shadow-[0_8px_22px_rgba(179,0,0,0.08)]">
-              <span className="text-[22px] md:text-[28px] leading-none">💰</span>
-              <p className="text-[13px] md:text-[15px] font-bold text-[#111827] dark:text-white leading-snug">
-                การันตี <span className="text-primary-600">ราคาคุ้มค่า · จริงใจ · ชัดเจน</span> ต้อง POP Pacred Shipping
+              <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed">
+                สุวรรณภูมิ / ดอนเมือง / ไปรษณีย์หลักสี่ / คลองเตย / แหลมฉบัง / ลาดกระบัง (ICD) / ด่านชายแดน
               </p>
+
+              <ul className="mt-4 md:mt-5 grid md:grid-cols-2 gap-x-5 md:gap-x-6 gap-y-2 md:gap-y-2.5 text-[12.5px] md:text-[14px] leading-snug text-foreground/85">
+                {[
+                  "เคลียร์สินค้านำเข้า–ส่งออก Air Cargo / Sea Freight / Truck ครบทุกช่องทาง",
+                  "ลงทะเบียนผู้นำเข้า–ส่งออก จับคู่ (YY) กรมศุลกากร ภายใน 30 นาที",
+                  "ดูแลเอกสารครบ — AWB / B/L / D/O / INVOICE + PACKING / ใบขนสินค้า / ใบเสร็จภาษี / ใบอนุญาตนำเข้า",
+                  "แก้ปัญหาสินค้าติดด่าน ติดศุลกากร ภาษีเกิน พิกัดศุลกากรไม่ตรง เอกสารไม่ครบ หรือไม่มีใบอนุญาต",
+                  "เคลียร์ใบอนุญาต อย. / มอก. / สมอ. / กสทช. / กรมเกษตร / กรมประมง / หน่วยงานราชการอื่นๆ",
+                  "ผู้เชี่ยวชาญด้านเคลียร์พิธีการศุลกากร Shipping มากกว่า 15 ปี",
+                  "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) ถูกต้องตามกฎหมาย",
+                  "ดูแลครบ ได้ใบขนสินค้า ชำระภาษีและอากรถูกต้อง หมดปัญหา กรมศุล ตำรวจ สรรพากร 100%",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <CheckCircle2
+                      className="w-4 h-4 md:w-[18px] md:h-[18px] mt-0.5 shrink-0 text-primary-600"
+                      strokeWidth={2.6}
+                    />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+
             </div>
           </div>
         </section>
+
+        {/* ─── Per-port clearance cards (reused from home page) ─── */}
+        <ClearanceCards />
+
+        {/* ─── Sales contact (reused from home, with พลอย as the featured customs expert) ─── */}
+        <ContactSales featuredName="พลอย" hideAssuranceStrip />
 
         {/* ═══════ 2. Ports we serve ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
