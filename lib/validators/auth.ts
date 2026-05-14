@@ -10,6 +10,13 @@ export const passwordSchema = z
   .min(6, "รหัสผ่านขั้นต่ำ 6 ตัวอักษร")
   .max(30, "รหัสผ่านยาวสุด 30 ตัวอักษร");
 
+/**
+ * hCaptcha token from `<HCaptchaInvisible>` widget — optional because
+ * dev (no site key) has the widget render null and execute() returns null.
+ * Server's `verifyHcaptcha` is also a no-op when secret unset.
+ */
+export const captchaTokenField = z.string().optional().nullable();
+
 export const phoneSchema = z
   .string()
   .min(8, "เบอร์โทรไม่ถูกต้อง")
@@ -43,6 +50,7 @@ export const registerPersonalSchema = z.object({
   agreed: z
     .boolean()
     .refine((v) => v === true, "ต้องยอมรับข้อกำหนด"),
+  captchaToken: captchaTokenField,
 });
 export type RegisterPersonalInput = z.infer<typeof registerPersonalSchema>;
 
@@ -52,6 +60,7 @@ export const registerJuristicStep1Schema = z.object({
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),
   otp: z.string().min(1, "กรอก OTP"),
+  captchaToken: captchaTokenField,
 });
 export type RegisterJuristicStep1Input = z.infer<
   typeof registerJuristicStep1Schema
@@ -80,7 +89,8 @@ export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 
 // ── password reset (P-2) ──
 export const resetByPhoneSchema = z.object({
-  phone: phoneSchema,
+  phone:        phoneSchema,
+  captchaToken: captchaTokenField,
 });
 export type ResetByPhoneInput = z.infer<typeof resetByPhoneSchema>;
 
@@ -92,7 +102,8 @@ export const confirmResetByPhoneSchema = z.object({
 export type ConfirmResetByPhoneInput = z.infer<typeof confirmResetByPhoneSchema>;
 
 export const resetByEmailSchema = z.object({
-  email: z.email("อีเมลไม่ถูกต้อง"),
+  email:        z.email("อีเมลไม่ถูกต้อง"),
+  captchaToken: captchaTokenField,
 });
 export type ResetByEmailInput = z.infer<typeof resetByEmailSchema>;
 

@@ -13,6 +13,7 @@ import {
   uploadJuristicDoc,
   completeJuristicRegistration,
 } from "@/actions/auth";
+import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
 
 /* ─────────────────────────── TYPES ─────────────────────────── */
 type TabId = "personal" | "juristic";
@@ -24,7 +25,8 @@ type SourceId = "line" | "fb" | "google" | "youtube" | "tiktok" | "ig" | "friend
 const ERR: Record<string, string> = {
   invalid_otp: "OTP ไม่ถูกต้องหรือหมดอายุ",
   invalid_input: "ข้อมูลไม่ครบหรือไม่ถูกต้อง",
-  rate_limit: "ส่ง OTP เกิน 3 ครั้งใน 1 ชม. กรุณารอสักครู่",
+  rate_limit: "สมัครเกินจำนวนครั้งที่กำหนด กรุณารอสักครู่แล้วลองใหม่",
+  captcha_failed: "ระบบตรวจสอบความปลอดภัยไม่ผ่าน กรุณาลองใหม่",
   sms_failed: "ส่ง SMS ไม่สำเร็จ ลองอีกครั้ง",
   signup_failed: "สมัครไม่สำเร็จ — เบอร์นี้อาจสมัครไปแล้ว",
   profile_failed: "บันทึกโปรไฟล์ไม่สำเร็จ",
@@ -221,6 +223,7 @@ function PersonalForm() {
   const [agreed, setAgreed]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const captchaRef = useRef<HCaptchaHandle>(null);
 
   function toggleService(id: ServiceId) {
     setServices((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -231,6 +234,7 @@ function PersonalForm() {
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
+      const captchaToken = await captchaRef.current?.execute();
       const res = await registerPersonal({
         firstName, lastName, phone, password,
         services,
@@ -238,9 +242,10 @@ function PersonalForm() {
         email: email || "",
         otp: "bypass",
         agreed,
+        captchaToken: captchaToken ?? null,
       });
       if (res.ok) { router.replace("/"); router.refresh(); }
-      else setError(ERR[res.error] ?? res.error);
+      else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
     });
   }
 
@@ -300,6 +305,7 @@ function PersonalForm() {
 
       <AgreeRow checked={agreed} onChange={setAgreed} />
       {error && <ErrorBox msg={error} />}
+      <HCaptchaInvisible ref={captchaRef} />
       <SubmitBtn pending={pending}>👤 สมัครสมาชิก</SubmitBtn>
     </form>
   );
@@ -336,6 +342,7 @@ function JuristicForm() {
   const [error, setError]           = useState<string | null>(null);
   const [pending, startTransition]  = useTransition();
   const taxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captchaRef = useRef<HCaptchaHandle>(null);
 
   function toggleService(id: ServiceId) {
     setServices((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -396,14 +403,16 @@ function JuristicForm() {
   function nextStep1() {
     setError(null);
     startTransition(async () => {
+      const captchaToken = await captchaRef.current?.execute();
       const res = await registerJuristicStep1({
         phone, password,
         services,
         howKnow: source ?? null,
         otp: "bypass",
+        captchaToken: captchaToken ?? null,
       });
       if (res.ok) setStep(2);
-      else setError(ERR[res.error] ?? res.error);
+      else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
     });
   }
 
@@ -481,6 +490,7 @@ function JuristicForm() {
           </FieldWrap>
 
           {error && <ErrorBox msg={error} />}
+          <HCaptchaInvisible ref={captchaRef} />
           <div style={{ display: "flex" }}>
             <NextBtn onClick={nextStep1} pending={pending}>ถัดไป →</NextBtn>
           </div>

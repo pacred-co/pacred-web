@@ -1887,9 +1887,9 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 16. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
 17. 🟡 **D-11-activate** Get Sentry account + DSN → drop in Vercel env (15-30m) — **blocked: need Pacred owner to create Sentry account / authorize use**
 18. 🟡 **D-12-activate** Create Upstash Redis DB + drop creds in Vercel env (15-30m) — **blocked: need Pacred owner to authorize**
-19. 🟡 **D-12-wire** Wire `checkRateLimit` into actual endpoints (signup / login / contact / password reset) (1-2h) — could do now; deferred so callers can pick ergonomic UX response per endpoint
+19. ✅ **D-12-wire** DONE 2026-05-14 evening — `checkRateLimit` wired into 6 server actions: `submitContactMessage` (contact 5/h/IP) + `signIn` (login 10/h/IP) + `registerPersonal` + `registerJuristicStep1` (signup 5/h/IP) + `requestPasswordResetByPhone` + `requestPasswordResetByEmail` (passwordReset 5/h/IP). New helper `getClientIpFromHeaders` in `lib/rate-limit.ts` for Server Action use. Returns `{ ok:false, error:'rate_limit', retryAfterSeconds }` — UI shows friendly Thai error
 20. 🟡 **D-13-activate** Create hCaptcha site (Type=Invisible) → drop site/secret in Vercel env (15-30m) — **blocked: need Pacred owner to create hCaptcha account**
-21. 🟡 **D-13-wire** Drop `<HCaptchaInvisible />` into target forms + call `verifyHcaptcha` in their server actions (1-2h)
+21. ✅ **D-13-wire** DONE 2026-05-14 evening — `<HCaptchaInvisible />` widget added to `components/contact-form.tsx` + `app/[locale]/(auth)/register/page.tsx` (PersonalForm + JuristicForm step 1) + `app/[locale]/(auth)/forgot-password/page.tsx` (shared between phone+email request flows). Token passed via `captchaToken` field added to validators (`registerPersonalSchema`, `registerJuristicStep1Schema`, `resetByPhoneSchema`, `resetByEmailSchema`, `contactMessageSchema`). Server-side `verifyHcaptcha(token, ip)` enforces in 5 server actions (`signIn` opted out — too friction for credential-stuffing UX). Reset on error so retry obtains fresh token. Dev no-op when site key + secret unset (`HCaptchaInvisible` renders null + `verifyHcaptcha` returns success)
 22. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
 
 **Estimated remaining:** ~14-21h once credentials/decisions are in hand
@@ -2014,7 +2014,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 **Remaining:**
 - **ภูม:** Sprint 6 follow-ups (6 items, ~2-3h) + Sprint 7+ Tracks A-G (~70-100h) — all self-directed. **NEW priority injection:** Track G P-50..P-53 (china-search rewire, ~10-15h) is most-leveraged because URL paste / search / image search are core customer flows — recommend doing P-50 + P-51 first (highest user-visible impact)
 - **ปอน:** Bonus 6+7 merged ✅ — next = L-5 + L-9b/c + Phase C+ ecosystem (ต้อง decision)
-- **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire = 1-2h each (could do now)
+- **เดฟ:** D-7a/b (creds) + D-7c/d (owner decision) = 4 blocked items; D-12-wire + D-13-wire ✅ DONE 2026-05-14 (forms + auth actions all wired, dev no-op until creds activate)
 - **ก๊อต:** schedule Pacred owner call to unblock D-7 + 4 sets of creds (Sentry DSN, Upstash, hCaptcha, 3rd-party APIs)
 
 **Real coverage estimate (post-Day-3-evening main):**
@@ -2041,7 +2041,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
    - ThaiBulkSMS real keys + PromptPay ID (Pacred new bank acct — PCS Cargo legacy `064-174-3836` ใช้ไม่ได้)
    - **NEW:** approval to pivot to landing-first focus (confirm with owner that beta launch priority order = customer acquisition channels working > more backend features)
    - **NEW:** Track G china-search rewire — verify with vendor (`tam011plus@gmail.com` likely owns TAMIT/AkuCargo/Laonet/tam-i-t) that Vercel egress IP is allowlisted
-5. **Optional เดฟ work** (between landing assists): D-12-wire + D-13-wire (~2-4h ทั้งคู่) — drop into signup/contact/password-reset
+5. ✅ **เดฟ work DONE 2026-05-14:** D-12-wire + D-13-wire — rate-limit + hCaptcha both wired into 5 server actions + 3 form components (no-op until Vercel creds set)
 
 **Estimate production beta-ready:** 1-2 weeks ถ้า creds + 1 owner call ได้ในweek นี้ · 3-4 weeks ถ้าไม่
 **Estimate to first 10 paying customers:** depends entirely on landing/acquisition push (เดฟ pivot focus) — backend is ahead of demand
@@ -2081,8 +2081,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 |---|---|
 | **LINE push** | ✅ creds ใน `.env.local` → ตั้ง 3 vars (`LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`) ใน Vercel env + flip `LINE_PUSH_BYPASS=false` |
 | **Sentry** | SDK scaffolded → ตั้ง `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel |
-| **Rate limit** | lib scaffolded → ตั้ง `UPSTASH_REDIS_REST_URL` + `_TOKEN` + ภูม wire (D-12-wire ~1-2h) |
-| **CAPTCHA** | scaffold ready → ตั้ง `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` + ภูม drop ลง forms (D-13-wire ~1-2h) |
+| **Rate limit** | lib scaffolded + ✅ **wired into 6 actions** (D-12-wire DONE 2026-05-14) → ตั้ง `UPSTASH_REDIS_REST_URL` + `_TOKEN` ใน Vercel = production-grade |
+| **CAPTCHA** | scaffold ready + ✅ **wired into 3 forms + 5 actions** (D-13-wire DONE 2026-05-14) → ตั้ง `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` ใน Vercel = bot protection live |
 
 ### 🔴 BLOCKED — รอ Pacred owner ก่อน beta launch
 
@@ -2196,7 +2196,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 - [ ] D-7 payment gateway intro — owner discuss + เลือก provider
 
 ### เดฟ (URGENT — ตอนนี้ pivot landing แต่ยังต้อง track)
-- [ ] D-12-wire + D-13-wire (~2-4h ทั้งคู่) เมื่อ creds มา
+- [x] ✅ D-12-wire + D-13-wire DONE 2026-05-14 (no-op until creds activated in Vercel env)
 - [ ] หลัง D-7 lock → lead M2.1 payment gateway implementation (~40-60h)
 - [ ] Continue landing pivot กับ Claude (current pivot focus)
 

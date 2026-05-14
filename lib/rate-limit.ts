@@ -165,6 +165,20 @@ export async function rateLimit(name: LimitName, key: string): Promise<RateLimit
 }
 
 /**
+ * Like `getClientIp` but takes a Headers-like (anything with `.get()`) directly.
+ * Use this in Server Actions where `await headers()` from `next/headers` returns
+ * a ReadonlyHeaders that quacks like Headers but isn't an instanceof of it.
+ *
+ *   import { headers } from "next/headers";
+ *   const ip = getClientIpFromHeaders(await headers());
+ */
+export function getClientIpFromHeaders(h: { get(name: string): string | null }): string {
+  const xff = h.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return h.get("x-real-ip") ?? "unknown";
+}
+
+/**
  * Best-effort client IP extraction from a Request. Vercel + most proxies
  * set `x-forwarded-for`. Returns `"unknown"` when no header is present —
  * caller decides whether to treat that as one shared bucket or to skip
