@@ -1,8 +1,15 @@
+"use client";
+
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
-export function SearchBar() {
+interface SearchBarProps {
+  /** When `embedded`, renders without sticky/border — used inside NavBar mobile dropdown. */
+  embedded?: boolean;
+}
+
+export function SearchBar({ embedded = false }: SearchBarProps) {
   const t = useTranslations("searchBar");
 
   const quickKeys = [
@@ -15,8 +22,12 @@ export function SearchBar() {
     t("quick7"),
   ];
 
+  const rootClass = embedded
+    ? "w-full bg-white dark:bg-surface overflow-hidden"
+    : "hidden md:block sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden";
+
   return (
-    <div className="sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className={rootClass}>
       <div className="mx-auto w-full max-w-[1440px] px-4 xl:px-6 py-[10px]">
 
         <div className="flex items-center gap-4">

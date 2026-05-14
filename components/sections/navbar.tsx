@@ -13,6 +13,7 @@ import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "
 import { NotificationBell } from "@/components/notification-bell";
 import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
+import { SearchBar } from "@/components/sections/search-bar";
 
 type ProfileLite = {
   member_code: string | null;
@@ -148,6 +149,10 @@ export function NavBar() {
       {/* ── Mobile dropdown ── */}
       {menuOpen && (
         <div className="xl:hidden border-t border-white/20 bg-[#991b1b]">
+          {/* SearchBar (mobile only — desktop has its own sticky SearchBar below NavBar) */}
+          <div className="md:hidden border-b border-white/20">
+            <SearchBar embedded />
+          </div>
           <nav className="flex w-full flex-col px-4 py-3 gap-0.5">
             <TopMenuMobile onClose={() => setMenuOpen(false)} />
             <div className="my-2 border-t border-white/20" />
