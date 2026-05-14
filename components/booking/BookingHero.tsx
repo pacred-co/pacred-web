@@ -10,6 +10,15 @@ interface BookingHeroProps {
   seaMode: SeaMode;
 }
 
+// Per-tab background overrides — mobile/desktop pair for landing pages that
+// need a richer hero than the shared `HERO_IMGS` registry in `lib/booking-data.ts`.
+const BG_OVERRIDES_MOBILE: Record<string, string> = {
+  customs: "/images/bannermobile/clearacnebanner.png",
+};
+const BG_OVERRIDES_DESKTOP: Record<string, string> = {
+  customs: "/images/bannerdesktop/clearancedesktop.png",
+};
+
 export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
   const t = useTranslations("bookingCalc.hero");
 
@@ -25,28 +34,39 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
     ? seaMode
     : activeTab;
 
-  const bg = HERO_IMGS[imgKey] ?? HERO_IMGS.default;
+  const fallbackBg = HERO_IMGS[imgKey] ?? HERO_IMGS.default;
+  const bgMobile = BG_OVERRIDES_MOBILE[imgKey] ?? fallbackBg;
+  const bgDesktop = BG_OVERRIDES_DESKTOP[imgKey] ?? fallbackBg;
   const keys = HERO_CONTENT_KEYS[contentKey] ?? HERO_CONTENT_KEYS.default;
 
   return (
-    <div
-      className="relative overflow-hidden h-[180px] md:h-[360px] flex flex-col items-center justify-center px-4 md:px-7 pb-[32px] md:pb-[48px] rounded-b-2xl md:rounded-b-3xl"
-      style={{ background: `url('${bg}') center/cover no-repeat` }}
-    >
-      {/* Subtle dark scrim for legibility on mobile */}
+    <div className="relative overflow-hidden aspect-[768/360] md:aspect-auto md:h-[460px] flex flex-col items-center justify-center px-4 md:px-7 pb-[32px] md:pb-[48px] rounded-b-2xl md:rounded-b-3xl">
+      {/* Mobile background */}
       <div
         aria-hidden
-        className="md:hidden pointer-events-none absolute inset-0"
-        style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.32) 100%)" }}
+        className="md:hidden absolute inset-0"
+        style={{ background: `url('${bgMobile}') center/cover no-repeat` }}
       />
-      <div className="relative z-10 max-w-[850px] mx-auto text-center text-white">
-        <h1 className="text-[22px] sm:text-[26px] md:text-[clamp(28px,4vw,42px)] font-extrabold tracking-tight leading-[1.2] md:leading-tight mb-2 md:mb-3 text-white [text-shadow:0_3px_12px_rgba(0,0,0,0.5)] md:[text-shadow:0_4px_15px_rgba(0,0,0,0.4)]">
+      {/* Desktop background */}
+      <div
+        aria-hidden
+        className="hidden md:block absolute inset-0"
+        style={{ background: `url('${bgDesktop}') center/cover no-repeat` }}
+      />
+      <div className="relative z-10 max-w-[1000px] mx-auto text-center text-white">
+        <h1 className="text-[24px] sm:text-[28px] md:text-[clamp(40px,5vw,68px)] font-extrabold tracking-tight leading-[1.2] md:leading-tight mb-3 md:mb-5 text-white [text-shadow:0_3px_12px_rgba(0,0,0,0.6)] md:[text-shadow:0_4px_18px_rgba(0,0,0,0.45)]">
           {t.rich(keys.titleKey, {
             em: (chunks: ReactNode) => <em className="text-yellow-300 not-italic">{chunks}</em>,
           })}
         </h1>
-        <p className="text-[12.5px] sm:text-[13px] md:text-base font-medium text-white/95 [text-shadow:0_2px_8px_rgba(0,0,0,0.55)] md:[text-shadow:0_2px_10px_rgba(0,0,0,0.5)] leading-snug px-1">
-          {t(keys.subKey)}
+        <p className="text-[18px] sm:text-[20px] md:text-[26px] font-bold text-white [text-shadow:0_2px_10px_rgba(0,0,0,0.7)] md:[text-shadow:0_2px_10px_rgba(0,0,0,0.5)] leading-snug px-1">
+          {t.rich(keys.subKey, {
+            em: (chunks: ReactNode) => (
+              <em className="not-italic text-yellow-300 text-[32px] sm:text-[36px] md:text-[clamp(56px,7vw,92px)] font-black tracking-tight md:ml-3 relative top-[6px] md:top-[30px] md:[text-shadow:0_4px_20px_rgba(0,0,0,0.55),0_0_28px_rgba(253,224,71,0.45)]">
+                {chunks}
+              </em>
+            ),
+          })}
         </p>
       </div>
     </div>
