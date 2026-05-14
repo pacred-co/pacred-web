@@ -8,15 +8,13 @@
 
 ## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-15 evening) 🚨🚨
 
-**🆕 Part R: VENDOR CUTOFF + คำตัดสินที่ ก๊อต/เดฟ ต้องล็อคด่วน → ดู [Part R](#part-r--vendor-cutoff--urgent-decisions-for-กอต--เดฟ-2026-05-15)**
+**✅ R1 vendor cutoff RESOLVED 2026-05-15 ค่ำ** — ก๊อต+เดฟ approved Option F (use TAM API interim, ก๊อต cutoff later). ADR: [`docs/decisions/0003-china-search-vendor.md`](decisions/0003-china-search-vendor.md) + cutoff checklist locked. **ภูม unblocked** → Track G activates in production day-1.
 
-ภูมิ flag (2026-05-15 ค่ำ): "ตัด **ทั้งไอแต้ม (TAM/TAMAI/TAMTISO)** ทั้ง **PCS Cargo legacy** ออกให้หมด — ไม่อยากให้ vendor เก่ารู้ว่า Pacred ทำเว็บใหม่".
+**Part Q (active):** Production beta blockers — บัญชี/LINE/การเงิน ที่ owner ต้อง provide creds + decisions **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ 3 bundles + D-1-LIFF + production launch checklist.
 
-**ผลกระทบทันที:** Track G ที่ภูมเพิ่ง ship เสร็จ (P-50..P-53 — china-search rewire) wired ไป TAM endpoints ทั้งหมด — code ทำงานถูกต้องตาม audit แต่ strategy ผิด.  **ห้าม flip switch เปิดใน production** จนกว่า ก๊อต/เดฟ จะเลือก replacement strategy.
+**Part R (mostly resolved):** R1 ✅ done. R2 PCS branding scrub still pending. R3-R5 reduced — most decisions ก๊อต+เดฟ ตัดสินได้คนละครึ่ง.
 
-**Part Q (เดิม):** Production beta blockers — บัญชี/LINE/การเงิน ที่ owner ต้อง provide creds + decisions **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ 3 bundles + D-1-LIFF + production launch checklist.
-
-**Estimate (revised):** beta launch ขึ้นกับว่า ก๊อต/เดฟ เลือก replacement สำหรับ china-search ภายในกี่วัน. LIFF + PromptPay + SMS + Sentry path ไปต่อได้ทันทีเพราะไม่เกี่ยว vendor เก่า.
+**Estimate (revised):** beta launch in 1-2 weeks if Bundle 1 creds (PromptPay + SMS + Pacred company info + LIFF app) come this week. China-search no longer blocks anything.
 
 ---
 
@@ -2591,7 +2589,24 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 >
 > Part Q เดิมมี "Pacred owner ต้องตอบ" เป็นจำนวนมาก — ภูม clarify ว่า "owner" = ก๊อต+เดฟ.  ดังนั้นเรื่องที่ถูก block อยู่จริงๆ มีแค่บางตัว (creds external เช่น Sentry/Upstash/hCaptcha) — ที่เหลือ ก๊อต+เดฟ ตัดสินได้เลย.
 
-## R1. 🆘 Track G ที่เพิ่ง ship — ห้าม activate ใน production จนกว่าจะตัดสินใจ
+## R1. ✅ RESOLVED 2026-05-15 ค่ำ — Option F (use TAM interim, ก๊อต cutoff later)
+
+> **Decision by ก๊อต+เดฟ (2026-05-15 ค่ำ):** "ใช้ API ของไอแต้มไปก่อน เดี๋ยวพี่กอทมาไล่เปลี่ยนทีหลัง".
+>
+> **Locked in ADR:** [`docs/decisions/0003-china-search-vendor.md`](decisions/0003-china-search-vendor.md)
+> **ก๊อต cutoff checklist:** [`docs/decisions/0003-china-search-vendor-cutoff-checklist.md`](decisions/0003-china-search-vendor-cutoff-checklist.md)
+>
+> **What this means for Pacred launch:**
+> - ✅ Track G code (P-50..P-53) **activates** in production with TAM endpoints
+> - ✅ Vercel env vars set per ADR (all defaults → TAM URLs work as-is, but explicit setting is cleaner)
+> - ✅ Customer flow: real product detail / keyword search / image search work day-1
+> - ⏰ ก๊อต cutoff trigger: **100 daily orders OR 8 weeks post-launch**, whichever sooner
+> - 🔒 Cleanup work locked in checklist (Phase 0 → Phase 3, ~10-50h depending on chosen replacement)
+>
+> **เดฟ action this week:** set 5 env vars in Vercel (PACRED_TAMIT_DETAIL_URL etc.) — see ADR §Action items.
+> **ก๊อต future track:** K-ADR-vendor-cutoff (Sprint 7+ Track K, post-launch).
+
+### Original blocker context (kept for history)
 
 **Status:** P-50, P-51, P-52, P-53 ภูม ship ครบใน `origin/Poom` (5 commits, ~1,300 LOC, 96 test assertions all green).  **โค้ดทำงานถูกต้องตาม audit แต่ wired ไปหา vendor ที่เจ้าของไม่อยากเกี่ยว.**
 
@@ -2681,11 +2696,12 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 - [ ] D-13-wire (hCaptcha drop into signup/contact/password-reset) — เมื่อ hCaptcha keys เข้า
 - [ ] Continue Phase H landing pivot กับ Claude
 
-### ภูม — รอ R1 decision (parallel work meanwhile)
-- [ ] **ถ้า ก๊อต/เดฟ บอก Option E (hybrid)** → ภูม ทำ Option D label-change UI (~1h) parallel + ทำ Sprint 6.5 follow-ups (~2-3h) + Track A tests (~7-9h) ไป
-- [ ] **ถ้า ก๊อต/เดฟ บอก Option D (cut feature)** → ภูม revert Track G env-var wiring + label change (~1.5h) + ทำ Sprint 6.5 + Track A
-- [ ] **ถ้า ก๊อต/เดฟ บอก Option A (build scraper)** → ภูม + เดฟ design call → spec → build (~30-50h, push เป็น Sprint 8 ใหม่)
-- [ ] **default action ระหว่างรอ:** ทำ Sprint 6.5 follow-ups ก่อน (admin digest UI, RBAC, batch insert, stale recovery, RLS, vercel cron — ทุกอันไม่ touch china-search) (~2-3h)
+### ภูม — unblocked ✅ (R1 resolved as Option F per ADR 0003)
+- [x] ✅ Sprint 6.5 follow-ups DONE (commit `0d9b47c`)
+- [x] ✅ R1 ADR 0003 + cutoff checklist written (this session)
+- [ ] **Track A tests** (Tier 1 in pending_state memory) — P-28 OTP / P-29 wallet / P-30 signup / P-31 cart cap (~7-9h, all green-field, doesn't touch china-search)
+- [ ] Sprint 6 leftover P-22 / P-23 / P-27 if Track A wraps fast
+- [ ] Tier 2-6 (Track B/C/D/E from pending_state memory)
 
 ### ปอน — ไม่กระทบ
 - [ ] Phase B landing polish (ตามเดิม)
