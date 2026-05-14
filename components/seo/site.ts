@@ -9,10 +9,51 @@ export const SITE_LOCALES = ["th", "en"] as const;
 export type SiteLocale = (typeof SITE_LOCALES)[number];
 export const DEFAULT_LOCALE: SiteLocale = "th";
 
+/**
+ * Pacred contact information — single source of truth.
+ *
+ * Authoritative info from เดฟ 2026-05-15 (`docs/pacred-info.md`).
+ * Replace any hardcoded phone numbers / addresses across the codebase
+ * by importing from here — see grep `066-131-0253` / `02-444-7046`
+ * (PCS Cargo legacy values) for residual hardcoded references that
+ * should migrate to CONTACT / ADDRESSES.
+ */
 export const CONTACT = {
-  phone: "+66661310253",
-  phoneDisplay: "066-131-0253",
-  email: "contact@pacred.co",
+  /** Default phone shown to customers (= sales primary). Back-compat alias for old `phone`/`phoneDisplay`. */
+  phone:               "+66661253007",
+  phoneDisplay:        "066-125-3007",
+  /** Company main line — for footer / receipts / official invoices. */
+  phoneCompany:        "+6624213325",
+  phoneCompanyDisplay: "02-421-3325",
+  /** Customer Service (CS) — currently routed to พลอย. */
+  phoneCs:             "+66660901217",
+  phoneCsDisplay:      "066-090-1217",
+  /** Sales reps — used by booking-data + sales-carousel + cards. */
+  phoneSalesDisplay:   ["066-125-3007", "066-125-3006"],
+  /** General contact + sales-specific email. */
+  email:               "contact@pacred.co",
+  emailSales:          "sales@pacred.co",
+} as const;
+
+export const ADDRESSES = {
+  /** Headquarters / mailing address — used in invoices, footer, JSON-LD PostalAddress. */
+  office: {
+    line:        "28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ",
+    subDistrict: "หนองแขม",
+    district:    "หนองแขม",
+    province:    "กรุงเทพมหานคร",
+    postcode:    "10160",
+    full:        "28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160",
+  },
+  /** Bangkok-area receiving warehouse — Samut Sakhon. */
+  warehouseTh: {
+    line:        "48/3 หมู่ 12",
+    subDistrict: "อ้อมน้อย",
+    district:    "กระทุ่มแบน",
+    province:    "สมุทรสาคร",
+    postcode:    "74130",
+    full:        "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
+  },
 } as const;
 
 export const SOCIAL = {
