@@ -12,6 +12,14 @@
     {
       "path": "/api/cron/refresh-active-customers",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/expire-probation",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/expire-driver-assignments",
+      "schedule": "0 * * * *"
     }
   ]
 }

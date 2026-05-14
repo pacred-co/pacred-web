@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
-  MessageSquare, Activity, ArrowRightLeft, Receipt,
+  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -23,6 +23,7 @@ const items: NavItem[] = [
   // Overview
   { href: "/admin",                  label: "ภาพรวม",          icon: <LayoutDashboard className="w-5 h-5" />, group: "ภาพรวม" },
   { href: "/admin/reports",          label: "รายงานรายได้",     icon: <BarChart3 className="w-5 h-5" />,       group: "ภาพรวม" },
+  { href: "/admin/reports/containers-hs", label: "รายงาน HS code",  icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ภาพรวม" },
   { href: "/admin/accounting",       label: "บัญชี Cargo/Freight", icon: <Wallet className="w-5 h-5" />,    roles: ["accounting"], group: "ภาพรวม" },
 
   // Operations
@@ -31,6 +32,7 @@ const items: NavItem[] = [
   { href: "/admin/yuan-payments",    label: "ฝากโอนหยวน",      icon: <Languages className="w-5 h-5" />,       roles: ["accounting"], group: "ปฏิบัติการ" },
   { href: "/admin/containers",       label: "รายการตู้",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
+  { href: "/admin/drivers",          label: "คนขับส่งของ",       icon: <Truck className="w-5 h-5" />,           roles: ["ops"], group: "ปฏิบัติการ" },
 
   // Finance
   { href: "/admin/wallet",           label: "กระเป๋าเงิน",     icon: <Wallet className="w-5 h-5" />,          roles: ["accounting"], group: "การเงิน" },
@@ -51,6 +53,7 @@ const items: NavItem[] = [
   { href: "/admin/learning",         label: "ศูนย์เรียนรู้",    icon: <BookOpen className="w-5 h-5" />,        group: "องค์กร" },
 
   // System
+  { href: "/admin/csv-imports",      label: "นำเข้า CSV",     icon: <Upload className="w-5 h-5" />,          roles: ["ops","super"], group: "ระบบ" },
   { href: "/admin/rates",            label: "ดูอัตราปัจจุบัน",   icon: <BarChart3 className="w-5 h-5" />,       group: "ระบบ" },
   { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
