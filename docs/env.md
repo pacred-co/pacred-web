@@ -145,7 +145,64 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 
 ---
 
-## 12. Rate limiting — Upstash Redis 🟡 (D-12)
+## 12. hCaptcha — invisible bot protection 🟡 (D-13)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | optional | https://www.hcaptcha.com → Sites → New (Type: **invisible**) | Public — inlined into client bundle. `NEXT_PUBLIC_` prefix required |
+| `HCAPTCHA_SECRET_KEY` | optional | same dashboard → site detail | Server-only. Sent in body of `siteverify` POST |
+
+**Behaviour by env:**
+- **Both unset, dev** — `lib/hcaptcha.ts` `verifyHcaptcha()` returns `{success:true}`; client component renders nothing; flows pass with no captcha
+- **Both unset, prod** — server FAILS CLOSED with `{success:false, error:"missing_secret"}` + `logger.error`; client component renders nothing
+- **Both set, any env** — full invisible CAPTCHA flow active
+
+**Usage pattern (combine client + server):**
+```tsx
+// Client (form)
+"use client";
+import { useRef } from "react";
+import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
+
+const captchaRef = useRef<HCaptchaHandle>(null);
+
+async function handleSubmit() {
+  const token = await captchaRef.current?.execute();
+  const res = await signupAction({ ...formData, captchaToken: token ?? "" });
+  if (!res.ok) captchaRef.current?.reset();
+}
+
+return <form>… <HCaptchaInvisible ref={captchaRef} /></form>;
+```
+
+```ts
+// Server action
+"use server";
+import { verifyHcaptcha } from "@/lib/hcaptcha";
+import { getClientIp } from "@/lib/rate-limit";
+
+export async function signupAction(input: { ...; captchaToken: string }) {
+  // (read request via headers() helper for IP)
+  const captcha = await verifyHcaptcha(input.captchaToken, ip);
+  if (!captcha.success) {
+    return { ok: false, error: "captcha_failed" };
+  }
+  // ... rest of signup
+}
+```
+
+**Activation order (when ready):**
+1. Pacred owner creates hCaptcha account → New Site → choose "Invisible"
+2. Copy site key + secret key
+3. เดฟ sets `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` in Vercel env
+4. ภูม wires `verifyHcaptcha` into target server actions: `signupAction`, contact form, password reset (D-13-wire follow-up)
+5. Redeploy → invisible challenge runs only on suspicious traffic; UX silent for normal users
+
+**Why "invisible":** challenges only suspect bots, otherwise passes silently — no UX friction for real users. hCaptcha free tier covers ~1M requests/month — enough for Pacred pre-launch + early growth.
+
+---
+
+## 13. Rate limiting — Upstash Redis 🟡 (D-12)
 
 | Var | Required? | Where to get | Notes |
 |---|---|---|---|
@@ -181,7 +238,7 @@ if (blocked) return blocked;  // { ok: false, error: "rate_limit", retryAfterSec
 
 ---
 
-## 13. Sentry — error tracking 🟡 (D-11)
+## 14. Sentry — error tracking 🟡 (D-11)
 
 | Var | Required? | Where to get | Notes |
 |---|---|---|---|
@@ -215,7 +272,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 
 ---
 
-## 14. Pre-launch checklist (production-readiness)
+## 15. Pre-launch checklist (production-readiness)
 
 ตรวจครบทุกข้อก่อน `OTP_BYPASS=false` + open ลูกค้า:
 
@@ -231,12 +288,13 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `PROMPTPAY_ID` = Pacred company actual ID
 - [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
 - [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
+- [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
 ---
 
-## 15. Migrate dev → staging → prod
+## 16. Migrate dev → staging → prod
 
 | Env | File location | Set by |
 |---|---|---|

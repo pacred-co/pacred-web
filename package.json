@@ -15,6 +15,7 @@
     "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.3",
