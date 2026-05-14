@@ -51,7 +51,25 @@ const SALES: SalesPerson[] = [
   },
 ];
 
-export function ContactSales() {
+interface ContactSalesProps {
+  /** Sales person name to feature in the middle slot (defaults to "แนท") */
+  featuredName?: string;
+  /** Hide the bottom assurance strip (ตอบไว · ปรึกษาฟรี · 14+ ปี) */
+  hideAssuranceStrip?: boolean;
+}
+
+export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false }: ContactSalesProps = {}) {
+  // Reorder so the requested person lands at index 1 (the "featured" middle card)
+  const featuredIdx = SALES.findIndex((s) => s.name === featuredName);
+  const orderedSales: SalesPerson[] =
+    featuredIdx < 0 || featuredIdx === 1
+      ? SALES
+      : (() => {
+          const featured = SALES[featuredIdx];
+          const rest = SALES.filter((s) => s.name !== featuredName);
+          return [rest[0], featured, rest[1]];
+        })();
+
   return (
     <section id="contact-sales" className="relative py-5 md:py-14 overflow-hidden">
       {/* Decorative background */}
@@ -80,16 +98,20 @@ export function ContactSales() {
           </p>
         </div>
 
-        {/* 3 sales rows */}
-        <div className="mt-4 md:mt-10 grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-5">
-          {SALES.map((s, i) => {
+        {/* 3 sales cards — horizontal swipe on mobile, 3-col grid on desktop */}
+        <div className="mt-4 md:mt-10 flex md:grid md:grid-cols-3 gap-3 md:gap-5 overflow-x-auto md:overflow-visible scroll-smooth snap-x snap-mandatory pb-2 md:pb-0 -mx-[10px] md:mx-0 px-[10px] md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {orderedSales.map((s, i) => {
             const BadgeIcon = s.badgeIcon;
             const featured = i === 1;
+            // Mobile flex order — featured card first, others follow desktop order
+            const mobileOrder = featured ? "order-1" : i === 0 ? "order-2" : "order-3";
             return (
               <div
                 key={s.name}
                 className={[
                   "group relative rounded-2xl md:rounded-3xl overflow-hidden border transition-all duration-400 hover:-translate-y-1",
+                  "shrink-0 w-[82%] max-w-[300px] snap-start md:w-auto md:max-w-none md:shrink",
+                  `${mobileOrder} md:order-none`,
                   featured
                     ? "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 text-white border-primary-700 shadow-[0_18px_40px_rgba(179,0,0,0.30)] hover:shadow-[0_28px_60px_rgba(179,0,0,0.42)]"
                     : "bg-white dark:bg-surface text-[#111827] dark:text-white border-border shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:shadow-[0_18px_42px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800",
@@ -227,6 +249,7 @@ export function ContactSales() {
         </div>
 
         {/* Bottom assurance strip */}
+        {!hideAssuranceStrip && (
         <div className="mt-6 md:mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11.5px] md:text-[12.5px] font-bold text-muted">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -241,6 +264,7 @@ export function ContactSales() {
             ทีมมืออาชีพ 14+ ปี
           </span>
         </div>
+        )}
       </div>
     </section>
   );
