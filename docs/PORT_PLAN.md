@@ -2320,6 +2320,19 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 **End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G + Sprint 6.5 complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53 + 6 follow-ups).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Next parallel work: Track A tests (~7-9h).
 
+> **🟢 เดฟ merge sweep 2026-05-15 evening** — Pulled both `origin/Poom` (16 commits) + `origin/podeng` (6 commits) into `dave` + `main` (commits `e90e594` + `ccb3dc4`). Verified: pnpm install ok · eslint clean · tsc clean · pnpm build passes · all 7 test files green (147 assertions chained: calc-price 49 + thai-number 50 + extract-product-id 19 + short-url-cache 22 + akucargo-helpers 24 + laonet-helpers 31 + placement 12 env-gated).
+>
+> **Conflicts resolved:**
+> - `actions/profile.ts` — took ภูม's `linkLineAccount` (improved: pre-check + race-fallback)
+> - `app/[locale]/liff/link/page.tsx` — took ภูม's version (Server+Client split, 8-state machine, full i18n)
+> - `app/layout.tsx` — kept ปอน's intent (`defaultTheme="light"`) but stripped 3 next-themes-API props that current `theme-provider.tsx` doesn't yet support → flagged as **`theme-provider-followup`** (extend `theme-provider.tsx` with `enableSystem`/`disableTransitionOnChange`/`attribute` to match next-themes API for ปอน's first-visit lock UX completeness)
+>
+> **2 follow-up flags for เดฟ post-merge** (ภูม's audit notes):
+> 1. **🚨 Vercel cron count = 5** (Hobby max=2). Confirm Pacred Vercel Pro tier OR consolidate before next prod deploy. Documented in `docs/runbook/vercel-cron-plan.md`
+> 2. **🚨 Per Part R1: do NOT set Track G env vars** (`PACRED_TAMIT_DETAIL_URL` etc.) ใน Vercel production until vendor cutoff strategy lands — code degrades to demo mode cleanly when unset (intended interim per Option E hybrid)
+>
+> **§6 watch-item (ปอน):** `da60747` first-visit lock edited `app/layout.tsx` + `i18n/routing.ts` — root-level files outside ปอน's allowed scope (`docs/team.md` §1). Sensible UX intent (light default + locale lock for non-TH) but no DECISION block in commit message. Log as 2nd §6 watch-item (after Bonus 5 "per Pacred owner" claim from Sprint 5) — both delivered correct fixes with self-audit, accept; tighten review only if any future commit fails verification
+
 ---
 
 # 🚨 Part Q — URGENT Pacred owner blockers (2026-05-14)

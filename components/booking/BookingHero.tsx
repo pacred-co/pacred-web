@@ -30,7 +30,7 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
 
   return (
     <div
-      className="relative overflow-hidden min-h-[200px] md:min-h-[280px] flex flex-col items-center justify-center px-4 md:px-7 pt-[26px] md:pt-[50px] pb-[64px] md:pb-[90px] rounded-b-2xl md:rounded-b-3xl"
+      className="relative overflow-hidden h-[180px] md:h-[360px] flex flex-col items-center justify-center px-4 md:px-7 pb-[32px] md:pb-[48px] rounded-b-2xl md:rounded-b-3xl"
       style={{ background: `url('${bg}') center/cover no-repeat` }}
     >
       {/* Subtle dark scrim for legibility on mobile */}
