@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.2",
+    "@line/liff": "^2.29.0",
     "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.3",

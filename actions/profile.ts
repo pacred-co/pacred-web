@@ -220,8 +220,54 @@ export async function completeProfile(
 }
 
 // ────────────────────────────────────────────────────────────
-// LINE UNLINK — remove line_user_id (linking flow lives in OAuth callback)
+// LINE LINK / UNLINK — populate `profiles.line_user_id` so push
+// notifications can reach the customer.
+//
+// Linking happens via LIFF (D-1-LIFF — see PORT_PLAN Part Q + Track G):
+//   1. Customer adds Pacred OA as friend (or already a friend)
+//   2. Customer opens https://liff.line.me/<NEXT_PUBLIC_LIFF_ID>
+//      (we render the page at app/[locale]/liff/link/page.tsx)
+//   3. LIFF SDK initialises → calls liff.getProfile() to get LINE userId
+//   4. Client posts userId to `linkLineAccount(lineUserId)` below
+//   5. Server validates Supabase session + UNIQUE constraint + saves
+//
+// The unique index `profiles_line_user_id_idx` enforces one-LINE-per-Pacred
+// account. Re-linking a different LINE userId overwrites silently (the
+// customer's choice).
 // ────────────────────────────────────────────────────────────
+
+const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
+
+export async function linkLineAccount(lineUserId: string): Promise<ActionResult> {
+  // LIFF guarantees U-prefixed 33-char LINE userId; validate to defend against
+  // a tampered client posting garbage. If the format ever changes, update here.
+  if (typeof lineUserId !== "string" || !LINE_USER_ID_RE.test(lineUserId)) {
+    return { ok: false, error: "invalid_line_user_id" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // If a different Pacred profile already claims this LINE userId, the unique
+  // index will reject the update. Surface as a friendly error so the UI can
+  // tell the customer to use a different LINE account or contact support.
+  const { error } = await supabase
+    .from("profiles")
+    .update({ line_user_id: lineUserId, line_linked_at: new Date().toISOString() })
+    .eq("id", user.id);
+
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "line_already_linked_to_another_account" };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
 export async function unlinkLine(): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

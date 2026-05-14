@@ -101,7 +101,7 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 
 ---
 
-## 7. LINE Messaging API (push notifications) 🟡 ✅ creds set 2026-05-14
+## 7. LINE Messaging API + LIFF 🟡 ✅ creds set 2026-05-14 / scaffold D-1-LIFF
 
 | Var | Value | Powers |
 |---|---|---|
@@ -109,6 +109,24 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 | `LINE_CHANNEL_ID` | `2009931373` (Pacred OA) | Used for webhook signature verification (future LINE OA bot) |
 | `LINE_CHANNEL_SECRET` | (set in `.env.local` 2026-05-14) | Same — webhook signature |
 | `LINE_CHANNEL_ACCESS_TOKEN` | (long-lived token set in `.env.local` 2026-05-14) | Push to LINE users who linked account via `api.line.me/v2/bot/message/push` |
+| `NEXT_PUBLIC_LIFF_ID` | (TBD — LINE Console → Messaging API → LIFF tab → Add LIFF) | LIFF link page at `/liff/link` populates `profiles.line_user_id`. Public — inlined into client bundle |
+
+**🚨 CRITICAL CHAIN — without LIFF, customers get NO push:**
+1. Pacred LINE creds set ✅
+2. `lib/notifications/index.ts` reads `profiles.line_user_id` to push
+3. `profiles.line_user_id` IS NULL for every customer until they link
+4. LIFF flow at `/liff/link` (D-1-LIFF, scaffolded) is the ONLY populator → without `NEXT_PUBLIC_LIFF_ID` set, page errors out
+
+**LIFF activation order:**
+1. LINE Console → Pacred Messaging API channel → LIFF tab → "Add" — set Endpoint URL = `https://pacred.co/liff/link`, Size = Compact, BOT link = ON (auto-add Pacred OA when user opens LIFF)
+2. Copy LIFF ID → set `NEXT_PUBLIC_LIFF_ID` in Vercel env
+3. ปอน wires "เพิ่ม LINE OA + เชื่อมบัญชี" CTAs at `/profile` + landing pages (uses `https://liff.line.me/<liff_id>` URL)
+4. Customer opens link → LINE auth → LIFF mounts at our page → posts `lineUserId` to `linkLineAccount` server action → saved
+5. Notification system starts pushing to that customer
+
+⚠️ **Default in dev is bypass=true** (safe — no spam to test users). To activate dev push: edit `.env.local` set `LINE_PUSH_BYPASS=false` then restart `pnpm dev`.
+
+**Code:** `lib/notifications/index.ts:24,100` (push) · `actions/profile.ts:linkLineAccount` (link server action) · `app/[locale]/liff/link/page.tsx` (LIFF mount page)
 
 ✅ **Pacred credentials landed** 2026-05-14 evening (เดฟ provided via chat). All 3 LINE vars set in `.env.local` (gitignored). For production, set the same 3 vars in Vercel env + flip `LINE_PUSH_BYPASS=false`.
 
@@ -308,6 +326,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
 - [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
 - [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
+- [ ] `NEXT_PUBLIC_LIFF_ID` set (D-1-LIFF) — without it `/liff/link` shows error + customers can't link → no LINE push reaches customers
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
