@@ -83,7 +83,13 @@ export function trackPlaceOrder(orderType: OrderType, valueTHB?: number): void {
   });
 }
 
-/** Wallet deposit confirmed (admin approved the slip). */
+/**
+ * Customer submitted a wallet deposit (slip uploaded, awaiting admin approve).
+ * Fires at customer-session-time so GTM/GA4 sees the conversion under the
+ * acquisition-attributed user — admin approval happens later in admin's
+ * session and would mis-attribute. The pending → approved transition is
+ * operational, not attribution-relevant.
+ */
 export function trackWalletDeposit(valueTHB: number): void {
   track("wallet_deposit", { value: valueTHB, currency: "THB" });
 }

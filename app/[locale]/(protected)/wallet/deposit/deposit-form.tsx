@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { createDeposit, getDepositQr } from "@/actions/wallet";
 import { uploadSlip } from "@/lib/storage-upload";
 import { QrCode, Upload, CheckCircle2, RefreshCw } from "lucide-react";
+import { trackWalletDeposit } from "@/lib/analytics";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -69,6 +70,7 @@ export function DepositForm() {
         note:      note || undefined,
       });
       if (res.ok) {
+        trackWalletDeposit(Number(amount));
         setStep("done");
         router.refresh();
       } else {
