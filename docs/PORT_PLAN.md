@@ -2554,9 +2554,12 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 ## Q4. Action assignments (per role)
 
+### ⚠️ All roles — cost discipline (ก๊อต flag 2026-05-15)
+> **`docs/team.md` §3.0 — push frequency rule:** commit local ฟรี, push เฉพาะ save point. Target ~1-3 push/day/คน. Vercel build minutes คิดตัง.
+
 ### ก๊อต (URGENT)
 - [ ] **Schedule Pacred owner call this week** — Bundle 1 (creds) + Bundle 2 (decisions)
-- [ ] หลัง owner call: review งานน้อง 2-day batch + push remaining merges
+- [ ] หลัง owner call: review งานน้อง 2-day batch + merge dave→main (per `team.md` §3 ก๊อต flow)
 - [ ] D-7 payment gateway intro — owner discuss + เลือก provider
 
 ### เดฟ (URGENT — ตอนนี้ pivot landing แต่ยังต้อง track)

@@ -62,6 +62,43 @@ Last updated: 2026-05-13
 > ```
 > **Key:** น้อง pull from `dave` (NOT `main`). `dave` = staging. `main` = production. ก๊อต = production gatekeeper.
 
+### ⚠️ 3.0. PUSH FREQUENCY RULE (cost discipline — ก๊อต flag 2026-05-15)
+
+> **ก๊อต บอก:** "ไม่อยากให้อัพ git เยอะเพราะเดี๋ยว Vercel มันคิดตัง"
+>
+> Vercel ทุก push → trigger build (preview deploy ของ branch + production build ถ้า main). Build minutes + bandwidth + function invocations = $$. รอบ commit เยอะ ไม่จำเป็น = สิ้นเปลือง.
+
+**กฎ:**
+- 🟢 **Commit ตามใจชอบ — local-only commits ฟรี** (`git commit` only, no `push`)
+- 🔴 **Push เฉพาะ "save point" จริง** — ไม่ใช่ทุก commit:
+  - จบ feature 1 task ที่ต้องการ checkpoint
+  - จบวัน / ก่อนเลิกงาน / ก่อนเดินทาง
+  - ก่อนขอ review จาก เดฟ/ก๊อต
+  - ก่อน reboot เครื่อง / change worktree (เพื่อ safety)
+- 🎯 **Target rate:** ~1-3 push/day/คน (ไม่ใช่ 10-20)
+- 🚫 **อย่า push:**
+  - "WIP — let me save in case I lose it" (commit local แทน)
+  - "fix typo" / "fix lint" หลัง push ใหญ่ (rebase + amend ก่อน push)
+  - Doc-only commit ที่จะตามด้วย code commit ใน 5 นาที (รวม batch ก่อน push)
+
+**Local commit pattern (ทำได้ฟรี):**
+```bash
+# ระหว่างวัน — commit ละเอียดเท่าที่ต้องการ
+git add <files> && git commit -m "wip: working on X"
+git add <files> && git commit -m "wip: refactor Y"
+git add <files> && git commit -m "fix: bug from Y refactor"
+
+# จบ feature / save point — squash เป็น 1-2 commit ที่ meaningful
+git rebase -i origin/<my-branch>   # squash WIP commits
+
+# Push 1 ครั้ง
+git push origin <my-branch>
+```
+
+**Apply to Claude Code automation:** ทุกคำสั่ง "commit + push" ของผม (Claude) — batch เป็น 1 push ต่อ session ถ้าทำได้. ถ้า session ทำหลาย task → commit หลายตัว แต่ push ครั้งเดียวตอน session จบ.
+
+> **เครื่องช่วยเช็ค:** Vercel dashboard → Settings → Usage. ถ้า build minutes > 80% quota = warning. Pro tier 6,000 min/month = ~50 builds/day at 4 min each.
+
 ### น้อง (ปอน + ภูม) — ก่อนเริ่มงานทุกครั้ง
 
 ```bash
@@ -256,19 +293,22 @@ git push origin <my-branch>
      - แสดง pending tasks + recent state
    
    Step 3 (ทำงาน):
-     - Claude Code ช่วย implement task ตาม spec ใน PORT_PLAN
-     - Lint+TS check + commit ตาม conventions
+     - Claude Code ช่วย implement tasks ตาม spec ใน PORT_PLAN
+     - Lint+TS check + `git commit` LOCAL — ทำได้บ่อยตามใจ (ฟรี)
+     - ทำ task ต่อไปได้เลย โดยยังไม่ push
    
-   Step 4 (ส่งงาน):
-     - Push ขึ้น branch ตัวเอง
+   Step 4 (save point — ปลายวัน / จบ batch / ก่อนขอ review):
+     - Squash WIP commits ถ้าเยอะเกิน — keep history clean
      - Claude Code อัพเดท PORT_PLAN Part P snapshot ว่าทำอะไรเสร็จ + ที่เหลือ
      - Commit doc update บน branch ตัวเอง
+     - `git push origin <branch>` — 1 ครั้งต่อ session (cost discipline §3.0)
    
-   Step 5 (เดฟ/ก๊อต integrate):
-     - เดฟ pull งานทุกคนเข้า dave → verify → push main
-     - ก๊อต watch main → review → ผ่าน
-     - PORT_PLAN Part P snapshot บน main update เป็นตัวล่าสุด
-     - คนถัดไปที่กลับมา → sync main → เห็น context ใหม่ทันที
+   Step 5 (เดฟ integrate to dave):
+     - เดฟ pull งานทุกคนเข้า dave → verify → push origin/dave (ไม่ขึ้น main!)
+   
+   Step 6 (ก๊อต approves to main):
+     - ก๊อต fetch + review origin/dave
+     - ก๊อต merges dave → main → push origin/main (production deploys)
    ```
 
 4. **Etiquette:**
@@ -285,7 +325,7 @@ git push origin <my-branch>
    - **เมื่อไหร่:** task ใน PORT_PLAN.md ที่ marked `Decision? = No` หรือ marked `<name> decide` พร้อม recommended default — ลุยได้เลย ไม่ต้องรอ
    - **เมื่อไหร่ห้าม:** task ที่ marked `Decision? = Pacred owner` / `เดฟ + ก๊อต` หรือ scope expansion (เพิ่ม feature นอกเหนือสเปคของ task) → ห้าม implement
    - **กฎทอง:** ถ้าระหว่างทางเจอเรื่อง trade-off ที่ไม่แน่ใจ → ใช้ default ที่ง่ายกว่า + log decision ใน commit message ใต้ "DECISION:" header (เดฟ/ก๊อต ปรับย้อนหลังได้); อย่าหยุดเพื่อรอ
-   - **Hand-off rule:** หลังจบ task — push branch + commit อัพเดท PORT_PLAN Part P snapshot (มี ✅ ของ task ที่เพิ่งจบ + note สั้นๆ) → next sync เห็นทันที
+   - **Hand-off rule:** หลังจบ **batch** ของ tasks (ไม่ใช่ทุก task) — `git push origin <branch>` 1 ครั้ง + commit อัพเดท PORT_PLAN Part P snapshot. ระหว่าง batch — `git commit` local-only ฟรี (ดู §3.0 push frequency rule). ทำหลาย task ครบแล้ว push 1 ครั้งจบ
    - **Trigger limit:** ห้ามทำหลาย task ของ Priority 0 พร้อมกัน (lock contention เสี่ยง schema migration); Priority 1+ ทำคู่ขนานได้
 
 ### ทำไม pattern นี้ดี
