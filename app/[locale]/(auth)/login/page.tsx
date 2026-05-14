@@ -9,6 +9,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 import { signIn, signInWithOAuth } from "@/actions/auth";
+import { trackLogin, type LoginMethod } from "@/lib/analytics";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_credentials: "อีเมล/เบอร์/รหัสไม่ถูกต้อง",
@@ -34,6 +35,12 @@ export default function LoginPage() {
     startTransition(async () => {
       const res = await signIn({ identifier, password });
       if (res.ok) {
+        const method: LoginMethod = identifier.includes("@")
+          ? "email"
+          : identifier.trim().toUpperCase().startsWith("PR")
+            ? "member_code"
+            : "phone";
+        trackLogin(method);
         router.replace(res.data?.isAdmin ? "/admin/dashboard" : "/");
         router.refresh();
       } else {
@@ -47,6 +54,8 @@ export default function LoginPage() {
     startTransition(async () => {
       const res = await signInWithOAuth(provider);
       if (res.ok && res.data) {
+        // Fire telemetry before navigating away (GTM unload handlers flush on beforeunload best-effort)
+        trackLogin(provider === "google" ? "oauth_google" : "oauth_facebook");
         window.location.href = res.data.url;
       } else {
         setError(ERROR_MESSAGES.oauth_failed);

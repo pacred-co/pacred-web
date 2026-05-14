@@ -14,6 +14,7 @@ import {
   completeJuristicRegistration,
 } from "@/actions/auth";
 import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
+import { trackSignUp } from "@/lib/analytics";
 
 /* ─────────────────────────── TYPES ─────────────────────────── */
 type TabId = "personal" | "juristic";
@@ -244,8 +245,11 @@ function PersonalForm() {
         agreed,
         captchaToken: captchaToken ?? null,
       });
-      if (res.ok) { router.replace("/"); router.refresh(); }
-      else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
+      if (res.ok) {
+        trackSignUp("personal");
+        router.replace("/");
+        router.refresh();
+      } else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
     });
   }
 
@@ -453,8 +457,11 @@ function JuristicForm() {
       const r3 = await uploadOne(docID, "national_id");
       if (!r3.ok) { const e = (r3 as { error: string }).error; return setError(ERR[e] ?? e); }
       const done = await completeJuristicRegistration();
-      if (done.ok) { router.replace("/"); router.refresh(); }
-      else setError(ERR[done.error] ?? done.error);
+      if (done.ok) {
+        trackSignUp("juristic");
+        router.replace("/");
+        router.refresh();
+      } else setError(ERR[done.error] ?? done.error);
     });
   }
 

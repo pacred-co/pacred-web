@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { submitContactMessage } from "@/actions/contact";
 import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
+import { trackGenerateLead } from "@/lib/analytics";
 
 /**
  * Drop-in contact form (P-6) + D-13-wire (hCaptcha invisible).
@@ -58,6 +59,7 @@ export function ContactForm() {
       setContact("");
       setSubject("");
       setMessage("");
+      trackGenerateLead("contact_form");
     });
   }
 

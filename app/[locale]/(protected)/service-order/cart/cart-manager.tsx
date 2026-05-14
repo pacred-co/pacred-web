@@ -12,6 +12,7 @@ import {
 } from "@/actions/cart";
 import { placeServiceOrder } from "@/actions/service-order";
 import type { Provider } from "@/lib/validators/cart";
+import { trackPlaceOrder } from "@/lib/analytics";
 import { MapPin, Truck, Ship, Plane, Package2, Box, Trash2 } from "lucide-react";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -143,6 +144,7 @@ export function CartManager({ cart: initialCart, yuanRate, serviceFee, defaultAd
         note_user:         noteUser || undefined,
       });
       if (res.ok && res.data) {
+        trackPlaceOrder("service_order", res.data.total_thb);
         setDone({ h_no: res.data.h_no, total: res.data.total_thb, due: res.data.payment_due_at });
         router.refresh();
       } else if (!res.ok) {
