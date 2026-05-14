@@ -2066,7 +2066,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 ## P5. Day 4 update — ภูม Sprint 6 progress + blockers (2026-05-15)
 
-### Sprint 6 progress: 6/13 done (~10h actual)
+### Sprint 6 progress: 11/13 done · D-1-LIFF URGENT shipped (~14h actual)
 
 | Task | Status | Commit |
 |---|---|---|
@@ -2077,7 +2077,12 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | P-19 CSV bulk import (forwarders) | ✅ | `e6c970b` |
 | P-19 follow-up: bucket-not-found UX (banner + hint) | ✅ | `e0c5976` |
 | P-20 HS code rates + container line items + report | ✅ | `dda663c` |
-| **P-21..P-27** | ⏳ next | — |
+| P-21 notification template builders (DRY) | ✅ | `8532f30` |
+| P-24 forwarder rate engine unit tests (49 assertions) | ✅ | `36ac681` |
+| P-25 re-audit Part N3 silent degraded modes | ✅ | `f39af74` |
+| P-26 service-order placement integration test (12 assertions) | ✅ | `52c7331` |
+| **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | this commit |
+| P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
 
@@ -2135,11 +2140,32 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-→ **P-21 Notification template system** (3-4h, no external dep, scope = refactor existing call sites). Then P-24 (rate engine unit tests) or P-22/23 (HR ports). P-17 driver-half (P-18 already shipped covers it). Will ping ใน next snapshot if blocker found.
+→ **P-50 china-search rewire** (TAMIT-cloud per audit, ~4-6h) — root-cause fix for the D-7a hang/not-configured surfaces ภูมเจอ. Then P-51 short-URL cache, P-52 AkuCargo keyword, P-53 Laonet image. After Track G clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+
+### D-1-LIFF shipped (this batch — URGENT from Part Q)
+
+Spec from Part Q + Part O2 line 1749. What's in:
+
+- `actions/profile.ts::linkLineAccount(lineUserId)` — Zod-style regex guard `^U[a-f0-9]{32}$`, pre-check unique-index conflict, returns `line_already_linked` instead of crashing
+- `app/[locale]/liff/link/page.tsx` — server wrapper (`requireAuth`, allow-incomplete) + client `LinkLineClient` that does `liff.init` → `liff.login` → `liff.getProfile` → server action POST
+- `@line/liff` 2.29.0 added (dynamic import keeps it out of rest-of-app bundle)
+- "เชื่อม LINE OA" button at `/profile` now navigates to `/liff/link` (was disabled placeholder)
+- i18n: full `liff.*` namespace TH + EN (16 keys)
+- env: `NEXT_PUBLIC_LIFF_ID` documented in `.env.example`; `.env.local` notes "set when LIFF app created in console"
+
+**Page handles 8 states:** boot · needs_liff_id · needs_login · ready · linking · linked · already_linked · error
+
+**Acceptance gate:** flow tested locally:
+- `/liff/link` without session → redirect `/login` ✅
+- `/liff/link` with session, NEXT_PUBLIC_LIFF_ID unset → "ระบบยังไม่พร้อม" notice ✅
+- `/liff/link` with already-linked profile → "เชื่อมไว้แล้ว" + back button ✅
+- Production wiring: requires LIFF app created in LINE Console (uses Pacred Channel ID 2009931373) + `NEXT_PUBLIC_LIFF_ID` set in Vercel + `LINE_PUSH_BYPASS=false` + ปอน drops "QR add friend" CTA at landing per Part Q Q4
+
+**Customer-side test (manual, owner-blocked):** needs LIFF app published in LINE console first. Once `NEXT_PUBLIC_LIFF_ID` lands → end-to-end test from Part Q4 Q1 acceptance: scan QR → add Pacred OA → click LIFF link → see "เชื่อมสำเร็จ" → admin pushes test notification → see in LINE chat.
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 Day 1-4 self-directed batch จากภูม (P-15..P-20 + 2 follow-up fixes). D-7a blocker flagged — เดฟ priority when bandwidth.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 Day 1-4 self-directed batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF). Next: Track G P-50 china-search rewire.
 
 ---
 

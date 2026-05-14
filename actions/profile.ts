@@ -220,8 +220,65 @@ export async function completeProfile(
 }
 
 // ────────────────────────────────────────────────────────────
-// LINE UNLINK — remove line_user_id (linking flow lives in OAuth callback)
+// LINE LINK / UNLINK — populate profiles.line_user_id (D-1-LIFF)
+//
+// Linking flow: customer opens /liff/link inside LINE OA chat (or browser),
+// the LIFF SDK exchanges the LINE login state for a profile { userId, ... },
+// the page POSTs userId here, and we persist it on the signed-in Pacred
+// profile.  Without this populator, every push to a customer is a silent
+// no-op because lib/notifications/index.ts gates `sendLinePush()` on
+// profile.line_user_id being non-null.
+//
+// Uniqueness: profiles_line_user_id_idx (0003_profiles_extended.sql) enforces
+// one Pacred profile per LINE userId — re-link from a second Pacred account
+// surfaces as `line_already_linked` so we never silently steal it.
 // ────────────────────────────────────────────────────────────
+
+// LINE userIds are exactly "U" + 32 lowercase hex chars (33 total).  Reject
+// anything else early so we never write garbage from a spoofed client.
+const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
+
+export async function linkLineAccount(lineUserId: string): Promise<ActionResult> {
+  if (typeof lineUserId !== "string" || !LINE_USER_ID_RE.test(lineUserId)) {
+    return { ok: false, error: "invalid_line_user_id" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // If this LINE userId is already attached to a *different* Pacred account,
+  // fail loud rather than overwriting (the unique index would 23505 anyway,
+  // but the lookup gives us a friendlier error string).
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("line_user_id", lineUserId)
+    .maybeSingle<{ id: string }>();
+
+  if (existing && existing.id !== user.id) {
+    return { ok: false, error: "line_already_linked" };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      line_user_id:   lineUserId,
+      line_linked_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    // Defensive — race could still trip the unique index between the lookup
+    // above and this update.
+    if (error.code === "23505") return { ok: false, error: "line_already_linked" };
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
 export async function unlinkLine(): Promise<ActionResult> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
