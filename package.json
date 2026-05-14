@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts"
+    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
