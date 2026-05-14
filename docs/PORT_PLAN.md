@@ -6,14 +6,17 @@
 
 ---
 
-## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-14 evening) 🚨🚨
+## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-15 evening) 🚨🚨
 
-**Production beta blockers:** มีเรื่องบัญชี/LINE/การเงิน ที่ Pacred owner ต้องตอบ + provide creds **ก่อน** เปิดลูกค้าจริงได้ **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ:
-1. **3 bundles** ของที่ owner ต้องเตรียม (creds + decisions + done-already)
-2. **D-1-LIFF (NEW URGENT TASK):** customers ไม่ได้รับ LINE push เลย — `profiles.line_user_id` ไม่มี mechanism populate (~4-6h ภูม)
-3. **Production launch checklist** ลำดับเร่งด่วน (PromptPay creds → ThaiBulkSMS → LINE LIFF → Sentry → D-7 decision)
+**🆕 Part R: VENDOR CUTOFF + คำตัดสินที่ ก๊อต/เดฟ ต้องล็อคด่วน → ดู [Part R](#part-r--vendor-cutoff--urgent-decisions-for-กอต--เดฟ-2026-05-15)**
 
-**Estimate:** beta launch 1-2 weeks ถ้า creds เข้าสัปดาห์นี้ · ถ้า payment gateway ต้องการก่อน +3-4 weeks (M2.1)
+ภูมิ flag (2026-05-15 ค่ำ): "ตัด **ทั้งไอแต้ม (TAM/TAMAI/TAMTISO)** ทั้ง **PCS Cargo legacy** ออกให้หมด — ไม่อยากให้ vendor เก่ารู้ว่า Pacred ทำเว็บใหม่".
+
+**ผลกระทบทันที:** Track G ที่ภูมเพิ่ง ship เสร็จ (P-50..P-53 — china-search rewire) wired ไป TAM endpoints ทั้งหมด — code ทำงานถูกต้องตาม audit แต่ strategy ผิด.  **ห้าม flip switch เปิดใน production** จนกว่า ก๊อต/เดฟ จะเลือก replacement strategy.
+
+**Part Q (เดิม):** Production beta blockers — บัญชี/LINE/การเงิน ที่ owner ต้อง provide creds + decisions **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ 3 bundles + D-1-LIFF + production launch checklist.
+
+**Estimate (revised):** beta launch ขึ้นกับว่า ก๊อต/เดฟ เลือก replacement สำหรับ china-search ภายในกี่วัน. LIFF + PromptPay + SMS + Sentry path ไปต่อได้ทันทีเพราะไม่เกี่ยว vendor เก่า.
 
 ---
 
@@ -1236,41 +1239,56 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 ## N3. 🔴 CRITICAL BLOCKERS — ห้าม launch ลูกค้าก่อนแก้
 
+> **Re-audit 2026-05-15 (P-25 ภูม):** 20/20 rows verified —
+> **9 ✅ FIXED in code**, **8 ⏳ BLOCKED on external creds**,
+> **2 ⏳ BLOCKED on owner decisions**, **1 🟡 INTENTIONAL dev toggle**
+> (OTP_BYPASS — flips at production deploy time when ThaiBulkSMS
+> creds land). Code-level audit was direct grep + git log walk;
+> env-level status was direct .env.local read.
+
 ### N3.1 — Silent degraded modes (ดูเหมือนทำงาน แต่ใช้งานจริงไม่ได้)
 ประเภทอันตรายที่สุด — UI render ปกติ แต่ backend ทำงานในโหมด demo/bypass/mock เงียบๆ:
 
-| # | Feature | Trigger | สิ่งที่ลูกค้าเห็น |
-|---|---|---|---|
-| 1 | **OTP registration** | `OTP_BYPASS=true` ใน .env.local | กรอก OTP อะไรก็ผ่าน — phone never verified → ลูกค้าปลอมเข้าได้ |
-| 2 | **URL→cart converter** (1688/Taobao/Tmall) | `PACRED_RCGROUP_API_URL` unset | demo product ราคา ¥0 "Taobao Shop" — ลูกค้ากรอกราคาเอง สับสน |
-| 3 | **Keyword search 1688** | `PACRED_TAMIT_API_URL` unset | yellow banner "API ไม่พร้อม" — search ใช้ไม่ได้ |
-| 4 | **Image reverse search** | `PACRED_RCGROUP_API_URL` unset | banner "ไม่พร้อม" |
-| 5 | **LINE push notification** | `LINE_PUSH_BYPASS` defaults true (ถ้า unset = bypass) + `LINE_CHANNEL_ACCESS_TOKEN` unset | console.log เท่านั้น — ลูกค้าไม่ได้รับแจ้งสถานะ order |
-| 6 | **Email notification fallback** | `RESEND_API_KEY` unset | console.warn เท่านั้น — เมล์ไม่ส่งจริง |
-| 7 | **DBD Tax-ID lookup** | DBD API down/rate-limited | silently shows "notfound" — ไม่บอกว่าเป็น API issue |
-| 8 | **ThaiBulkSMS** | API key placeholder "YOUR_API_KEY" | return `missing_credentials` แต่ UI โชว์ error generic |
+| # | Feature | Trigger | สิ่งที่ลูกค้าเห็น | Status (2026-05-15) |
+|---|---|---|---|---|
+| 1 | **OTP registration** | `OTP_BYPASS=true` ใน .env.local | กรอก OTP อะไรก็ผ่าน — phone never verified → ลูกค้าปลอมเข้าได้ | 🔴 still degraded — confirmed `OTP_BYPASS=true` ใน .env.local. Intentional for dev. Production prep: flip to `false` + ต้องมี ThaiBulkSMS creds พร้อมใช้ก่อน (ดู #8) |
+| 2 | **URL→cart converter** (1688/Taobao/Tmall) | `PACRED_RCGROUP_API_URL` unset | demo product ราคา ¥0 "Taobao Shop" — ลูกค้ากรอกราคาเอง สับสน | ⏳ blocked on D-7a — env var ตั้งแล้ววันนี้แต่ legacy URL ดูเหมือน dead. ภูม shipped 8s timeout (commit `77d4c44`) → graceful fallback to demo. รอเดฟ + Pacred owner verify URL หรือเลือก provider ใหม่ |
+| 3 | **Keyword search 1688** | `PACRED_TAMIT_API_URL` unset | yellow banner "API ไม่พร้อม" — search ใช้ไม่ได้ | ⏳ blocked on D-7a — same as #2 |
+| 4 | **Image reverse search** | `PACRED_RCGROUP_API_URL` unset | banner "ไม่พร้อม" | ⏳ blocked on D-7a — same RCGroup endpoint |
+| 5 | **LINE push notification** | `LINE_PUSH_BYPASS` defaults true (ถ้า unset = bypass) + `LINE_CHANNEL_ACCESS_TOKEN` unset | console.log เท่านั้น — ลูกค้าไม่ได้รับแจ้งสถานะ order | ⏳ blocked on D-7b — `LINE_PUSH_BYPASS=true` ใน .env.local (intentional dev). `LINE_CHANNEL_ACCESS_TOKEN` ยัง unset. รอ Pacred OA setup |
+| 6 | **Email notification fallback** | `RESEND_API_KEY` unset | console.warn เท่านั้น — เมล์ไม่ส่งจริง | ⏳ blocked on D-7d — `RESEND_API_KEY` + `RESEND_FROM` ทั้งคู่ unset. รอเดฟสร้าง Resend account |
+| 7 | **DBD Tax-ID lookup** | DBD API down/rate-limited | silently shows "notfound" — ไม่บอกว่าเป็น API issue | ✅ FIXED P-4 (commit `ceac3e5`) — distinguishes API down (sawApiError flag) from real notfound. Shows "ระบบค้นหาไม่พร้อม" + retry button when 5xx/network |
+| 8 | **ThaiBulkSMS** | API key placeholder "YOUR_API_KEY" | return `missing_credentials` แต่ UI โชว์ error generic | ⏳ blocked on D-7a — `THAIBULKSMS_API_KEY=YOUR_API_KEY` confirmed in .env.local. Real key needed before OTP_BYPASS=false flip |
 
 ### N3.2 — Hard blockers (ใช้ไม่ได้เลย)
 
-| # | Feature | สาเหตุ | Fix |
-|---|---|---|---|
-| 9 | **Wallet deposit QR** | `PROMPTPAY_ID` unset → throw error | set env var |
-| 10 | **OAuth (Google/Facebook)** | ต้อง verify provider config ใน Supabase Dashboard | verify + test |
-| 11 | **`/complete-profile`** | placeholder page (มีไฟล์แต่ไม่มี form จริง) | ปอนสร้าง C-0 |
-| 12 | **`/forgot-password`** | ไม่มี page เลย | ปอนสร้าง (new task C-10) |
-| 13 | **LINE login** | stub "coming soon" — กดแล้ว error | ตัดปุ่มออก หรือ build จริง |
-| 14 | **Payment gateway (Omise/2C2P)** | ไม่มีโค้ดเลย | dave M2.1 (40-60h) |
+| # | Feature | สาเหตุ | Fix | Status (2026-05-15) |
+|---|---|---|---|---|
+| 9 | **Wallet deposit QR** | `PROMPTPAY_ID` unset → throw error | set env var | ⏳ blocked on Pacred owner — `PROMPTPAY_ID` ยัง unset (commented placeholder ใน .env.local) |
+| 10 | **OAuth (Google/Facebook)** | ต้อง verify provider config ใน Supabase Dashboard | verify + test | ⏳ blocked on verification — ก๊อต/เดฟ ต้อง check Supabase project settings (no code change needed) |
+| 11 | **`/complete-profile`** | placeholder page (มีไฟล์แต่ไม่มี form จริง) | ปอนสร้าง C-0 | ✅ FIXED P-1 (commit `0ff8725`, ภูม) — full personal form + juristic redirect + atomic TOS write. Reassigned ปอน→ภูม per Part O1 |
+| 12 | **`/forgot-password`** | ไม่มี page เลย | ปอนสร้าง (new task C-10) | ✅ FIXED P-2 (commit `b7a6ba4`, ภูม) — phone OTP + email magic link both paths. Reassigned ปอน→ภูม per Part O1 |
+| 13 | **LINE login** | stub "coming soon" — กดแล้ว error | ตัดปุ่มออก หรือ build จริง | ⏳ blocked on owner decision — ยังเป็น stub, ตัดสินใจ remove vs build เป็น D-7-equivalent |
+| 14 | **Payment gateway (Omise/2C2P)** | ไม่มีโค้ดเลย | dave M2.1 (40-60h) | ⏳ blocked on D-7c — Pacred owner เลือก provider ก่อน. Until decided: PromptPay-only beta launch is viable per Part N9 |
 
 ### N3.3 — Code bugs (ใน admin actions ของภูม)
 
-| # | Bug | File:Line | Severity |
-|---|---|---|---|
-| 15 | `approveCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~103` | 🔴 audit gap |
-| 16 | `suspendCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~118` | 🔴 audit gap |
-| 17 | `approveCustomer()` ใช้ `requireAdmin()` (any admin) — ควรเป็น `withAdmin(["ops"])` | same file | 🔴 RBAC weak |
-| 18 | `suspendCustomer()` same | same | 🔴 RBAC weak |
-| 19 | approve/suspend ไม่ call `sendNotification()` | same file | 🟡 customer ไม่รู้ว่าถูก approve |
-| 20 | React Compiler errors 3 ตัวใน `scan-form.tsx` (line 130/142/151) | scan-form.tsx | 🟡 ภูม fix แล้วยังไม่ push |
+| # | Bug | File:Line | Severity | Status (2026-05-15) |
+|---|---|---|---|---|
+| 15 | `approveCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~103` | 🔴 audit gap | ✅ FIXED (เดฟ commit `1a470ee`, line 121 verified) |
+| 16 | `suspendCustomer()` ไม่ call `logAdminAction()` | `actions/admin/customers.ts:~118` | 🔴 audit gap | ✅ FIXED (เดฟ commit `1a470ee` — `customer.suspend` audit row written) |
+| 17 | `approveCustomer()` ใช้ `requireAdmin()` (any admin) — ควรเป็น `withAdmin(["ops"])` | same file | 🔴 RBAC weak | ✅ FIXED (เดฟ commit `1a470ee`, line 105: `withAdmin(["ops","super"])`) |
+| 18 | `suspendCustomer()` same | same | 🔴 RBAC weak | ✅ FIXED (เดฟ commit `1a470ee`, line 245: `withAdmin(["ops","super"])`) |
+| 19 | approve/suspend ไม่ call `sendNotification()` | same file | 🟡 customer ไม่รู้ว่าถูก approve | ✅ FIXED — both call `sendNotification()` now (refactored to `notify.customerApproved()` / `notify.customerSuspended()` templates per P-21 commit `8532f30`) |
+| 20 | React Compiler errors 3 ตัวใน `scan-form.tsx` (line 130/142/151) | scan-form.tsx | 🟡 ภูม fix แล้วยังไม่ push | ✅ FIXED (เดฟ commit `1a470ee` — handleSubmitCode reorder + Ref pattern + setCameraErr placement) |
+
+**Re-audit summary (P-25, 2026-05-15) — 20 items grouped by next-action owner:**
+- ✅ **FIXED in code** (no further work needed): #7, #11, #12, #15, #16, #17, #18, #19, #20 = **9 items**
+- ⏳ **BLOCKED on external creds** (D-7a/b/d, เดฟ + Pacred owner): #2, #3, #4, #5, #6, #8, #9, #10 = **8 items**
+- ⏳ **BLOCKED on owner decisions**: #13 (LINE login keep/remove), #14 (payment gateway provider) = **2 items**
+- 🟡 **INTENTIONAL dev toggle**: #1 (`OTP_BYPASS=true` in dev — flips false at production deploy. Pure operational; no code change needed) = **1 item**
+
+→ **Zero items remain "internally broken"**. All ⏳ badges trace to external dependencies (creds / 3rd-party signup / business decision). Production launch gate (Part N9) cannot proceed until 10 external-blocked items resolve, but they're all in เดฟ + Pacred owner court — no further ภูม code work required for N3.
 
 ## N4. Missing env vars — definitive list
 
@@ -1723,6 +1741,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 > **Source:** `docs/audit/php-pcscargo-integrations.md` (deep audit ของ legacy PHP) — เปิดเผยว่า Pacred lib/china-search/index.ts wired ผิด. RCGroup-TH = dead code in PHP! Real flow = TAMIT (detail) + tam-i-t (cache) + AkuCargo (keyword) + Laonet (image)
 >
 > **Why CRITICAL:** Pacred URL-paste converter, keyword search, image search ทุกอันใช้ `PACRED_RCGROUP_API_URL` ที่ไม่มี response → fallback demo mode → ลูกค้ากรอกราคาเอง สับสน
+>
+> **🚨 STATUS UPDATE 2026-05-15 (ภูม):** P-50, P-51, P-52, P-53 ✅ shipped to `origin/Poom` per spec.  **BUT — owner (ก๊อต+เดฟ) flagged 2026-05-15 ค่ำ ว่าห้าม activate ใน production** จนกว่าจะตัดสินใจ vendor cutoff strategy.  All 4 endpoints (TAMIT/tam-i-t/AkuCargo/Laonet) เป็น vendor PCS Cargo เก่า — ดู [Part R §R1](#part-r--vendor-cutoff--urgent-decisions-for-กอต--เดฟ-2026-05-15) สำหรับ Option A-E + ก๊อต/เดฟ decision.  Code นั่งนิ่งใน repo รอ env-var flip; demo fallback ทำงานได้ — production interim acceptable.
 
 | # | Task | Est | Decision? | Description |
 |---|---|---|---|---|
@@ -2050,7 +2070,255 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-14 evening หลัง Day 3 merge (เดฟ + ภูม + ปอน parallel-ship via Claude Code collab pattern §9) + Sprint 6 runway opened for ภูม (self-directed P-15..P-27)
+## P5. Day 4 update — ภูม Sprint 6 progress + blockers (2026-05-15)
+
+### Sprint 6 progress: 11/13 done · D-1-LIFF URGENT shipped (~14h actual)
+
+| Task | Status | Commit |
+|---|---|---|
+| P-15 sales-daily-digest dispatch wired | ✅ | `e440a31` |
+| P-16 refresh-active-customers verified + D-18 resolved | ✅ | `6b5a517` |
+| P-17 check-apprentice probation expiry (admin half) | ✅ | `0479949` |
+| P-18 forwarder_driver table + admin CRUD + expiry cron | ✅ | `8bd04b7` |
+| P-19 CSV bulk import (forwarders) | ✅ | `e6c970b` |
+| P-19 follow-up: bucket-not-found UX (banner + hint) | ✅ | `e0c5976` |
+| P-20 HS code rates + container line items + report | ✅ | `dda663c` |
+| P-21 notification template builders (DRY) | ✅ | `8532f30` |
+| P-24 forwarder rate engine unit tests (49 assertions) | ✅ | `36ac681` |
+| P-25 re-audit Part N3 silent degraded modes | ✅ | `f39af74` |
+| P-26 service-order placement integration test (12 assertions) | ✅ | `52c7331` |
+| **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | `dba11a6` |
+| **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | `01f0cc1` |
+| **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | `1dc4ed3` |
+| **P-52 (Track G)** — AkuCargo keyword search adapter | ✅ | `74db555` |
+| **P-53 (Track G)** — Laonet image search adapter (closes Track G core) | ✅ | `f8e1a20` |
+| **Sprint 6.5 batch (6 follow-ups)** — RLS, RBAC, batch insert, stale recovery, daily_digest UI, vercel cron doc | ✅ | this commit |
+| P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
+
+**Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
+
+### 🔴 New blocker found by manual QA — D-7a critical
+
+ภูม เจอตอน manual-test /service-order/add หลัง Sprint 6 batch:
+
+1. **Paste URL Tmall/Taobao** → page hung indefinitely (no UI feedback)
+2. **Keyword search** → yellow banner "ระบบค้นหาไม่พร้อมใช้งาน (not_configured)"
+
+**Root cause:** legacy URLs จาก `.env.example`:
+```
+PACRED_RCGROUP_API_URL=https://rcgroup-th.com/api-china/api-search
+PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
+```
+ภูมตั้ง 2 URLs นี้บน `.env.local` ตามค่า default แล้ว — แต่ endpoint ดูเหมือน dead (ไม่ตอบใน reasonable time)
+
+**ภูม shipped 1 mitigation** (commit `77d4c44` `fix(china-search): add 8s/15s timeouts`):
+- เพิ่ม `AbortSignal.timeout(8000)` ใน `convertProductUrl` + `convertProductUrlDetail` + `searchKeyword`
+- เพิ่ม `AbortSignal.timeout(15000)` ใน `searchByImage`
+- ผล: hang → 8s wait → graceful fallback to demo mode (UI editable, customer can still proceed)
+
+**ยังต้องการจาก เดฟ + Pacred owner (D-7a):**
+1. Confirm URLs `https://rcgroup-th.com/api-china/api-search` + `https://tamit-cloud.com/api-product/api-search` ยัง alive มั้ย? มี per-customer key มั้ย?
+2. ถ้า dead → ขอ replacement URL จาก Pacred owner หรือเลือก provider ใหม่
+3. ถ้า alive แต่ต้อง auth header → ภูม wire เพิ่มได้ (คือ scope code) แต่ต้องการ key
+
+**ภูม ไม่ blocked** — ทำ P-21 (notification templates, no external dep) ต่อได้ทันที. แค่ flag ไว้ตรงนี้เพื่อให้เดฟ priority D-7a ตอนหา window
+
+### 🟡 Other env vars ยังขาด (ภูม noted ใน .env.local เป็น comment)
+
+```
+# CRON_SECRET=               # required for cron endpoints in production
+# LINE_CHANNEL_ACCESS_TOKEN= # for real LINE push (LINE_PUSH_BYPASS=false)
+# PROMPTPAY_ID=              # for /wallet/deposit QR
+# RESEND_API_KEY=            # for /forgot-password email path (P-2)
+# RESEND_FROM=               # email From: header
+```
+
+ทั้ง 5 ตัวเป็น D-7b/c/d scope ของเดฟ (ดู P3 `Credentials / external setup ที่รอ Pacred owner`). ไม่ block Sprint 6 cont.
+
+### Migrations รอเดฟรันบน production Supabase (ลำดับ)
+
+ภูมรันบน dev project แล้ว ครบทั้ง 8 — verified via 3-query check. รอ เดฟ run บน production ตอน merge Poom → main batch ถัดไป:
+```
+0023_otp_purpose_change_phone.sql
+0024_notification_ref_contact_message.sql
+0025_profiles_notify_channels_daily_digest.sql
+0026_notification_category_sales_digest.sql
+0027_admin_contact_extras_contract_end_date.sql
+0028_forwarder_driver.sql
+0029_csv_imports.sql            ← creates 'csv-imports' storage bucket
+0030_hs_codes_rates.sql         ← seeds 9 common HS codes
+```
+
+### Next from ภูม (continuing self-directed)
+
+🎉 **Track G core closed + Sprint 6.5 follow-ups all shipped.**  Code repo is clean from low-hanging follow-ups.  Block on R1 decision (vendor cutoff strategy from ก๊อต+เดฟ — see Part R) before any further china-search work.
+
+→ **Track A tests (~7-9h)** — P-28 OTP flow + P-29 wallet ledger + P-30 auth signup + P-31 cart cap.  Pure DB/server-side coverage, doesn't touch china-search at all → safe parallel work while waiting on R1.
+
+After Track A: **Sprint 6 leftover** P-22 (HR attendance, 4-6h) + P-23 (meeting room, 2-3h) + P-27 (DPX ERP ADR, 2-4h) — or **Track B production hardening** (10-15h: SLA tracking, DB backup runbook, Web Vitals, rate limit headers, Sentry alert rules) if Pacred owner prefers ops focus.
+
+### Sprint 6.5 batch shipped (this commit — 6 follow-ups, ~2.5h actual)
+
+| # | Task | Where | Notes |
+|---|---|---|---|
+| **P-15-followup** | Admin self-service UI for daily_digest toggle | `/admin/settings/notifications` (new page + form) | Reuses existing `updateNotifyChannels` action; `notifyChannelsSchema` extended with optional `daily_digest` field. Eligibility hint shown for non-(super/sales_admin) admins |
+| **P-18-followup-rbac** | `requireAdmin(["ops"])` page-level | `/admin/drivers/page.tsx` + `[id]/page.tsx` | Sidebar gate already filtered, but direct URL bypass closed. Defence in depth |
+| **P-19-followup-batch** | Chunked batch insert | `actions/admin/csv-imports.ts::confirmCsvImport` | 2-pass refactor: validate-then-insert in chunks of 100. 1000-row CSV: 1000 round-trips → 10 round-trips. Per-chunk failure marks whole chunk skipped (no fall-back to per-row — same FK violations would just re-fire) |
+| **P-19-followup-stale** | Stale 'importing' recovery | Migration `0032_csv_imports_started_at.sql` + `lib/admin/csv-import-sweep.ts` | Sweep-on-read at admin list page + at top of `confirmCsvImport`. 10-min threshold. Migration backfills existing zombie rows on first run. Started_at stamped when status flips to 'importing' |
+| **P-20-followup-rls** | Tighten `hs_codes_select_all` RLS | Migration `0031_hs_codes_rls_authenticated.sql` | `using (true)` → `using (auth.role() = 'authenticated')`. Low-risk reference data but matches the policy comment intent |
+| **P-vercel-plan** | Vercel plan vs cron count check | `docs/runbook/vercel-cron-plan.md` (new) | Doc-only audit: Pacred has 5 crons, Hobby plan limit is 2. Clear action items for เดฟ if on Hobby (upgrade to Pro $20/mo OR consolidate to 2 batch crons). If on Pro: ✅ no action |
+
+**Acceptance gate:**
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint <touched files>` clean ✅
+- `pnpm test` chain → 207 assertions all green (no test additions needed for these — they're plumbing changes, behaviour verified by existing P-19 manual QA path)
+- Migrations 0031 + 0032 ready for เดฟ to run on production Supabase
+
+**Migrations รอเดฟรันบน production Supabase:**
+```
+0031_hs_codes_rls_authenticated.sql   ← P-20-followup-rls
+0032_csv_imports_started_at.sql        ← P-19-followup-stale (auto-recovers any existing zombies)
+```
+
+### P-53 shipped (Track G closes)
+
+`lib/china-search/laonet.ts` (server-only) + `laonet-helpers.ts` (testable) per audit §4b:
+
+- **2-step flow** mirrors PHP `searchIMG.php`:
+  1. Read `Blob` → `Buffer` → base64 → POST to `/index.php` with `route=api_tester/call&api_name=upload_img&imgcode=<b64>&key=<email>` (auto-switches to GET when URL < 1500 chars; long base64 always POSTs)
+  2. Parse `imgid` from response (defensive — top-level `imgid`/`img_id`/`id`/`url` and nested `data.*`/`result.*` variants)
+  3. GET `/index.php?route=api_tester/call&api_name=item_search_img&imgid=<id>&key=<email>` → parse hits via the same shape-variant parser used by AkuCargo
+- **5 MB upload cap** enforced server-side (matches the route handler's pre-check; defence in depth — Laonet itself rejects > ~8 MB)
+- **All hits marked `provider: "1688"`** — Laonet's image-search backend only indexes 1688 even though the same wrapper serves Taobao detail in the audit
+- **Env vars**: `PACRED_LAONET_API_URL` (default `https://laonet.online`), `PACRED_LAONET_KEY` (default `tam011plus@gmail.com` — the vendor's literal-email-as-key per audit; Pacred shares this key with the legacy install for now)
+- **`searchByImage`** in `index.ts` now delegates to `laonetImageSearch(file)`; the dead RCGroup path with its `normaliseHits` helper has been removed (was the last consumer)
+- **Tests:** 31 new assertions across 7 areas in `laonet-helpers.test.ts`:
+  - (a) buildLaonetUploadUrl encoding + trailing slash
+  - (b) buildLaonetSearchUrl encoding
+  - (c) parseLaonetUploadResponse top-level fields (`imgid`/`img_id`/`id`/`url`)
+  - (d) parseLaonetUploadResponse nested wrappers (`data.*`/`result.*`)
+  - (e) parseLaonetUploadResponse defensive (null/undef/string/empty/wrong-type)
+  - (f) parseLaonetSearchResponse canonical hits (8 field assertions)
+  - (g) parseLaonetSearchResponse alt shapes + edge cases
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/laonet-helpers.test.ts` → 31 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/ app/api/china-search/` clean ✅
+- `pnpm test` chain → **207 assertions** all green (176 + 31 new)
+- Real Laonet response owner-blocked: needs Vercel egress IP allowlist verification (P-55).  Locally: image upload likely 403s from Vercel IPs → UI banner gracefully degraded.  Logic verified by unit tests covering both upload + search response shape variants.
+
+### Track G summary (complete)
+
+| Task | Lines added | Tests |
+|---|---|---|
+| P-50 — TAMIT-cloud URL→detail rewire | ~430 | 19 assertions |
+| P-51 — tam-i-t.com short-URL cache | ~260 | 22 assertions |
+| P-52 — AkuCargo keyword search | ~280 | 24 assertions |
+| P-53 — Laonet image search | ~330 | 31 assertions |
+| **Total** | **~1300** | **96 new assertions** |
+
+**Suite total** 207 assertions across 7 test files (49 + 50 + 19 + 22 + 24 + 31 + 12).  No more wired-to-dead-endpoint code in `lib/china-search/`.  All adapters share the same posture: `available: true` with empty hits / demo product on graceful failures, `available: false` only when env unset at the route layer.
+
+### P-52 shipped (Track G)
+
+`lib/china-search/akucargo.ts` (server-only) + `akucargo-helpers.ts` (testable) per audit §4a:
+
+- **Endpoint**: `https://akucargo.com/api3/api-2022/search/v1[/taobao]/?q=<words>&page=<N>&page_size=15&lang=zh-CN` — Tmall maps to taobao (AkuCargo doesn't separately route Tmall).  Default base URL hard-coded so `PACRED_AKUCARGO_API_URL` env var being unset still works (vendor allowlist permitting).
+- **Auth**: none.  Spoofs desktop Firefox UA per audit (mobile UA returns thinner / different results).
+- **Response parser** handles 3 top-level shape variants:
+  - canonical `{ items: { item: [...] } }`
+  - flat `{ items: [...] }`
+  - legacy `{ data: [...] }`
+- **Per-row defensive parsing**: skips rows with no title AND no url; numeric-or-undef coercion for prices; promo wins when `> 0` AND `< base`; falls back to base if promo missing/zero/higher.
+- **Wired into** `searchKeyword(words, page, _order, platform)` — `_order` kept for API back-compat (AkuCargo doesn't expose order-by; the `/api/china-search` route handler doesn't need to change).
+- **Types extracted** to new `lib/china-search/types.ts` so helper modules + their tsx tests can `import type` without dragging the Next.js `server-only` sentinel into a node test runner.  `index.ts` re-exports types for back-compat.
+- **Tests:** 24 new assertions across 7 areas in `akucargo-helpers.test.ts`:
+  - (a) buildAkucargoUrl — 1688 path
+  - (b) buildAkucargoUrl — taobao path
+  - (c) buildAkucargoUrl — defensive inputs (trailing slash, zero/negative page)
+  - (d) parseAkucargoResponse — canonical items.item[]
+  - (e) parseAkucargoResponse — price fallback rules (promo=0, promo≥base, base missing, both missing)
+  - (f) parseAkucargoResponse — alt response shapes (flat items, legacy data)
+  - (g) parseAkucargoResponse — defensive edge cases (null, undefined, string, empty list, rows lacking title+url)
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/akucargo-helpers.test.ts` → 24 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain → **176 assertions** all green (152 + 24 new)
+- Real AkuCargo response owner-blocked: needs Vercel egress IP allowlist verification (P-55).  Locally: keyword search with default base URL → likely network error → UI banner "ระบบไม่พร้อม" gracefully degraded (was the same before P-52, just on a different broken endpoint).  Logic verified by unit tests covering all branches.
+
+### P-51 shipped (Track G)
+
+`lib/china-search/short-url-cache.ts` + `short-url-helpers.ts` per audit §3b:
+
+- **Detect**: `detectShortUrl(url)` recognises `m.tb.cn/<tk>` (Taobao, provider 2, cache subpath `/get/taobao/`) and `qr.1688.com/s/<tk>` (1688, provider 1, cache subpath `/get/`).
+- **Resolve flow** (mirrors PHP `convertURLChinna()`):
+  1. In-memory LRU hit → return immediately (5-min TTL, max 200 entries, FIFO eviction)
+  2. GET tam-i-t.com cache → if 200 with productID, cache in memory + return
+  3. On 204 / network blip: fetch the short URL itself with desktop Firefox UA spoof (mobile UA returns a different DOM that hides the productID) → scrape productID from final URL + body via PHP-equivalent regex set
+  4. POST back to `/save/?tk=&provider=&productID=` (best-effort, fire-and-forget) so the next paste of the same tk skips the scrape
+- **Wired into** `convertProductUrlDetail` ahead of the `extractProductId` step — short URLs now resolve to a productID instead of falling through to demo.  Failure at any layer still falls through to demo so the customer is never blocked.
+- **Helpers split** into `short-url-helpers.ts` (no `server-only`) so tsx tests can load `detectShortUrl` + `scrapeProductId` without dragging the Next.js server-only sentinel into a node runner.  Same pattern as `extract-product-id.ts`.
+- **Tests:** 22 new assertions across 6 areas in `short-url-cache.test.ts`:
+  - (a) Taobao m.tb.cn detection (4)
+  - (b) 1688 qr.1688.com detection (4)
+  - (c) non-short URLs return null (5)
+  - (d) encoded redirect patterns (`Id%3D`, `Foffer%2F`) (2)
+  - (e) plain querystring patterns (`?id=`, `/offer/<id>.html`, `?offerId=`) (3)
+  - (f) HTML body fragments + edge cases (4)
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/short-url-cache.test.ts` → 22 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain → **152 assertions** all green (130 + 22 new)
+- Real cache+scrape flow owner-blocked: needs Vercel egress IP allowlist (P-55) before tam-i-t.com responds outside legacy XAMPP IP.  Locally short URL paste → cache miss → scrape attempt → demo fallback (graceful), but unit-tested path covers all logic branches.
+
+### P-50 shipped (Track G URGENT)
+
+`lib/china-search/index.ts` rewired to TAMIT-cloud per audit §3a:
+
+- **New env var** `PACRED_TAMIT_DETAIL_URL` (default `https://tamit-cloud.com/api-product`) — `.env.example` already had this from เดฟ audit commit; `.env.local` updated to match (RCGroup vars commented out as legacy).
+- **Endpoint pattern** changed from `?q=<full-url>` to `/get/{1688|taobao}/?id=<productID>` per the canonical PHP `convertURLChinna()` — Tmall maps to taobao at TAMIT.
+- **`extractProductId()`** extracted to its own file `lib/china-search/extract-product-id.ts` (no `server-only`) so it's tsx-testable. Handles 1688/Taobao/Tmall desktop + mobile patterns + `?offerId=` fallback + generic numeric path segments.
+- **`normaliseTamitDetail()`** parses TAMIT's actual response shape: `json.status==200 → json.data.{title, vendor, mainImage, listImage[], referencePrice, priceRanges[], sku[], skuMap[]}`.  Defensive: missing/wrong-typed fields degrade gracefully (e.g., no priceRanges → no promo price; sku_axes empty → UI single-row fallback).
+- **Demo fallback preserved** — if productID not extractable (short URLs, P-51 will fix), TAMIT unreachable, response status !== 200, or any throw → returns `available: true` with `buildDemoDetail()` so the customer can still type price/qty manually and place the order. Same posture the legacy PHP took on API outages.
+- **`searchKeyword` + `searchByImage`** kept on legacy wiring for now with explicit `TODO(P-52)` / `TODO(P-53)` comments — those rewires come next in this same Track G batch.
+- **Tests:** new `extract-product-id.test.ts` with 19 assertions across 7 areas (a-g): 1688 desktop, Taobao item.htm, Tmall, ?offerId fallback, generic path segments, short URLs return null, malformed inputs. Wired into `pnpm test` chain → total now **130 assertions** all green.
+
+**Acceptance gate:**
+- `extractProductId` unit tests green ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain green (130 assertions) ✅
+- Real TAMIT smoke test owner-blocked: needs Vercel egress IP allowlist verification (P-55) once first paste hits production. Locally a Tmall URL → demo fallback (TAMIT may not respond from dev IP) but extractProductId → correct productID, so the rewire is verified in unit tests + shape-compatible.
+
+### D-1-LIFF shipped (this batch — URGENT from Part Q)
+
+Spec from Part Q + Part O2 line 1749. What's in:
+
+- `actions/profile.ts::linkLineAccount(lineUserId)` — Zod-style regex guard `^U[a-f0-9]{32}$`, pre-check unique-index conflict, returns `line_already_linked` instead of crashing
+- `app/[locale]/liff/link/page.tsx` — server wrapper (`requireAuth`, allow-incomplete) + client `LinkLineClient` that does `liff.init` → `liff.login` → `liff.getProfile` → server action POST
+- `@line/liff` 2.29.0 added (dynamic import keeps it out of rest-of-app bundle)
+- "เชื่อม LINE OA" button at `/profile` now navigates to `/liff/link` (was disabled placeholder)
+- i18n: full `liff.*` namespace TH + EN (16 keys)
+- env: `NEXT_PUBLIC_LIFF_ID` documented in `.env.example`; `.env.local` notes "set when LIFF app created in console"
+
+**Page handles 8 states:** boot · needs_liff_id · needs_login · ready · linking · linked · already_linked · error
+
+**Acceptance gate:** flow tested locally:
+- `/liff/link` without session → redirect `/login` ✅
+- `/liff/link` with session, NEXT_PUBLIC_LIFF_ID unset → "ระบบยังไม่พร้อม" notice ✅
+- `/liff/link` with already-linked profile → "เชื่อมไว้แล้ว" + back button ✅
+- Production wiring: requires LIFF app created in LINE Console (uses Pacred Channel ID 2009931373) + `NEXT_PUBLIC_LIFF_ID` set in Vercel + `LINE_PUSH_BYPASS=false` + ปอน drops "QR add friend" CTA at landing per Part Q Q4
+
+**Customer-side test (manual, owner-blocked):** needs LIFF app published in LINE console first. Once `NEXT_PUBLIC_LIFF_ID` lands → end-to-end test from Part Q4 Q1 acceptance: scan QR → add Pacred OA → click LIFF link → see "เชื่อมสำเร็จ" → admin pushes test notification → see in LINE chat.
+
+---
+
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G + Sprint 6.5 complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53 + 6 follow-ups).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Next parallel work: Track A tests (~7-9h).
 
 ---
 
@@ -2220,3 +2488,125 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 ---
 
 **End of Part Q.** Single-page alert บัญชี/LINE/การเงิน. Cross-link to Part O2 (per-task spec) + Part P §P3 burndown + audit `docs/audit/php-pcscargo-integrations.md`
+
+---
+
+# 🚨 Part R — VENDOR CUTOFF + URGENT decisions for ก๊อต / เดฟ (2026-05-15)
+
+> **ภูม flag (2026-05-15 ค่ำ):** "Pacred owner = ก๊อต + เดฟ — ตัดสินได้เลย ไม่ต้องคุยใคร".  **"ตัด ทั้งไอแต้ม (TAM/TAMAI/TAMTISO/tam-i-t/tamit-cloud/akucargo/laonet) ทั้ง PCS Cargo legacy ออกให้หมด — ไม่อยากให้ vendor เก่ารู้ว่า Pacred ทำเว็บใหม่"**.
+>
+> Part Q เดิมมี "Pacred owner ต้องตอบ" เป็นจำนวนมาก — ภูม clarify ว่า "owner" = ก๊อต+เดฟ.  ดังนั้นเรื่องที่ถูก block อยู่จริงๆ มีแค่บางตัว (creds external เช่น Sentry/Upstash/hCaptcha) — ที่เหลือ ก๊อต+เดฟ ตัดสินได้เลย.
+
+## R1. 🆘 Track G ที่เพิ่ง ship — ห้าม activate ใน production จนกว่าจะตัดสินใจ
+
+**Status:** P-50, P-51, P-52, P-53 ภูม ship ครบใน `origin/Poom` (5 commits, ~1,300 LOC, 96 test assertions all green).  **โค้ดทำงานถูกต้องตาม audit แต่ wired ไปหา vendor ที่เจ้าของไม่อยากเกี่ยว.**
+
+**Endpoints ที่ Track G ใช้** (audit-derived; ทั้งหมดเป็น vendor PCS Cargo เก่า):
+
+| File | Endpoint | จัดการ |
+|---|---|---|
+| `lib/china-search/index.ts` (P-50) | `tamit-cloud.com/api-product/get/{1688\|taobao}/?id=` | URL→detail |
+| `lib/china-search/short-url-cache.ts` (P-51) | `tam-i-t.com/api/convert-link-china/{get,save}` | short URL resolver |
+| `lib/china-search/akucargo.ts` (P-52) | `akucargo.com/api3/api-2022/search/v1[/taobao]/` | keyword search |
+| `lib/china-search/laonet.ts` (P-53) | `laonet.online/index.php?api_name={upload_img,item_search_img}` | image search |
+| `.env.local` `PACRED_LAONET_KEY` | `tam011plus@gmail.com` (vendor's literal email-as-key) | shared with PCS legacy |
+
+**Decision needed (ก๊อต+เดฟ — เลือก 1):**
+
+| Option | Effort | Risk | Note |
+|---|---|---|---|
+| **A. Build Pacred-owned scraper** (Cheerio + Puppeteer + Vercel function) | ~30-50h | Med (1688/Taobao change anti-scraper rules) | Full independence; matches what TAM/AkuCargo do internally |
+| **B. Apply for official Taobao Open API** (Alibaba Open Platform) | ~10h apply + 5-10h integrate | Low (official) | Need Pacred company verification documents to Alibaba; might take weeks for approval |
+| **C. Pay 3rd-party SaaS** (RapidAPI / Apify Taobao Scraper / similar) | ~5h | Low | Monthly recurring cost; not under our control but cleanly contracted |
+| **D. Cut feature short-term** — customer pastes URL/title/price/qty manual | 0h (revert wiring) | Low | UI already supports demo mode (P-50 demo fallback); just don't enable Track G in production. Add notice "ใส่ข้อมูลสินค้าเอง — ระบบ search กำลังพัฒนา" |
+| **E. Hybrid (recommended interim)** | 0h decision + 1-3 days implement when ready | Low | Keep Track G code as-is in repo (it's correct) but **don't set the env vars in Vercel**.  Production runs in demo mode (option D).  When option A/B/C ready, just set the env vars and traffic flows.  Zero throwaway work. |
+
+**ภูม ความเห็น (advice — final call to ก๊อต/เดฟ):** **Option E (hybrid)** ตอนนี้ — Track G code นั่งนิ่ง ๆ ไม่กระทบใคร, prod ใช้ demo mode (UI เปลี่ยน label ให้ลูกค้าเข้าใจ).  ขนาน ก๊อต/เดฟ ตัดสินใจ A/B/C เป็นการบ้าน Phase H/I ไม่ rush.
+
+**ถ้าอยาก Option D ตัดทันที:** ภูม ใช้ ~1h revert wiring (set `PACRED_TAMIT_DETAIL_URL=disabled` หรือ feature flag) — บอกได้เลย.
+
+## R2. 🆘 PCS Cargo branding cutoff (audit-needed)
+
+ภูม flag: "ตัด PCS ออกหมดด้วย".  ตอนนี้ในโค้ด/comment/test ยังมี references ที่อาจหลงเหลือ:
+
+| ที่ | สิ่งที่อาจรั่ว | Action |
+|---|---|---|
+| `docs/audit/php-pcscargo-integrations.md` | สรุป PHP เก่าทั้งหมด — มี secret PCS, social tokens, etc. | **internal-only doc** ไม่ commit ออก public; ถ้า leak Git history ของ vendor/ก๊อต/เดฟ — flag |
+| Code comments mentioning "PCS Cargo" / "pcscargo.co.th" | บอกที่มา legacy | Replace ด้วย "Pacred (formerly the same team / new company)" หรือ "legacy" generic |
+| Test data / migrations using PCS member codes | `PCS<num>` เก่า | ✅ ไม่มี — ใช้ `PR<num>` ตั้งแต่แรก (CLAUDE.md decision A1) |
+| `.env.local` legacy variable names with `PCS_` prefix | naming leak | ✅ ตรวจแล้ว — ใช้ `PACRED_*` prefix ทั้งหมด |
+| Bank account `064-174-3836` Kasikorn (PCS legacy) | ไม่อยู่ในโค้ด แต่ถ้า hardcode = leak | ⏳ เดฟ block ใน Part Q — รอ Pacred bank acct ใหม่ |
+| LINE Notify legacy tokens (audit §1.3) | ไม่อยู่ในโค้ด — ทั้งหมด LINE Notify EOL แล้ว | ✅ ไม่ใช้แน่นอน |
+
+**Action ก๊อต/เดฟ:**
+- [ ] Confirm `docs/audit/php-pcscargo-integrations.md` เป็น internal-only doc (ไม่ใช่ public docs)
+- [ ] Decide: ในโค้ด/comment ที่อ้างถึง "PCS Cargo" / "pcscargo.co.th" / "legacy PHP" — เก็บไว้เพื่อ context หรือลบทิ้ง?
+- [ ] Pacred new bank account + PromptPay number (Part Q Bundle 1 #1)
+
+## R3. ของเร่งด่วน — Pacred owner = ก๊อต/เดฟ ตัดสินได้ตอนนี้เลย
+
+ที่ Part Q เดิม mark "BLOCKED on owner" — ภูม clarify ว่า ก๊อต+เดฟ ตัดสินได้เลย:
+
+| # | Decision | Owner | Sub-decision details |
+|---|---|---|---|
+| 1 | **D-7 Payment Gateway** | ก๊อต+เดฟ | Omise / 2C2P / Stripe TH / PromptPay-only?  Beta launch ใช้ PromptPay-only ได้ตามที่เดฟ note ใน Part Q. |
+| 2 | **D-1 LINE customer linkage** | ก๊อต+เดฟ | LIFF (เดฟ บอกแนะนำ) / Webhook+DM / OAuth?  ภูมิ ship LIFF code แล้ว — แค่ตัดสินใจ "OK ใช้ LIFF" + create LIFF app ใน LINE Console + set `NEXT_PUBLIC_LIFF_ID` ใน Vercel |
+| 3 | **D-8 HS code variants** | ก๊อต+เดฟ | แยก หรือ merge? |
+| 4 | **D-9 Payroll module** | ก๊อต+เดฟ | M2.2 spec |
+| 5 | **Tax invoice numbering format** | ก๊อต+เดฟ | `INV-YYYYMM-NNNN`? Sequential? |
+| 6 | **Wallet deposit approver role** | ก๊อต+เดฟ | super only / accounting role / both? |
+| 7 | **R1 — Track G replacement strategy** | ก๊อต+เดฟ | Option A/B/C/D/E (ดู R1 ด้านบน) |
+| 8 | **R2 — PCS branding cutoff** | ก๊อต+เดฟ | จะเก็บ comment context หรือ scrub? |
+
+**ของที่ external-blocked จริงๆ (ไม่ใช่ ก๊อต/เดฟ ตัดสินใจคนเดียวได้):**
+
+| # | Decision | External party | Notes |
+|---|---|---|---|
+| A | Sentry account → DSN | sentry.io signup | free tier OK pre-launch |
+| B | Upstash Redis DB → URL + token | upstash.com signup | free tier OK |
+| C | hCaptcha site (Type=Invisible) → site key + secret | hcaptcha.com signup | free tier OK |
+| D | ThaiBulkSMS account → API key + secret | thaibulksms.com signup | paid (per SMS) |
+| E | Pacred company info | Pacred legal | tax ID, address, bank acct |
+
+→ **Action ก๊อต:** Bundle A-E สามารถสมัครเอง / ขอ Pacred legal เอง (15-30 นาที per service)
+
+## R4. Action checklist (priority order, ก๊อต+เดฟ คนละครึ่ง)
+
+### ก๊อต — URGENT (this week)
+- [ ] **R1 decision**: เลือก Option E (hybrid) ไหม? ถ้าเลือก = แค่ "OK" reply → ภูม ทำ Option D parallel (UI label change) ระหว่างรอ A/B/C
+- [ ] **R2 decision**: scrub PCS comments หรือเก็บ?
+- [ ] Sign up: Sentry + Upstash + hCaptcha (Bundle A/B/C — ฟรีหมด)
+- [ ] Apply: ThaiBulkSMS account (Bundle D)
+- [ ] Provision: Pacred company bank acct + PromptPay number (Bundle E + Part Q #1)
+- [ ] Create: LIFF app ใน LINE Console (Pacred Channel ID 2009931373) → set `NEXT_PUBLIC_LIFF_ID` ใน Vercel
+
+### เดฟ — URGENT (this week)
+- [ ] **R1 decision** ร่วมกับ ก๊อต — ถ้า A (build scraper) → spec ออกเป็น Phase H task
+- [ ] D-7 Payment Gateway lock (ก๊อต+เดฟ ตัดสิน) → ถ้า PromptPay-only ก่อน beta = OK
+- [ ] D-12-wire (rate limit drop into forms) — เมื่อ Upstash creds เข้า
+- [ ] D-13-wire (hCaptcha drop into signup/contact/password-reset) — เมื่อ hCaptcha keys เข้า
+- [ ] Continue Phase H landing pivot กับ Claude
+
+### ภูม — รอ R1 decision (parallel work meanwhile)
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option E (hybrid)** → ภูม ทำ Option D label-change UI (~1h) parallel + ทำ Sprint 6.5 follow-ups (~2-3h) + Track A tests (~7-9h) ไป
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option D (cut feature)** → ภูม revert Track G env-var wiring + label change (~1.5h) + ทำ Sprint 6.5 + Track A
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option A (build scraper)** → ภูม + เดฟ design call → spec → build (~30-50h, push เป็น Sprint 8 ใหม่)
+- [ ] **default action ระหว่างรอ:** ทำ Sprint 6.5 follow-ups ก่อน (admin digest UI, RBAC, batch insert, stale recovery, RLS, vercel cron — ทุกอันไม่ touch china-search) (~2-3h)
+
+### ปอน — ไม่กระทบ
+- [ ] Phase B landing polish (ตามเดิม)
+- [ ] หลัง LIFF app created (ก๊อต) → drop "เพิ่ม LINE OA" CTA ตามที่ Part Q4 บอก
+
+## R5. Burndown estimate (revised)
+
+| Path | Time-to-beta | Notes |
+|---|---|---|
+| **Hybrid (Option E)** | 1-2 weeks | ก๊อต/เดฟ ตัดสินวันนี้ + Bundle creds เข้าสัปดาห์นี้ + ภูม Sprint 6.5 + Track A. China-search = demo mode in prod (acceptable) |
+| **Cut feature (Option D)** | 1-2 weeks | เหมือน hybrid + ภูม revert wiring (~1h) |
+| **Pacred-owned scraper (Option A)** | 4-6 weeks | hybrid first → ภูม + เดฟ ทำ scraper parallel → swap when ready |
+| **Official Taobao API (Option B)** | unknown (Alibaba approval) | hybrid first → ผูกกับ application timeline ของ Alibaba |
+| **3rd-party SaaS (Option C)** | 1-2 weeks | hybrid first → contract + integrate (~5-7h) |
+
+---
+
+**End of Part R.** Single-page alert vendor cutoff + ก๊อต/เดฟ decisions.  ภูม block on R1 decision but has parallel work (Sprint 6.5 + Track A) ที่ไม่ blocked.

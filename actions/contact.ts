@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 import { contactMessageSchema, type ContactMessageInput } from "@/lib/validators/contact";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { verifyHcaptcha } from "@/lib/hcaptcha";
@@ -86,15 +87,12 @@ export async function submitContactMessage(
       const pid = (row as { profile_id: string }).profile_id;
       if (!pid || seen.has(pid)) continue;
       seen.add(pid);
-      await sendNotification(pid, {
-        category:       "system",
-        severity:       "info",
-        title:          "ข้อความใหม่จากฟอร์มติดต่อ",
-        body:           `${d.name} (${d.contact}): ${d.message.slice(0, 120)}${d.message.length > 120 ? "..." : ""}`,
-        link_href:      "/admin/contact-messages",
-        reference_type: "contact_message",
-        reference_id:   inserted.id,
-      });
+      await sendNotification(pid, notify.contactMessageReceived({
+        name:           d.name,
+        contact:        d.contact,
+        messagePreview: d.message,
+        messageId:      inserted.id,
+      }));
     }
   } catch {
     /* swallow — message is saved, admins will see it on next dashboard load */

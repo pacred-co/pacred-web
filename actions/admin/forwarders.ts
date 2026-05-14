@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -28,16 +29,6 @@ const STATUS_DATE_COL: Record<string, string | null> = {
   arrived_thailand: "date_arrived_thailand",
   out_for_delivery: "date_out_for_delivery",
   delivered:        "date_delivered",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  pending_payment:   "รอชำระเงิน",
-  shipped_china:     "ออกจากจีน",
-  in_transit:        "ขนส่งกลางทาง",
-  arrived_thailand:  "เข้าโกดังไทย",
-  out_for_delivery:  "กำลังจัดส่ง",
-  delivered:         "ส่งสำเร็จ",
-  cancelled:         "ยกเลิก",
 };
 
 export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise<AdminActionResult> {
@@ -86,15 +77,11 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
 
     // Notify customer when status changes
     if (statusChanged && d.status) {
-      void sendNotification(existing.profile_id, {
-        category: "forwarder",
-        severity: d.status === "cancelled" ? "warning" : "info",
-        title:    `ฝากนำเข้า ${d.f_no} อัพเดทแล้ว`,
-        body:     `สถานะ: ${STATUS_LABEL[d.status] ?? d.status}`,
-        link_href: `/service-import/${d.f_no}`,
-        reference_type: "forwarder",
-        reference_id:   existing.id,
-      });
+      void sendNotification(existing.profile_id, notify.forwarderStatusChanged({
+        fNo:         d.f_no,
+        status:      d.status,
+        forwarderId: existing.id,
+      }));
     }
 
     revalidatePath("/admin/forwarders");
@@ -148,15 +135,11 @@ export async function adminBulkUpdateForwarderStatus(
     // Notify each customer
     for (const row of existing) {
       if (row.status === status) continue;
-      void sendNotification(row.profile_id, {
-        category: "forwarder",
-        severity: status === "cancelled" ? "warning" : "info",
-        title:    `ฝากนำเข้า ${row.f_no} อัพเดทแล้ว`,
-        body:     `สถานะ: ${STATUS_LABEL[status] ?? status}`,
-        link_href: `/service-import/${row.f_no}`,
-        reference_type: "forwarder",
-        reference_id:   row.id,
-      });
+      void sendNotification(row.profile_id, notify.forwarderStatusChanged({
+        fNo:         row.f_no,
+        status,
+        forwarderId: row.id,
+      }));
     }
 
     revalidatePath("/admin/forwarders");

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { updateProfileBasic, upsertCorporate, updateNotifyChannels, unlinkLine } from "@/actions/profile";
 import type { Profile } from "@/lib/auth/get-user";
@@ -234,9 +235,15 @@ export function ProfileForm({ profile, corporate }: Props) {
               </Button>
             </div>
           ) : (
-            <Button type="button" variant="outline" size="sm" disabled>
+            // D-1-LIFF: page does its own LIFF init + auth gate.  We do not
+            // need to feature-flag the link by NEXT_PUBLIC_LIFF_ID here —
+            // /liff/link surfaces a "ระบบยังไม่พร้อม" notice when unset.
+            <Link
+              href="/liff/link"
+              className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors px-4 py-1.5 text-sm border border-border bg-surface hover:bg-surface-alt"
+            >
               {t("lineLinkButton")}
-            </Button>
+            </Link>
           )}
         </div>
 

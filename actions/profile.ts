@@ -220,27 +220,25 @@ export async function completeProfile(
 }
 
 // ────────────────────────────────────────────────────────────
-// LINE LINK / UNLINK — populate `profiles.line_user_id` so push
-// notifications can reach the customer.
+// LINE LINK / UNLINK — populate profiles.line_user_id (D-1-LIFF)
 //
-// Linking happens via LIFF (D-1-LIFF — see PORT_PLAN Part Q + Track G):
-//   1. Customer adds Pacred OA as friend (or already a friend)
-//   2. Customer opens https://liff.line.me/<NEXT_PUBLIC_LIFF_ID>
-//      (we render the page at app/[locale]/liff/link/page.tsx)
-//   3. LIFF SDK initialises → calls liff.getProfile() to get LINE userId
-//   4. Client posts userId to `linkLineAccount(lineUserId)` below
-//   5. Server validates Supabase session + UNIQUE constraint + saves
+// Linking flow: customer opens /liff/link inside LINE OA chat (or browser),
+// the LIFF SDK exchanges the LINE login state for a profile { userId, ... },
+// the page POSTs userId here, and we persist it on the signed-in Pacred
+// profile.  Without this populator, every push to a customer is a silent
+// no-op because lib/notifications/index.ts gates `sendLinePush()` on
+// profile.line_user_id being non-null.
 //
-// The unique index `profiles_line_user_id_idx` enforces one-LINE-per-Pacred
-// account. Re-linking a different LINE userId overwrites silently (the
-// customer's choice).
+// Uniqueness: profiles_line_user_id_idx (0003_profiles_extended.sql) enforces
+// one Pacred profile per LINE userId — re-link from a second Pacred account
+// surfaces as `line_already_linked` so we never silently steal it.
 // ────────────────────────────────────────────────────────────
 
+// LINE userIds are exactly "U" + 32 lowercase hex chars (33 total).  Reject
+// anything else early so we never write garbage from a spoofed client.
 const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
 
 export async function linkLineAccount(lineUserId: string): Promise<ActionResult> {
-  // LIFF guarantees U-prefixed 33-char LINE userId; validate to defend against
-  // a tampered client posting garbage. If the format ever changes, update here.
   if (typeof lineUserId !== "string" || !LINE_USER_ID_RE.test(lineUserId)) {
     return { ok: false, error: "invalid_line_user_id" };
   }
@@ -249,18 +247,31 @@ export async function linkLineAccount(lineUserId: string): Promise<ActionResult>
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // If a different Pacred profile already claims this LINE userId, the unique
-  // index will reject the update. Surface as a friendly error so the UI can
-  // tell the customer to use a different LINE account or contact support.
+  // If this LINE userId is already attached to a *different* Pacred account,
+  // fail loud rather than overwriting (the unique index would 23505 anyway,
+  // but the lookup gives us a friendlier error string).
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("line_user_id", lineUserId)
+    .maybeSingle<{ id: string }>();
+
+  if (existing && existing.id !== user.id) {
+    return { ok: false, error: "line_already_linked" };
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({ line_user_id: lineUserId, line_linked_at: new Date().toISOString() })
+    .update({
+      line_user_id:   lineUserId,
+      line_linked_at: new Date().toISOString(),
+    })
     .eq("id", user.id);
 
   if (error) {
-    if (error.code === "23505") {
-      return { ok: false, error: "line_already_linked_to_another_account" };
-    }
+    // Defensive — race could still trip the unique index between the lookup
+    // above and this update.
+    if (error.code === "23505") return { ok: false, error: "line_already_linked" };
     return { ok: false, error: error.message };
   }
 

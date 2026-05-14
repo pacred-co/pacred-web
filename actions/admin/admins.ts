@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { notify } from "@/lib/notifications/templates";
 
 const ROLE = z.enum(["super", "ops", "accounting", "sales_admin"]);
 
@@ -197,32 +198,23 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
     // verify the move (and see the new assignee) instead of being
     // dead-ended on a notification with nowhere to click.
     if (previous_sales_admin_id) {
-      void sendNotification(previous_sales_admin_id, {
-        category:  "sales",
-        severity:  "info",
-        title:     "ลูกค้าถูกย้ายออกจากทีม",
-        body:      `${customerLabel} ถูกย้ายไปทีมอื่น — เหตุผล: ${d.reason}`,
-        link_href: `/admin/customers/${d.customer_id}`,
-      });
+      void sendNotification(previous_sales_admin_id, notify.salesRepTransferOutgoing({
+        customerLabel,
+        reason:     d.reason,
+        customerId: d.customer_id,
+      }));
     }
     // Notify new rep
     if (d.new_sales_admin_id) {
-      void sendNotification(d.new_sales_admin_id, {
-        category:  "sales",
-        severity:  "info",
-        title:     "ลูกค้าถูกย้ายเข้าทีมท่าน",
-        body:      `${customerLabel} ถูกย้ายมาดูแลในทีมท่าน — เหตุผล: ${d.reason}`,
-        link_href: `/admin/customers/${d.customer_id}`,
-      });
+      void sendNotification(d.new_sales_admin_id, notify.salesRepTransferIncoming({
+        customerLabel,
+        reason:     d.reason,
+        customerId: d.customer_id,
+      }));
     }
     // Notify customer (only if newly assigned to someone — unassign isn't worth notifying)
     if (d.new_sales_admin_id) {
-      void sendNotification(d.customer_id, {
-        category: "system",
-        severity: "info",
-        title:    "ทีมเซลล์ที่ดูแลถูกเปลี่ยน",
-        body:     "ทีม Pacred ได้มอบหมายเซลล์ใหม่ให้ดูแลบัญชีของท่าน",
-      });
+      void sendNotification(d.customer_id, notify.salesRepReassignedCustomerNotice());
     }
 
     revalidatePath("/admin/customers");

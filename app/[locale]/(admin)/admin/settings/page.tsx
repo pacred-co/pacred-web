@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
 import { SettingsForm } from "./settings-form";
 
 export default async function AdminSettingsPage() {
@@ -30,6 +31,11 @@ export default async function AdminSettingsPage() {
         <h1 className="mt-1 text-2xl font-bold">ตั้งค่าระบบ</h1>
         <p className="mt-1 text-sm text-muted">
           ตัวเลขในตารางนี้ถูกใช้ทุกครั้งที่คำนวณราคา — เปลี่ยนจะมีผลกับออเดอร์ใหม่ทันที (ออเดอร์เก่าใช้ค่าเรทตอนเปิด)
+        </p>
+        <p className="mt-2 text-xs">
+          <Link href="/admin/settings/notifications" className="text-primary-600 underline">
+            → ตั้งค่าการแจ้งเตือนของฉัน (รวม Sales Daily Digest)
+          </Link>
         </p>
       </div>
 
