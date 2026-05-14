@@ -58,3 +58,11 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
+
+      - name: Docs + env audit
+        # Verifies all markdown local links resolve + every process.env.X
+        # reference in code is documented in .env.example. Catches doc rot
+        # before manual review. Both scripts exit 0 when healthy.
+        # NOTE: scripted as `audit:all` (not `audit`) because `pnpm audit`
+        # is a built-in security advisory command that wins the namespace.
+        run: pnpm audit:all

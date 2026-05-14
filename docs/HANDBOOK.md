@@ -16,6 +16,17 @@ pnpm install --frozen-lockfile     # uses pinned Node 24 + pnpm 11
 pnpm dev                           # http://localhost:3000
 ```
 
+### Verify scripts (also run automatically in CI)
+
+```bash
+pnpm lint           # eslint
+pnpm exec tsc --noEmit   # typecheck
+pnpm test:unit      # 240+ assertions, env-independent
+pnpm test           # adds placement integration test (needs .env.local + Supabase)
+pnpm audit:all      # MD link audit + env var audit (catches doc/env drift)
+pnpm audit:i18n     # th vs en key parity
+```
+
 **Need help:**
 - ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
 - งานของฉันคืออะไร → [`team.md`](team.md) + [`PORT_PLAN.md`](PORT_PLAN.md) Part O (assignments) + Part P (snapshot)

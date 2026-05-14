@@ -13,7 +13,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts",
-    "test:unit": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts"
+    "test:unit": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts",
+    "audit:md": "node scripts/md-link-audit.mjs",
+    "audit:env": "node scripts/env-audit.mjs",
+    "audit:i18n": "node scripts/i18n-audit.mjs",
+    "audit:all": "pnpm audit:md && pnpm audit:env"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.0.2",
