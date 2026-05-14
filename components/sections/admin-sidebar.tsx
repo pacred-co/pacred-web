@@ -23,6 +23,7 @@ const items: NavItem[] = [
   // Overview
   { href: "/admin",                  label: "ภาพรวม",          icon: <LayoutDashboard className="w-5 h-5" />, group: "ภาพรวม" },
   { href: "/admin/reports",          label: "รายงานรายได้",     icon: <BarChart3 className="w-5 h-5" />,       group: "ภาพรวม" },
+  { href: "/admin/reports/containers-hs", label: "รายงาน HS code",  icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ภาพรวม" },
   { href: "/admin/accounting",       label: "บัญชี Cargo/Freight", icon: <Wallet className="w-5 h-5" />,    roles: ["accounting"], group: "ภาพรวม" },
 
   // Operations

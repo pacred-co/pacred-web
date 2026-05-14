@@ -163,6 +163,22 @@ export default async function AdminContainerDetailPage({
         </div>
       </div>
 
+      {/* HS code line items entry (P-20) */}
+      <Link
+        href={`/admin/containers/${c.id}/hs`}
+        className="block rounded-2xl border border-emerald-300 bg-emerald-50 px-5 py-4 hover:bg-emerald-100 transition-colors"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-emerald-900">รายการ HS code →</p>
+            <p className="text-xs text-emerald-800/80 mt-0.5">
+              บันทึก qty / น้ำหนัก / มูลค่า แยกตาม HS code ของตู้นี้ เพื่อให้รายงาน /admin/reports/containers-hs สรุปได้
+            </p>
+          </div>
+          <span className="text-xs font-mono uppercase text-emerald-700">CONTAINER · HS</span>
+        </div>
+      </Link>
+
       {/* Linked forwarders */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-surface-alt/50">
