@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { TabMode } from "@/types/booking";
 
 interface BookingTabsProps {
@@ -13,6 +13,31 @@ interface BookingTabsProps {
 export function BookingTabs({ active, onChange }: BookingTabsProps) {
   const t = useTranslations("bookingCalc");
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll-affordance state: show arrows only when there's overflow on that side
+  const [canScrollLeft, setCanScrollLeft]   = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    function update() {
+      if (!el) return;
+      const overflow = el.scrollWidth - el.clientWidth;
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(overflow > 4 && el.scrollLeft < overflow - 4);
+    }
+
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   const tabs: { mode: TabMode; emoji: string; label: string; sub: string }[] = [
     { mode: "sea",      emoji: "🚢", label: t("tabSeaTitle"),      sub: t("tabSeaSub") },
@@ -88,12 +113,18 @@ export function BookingTabs({ active, onChange }: BookingTabsProps) {
         })}
       </div>
 
-      {/* Mobile scroll affordance: subtle chevron on the right edge */}
+      {/* Mobile scroll affordances: clear pulsing chevrons on both edges */}
       <span
         aria-hidden
-        className="pointer-events-none md:hidden absolute top-1/2 right-1 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-white/90 shadow-[0_2px_6px_rgba(0,0,0,0.10)] animate-pulse"
+        className={`pointer-events-none md:hidden absolute top-1/2 left-0.5 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse transition-opacity duration-200 ${canScrollLeft ? "opacity-100" : "opacity-0"}`}
       >
-        <ChevronRight className="w-3.5 h-3.5 text-primary-500" strokeWidth={3} />
+        <ChevronLeft className="w-4 h-4" strokeWidth={3.2} />
+      </span>
+      <span
+        aria-hidden
+        className={`pointer-events-none md:hidden absolute top-1/2 right-0.5 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse transition-opacity duration-200 ${canScrollRight ? "opacity-100" : "opacity-0"}`}
+      >
+        <ChevronRight className="w-4 h-4" strokeWidth={3.2} />
       </span>
     </div>
   );
