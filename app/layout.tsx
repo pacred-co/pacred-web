@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
+import Script from "next/script";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -36,16 +37,18 @@ export default function RootLayout({
       className={`${prompt.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        {/*
-          Pre-hydration theme script — runs synchronously before paint
-          to prevent FOUC. Lives in the Server Component head (NOT inside
-          ThemeProvider) so React 19 doesn't warn about <script> JSX
-          re-rendering on client. See components/theme-provider.tsx.
-        */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
+        {/*
+          Pre-hydration theme script via next/script with
+          strategy="beforeInteractive" — Next.js injects this directly
+          into the document <head> outside React's JSX tree, so React 19
+          doesn't fire its "script tag inside component" warning.
+          Runs synchronously before any client JS / hydration to avoid
+          FOUC. See components/theme-provider.tsx.
+        */}
+        <Script id="theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
         <ThemeProvider defaultTheme="system">{children}</ThemeProvider>
       </body>
     </html>
