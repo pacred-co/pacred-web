@@ -6,6 +6,17 @@
 
 ---
 
+## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-14 evening) 🚨🚨
+
+**Production beta blockers:** มีเรื่องบัญชี/LINE/การเงิน ที่ Pacred owner ต้องตอบ + provide creds **ก่อน** เปิดลูกค้าจริงได้ **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ:
+1. **3 bundles** ของที่ owner ต้องเตรียม (creds + decisions + done-already)
+2. **D-1-LIFF (NEW URGENT TASK):** customers ไม่ได้รับ LINE push เลย — `profiles.line_user_id` ไม่มี mechanism populate (~4-6h ภูม)
+3. **Production launch checklist** ลำดับเร่งด่วน (PromptPay creds → ThaiBulkSMS → LINE LIFF → Sentry → D-7 decision)
+
+**Estimate:** beta launch 1-2 weeks ถ้า creds เข้าสัปดาห์นี้ · ถ้า payment gateway ต้องการก่อน +3-4 weeks (M2.1)
+
+---
+
 ## 📊 TL;DR — สรุป 5 บรรทัด
 
 | | สถานะปัจจุบัน |
@@ -1720,6 +1731,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | **P-52** | Add AkuCargo keyword search adapter | 2-3h | No | New `lib/china-search/akucargo.ts`. Replace `searchKeyword()` to call `{PACRED_AKUCARGO_API_URL}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` with desktop Firefox UA. Response shape `json.items.item[i].{detail_url,pic_url,title,price,promotion_price,sales}`. **Acceptance:** type Thai or Chinese keyword → get hits with real prices |
 | **P-53** | Add Laonet image search adapter | 2-3h | No | New `lib/china-search/laonet.ts`. Replace `searchByImage(file)` to: (a) upload file as base64 → `{PACRED_LAONET_API_URL}/index.php?route=api_tester/call&api_name=upload_img&imgcode={b64}&key={PACRED_LAONET_KEY}` returns `imgid` (b) search → `?api_name=item_search_img&imgid={imgid}&key={PACRED_LAONET_KEY}` returns hits. **Acceptance:** upload product photo → get similar 1688 products |
 | **P-54** ✅ | LINE Messaging API ACTIVATED — creds in `.env.local` | done by เดฟ | — | All 3 vars set 2026-05-14: `LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`. Production needs same in Vercel env + `LINE_PUSH_BYPASS=false`. ภูม: P-15 dispatch wiring (already done in `e440a31`) → real LINE pushes when bypass off. Future task: webhook receiver for LINE OA (signature verify uses `LINE_CHANNEL_SECRET`) |
+| **D-1-LIFF** 🚨 URGENT | LINE LIFF for customer→profile linkage (`profiles.line_user_id` populator) | 4-6h | No (recommended LIFF default) | **Why:** Pacred has LINE creds + push code ready, BUT no customer has `line_user_id` linked → no customer gets push. Without this, the entire LINE notification pipeline is dead-end. **Spec:** (a) Create LIFF app in LINE Developers Console (size: Compact, BOT link: ON) — uses Pacred Messaging API channel (ID 2009931373) (b) New page `app/[locale]/liff/link/page.tsx` — client component using `@line/liff` SDK: `liff.init({liffId})` → `liff.isLoggedIn() ? liff.getProfile() : liff.login()` → POST userId to server action → save to `profiles.line_user_id` (require Supabase session — user must be logged in to Pacred too) (c) Server action `actions/profile.ts` `linkLineAccount(lineUserId)` — withAuth + upsert into profiles (d) New env var `NEXT_PUBLIC_LIFF_ID` (e) UI: add "เชื่อม LINE OA" button at `/profile` + "QR เพิ่มเพื่อน + เชื่อม" CTA at landing/dashboard (ปอน assist) (f) Test: Pacred OA add friend → click LIFF link → see "เชื่อมสำเร็จ" → admin pushes test notification → see in LINE chat. **Acceptance:** 1 customer end-to-end test green |
 | **P-55** | Verify Vercel egress IP allowlist with TAMIT/AkuCargo/Laonet/tam-i-t | 1h | ภูม + เดฟ | Vercel function egress IP differs from legacy XAMPP/cPanel. Check after P-50 lands — if real API returns 403/blocked, contact vendor (likely all 4 services owned by same vendor `tam011plus@gmail.com`) to allowlist Vercel. Document Vercel egress IP block in `docs/runbook/vendor-allowlist.md` |
 | **P-56** | (Future) JMFCARGO carrier sync port | 6-8h | เดฟ + ก๊อต | Two-way sync over HTTP. PCS↔JMF via `JMF_CARGO_TOKEN` (concat of legacy Tiso key+secret). Receiving endpoint at `/api/integrations/jmf-cargo/inbound/route.ts`. Outbound calls in admin actions. Lower priority — only if Pacred wants JMF integration. Spec in audit §9a |
 | **P-57** | (Future) CargoThai TTP/CN container API port | 4-6h | เดฟ + ก๊อต | Active legacy carrier (`a807f4fe...`, `aea07c4d...` query-string `_token`). Endpoint `https://cargothai.tech/api/service/{GetContainer,GetDetail}`. Lower priority — only if Pacred uses these carriers. Spec in audit §9b |
@@ -2038,3 +2050,168 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 ---
 
 **End of Part P.** Snapshot ณ 2026-05-14 evening หลัง Day 3 merge (เดฟ + ภูม + ปอน parallel-ship via Claude Code collab pattern §9) + Sprint 6 runway opened for ภูม (self-directed P-15..P-27)
+
+---
+
+# 🚨 Part Q — URGENT Pacred owner blockers (2026-05-14)
+
+> **เดฟ บอก** "เน้นพวกเรื่อง บัญชี เรื่อง ไลน์ เรื่อง อะไรที่เป็นการเงิน อะไรที่จำเป็นต้องรอก็บอก ก็เตือน". This part = single-page alert for เดฟ + ก๊อต. ทุกคนอ่านอันนี้แล้ว pick action ของตัวเอง
+
+## Q1. Status — บัญชี / LINE / การเงิน
+
+### ✅ ใช้งานได้แล้ว (ใน main `b2064e5`, code+infra ครบ)
+
+**LINE:** wrapper push via Messaging API + `profiles.line_user_id` column ready + P-15 sales digest dispatch wired (`e440a31`)
+
+**บัญชี/การเงิน:**
+- Wallet ledger 3 buckets + recompute trigger
+- Wallet deposit slip → admin approve
+- Wallet withdraw request → admin approve
+- Yuan transfer (Alipay) request → admin approve
+- Service-import + service-order full flow + receipt PDFs
+- Sales commission ledger + claim form (P-7)
+- Forwarder month-end closing (P-11)
+- Cross-team commission dashboard (P-12)
+- CSV bulk import for forwarders (P-19)
+- HS code rates + container line items + report (P-20)
+
+### 🟡 พร้อมระดับ code — ต้อง flip switch ใน production
+
+| Item | Action |
+|---|---|
+| **LINE push** | ✅ creds ใน `.env.local` → ตั้ง 3 vars (`LINE_CHANNEL_ID`/`_SECRET`/`_ACCESS_TOKEN`) ใน Vercel env + flip `LINE_PUSH_BYPASS=false` |
+| **Sentry** | SDK scaffolded → ตั้ง `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel |
+| **Rate limit** | lib scaffolded → ตั้ง `UPSTASH_REDIS_REST_URL` + `_TOKEN` + ภูม wire (D-12-wire ~1-2h) |
+| **CAPTCHA** | scaffold ready → ตั้ง `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` + ภูม drop ลง forms (D-13-wire ~1-2h) |
+
+### 🔴 BLOCKED — รอ Pacred owner ก่อน beta launch
+
+#### 1. PromptPay QR (wallet deposit จะ throw error)
+ต้อง 3 ค่าจาก Pacred:
+- PromptPay number (เบอร์โทร 10 หลัก หรือ tax-ID 13 หลัก)
+- Bank account number (สำหรับพิมพ์ใน QR receipt)
+- Account name (ชื่อบริษัท Pacred)
+
+⚠️ PCS Cargo legacy ใช้ `064-174-3836` Kasikorn — **Pacred ใช้ไม่ได้** ต้องเปิดบัญชีใหม่
+
+#### 2. Payment gateway (D-7 decision — owner)
+ตอนนี้ launch ได้เฉพาะ **PromptPay-only manual** (slip upload + admin approve). ถ้าจะรับ credit card — ต้องเลือก:
+- **Omise** — Thai-friendly, simple integration
+- **2C2P** — Pacred industry standard
+- **Stripe TH** — international, more features
+
+หลัง decide → M2.1 implementation (~40-60h) — เดฟ ทำ
+
+#### 3. ThaiBulkSMS real keys (OTP fail ถ้า OTP_BYPASS=false)
+- `THAIBULKSMS_API_KEY`
+- `THAIBULKSMS_API_SECRET`
+
+ปัจจุบัน `YOUR_API_KEY` placeholder — production OTP ใช้ไม่ได้
+
+#### 4. 🚨 LINE customer linkage — **ใหญ่กว่าที่คิด** (D-1-LIFF NEW)
+**`profiles.line_user_id` column มี แต่ NO mechanism populate มัน:**
+- ❌ ไม่มี LINE OA webhook receiver (เก็บ user_id ตอน customer add friend)
+- ❌ ไม่มี LIFF / LINE Login OAuth (auto-link ตอน customer login)
+
+**ผลกระทบ:** LINE push ทำงานกับ admin ได้ (ถ้า seed `line_user_id` manually ใน DB) แต่ **customer ไม่ได้รับ push เลย** จนกว่าจะมี linkage
+
+**ต้องเลือก 1 ใน 3 patterns:**
+| Option | Friction | Est | Note |
+|---|---|---|---|
+| **LIFF in OA** ⭐ | ต่ำสุด | 4-6h | Customer click link → open LIFF → auto-link via LINE userID. ใช้ Pacred OA ที่มีแล้ว |
+| LINE OA webhook + DM bot | กลาง | 6-8h | Customer add friend → bot ส่ง code → customer paste ใน profile |
+| LINE Login OAuth | สูง | 6-8h | Separate channel — full auth replacement |
+
+**แนะนำ:** LIFF (lowest friction, fastest, reuses existing OA channel). New task **D-1-LIFF** assigned to ภูม → ดู Part O2 Track G
+
+### ⚠️ ขาดทั้งระบบ (PHP เดิมไม่มีหรือ partial — Pacred ยังไม่ได้ build)
+
+**บัญชี/Tax (post-launch OK ก่อน):**
+- ❌ Tax invoice (ใบกำกับภาษี) issuance flow + numbering
+- ❌ Withholding tax (ภ.ง.ด. 3, 53) handling สำหรับ B2B juristic
+- ❌ Aging report — admin ไม่เห็น overdue accounts
+- ❌ Profit/Loss report comprehensive
+- ❌ Bank reconciliation (slip vs bank statement auto-match)
+
+**Refund/dispute (post-launch OK):**
+- ❌ Formal refund workflow (ปัจจุบัน wallet adjustment manual)
+- ❌ Dispute / chargeback model
+
+**Phase I services (ecosystem expansion — design only):**
+- Service #5 tax-refund · #7 tax-invoice · #8 shipping-document · #12 bill-payment
+
+## Q2. ของที่ก๊อต ต้องเตรียมก่อน owner call
+
+### Bundle 1 — เปิดได้ทันที (no decisions, just provide values)
+```
+□ PromptPay number (เบอร์/tax-ID, no dash)
+□ Bank account number + ชื่อธนาคาร + ชื่อบัญชี (สำหรับพิมพ์ใน QR receipt)
+□ ThaiBulkSMS account → API key + API secret (login ที่ thaibulksms.com)
+□ Pacred company info (ใช้สำหรับ tax invoice + footer + email):
+  □ Tax ID (เลข 13 หลัก)
+  □ ที่อยู่จดทะเบียน (สำหรับใบกำกับ)
+  □ ชื่อบริษัท Thai + English
+  □ เบอร์โทรกลาง + email contact
+□ Sentry account → DSN (free tier OK pre-launch)
+□ Upstash Redis DB → URL + token (free tier OK)
+□ hCaptcha site (Type=Invisible) → site key + secret
+```
+
+### Bundle 2 — Decisions ที่ต้องตอบ
+```
+□ D-7: Payment gateway = Omise / 2C2P / Stripe TH? หรือ PromptPay-only ก่อน?
+□ D-1: LINE customer linkage = LIFF (แนะนำ) / Webhook+DM / OAuth?
+□ D-8: HS code variants = แยก หรือ merge เข้า tier?
+□ Tax invoice numbering format? (auto INV-YYYYMM-NNNN?)
+□ ใครเป็น approver ของ wallet deposit? (super only / accounting role / both?)
+```
+
+### Bundle 3 — ✅ landed already (ไม่ต้องคุย)
+```
+✅ LINE OA channel access token (Pacred provided 2026-05-14)
+✅ Sentry SDK + Rate limit + hCaptcha — scaffolded รอ creds เท่านั้น
+```
+
+## Q3. Production launch checklist (priority order)
+
+```
+Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
+  1. PromptPay creds → wallet deposit ทำงาน
+  2. ThaiBulkSMS keys → OTP จริง (OTP_BYPASS=false)
+  3. Sentry DSN → จับ error production
+  4. LINE LIFF (D-1-LIFF) + LINE_CHANNEL_* ใน Vercel → customer notification
+  5. Pacred company info → tax invoice เตรียมในอนาคต
+  6. Upstash + hCaptcha → bot/abuse protection production-grade
+  7. (Optional) Payment gateway D-7 — ถ้ายังไม่พร้อมก็ใช้ PromptPay-only ไปก่อน
+```
+
+**Estimate ถ้า creds week นี้:** 1-2 weeks ถึง beta launch (PromptPay-only + LIFF + บัญชีพื้นฐาน)
+**ถ้า payment gateway ต้อง launch:** +3-4 weeks สำหรับ M2.1
+
+## Q4. Action assignments (per role)
+
+### ก๊อต (URGENT)
+- [ ] **Schedule Pacred owner call this week** — Bundle 1 (creds) + Bundle 2 (decisions)
+- [ ] หลัง owner call: review งานน้อง 2-day batch + push remaining merges
+- [ ] D-7 payment gateway intro — owner discuss + เลือก provider
+
+### เดฟ (URGENT — ตอนนี้ pivot landing แต่ยังต้อง track)
+- [ ] D-12-wire + D-13-wire (~2-4h ทั้งคู่) เมื่อ creds มา
+- [ ] หลัง D-7 lock → lead M2.1 payment gateway implementation (~40-60h)
+- [ ] Continue landing pivot กับ Claude (current pivot focus)
+
+### ภูม (URGENT — backend self-directed)
+- [ ] **NEW D-1-LIFF (URGENT, ~4-6h)** — LINE LIFF for customer linkage. ดู Part O2 Track G
+- [ ] **P-50 china-search rewire (CRITICAL, ~4-6h)** — TAMIT-cloud per audit
+- [ ] Sprint 6.5 follow-ups (~2-3h)
+- [ ] Sprint 7+ Tracks A-G ตามลำดับ self-directed
+
+### ปอน (URGENT — frontend self-directed)
+- [ ] Continue Phase B landing polish (decisions ก็ pull เดฟ assist)
+- [ ] **NEW: หลัง D-1-LIFF lands** — เพิ่ม "เพิ่ม LINE OA" CTA + LIFF entry point ที่ landing pages + dashboard
+- [ ] Phase D L-9b/c i18n polish (self-directed, anytime)
+- [ ] Phase C+ ecosystem (รอ Pacred owner decisions ที่ Bundle 2)
+
+---
+
+**End of Part Q.** Single-page alert บัญชี/LINE/การเงิน. Cross-link to Part O2 (per-task spec) + Part P §P3 burndown + audit `docs/audit/php-pcscargo-integrations.md`
