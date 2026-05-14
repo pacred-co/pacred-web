@@ -6,14 +6,17 @@
 
 ---
 
-## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-14 evening) 🚨🚨
+## 🚨🚨 URGENT — เดฟ + ก๊อต attention (2026-05-15 evening) 🚨🚨
 
-**Production beta blockers:** มีเรื่องบัญชี/LINE/การเงิน ที่ Pacred owner ต้องตอบ + provide creds **ก่อน** เปิดลูกค้าจริงได้ **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ:
-1. **3 bundles** ของที่ owner ต้องเตรียม (creds + decisions + done-already)
-2. **D-1-LIFF (NEW URGENT TASK):** customers ไม่ได้รับ LINE push เลย — `profiles.line_user_id` ไม่มี mechanism populate (~4-6h ภูม)
-3. **Production launch checklist** ลำดับเร่งด่วน (PromptPay creds → ThaiBulkSMS → LINE LIFF → Sentry → D-7 decision)
+**🆕 Part R: VENDOR CUTOFF + คำตัดสินที่ ก๊อต/เดฟ ต้องล็อคด่วน → ดู [Part R](#part-r--vendor-cutoff--urgent-decisions-for-กอต--เดฟ-2026-05-15)**
 
-**Estimate:** beta launch 1-2 weeks ถ้า creds เข้าสัปดาห์นี้ · ถ้า payment gateway ต้องการก่อน +3-4 weeks (M2.1)
+ภูมิ flag (2026-05-15 ค่ำ): "ตัด **ทั้งไอแต้ม (TAM/TAMAI/TAMTISO)** ทั้ง **PCS Cargo legacy** ออกให้หมด — ไม่อยากให้ vendor เก่ารู้ว่า Pacred ทำเว็บใหม่".
+
+**ผลกระทบทันที:** Track G ที่ภูมเพิ่ง ship เสร็จ (P-50..P-53 — china-search rewire) wired ไป TAM endpoints ทั้งหมด — code ทำงานถูกต้องตาม audit แต่ strategy ผิด.  **ห้าม flip switch เปิดใน production** จนกว่า ก๊อต/เดฟ จะเลือก replacement strategy.
+
+**Part Q (เดิม):** Production beta blockers — บัญชี/LINE/การเงิน ที่ owner ต้อง provide creds + decisions **→ ดู [Part Q](#part-q--urgent-pacred-owner-blockers-2026-05-14)** สำหรับ 3 bundles + D-1-LIFF + production launch checklist.
+
+**Estimate (revised):** beta launch ขึ้นกับว่า ก๊อต/เดฟ เลือก replacement สำหรับ china-search ภายในกี่วัน. LIFF + PromptPay + SMS + Sentry path ไปต่อได้ทันทีเพราะไม่เกี่ยว vendor เก่า.
 
 ---
 
@@ -1738,6 +1741,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 > **Source:** `docs/audit/php-pcscargo-integrations.md` (deep audit ของ legacy PHP) — เปิดเผยว่า Pacred lib/china-search/index.ts wired ผิด. RCGroup-TH = dead code in PHP! Real flow = TAMIT (detail) + tam-i-t (cache) + AkuCargo (keyword) + Laonet (image)
 >
 > **Why CRITICAL:** Pacred URL-paste converter, keyword search, image search ทุกอันใช้ `PACRED_RCGROUP_API_URL` ที่ไม่มี response → fallback demo mode → ลูกค้ากรอกราคาเอง สับสน
+>
+> **🚨 STATUS UPDATE 2026-05-15 (ภูม):** P-50, P-51, P-52, P-53 ✅ shipped to `origin/Poom` per spec.  **BUT — owner (ก๊อต+เดฟ) flagged 2026-05-15 ค่ำ ว่าห้าม activate ใน production** จนกว่าจะตัดสินใจ vendor cutoff strategy.  All 4 endpoints (TAMIT/tam-i-t/AkuCargo/Laonet) เป็น vendor PCS Cargo เก่า — ดู [Part R §R1](#part-r--vendor-cutoff--urgent-decisions-for-กอต--เดฟ-2026-05-15) สำหรับ Option A-E + ก๊อต/เดฟ decision.  Code นั่งนิ่งใน repo รอ env-var flip; demo fallback ทำงานได้ — production interim acceptable.
 
 | # | Task | Est | Decision? | Description |
 |---|---|---|---|---|
@@ -2288,7 +2293,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53).  Next: P-55 vendor allowlist (1h) → Sprint 6.5 follow-ups (~2-3h) → Track A tests.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Parallel work ที่ไม่ block: Sprint 6.5 (~2-3h) + Track A tests (~7-9h).
 
 ---
 
@@ -2454,3 +2459,125 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 ---
 
 **End of Part Q.** Single-page alert บัญชี/LINE/การเงิน. Cross-link to Part O2 (per-task spec) + Part P §P3 burndown + audit `docs/audit/php-pcscargo-integrations.md`
+
+---
+
+# 🚨 Part R — VENDOR CUTOFF + URGENT decisions for ก๊อต / เดฟ (2026-05-15)
+
+> **ภูม flag (2026-05-15 ค่ำ):** "Pacred owner = ก๊อต + เดฟ — ตัดสินได้เลย ไม่ต้องคุยใคร".  **"ตัด ทั้งไอแต้ม (TAM/TAMAI/TAMTISO/tam-i-t/tamit-cloud/akucargo/laonet) ทั้ง PCS Cargo legacy ออกให้หมด — ไม่อยากให้ vendor เก่ารู้ว่า Pacred ทำเว็บใหม่"**.
+>
+> Part Q เดิมมี "Pacred owner ต้องตอบ" เป็นจำนวนมาก — ภูม clarify ว่า "owner" = ก๊อต+เดฟ.  ดังนั้นเรื่องที่ถูก block อยู่จริงๆ มีแค่บางตัว (creds external เช่น Sentry/Upstash/hCaptcha) — ที่เหลือ ก๊อต+เดฟ ตัดสินได้เลย.
+
+## R1. 🆘 Track G ที่เพิ่ง ship — ห้าม activate ใน production จนกว่าจะตัดสินใจ
+
+**Status:** P-50, P-51, P-52, P-53 ภูม ship ครบใน `origin/Poom` (5 commits, ~1,300 LOC, 96 test assertions all green).  **โค้ดทำงานถูกต้องตาม audit แต่ wired ไปหา vendor ที่เจ้าของไม่อยากเกี่ยว.**
+
+**Endpoints ที่ Track G ใช้** (audit-derived; ทั้งหมดเป็น vendor PCS Cargo เก่า):
+
+| File | Endpoint | จัดการ |
+|---|---|---|
+| `lib/china-search/index.ts` (P-50) | `tamit-cloud.com/api-product/get/{1688\|taobao}/?id=` | URL→detail |
+| `lib/china-search/short-url-cache.ts` (P-51) | `tam-i-t.com/api/convert-link-china/{get,save}` | short URL resolver |
+| `lib/china-search/akucargo.ts` (P-52) | `akucargo.com/api3/api-2022/search/v1[/taobao]/` | keyword search |
+| `lib/china-search/laonet.ts` (P-53) | `laonet.online/index.php?api_name={upload_img,item_search_img}` | image search |
+| `.env.local` `PACRED_LAONET_KEY` | `tam011plus@gmail.com` (vendor's literal email-as-key) | shared with PCS legacy |
+
+**Decision needed (ก๊อต+เดฟ — เลือก 1):**
+
+| Option | Effort | Risk | Note |
+|---|---|---|---|
+| **A. Build Pacred-owned scraper** (Cheerio + Puppeteer + Vercel function) | ~30-50h | Med (1688/Taobao change anti-scraper rules) | Full independence; matches what TAM/AkuCargo do internally |
+| **B. Apply for official Taobao Open API** (Alibaba Open Platform) | ~10h apply + 5-10h integrate | Low (official) | Need Pacred company verification documents to Alibaba; might take weeks for approval |
+| **C. Pay 3rd-party SaaS** (RapidAPI / Apify Taobao Scraper / similar) | ~5h | Low | Monthly recurring cost; not under our control but cleanly contracted |
+| **D. Cut feature short-term** — customer pastes URL/title/price/qty manual | 0h (revert wiring) | Low | UI already supports demo mode (P-50 demo fallback); just don't enable Track G in production. Add notice "ใส่ข้อมูลสินค้าเอง — ระบบ search กำลังพัฒนา" |
+| **E. Hybrid (recommended interim)** | 0h decision + 1-3 days implement when ready | Low | Keep Track G code as-is in repo (it's correct) but **don't set the env vars in Vercel**.  Production runs in demo mode (option D).  When option A/B/C ready, just set the env vars and traffic flows.  Zero throwaway work. |
+
+**ภูม ความเห็น (advice — final call to ก๊อต/เดฟ):** **Option E (hybrid)** ตอนนี้ — Track G code นั่งนิ่ง ๆ ไม่กระทบใคร, prod ใช้ demo mode (UI เปลี่ยน label ให้ลูกค้าเข้าใจ).  ขนาน ก๊อต/เดฟ ตัดสินใจ A/B/C เป็นการบ้าน Phase H/I ไม่ rush.
+
+**ถ้าอยาก Option D ตัดทันที:** ภูม ใช้ ~1h revert wiring (set `PACRED_TAMIT_DETAIL_URL=disabled` หรือ feature flag) — บอกได้เลย.
+
+## R2. 🆘 PCS Cargo branding cutoff (audit-needed)
+
+ภูม flag: "ตัด PCS ออกหมดด้วย".  ตอนนี้ในโค้ด/comment/test ยังมี references ที่อาจหลงเหลือ:
+
+| ที่ | สิ่งที่อาจรั่ว | Action |
+|---|---|---|
+| `docs/audit/php-pcscargo-integrations.md` | สรุป PHP เก่าทั้งหมด — มี secret PCS, social tokens, etc. | **internal-only doc** ไม่ commit ออก public; ถ้า leak Git history ของ vendor/ก๊อต/เดฟ — flag |
+| Code comments mentioning "PCS Cargo" / "pcscargo.co.th" | บอกที่มา legacy | Replace ด้วย "Pacred (formerly the same team / new company)" หรือ "legacy" generic |
+| Test data / migrations using PCS member codes | `PCS<num>` เก่า | ✅ ไม่มี — ใช้ `PR<num>` ตั้งแต่แรก (CLAUDE.md decision A1) |
+| `.env.local` legacy variable names with `PCS_` prefix | naming leak | ✅ ตรวจแล้ว — ใช้ `PACRED_*` prefix ทั้งหมด |
+| Bank account `064-174-3836` Kasikorn (PCS legacy) | ไม่อยู่ในโค้ด แต่ถ้า hardcode = leak | ⏳ เดฟ block ใน Part Q — รอ Pacred bank acct ใหม่ |
+| LINE Notify legacy tokens (audit §1.3) | ไม่อยู่ในโค้ด — ทั้งหมด LINE Notify EOL แล้ว | ✅ ไม่ใช้แน่นอน |
+
+**Action ก๊อต/เดฟ:**
+- [ ] Confirm `docs/audit/php-pcscargo-integrations.md` เป็น internal-only doc (ไม่ใช่ public docs)
+- [ ] Decide: ในโค้ด/comment ที่อ้างถึง "PCS Cargo" / "pcscargo.co.th" / "legacy PHP" — เก็บไว้เพื่อ context หรือลบทิ้ง?
+- [ ] Pacred new bank account + PromptPay number (Part Q Bundle 1 #1)
+
+## R3. ของเร่งด่วน — Pacred owner = ก๊อต/เดฟ ตัดสินได้ตอนนี้เลย
+
+ที่ Part Q เดิม mark "BLOCKED on owner" — ภูม clarify ว่า ก๊อต+เดฟ ตัดสินได้เลย:
+
+| # | Decision | Owner | Sub-decision details |
+|---|---|---|---|
+| 1 | **D-7 Payment Gateway** | ก๊อต+เดฟ | Omise / 2C2P / Stripe TH / PromptPay-only?  Beta launch ใช้ PromptPay-only ได้ตามที่เดฟ note ใน Part Q. |
+| 2 | **D-1 LINE customer linkage** | ก๊อต+เดฟ | LIFF (เดฟ บอกแนะนำ) / Webhook+DM / OAuth?  ภูมิ ship LIFF code แล้ว — แค่ตัดสินใจ "OK ใช้ LIFF" + create LIFF app ใน LINE Console + set `NEXT_PUBLIC_LIFF_ID` ใน Vercel |
+| 3 | **D-8 HS code variants** | ก๊อต+เดฟ | แยก หรือ merge? |
+| 4 | **D-9 Payroll module** | ก๊อต+เดฟ | M2.2 spec |
+| 5 | **Tax invoice numbering format** | ก๊อต+เดฟ | `INV-YYYYMM-NNNN`? Sequential? |
+| 6 | **Wallet deposit approver role** | ก๊อต+เดฟ | super only / accounting role / both? |
+| 7 | **R1 — Track G replacement strategy** | ก๊อต+เดฟ | Option A/B/C/D/E (ดู R1 ด้านบน) |
+| 8 | **R2 — PCS branding cutoff** | ก๊อต+เดฟ | จะเก็บ comment context หรือ scrub? |
+
+**ของที่ external-blocked จริงๆ (ไม่ใช่ ก๊อต/เดฟ ตัดสินใจคนเดียวได้):**
+
+| # | Decision | External party | Notes |
+|---|---|---|---|
+| A | Sentry account → DSN | sentry.io signup | free tier OK pre-launch |
+| B | Upstash Redis DB → URL + token | upstash.com signup | free tier OK |
+| C | hCaptcha site (Type=Invisible) → site key + secret | hcaptcha.com signup | free tier OK |
+| D | ThaiBulkSMS account → API key + secret | thaibulksms.com signup | paid (per SMS) |
+| E | Pacred company info | Pacred legal | tax ID, address, bank acct |
+
+→ **Action ก๊อต:** Bundle A-E สามารถสมัครเอง / ขอ Pacred legal เอง (15-30 นาที per service)
+
+## R4. Action checklist (priority order, ก๊อต+เดฟ คนละครึ่ง)
+
+### ก๊อต — URGENT (this week)
+- [ ] **R1 decision**: เลือก Option E (hybrid) ไหม? ถ้าเลือก = แค่ "OK" reply → ภูม ทำ Option D parallel (UI label change) ระหว่างรอ A/B/C
+- [ ] **R2 decision**: scrub PCS comments หรือเก็บ?
+- [ ] Sign up: Sentry + Upstash + hCaptcha (Bundle A/B/C — ฟรีหมด)
+- [ ] Apply: ThaiBulkSMS account (Bundle D)
+- [ ] Provision: Pacred company bank acct + PromptPay number (Bundle E + Part Q #1)
+- [ ] Create: LIFF app ใน LINE Console (Pacred Channel ID 2009931373) → set `NEXT_PUBLIC_LIFF_ID` ใน Vercel
+
+### เดฟ — URGENT (this week)
+- [ ] **R1 decision** ร่วมกับ ก๊อต — ถ้า A (build scraper) → spec ออกเป็น Phase H task
+- [ ] D-7 Payment Gateway lock (ก๊อต+เดฟ ตัดสิน) → ถ้า PromptPay-only ก่อน beta = OK
+- [ ] D-12-wire (rate limit drop into forms) — เมื่อ Upstash creds เข้า
+- [ ] D-13-wire (hCaptcha drop into signup/contact/password-reset) — เมื่อ hCaptcha keys เข้า
+- [ ] Continue Phase H landing pivot กับ Claude
+
+### ภูม — รอ R1 decision (parallel work meanwhile)
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option E (hybrid)** → ภูม ทำ Option D label-change UI (~1h) parallel + ทำ Sprint 6.5 follow-ups (~2-3h) + Track A tests (~7-9h) ไป
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option D (cut feature)** → ภูม revert Track G env-var wiring + label change (~1.5h) + ทำ Sprint 6.5 + Track A
+- [ ] **ถ้า ก๊อต/เดฟ บอก Option A (build scraper)** → ภูม + เดฟ design call → spec → build (~30-50h, push เป็น Sprint 8 ใหม่)
+- [ ] **default action ระหว่างรอ:** ทำ Sprint 6.5 follow-ups ก่อน (admin digest UI, RBAC, batch insert, stale recovery, RLS, vercel cron — ทุกอันไม่ touch china-search) (~2-3h)
+
+### ปอน — ไม่กระทบ
+- [ ] Phase B landing polish (ตามเดิม)
+- [ ] หลัง LIFF app created (ก๊อต) → drop "เพิ่ม LINE OA" CTA ตามที่ Part Q4 บอก
+
+## R5. Burndown estimate (revised)
+
+| Path | Time-to-beta | Notes |
+|---|---|---|
+| **Hybrid (Option E)** | 1-2 weeks | ก๊อต/เดฟ ตัดสินวันนี้ + Bundle creds เข้าสัปดาห์นี้ + ภูม Sprint 6.5 + Track A. China-search = demo mode in prod (acceptable) |
+| **Cut feature (Option D)** | 1-2 weeks | เหมือน hybrid + ภูม revert wiring (~1h) |
+| **Pacred-owned scraper (Option A)** | 4-6 weeks | hybrid first → ภูม + เดฟ ทำ scraper parallel → swap when ready |
+| **Official Taobao API (Option B)** | unknown (Alibaba approval) | hybrid first → ผูกกับ application timeline ของ Alibaba |
+| **3rd-party SaaS (Option C)** | 1-2 weeks | hybrid first → contract + integrate (~5-7h) |
+
+---
+
+**End of Part R.** Single-page alert vendor cutoff + ก๊อต/เดฟ decisions.  ภูม block on R1 decision but has parallel work (Sprint 6.5 + Track A) ที่ไม่ blocked.
