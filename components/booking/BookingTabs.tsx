@@ -22,21 +22,28 @@ export function BookingTabs({ active, onChange }: BookingTabsProps) {
     const el = scrollerRef.current;
     if (!el) return;
 
-    function update() {
-      if (!el) return;
-      const overflow = el.scrollWidth - el.clientWidth;
-      setCanScrollLeft(el.scrollLeft > 4);
-      setCanScrollRight(overflow > 4 && el.scrollLeft < overflow - 4);
-    }
+    // Use IntersectionObserver on first + last tabs so arrows reliably vanish
+    // when either edge is fully visible (more accurate than scrollLeft math
+    // when snap-scroll + mask-image are in play).
+    const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>("[data-tab]"));
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (!first || !last) return;
 
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.target === first) setCanScrollLeft(!e.isIntersecting);
+          if (e.target === last) setCanScrollRight(!e.isIntersecting);
+        }
+      },
+      { root: el, threshold: 0.96 },
+    );
 
-    return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
+    observer.observe(first);
+    observer.observe(last);
+
+    return () => observer.disconnect();
   }, []);
 
   const tabs: { mode: TabMode; emoji: string; label: string; sub: string }[] = [
