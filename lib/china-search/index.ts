@@ -25,85 +25,45 @@
 import "server-only";
 import { extractProductId } from "./extract-product-id";
 import { resolveShortUrl, detectShortUrl } from "./short-url-cache";
+import { akucargoSearch } from "./akucargo";
+import type {
+  ChinaSearchHit,
+  ChinaProductDetail,
+  ConvertProductResult,
+  ChinaSearchResult,
+} from "./types";
+
+// Re-export types for back-compat with existing call sites.
+export type {
+  ChinaSearchHit,
+  ChinaProductDetail,
+  ConvertProductResult,
+  ChinaSearchResult,
+};
 
 const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product";
 
-export type ChinaSearchHit = {
-  provider: "1688" | "taobao" | "tmall";
-  product_id?: string;
-  title: string;
-  url:   string;
-  image_url?: string;
-  price_cny?: number;
-  shop_name?: string;
-};
-
-/** Rich product detail returned when a single URL is converted.
- *  Mirrors the legacy `json->data` shape so callers don't care which
- *  upstream provider answered. */
-export type ChinaProductDetail = {
-  provider:     "1688" | "taobao" | "tmall";
-  product_id?:  string;
-  title:        string;
-  url:          string;
-  shop_name?:   string;
-  main_image?:  string;
-  images?:      string[];
-  base_price_cny?: number;
-  promo_price_cny?: number;
-  stock_total?: number;
-
-  /** Property axes: e.g. [{ name: 'สี', values: [{label:'แดง', image, data}, ...]}, ...] */
-  sku_axes?: Array<{
-    name: string;
-    values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }>;
-  }>;
-
-  /** Flattened combinations — one row per buyable SKU.
-   *  prop_path identifies which axis-values combine to make this row. */
-  sku_map?: Array<{
-    sku_id:     string;
-    prop_path:  Record<string, string>;     // { 'สี': 'แดง', 'ขนาด': 'M' }
-    price_cny:  number;
-    stock:      number;
-    image?:     string;
-  }>;
-};
-
-export type ConvertProductResult =
-  | { available: false; reason: string; message?: string }
-  | { available: true; detail: ChinaProductDetail };
-
-export type ChinaSearchResult =
-  | { available: false; reason: "not_configured" | "network_error" | "rate_limited"; message?: string }
-  | { available: true;  hits: ChinaSearchHit[]; page: number; has_more: boolean };
-
 // ────────────────────────────────────────────────────────────
-// KEYWORD SEARCH — TODO(P-52): rewire to AkuCargo per audit §4a
-//   `https://akucargo.com/api3/api-2022/search/v1[/taobao]/?q=&page_size=15&page=&lang=zh-CN`
-//   Response shape: json.items.item[i].{detail_url, pic_url, title, price, promotion_price, sales}
+// KEYWORD SEARCH — wired to AkuCargo per audit §4a (P-52)
 // ────────────────────────────────────────────────────────────
+
+/**
+ * Search by keyword (text typed into the search bar).  Delegates to the
+ * AkuCargo adapter which knows the actual `?q=&page_size=15&lang=zh-CN`
+ * pattern — Tmall isn't a separate platform at AkuCargo so it falls
+ * through to taobao.  The legacy `order` parameter is no longer used
+ * (AkuCargo doesn't expose order-by) but kept in the signature so the
+ * /api/china-search route handler doesn't need to change.
+ */
 export async function searchKeyword(
   words: string,
   page = 1,
-  order: "default" | "price_asc" | "price_desc" = "default",
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for API compat; AkuCargo doesn't support order-by
+  _order: "default" | "price_asc" | "price_desc" = "default",
   platform: "1688" | "taobao" | "tmall" = "1688",
 ): Promise<ChinaSearchResult> {
-  const base = process.env.PACRED_TAMIT_API_URL;
-  if (!base) {
-    return { available: false, reason: "not_configured", message: "TAMIT_API_URL is unset" };
-  }
-  const url = platform === "1688"
-    ? `${base}/?words=${encodeURIComponent(words)}&page=${page}&order=${order}`
-    : `${base}/${platform}/?words=${encodeURIComponent(words)}&page=${page}&order=${order}`;
-  try {
-    const res = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
-    const json = await res.json();
-    return { available: true, hits: normaliseHits(json, platform), page, has_more: Boolean(json?.has_more) };
-  } catch (e) {
-    return { available: false, reason: "network_error", message: e instanceof Error ? e.message : "unknown" };
-  }
+  const akucargoPlatform = platform === "1688" ? "1688" : "taobao";
+  return akucargoSearch(words, page, akucargoPlatform);
 }
 
 // ────────────────────────────────────────────────────────────

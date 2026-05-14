@@ -2083,7 +2083,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | P-26 service-order placement integration test (12 assertions) | ✅ | `52c7331` |
 | **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | `dba11a6` |
 | **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | `01f0cc1` |
-| **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | this commit |
+| **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | `1dc4ed3` |
+| **P-52 (Track G)** — AkuCargo keyword search adapter | ✅ | this commit |
 | P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
@@ -2142,9 +2143,38 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-→ **P-52 AkuCargo keyword** (~2-3h) — replaces the legacy TAMIT keyword endpoint with the actual AkuCargo `/search/v1/[/taobao]/?q=&page_size=15&page=&lang=zh-CN` per audit §4a.  Then **P-53 Laonet image** (~2-3h).  After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+→ **P-53 Laonet image** (~2-3h) — replaces the dead RCGroup image-search endpoint with Laonet's two-step upload→search flow (`upload_img` returns imgid → `item_search_img` returns hits) per audit §4b.  After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
 
-### P-51 shipped (this batch — Track G)
+### P-52 shipped (this batch — Track G)
+
+`lib/china-search/akucargo.ts` (server-only) + `akucargo-helpers.ts` (testable) per audit §4a:
+
+- **Endpoint**: `https://akucargo.com/api3/api-2022/search/v1[/taobao]/?q=<words>&page=<N>&page_size=15&lang=zh-CN` — Tmall maps to taobao (AkuCargo doesn't separately route Tmall).  Default base URL hard-coded so `PACRED_AKUCARGO_API_URL` env var being unset still works (vendor allowlist permitting).
+- **Auth**: none.  Spoofs desktop Firefox UA per audit (mobile UA returns thinner / different results).
+- **Response parser** handles 3 top-level shape variants:
+  - canonical `{ items: { item: [...] } }`
+  - flat `{ items: [...] }`
+  - legacy `{ data: [...] }`
+- **Per-row defensive parsing**: skips rows with no title AND no url; numeric-or-undef coercion for prices; promo wins when `> 0` AND `< base`; falls back to base if promo missing/zero/higher.
+- **Wired into** `searchKeyword(words, page, _order, platform)` — `_order` kept for API back-compat (AkuCargo doesn't expose order-by; the `/api/china-search` route handler doesn't need to change).
+- **Types extracted** to new `lib/china-search/types.ts` so helper modules + their tsx tests can `import type` without dragging the Next.js `server-only` sentinel into a node test runner.  `index.ts` re-exports types for back-compat.
+- **Tests:** 24 new assertions across 7 areas in `akucargo-helpers.test.ts`:
+  - (a) buildAkucargoUrl — 1688 path
+  - (b) buildAkucargoUrl — taobao path
+  - (c) buildAkucargoUrl — defensive inputs (trailing slash, zero/negative page)
+  - (d) parseAkucargoResponse — canonical items.item[]
+  - (e) parseAkucargoResponse — price fallback rules (promo=0, promo≥base, base missing, both missing)
+  - (f) parseAkucargoResponse — alt response shapes (flat items, legacy data)
+  - (g) parseAkucargoResponse — defensive edge cases (null, undefined, string, empty list, rows lacking title+url)
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/akucargo-helpers.test.ts` → 24 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/` clean ✅
+- `pnpm test` chain → **176 assertions** all green (152 + 24 new)
+- Real AkuCargo response owner-blocked: needs Vercel egress IP allowlist verification (P-55).  Locally: keyword search with default base URL → likely network error → UI banner "ระบบไม่พร้อม" gracefully degraded (was the same before P-52, just on a different broken endpoint).  Logic verified by unit tests covering all branches.
+
+### P-51 shipped (Track G)
 
 `lib/china-search/short-url-cache.ts` + `short-url-helpers.ts` per audit §3b:
 
@@ -2213,7 +2243,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50 + P-51). Next: Track G P-52 AkuCargo keyword → P-53 Laonet image.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50 + P-51 + P-52). Next: Track G P-53 Laonet image.
 
 ---
 
