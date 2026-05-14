@@ -2,7 +2,7 @@ import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { listForwarders, type ForwarderSummary } from "@/actions/forwarder";
 import { ForwarderList } from "./forwarder-list";
-import { Package, Plus, ChevronRight, Home } from "lucide-react";
+import { Package, Plus, ChevronRight, Home, MapPin } from "lucide-react";
 
 type StatusFilter = ForwarderSummary["status"];
 
@@ -66,7 +66,7 @@ export default async function ServiceImportPage({ searchParams }: { searchParams
                 href="/service-import/warehouse-addresses"
                 className="rounded-lg border border-border px-3 py-2 text-xs sm:text-sm font-medium hover:bg-surface-alt inline-flex items-center gap-1.5"
               >
-                🇨🇳 ที่อยู่โกดังจีน
+                <MapPin className="w-4 h-4" /> ที่อยู่โกดังจีน
               </Link>
               <Link
                 href="/service-import/receipts"

@@ -1,0 +1,133 @@
+import { Footer } from "@/components/sections/footer";
+import { Link } from "@/i18n/navigation";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { Home, ChevronRight, Warehouse, Info, ExternalLink } from "lucide-react";
+import { WarehouseCard, type WarehouseDef } from "./warehouse-card";
+
+export const metadata = {
+  title: "ที่อยู่โกดังจีน · Pacred Shipping",
+};
+
+const PLACEHOLDER_CODE = "PR_____";
+
+export default async function WarehouseAddressesPage() {
+  const session = await getCurrentUserWithProfile();
+  const memberCode = session?.profile?.member_code ?? PLACEHOLDER_CODE;
+
+  const warehouses: WarehouseDef[] = [
+    {
+      slug: "yiwu",
+      cityTh: "อี้อู",
+      cityEn: "Yiwu",
+      province: "มณฑลเจ้อเจียง (Zhejiang)",
+      flag: "🇨🇳",
+      blurb: "ศูนย์กลางค้าส่งสินค้าจิปาถะใหญ่ที่สุดของจีน — รองรับ 1688, Taobao, Yiwu Market",
+      fields: [
+        { key: "shipping-mark", label: "Shipping Mark", value: `${memberCode} by EK`,                       hint: "วางข้างกล่อง" },
+        { key: "receiver",      label: "收件人 (ผู้รับ)",  value: `${memberCode} (รถ EK / เรือ SEA)` },
+        { key: "address",       label: "ที่อยู่ (中文)",   value: "浙江省金华市义乌市荷叶塘工业区龙岗路一街2号1栋102" },
+        { key: "phone",         label: "电话 (โทร)",      value: "19817984258 谢小姐" },
+      ],
+    },
+    {
+      slug: "guangzhou",
+      cityTh: "กวางโจว",
+      cityEn: "Guangzhou",
+      province: "มณฑลกวางตุ้ง (Guangdong)",
+      flag: "🇨🇳",
+      blurb: "พื้นที่ขนส่งหลักของกวางโจว — รองรับสินค้าจาก 1688, Taobao, Tmall, Alibaba และโรงงานจีนโดยตรง",
+      fields: [
+        { key: "receiver",  label: "收货人姓名 (ผู้รับ)",  value: `${memberCode} / EK = รถ / SEA = เรือ`,            hint: "เลือก EK หรือ SEA ตามรูปแบบขนส่ง" },
+        { key: "address",   label: "详细地址 (ที่อยู่)",    value: "广州市白云区 江高镇沙溪东路18号66仓 (燕子情创园)" },
+        { key: "zipcode",   label: "邮政编码 (ไปรษณีย์)", value: "510000" },
+        { key: "phone",     label: "手机号码 (โทร)",      value: "+13168385163" },
+      ],
+    },
+  ];
+
+  return (
+    <>
+      <main className="mx-auto w-full max-w-[1100px] px-4 py-6 space-y-5 pb-32">
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1.5 text-xs text-muted">
+          <Link href="/dashboard" className="hover:text-primary-600 inline-flex items-center gap-1">
+            <Home className="w-3.5 h-3.5" /> หน้าแรก
+          </Link>
+          <ChevronRight className="w-3 h-3" />
+          <Link href="/service-import" className="hover:text-primary-600">รายการฝากนำเข้า</Link>
+          <ChevronRight className="w-3 h-3" />
+          <span className="text-foreground font-medium">ที่อยู่โกดังจีน</span>
+        </nav>
+
+        {/* Page header */}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600">
+              <Warehouse className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">ที่อยู่โกดังจีน</h1>
+              <p className="text-xs text-muted mt-0.5">
+                ใช้ที่อยู่นี้แจ้งให้ร้านค้าจีนส่งสินค้ามาที่โกดัง Pacred — ทีมจีนจะรับและจัดส่งกลับไทยให้
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Member code hero */}
+        <div className="rounded-2xl border-2 border-primary-500/30 bg-gradient-to-br from-primary-500/10 to-primary-500/0 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-muted uppercase tracking-wide">รหัสสมาชิกของคุณ</p>
+              <p className="mt-1 text-3xl font-bold font-mono text-primary-600">{memberCode}</p>
+              <p className="mt-1 text-xs text-muted">รหัสนี้ถูกใส่ในที่อยู่ด้านล่างให้แล้ว — ก็อปไปแจ้งร้านค้าจีนได้เลย</p>
+            </div>
+            {memberCode === PLACEHOLDER_CODE && (
+              <Link
+                href="/complete-profile"
+                className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600"
+              >
+                กรอกข้อมูลให้ครบเพื่อรับรหัส →
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* How-to note */}
+        <div className="rounded-2xl border border-blue-200 bg-blue-50/50 dark:bg-blue-900/10 p-4 flex gap-3">
+          <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="text-sm space-y-1">
+            <p className="font-bold text-blue-900 dark:text-blue-200">วิธีใช้</p>
+            <ol className="list-decimal list-inside text-blue-900/80 dark:text-blue-200/80 space-y-0.5 text-xs">
+              <li>เลือกโกดังที่ต้องการให้สินค้าไปรับ (อี้อู หรือ กวางโจว)</li>
+              <li>ก็อปข้อมูลที่อยู่ — รหัส <span className="font-mono font-bold">{memberCode}</span> ถูกใส่ให้แล้ว</li>
+              <li>ส่งให้ร้านค้าจีน — เลือก <span className="font-mono">EK</span> = ทางรถ หรือ <span className="font-mono">SEA</span> = ทางเรือ</li>
+              <li>เมื่อสินค้าถึงโกดัง Pacred จะอัพเดทใน <Link href="/service-import" className="underline">รายการฝากนำเข้า</Link></li>
+            </ol>
+          </div>
+        </div>
+
+        {/* Warehouse cards */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {warehouses.map((w) => (
+            <WarehouseCard key={w.slug} warehouse={w} />
+          ))}
+        </div>
+
+        {/* Marketing footer */}
+        <div className="rounded-2xl border border-border bg-surface-alt/40 p-4 text-xs text-muted flex flex-wrap items-center justify-between gap-2">
+          <span>ดูรายละเอียดเพิ่มเติมและรูปโกดัง:</span>
+          <div className="flex gap-3">
+            <Link href="/warehouses/yiwu" className="inline-flex items-center gap-1 text-primary-600 hover:underline">
+              โกดังอี้อู <ExternalLink className="w-3 h-3" />
+            </Link>
+            <Link href="/warehouses/guangzhou" className="inline-flex items-center gap-1 text-primary-600 hover:underline">
+              โกดังกวางโจว <ExternalLink className="w-3 h-3" />
+            </Link>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
+}
