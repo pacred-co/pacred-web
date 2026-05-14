@@ -145,7 +145,43 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 
 ---
 
-## 12. Sentry — error tracking 🟡 (D-11)
+## 12. Rate limiting — Upstash Redis 🟡 (D-12)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `UPSTASH_REDIS_REST_URL` | optional | https://console.upstash.com → create Redis DB → REST API tab | `https://<region>.upstash.io` |
+| `UPSTASH_REDIS_REST_TOKEN` | optional | same page | REST token with read+write |
+
+**Behaviour when unset:** `lib/rate-limit.ts` falls back to an in-memory `Map` per server process. **Dev-only fallback** — in prod Vercel may run multiple function instances concurrently, each with its own memory, so attackers can multiply allowed volume by hammering different cold starts. Set Upstash creds before customer launch.
+
+**Pre-configured limits** (in `lib/rate-limit.ts`):
+- `signup` — 5/hour/IP — pre-account creation
+- `login` — 10/hour/IP — defend credential stuffing
+- `passwordReset` — 5/hour/IP — anti-enumeration
+- `contact` — 5/hour/IP — anti-spam on `/contact` form
+- `generic` — 30/min/key — default for endpoints without their own bucket
+
+**Usage pattern (Server Action / Route Handler):**
+```ts
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+const ip = getClientIp(request);
+const blocked = await checkRateLimit("signup", ip);
+if (blocked) return blocked;  // { ok: false, error: "rate_limit", retryAfterSeconds }
+```
+
+**Note:** This is for IP-based + generic time-window limits. For OTP-specific limits see `actions/otp.ts` — that uses DB-backed counting (3/hour/phone via `otp_codes` table) which doubles as audit trail.
+
+**Activation order (when ready):**
+1. Pacred owner creates Upstash account → create Redis DB (free tier OK pre-launch)
+2. เดฟ sets `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel env
+3. Redeploy → no code change needed; abstraction switches from memory to Redis on next request
+
+**Activation:** zero downtime. The lib reads env once at module load — server functions cold-start with Redis when env present.
+
+---
+
+## 13. Sentry — error tracking 🟡 (D-11)
 
 | Var | Required? | Where to get | Notes |
 |---|---|---|---|
@@ -179,7 +215,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 
 ---
 
-## 13. Pre-launch checklist (production-readiness)
+## 14. Pre-launch checklist (production-readiness)
 
 ตรวจครบทุกข้อก่อน `OTP_BYPASS=false` + open ลูกค้า:
 
@@ -194,12 +230,13 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `LINE_CHANNEL_ACCESS_TOKEN` = real token + Pacred OA verified
 - [ ] `PROMPTPAY_ID` = Pacred company actual ID
 - [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
+- [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
 ---
 
-## 14. Migrate dev → staging → prod
+## 15. Migrate dev → staging → prod
 
 | Env | File location | Set by |
 |---|---|---|
