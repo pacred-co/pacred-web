@@ -2730,8 +2730,8 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 | # | Task | Est | Output | Unblocks |
 |---|---|---|---|---|
-| **K-1** | ✅ ADR-0003: China-search vendor cutoff (lock Option E + Phase H/I A/B/C exploration plan) | 2-3h | `docs/decisions/0003-china-search-vendor.md` | ภูม Track G label-change + future scraper work |
-| **K-2** | ✅ ADR-0004: Payment Gateway (lock D-7 = PromptPay-only ก่อน beta; defer Omise/2C2P/Stripe TH to post-beta) | 2-3h | `docs/decisions/0004-payment-gateway.md` | เดฟ ไม่ต้อง spend cycles หา gateway ก่อน launch; M2.1 deferred |
+| **K-1** | ✅ **DONE 2026-05-16** — ADR-0003 china-search vendor cutoff [`0003-china-search-vendor-cutoff.md`](decisions/0003-china-search-vendor-cutoff.md). Locks Option E hybrid + guardrails + re-evaluation triggers. Written by เดฟ on ก๊อต's behalf per §6 second-tier owner authority — ก๊อต can amend | done | — |
+| **K-2** | ✅ **DONE 2026-05-16** — ADR-0004 payment gateway [`0004-payment-gateway.md`](decisions/0004-payment-gateway.md). Locks D-7 = PromptPay-only ก่อน beta + post-beta selection criteria (Omise > 2C2P > Stripe TH gated on cart-dropoff % + CS ticket volume) | done | — |
 | **K-3** | R2 PCS scrub execution plan | 1h | New section ใน `docs/decisions/0005-pcs-branding-scrub.md` หรือ inline note ที่ Part R2 — list files + grep patterns + who executes (recommend: ภูม + ปอน batch ระหว่างทำ task ปกติ) | ทีม execute scrub ได้ทันที |
 
 ### Priority 2 — Quick decisions (~1h batched)
