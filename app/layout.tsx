@@ -95,7 +95,14 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
-        <ThemeProvider defaultTheme="system">{children}</ThemeProvider>
+        {/* Light theme default per ปอน's first-visit lock UX (commit da60747).
+            ปอน wanted enableSystem={false} + disableTransitionOnChange too —
+            current `theme-provider.tsx` (ภูม commit 0da2e71) doesn't yet
+            expose those props. Flagged as follow-up: extend ThemeProvider to
+            support `enableSystem`/`disableTransitionOnChange` to fully match
+            next-themes API. For now `defaultTheme="light"` covers the most
+            user-visible part of the intent. */}
+        <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
       </body>
     </html>
   );

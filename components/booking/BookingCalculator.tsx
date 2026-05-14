@@ -108,6 +108,10 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   })), [tSales]);
 
   const [activeTab,  setActiveTab]  = useState<TabMode | null>(landing ?? null);
+  // Form panel stays closed by default — tab is highlighted via `activeTab` but
+  // user has to click the tab to expand the form. Lets landing pages (eg.
+  // /services/customs-clearance) pre-highlight a tab without forcing the form open.
+  const [panelOpen,  setPanelOpen]  = useState(false);
   const [seaMode,    setSeaMode]    = useState<SeaMode>("lcl");
   const [lclTerm,    setLclTerm]    = useState<Term>("ddp");
   const [fclTerm,    setFclTerm]    = useState<Term>("ddp");
@@ -159,7 +163,13 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   const [airResult,   setAirResult]   = useState<CalcResult | null>(null);
 
   function handleTabChange(mode: TabMode) {
-    setActiveTab(prev => prev === mode ? null : mode);
+    if (panelOpen && activeTab === mode) {
+      // Click the already-open tab → collapse panel, keep tab highlighted
+      setPanelOpen(false);
+    } else {
+      setActiveTab(mode);
+      setPanelOpen(true);
+    }
     setAlertMsg("");
   }
 
@@ -186,8 +196,6 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
     if (!airForm.weight && (!airForm.w || !airForm.l || !airForm.h)) return showAlert(t("alertAirSize"));
     setAirResult(calcAir(airForm, tCalc));
   }
-
-  const panelOpen = activeTab !== null;
 
   return (
     <div className="w-full max-w-[1280px] mx-auto pb-6 md:pb-10">
@@ -218,7 +226,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── LCL Panel ── */}
-          {activeTab === "sea" && seaMode === "lcl" && (
+          {panelOpen && activeTab === "sea" && seaMode === "lcl" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tLcl("originLabel")} displayValue={lclForm.originLabel} sections={ORIGIN_SECTIONS}
@@ -256,7 +264,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── FCL Panel ── */}
-          {activeTab === "sea" && seaMode === "fcl" && (
+          {panelOpen && activeTab === "sea" && seaMode === "fcl" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tFcl("originLabel")} displayValue={fclForm.originLabel} sections={ORIGIN_SECTIONS}
@@ -291,7 +299,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── Truck Panel ── */}
-          {activeTab === "truck" && (
+          {panelOpen && activeTab === "truck" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tTruck("originLabel")} displayValue={truckForm.originLabel} sections={ORIGIN_SECTIONS}
@@ -323,7 +331,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── Air Panel ── */}
-          {activeTab === "air" && (
+          {panelOpen && activeTab === "air" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <TextDropdown label={tAir("originLabel")} value={airForm.origin}
@@ -359,7 +367,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── Customs Panel ── */}
-          {activeTab === "customs" && (
+          {panelOpen && activeTab === "customs" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tCustoms("portLabel")} displayValue={customsForm.portLabel} sections={CUSTOMS_PORT_SECTIONS}
@@ -386,7 +394,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── Sourcing Panel ── */}
-          {activeTab === "sourcing" && (
+          {panelOpen && activeTab === "sourcing" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tSourcing("platformLabel")} displayValue={sourcingForm.platformLabel} sections={PLATFORM_SECTIONS}
@@ -414,7 +422,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           )}
 
           {/* ── Remit Panel ── */}
-          {activeTab === "remit" && (
+          {panelOpen && activeTab === "remit" && (
             <div className="p-4 md:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <CustomDropdown label={tRemit("currencyLabel")} displayValue={remitForm.currencyLabel} sections={CURRENCY_SECTIONS}

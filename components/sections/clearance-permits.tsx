@@ -13,13 +13,6 @@ type Permit = {
 
 const PERMITS: Permit[] = [
   {
-    image: "/images/tsi/อย.png",
-    code: "อย.",
-    name: "อาหารและยา",
-    desc: "อาหาร · เครื่องสำอาง · ยา · อาหารเสริม",
-    color: "from-rose-500 to-rose-700",
-  },
-  {
     image: "/images/tsi/มอก.png",
     code: "มอก.",
     name: "มาตรฐานผลิตภัณฑ์",
