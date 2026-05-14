@@ -1,8 +1,15 @@
+"use client";
+
+// Converted to client component 2026-05-16 to attach onClick analytics on
+// the "claim" CTA. PromoCarousel was already client-rendered; the benefits
+// array is 4 items so the bundle-size cost is negligible.
+
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { PromoCarousel } from "@/components/ui/promo-carousel";
 import { LINE_OA } from "@/components/seo/site";
+import { trackCtaClick } from "@/lib/analytics";
 
 export function Promotion() {
   const t = useTranslations("promotion");
@@ -120,6 +127,7 @@ export function Promotion() {
                   <div className="w-[65px] shrink-0 text-right">
                     <Link
                       href="/register"
+                      onClick={() => trackCtaClick("promotion_claim", "home_promotion", { promo_idx: i, promo_title: b.title })}
                       className={[
                         "inline-block text-[10px] font-bold px-1.5 py-1 rounded transition-colors",
                         b.first

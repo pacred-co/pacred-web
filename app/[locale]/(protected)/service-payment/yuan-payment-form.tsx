@@ -7,6 +7,7 @@ import { Link } from "@/i18n/navigation";
 import { createYuanPayment } from "@/actions/payment";
 import { uploadSlip } from "@/lib/storage-upload";
 import { Wallet as WalletIcon, Plus } from "lucide-react";
+import { trackPlaceOrder } from "@/lib/analytics";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -83,6 +84,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         id_doc_url:       idDocPath ?? undefined,
       });
       if (res.ok && res.data) {
+        trackPlaceOrder("service_payment", res.data.thb_amount);
         setDone({ id: res.data.id, thb: res.data.thb_amount });
         router.refresh();
       } else if (!res.ok) {

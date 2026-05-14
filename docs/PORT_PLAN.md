@@ -2811,7 +2811,8 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | ~~2~~ ✅ | ~~Track G label-change UI~~ | done | — | Landed 2026-05-16 — i18n `apiUnavailable` rewritten to Option E messaging ("ใส่ข้อมูลสินค้าเอง — ระบบ search กำลังพัฒนา"), banner switched from yellow/warning to blue/info, `reason` interpolation dropped |
 | ~~3~~ ✅ | ~~Wire remaining home CTAs~~ | done | — | Top-5 banners covered (DV-8 Phase 1). Promotion deferred — Server Component needs "use client" refactor; Sales/Blog have no top-level click CTAs |
 | 2 | **DV-8 Phase 2 — visual polish** (home → import-china → china-shopping → customs-clearance) | 3-4h chunk | ปอน sync (priority page) → Claude implement | Now has analytics + heatmap + A/B infra to inform changes |
-| 3 | **Convert Promotion to client + wire register CTAs** | 30m | Claude self-directed | Last untracked top-level CTA on home; small refactor (extract card, add "use client") |
+| ~~3~~ ✅ | ~~Convert Promotion to client + wire register CTAs~~ | done | — | Landed 2026-05-16 — "use client" + `trackCtaClick("promotion_claim", "home_promotion", { promo_idx, promo_title })` on each card |
+| 3 | **Extend trackPlaceOrder to admin-side wallet approve** | 30m | Claude self-directed | After admin approves slip → `trackWalletDeposit(amount)` so revenue events flow into GTM even when initiated by admin |
 
 ### งานที่ต้องรอ external (defer; ส่งต่อก๊อต/Pacred owner):
 

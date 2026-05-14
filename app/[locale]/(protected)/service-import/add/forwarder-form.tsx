@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { createForwarder, previewPrice } from "@/actions/forwarder";
 import { uploadSlip } from "@/lib/storage-upload";
 import type { CalcPriceBreakdown } from "@/lib/forwarder/calc-price";
+import { trackPlaceOrder } from "@/lib/analytics";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -211,6 +212,7 @@ export function ForwarderForm({ defaultAddress }: Props) {
         items:     [],
       });
       if (res.ok && res.data) {
+        trackPlaceOrder("service_import", res.data.total_price);
         setDone({ id: res.data.id, f_no: res.data.f_no, total: res.data.total_price });
         router.refresh();
       } else if (!res.ok) {
