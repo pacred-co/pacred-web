@@ -98,7 +98,10 @@ export default function RootLayout({
         <GtmScript />
         <ClarityScript />
       </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]"
+      >
         <GtmNoscript />
         {/* Light theme default per ปอน's first-visit lock UX (commit da60747).
             ปอน wanted enableSystem={false} + disableTransitionOnChange too —

@@ -1,9 +1,20 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
-export function SearchBar() {
+interface SearchBarProps {
+  /** When `embedded`, renders without sticky/border — used inside NavBar mobile dropdown. */
+  embedded?: boolean;
+}
+
+export function SearchBar({ embedded = false }: SearchBarProps) {
   const t = useTranslations("searchBar");
+  // Embedded mode starts collapsed (trigger button only); full mode renders straight away
+  const [expanded, setExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const quickKeys = [
     t("quick1"),
@@ -15,8 +26,45 @@ export function SearchBar() {
     t("quick7"),
   ];
 
+  // Auto-focus the input the first time the embedded user expands the bar
+  useEffect(() => {
+    if (embedded && expanded) {
+      inputRef.current?.focus();
+    }
+  }, [embedded, expanded]);
+
+  // ── Embedded + collapsed → render a single "fake input" trigger button only
+  if (embedded && !expanded) {
+    return (
+      <div className="w-full bg-white dark:bg-surface px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label={t("searchAria")}
+          aria-expanded={false}
+          className="w-full flex items-center gap-3 h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background pl-5 pr-3 text-[13px] font-medium text-gray-500 dark:text-muted hover:border-red-300 hover:text-gray-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <span className="flex-1 text-left truncate">{t("placeholder")}</span>
+          <span className="shrink-0 inline-flex w-[28px] h-[28px] items-center justify-center rounded-full bg-red-600 text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  const rootClass = embedded
+    ? "w-full bg-white dark:bg-surface overflow-hidden"
+    : "hidden md:block sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden";
+
   return (
-    <div className="sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className={rootClass}>
       <div className="mx-auto w-full max-w-[1440px] px-4 xl:px-6 py-[10px]">
 
         <div className="flex items-center gap-4">
@@ -36,6 +84,7 @@ export function SearchBar() {
           {/* Search input + camera + button */}
           <div className="relative flex-1">
             <input
+              ref={inputRef}
               type="text"
               name="url"
               placeholder={t("placeholder")}
@@ -75,6 +124,21 @@ export function SearchBar() {
               <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
             </svg>
           </Link>
+
+          {/* Collapse button — embedded mode only */}
+          {embedded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label={t("searchAria")}
+              aria-expanded={true}
+              className="shrink-0 flex items-center justify-center w-[44px] h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background hover:border-red-300 hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m18 15-6-6-6 6" />
+              </svg>
+            </button>
+          )}
 
         </div>
 

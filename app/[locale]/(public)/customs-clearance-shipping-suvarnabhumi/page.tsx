@@ -48,6 +48,8 @@ import {
   Headset,
   Tag,
   ShieldQuestion,
+  Home,
+  ChevronRight,
 } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
@@ -457,46 +459,44 @@ export default async function CustomsClearancePage({
       <NavBar />
       <SearchBar />
       <main>
-        {/* Mobile-only banner above the booking calculator */}
-        <div className="md:hidden relative aspect-[768/360] overflow-hidden">
-          <Image
-            src="/images/bannermobile/clearacnebanner.png"
-            alt="Pacred Shipping · เคลียร์สินค้าติดด่านศุลกากร"
-            fill
-            sizes="100vw"
-            priority
-            className="object-cover"
-          />
-        </div>
-
         <BookingCalculator landing="customs" />
+
+        {/* Breadcrumb — under booking tabs, links back to home */}
+        <nav
+          aria-label="Breadcrumb"
+          className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-4 md:pt-6"
+        >
+          <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px]">
+            <li>
+              <Link
+                href="/"
+                className="inline-flex items-center gap-1.5 text-muted hover:text-primary-600 transition-colors"
+              >
+                <Home className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
+                <span>หน้าแรก</span>
+              </Link>
+            </li>
+            <li aria-hidden className="text-gray-300 dark:text-border">
+              <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
+            </li>
+            <li aria-current="page" className="font-bold text-foreground">
+              เคลียร์ศุลกากร สุวรรณภูมิ
+            </li>
+          </ol>
+        </nav>
 
         {/* ═══════ 1. Hero intro ═══════ */}
         <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
-          {/* Desktop-only faded customs bg */}
-          <div aria-hidden className="hidden md:block absolute inset-x-0 top-0 h-[560px] overflow-hidden pointer-events-none">
-            <Image
-              src="/images/hero-section/banner/customs.png"
-              alt=""
-              fill
-              sizes="100vw"
-              className="object-cover opacity-[0.12] dark:opacity-[0.18]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
-          </div>
-
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11.5px] md:text-[12.5px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(179,0,0,0.10)]">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.8} />
               CUSTOMS CLEARANCE · ทุกด่าน ทุก Term
             </div>
-            <h1 className="text-[32px] md:text-[56px] leading-[1.05] font-black tracking-[-0.04em] text-[#111827] dark:text-white max-w-[920px]">
-              <span className="text-yellow-500 dark:text-yellow-400 drop-shadow-[0_2px_8px_rgba(234,179,8,0.30)]">เคลียร์</span>
-              <span>จบใน </span>
-              <span className="text-primary-600">1 ชั่วโมง</span>
-              <span className="text-[20px] md:text-[28px] align-top text-primary-600">*</span>
-              <span className="block mt-2 md:mt-3 text-[17px] md:text-[26px] text-muted font-bold tracking-tight">
-                เร็ว ไว ไม่มีคำว่าทำไม่ได้ · ทุกด่านทั่วไทย
+            <h1 className="text-[28px] md:text-[48px] leading-[1.15] font-black tracking-[-0.03em] text-[#111827] dark:text-white max-w-[920px]">
+              บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์สินค้าติดด่าน{" "}
+              <span className="text-yellow-500 dark:text-yellow-400 drop-shadow-[0_2px_8px_rgba(234,179,8,0.30)]">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>
+              <span className="block mt-2 md:mt-3 text-[16px] md:text-[22px] text-muted font-bold tracking-tight">
+                | Pacred Shipping
               </span>
             </h1>
 
