@@ -3,7 +3,12 @@ export const SITE_URL = (
 ).replace(/\/$/, "");
 
 export const SITE_NAME = "Pacred";
-export const SITE_LEGAL_NAME = "Pacred CO., LTD.";
+export const SITE_LEGAL_NAME = "Pacred (Thailand) Co., Ltd.";
+export const SITE_LEGAL_NAME_TH = "บริษัท แพคเรด (ประเทศไทย) จำกัด";
+/** Company registration number (13 digits) — used by tax invoice + DBD juristic lookup. */
+export const TAX_ID = "0105564077716";
+/** Brand voice slogan — surfaces in JSON-LD `slogan`, footer, hero subtitle. */
+export const SLOGAN = "เร็ว ไว ไม่มีคำว่าทำไม่ได้";
 
 export const SITE_LOCALES = ["th", "en"] as const;
 export type SiteLocale = (typeof SITE_LOCALES)[number];
@@ -30,9 +35,30 @@ export const CONTACT = {
   phoneCsDisplay:      "066-090-1217",
   /** Sales reps — used by booking-data + sales-carousel + cards. */
   phoneSalesDisplay:   ["066-125-3007", "066-125-3006"],
-  /** General contact + sales-specific email. */
-  email:               "contact@pacred.co",
+  /**
+   * Customer-facing default — shown in footer / JSON-LD ContactPoint / signup
+   * confirmation. Per เดฟ 2026-05-15: pair `sales` + `docs` side-by-side on
+   * customer surfaces so urgent inquiries have a second channel (specialist
+   * feel). `email` aliases the primary; `emailContactPair` is the pair tuple
+   * for footer rendering.
+   */
+  email:               "sales@pacred.co",
+  emailContactPair:    ["sales@pacred.co", "docs@pacred.co"] as readonly string[],
+
+  /** Sales — marketing, customer inquiries, new business intake. */
   emailSales:          "sales@pacred.co",
+  /** Docs — CS + DOCS shared central ops hub (talks freight/carriers/customs/sales/pricing/acc). */
+  emailDocs:           "docs@pacred.co",
+  /** Accounting — receipts, transactions, payments, tax invoice queries. Used on receipt + invoice PDFs. */
+  emailAcc:            "acc@pacred.co",
+  /** Pricing — rate quotes, partner/supplier deals, multimodal freight pricing. */
+  emailPricing:        "pricing@pacred.co",
+  /** HR — recruitment, onboarding. */
+  emailHr:             "hr@pacred.co",
+  /** Dev + marketing — website dev, ads, social analytics, partner integrations. */
+  emailDevMkt:         "devmkt@pacred.co",
+  /** Top-level org admin (เดฟ holds) — internal control, not customer-facing. */
+  emailAdmin:          "admin@pacred.co",
 } as const;
 
 export const ADDRESSES = {

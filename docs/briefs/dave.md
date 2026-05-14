@@ -1,16 +1,34 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
 Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authority: second-tier owner
+
+---
+
+## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+
+บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. คุณคือ integrator — ทำให้ภูม + ปอน + ก๊อต ส่งของได้ + path ไป revenue คุย flow ได้.
+
+**เดฟ P0 (do these in this order — Part T2):**
+1. **T-D1 Cargo flow end-to-end smoke test** — signup → topup → service-order → admin paid → receipt issues. Find every gap. Fill or assign to ภูม (~4h test + 2h fix)
+2. **T-D2 Backend specs for ภูม** — G2 tax invoice schema `0034_tax_invoices.sql` + container `0033_containers.sql` (draft → ภูม reviews → applies)
+3. **T-D3 L-22 GTM verify** (after ก๊อต K-12) — events flow into GTM Preview Mode → GA4 → reports ก๊อต sees
+4. **T-D4 Internal soft-launch coordination** — pick 5 friendly customers (พี่ป๊อป's network) for first real transactions
+
+**Defer:** DV-7/DV-8 backlog polish until revenue path live. Landing pivot Phase 2 only when ก๊อต K-12 lands (otherwise no data).
+
+Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the full per-role emergency table + T1 critical path + T5 revenue-ready DoD checklist.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. [`docs/team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency — STRICTER now)
-2. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S4 (เดฟ self-batch — your assigned items)
-3. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules
-4. Memory: `owner_pop_v2_v3_strategy` + `push_frequency_strict` (load via /memories — not in repo)
+1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-D1..T-D4)
+2. [`docs/team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency — STRICTER now)
+3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S4 (เดฟ self-batch — normal pipeline items)
+4. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor mid-burn)
+5. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
+6. Memory: `pacred_company_dna` + `cash_burning_p0_emergency` + `owner_pop_v2_v3_strategy` + `push_frequency_strict` (load via /memories — not in repo)
 
 ---
 

@@ -7,7 +7,13 @@
 > ทุก agent ใช้ Claude Code Windows — ทำงาน async. การอ่าน brief ให้ตรงกัน
 > = ทุกคนทำงานไปในทิศทางเดียวกัน
 
-Last reviewed: 2026-05-16
+> 🔥 **EMERGENCY MODE ACTIVE (2026-05-15)** — company burning runway,
+> cargo system must go live + receive customers ASAP. Each brief now has
+> an EMERGENCY section at the top that overrides normal priority. See
+> [`../PORT_PLAN.md`](../PORT_PLAN.md) **Part T** for the master cargo
+> revenue sprint plan.
+
+Last reviewed: 2026-05-15 (emergency revision)
 
 ---
 

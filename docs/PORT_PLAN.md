@@ -1433,3 +1433,124 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 **End of Part S.** เดฟ→ก๊อต hand-off pattern: ทุกครั้งที่เดฟต้อง offload งานสำคัญให้ก๊อต → append entry ใน Part S ใหม่ (new section S6, S7, ...) พร้อม commit message `docs(port-plan): hand-off batch to ก๊อต — <topics>`. ก๊อต tick off ใน follow-up commit.
 
+---
+
+# 🔥 Part T — EMERGENCY P0: Cargo Revenue Sprint (2026-05-15 brief)
+
+> **State:** บริษัทกำลังเผาเงินตัวเอง. Google Ads ยิงไม่ติด · Search ก็ไม่เจอ · Facebook Ads มี inquiry คาร์โก้เข้าแต่ระบบยังไม่พร้อมรับ → ลูกค้า drop + เสียชื่อ. พี่ป๊อปเครียดมาก.
+> **Goal:** Get the cargo system live + receiving customers ASAP. Revenue inflow → stop burn → fund continued dev (V2 expansion + V3 prep).
+> **Lens (every priority decision):** "งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?" ถ้าใช่ → P0. ถ้าไม่ → defer.
+
+## T1 — Critical path to first revenue
+
+The shortest path from "today's state" → "Pacred receives first paying customer for cargo service":
+
+```
+[A] Owner provides bank + PromptPay
+    ↓
+[B] ก๊อต API switchover decisions (R1 china-search ✅ done · MOMO endpoints · borrow plan)
+    ↓
+[C] ภูม cargo backend full (service-import receipts + admin workflows + container model CT-1..CT-4)
+    ↓
+[D] ปอน landing fixes (SEO + Ad quality score)
+    ↓
+[E] Soft-launch internal test → first 5 friendly customers
+    ↓
+[F] Public Ads on (Google + FB) → scale
+```
+
+Each box can advance in parallel where the dep allows. The slowest box drags revenue → that's where everyone helps.
+
+## T2 — Per-role emergency pickups (override normal priority)
+
+> ปฎิบัติเพิ่ม / แทน priority ของ brief เดิม. **อ่านนี่ก่อน normal P0 list.**
+
+### ก๊อต (decision + API switchover gate)
+
+| # | Task | Why it blocks revenue |
+|---|---|---|
+| **T-G1** | **API borrow audit** — list every external API that the cargo system depends on right now. For each: (a) is it Pacred-owned or borrowed? (b) if borrowed, from whom? (c) sign-up timeline for Pacred-owned replacement | Without this list ภูม can't tell which deps are stable. Currently fuzzy. ~2h |
+| **T-G2** | MOMO JMF endpoint inventory (existing MOMO-1) | Container tracking blocks customer trust → without "where's my container?" feature, customers don't return. ~2h call + 1h doc |
+| **T-G3** | Pacred owner call bundle — bank/PromptPay/tax-ID/legal name (existing P3) | PromptPay = entire wallet/deposit flow. Tax-ID = tax invoice flow. Without these, customer cannot pay. ~30m call |
+| **T-G4** | K-12 GTM + K-13 Clarity signup (existing P0) | Ads quality score depends on conversion tracking. No GTM = paying for ads without data = revenue waste | 
+| **T-G5** | DV-1 Sentry + Upstash + hCaptcha signup (existing P0) | Sentry = catch prod errors that lose customers · Upstash = prevent OTP DoS · hCaptcha = prevent bot inquiries that waste sales bandwidth |
+
+### ภูม (backend — biggest single revenue lever)
+
+| # | Task | Why it blocks revenue |
+|---|---|---|
+| **T-P1** | **Admin workflow buttons** for cargo path — `customers/[id]` approve · `forwarders/[fNo]` status transitions + driver assignment · `service-orders/[hNo]` mark-payment + issue-receipt | Admin staff (วิน + พลอย + ภูม) cannot fulfill orders without these. Each missing button = manual SQL = bottleneck |
+| **T-P2** | CT-1 container migration + CT-3 customer-side container view | "Where's my container?" = #1 customer churn factor. Customer can see → return rate ↑ |
+| **T-P3** | Wallet/yuan-payments admin **bulk approve** | Pacred staff approves deposits manually → bottleneck. Bulk approve = same staff handles 10× volume |
+| **T-P4** | G2 tax invoice issuance (existing P1) | Juristic customers (>50% of cargo value) cannot pay without tax invoice. Mandatory for B2B revenue |
+| **T-P5** | Stub `/admin/accounting` (acc-* PHP port) | Owner sees revenue flow. Without dashboard, owner stress ↑ (can't see if Ads working) |
+
+> Defer Track A integration tests + V3 prep until T-P1..T-P5 ship. Tests valuable but don't earn revenue this week.
+
+### ปอน (landing → SEO → Ad-quality)
+
+| # | Task | Why it blocks revenue |
+|---|---|---|
+| **T-N1** | **SEO emergency audit** — why is pacred.co not in Google search results? · run `pnpm audit:i18n` to check metadata · verify sitemap.xml deploys · check Google Search Console for indexing errors · request manual reindex | Site invisible = Ads wasted. ~3h. Result: report back what's blocking indexing |
+| **T-N2** | **Ad landing quality** — every `/services/*` page must: (a) have h1 with intent keyword, (b) have CTA above the fold, (c) load <3s on 4G, (d) have phone + LINE CTA visible. Use Google PageSpeed Insights | Quality score affects CPC. Better quality = same ad budget reaches more customers |
+| **T-N3** | **Funnel CTA wiring on top-5 cargo pages** — every page emits `generate_lead` when phone tapped, `cta_click` when LINE clicked, `start_signup` when "ลงทะเบียน" clicked. GTM dashboards then show drop-off | Without funnel data ก๊อต/เดฟ cannot tune ads |
+| **T-N4** | **Phase I landing shells** (when Pacred has copy direction) — `/services/customs-clearance`, `/services/customs-broker-matching`, `/services/tax-invoice`, `/services/logistics` | Each missing landing = each missing Ad keyword = lost capture |
+| **T-N5** | **Mobile QA top-5 cargo pages** — most TH cargo buyers browse mobile. If layout breaks → drop | Existing L-8 task; bump to P0 |
+
+### เดฟ (integrator + cargo backend support for ภูม)
+
+| # | Task | Why it blocks revenue |
+|---|---|---|
+| **T-D1** | **Cargo flow end-to-end smoke test** — go through signup → topup wallet → place service-order → admin marks paid → receipt issues. Find every gap. Fill or assign to ภูม | Without smoke test no one knows what's broken on the path to revenue. ~4h test + 2h fix |
+| **T-D2** | **Backend specs for ภูม** — G2 tax invoice schema migration `0034_tax_invoices.sql` + container migration `0033_containers.sql` (draft + ภูม reviews + applies) | Unblocks ภูม T-P2 + T-P4. ~3h |
+| **T-D3** | **L-22 GTM verify** (after ก๊อต K-12) — confirm events flow into GTM Preview Mode → into GA4 → into reports ก๊อต sees | Confirms entire conversion data pipeline; without this we're blind on ad attribution |
+| **T-D4** | **Internal soft-launch coordination** — pick 5 friendly customers (พี่ป๊อป's network) for first paying transactions. Schedule. Hand-hold each through signup → topup → order → fulfilment | Real revenue. Tests system under real conditions. Builds confidence for public launch |
+
+## T3 — "Borrow first, switch later" API plan (ก๊อต-gated)
+
+> สาเหตุที่ Pacred ยังไม่ "ของตัวเอง" ทั้งหมด — เพิ่งแยกจาก PCS CARGO / TTP / ไอแต้ม. List external deps with switchover state.
+
+| API / service | Current state | Borrow-from | Pacred-own timeline | ก๊อต task |
+|---|---|---|---|---|
+| **China product search** (1688/Taobao) | ✅ ADR-0003 Option F locked — use TAM API interim · ภูม shipped P-50..P-53 rewire | TAM (ไอแต้ม) — but cutoff planned | Option B (Alibaba API direct) or D (SaaS like RCGroup-TH) — ก๊อต ADR-0011 candidate | Decide replacement vendor + timeline |
+| **MOMO JMF cargo tracking** (TH warehouse partner) | 🟡 JWT token captured · endpoints TBD | MOMO (partner — not competitor) | Pacred owns warehouse eventually (post-revenue) | T-G2 endpoint call |
+| **ThaiBulkSMS OTP** | 🟢 Pacred-own pending creds | Self (sign up own acct) | Just sign up + flip `OTP_BYPASS=false` | DV-3 in Part S4 |
+| **PromptPay payment** | 🔴 Owner opening Pacred bank acct | TBD | Owner provides | Part Q owner bundle |
+| **Tax invoice numbering** | 🟢 Pacred-own (ADR-0006) | Self | Already locked | ภูม T-P4 |
+| **Google Ads + Meta Pixel + TikTok Pixel** | 🟢 Pacred-own pending GTM activation | Self | K-12 GTM → activate | ก๊อต K-12 + เดฟ L-22-Ads |
+| **Sentry + Upstash + hCaptcha** | 🟡 Code wired · accts pending | Self (sign up own) | Just sign up | DV-1a/b/c in Part S4 |
+| **LINE Messaging API + LIFF** | 🟢 Pacred-own (Channel ID 2009931373 set) | Self | LIFF app creation pending | DV-2 in Part S4 |
+| **DBD juristic-person lookup** | 🟢 Pacred-own (free DBD API) | Self | Already wired | n/a |
+| **Email** (Resend/Workspace) | 🟡 7 dept emails set up | Self | Confirm forwarding rules + DKIM | เดฟ ops |
+
+## T4 — Brand cleanup gate (don't preempt)
+
+**Rule:** ทุก reference ของ "PCS Cargo / TTP / ไอแต้ม" จะลบเมื่อ ก๊อต confirm API switchover ของ component นั้นๆ. **อย่ารีบลบก่อน** เพราะอาจ break revenue path.
+
+Current scrub status (per [`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md)):
+- R2 PCS branding scrub plan ✅ documented; partial sweep done
+- TTP scrub plan ⏳ pending (TTP = unknown to current code? verify with ก๊อต)
+- ไอแต้ม scrub plan ⏳ pending (post-Option B/D vendor swap)
+
+## T5 — Definition of "revenue-ready"
+
+We've shipped revenue-ready when **all** of these are TRUE:
+
+- [ ] Customer can sign up (TH OTP works · juristic lookup works)
+- [ ] Customer can top up wallet (PromptPay live · slip upload works · admin approves within 1h)
+- [ ] Customer can create service-import order (forwarder rate engine works · uploads work)
+- [ ] Customer can pay for the order (wallet or PromptPay direct)
+- [ ] Customer receives receipt PDF (with Pacred legal name + tax ID + bank account)
+- [ ] Customer can request tax invoice if juristic (ADR-0006 flow live)
+- [ ] Customer can see container/shipment status (CT-3 view + MOMO sync OR manual entry by admin)
+- [ ] Admin (วิน/พลอย/ภูม) can fulfill the order through admin UI (no manual SQL)
+- [ ] Conversion events fire into GTM → GA4 (K-12 active)
+- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` flags in prod
+- [ ] At least 5 friendly customers completed the loop end-to-end
+
+> When this checklist hits 100%, Pacred can confidently scale Ads.
+
+---
+
+**End of Part T.** Update freq: each role updates their column when they ship something. เดฟ keeps T1 critical path drawing accurate. ก๊อต updates T3 borrow→own state when each switchover lands.
+

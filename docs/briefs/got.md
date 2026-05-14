@@ -1,16 +1,35 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
+
+---
+
+## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+
+บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. Cargo system ต้องรับลูกค้าได้ ASAP → revenue → stop burn.
+
+**Your job during emergency:** API switchover decisions + signups + decisions ที่ unblock ภูม + เดฟ จะ ship cargo path.
+
+**ก๊อต P0 (do these in this order):**
+1. **T-G1 API borrow audit** — list every external API the cargo system uses · borrow-from / Pacred-own / switchover timeline (~2h, output: table in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T3)
+2. **T-G3 Pacred owner call** — bank/PromptPay/tax-ID/legal name (~30m call)
+3. **T-G4 K-12 GTM + K-13 Clarity** signup (existing P0)
+4. **T-G2 MOMO endpoint inventory** (existing MOMO-1)
+5. **T-G5 DV-1 Sentry + Upstash + hCaptcha** signups
+
+Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + revenue-ready DoD.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
-2. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S2 (ก๊อต batch — your assigned items)
-3. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules
-4. [`docs/audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) — production hardening status
+1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency cargo sprint — your T-G1..T-G5)
+2. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
+3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S2 (ก๊อต batch — your assigned items, normal pipeline)
+4. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor V2 → V3 mid-burn)
+5. [`docs/audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) — production hardening status
+6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
 
 ---
 

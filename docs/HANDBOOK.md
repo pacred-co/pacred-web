@@ -2,7 +2,27 @@
 
 > Entry point for everyone on the team — start here.
 
-Last updated: 2026-05-16
+Last updated: 2026-05-15 (emergency revision — cargo revenue sprint)
+
+---
+
+## 🔥 EMERGENCY MODE ACTIVE (2026-05-15)
+
+**Company is burning runway.** Cargo system must go live + receive customers ASAP. Every priority decision passes the lens: *"งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?"*
+
+📋 Master plan: [`PORT_PLAN.md`](PORT_PLAN.md) **Part T** — per-role T1..T5 emergency pickups + critical path to first revenue + "borrow first, switch later" API plan + revenue-ready DoD checklist.
+
+Each role brief has an **EMERGENCY** section at the top that overrides normal priority during this sprint.
+
+---
+
+## 🧬 Pacred DNA (one-liner)
+
+**บริษัท แพคเรด (ประเทศไทย) จำกัด** · Pacred (Thailand) Co., Ltd. · ทะเบียน `0105564077716` · Slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"** · Owner พี่ป๊อป Visit. Scope = ecosystem นำเข้า/ส่งออก/customs/cargo/logistics ครบวงจร.
+
+Full SOT: [`pacred-info.md`](pacred-info.md) (addresses, phones, 7 dept emails, LINE OA, social, sales reps, code consumers).
+
+Brand-split context: separating from **PCS CARGO + TTP + ไอแต้ม** — clean-up rule = wait for ก๊อต API switchover **before** scrubbing references.
 
 ---
 
@@ -184,9 +204,9 @@ git push origin <my-branch>
 
 ---
 
-## 🎯 Current state (2026-05-16)
+## 🎯 Current state (2026-05-15 — emergency)
 
-- **Active phase:** Brief-driven async execution. ทุกคนเริ่ม session ด้วยการเปิด brief ตัวเอง → pickup จาก priority list → ส่ง hand-off ตาม brief. Push only at save-points (sleep / machine change / batch done).
+- **Active phase:** 🔥 **Cargo Revenue Sprint** (Part T). Brief-driven async execution but priorities are revenue-first. ทุกคนเริ่ม session ด้วยเปิด brief → emergency section → ทำงาน T-* tasks → push at save-points.
 - **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging — Poom + podeng consolidated) · `Poom` + `podeng` = น้อง working branches.
 - **Production readiness:** ~88% customer · ~98% admin HR / ~50% admin ops · ~85% infra · ~85% SEO/landing (analytics substrate live)
 - **Recent landmarks (2026-05-16):**
@@ -199,30 +219,33 @@ git push origin <my-branch>
   - Doc restructure: 6 role briefs (`docs/briefs/`) + container-centric model (`docs/architecture/`) + MOMO JMF spec (`docs/integrations/`) + V2/V3 strategy ADR-0010 + PORT_PLAN split (Parts A–N archived)
   - MOMO JMF partner token captured in 5 worktrees + `.env.example`; endpoint inventory TBD (ก๊อต MOMO-1..MOMO-3)
 - **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo, employee masterpiece). V3 wishlist appends to `docs/v3-wishlist.md` (TBD) — don't refactor V2 into V3 mid-flight.
-- **🚨 Critical blockers (production beta):**
-  - ก๊อต batch: K-12 GTM signup · K-13 Clarity signup · DV-1a Sentry DSN · DV-1b Upstash · DV-1c hCaptcha (5 creds → Vercel env)
-  - Pacred owner: PromptPay account + ThaiBulkSMS keys + LIFF ID + bank acct + legal tax-ID
-  - MOMO partner: endpoint inventory call (ก๊อต MOMO-1) + webhook signature decision (MOMO-3)
-- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) — don't re-derive from PORT_PLAN
+- **🔥 Revenue path blockers (block customer-receiving cargo system — Part T):**
+  - **ก๊อต:** T-G1 API borrow audit · T-G3 owner-call bundle (bank/PromptPay/tax-ID) · T-G4 GTM + Clarity · T-G5 Sentry/Upstash/hCaptcha · T-G2 MOMO endpoints
+  - **ภูม:** T-P1 admin workflow buttons · T-P2 container model + customer view · T-P3 wallet bulk-approve · T-P4 tax invoice flow · T-P5 stub accounting page
+  - **ปอน:** T-N1 SEO audit (why pacred.co not indexed?) · T-N2 ad-landing quality · T-N3 funnel CTA wiring · T-N4 Phase I landing shells · T-N5 mobile QA
+  - **เดฟ:** T-D1 cargo flow smoke test · T-D2 backend specs for ภูม · T-D3 GTM verify post-K-12 · T-D4 soft-launch 5 friendly customers
+- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) — emergency section at top overrides normal priority. Don't re-derive from PORT_PLAN.
 
 ---
 
 ## ⚠️ Things that bite
 
-1. **Skipping your brief = wandering session.** Open [`briefs/<your-name>.md`](briefs/) FIRST. CLAUDE.md top section enforces this.
-2. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
-3. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
-4. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
-5. **China-search vendor cutoff (Track G)** — `lib/china-search` wired but vendor (ไอแต้ม) being cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต ADR-0003 R1 lands replacement. Code degrades to demo mode when env unset — intended interim.
-6. **MOMO JMF token in `.env.local`** — captured 2026-05-16, but `MOMO_JMF_BASE_URL` + endpoint inventory still TBD (ก๊อต MOMO-1). Don't write integration code referencing endpoints until inventory locks.
-7. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
-8. **i18n key missing** crashes the page — always add both th + en. Audit script: `pnpm audit:i18n`
-9. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))
-10. **Push to `main` directly = bypass mode** — only เดฟ for urgent hotfix. Normal flow: น้อง→own branch→เดฟ→`dave`→ก๊อต→`main`
-11. **Push frequency = save-points only** — Vercel builds cost + push churn distracts the team. Commit local often, push at sleep / machine change / location change / big batch done. ~1 push per session. See [`team.md`](team.md) §3.0.
-12. **`profiles.line_user_id`** stays NULL until D-1-LIFF customer linkage runs — every LINE push to customer is silent no-op until LIFF activated
-13. **V2 ≠ V3** — this repo is V2 owner-pleaser. Don't refactor V2 into your ideal architecture; that's V3 (`pacred-DPX`) territory. See [ADR-0010](decisions/0010-v2-v3-version-strategy.md).
-14. **Admin sidebar bg = white** (per เดฟ 2026-05-16 brief) — rest of admin chrome uses landing theme tokens. Don't introduce a dark admin variant.
+1. **EMERGENCY mode active** — revenue-first lens. ถ้างานไม่ unblock cargo revenue path → defer. See [`PORT_PLAN.md`](PORT_PLAN.md) Part T.
+2. **Skipping your brief = wandering session.** Open [`briefs/<your-name>.md`](briefs/) FIRST. CLAUDE.md top section enforces this.
+3. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
+4. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
+5. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
+6. **China-search vendor cutoff (Track G)** — `lib/china-search` wired but vendor (ไอแต้ม) being cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต ADR-0003 R1 lands replacement. Code degrades to demo mode when env unset — intended interim.
+7. **MOMO JMF token in `.env.local`** — captured 2026-05-16, but `MOMO_JMF_BASE_URL` + endpoint inventory still TBD (ก๊อต MOMO-1). Don't write integration code referencing endpoints until inventory locks.
+8. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
+9. **i18n key missing** crashes the page — always add both th + en. Audit script: `pnpm audit:i18n`
+10. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))
+11. **Push to `main` directly = bypass mode** — only เดฟ for urgent hotfix. Normal flow: น้อง→own branch→เดฟ→`dave`→ก๊อต→`main`
+12. **Push frequency = save-points only** — Vercel builds cost + push churn distracts the team. Commit local often, push at sleep / machine change / location change / big batch done. ~1 push per session. See [`team.md`](team.md) §3.0.
+13. **`profiles.line_user_id`** stays NULL until D-1-LIFF customer linkage runs — every LINE push to customer is silent no-op until LIFF activated
+14. **V2 ≠ V3** — this repo is V2 owner-pleaser. Don't refactor V2 into your ideal architecture; that's V3 (`pacred-DPX`) territory. See [ADR-0010](decisions/0010-v2-v3-version-strategy.md).
+15. **Admin sidebar bg = white** (per เดฟ 2026-05-16 brief) — rest of admin chrome uses landing theme tokens. Don't introduce a dark admin variant.
+16. **Don't preempt brand cleanup** — references to PCS Cargo / TTP / ไอแต้ม survive because some APIs still borrowed interim. Scrub *after* ก๊อต confirms the matching API switchover. See [`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md).
 
 ---
 

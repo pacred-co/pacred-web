@@ -1,17 +1,35 @@
 # ปอน — Frontend / Landing / SEO / Marketing
 
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
 Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
+
+---
+
+## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+
+Google Ads ยิงไม่ติด · Search หา pacred.co ไม่เจอ · FB Ads ก็มี inquiry เข้าแต่ระบบยังไม่พร้อม. **ปอนคือ visibility lever** — ถ้า landing rank ไม่ได้ + quality score ต่ำ = Ad budget ทิ้งไปเปล่าๆ.
+
+**ปอน P0 (do these in this order — Part T2):**
+1. **T-N1 SEO emergency audit** — why pacred.co not indexed? verify sitemap deploys · check GSC · request manual reindex (~3h, report blocker)
+2. **T-N2 Ad landing quality** — h1 with intent keyword · CTA above fold · LCP <3s on 4G · phone+LINE CTA visible (top-5 cargo pages)
+3. **T-N3 Funnel CTA wiring** on top-5 cargo pages — `generate_lead`, `cta_click`, `start_signup` events fire correctly into GTM
+4. **T-N4 Phase I landing shells** (when Pacred owner provides copy direction)
+5. **T-N5 Mobile QA top-5 cargo pages** — most TH cargo buyers = mobile
+
+**Voice (every customer surface):** Slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Mobile-first. Copy ตรงเป้า ไม่อ้อมค้อม. CTA visible.
+
+Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + critical path + revenue-ready DoD.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
-2. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ปอน hand-off triggers) + Part O3 (your assignments)
-3. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style) + §12 (Performance/SEO)
-4. [`docs/decisions/0007-analytics-and-ab-testing.md`](../decisions/0007-analytics-and-ab-testing.md) — GTM + Clarity + A/B substrate (already shipped — you wire experiments here)
-5. [`docs/pacred-info.md`](../pacred-info.md) — company info SOT — every contact UI element imports from `components/seo/site.ts`
+1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-N1..T-N5)
+2. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
+3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ปอน hand-off triggers) + Part O3 (normal pipeline)
+4. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style) + §12 (Performance/SEO)
+5. [`docs/decisions/0007-analytics-and-ab-testing.md`](../decisions/0007-analytics-and-ab-testing.md) — GTM + Clarity + A/B substrate
+6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT — every contact UI element imports from `components/seo/site.ts`
 
 ---
 

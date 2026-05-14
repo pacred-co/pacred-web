@@ -2,6 +2,39 @@
 
 ---
 
+# 🧬 Pacred DNA (load-bearing — read once, internalise forever)
+
+**Company:** บริษัท แพคเรด (ประเทศไทย) จำกัด · **Pacred (Thailand) Co., Ltd.** · ทะเบียน `0105564077716` · **Slogan: "เร็ว ไว ไม่มีคำว่าทำไม่ได้"** · Owner **พี่ป๊อป Visit** (second-tier: เดฟ + ก๊อต).
+
+**Scope:** ecosystem ของ import-export-customs-cargo-logistics (เคลียร์ศุลกากร · นำเข้า-ส่งออก · ขนส่งระหว่างประเทศ + ในประเทศ · ฝากสั่งซื้อ-ฝากโอน-ฝากขาย · ใบกำกับภาษี · ใบขนสินค้า · ขอคืนภาษี · ฟูมิเกชัน · แมสเซ็นเจอร์ · "และอื่นๆ ทั้งวงการ"). Markets ลำดับ: ไทย → จีน → ญี่ปุ่น → เกาหลี → มาเล → อินโด → เมกา → อื่นๆ.
+
+**Vision:** ทำให้ทุกคน (แม้ไม่รู้อะไรเลย) สามารถนำเข้า-ส่งออกได้ ง่ายๆแค่ปลายนิ้ว. Full-loop service ดึงลูกค้าไว้ในระบบ ไม่ปล่อย handover ที่อื่น.
+
+**Brand-split context (DON'T preempt cleanup):** Pacred = บริษัทใหม่ กำลังแยกจาก **PCS CARGO + TTP + ไอแต้ม**. บาง API ยัง "ยืม" เจ้าเก่าใช้ — ลบ reference เหล่านี้ **หลัง** ก๊อต confirm API switchover เสร็จ (ไม่ใช่ก่อน). Tracked in [`docs/runbook/pcs-scrub-plan.md`](docs/runbook/pcs-scrub-plan.md).
+
+📋 **Full SOT:** [`docs/pacred-info.md`](docs/pacred-info.md) — addresses, phones, emails (7 depts), LINE OA, social, sales reps, JSON-LD code consumers
+🧠 **Memory:** `pacred_company_dna` + `cash_burning_p0_emergency` (load via /memories)
+
+---
+
+# 🔥 EMERGENCY STATE — Cargo Revenue Sprint (2026-05-15)
+
+บริษัทกำลังเผาเงินตัวเอง. Google Ads ยิงไม่ติด · Search หา pacred.co ไม่เจอ · FB Ads มี inquiry คาร์โก้เข้าแต่ระบบยังไม่พร้อมรับ → ลูกค้า drop + เสียชื่อ. พี่ป๊อปเครียดมาก.
+
+**Goal:** ระบบ cargo (port from PHP) → live + รับลูกค้าได้ ASAP → revenue → stop burn → fund continued dev.
+
+**Decision lens (every task):** "งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?" ใช่ → P0. ไม่ → defer.
+
+📋 **Plan:** [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) **Part T** — per-role T1..T5 emergency pickups + "borrow first, switch later" API plan + revenue-ready DoD checklist.
+
+**Anti-patterns during emergency (don't do):**
+- V3 architecture redesign mid-burn (V3 = pacred-DPX repo, not here)
+- Wide refactor cleanup without revenue tie-in
+- Wait for "perfect" UX — ship "good enough" + iterate post-revenue
+- Scrub PCS/TTP/ไอแต้ม **before** ก๊อต API switchover (would break revenue path)
+
+---
+
 # 🛑 STOP — Read your role brief FIRST (force-read every Claude Code session)
 
 ทุก dev ใช้ Claude Code Windows ทำงาน async บน worktree ของตัวเอง. ก่อนแตะ code หรือตอบคำถาม — **เปิด brief ของคุณก่อน**:

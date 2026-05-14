@@ -1,17 +1,36 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
+
+---
+
+## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+
+บริษัทเผาเงิน. **ภูมคือ single biggest revenue lever** — backend cargo path = ทุกบาทที่ Pacred จะรับเข้ามา.
+
+**ภูม P0 (do these in this order — Part T2):**
+1. **T-P1 Admin workflow buttons** for cargo path — `customers/[id]` approve · `forwarders/[fNo]` status + driver · `service-orders/[hNo]` mark-paid + issue-receipt. Staff cannot fulfill without these
+2. **T-P2 CT-1 container migration + CT-3 customer container view** — "Where's my container?" = #1 churn factor
+3. **T-P3 Wallet/yuan-payments bulk approve** — manual SQL bottleneck = no scale
+4. **T-P4 G2 tax invoice issuance** — juristic customers cannot pay without
+5. **T-P5 Stub `/admin/accounting`** — owner sees revenue flow → stress ↓
+
+**Defer until T-P1..T-P5 ship:** Track A integration tests, V3 prep, refactor cleanup. Tests valuable but don't earn revenue this week.
+
+Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + critical path + revenue-ready DoD.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
-2. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part O2 (your assignments)
-3. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — NEW data spine for warehouse + container + shipment
-4. [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you wire
-5. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0009-erp-schema-sketch.md`](../decisions/0009-erp-schema-sketch.md) — schema specs you implement
+1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-P1..T-P5)
+2. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
+3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part O2 (normal pipeline)
+4. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — NEW data spine for warehouse + container + shipment
+5. [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you wire
+6. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0009-erp-schema-sketch.md`](../decisions/0009-erp-schema-sketch.md) — schema specs you implement
+7. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
 
 ---
 
