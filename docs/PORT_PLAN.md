@@ -1500,10 +1500,24 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 **Strategy:** Port PHP cargo system → Pacred 100% ก่อน DPX ERP. ทุก feature ที่ PHP เดิมมี ต้อง work ใน Pacred ก่อน
 
-**Status check:**
+**Status check (2026-05-14):**
+- ✅ P-1 ถึง P-14 เสร็จหมด (รายละเอียดใน commit log `bb747bf`..`1700144`)
 - ✅ Bug fixes ของ Sprint 1-3 (approve/suspend, scan-form, etc.) — แก้แล้วบน dave commit `1a470ee`
 - ✅ Sprint 1-3 admin features ครบ (A-1 ถึง A-15 + L-cleanup)
+- 🟡 4 commits cleanup ค้าง `origin/Poom` (ยังไม่ merge เข้า main) — ต้องผ่าน Phase 0 review fixes ก่อน
 - 🟡 ลำดับงานใหม่:
+
+### Phase 0 — Pre-merge fixes บน `origin/Poom` (BEFORE next merge to main, ~1-2h)
+
+เดฟ review 4 commits (8db9140, 07535a5, 5cf2499, b8dd259) ก่อน merge แล้วเจอ 3 อันที่ต้องแก้ก่อน — รายละเอียดเต็มใน Part P §P2
+
+| # | Fix | File:Line | Severity |
+|---|---|---|---|
+| **rev-1** | Revert `next/script beforeInteractive` กลับเป็น inline `<script>` ใน server `<head>` | `app/[locale]/layout.tsx` (commit 5cf2499) | 🔴 FOUC regression risk per Next 16 docs — `beforeInteractive` ไม่ block hydration |
+| **rev-2** | Move "Transfer Rep" card AFTER `AssignRepForm` (UX: ลูกค้ายังไม่มี rep ไม่ควรเห็น "Transfer Rep" ก่อน) — หรือ hide เมื่อ `sales_admin_id IS NULL` | `app/[locale]/(admin)/admin/customers/[id]/page.tsx:126-138` | 🟡 UX ordering |
+| **rev-3** | "Active ล่าสุด" sidebar item ขาด role gate — confirm intended audience หรือเพิ่ม `roles: ["sales_admin","accounting"]` | `components/sections/admin-sidebar.tsx:42` | 🟡 RBAC |
+
+หลัง 3 fix แล้ว — squash-fix theme commits (07535a5 + 5cf2499) เป็น 1 commit เดียว แล้ว resubmit Poom branch
 
 ### Priority 0 (block customer launch — must finish first)
 
@@ -1554,30 +1568,96 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 ## O3. 👤 ปอน (podeng) — Sprint 5 (FRONTEND/SEO/LANDING FOCUS)
 
-**Strategy:** ทำ landing pages ทุก service + push SEO + acquisition funnel ให้แรง — เป้า Lighthouse 95+ ทุก public page
+**Strategy ใหม่ (2026-05-14):** ทำงานเป็น phase สั้นๆ — เสร็จ 1 phase → ส่งเดฟ confirm → เริ่ม phase ถัดไป
+**ทำไม:** Feedback จาก เดฟ ("เริ่มคิดนานนะ ลองแบ่งเฟส คิด หรือ แยก หัวคิด แล้ว ให้คอนเฟิม") — แทนที่จะเลือกจาก L-1 ถึง L-24 ทั้งกอง ให้ดูทีละเฟส 2-6h พอ
+**สถานะ:** `origin/podeng` == `origin/dave` == hash `1700144` — **ยังไม่มี commit ใหม่หลัง merge ครั้งก่อน** เริ่มจาก Phase A1 ได้เลย
 
-### Priority 0 (SEO foundation — must do first)
+> **กฎ checkpoint:** ทุกเฟสจบ → ส่ง output (screenshot/url/diff) ให้เดฟใน LINE → รอ "go" ก่อนเริ่ม phase ถัดไป — อย่ารวบรัด **ห้ามทำหลาย phase พร้อมกัน** ถ้ายังไม่ได้ confirm
 
-| # | Task | Est | Description |
-|---|---|---|---|
-| **L-1** | `app/sitemap.ts` | 2h | Dynamic sitemap covering all public routes + i18n alt links. Use Next 16 metadata API |
-| **L-2** | `app/robots.ts` | 30m | Allow all public, disallow `/admin`, `/auth`, `/(protected)` |
-| **L-3** | Structured data on all landing pages | 4-6h | JSON-LD: Organization, LocalBusiness, Service, BreadcrumbList. Add to `app/[locale]/(public)/**/page.tsx` `generateMetadata` or inline `<script type="application/ld+json">` |
-| **L-4** | Open Graph + Twitter card meta | 2-3h | Every public page gets `openGraph`, `twitter` in `generateMetadata`. OG images per service |
+---
 
-### Priority 1 (landing page polish + completion)
+### Phase A1 — SEO foundation (THIS WEEK · ~2-3h · ZERO design decisions)
 
-| # | Task | Est | Description |
-|---|---|---|---|
-| **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/customs-clearance`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX |
-| **L-6** | Knowledge base SEO + content | 3-4h | Article meta, internal linking, RSS feed |
-| **L-7** | FAQ page + structured data | 2h | FAQPage JSON-LD schema |
-| **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools |
-| **L-9** | i18n audit Phase 4b/5 | 4-6h | Find missing keys, normalize namespaces, EN translation polish |
+ของ technical ล้วน — ไม่ต้องคิด design — ทำได้เลย ไม่ต้องถาม
 
-### Priority 2 (Phase I — Pacred Ecosystem expansion landing pages)
+- [ ] **L-2** `app/robots.ts` (30m) — allow public, disallow `/admin`, `/auth`, `/(protected)`. Use Next 16 metadata API ([docs](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/robots))
+- [ ] **L-1** `app/sitemap.ts` (2h) — dynamic. Cover top-level public routes + i18n alt links via `alternates.languages` ([docs](https://nextjs.org/docs/app/api-reference/file-conventions/metadata/sitemap))
 
-11 new service landing pages (#1, #5-13 ตาม CLAUDE.md service catalogue):
+**✅ Done definition:**
+1. Hit `localhost:3000/sitemap.xml` → see XML รวม URL public ทั้งหมด (home + services + knowledge + about + contact + faq)
+2. Hit `localhost:3000/robots.txt` → see expected disallow list
+3. `pnpm lint` clean
+4. PR opened บน `podeng` branch
+
+**🛑 CHECKPOINT 1:** ส่ง screenshot ของ `/sitemap.xml` + `/robots.txt` มาให้เดฟใน LINE — ถามก่อนเริ่ม Phase A2 ว่า:
+- "ผ่าน OK ทำ A2 (structured data) ต่อเลยมั้ย?"
+- หรือ "เปลี่ยนทาง — ทำ Phase B (landing polish) ก่อนได้มั้ย?"
+
+---
+
+### Phase A2 — Structured data (หลัง A1 confirm · ~4-6h)
+
+- [ ] **L-3a** Organization schema ใน root layout (1h) — name, url, logo, sameAs (social links จาก CLAUDE.md)
+- [ ] **L-3b** Service schema per landing (3-4h) — `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/customs-clearance`, `/services/export-worldwide`, `/services/china-shopping`. Inline `<script type="application/ld+json">` ใน Server Component
+- [ ] **L-3c** BreadcrumbList per page (1h) — auto-derived จาก path
+
+**✅ Done definition:** validate ทุก URL ผ่าน https://validator.schema.org/ — ทุก landing page returns valid JSON-LD
+
+**🛑 CHECKPOINT 2:** paste validator URL + screenshot result ของ 1-2 pages — ถาม:
+- "ทำ A3 (OG/Twitter cards) ต่อ?"
+- หรือ "เริ่ม Phase B (landing polish) ก่อน?"
+
+---
+
+### Phase A3 — Open Graph + Twitter cards (~2-3h)
+
+- [ ] **L-4** ทุก public page get `openGraph`, `twitter` ใน `generateMetadata`
+- [ ] OG images per service — start ด้วย default + service-specific later
+
+**🛑 CHECKPOINT 3:** ส่ง list URL + paste 1 ตัวอย่างของ OG meta block — ถามต่อว่าจะไป Phase B หรือ Phase D (i18n)
+
+---
+
+### Phase B — Landing page polish (DECISION CHECKPOINT FIRST)
+
+**🛑 ก่อนเริ่ม Phase B ขอเดฟ confirm 2 ข้อใน LINE:**
+1. **Priority pages** — page ไหน polish ก่อน? (ปอน suggest: home → import-china → china-shopping → customs-clearance ตามลำดับ)
+2. **Style update** — มี design tokens ใหม่หรือยังใช้ของเดิม?
+
+หลัง confirm:
+- [ ] **L-5a** Polish page #1 ที่เดฟเลือก (2-3h)
+- [ ] **L-5b** Polish page #2 (2-3h)
+- ... (ทำทีละ page → checkpoint after each)
+
+ส่วนของ L-5 อื่นๆ:
+- [ ] **L-7** FAQ + FAQPage JSON-LD (2h)
+- [ ] **L-8** Mobile responsive QA top 10 pages (4-6h) — ใช้ browser devtools / Playwright
+
+**🛑 CHECKPOINT B-final:** หลังทุก page โดน polish — Lighthouse score แต่ละ page > 90 mobile + 95 desktop
+
+---
+
+### Phase D — i18n audit (independent · ~4-6h · ทำได้ระหว่าง wait Phase B confirm)
+
+- [ ] **L-9a** หา missing key (script: grep ทุก `useTranslations(...)` + `t("...")` แล้ว diff vs `messages/{th,en}.json`)
+- [ ] **L-9b** Normalize namespace pattern (`page.section.element`)
+- [ ] **L-9c** EN translation polish (review machine TL หรือ rough translations)
+
+**🛑 CHECKPOINT D:** PR diff ของ messages/*.json — เดฟ review
+
+---
+
+### Phase C+ — Pacred Ecosystem expansion landing pages (DECISION REQUIRED FIRST)
+
+11 new service landing pages (L-10 ถึง L-20) — ต้องถามเดฟ + Pacred owner ก่อน:
+
+**🛑 BEFORE STARTING ANY of L-10..L-20:**
+1. **Style guide** — ใช้ของเดิม (red/dark) หรือ design ใหม่?
+2. **Content** — ปอนเขียน copy เอง / marketing person / AI draft + edit?
+3. **Images** — มี asset library / use stock / commission?
+4. **Priority order** — services ไหนสำคัญก่อน? (ปอน suggest: customs-clearance + export ก่อน เพราะ ecosystem ใหม่ไม่ครอบเดิม + revenue สูง)
+
+หลัง decisions ครบ → ทำทีละ service → checkpoint after each
 
 | # | Service | slug | Est |
 |---|---|---|---|
@@ -1593,7 +1673,9 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | **L-19** | logistics + messenger | `/services/logistics` | 4-6h |
 | **L-20** | services hub page redesign | `/services` | 4-6h |
 
-### Priority 3 (performance + acquisition)
+---
+
+### Phase E — Performance + analytics (สุดท้าย — เมื่อ landing เสร็จแล้ว)
 
 | # | Task | Est | Description |
 |---|---|---|---|
@@ -1602,8 +1684,15 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | **L-23** | Heatmap (Microsoft Clarity or Hotjar) | 1-2h | Setup tracking |
 | **L-24** | A/B test infrastructure | TBD | If GrowthBook or similar chosen |
 
-**Estimated total P0+P1:** 30-40h → 2-3 weeks part-time
-**Phase I (P2):** +40-50h → ขึ้นกับ priority ของ Pacred owner
+**🛑 ก่อน Phase E:** ขอเดฟยืนยันว่า analytics tools เลือกอะไร (GA4? GTM? Clarity? Hotjar?)
+
+---
+
+**Estimated:**
+- Phase A1+A2+A3: ~9-12h → 2-3 sessions ของปอน
+- Phase B + D: ~15-20h → 4-5 sessions
+- Phase C+ (11 services): +40-50h → ขึ้นกับ owner priority + content readiness
+- Phase E: +10-15h
 
 ## O4. 👤 เดฟ (dave) — Sprint 5 (INFRASTRUCTURE LEAD)
 
@@ -1652,3 +1741,138 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 ---
 
 **End of Part O.** Part O supersedes Part N6 Sprint 5 plan with proper role mapping.
+
+---
+
+# Part P — Sprint 5 Day 3 handoff snapshot (2026-05-14)
+
+> **Purpose:** Single-page snapshot ของสถานะโปรเจคขณะที่เดฟ "ฝากรันยาวๆ" ไปกินข้าว — รวม review findings + decisions outstanding ในที่เดียว เพื่อให้ ภูม + ปอน + ก๊อต รับงานต่อได้ทันที
+> **ใช้คู่กับ:** Part O2 (ภูม restructured), Part O3 (ปอน restructured), Part O4 (เดฟ remaining)
+
+## P1. ภาพรวม commits ขณะนี้
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `origin/main` | `5475f14` | latest merged — ครบ P-1 ถึง P-14 จากภูม + helper-1/C-7/D-14..17/A-12 จากเดฟ |
+| `origin/dave` | `1700144` | ตามหลัง main 1 commit (icon merge) — ไม่ critical |
+| `origin/Poom` | `b8dd259` | **4 commits ค้าง** ยังไม่ merge — ต้อง Phase 0 review fix ก่อน |
+| `origin/podeng` | `1700144` | == origin/dave — ปอน ยังไม่ start L-* ใดๆ |
+| `origin/claude/ecstatic-bhabha-8c289a` | `e2cd8ae` | **PR เดฟ ค้างรอ merge** — cron scaffold + restructured plan |
+
+**Open PR ที่รอ:**
+1. **เดฟ → dave**: claude/ecstatic-bhabha-8c289a — feat(cron): scaffold sales-daily-digest + refresh-active-customers — ready for review
+2. **ภูม → main**: origin/Poom — needs Phase 0 fixes ก่อน
+
+## P2. Pre-merge review — origin/Poom (4 commits)
+
+เดฟ review แล้ว 2026-05-14 — พบ 3 อันต้องแก้:
+
+### 🔴 Block 1: `5cf2499 fix(theme): swap inline <script> for next/script beforeInteractive`
+
+**ปัญหา:** Per Next 16 docs (`node_modules/next/dist/docs/01-app/03-api-reference/02-components/script.md:71`):
+> Scripts denoted with `beforeInteractive` are preloaded and fetched before any first-party code, but their execution **does not block page hydration from occurring**.
+
+แปล: `beforeInteractive` ไม่รับประกันว่าจะรันก่อน first paint สำหรับ inline children — ต่างจาก raw `<script dangerouslySetInnerHTML>` ใน `<head>` ของ Server Component ที่บล็อก paint จริงๆ
+
+**ผลกระทบ:** FOUC (flash of light theme) บน slow connection / cold load สำหรับ user ที่ system theme = dark
+
+**แก้:** Revert กลับไปใช้ inline `<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />` ใน `<head>` ของ Server Component `RootLayout` (commit `07535a5` approach). ภูม commit message อ้างว่า React 19 warn — แต่จริงๆ warn เกิดเฉพาะใน Client Component re-render ไม่ใช่ Server-rendered `<head>` content
+
+**Verify หลังแก้:** Slow 3G throttle + cold reload `/` บน machine ที่ system=dark → ห้ามเห็น flash of light theme
+
+### 🟡 Nit 2: `b8dd259 feat(admin): wire navigation for orphan Sprint 5 admin routes`
+
+**ปัญหา:** "Transfer Rep" card render ก่อน `AssignRepForm` — ลูกค้ายังไม่มี rep จะเห็น "Transfer Rep" ก่อน "Assign Rep" → backward UX
+
+**File:** `app/[locale]/(admin)/admin/customers/[id]/page.tsx:126-138`
+
+**แก้:** ย้าย card ลงไปอยู่หลัง `AssignRepForm` หรือ hide เมื่อ `sales_admin_id IS NULL`
+
+### 🟡 Nit 3: `b8dd259` — sidebar role gate ขาด
+
+**ปัญหา:** "Active ล่าสุด" sidebar item ไม่มี `roles` gate (line `admin-sidebar.tsx:42`) — P-13 dashboard exposes lifetime customer revenue ทั่วทุก admin
+
+**แก้:** Confirm ว่าเปิดให้ใครดูได้ (ops? accounting? sales_admin?) แล้วเพิ่ม `roles: ["sales_admin","accounting"]` หรือคงไว้ตามตั้งใจ
+
+### ✅ OK as-is: `8db9140 contact-messages` + `07535a5 next-themes replacement`
+
+มี nits เล็กน้อย (count query scaling, type strictness) — ภูม note ไว้ทำ Sprint 6
+
+### Squash recommendation
+
+Theme commits (07535a5 + 5cf2499) ควร squash เป็น 1 commit เดียวที่ใช้ inline-`<script>`-in-server-`<head>` approach
+
+## P3. Cross-cutting decisions ที่ต้อง resolve
+
+### 🆕 New (จาก review ครั้งนี้)
+
+| # | Decision | Owner | Blocks | Recommended |
+|---|---|---|---|---|
+| **D-18** | P-13 "recently-active customers dashboard" vs `/api/cron/refresh-active-customers` overlap | เดฟ + ภูม | ภูม P-16 | คงทั้งคู่ — cron flips `is_active` flag (cheap query later); P-13 is real-time aggregate query. ภูม confirm ว่า P-13 query depend ที่ flag หรือคำนวณ on-the-fly |
+
+### Carried forward (รอตั้งแต่ก่อน)
+
+| # | Decision | Owner | Blocks |
+|---|---|---|---|
+| D-7 | Payment Gateway provider (Omise / 2C2P / Stripe TH) | เดฟ + Pacred owner | M2.1 implementation (40-60h) |
+| D-8 | HS variants — keep แยก หรือ merge เข้า tier | Pacred owner + ก๊อต | M2.4 design |
+| D-9 | Payroll module — standalone หรือ extend HR | ภูม + เดฟ | M2.2 design + M2.5d driver shifts |
+
+### Credentials / external setup ที่รอ Pacred owner
+
+| Var / Account | Status | Blocks |
+|---|---|---|
+| `PACRED_RCGROUP_API_URL` | unset | URL→cart converter, image search (silent demo mode) |
+| `PACRED_TAMIT_API_URL` | unset | Keyword search 1688 (yellow banner) |
+| `PROMPTPAY_ID` | unset | Wallet deposit QR (throws error) |
+| `THAIBULKSMS_API_KEY` + `_SECRET` | placeholder | OTP send |
+| `LINE_CHANNEL_ACCESS_TOKEN` | unset | LINE push notifications + P-15 dispatch |
+| `LINE_PUSH_BYPASS=false` | currently bypass | Real LINE delivery |
+| `OTP_BYPASS=false` | currently bypass | Real OTP verification (production) |
+| `OTP_PEPPER` | placeholder | OTP hash security |
+| `NEXT_PUBLIC_SITE_URL=https://pacred.co` | localhost:3000 | OAuth callbacks + notification deep links |
+| Sentry DSN | none | D-11 error tracking |
+| Upstash Redis / Vercel KV creds | none | D-12 rate limiting |
+| hCaptcha site key + secret | none | D-13 signup CAPTCHA |
+| Resend API key | none | D-7d email fallback |
+
+→ **Action:** ก๊อต schedule decision call กับ Pacred owner — ทุกครั้ง 15-30 นาที พอ:
+- D-7 payment gateway choice
+- LINE OA channel access token request
+- Sentry account creation (free tier OK สำหรับ pre-launch)
+- 3rd-party cred consolidation
+
+## P4. Sprint 5 burndown
+
+**Done (counted by P-task / D-task ID):**
+- ภูม: P-1 → P-14 + 4 cleanup commits = 18 deliverables
+- เดฟ: helper-1, C-7, D-14, D-15, D-16, D-17, A-12, cron-scaffold = 8 deliverables
+- ปอน: 0 (Sprint 5 frontend/SEO ยังไม่ start)
+- ก๊อต: review + merge admin (ongoing)
+
+**Remaining (counted by ID):**
+- ภูม: Phase 0 fixes (3 items) + P-15 + P-16 + P-17 = 6 items, ~9-14h (P-17 blocked)
+- ปอน: Phase A1 (L-1, L-2) → ~2-3h ก่อน first checkpoint
+- เดฟ: D-7a/b/c/d/D-11/D-12/D-13 = 7 items ALL blocked on creds/owner decisions
+- ก๊อต: review รอบใหม่ของ Poom branch หลัง Phase 0 fix + cron PR
+
+**Real coverage estimate:**
+- Customer portal: ~80% (was 65% pre-Sprint-5; P-1/P-2 closed biggest blockers; payment gateway + LINE token still missing for production)
+- Admin: ~92% (Sprint 5 added P-9 P-10 P-11 P-12 P-13 + container ETA + contact triage)
+- Infrastructure: ~70% (cron jobs done, security hardening done; Sentry/rate limit/CAPTCHA blocked)
+- Phase I ecosystem: ~0% (still pending)
+
+## P5. Day 3 → Day 4+ priorities
+
+**ลำดับสำคัญสุดที่ควร resolve ก่อน week ปิด:**
+1. **เดฟ + ก๊อต** — review + merge cron PR (claude/ecstatic-bhabha-8c289a → dave)
+2. **ภูม** — Phase 0 fix theme + UX + RBAC items บน Poom branch → resubmit
+3. **ก๊อต** — review + merge Poom branch หลัง Phase 0 → main
+4. **ปอน** — Phase A1 (sitemap + robots) → checkpoint → Phase A2 if confirm
+5. **ก๊อต** — schedule Pacred owner call เพื่อ unblock D-7 + creds list
+
+**Estimate to "production beta-ready":** 1-2 weeks ถ้า creds + decisions เข้ามาภายใน week นี้ — ไม่งั้นอาจสไลด์ไป 3-4 weeks
+
+---
+
+**End of Part P.** Snapshot ณ 2026-05-14 หลัง Sprint 5 Day 3 (เดฟ ส่ง cron scaffold PR + handoff doc)
