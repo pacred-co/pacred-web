@@ -325,10 +325,10 @@
 ### G8 — Cron / Automation
 | PHP file | ทำอะไร | Port status |
 |---|---|---|
-| `api/autorun/check-apprentice.php` | auto-check ใหม่ | 🔴 |
-| `api/autorun/send-line-sales.php` | send LINE ขาย | 🔴 |
-| `api/autorun/update-active-customers.php` | update active status | 🔴 |
-| `api/autorun/update-sheet-sang.php` | sync sheet | 🔴 |
+| `api/autorun/check-apprentice.php` | admin probation expiry + driver assignment 17h timeout | 🟡 deferred — needs `employees.contract_end_date` (admin half) + `forwarder_driver` table (driver half) before scaffolding |
+| `api/autorun/send-line-sales.php` | daily 00:05 LINE digest of yesterday's paid sales | 🟡 scaffolded by เดฟ at `/api/cron/sales-daily-digest` (auth + queries done; ภูม wires recipient/dispatch — see P-15) |
+| `api/autorun/update-active-customers.php` | mark `profiles.is_active=true` based on activity | ✅ scaffolded by เดฟ at `/api/cron/refresh-active-customers` (full implementation; ภูม verify + enable schedule — see P-16) |
+| `api/autorun/update-sheet-sang.php` | sync to "Sang" Google Sheet | ⚪ obsolete — replaced by Pacred admin dashboards; do not port |
 | auto-cancel orders | — | ✅ ที่ `/api/cron/auto-cancel-orders` |
 
 ### G9 — Rate Management
@@ -1294,7 +1294,7 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 | CAPTCHA / bot protection บน signup | **MISSING** | dave (new task D-13) |
 | CSP / security headers | **MISSING** | dave (new task D-14) |
 | File upload size/MIME server-side validation | **WEAK** (UI check only) | dave (new task D-15) |
-| 4 PHP cron jobs ports: `send-line-sales`, `update-active-customers`, `update-sheet-sang`, `check-apprentice` | **MISSING** | dave/ภูม split |
+| 4 PHP cron jobs ports: `send-line-sales`, `update-active-customers`, `update-sheet-sang`, `check-apprentice` | **2/4 SCAFFOLDED** by เดฟ (sales-daily-digest + refresh-active-customers); update-sheet-sang dropped as obsolete; check-apprentice deferred (schema work first) | dave (scaffolding) → ภูม P-15/P-16 (finish + verify) |
 
 ## N6. Hardening / observability gaps (ต้องมีก่อน production launch)
 
@@ -1534,13 +1534,23 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 |---|---|---|---|
 | **P-14** | C-2 PDF shop order receipt | 3-4h | Uses `@react-pdf/renderer` infrastructure + `ReadNumber()` helper from เดฟ |
 
-### Priority 3 (waiting for owner decision)
+### Priority 3 (cron-jobs port — เดฟ scaffolded, ภูม finishes)
+
+เดฟวางโครงไว้ที่ `app/api/cron/{sales-daily-digest,refresh-active-customers}/route.ts` + `vercel.json` อัปเดตแล้ว
+
+| # | Task | Est | Description |
+|---|---|---|---|
+| **P-15** | Wire `sales-daily-digest` recipient/dispatch | 2-3h | Route at `app/api/cron/sales-daily-digest/route.ts` already computes yesterday + MTD totals across order_payment / import_payment / yuan_payment. Need: (a) extend `profiles.notify_channels` jsonb with `daily_digest` flag (new migration), (b) loop admins where `role IN ('super','sales_admin')` with flag on, (c) call `sendNotification()` per admin with the formatted message. See TODO block at end of route.ts |
+| **P-16** | Verify + enable `refresh-active-customers` schedule | 1h | Route already implements full PHP behaviour (3 activity streams → flip `profiles.is_active=true`). Need: (a) confirm forwarder status enum exclusion is right (only `pending_payment` excluded, not `'rejected'` etc.), (b) confirm doesn't conflict with P-13 recently-active dashboard logic, (c) flip on the daily 01:00 UTC cron in production. Vercel cron entry already added |
+| **P-17** | Port `check-apprentice` (deferred) | 4-6h | Two halves: (i) admin probation expiry — needs new column `employees.contract_end_date date`, then sweep employees where date passed → set `is_active=false`. (ii) driver assignment 17h timeout — blocked entirely on `forwarder_driver` table (not yet ported in cargo schema). Recommend splitting into two route handlers when ready |
+
+### Priority 4 (waiting for owner decision)
 
 - M2.2 Payroll module (decision D-9 with owner)
 - M2.4 HS variants keep/merge (decision D-8 with owner)
 - M2.5d Driver work shifts (after payroll decision)
 
-**Estimated total P0+P1+P2:** 40-55h → 3-4 weeks part-time
+**Estimated total P0+P1+P2+P3:** 43-64h → 3-4 weeks part-time
 
 ## O3. 👤 ปอน (podeng) — Sprint 5 (FRONTEND/SEO/LANDING FOCUS)
 
@@ -1608,17 +1618,19 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 8. ✅ **A-10** Team Leaders commission edit — **already built by ภูม** (inline % editor + toggle active)
 9. ✅ **A-11** Sales Payouts approve actions — **already built by ภูม** (approve/reject/paid + rejection reason)
 10. ✅ **A-12** Containers ETA workflow — new `/admin/containers/[id]` detail page with full edit form (ETA + carrier + vessel + note) + linked forwarders list with unlink + "Link forwarders" multi-select (filtered by origin+transport+unlinked) + bulk-link action + status timeline. New server actions `adminLinkForwardersToContainer` + `adminUnlinkForwarder` (with audit logs)
+11. ✅ **cron-scaffold** Cron jobs port (Part N5 row 4 of 4) — scaffolded `/api/cron/sales-daily-digest` (auth + aggregations done; ภูม wires dispatch — P-15) + `/api/cron/refresh-active-customers` (full impl; ภูม verifies + enables — P-16). Dropped `update-sheet-sang` as obsolete. `check-apprentice` deferred (needs schema). vercel.json updated with 2 new entries.
 
 ### 🟡 REMAINING (Sprint 5 Days 3+)
-11. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h) — **blocked: need real credentials** (RCGroup URL, TAMIT URL, ThaiBulkSMS keys, PromptPay ID)
-12. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
-13. 🟡 **D-11** Sentry / error tracking setup (3-4h) — **blocked: need Sentry account + DSN**
-14. 🟡 **D-12** Rate limiting (Upstash Redis or Vercel KV) (4-6h) — **blocked: need Upstash/Vercel KV setup**
-15. 🟡 **D-13** CAPTCHA on signup (hCaptcha invisible) (2-3h) — **blocked: need hCaptcha site key**
-16. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
+12. 🔴 **D-7a** Set 3rd-party API env vars + verify endpoints (2-4h) — **blocked: need real credentials** (RCGroup URL, TAMIT URL, ThaiBulkSMS keys, PromptPay ID)
+13. 🔴 **D-7b** LINE Messaging API setup (3-4h) — **blocked: need LINE Channel Access Token from Pacred OA**
+14. 🟡 **D-11** Sentry / error tracking setup (3-4h) — **blocked: need Sentry account + DSN**
+15. 🟡 **D-12** Rate limiting (Upstash Redis or Vercel KV) (4-6h) — **blocked: need Upstash/Vercel KV setup**
+16. 🟡 **D-13** CAPTCHA on signup (hCaptcha invisible) (2-3h) — **blocked: need hCaptcha site key**
+17. ⚪ **D-7c** Decision: Payment Gateway provider (with Pacred owner) → M2.1 design
 
 **Estimated remaining:** ~14-21h once credentials/decisions are in hand
 **Sprint 5 Days 1-2 actual:** ~3-4 commits, lint clean, build pass, 50/50 tests
+**Sprint 5 Day 3:** cron scaffolding committed (this branch) — passes to ภูม via P-15/P-16
 
 ## O5. 👤 ก๊อต — co-merger + advisor
 
