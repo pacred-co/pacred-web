@@ -37,44 +37,61 @@ export function BookingTabs({ active, onChange }: BookingTabsProps) {
     <div className="relative">
       <div
         ref={scrollerRef}
-        className="flex overflow-x-auto border-b border-gray-200 px-2.5 md:justify-center snap-x snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_18px,black_calc(100%-18px),transparent)] md:[mask-image:none]"
+        className="flex overflow-x-auto px-2.5 py-2 md:py-0 gap-1.5 md:gap-0 md:border-b md:border-gray-200 md:justify-center snap-x snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,black_18px,black_calc(100%-18px),transparent)] md:[mask-image:none]"
       >
-        {tabs.map(tab => (
-          <button
-            key={tab.mode}
-            type="button"
-            role="tab"
-            data-tab={tab.mode}
-            aria-selected={active === tab.mode}
-            onClick={() => onChange(tab.mode)}
-            className={`flex flex-col items-center gap-0.5 px-4 md:px-[22px] py-4 whitespace-nowrap shrink-0 snap-start border-b-[3px] -mb-px transition-all cursor-pointer ${
-              active === tab.mode
-                ? "border-red-600 text-red-600"
-                : "border-transparent text-gray-500 hover:text-red-600"
-            }`}
-          >
-            <span className="text-sm font-bold flex items-center gap-1.5">
-              <span
-                className="text-[20px] leading-none transition-all duration-200"
-                style={{
-                  filter: active === tab.mode
-                    ? "grayscale(1) sepia(1) saturate(10) hue-rotate(320deg) brightness(0.85)"
-                    : "grayscale(1) brightness(0.45)"
-                }}
-              >{tab.emoji}</span>
-              {tab.label}
-            </span>
-            <span className={`text-[11px] font-medium ${active === tab.mode ? "text-red-500/70" : "text-gray-400"}`}>
-              {tab.sub}
-            </span>
-          </button>
-        ))}
+        {tabs.map(tab => {
+          const isActive = active === tab.mode;
+          return (
+            <button
+              key={tab.mode}
+              type="button"
+              role="tab"
+              data-tab={tab.mode}
+              aria-selected={isActive}
+              suppressHydrationWarning
+              onClick={() => onChange(tab.mode)}
+              className={[
+                "shrink-0 snap-start cursor-pointer transition-all whitespace-nowrap",
+                // Mobile: pill style
+                "inline-flex flex-col items-center gap-0 px-3.5 py-2 rounded-xl border",
+                // Desktop reset: column tab with bottom-border indicator
+                "md:flex md:flex-col md:items-center md:gap-0.5 md:px-[22px] md:py-4 md:rounded-none md:border-0 md:border-b-[3px] md:-mb-px",
+                isActive
+                  ? [
+                      // Mobile active: red pill with shadow
+                      "bg-red-50 text-red-600 border-red-300 shadow-[0_4px_10px_rgba(220,38,38,0.12)]",
+                      // Desktop active: just bottom border + red text
+                      "md:bg-transparent md:border-red-600 md:shadow-none",
+                    ].join(" ")
+                  : [
+                      "bg-white text-gray-500 border-gray-200 hover:border-red-300 hover:text-red-600",
+                      "md:bg-transparent md:border-transparent md:border-b-[3px] md:hover:bg-transparent md:hover:text-red-600",
+                    ].join(" "),
+              ].join(" ")}
+            >
+              <span className="text-[12.5px] md:text-sm font-bold flex items-center gap-1.5 leading-none">
+                <span
+                  className="text-[16px] md:text-[20px] leading-none transition-all duration-200"
+                  style={{
+                    filter: isActive
+                      ? "grayscale(1) sepia(1) saturate(10) hue-rotate(320deg) brightness(0.85)"
+                      : "grayscale(1) brightness(0.45)",
+                  }}
+                >{tab.emoji}</span>
+                {tab.label}
+              </span>
+              <span className={`hidden md:inline text-[11px] font-medium mt-0.5 ${isActive ? "text-red-500/70" : "text-gray-400"}`}>
+                {tab.sub}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Mobile scroll affordance: subtle chevron on the right edge */}
       <span
         aria-hidden
-        className="pointer-events-none md:hidden absolute top-1/2 right-1 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-white/85 dark:bg-surface/85 shadow-[0_2px_6px_rgba(0,0,0,0.08)] animate-pulse"
+        className="pointer-events-none md:hidden absolute top-1/2 right-1 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-white/90 shadow-[0_2px_6px_rgba(0,0,0,0.10)] animate-pulse"
       >
         <ChevronRight className="w-3.5 h-3.5 text-primary-500" strokeWidth={3} />
       </span>
