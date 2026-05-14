@@ -15,12 +15,13 @@ if (dsn) {
     environment: process.env.SENTRY_ENV ?? process.env.NODE_ENV,
 
     // Performance traces — 10% in prod (cost control), 100% in dev.
+    // Trace volume control happens here, not by stripping integrations.
     tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 
-    // Don't auto-instrument every fetch — too noisy for our admin-heavy app.
-    // Sentry's defaults already capture errors; we explicitly add traces
-    // when needed via `Sentry.startSpan`.
-    integrations: [],
+    // Default integrations are kept on purpose — they include
+    // HttpIntegration / LinkedErrorsIntegration / OnUncaughtException
+    // which we want for error capture. Trace volume is bounded by
+    // tracesSampleRate above, not by removing instrumentation.
 
     // Server stack frames — keep them. Source maps land later when
     // SENTRY_AUTH_TOKEN + build-time upload are configured.

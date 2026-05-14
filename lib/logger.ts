@@ -97,20 +97,27 @@ export const logger = {
 function forwardToSentry(scope: string, msg: string, err?: unknown, ctx?: Record<string, unknown>): void {
   // Sentry's SDK is a no-op when not initialised (DSN unset). Wrap defensively
   // so a logger call never throws even if the SDK glitches.
+  //
+  // `tags` are indexed for filtering in Sentry — only put low-cardinality
+  // values there (scope = ~10 distinct values across the app). msg goes
+  // into `extra` since it's free-form and unbounded; tagging it would
+  // explode tag cardinality and slow down search.
   try {
     if (err instanceof Error) {
       Sentry.captureException(err, {
-        tags:  { scope, msg },
-        extra: ctx,
+        tags:  { scope },
+        extra: { msg, ...ctx },
       });
     } else if (err != null) {
       Sentry.captureMessage(`${scope}: ${msg} — ${String(err)}`, {
         level: "error",
+        tags:  { scope },
         extra: ctx,
       });
     } else {
       Sentry.captureMessage(`${scope}: ${msg}`, {
         level: "error",
+        tags:  { scope },
         extra: ctx,
       });
     }
