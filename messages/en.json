@@ -893,7 +893,7 @@
     "productType": {
       "general": "General",
       "tisi": "TISI (มอก.)",
-      "fda": "FDA (อย.)",
+      "fda": "FDA",
       "special": "Special"
     },
     "status": {
