@@ -1,18 +1,43 @@
+import type { Metadata } from "next";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { WarehouseDetail } from "@/components/sections/warehouse-detail";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "โกดังอี้อู (Yiwu) · Pacred Shipping",
-  description:
-    "โกดังรับสินค้า Pacred Shipping เมืองอี้อู ประเทศจีน — ศูนย์กลางค้าส่งสินค้าจิปาถะใหญ่ที่สุดของจีน รองรับ 1688, Taobao, Yiwu Market",
-};
+const PATH = "/warehouses/yiwu";
 
-export default function YiwuWarehousePage() {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.warehouses.yiwu" });
+}
+
+export default async function YiwuWarehousePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
     <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "ที่อยู่โกดังจีน" : "China warehouses", path: "/warehouses/china" },
+            { name: typedLocale === "th" ? "โกดังอี้อู" : "Yiwu warehouse", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
       <NavBar />
       <SearchBar />
       <main>

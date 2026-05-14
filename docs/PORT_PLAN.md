@@ -1546,24 +1546,29 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 **Strategy:** ทำ landing pages ทุก service + push SEO + acquisition funnel ให้แรง — เป้า Lighthouse 95+ ทุก public page
 
-### Priority 0 (SEO foundation — must do first)
+### ✅ COMPLETED (Sprint 5 Day 3 — claude session `great-banzai-0675e6` → merged into `podeng` 2026-05-14)
+
+| # | Task | Files / Notes |
+|---|---|---|
+| ✅ **L-1** | `app/sitemap.ts` | 27 static routes + 15 dynamic knowledge slugs × TH/EN hreflang alternates · Next 16 `MetadataRoute.Sitemap` type |
+| ✅ **L-2** | `app/robots.ts` | allow `/`, disallow `/admin /auth /api /dashboard /profile /addresses /wallet /service-* /sales /receipts /complete-profile /login /register /recover` + AI bot allowlist (GPTBot/ChatGPT-User/CCBot/Google-Extended/anthropic-ai/Claude-Web) |
+| ✅ **L-3** | JSON-LD on all landing pages | `components/seo/{json-ld.tsx,schemas.ts,site.ts,page-meta.ts}` — Organization + LocalBusiness + WebSite (locale layout) · Service + BreadcrumbList (per service landing) · Article (knowledge slug) · FAQPage (faq page) · ItemList (knowledge index) |
+| ✅ **L-4** | OG + Twitter meta + dynamic OG image | `metadataBase` set in root layout · per-page `generateMetadata` with `openGraph` + `twitter` + `alternates.canonical` + `alternates.languages` · `app/opengraph-image.tsx` generates 1200×630 PNG with Sarabun font on demand |
+| ✅ **L-6** | Knowledge SEO + RSS | `app/feed.xml/route.ts` — RSS 2.0 with all 15 articles · Article JSON-LD + locale-aware OG on each `/knowledge/[slug]` · `alternates.types["application/rss+xml"]` in root layout |
+| ✅ **L-7** | Real FAQ page + FAQPage JSON-LD | `app/[locale]/(public)/faq/page.tsx` — 22 Q&A across 5 categories (general / shipping / payment / customs / support) · `components/sections/faq-accordion.tsx` reusable client accordion · TH + EN content |
+| ✅ **L-9** | i18n audit script | `scripts/i18n-audit.mjs` — diffs th vs en, reports missing keys + same-value (untranslated) candidates · current state: 1770 keys each, 0 missing |
+| ✅ **Bonus 1** | New `seo.*` namespace | ~70 keys × 2 locales for all SEO titles/descriptions (root, home, services.*, warehouses.*, knowledge.index, faq, about, contact, booking, payment.*, howToUse, deliveryAreas, holidays, joinUs, terms, privacy) |
+| ✅ **Bonus 2** | Home rich SEO article block | `components/sections/home-article.tsx` — "Pacred Shipping — ผู้เชี่ยวชาญด้านนำเข้า-ส่งออกครบวงจร 14 ปี" placed under `<Partner />` (home only). 5 sub-sections: 3-paragraph hero with inline service links · pull quote · marketplaces (1688/Taobao/Tmall/Alibaba/JD/Pinduoduo/AliExpress/Weidian) · 16 category pills · 10 port pills · 3 warehouse cards · `homeArticle.*` i18n namespace |
+| ✅ **Bonus 3** | Reusable horizontal scroller | `components/sections/horizontal-scroller.tsx` — client component: mouse drag-to-scroll + vertical-wheel→horizontal scroll + touch native momentum + click suppression on drag · used on all 4 pill/card rows in HomeArticle |
+| ✅ **Bonus 4** | Red-cloud page background | `app/globals.css` — replaced mismatched yellow radial with 4 uniform red radial blobs (1250–1400px) · `background-attachment: fixed` · removed mobile `#ffffff !important` override (mobile now matches desktop) · dark-mode variant |
+| ✅ **Bonus 5** | Page-mover + cleanup | Moved `<Partner />` to bottom (home only) · Office image card now `<Link href="/about">` with hover badge "เกี่ยวกับเรา" · Removed orphan `cert*` i18n keys (7×2) + `public/images/dbd/` (4 cert images) · Removed stale "certificate slider" comment in `about/page.tsx` · Replaced `app/favicon.ico` (default Next.js logo) with `app/icon.png` (`pdiwaicon.png`) + updated `metadata.icons` |
+
+### 🟡 REMAINING (Sprint 5 Day 4+)
 
 | # | Task | Est | Description |
 |---|---|---|---|
-| **L-1** | `app/sitemap.ts` | 2h | Dynamic sitemap covering all public routes + i18n alt links. Use Next 16 metadata API |
-| **L-2** | `app/robots.ts` | 30m | Allow all public, disallow `/admin`, `/auth`, `/(protected)` |
-| **L-3** | Structured data on all landing pages | 4-6h | JSON-LD: Organization, LocalBusiness, Service, BreadcrumbList. Add to `app/[locale]/(public)/**/page.tsx` `generateMetadata` or inline `<script type="application/ld+json">` |
-| **L-4** | Open Graph + Twitter card meta | 2-3h | Every public page gets `openGraph`, `twitter` in `generateMetadata`. OG images per service |
-
-### Priority 1 (landing page polish + completion)
-
-| # | Task | Est | Description |
-|---|---|---|---|
-| **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/customs-clearance`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX |
-| **L-6** | Knowledge base SEO + content | 3-4h | Article meta, internal linking, RSS feed |
-| **L-7** | FAQ page + structured data | 2h | FAQPage JSON-LD schema |
-| **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools |
-| **L-9** | i18n audit Phase 4b/5 | 4-6h | Find missing keys, normalize namespaces, EN translation polish |
+| 🟡 **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX. (`/services/customs-clearance` already has full content via existing `Clearance*` components.) Recommendation: replace `StubPage` with real layout per service |
+| 🔴 **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools. **Blocked: needs real device or BrowserStack testing — Claude session can only spot-check via curl/CSS** |
 
 ### Priority 2 (Phase I — Pacred Ecosystem expansion landing pages)
 
@@ -1633,9 +1638,28 @@ PHP มี variant "HS" แยกออกจาก main flow — มี invoice
 
 - **ภูม** must finish P-1 (complete-profile) + P-2 (forgot-password) before customer beta
 - **เดฟ** must finish C-7 PDF infra before ภูม can start P-14
-- **ปอน** L-1/L-2 SEO foundation can ship anytime (independent)
+- **ปอน** ✅ L-1..L-4, L-6, L-7, L-9 ship-ready บน `origin/podeng` แล้ว (claude session 2026-05-14)
 - **All:** sync main daily (per [`team.md`](team.md) §3)
 - **PR turnaround:** review within 24h target
+
+---
+
+## O7. Live status — 2026-05-14 (latest claude check-in)
+
+> **เป้าหมาย:** ให้ 4 claude code ของทุกคน (เดฟ/ก๊อต/ภูม/ปอน) เปิดมาแล้วเห็นภาพเดียวกันทันที — จบ phase = push เข้า branch ตัวเอง
+
+| Branch | SHA | สถานะเนื้อหา |
+|---|---|---|
+| `origin/main` | `5475f14` | latest ก่อน claude session |
+| `origin/dave` | `1700144` | = `origin/podeng` (1 commit behind main = Poom merge) |
+| `origin/Poom` | `3f8b887` | ภูม push 5 commit ใหม่ (admin/auth/notifications fixes) — ไม่กระทบ public scope ของปอน |
+| `origin/podeng` | (kept fresh after this session) | ปอนรับงาน SEO bundle + HomeArticle + red cloud + cleanup เข้ามา; ตามตาราง O3 ✅ section |
+
+### ใครเปิดเทอร์มินอลแล้วทำอะไรต่อ
+1. **เดฟ/ก๊อต:** pull `origin/podeng` → review งานปอน (ดูตาราง O3 ✅) → pull `origin/Poom` → merge ทั้งคู่เข้า `dave` → verify lint+build → merge → `main`
+2. **ปอน:** sync `podeng` ลงเครื่อง (`git pull origin podeng`) → เริ่ม **L-5** (service landing polish) บน branch ตัวเอง — ดูว่า `home-article.tsx` pattern (server component + `useTranslations` + JSON-LD) reuse กับ landing อื่นได้เลย
+3. **ภูม:** ทำงาน Poom branch ต่อ (P-7+ admin) ไม่กระทบกัน
+4. **claude สำหรับใครก็ตาม:** อ่าน Part O3 ✅ section + ตาราง O7 นี้ก็เข้าใจว่ามาถึงไหนแล้ว
 
 ---
 

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
@@ -15,16 +17,55 @@ import { Sales } from "@/components/sections/sales";
 import { Blog } from "@/components/sections/blog";
 import { Partner } from "@/components/sections/partner";
 import { Footer } from "@/components/sections/footer";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema, serviceSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "ชิปปิ้งเคลียร์พิธีการศุลกากร · เคลียร์สินค้าติดด่าน Pacred Shipping",
-  description:
-    "บริการชิปปิ้งเคลียร์สินค้าติดด่าน พิธีการศุลกากร ครบทุกด่าน — สุวรรณภูมิ · แหลมฉบัง · คลองเตย · ดอนเมือง · มุกดาหาร · ICD ลาดกระบัง · ไปรษณีย์หลักสี่ พร้อม อย./มอก./เกษตร/ประมง ครบจบในที่เดียว",
-};
+const PATH = "/services/customs-clearance";
+const NS = "seo.services.customsClearance";
 
-export default function CustomsClearancePage() {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: NS });
+}
+
+export default async function CustomsClearancePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const t = await getTranslations({ locale, namespace: NS });
+  const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
+  const svcLabel  = typedLocale === "th" ? "บริการ" : "Services";
+  const here      = typedLocale === "th" ? "เคลียร์ศุลกากร" : "Customs clearance";
+
   return (
     <>
+      <JsonLd
+        data={[
+          serviceSchema({
+            name: t("title"),
+            description: t("description"),
+            slug: PATH,
+            locale: typedLocale,
+            serviceType: typedLocale === "th" ? "เคลียร์ศุลกากร" : "Customs clearance",
+          }),
+          breadcrumbSchema(
+            [
+              { name: homeLabel, path: "/" },
+              { name: svcLabel, path: "/services" },
+              { name: here, path: PATH },
+            ],
+            typedLocale,
+          ),
+        ]}
+      />
       <NavBar />
       <SearchBar />
       <main>

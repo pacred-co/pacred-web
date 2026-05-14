@@ -1784,13 +1784,6 @@
     "f6Desc": "ระบบ SMS แจ้งเตือนยอดชำระเงินทุกครั้ง ลดความสับสน ตรวจสอบค่าใช้จ่ายได้โปร่งใส ทุกบิลทุกออเดอร์",
     "registerAria": "สมัครเลย · {title}",
     "registerCta": "สมัครเลย",
-    "certEyebrow": "VERIFIED COMPANY",
-    "certTitlePart1": "หนังสือรับรองบริษัท",
-    "certTitleHighlight": "ตรวจสอบได้จริง",
-    "certPageAlt": "หนังสือรับรองบริษัท หน้า {n}",
-    "certPagePrev": "หน้าก่อนหน้า",
-    "certPageNext": "หน้าถัดไป",
-    "certPageGoto": "ไปหน้า {n}",
     "articleHeading1": "Pacred Shipping",
     "articleHeading2": "ผู้เชี่ยวชาญด้านนำเข้า–ส่งออกครบวงจร",
     "articleYears": "14 ปี",
@@ -1810,5 +1803,184 @@
     "articleP5Brand": "Pacred Shipping",
     "articleP5Body2": " ดูแล แล้วคุณจะเข้าใจคำว่า ",
     "articleP5Quote": "“ครบจบจริงในที่เดียว”"
+  },
+  "homeArticle": {
+    "eyebrow": "ABOUT PACRED · 14+ YEARS",
+    "headingPart1": "Pacred Shipping —",
+    "headingHighlight": "ผู้เชี่ยวชาญด้านนำเข้า–ส่งออก",
+    "headingPart2": "ครบวงจร 14 ปี",
+    "subheading": "เปิดประสบการณ์ชิปปิ้งแบบมืออาชีพ — ดูแลตั้งแต่ต้นน้ำถึงปลายน้ำ จบในที่เดียวกับทีมงานคุณภาพ Pacred Shipping",
+    "officeAlt": "สำนักงาน Pacred Shipping ประเทศไทย",
+    "introBody1": "เปิดประสบการณ์ผู้เชี่ยวชาญด้านชิปปิ้ง ",
+    "introImportLink": "นำเข้า–ส่งออก",
+    "introBody2": " เคลียร์พิธีการกรมศุลกากรครบวงจร มากกว่า ",
+    "introYears": "14 ปี",
+    "introBody3": " ดูแลตั้งแต่ต้นน้ำถึงปลายน้ำ จบในที่เดียว หากคุณกำลังต้องการ",
+    "introShopLink": "สั่งซื้อสินค้าจากจีน",
+    "introBody4": "หรือต่างประเทศทั่วโลก ไม่ว่าจะเป็น ",
+    "introMarketplaces": "1688 / Taobao / Tmall",
+    "introBody5": " เราพร้อมให้บริการ",
+    "introPayLink": "ฝากโอนชำระค่าสินค้าอย่างปลอดภัย",
+    "introBody6": " พร้อมเรทคุ้มค่า โปร่งใส ตรวจสอบได้",
+    "p2Body1": "ไม่เพียงเท่านั้น เรายังมีทีมล่ามจีนมืออาชีพช่วยติดต่อ เจรจา และปิดดีลโรงงานให้ฟรี ช่วยให้คุณลดต้นทุนค่าสินค้า เราทำราคาดีที่สุดได้แน่นอน พร้อมบริการนำเข้าสินค้าแบบ ",
+    "p2DoorToDoor": "Door to Door",
+    "p2Body2": " ครบทุกขั้นตอน ตั้งแต่จัดหา สั่งซื้อ ขนส่ง ไปจนถึง",
+    "p2ClearanceLink": "เคลียร์ศุลกากร",
+    "p2Body3": " และจัดส่งถึงมือคุณ",
+    "p3Body1": "สำหรับผู้ที่มีสินค้าอยู่แล้ว ไม่ว่าคุณจะเป็นบุคคลทั่วไป นิติบุคคล หรือผู้ประกอบการ เราพร้อมช่วยขยายตลาดให้คุณ ด้วยบริการ",
+    "p3ExportLink": "ตัวแทนจำหน่ายและส่งออกสินค้าไปต่างประเทศ",
+    "p3Body2": " ดูแลเอกสาร โลจิสติกส์ และขั้นตอนทั้งหมดให้ครบ",
+    "quoteIntro": "Pacred มุ่งเน้นการบริการที่",
+    "quoteText": "เร็ว ไว ไม่มีคำว่าทำไม่ได้",
+    "quoteOutro": "ทุกขั้นตอน — นำเข้า–ส่งออก เคลียร์ สั่งซื้อ เราพร้อมรับจบหมดทุกปัญหา",
+    "marketplacesEyebrow": "POPULAR CHINA MARKETPLACES",
+    "marketplacesHeading": "นำเข้าจาก",
+    "marketplacesHighlight": "แหล่งสินค้าชั้นนำ",
+    "marketplacesHeadingSuffix": "ของจีน",
+    "marketplacesSub": "ครอบคลุมทุกแพลตฟอร์มยอดนิยม ตั้งแต่ค้าส่งโรงงาน 1688 ถึงปลีก Taobao และ Tmall — เราจัดการให้ครบทุกขั้นตอน",
+    "categoriesHeading": "ครอบคลุม",
+    "categoriesHighlight": "สินค้าทุกหมวด",
+    "categoriesSub": "ไม่ว่าคุณจะนำเข้าสินค้าประเภทไหน เรามีประสบการณ์ครอบคลุมแล้ว",
+    "portsEyebrow": "CLEARANCE · EVERY PORT",
+    "portsHeading": "เคลียร์ศุลกากร",
+    "portsHighlight": "ทุกด่าน · ทุก Term",
+    "portsSub": "ครบทุกด่านในไทย ตั้งแต่สนามบิน · ท่าเรือ · ICD · ไปรษณีย์ · ด่านชายแดน พร้อม อย./มอก./เกษตร/ประมง",
+    "warehousesEyebrow": "GLOBAL WAREHOUSE NETWORK",
+    "warehousesHeading": "เครือข่าย",
+    "warehousesHighlight": "โกดัง 3 แห่ง",
+    "warehousesHeadingSuffix": "— จีน + ไทย",
+    "warehousesSub": "ต้นทาง 2 จุดในจีน (กวางโจว · อี้อู) + ปลายทางในไทย รับ-กระจายสินค้าครบทุกขั้นตอน",
+    "warehouseGuangzhouCity": "กวางโจว",
+    "warehouseGuangzhouEn": "Guangzhou",
+    "warehouseGuangzhouDesc": "ศูนย์กลางการค้าจีนใต้ รับสินค้าโรงงาน 1688 และ Tmall",
+    "warehouseYiwuCity": "อี้อู",
+    "warehouseYiwuEn": "Yiwu",
+    "warehouseYiwuDesc": "ตลาดค้าส่งจิปาถะใหญ่สุดในจีน เหมาะของชำร่วย",
+    "warehouseThailandCity": "ไทย",
+    "warehouseThailandEn": "Thailand",
+    "warehouseThailandDesc": "ฮับปลายทาง อ้อมน้อย กระจายต่อทั่วประเทศ",
+    "warehouseViewAll": "ดูเครือข่ายโกดังทั้งหมด"
+  },
+  "seo": {
+    "root": {
+      "title": "Pacred — นำเข้า ส่งออก ชิปปิ้ง เคลียร์ศุลกากร ครบวงจร",
+      "description": "Pacred — บริการนำเข้า-ส่งออก ชิปปิ้ง เคลียร์พิธีการศุลกากร ฝากสั่งซื้อสินค้าจากจีน FCL/LCL ขนส่งทางรถ เรือ อากาศ ครบวงจรในที่เดียว"
+    },
+    "home": {
+      "title": "Pacred Shipping — นำเข้า ส่งออก ชิปปิ้ง เคลียร์ศุลกากร 14 ปี",
+      "description": "นำเข้าสินค้าจากจีน 1688 / Taobao / Tmall · ส่งออกทั่วโลก · เคลียร์พิธีการศุลกากร · FCL/LCL ทางรถ เรือ อากาศ — ทีมงาน 14 ปี Pacred Shipping ดูแลครบจบในที่เดียว"
+    },
+    "services": {
+      "index": {
+        "title": "บริการนำเข้า–ส่งออก เคลียร์ศุลกากรครบวงจร",
+        "description": "บริการของ Pacred Shipping — นำเข้าจีน FCL/LCL, ส่งออกทั่วโลก, เคลียร์ศุลกากร, ฝากสั่ง 1688/Taobao/Tmall — ดูทุกบริการครบในที่เดียว"
+      },
+      "importChina": {
+        "title": "นำเข้าสินค้าจากจีน",
+        "description": "บริการนำเข้าสินค้าจากจีน 1688 / Taobao / Tmall — FCL · LCL · Door to Door · เคลียร์ภาษีครบทุก Term ทุก Port โดยทีมงาน Pacred Shipping 14 ปี"
+      },
+      "importChinaFcl": {
+        "title": "นำเข้า FCL จากจีน",
+        "description": "นำเข้าตู้ FCL (Full Container Load) จากจีน — 20'/40' รับสินค้าโรงงาน เคลียร์ครบ Term EXW/FOB/CIF/DDP โดย Pacred Shipping"
+      },
+      "importChinaLcl": {
+        "title": "นำเข้า LCL จากจีน",
+        "description": "บริการนำเข้าแบบ LCL (Less Container Load) จากจีน — รวมตู้ ค่าใช้จ่ายคุ้มกว่า เคลียร์ครบ Door to Door โดย Pacred Shipping"
+      },
+      "customsClearance": {
+        "title": "เคลียร์พิธีการศุลกากร · สินค้าติดด่าน",
+        "description": "บริการชิปปิ้งเคลียร์ภาษีศุลกากรครบทุก Term ทุก Port — แก้ปัญหาสินค้าติดด่าน รถ/เรือ/อากาศ ทีม Pacred Shipping 14 ปี"
+      },
+      "exportWorldwide": {
+        "title": "ส่งออกสินค้าไปทั่วโลก",
+        "description": "บริการส่งออกสินค้าจากไทยไปทั่วโลก — Air/Sea Freight, FCL/LCL, customs export, fumigation — ทีม Pacred Shipping เคลียร์เอกสารครบ"
+      },
+      "chinaShopping": {
+        "title": "ฝากสั่งซื้อสินค้าจากจีน · ฝากโอนหยวน",
+        "description": "บริการฝากสั่งสินค้า 1688 · Taobao · Tmall · Alibaba พร้อมล่ามจีนต่อรองโรงงาน และฝากโอนเงินหยวน Alipay ปลอดภัย โดย Pacred Shipping"
+      }
+    },
+    "warehouses": {
+      "index": {
+        "title": "ที่อยู่โกดัง Pacred — จีน · ไทย",
+        "description": "โกดัง Pacred Shipping ทั่วเอเชีย — กวางโจว · อี้อู · ไทย พร้อมรับสินค้าจากทุกแพลตฟอร์ม"
+      },
+      "china": {
+        "title": "ที่อยู่โกดังจีน · Guangzhou + Yiwu",
+        "description": "โกดังต้นทาง Pacred Shipping ในประเทศจีน — กวางโจว (Guangzhou) และอี้อู (Yiwu) รับสินค้าจาก 1688, Taobao, Tmall, Alibaba"
+      },
+      "guangzhou": {
+        "title": "โกดังกวางโจว (Guangzhou)",
+        "description": "โกดัง Pacred ที่กวางโจว — ศูนย์กลางการค้าจีนใต้ รับสินค้าจากโรงงานและร้านออนไลน์ทุกแพลตฟอร์ม"
+      },
+      "yiwu": {
+        "title": "โกดังอี้อู (Yiwu)",
+        "description": "โกดัง Pacred ที่อี้อู — ตลาดค้าส่งจิปาถะใหญ่ที่สุดในจีน เหมาะกับของชำร่วย ของขวัญ ของเล่น เครื่องเขียน"
+      },
+      "thailand": {
+        "title": "โกดังกรุงเทพ · บริษัท Pacred",
+        "description": "ที่อยู่โกดัง Pacred ในประเทศไทย — รับสินค้าปลายทาง บริการ Door to Door ทั่วประเทศ"
+      }
+    },
+    "knowledge": {
+      "index": {
+        "title": "สาระน่ารู้ · นำเข้า ส่งออก เคลียร์ศุลกากร",
+        "description": "บทความวิชาการจาก Pacred Shipping — รู้ลึกเรื่องนำเข้าจีน Term CIF/FOB/EXW เคลียร์ด่าน ใบอนุญาต และวิธีลดความเสี่ยง"
+      }
+    },
+    "faq": {
+      "title": "คำถามที่พบบ่อย",
+      "description": "FAQ รวมคำถามที่พบบ่อยเกี่ยวกับบริการ Pacred Shipping — นำเข้า ส่งออก เคลียร์ด่าน ฝากสั่ง ฝากโอน ค่าบริการ และอื่น ๆ"
+    },
+    "about": {
+      "title": "เกี่ยวกับ Pacred Shipping",
+      "description": "Pacred Shipping ผู้ให้บริการนำเข้า-ส่งออก เคลียร์ศุลกากรครบวงจร ประสบการณ์ 14 ปี ดูแลครบตั้งแต่ต้นน้ำถึงปลายน้ำ"
+    },
+    "contact": {
+      "title": "ติดต่อ Pacred Shipping",
+      "description": "ติดต่อทีม Pacred Shipping — LINE OA, โทร 066-131-0253, อีเมล contact@pacred.co · ตอบไว ครบทุกช่องทาง"
+    },
+    "booking": {
+      "title": "คำนวณค่าขนส่ง · จองบริการ",
+      "description": "คำนวณราคาขนส่งจีน-ไทยล่วงหน้า — ใส่ปริมาณและน้ำหนัก ระบบประเมินราคาให้ทันที จองบริการกับ Pacred Shipping"
+    },
+    "payment": {
+      "alipay": {
+        "title": "วิธีการโอนเงินผ่าน Alipay",
+        "description": "คู่มือฝากโอนชำระ Alipay กับ Pacred Shipping — ปลอดภัย เรทคุ้มค่า ตรวจสอบยอดได้ทันที"
+      },
+      "p1688": {
+        "title": "วิธีโอนเงิน 1688",
+        "description": "วิธีฝากชำระค่าสินค้า 1688 ผ่าน Pacred Shipping — รวดเร็ว ปลอดภัย รองรับการตรวจสอบทุกขั้นตอน"
+      },
+      "taobao": {
+        "title": "วิธีโอนเงิน Taobao",
+        "description": "ฝากชำระสินค้าจาก Taobao กับ Pacred Shipping — ลดความยุ่งยาก เรทตลาด ราคาโปร่งใส"
+      }
+    },
+    "howToUse": {
+      "title": "วิธีการใช้บริการ Pacred Shipping",
+      "description": "ขั้นตอนการใช้บริการนำเข้า ส่งออก เคลียร์ด่าน ฝากสั่ง ฝากโอน — Pacred Shipping เริ่มต้นใช้งานง่าย เริ่มได้ทันที"
+    },
+    "deliveryAreas": {
+      "title": "พื้นที่จัดส่ง · ค่าขนส่งทั่วประเทศ",
+      "description": "เช็คพื้นที่จัดส่งของ Pacred Shipping — รองรับทั่วประเทศไทย กรุงเทพ ปริมณฑล และต่างจังหวัดทุกภาค"
+    },
+    "holidays": {
+      "title": "วันหยุดประจำปี · ปฏิทินบริการ",
+      "description": "ปฏิทินวันหยุด Pacred Shipping — วันหยุดประจำปี วันหยุดศุลกากร และวันให้บริการล่วงหน้า"
+    },
+    "joinUs": {
+      "title": "ร่วมงานกับ Pacred Shipping",
+      "description": "เปิดรับสมัครทีม Pacred — ขยายธุรกิจชิปปิ้งครบวงจร เปิดโอกาสให้คนรุ่นใหม่ที่อยากเรียนรู้และเติบโต"
+    },
+    "terms": {
+      "title": "เงื่อนไขการใช้บริการ",
+      "description": "ข้อกำหนดและเงื่อนไขการใช้บริการเว็บไซต์และระบบสมาชิกของ Pacred Shipping"
+    },
+    "privacy": {
+      "title": "นโยบายความเป็นส่วนตัว",
+      "description": "Pacred Shipping เคารพความเป็นส่วนตัวของคุณ — เรียนรู้นโยบายการเก็บและใช้ข้อมูลส่วนบุคคล"
+    }
   }
 }

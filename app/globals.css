@@ -50,10 +50,10 @@ html, body {
 
 body {
   background:
-    radial-gradient(900px circle at 5% 5%,   rgba(255, 184, 184, 0.32) 0%, transparent 55%),
-    radial-gradient(1000px circle at 95% 35%, rgba(255, 184, 184, 0.26) 0%, transparent 55%),
-    radial-gradient(900px circle at 30% 78%, rgba(254, 243, 199, 0.22) 0%, transparent 55%),
-    radial-gradient(900px circle at 80% 95%, rgba(255, 184, 184, 0.20) 0%, transparent 55%),
+    radial-gradient(1300px circle at  6%   4%, rgba(255, 184, 184, 0.42) 0%, transparent 62%),
+    radial-gradient(1400px circle at 96%  32%, rgba(255, 168, 168, 0.36) 0%, transparent 62%),
+    radial-gradient(1250px circle at 28%  72%, rgba(255, 200, 200, 0.32) 0%, transparent 62%),
+    radial-gradient(1300px circle at 82%  98%, rgba(255, 176, 176, 0.30) 0%, transparent 62%),
     var(--background);
   background-attachment: fixed;
   background-repeat: no-repeat;
@@ -63,31 +63,19 @@ body {
 
 .dark body {
   background:
-    radial-gradient(900px circle at 5% 5%,   rgba(120, 0, 0, 0.30) 0%, transparent 55%),
-    radial-gradient(1000px circle at 95% 35%, rgba(140, 0, 0, 0.22) 0%, transparent 55%),
-    radial-gradient(900px circle at 30% 78%, rgba(160, 110, 0, 0.14) 0%, transparent 55%),
-    radial-gradient(900px circle at 80% 95%, rgba(120, 0, 0, 0.18) 0%, transparent 55%),
+    radial-gradient(1300px circle at  6%   4%, rgba(140, 0, 0, 0.32) 0%, transparent 62%),
+    radial-gradient(1400px circle at 96%  32%, rgba(120, 0, 0, 0.26) 0%, transparent 62%),
+    radial-gradient(1250px circle at 28%  72%, rgba(140, 0, 0, 0.24) 0%, transparent 62%),
+    radial-gradient(1300px circle at 82%  98%, rgba(120, 0, 0, 0.22) 0%, transparent 62%),
     var(--background);
   background-attachment: fixed;
   background-repeat: no-repeat;
 }
 
-/* Mobile overrides: white background + bottom nav space */
+/* Mobile: keep the red cloud, add bottom-nav space */
 @media (max-width: 767px) {
-  html,
-  body {
-    background: #ffffff !important;
-    background-image: none !important;
-    background-color: #ffffff !important;
-  }
   body {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
-  }
-  .dark html,
-  .dark body {
-    background: #0d0d0d !important;
-    background-image: none !important;
-    background-color: #0d0d0d !important;
   }
 }
 

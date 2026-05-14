@@ -1784,13 +1784,6 @@
     "f6Desc": "Get SMS alerts for every payment — less confusion, transparent verifiable expenses on every bill and order.",
     "registerAria": "Sign up · {title}",
     "registerCta": "Sign up now",
-    "certEyebrow": "VERIFIED COMPANY",
-    "certTitlePart1": "Company certificate —",
-    "certTitleHighlight": "verifiable for real",
-    "certPageAlt": "Company certificate, page {n}",
-    "certPagePrev": "Previous page",
-    "certPageNext": "Next page",
-    "certPageGoto": "Go to page {n}",
     "articleHeading1": "Pacred Shipping",
     "articleHeading2": "your end-to-end import & export specialist",
     "articleYears": "14 years",
@@ -1810,5 +1803,184 @@
     "articleP5Brand": "Pacred Shipping",
     "articleP5Body2": " take care of it, and you'll understand the meaning of ",
     "articleP5Quote": "\"truly end-to-end in one place\""
+  },
+  "homeArticle": {
+    "eyebrow": "ABOUT PACRED · 14+ YEARS",
+    "headingPart1": "Pacred Shipping —",
+    "headingHighlight": "your import-export",
+    "headingPart2": "specialist for 14 years",
+    "subheading": "End-to-end shipping the professional way — Pacred Shipping handles every step, from origin to last mile.",
+    "officeAlt": "Pacred Shipping office in Thailand",
+    "introBody1": "Open the door to professional shipping with ",
+    "introImportLink": "import & export",
+    "introBody2": " — full customs clearance, end-to-end, with over ",
+    "introYears": "14 years",
+    "introBody3": " of experience. Looking to ",
+    "introShopLink": "shop from China",
+    "introBody4": " or the world? We handle ",
+    "introMarketplaces": "1688 / Taobao / Tmall",
+    "introBody5": ", with safe ",
+    "introPayLink": "Yuan transfers and product payments",
+    "introBody6": " at fair, transparent rates.",
+    "p2Body1": "On top of that, our in-house Chinese-speaking team negotiates directly with factories — closing deals for you at the best price, free of charge. Door-to-door imports are handled completely, from sourcing to ",
+    "p2DoorToDoor": "Door to Door",
+    "p2Body2": " delivery — sourcing, ordering, freight, and finally ",
+    "p2ClearanceLink": "customs clearance",
+    "p2Body3": " to your address.",
+    "p3Body1": "Already have goods? Whether you're an individual, a company, or an SME, we help expand your market — including ",
+    "p3ExportLink": "agent representation and worldwide export",
+    "p3Body2": " with full paperwork, logistics and lifecycle management.",
+    "quoteIntro": "Pacred is built on the promise of",
+    "quoteText": "fast, sharp, never impossible",
+    "quoteOutro": "service end-to-end — import, export, clearance, shop-order — we close every problem.",
+    "marketplacesEyebrow": "POPULAR CHINA MARKETPLACES",
+    "marketplacesHeading": "Import from",
+    "marketplacesHighlight": "the top sources",
+    "marketplacesHeadingSuffix": "in China",
+    "marketplacesSub": "Coverage across every popular platform — from wholesale 1688 to retail Taobao and Tmall — Pacred handles all of it.",
+    "categoriesHeading": "Cover every",
+    "categoriesHighlight": "product category",
+    "categoriesSub": "Whatever you're importing, we've already done it.",
+    "portsEyebrow": "CLEARANCE · EVERY PORT",
+    "portsHeading": "Customs cleared",
+    "portsHighlight": "every port · every Incoterm",
+    "portsSub": "Every port in Thailand — airports, seaports, ICD, mail, border crossings — plus TFDA, TISI, agriculture and fisheries permits.",
+    "warehousesEyebrow": "GLOBAL WAREHOUSE NETWORK",
+    "warehousesHeading": "A network of",
+    "warehousesHighlight": "three warehouses",
+    "warehousesHeadingSuffix": "— China + Thailand",
+    "warehousesSub": "Two origin hubs in China (Guangzhou · Yiwu) plus a Thailand destination — receive and distribute at every step.",
+    "warehouseGuangzhouCity": "Guangzhou",
+    "warehouseGuangzhouEn": "Guangzhou",
+    "warehouseGuangzhouDesc": "South China commerce hub. Receives from 1688 and Tmall factories.",
+    "warehouseYiwuCity": "Yiwu",
+    "warehouseYiwuEn": "Yiwu",
+    "warehouseYiwuDesc": "World's largest small-commodity market — ideal for gifts and homeware.",
+    "warehouseThailandCity": "Thailand",
+    "warehouseThailandEn": "Thailand",
+    "warehouseThailandDesc": "Om Noi destination hub. Last-mile distribution nationwide.",
+    "warehouseViewAll": "View all warehouses"
+  },
+  "seo": {
+    "root": {
+      "title": "Pacred — Import · Export · Shipping · Customs Clearance",
+      "description": "Pacred — end-to-end import & export, customs clearance, FCL/LCL shipping by road, sea and air, and China shop-order. One platform."
+    },
+    "home": {
+      "title": "Pacred Shipping — 14 Years of Import, Export & Customs Clearance",
+      "description": "Import from China (1688 / Taobao / Tmall), export worldwide, customs clearance, FCL/LCL by road, sea and air — Pacred Shipping delivers door to door."
+    },
+    "services": {
+      "index": {
+        "title": "Import, Export & Customs Clearance Services",
+        "description": "Pacred Shipping services — China import (FCL/LCL), worldwide export, customs clearance, and 1688/Taobao/Tmall shop-order. All in one place."
+      },
+      "importChina": {
+        "title": "Import from China",
+        "description": "Import from China — 1688, Taobao, Tmall · FCL · LCL · door-to-door · cleared across every Incoterm and port by Pacred Shipping."
+      },
+      "importChinaFcl": {
+        "title": "Import FCL from China",
+        "description": "Full-container imports from China — 20'/40' containers from factory, cleared under EXW/FOB/CIF/DDP by Pacred Shipping."
+      },
+      "importChinaLcl": {
+        "title": "Import LCL from China",
+        "description": "Less-than-container imports from China — consolidated freight at lower cost, door-to-door by Pacred Shipping."
+      },
+      "customsClearance": {
+        "title": "Customs Clearance · Stuck-at-Customs Recovery",
+        "description": "Customs clearance under every Incoterm and port, including stuck-at-customs recovery — road, sea, air. 14 years with Pacred Shipping."
+      },
+      "exportWorldwide": {
+        "title": "Worldwide Export",
+        "description": "Export from Thailand worldwide — air/sea freight, FCL/LCL, customs export, fumigation. Full paperwork by Pacred Shipping."
+      },
+      "chinaShopping": {
+        "title": "China Shop-Order · Yuan Transfer",
+        "description": "Shop on 1688 · Taobao · Tmall · Alibaba with Chinese-speaking buyers and safe Yuan transfers via Alipay through Pacred Shipping."
+      }
+    },
+    "warehouses": {
+      "index": {
+        "title": "Pacred Warehouses — China · Thailand",
+        "description": "Pacred Shipping warehouses across Asia — Guangzhou, Yiwu, and Thailand, receiving from every marketplace."
+      },
+      "china": {
+        "title": "China Warehouses · Guangzhou + Yiwu",
+        "description": "Pacred Shipping origin warehouses in China — Guangzhou and Yiwu, receiving from 1688, Taobao, Tmall, Alibaba."
+      },
+      "guangzhou": {
+        "title": "Guangzhou Warehouse",
+        "description": "Pacred's Guangzhou hub — receives factory and online orders from every major Chinese marketplace."
+      },
+      "yiwu": {
+        "title": "Yiwu Warehouse",
+        "description": "Pacred's Yiwu hub — the world's biggest small-commodity market, ideal for gifts, toys, stationery and homeware."
+      },
+      "thailand": {
+        "title": "Thailand Warehouse · Pacred HQ",
+        "description": "Pacred's Thailand warehouse — destination hub and door-to-door delivery across the country."
+      }
+    },
+    "knowledge": {
+      "index": {
+        "title": "Knowledge Base · Import, Export & Customs",
+        "description": "In-depth Pacred Shipping articles — China imports, CIF/FOB/EXW Incoterms, customs clearance, permits, and how to reduce risk."
+      }
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "description": "FAQ for Pacred Shipping — import, export, customs clearance, shop-order, Yuan transfer, fees, and more."
+    },
+    "about": {
+      "title": "About Pacred Shipping",
+      "description": "Pacred Shipping is a full-service import, export and customs-clearance partner with 14 years of experience, from upstream to last mile."
+    },
+    "contact": {
+      "title": "Contact Pacred Shipping",
+      "description": "Reach Pacred Shipping — LINE OA, phone 066-131-0253, email contact@pacred.co. Fast replies on every channel."
+    },
+    "booking": {
+      "title": "Calculate Shipping · Book Now",
+      "description": "Estimate China-Thailand shipping costs in seconds — enter your volume and weight, get an instant quote, and book with Pacred Shipping."
+    },
+    "payment": {
+      "alipay": {
+        "title": "How to Pay via Alipay",
+        "description": "Pacred Shipping's Alipay payment guide — safe Yuan transfers at fair market rates with real-time confirmation."
+      },
+      "p1688": {
+        "title": "How to Pay on 1688",
+        "description": "Pay 1688 suppliers through Pacred Shipping — fast, safe, and fully traceable."
+      },
+      "taobao": {
+        "title": "How to Pay on Taobao",
+        "description": "Pay Taobao sellers through Pacred Shipping — simple workflow, transparent market rates."
+      }
+    },
+    "howToUse": {
+      "title": "How to Use Pacred Shipping",
+      "description": "Step-by-step guide to using Pacred Shipping — import, export, customs, shop-order and Yuan transfer. Get started in minutes."
+    },
+    "deliveryAreas": {
+      "title": "Delivery Coverage & Pricing",
+      "description": "Check Pacred Shipping's delivery zones — nationwide Thailand, Bangkok, suburbs, and provincial coverage."
+    },
+    "holidays": {
+      "title": "Service Calendar · Holidays",
+      "description": "Pacred Shipping holiday calendar — annual holidays, customs closures, and service availability."
+    },
+    "joinUs": {
+      "title": "Join Pacred Shipping",
+      "description": "Pacred is hiring — build the future of full-service shipping with a team that grows together."
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "description": "Terms and conditions for using the Pacred Shipping website and member system."
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "description": "Pacred Shipping respects your privacy — read how we collect and process personal information."
+    }
   }
 }

@@ -1,19 +1,50 @@
+import type { Metadata } from "next";
 import { StubPage } from "@/components/stub-page";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "วิธีการใช้บริการ · Pacred Shipping",
-  description: "ขั้นตอนการใช้บริการนำเข้า–ส่งออก ฝากสั่งซื้อ และเคลียร์สินค้าติดด่านกับ Pacred Shipping",
-};
+const PATH = "/how-to-use";
 
-export default function Page() {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.howToUse" });
+}
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
-    <StubPage
-      eyebrow="HOW TO USE"
-      title="วิธีการ"
-      highlight="ใช้บริการ"
-      description="ขั้นตอนตั้งแต่สมัครสมาชิก สั่งซื้อ ฝากโอน รับสินค้าเข้าโกดังจีน จนถึงรับสินค้าที่ไทย — ครบจบในที่เดียวกับ Pacred Shipping"
-      breadcrumb={[{ label: "วิธีการใช้บริการ" }]}
-      banner="import-export"
-    />
+    <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "วิธีการใช้บริการ" : "How to use", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
+      <StubPage
+        eyebrow="HOW TO USE"
+        title={typedLocale === "th" ? "วิธีการ" : "How to"}
+        highlight={typedLocale === "th" ? "ใช้บริการ" : "use Pacred"}
+        description={
+          typedLocale === "th"
+            ? "ขั้นตอนตั้งแต่สมัครสมาชิก สั่งซื้อ ฝากโอน รับสินค้าเข้าโกดังจีน จนถึงรับสินค้าที่ไทย — ครบจบในที่เดียวกับ Pacred Shipping"
+            : "From sign-up to shop-order, Yuan transfer, China-warehouse intake, and Thailand delivery — Pacred Shipping handles the lot."
+        }
+        breadcrumb={[{ label: typedLocale === "th" ? "วิธีการใช้บริการ" : "How to use" }]}
+        banner="import-export"
+      />
+    </>
   );
 }
