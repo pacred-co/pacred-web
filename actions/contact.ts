@@ -70,14 +70,14 @@ export async function submitContactMessage(
       const pid = (row as { profile_id: string }).profile_id;
       if (!pid || seen.has(pid)) continue;
       seen.add(pid);
-      // reference_type intentionally omitted — its CHECK constraint
-      // doesn't include 'contact_message' yet; admins navigate via link_href
       await sendNotification(pid, {
         category:       "system",
         severity:       "info",
         title:          "ข้อความใหม่จากฟอร์มติดต่อ",
         body:           `${d.name} (${d.contact}): ${d.message.slice(0, 120)}${d.message.length > 120 ? "..." : ""}`,
         link_href:      "/admin/contact-messages",
+        reference_type: "contact_message",
+        reference_id:   inserted.id,
       });
     }
   } catch {
