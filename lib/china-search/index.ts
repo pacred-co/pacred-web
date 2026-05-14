@@ -26,6 +26,7 @@ import "server-only";
 import { extractProductId } from "./extract-product-id";
 import { resolveShortUrl, detectShortUrl } from "./short-url-cache";
 import { akucargoSearch } from "./akucargo";
+import { laonetImageSearch } from "./laonet";
 import type {
   ChinaSearchHit,
   ChinaProductDetail,
@@ -333,25 +334,17 @@ function normaliseTamitDetail(
 }
 
 // ────────────────────────────────────────────────────────────
-// IMAGE SEARCH — TODO(P-53): rewire to Laonet per audit §4b
-//   upload:  ?api_name=upload_img&imgcode=<b64>&key=<email-as-key>
-//   search:  ?api_name=item_search_img&imgid=<id>&key=...
+// IMAGE SEARCH — wired to Laonet per audit §4b (P-53)
 // ────────────────────────────────────────────────────────────
+
+/**
+ * Reverse-image search.  Delegates to the Laonet adapter which knows the
+ * 2-step flow (base64 upload → returns imgid → search by imgid).
+ * Returns 1688 hits only — Laonet's image-search backend only indexes
+ * 1688, even though the same wrapper serves Taobao detail in audit §4b.
+ */
 export async function searchByImage(file: Blob): Promise<ChinaSearchResult> {
-  const base = process.env.PACRED_RCGROUP_API_URL;
-  if (!base) {
-    return { available: false, reason: "not_configured", message: "RCGROUP_API_URL is unset (P-53 will rewire to Laonet)" };
-  }
-  const fd = new FormData();
-  fd.append("image", file);
-  try {
-    const res = await fetch(`${base}/image-search/`, { method: "POST", body: fd, cache: "no-store", signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return { available: false, reason: "network_error", message: `HTTP ${res.status}` };
-    const json = await res.json();
-    return { available: true, hits: normaliseHits(json, "1688"), page: 1, has_more: false };
-  } catch (e) {
-    return { available: false, reason: "network_error", message: e instanceof Error ? e.message : "unknown" };
-  }
+  return laonetImageSearch(file);
 }
 
 // ── helpers ──
@@ -369,22 +362,7 @@ function fixAliCdn(src: string | undefined): string | undefined {
     .replace("http://g.search.alicdn.com",   "https://cbu01.alicdn.com");
 }
 
-type AnyRow = Record<string, unknown>;
-
-function normaliseHits(json: unknown, fallbackProvider: ChinaSearchHit["provider"]): ChinaSearchHit[] {
-  if (!json || typeof json !== "object") return [];
-  const root = json as AnyRow;
-  // Legacy/AkuCargo response shape variants.
-  const list = (Array.isArray(root.datalist) ? root.datalist
-              : Array.isArray(root.data)     ? root.data
-              : []) as AnyRow[];
-  return list.map((r) => ({
-    provider:   (r.provider as ChinaSearchHit["provider"]) ?? fallbackProvider,
-    product_id: typeof r.thid_item_id === "string" ? r.thid_item_id : (typeof r.product_id === "string" ? r.product_id : undefined),
-    title:      String(r.title ?? r.name ?? ""),
-    url:        String(r.url ?? r.detail_url ?? (typeof r.thid_item_id === "string" ? `https://detail.1688.com/offer/${r.thid_item_id}.html` : "")),
-    image_url:  fixAliCdn(typeof r.image === "string" ? r.image : (typeof r.pImages === "string" ? r.pImages : undefined)),
-    price_cny:  typeof r.price === "number" ? r.price : (typeof r.price === "string" ? Number(r.price) : undefined),
-    shop_name:  typeof r.shop === "string" ? r.shop : (typeof r.shop_name === "string" ? r.shop_name : undefined),
-  })).filter((h) => h.title || h.url);
-}
+// normaliseHits removed in P-53 — keyword search now goes through
+// AkuCargo (P-52) and image search through Laonet (P-53), each with its
+// own per-adapter parser.  The legacy combined parser had RCGroup-shape
+// fields baked in that no longer match either real backend.

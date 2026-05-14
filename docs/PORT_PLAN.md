@@ -2084,7 +2084,8 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 | **🚨 D-1-LIFF (URGENT NEW from Part Q)** — LINE LIFF customer linkage | ✅ | `dba11a6` |
 | **🔴 P-50 (Track G URGENT)** — china-search rewire to TAMIT-cloud | ✅ | `01f0cc1` |
 | **P-51 (Track G)** — tam-i-t.com short-URL cache layer | ✅ | `1dc4ed3` |
-| **P-52 (Track G)** — AkuCargo keyword search adapter | ✅ | this commit |
+| **P-52 (Track G)** — AkuCargo keyword search adapter | ✅ | `74db555` |
+| **P-53 (Track G)** — Laonet image search adapter (closes Track G core) | ✅ | this commit |
 | P-22 / P-23 / P-27 remaining Sprint 6 | ⏳ deferred to runway | — |
 
 **Decisions logged in commit messages** (per §6 self-directed mode): migration numbering bumps (0028→0030 chain), schema adaptations (`employees` → `admin_contact_extras`), audit-log skip for cron actions, target table CHECK starts at `forwarders` only. Lead can adjust retroactively.
@@ -2143,9 +2144,53 @@ PACRED_TAMIT_API_URL=https://tamit-cloud.com/api-product/api-search
 
 ### Next from ภูม (continuing self-directed)
 
-→ **P-53 Laonet image** (~2-3h) — replaces the dead RCGroup image-search endpoint with Laonet's two-step upload→search flow (`upload_img` returns imgid → `item_search_img` returns hits) per audit §4b.  After Track G fully clears: Sprint 6.5 follow-ups (~2-3h) → Track A tests (~7-9h).
+🎉 **Track G core closed (P-50 + P-51 + P-52 + P-53).** All three china-search surfaces (URL→detail, keyword, image) now wired to the actual production PHP backends per audit, with demo fallback preserved on every failure path.
 
-### P-52 shipped (this batch — Track G)
+→ **P-55 Vercel egress IP allowlist** (~1h, ภูม + เดฟ) — once production traffic hits TAMIT/AkuCargo/Laonet/tam-i-t, contact vendor `tam011plus@gmail.com` to allowlist Vercel egress IPs.  Document in `docs/runbook/vendor-allowlist.md`.
+
+After P-55: **Sprint 6.5 follow-ups (~2-3h)** — admin digest UI, page-level RBAC for /admin/drivers, batch insert, stale recovery, RLS tighten, vercel plan check.  Then **Track A tests (~7-9h)** for OTP / wallet ledger / signup / cart-cap coverage.
+
+### P-53 shipped (this batch — Track G closes)
+
+`lib/china-search/laonet.ts` (server-only) + `laonet-helpers.ts` (testable) per audit §4b:
+
+- **2-step flow** mirrors PHP `searchIMG.php`:
+  1. Read `Blob` → `Buffer` → base64 → POST to `/index.php` with `route=api_tester/call&api_name=upload_img&imgcode=<b64>&key=<email>` (auto-switches to GET when URL < 1500 chars; long base64 always POSTs)
+  2. Parse `imgid` from response (defensive — top-level `imgid`/`img_id`/`id`/`url` and nested `data.*`/`result.*` variants)
+  3. GET `/index.php?route=api_tester/call&api_name=item_search_img&imgid=<id>&key=<email>` → parse hits via the same shape-variant parser used by AkuCargo
+- **5 MB upload cap** enforced server-side (matches the route handler's pre-check; defence in depth — Laonet itself rejects > ~8 MB)
+- **All hits marked `provider: "1688"`** — Laonet's image-search backend only indexes 1688 even though the same wrapper serves Taobao detail in the audit
+- **Env vars**: `PACRED_LAONET_API_URL` (default `https://laonet.online`), `PACRED_LAONET_KEY` (default `tam011plus@gmail.com` — the vendor's literal-email-as-key per audit; Pacred shares this key with the legacy install for now)
+- **`searchByImage`** in `index.ts` now delegates to `laonetImageSearch(file)`; the dead RCGroup path with its `normaliseHits` helper has been removed (was the last consumer)
+- **Tests:** 31 new assertions across 7 areas in `laonet-helpers.test.ts`:
+  - (a) buildLaonetUploadUrl encoding + trailing slash
+  - (b) buildLaonetSearchUrl encoding
+  - (c) parseLaonetUploadResponse top-level fields (`imgid`/`img_id`/`id`/`url`)
+  - (d) parseLaonetUploadResponse nested wrappers (`data.*`/`result.*`)
+  - (e) parseLaonetUploadResponse defensive (null/undef/string/empty/wrong-type)
+  - (f) parseLaonetSearchResponse canonical hits (8 field assertions)
+  - (g) parseLaonetSearchResponse alt shapes + edge cases
+
+**Acceptance gate:**
+- `pnpm tsx lib/china-search/laonet-helpers.test.ts` → 31 pass ✅
+- `tsc --noEmit` clean ✅
+- `pnpm exec eslint lib/china-search/ app/api/china-search/` clean ✅
+- `pnpm test` chain → **207 assertions** all green (176 + 31 new)
+- Real Laonet response owner-blocked: needs Vercel egress IP allowlist verification (P-55).  Locally: image upload likely 403s from Vercel IPs → UI banner gracefully degraded.  Logic verified by unit tests covering both upload + search response shape variants.
+
+### Track G summary (complete)
+
+| Task | Lines added | Tests |
+|---|---|---|
+| P-50 — TAMIT-cloud URL→detail rewire | ~430 | 19 assertions |
+| P-51 — tam-i-t.com short-URL cache | ~260 | 22 assertions |
+| P-52 — AkuCargo keyword search | ~280 | 24 assertions |
+| P-53 — Laonet image search | ~330 | 31 assertions |
+| **Total** | **~1300** | **96 new assertions** |
+
+**Suite total** 207 assertions across 7 test files (49 + 50 + 19 + 22 + 24 + 31 + 12).  No more wired-to-dead-endpoint code in `lib/china-search/`.  All adapters share the same posture: `available: true` with empty hits / demo product on graceful failures, `available: false` only when env unset at the route layer.
+
+### P-52 shipped (Track G)
 
 `lib/china-search/akucargo.ts` (server-only) + `akucargo-helpers.ts` (testable) per audit §4a:
 
@@ -2243,7 +2288,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G batch จากภูม (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50 + P-51 + P-52). Next: Track G P-53 Laonet image.
+**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53).  Next: P-55 vendor allowlist (1h) → Sprint 6.5 follow-ups (~2-3h) → Track A tests.
 
 ---
 
