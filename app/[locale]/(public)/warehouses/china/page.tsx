@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, MapPin, ArrowRight } from "lucide-react";
@@ -5,12 +6,20 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "ที่อยู่โกดังจีน · Pacred Shipping",
-  description:
-    "โกดัง Pacred Shipping ในประเทศจีน — กวางโจว (Guangzhou) และ อี้อู (Yiwu) รองรับสินค้าจาก 1688, Taobao, Tmall, Alibaba",
-};
+const PATH = "/warehouses/china";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.warehouses.china" });
+}
 
 const WAREHOUSES = [
   {
@@ -33,9 +42,25 @@ const WAREHOUSES = [
   },
 ];
 
-export default function ChinaWarehousesPage() {
+export default async function ChinaWarehousesPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
     <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "โกดัง" : "Warehouses", path: "/warehouses/china" },
+            { name: typedLocale === "th" ? "ที่อยู่โกดังจีน" : "China warehouses", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
       <NavBar />
       <SearchBar />
       <main>

@@ -1,0 +1,175 @@
+import {
+  CONTACT,
+  LOGO_PATH,
+  SITE_LEGAL_NAME,
+  SITE_NAME,
+  SITE_URL,
+  SOCIAL,
+  absoluteUrl,
+  type SiteLocale,
+} from "./site";
+
+const LOGO_URL = `${SITE_URL}${LOGO_PATH}`;
+
+export function organizationSchema(locale: SiteLocale = "th") {
+  const description =
+    locale === "th"
+      ? "Pacred — ผู้ให้บริการนำเข้า-ส่งออก ชิปปิ้ง เคลียร์พิธีการศุลกากร ฝากสั่งซื้อสินค้าจากจีน FCL/LCL ครบวงจร"
+      : "Pacred — end-to-end import & export, customs clearance, and China shop-order. FCL/LCL by road, sea, and air.";
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": `${SITE_URL}#organization`,
+    name: SITE_NAME,
+    legalName: SITE_LEGAL_NAME,
+    url: SITE_URL,
+    logo: {
+      "@type": "ImageObject",
+      url: LOGO_URL,
+    },
+    image: LOGO_URL,
+    description,
+    contactPoint: [
+      {
+        "@type": "ContactPoint",
+        contactType: "customer service",
+        telephone: CONTACT.phone,
+        email: CONTACT.email,
+        areaServed: ["TH", "CN", "Worldwide"],
+        availableLanguage: ["th", "en", "zh"],
+      },
+    ],
+    sameAs: [SOCIAL.facebook, SOCIAL.youtube, SOCIAL.tiktok, SOCIAL.instagram, SOCIAL.line],
+  };
+}
+
+export function localBusinessSchema(locale: SiteLocale = "th") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": `${SITE_URL}#localbusiness`,
+    name: SITE_NAME,
+    image: LOGO_URL,
+    url: SITE_URL,
+    telephone: CONTACT.phone,
+    email: CONTACT.email,
+    priceRange: "฿฿",
+    address: {
+      "@type": "PostalAddress",
+      addressCountry: "TH",
+      addressLocality: locale === "th" ? "กรุงเทพมหานคร" : "Bangkok",
+    },
+    sameAs: [SOCIAL.facebook, SOCIAL.youtube, SOCIAL.tiktok, SOCIAL.instagram, SOCIAL.line],
+  };
+}
+
+export function websiteSchema(locale: SiteLocale = "th") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${SITE_URL}#website`,
+    name: SITE_NAME,
+    url: locale === "th" ? SITE_URL : `${SITE_URL}/${locale}`,
+    inLanguage: locale === "th" ? "th-TH" : "en-US",
+    publisher: { "@id": `${SITE_URL}#organization` },
+  };
+}
+
+export type BreadcrumbItem = { name: string; path: string };
+
+export function breadcrumbSchema(items: BreadcrumbItem[], locale: SiteLocale = "th") {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path, locale),
+    })),
+  };
+}
+
+export type ServiceSchemaInput = {
+  name: string;
+  description: string;
+  slug: string;
+  serviceType?: string;
+  areaServed?: string[];
+  locale?: SiteLocale;
+};
+
+export function serviceSchema({
+  name,
+  description,
+  slug,
+  serviceType,
+  areaServed = ["TH"],
+  locale = "th",
+}: ServiceSchemaInput) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name,
+    description,
+    serviceType: serviceType ?? name,
+    url: absoluteUrl(slug, locale),
+    provider: { "@id": `${SITE_URL}#organization` },
+    areaServed: areaServed.map((country) => ({ "@type": "Country", name: country })),
+  };
+}
+
+export type FaqItem = { question: string; answer: string };
+
+export function faqPageSchema(items: FaqItem[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+}
+
+export type ArticleSchemaInput = {
+  title: string;
+  description: string;
+  slug: string;
+  image: string;
+  datePublished?: string;
+  dateModified?: string;
+  locale?: SiteLocale;
+};
+
+export function articleSchema({
+  title,
+  description,
+  slug,
+  image,
+  datePublished,
+  dateModified,
+  locale = "th",
+}: ArticleSchemaInput) {
+  const url = absoluteUrl(slug, locale);
+  const base: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: title,
+    description,
+    image: image.startsWith("http") ? image : `${SITE_URL}${image.startsWith("/") ? "" : "/"}${image}`,
+    url,
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    author: { "@id": `${SITE_URL}#organization` },
+    publisher: { "@id": `${SITE_URL}#organization` },
+    inLanguage: locale === "th" ? "th-TH" : "en-US",
+  };
+  if (datePublished) base.datePublished = datePublished;
+  if (dateModified ?? datePublished) base.dateModified = dateModified ?? datePublished;
+  return base;
+}

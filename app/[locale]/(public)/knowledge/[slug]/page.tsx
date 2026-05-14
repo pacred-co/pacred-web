@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -22,6 +23,9 @@ import {
   getArticleBySlug,
   getRelatedArticles,
 } from "@/lib/knowledge-articles";
+import { JsonLd } from "@/components/seo/json-ld";
+import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
+import { SITE_URL } from "@/components/seo/site";
 
 const CATEGORY_BADGE: Record<string, string> = {
   นำเข้า:  "bg-primary-50 text-primary-700 border-primary-200 dark:bg-primary-900/30 dark:text-primary-300 dark:border-primary-900/50",
@@ -36,23 +40,47 @@ export function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
   const article = getArticleBySlug(slug);
   if (!article) return { title: "ไม่พบบทความ · Pacred Shipping" };
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const canonical = `${typedLocale === "th" ? "" : `/${typedLocale}`}/knowledge/${slug}`;
+  const imageUrl = `${SITE_URL}${article.image}`;
   return {
-    title: `${article.title} · Pacred Shipping`,
+    title: article.title,
     description: article.excerpt,
+    alternates: {
+      canonical,
+      languages: {
+        "th-TH": `/knowledge/${slug}`,
+        "en-US": `/en/knowledge/${slug}`,
+        "x-default": `/knowledge/${slug}`,
+      },
+    },
+    openGraph: {
+      title: article.title,
+      description: article.excerpt,
+      type: "article",
+      url: canonical,
+      images: [{ url: imageUrl, alt: article.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.title,
+      description: article.excerpt,
+      images: [imageUrl],
+    },
   };
 }
 
 export default async function ArticlePage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ locale: string; slug: string }>;
 }) {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const article = getArticleBySlug(slug);
   if (!article) notFound();
 
@@ -62,9 +90,29 @@ export default async function ArticlePage({
   );
 
   const related = getRelatedArticles(article, 4);
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
 
   return (
     <>
+      <JsonLd
+        data={[
+          articleSchema({
+            title: article.title,
+            description: article.excerpt,
+            slug: `/knowledge/${article.slug}`,
+            image: article.image,
+            locale: typedLocale,
+          }),
+          breadcrumbSchema(
+            [
+              { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+              { name: typedLocale === "th" ? "สาระน่ารู้" : "Knowledge", path: "/knowledge" },
+              { name: article.title, path: `/knowledge/${article.slug}` },
+            ],
+            typedLocale,
+          ),
+        ]}
+      />
       <NavBar />
       <SearchBar />
       <main>

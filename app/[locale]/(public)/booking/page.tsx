@@ -1,14 +1,41 @@
+import type { Metadata } from "next";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "คำนวณราคา | Pacred — ชิปปิ้ง นำเข้า-ส่งออก",
-  description: "คำนวณราคาขนส่งทางเรือ LCL FCL ทางรถ DDP ทางอากาศ เคลียร์ศุลกากร ฝากสั่งซื้อ โอนเงินต่างประเทศ",
-};
+const PATH = "/booking";
 
-export default function BookingPage() {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.booking" });
+}
+
+export default async function BookingPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
-    <main>
-      <BookingCalculator />
-    </main>
+    <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "คำนวณราคา" : "Booking", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
+      <main>
+        <BookingCalculator />
+      </main>
+    </>
   );
 }

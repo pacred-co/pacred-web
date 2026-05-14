@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { ArrowRight } from "lucide-react";
@@ -6,12 +7,21 @@ import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
+import { SITE_URL } from "@/components/seo/site";
 
-export const metadata = {
-  title: "สาระน่ารู้ · Pacred Shipping",
-  description:
-    "รวมบทความนำเข้า–ส่งออก เคลียร์สินค้าติดด่าน CIF FTA Incoterms และเคล็ดลับมือโปร จาก Pacred Shipping",
-};
+const PATH = "/knowledge";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.knowledge.index" });
+}
 
 const CATEGORIES: { id: string; label: string; color: string }[] = [
   { id: "นำเข้า",  label: "นำเข้า",  color: "bg-primary-600" },
@@ -25,9 +35,38 @@ const CATEGORY_BADGE: Record<string, string> = {
   ส่งออก:  "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-900/50",
 };
 
-export default function KnowledgeListingPage() {
+export default async function KnowledgeListingPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
+  const itemList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: typedLocale === "th" ? "สาระน่ารู้นำเข้า-ส่งออก เคลียร์ศุลกากร" : "Knowledge base — import, export, customs",
+    itemListElement: KNOWLEDGE_ARTICLES.map((a, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: `${SITE_URL}${typedLocale === "en" ? "/en" : ""}/knowledge/${a.slug}`,
+      name: a.title,
+    })),
+  };
   return (
     <>
+      <JsonLd
+        data={[
+          breadcrumbSchema(
+            [
+              { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+              { name: typedLocale === "th" ? "สาระน่ารู้" : "Knowledge", path: PATH },
+            ],
+            typedLocale,
+          ),
+          itemList,
+        ]}
+      />
       <NavBar />
       <SearchBar />
       <main>

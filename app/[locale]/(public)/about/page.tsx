@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import {
@@ -19,12 +20,20 @@ import { Footer } from "@/components/sections/footer";
 import { PacredExperience } from "@/components/sections/pacred-experience";
 import { WhyPacred } from "@/components/sections/why-pacred";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "เกี่ยวกับ Pacred · Pacred Shipping",
-  description:
-    "Pacred Shipping ผู้เชี่ยวชาญด้านนำเข้า–ส่งออก เคลียร์พิธีการศุลกากรครบวงจร มากกว่า 14 ปี — ดูแลตั้งแต่ต้นน้ำถึงปลายน้ำ",
-};
+const PATH = "/about";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.about" });
+}
 
 const STATS = [
   { icon: Award, value: "14+", suffix: "ปี", label: "ประสบการณ์" },
@@ -33,9 +42,24 @@ const STATS = [
   { icon: ShieldCheck, value: "100%", suffix: "", label: "ถูกต้องตามกฎหมาย" },
 ];
 
-export default function AboutPage() {
+export default async function AboutPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
     <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "เกี่ยวกับ Pacred" : "About Pacred", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
       <NavBar />
       <SearchBar />
       <main>
@@ -392,7 +416,6 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Why Pacred — features + certificate slider */}
         <WhyPacred />
 
         {/* Banner CTA */}

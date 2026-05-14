@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import {
@@ -16,12 +17,20 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "ที่อยู่โกดังไทย · Pacred Shipping",
-  description:
-    "โกดังไทย Pacred Shipping — สมุทรสาคร · กระทุ่มแบน · อ้อมน้อย รับสินค้าจากจีนและกระจายต่อทั่วประเทศ",
-};
+const PATH = "/warehouses/thailand";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.warehouses.thailand" });
+}
 
 const ADDRESS_TH = "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130";
 const ADDRESS_EN_QUERY = "48/3+Moo+12+Om+Noi+Krathum+Baen+Samut+Sakhon+74130";
@@ -51,9 +60,24 @@ const HIGHLIGHTS = [
 
 const PHOTOS = [1, 2, 3, 4];
 
-export default function Page() {
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
     <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "ที่อยู่โกดังไทย" : "Thailand warehouse", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
       <NavBar />
       <SearchBar />
       <main>

@@ -1,18 +1,43 @@
+import type { Metadata } from "next";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { WarehouseDetail } from "@/components/sections/warehouse-detail";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema } from "@/components/seo/schemas";
+import { buildPageMetadata } from "@/components/seo/page-meta";
 
-export const metadata = {
-  title: "โกดังกวางโจว (Guangzhou) · Pacred Shipping",
-  description:
-    "โกดังรับสินค้า Pacred Shipping เมืองกวางโจว ประเทศจีน — รองรับสินค้าจาก 1688, Taobao, Tmall, Alibaba และโรงงานจีน",
-};
+const PATH = "/warehouses/guangzhou";
 
-export default function GuangzhouWarehousePage() {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  return buildPageMetadata({ locale, path: PATH, namespace: "seo.warehouses.guangzhou" });
+}
+
+export default async function GuangzhouWarehousePage({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}) {
+  const { locale } = await params;
+  const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   return (
     <>
+      <JsonLd
+        data={breadcrumbSchema(
+          [
+            { name: typedLocale === "th" ? "หน้าหลัก" : "Home", path: "/" },
+            { name: typedLocale === "th" ? "ที่อยู่โกดังจีน" : "China warehouses", path: "/warehouses/china" },
+            { name: typedLocale === "th" ? "โกดังกวางโจว" : "Guangzhou warehouse", path: PATH },
+          ],
+          typedLocale,
+        )}
+      />
       <NavBar />
       <SearchBar />
       <main>
