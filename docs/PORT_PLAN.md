@@ -2752,6 +2752,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | **K-10** | K-tooling-1: CI workflow `.github/workflows/ci.yml` (lint + test + build on PR) | 2-3h | Quality gate before manual review |
 | **K-11** | K-sec-1: OWASP Top 10 audit | 4-6h | `docs/audit/owasp-2026-05.md` — launch confidence |
 | **K-12 🆕** | **L-22 GTM activation** — สมัคร GTM container + GA4 + ตั้ง `NEXT_PUBLIC_GTM_ID` ใน Vercel | 30-45m | Quick run: (1) tagmanager.google.com → New Container → Web → copy `GTM-XXXXXXX` (2) inside GTM connect GA4 property → publish container (3) `vercel env add NEXT_PUBLIC_GTM_ID` for Production + Preview (4) redeploy (5) smoke: open prod + GTM Preview Mode → verify sign_up/login/generate_lead/place_order dataLayer events fire. **Code shipped 2026-05-16 ([`08685b3`]); ทุกอย่างพร้อมแล้ว แค่ต่อท่อ Google ปลายทาง** |
+| **K-13 🆕** | **L-23 Clarity activation** — สมัคร Microsoft Clarity + ตั้ง `NEXT_PUBLIC_CLARITY_ID` ใน Vercel | 15-30m | Quick run: (1) clarity.microsoft.com → sign in with Microsoft account → New Project → site URL `https://pacred.co` → copy 10-char project ID (2) `vercel env add NEXT_PUBLIC_CLARITY_ID` for Production + Preview (3) redeploy (4) wait ~15min then check Clarity dashboard for first recordings. **Code shipped 2026-05-16 (DV-6); free tier no quota; auto-masks form inputs** |
 
 ### Priority 4 — Nice-to-have (after Priority 1-3)
 
@@ -2787,8 +2788,8 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 | **DV-3** | ThaiBulkSMS account apply + API keys → Vercel env | 30m | None (paid per SMS) |
 | **DV-4** | Pacred owner ติดต่อ ขอ PromptPay # + bank acct | 15m + รอ | Pacred legal |
 | **DV-5** | ✅ **DONE 2026-05-16** — L-22 GTM/GA4 scaffold + 4 events wired (commits `632e028` + `08685b3`). Activation = K-12 ของก๊อต | done | — |
-| **DV-6** | Landing pivot: L-23 heatmap integration (Microsoft Clarity = ฟรี, recommended) | 2-3h | None |
-| **DV-7** | Landing pivot: L-24 A/B infra scaffold (GrowthBook free tier or Vercel Edge Config) | 3-4h | None |
+| **DV-6** | ✅ **DONE 2026-05-16** — L-23 Clarity scaffold (`components/analytics/clarity-script.tsx` + `clarityTag/clarityEvent/clarityIdentify` helpers). Activation = K-13 ของก๊อต | done | — |
+| **DV-7** | ✅ **DONE 2026-05-16** — L-24 A/B infra (cookie-based deterministic bucketing via `pacred_vid` + FNV-1a; `lib/experiments.ts` pure primitives + `lib/experiments-server.ts` for RSC). No external activation needed; flip experiment `active: true` in registry to start traffic-splitting | done | — |
 | **DV-8** | Help ปอน Phase B L-5 — เดฟ confirm priority page order + scaffold helpers | 6-8h | ปอน sync |
 
 **Estimate รวม:** ~16-22h งานเดฟ this week. หลัง creds เข้าจาก DV-1..DV-4 → activate Sentry/Upstash/hCaptcha ใน Vercel + redeploy = unblock production hardening
@@ -2803,10 +2804,10 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 
 | Rank | Task | Effort | Who unblocks | Why this order |
 |---|---|---|---|---|
-| 1 | **DV-6 L-23 Microsoft Clarity scaffold** | 2-3h | Claude implement → user signup clarity.microsoft.com ทีหลัง (free) | Smaller than L-22 (1 script tag + env var). Pairs กับ L-22 — heatmap + session recording ให้รู้ว่าลูกค้าใช้หน้าไหนติด หน้าไหนเสีย — landing pivot data ครบ |
-| 2 | **DV-8 L-5 home page polish** | 3-4h chunk | Claude audit + propose → เดฟ confirm direction → implement | Strategic shift Part P4 = "เดฟ + Claude pivot landing/acquisition". Home = highest-traffic acquisition page. ปอน suggest order: home → import-china → china-shopping → customs-clearance |
-| 3 | **DV-7 L-24 A/B infra scaffold** | 3-4h | Claude scaffold + recommend default → เดฟ confirm provider | Decision-heavy (GrowthBook vs Vercel Edge Config). Less urgent กว่า 2 อันบน — A/B ต้องการ traffic เยอะก่อนจะมี significant data |
-| 4 | **Track G label-change UI** (per R1 Option E) | ~1h | ปอน normally — Claude สามารถจัดให้ได้ถ้าต้องการ unblock | Tiny UI change ที่ทำได้ก่อนก๊อต ADR ลง — bench-warm |
+| ~~1~~ ✅ | ~~DV-6 L-23 Microsoft Clarity scaffold~~ | done | — | Landed 2026-05-16 |
+| ~~3~~ ✅ | ~~DV-7 L-24 A/B infra scaffold~~ | done | — | Landed 2026-05-16 (cookie-based bucketing, no external SaaS) |
+| 1 | **DV-8 L-5 home page polish** | 3-4h chunk | Claude audit + propose → เดฟ confirm direction → implement | Strategic shift Part P4 = "เดฟ + Claude pivot landing/acquisition". Home = highest-traffic acquisition page. ปอน suggest order: home → import-china → china-shopping → customs-clearance |
+| 2 | **Track G label-change UI** (per R1 Option E) | ~1h | ปอน normally — Claude สามารถจัดให้ได้ถ้าต้องการ unblock | Tiny UI change ที่ทำได้ก่อนก๊อต ADR ลง — bench-warm |
 
 ### งานที่ต้องรอ external (defer; ส่งต่อก๊อต/Pacred owner):
 

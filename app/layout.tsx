@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import { GtmScript, GtmNoscript } from "@/components/analytics/gtm-script";
+import { ClarityScript } from "@/components/analytics/clarity-script";
 import { SITE_NAME, SITE_URL } from "@/components/seo/site";
 import "./globals.css";
 
@@ -95,6 +96,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
         />
         <GtmScript />
+        <ClarityScript />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
         <GtmNoscript />

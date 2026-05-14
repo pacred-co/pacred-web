@@ -15,6 +15,7 @@ type EventPayload = DataLayerEntry & { event: string };
 declare global {
   interface Window {
     dataLayer?: DataLayerEntry[];
+    clarity?: (action: string, ...args: unknown[]) => void;
   }
 }
 
@@ -85,4 +86,61 @@ export function trackPlaceOrder(orderType: OrderType, valueTHB?: number): void {
 /** Wallet deposit confirmed (admin approved the slip). */
 export function trackWalletDeposit(valueTHB: number): void {
   track("wallet_deposit", { value: valueTHB, currency: "THB" });
+}
+
+// ── Microsoft Clarity helpers (L-23) ─────────────────────────────
+// Clarity is loaded by `components/analytics/clarity-script.tsx`. These
+// helpers are no-op on server + safe to call before the tag finishes
+// loading (window.clarity is the queue function itself).
+
+/**
+ * Tag the current Clarity session with a custom key/value. Useful for
+ * filtering recordings later — e.g., `clarityTag("plan", "juristic")` lets
+ * you watch only juristic-customer sessions in the Clarity dashboard.
+ */
+export function clarityTag(key: string, value: string): void {
+  if (typeof window === "undefined") return;
+  window.clarity?.("set", key, value);
+}
+
+/**
+ * Fire a custom Clarity event — shows up as a marker in the session
+ * timeline. Use sparingly for high-signal moments only (e.g., signup-success,
+ * cart-abandoned). For funnel analysis, prefer GA4 events via `track()`.
+ */
+export function clarityEvent(name: string): void {
+  if (typeof window === "undefined") return;
+  window.clarity?.("event", name);
+}
+
+/**
+ * Identify the signed-in customer so Clarity recordings can be tied back
+ * to a specific user. Pass `profileId` (uuid) — never PII. Call once
+ * after successful sign-in if the customer has consented to recording.
+ */
+export function clarityIdentify(profileId: string): void {
+  if (typeof window === "undefined") return;
+  window.clarity?.("identify", profileId);
+}
+
+// ── A/B experiment exposure (L-24) ───────────────────────────────
+// Fire once per (experiment, variant) pair per page-view so GA4 can
+// segment downstream conversions by variant. Pairs with `lib/experiments.ts`.
+
+/**
+ * Tell GTM/GA4 that a visitor saw a specific experiment variant. Call
+ * this when the component implementing the variant actually renders —
+ * not on every getVariant() invocation — so exposure counts match
+ * actual impressions.
+ */
+export function trackExperimentExposure(
+  experimentKey: string,
+  variant: string,
+): void {
+  track("experiment_exposure", {
+    experiment_id: experimentKey,
+    variant,
+  });
+  // Also tag the Clarity session so recordings filter by variant
+  clarityTag(`exp_${experimentKey}`, variant);
 }

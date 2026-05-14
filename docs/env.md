@@ -328,6 +328,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
 - [ ] `NEXT_PUBLIC_LIFF_ID` set (D-1-LIFF) — without it `/liff/link` shows error + customers can't link → no LINE push reaches customers
 - [ ] `NEXT_PUBLIC_GTM_ID` set (L-22) — without it conversion tracking silently disabled; landing pivot acquisition metrics missing
+- [ ] `NEXT_PUBLIC_CLARITY_ID` set (L-23) — without it heatmap + session recording missing; behavioural debug data unavailable
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
@@ -384,6 +385,47 @@ import {
 - Marketing/ภูม can add/edit tags via GTM UI without redeploys
 - One container supports future Meta Pixel, TikTok Pixel, hotjar, conversion goals, etc.
 - Same conversion events power both GA4 reporting and ad-platform attribution
+
+---
+
+## 18. Heatmap & Session Replay — Microsoft Clarity 🟡 (L-23)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_CLARITY_ID` | optional (recommended for landing pivot) | https://clarity.microsoft.com → Sign in (free Microsoft account) → New Project → copy 10-char project ID | Public — inlined into client bundle. `NEXT_PUBLIC_` prefix required. |
+
+**Behaviour by env:**
+- **Unset, any env** — `<ClarityScript />` renders nothing; `clarityTag()` / `clarityEvent()` / `clarityIdentify()` are no-ops.
+- **Set, any env** — tag loaded; Clarity dashboard receives heatmap + session recordings within ~15 min of first traffic.
+
+**Code:** `lib/analytics.ts` (helpers) · `components/analytics/clarity-script.tsx` (loader) · `app/layout.tsx` (injection).
+
+**Helpers exported:**
+
+```ts
+import {
+  clarityTag,        // tag session with key/value (e.g., "plan", "juristic")
+  clarityEvent,      // fire timeline marker (e.g., "cart_abandoned")
+  clarityIdentify,   // attach profileId to recordings (post-login only)
+} from "@/lib/analytics";
+```
+
+**Activation order (when ready):**
+1. Pacred owner signs in to clarity.microsoft.com with a Microsoft account
+2. New Project → name "Pacred" → site URL `https://pacred.co` → copy 10-char ID
+3. เดฟ sets `NEXT_PUBLIC_CLARITY_ID` in Vercel env (Production + Preview)
+4. Redeploy → recordings start flowing within minutes; heatmap available after ~50 sessions
+
+**Why Clarity (vs Hotjar / FullStory):**
+- Free, no session quota (Hotjar free tier caps at 35 sessions/day)
+- No PII concern (Clarity masks form inputs by default)
+- Lightweight script (~50 KB, async, no Core Web Vitals impact)
+- Complementary to GTM/GA4 — GA4 tells you *what* converted; Clarity shows *why* others didn't
+
+**Privacy / consent (for production):**
+- Clarity respects DoNotTrack header by default — no extra config needed
+- Form inputs are auto-masked (passwords, credit cards, free-text fields) — see Clarity console → Settings → Masking
+- For Thai PDPA compliance: add a cookie banner once `NEXT_PUBLIC_CLARITY_ID` is set + consider calling `clarity("consent")` only after user opts in
 
 ---
 
