@@ -2732,7 +2732,7 @@ Sequence ถ้าจะ launch beta แบบ "PromptPay-only + admin manual":
 |---|---|---|---|---|
 | **K-1** | ✅ **DONE 2026-05-16** — ADR-0003 china-search vendor cutoff [`0003-china-search-vendor-cutoff.md`](decisions/0003-china-search-vendor-cutoff.md). Locks Option E hybrid + guardrails + re-evaluation triggers. Written by เดฟ on ก๊อต's behalf per §6 second-tier owner authority — ก๊อต can amend | done | — |
 | **K-2** | ✅ **DONE 2026-05-16** — ADR-0004 payment gateway [`0004-payment-gateway.md`](decisions/0004-payment-gateway.md). Locks D-7 = PromptPay-only ก่อน beta + post-beta selection criteria (Omise > 2C2P > Stripe TH gated on cart-dropoff % + CS ticket volume) | done | — |
-| **K-3** | R2 PCS scrub execution plan | 1h | New section ใน `docs/decisions/0005-pcs-branding-scrub.md` หรือ inline note ที่ Part R2 — list files + grep patterns + who executes (recommend: ภูม + ปอน batch ระหว่างทำ task ปกติ) | ทีม execute scrub ได้ทันที |
+| **K-3** | ✅ **DONE 2026-05-16** — Scrub runbook [`docs/runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md) + sweep applied. 4 user-visible files migrated to `CONTACT.*` / `ADDRESSES.*` imports (HTML + 2 PDF receipts + sales-rep-card fallback). Legacy code comments + migration SQL kept (internal traceability, never ship to client). Pending = bank acct + PromptPay number (Part Q Bundle 1, blocked on Pacred owner) | done | — |
 
 ### Priority 2 — Quick decisions (~1h batched)
 

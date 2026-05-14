@@ -11,6 +11,7 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { styles, fmtBaht } from "./styles";
 import { readThaiBaht } from "@/lib/utils/thai-number";
+import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 export type ForwarderReceiptData = {
   f_no:        string | null;
@@ -102,8 +103,8 @@ export function ForwarderReceipt({ data }: { data: ForwarderReceiptData }) {
             <Text style={styles.brandName}>Pacred</Text>
             <Text style={styles.brandTagline}>นำเข้า · ส่งออก · ฝากสั่ง · ชิปปิ้ง</Text>
             <Text style={styles.brandAddress}>
-              12 ซอยเพชรเกษม 77 แยก 3-6 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพฯ 10160{"\n"}
-              โทร 02-444-7046 · contact@pacred.co
+              {ADDRESSES.office.full}{"\n"}
+              โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}
             </Text>
           </View>
           <View style={styles.receiptMeta}>
@@ -188,7 +189,7 @@ export function ForwarderReceipt({ data }: { data: ForwarderReceiptData }) {
         {/* Footer */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
-            Pacred · 02-444-7046 · LINE @pacred · pacred.co
+            Pacred · {CONTACT.phoneCompanyDisplay} · LINE @pacred · pacred.co
           </Text>
           <Text
             style={styles.pageNumber}

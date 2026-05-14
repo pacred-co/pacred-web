@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
+import { CONTACT } from "@/components/seo/site";
 
 /**
  * Sales rep card — shows the customer's assigned sales rep with
@@ -89,10 +90,10 @@ function SalesRepFallback() {
           <p className="font-bold text-foreground text-sm leading-tight">ทีมงาน Pacred</p>
           <p className="text-[10px] text-muted">Customer Care</p>
           <a
-            href="tel:024447046"
+            href={`tel:${CONTACT.phoneCompany}`}
             className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700 font-mono hover:underline"
           >
-            📞 02-444-7046
+            📞 {CONTACT.phoneCompanyDisplay}
           </a>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getForwarderByNo } from "@/actions/forwarder";
 import { PrintButton } from "@/components/print-button";
+import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 /**
  * Print-ready receipt view. No NavBar/sidebar/footer — just the body.
@@ -42,8 +43,8 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
         <div className="flex items-start justify-between border-b-2 border-black pb-4">
           <div>
             <h1 className="text-3xl font-black text-primary-700">Pacred</h1>
-            <p className="text-xs">12 ซอยเพชรเกษม 77 แยก 3-6 หนองค้างพลู หนองแขม กรุงเทพฯ 10160</p>
-            <p className="text-xs">โทร 02-444-7046 · contact@pacred.co</p>
+            <p className="text-xs">{ADDRESSES.office.full}</p>
+            <p className="text-xs">โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}</p>
           </div>
           <div className="text-right">
             <h2 className="text-xl font-bold">ใบแจ้งหนี้ฝากนำเข้า</h2>
@@ -115,7 +116,7 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
         {/* Footer */}
         <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-600">
           <p>• เอกสารนี้ออกโดย Pacred โดยอัตโนมัติจากระบบ — ไม่ต้องเซ็นกำกับ</p>
-          <p>• สำหรับสอบถามเพิ่มเติม โทร 02-444-7046 / LINE @pacred</p>
+          <p>• สำหรับสอบถามเพิ่มเติม โทร {CONTACT.phoneCompanyDisplay} / LINE @pacred</p>
         </div>
       </main>
     </div>
