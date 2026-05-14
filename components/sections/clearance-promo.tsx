@@ -118,7 +118,7 @@ function ContactCard({ className = "" }: { className?: string }) {
             โทร 066-131-0253
           </a>
           <a
-            href="https://lin.ee/Yg3fU0I"
+            href="/line"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-1.5 md:gap-2 h-10 md:h-10 rounded-lg md:rounded-xl border border-[#06C755] text-[#06C755] dark:text-[#06C755] text-[13px] md:text-[13.5px] font-extrabold bg-white dark:bg-transparent hover:bg-[#06C755] hover:text-white transition-all"

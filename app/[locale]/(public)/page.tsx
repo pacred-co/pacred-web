@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
-import { MobileTrustRibbon } from "@/components/sections/mobile-trust-ribbon";
 import { StatsBar } from "@/components/sections/stats-bar";
 import { Promotion } from "@/components/sections/promotion";
 import { OurService } from "@/components/sections/our-service";
@@ -100,7 +99,6 @@ export default async function Home({
       <SearchBar />
       <main>
         <BookingCalculator />
-        <MobileTrustRibbon />
         <StatsBar />
         <Promotion />
         <OurService />

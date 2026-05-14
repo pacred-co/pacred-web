@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { withSentryConfig } from "@sentry/nextjs";
 import path from "path";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
@@ -72,4 +73,27 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withNextIntl(nextConfig);
+/**
+ * Sentry build wrapper.
+ *
+ * Active only when SENTRY_DSN is set — in dev / pre-launch this is a
+ * passthrough. Source map upload requires SENTRY_AUTH_TOKEN +
+ * SENTRY_ORG + SENTRY_PROJECT (set in Vercel later for production
+ * stack-trace symbolication). Until then, errors still arrive at
+ * Sentry but stacks point at minified output.
+ *
+ * Tunnel route bypasses ad-blockers that block requests to *.sentry.io.
+ *
+ * @see https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+ */
+const sentryBuildOptions = {
+  org:    process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  tunnelRoute: "/api/monitoring",
+  disableLogger: true,
+  automaticVercelMonitors: false,
+};
+
+export default withSentryConfig(withNextIntl(nextConfig), sentryBuildOptions);

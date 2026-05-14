@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { MessageCircle, Phone, ArrowRight, Quote } from "lucide-react";
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 const HOTLINE = "066-125-3007";
 
 const EMOJI_HEAD = /^([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F000}-\u{1F02F}✅⚠️📞📲🚢✈️📦🛠️🆘🛑🚫🌍🇨🇳🚀🛳️💡🎯👉⏱⏰🔎🛒🇹🇭🏁📍⭐📂](?:[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE0F}️])*)\s*(.*)$/u;

@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
-import { MobileTrustRibbon } from "@/components/sections/mobile-trust-ribbon";
 import { ClearanceBanner } from "@/components/sections/clearance-banner";
 import { ClearancePromo } from "@/components/sections/clearance-promo";
 import { ClearanceProcess } from "@/components/sections/clearance-process";
@@ -70,7 +69,6 @@ export default async function CustomsClearancePage({
       <SearchBar />
       <main>
         <BookingCalculator landing="customs" />
-        <MobileTrustRibbon variant="customs" />
         <ClearancePromo />
         <ClearanceCards />
         <ClearanceProcess />

@@ -15,9 +15,13 @@
     "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/utils/thai-number.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts"
   },
   "dependencies": {
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@react-pdf/renderer": "^4.5.1",
+    "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "lucide-react": "^1.14.0",
     "next": "16.2.6",
     "next-intl": "^4.11.1",

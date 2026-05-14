@@ -6,7 +6,7 @@ import { X, Phone, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 
 type SalesCardLocal = {
   personKey: "win" | "nat" | "ploy";

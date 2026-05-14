@@ -61,16 +61,31 @@ Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links 
 
 ---
 
-## 5. China Product Search 🟡
+## 5. China Product Search 🟡 (P-50 audit 2026-05-14)
 
-| Var | Value | Powers |
-|---|---|---|
-| `PACRED_RCGROUP_API_URL` | `https://rcgroup-th.com/api-china/api-search` (legacy — verify alive) | `/service-order/add` URL-paste converter + image search |
-| `PACRED_TAMIT_API_URL` | `https://tamit-cloud.com/api-product/api-search` (legacy — verify alive) | `/service-order/add` keyword search |
+⚠️ **Pacred lib/china-search/index.ts is currently MISWIRED to RCGroup-TH (dead code in PHP).** See `docs/audit/php-pcscargo-integrations.md` §17 for full rewire spec. Tracked as **P-50 (CRITICAL)** in `PORT_PLAN.md` Sprint 7+ Track G.
 
-⚠️ **Degraded mode:** ไม่ตั้ง = URL paste returns demo product (price ¥0, "Taobao Shop") — ลูกค้าสับสน ไม่รู้ว่า API broken
+**The ACTIVE PHP integrations** (verbatim from legacy production):
 
-**Code:** `lib/china-search/index.ts`. Legacy PHP `member/include/pages/search/dataAPI.php` ใช้ endpoint เดียวกัน — verify pattern (current code expects `?q=` but legacy uses `?id=`).
+| Var | Value | Powers | Auth |
+|---|---|---|---|
+| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}` | None |
+| `PACRED_TAMIT_CACHE_URL` | `https://tam-i-t.com/api/convert-link-china` | Short-URL cache (1688 `qr.1688.com/s/{tk}` + Taobao `m.tb.cn/{tk}` → productID). Endpoint shape: `{base}/get[/taobao]/?tk={tk}` + `/save/?tk=...&provider={1\|2}&productID=...` | None |
+| `PACRED_AKUCARGO_API_URL` | `https://akucargo.com/api3/api-2022` | Keyword search (1688 + Taobao). Endpoint shape: `{base}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` | None (UA spoof to desktop Firefox) |
+| `PACRED_LAONET_API_URL` | `https://laonet.online` | Image search (reverse-image) + product detail fallback. Endpoint shape: `{base}/index.php?route=api_tester/call&api_name={item_search_img\|item_get\|upload_img}&...&key={key}` | Email-as-key (`PACRED_LAONET_KEY`) |
+| `PACRED_LAONET_KEY` | `tam011plus@gmail.com` (legacy) | API key for Laonet — literally an email | — |
+
+**Degraded mode (any unset):** URL paste returns demo product (price ¥0, generic shop name) — `lib/china-search/index.ts` `convertProductUrlDetail` falls back to `buildDemoDetail()` so flow still works.
+
+**DEAD code (kept commented for reference):**
+- `PACRED_RCGROUP_API_URL=https://rcgroup-th.com/api-china/api-search` — RCGroup branch in PHP `convertURL.php` is gated by `$APIKEY` flag that's never assigned anywhere → never executes in production. Pacred port should drop this entirely after P-50 lands
+
+**Why "API blocked" symptom:**
+1. Pacred's `lib/china-search/index.ts:104,127,277` use `PACRED_RCGROUP_API_URL` for product detail + image — but RCGroup is dead
+2. Vercel function egress IP differs from legacy XAMPP/cPanel — TAMIT/AkuCargo/Laonet may need vendor IP allowlist
+3. PHP disables `CURLOPT_SSL_VERIFYPEER` — Vercel/Node fetch defaults to verify; some vendor certs have issues, may need explicit https.Agent
+
+See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 
 ---
 
@@ -86,16 +101,20 @@ Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links 
 
 ---
 
-## 7. LINE Messaging API (push notifications) 🟡
+## 7. LINE Messaging API (push notifications) 🟡 ✅ creds set 2026-05-14
 
 | Var | Value | Powers |
 |---|---|---|
 | `LINE_PUSH_BYPASS` | `true` (dev, default) / `false` (prod) | If true, push skipped — only console.log |
-| `LINE_CHANNEL_ACCESS_TOKEN` | https://developers.line.biz → Pacred OA → Messaging API → Channel access token | Push to LINE users who linked account |
+| `LINE_CHANNEL_ID` | `2009931373` (Pacred OA) | Used for webhook signature verification (future LINE OA bot) |
+| `LINE_CHANNEL_SECRET` | (set in `.env.local` 2026-05-14) | Same — webhook signature |
+| `LINE_CHANNEL_ACCESS_TOKEN` | (long-lived token set in `.env.local` 2026-05-14) | Push to LINE users who linked account via `api.line.me/v2/bot/message/push` |
 
-⚠️ **Default is bypass=true** (safe for dev). Production needs `LINE_PUSH_BYPASS=false` + valid token.
+✅ **Pacred credentials landed** 2026-05-14 evening (เดฟ provided via chat). All 3 LINE vars set in `.env.local` (gitignored). For production, set the same 3 vars in Vercel env + flip `LINE_PUSH_BYPASS=false`.
 
-LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging API push + email fallback.
+⚠️ **Default in dev is bypass=true** (safe — no spam to test users). To activate dev push: edit `.env.local` set `LINE_PUSH_BYPASS=false` then restart `pnpm dev`.
+
+LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging API push + email fallback. Pacred uses Messaging API push (NOT Notify) — see `lib/notifications/index.ts:104-132`.
 
 **Code:** `lib/notifications/index.ts:24,100`.
 
@@ -145,7 +164,134 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 
 ---
 
-## 12. Pre-launch checklist (production-readiness)
+## 12. hCaptcha — invisible bot protection 🟡 (D-13)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | optional | https://www.hcaptcha.com → Sites → New (Type: **invisible**) | Public — inlined into client bundle. `NEXT_PUBLIC_` prefix required |
+| `HCAPTCHA_SECRET_KEY` | optional | same dashboard → site detail | Server-only. Sent in body of `siteverify` POST |
+
+**Behaviour by env:**
+- **Both unset, dev** — `lib/hcaptcha.ts` `verifyHcaptcha()` returns `{success:true}`; client component renders nothing; flows pass with no captcha
+- **Both unset, prod** — server FAILS CLOSED with `{success:false, error:"missing_secret"}` + `logger.error`; client component renders nothing
+- **Both set, any env** — full invisible CAPTCHA flow active
+
+**Usage pattern (combine client + server):**
+```tsx
+// Client (form)
+"use client";
+import { useRef } from "react";
+import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
+
+const captchaRef = useRef<HCaptchaHandle>(null);
+
+async function handleSubmit() {
+  const token = await captchaRef.current?.execute();
+  const res = await signupAction({ ...formData, captchaToken: token ?? "" });
+  if (!res.ok) captchaRef.current?.reset();
+}
+
+return <form>… <HCaptchaInvisible ref={captchaRef} /></form>;
+```
+
+```ts
+// Server action
+"use server";
+import { verifyHcaptcha } from "@/lib/hcaptcha";
+import { getClientIp } from "@/lib/rate-limit";
+
+export async function signupAction(input: { ...; captchaToken: string }) {
+  // (read request via headers() helper for IP)
+  const captcha = await verifyHcaptcha(input.captchaToken, ip);
+  if (!captcha.success) {
+    return { ok: false, error: "captcha_failed" };
+  }
+  // ... rest of signup
+}
+```
+
+**Activation order (when ready):**
+1. Pacred owner creates hCaptcha account → New Site → choose "Invisible"
+2. Copy site key + secret key
+3. เดฟ sets `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` in Vercel env
+4. ภูม wires `verifyHcaptcha` into target server actions: `signupAction`, contact form, password reset (D-13-wire follow-up)
+5. Redeploy → invisible challenge runs only on suspicious traffic; UX silent for normal users
+
+**Why "invisible":** challenges only suspect bots, otherwise passes silently — no UX friction for real users. hCaptcha free tier covers ~1M requests/month — enough for Pacred pre-launch + early growth.
+
+---
+
+## 13. Rate limiting — Upstash Redis 🟡 (D-12)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `UPSTASH_REDIS_REST_URL` | optional | https://console.upstash.com → create Redis DB → REST API tab | `https://<region>.upstash.io` |
+| `UPSTASH_REDIS_REST_TOKEN` | optional | same page | REST token with read+write |
+
+**Behaviour when unset:** `lib/rate-limit.ts` falls back to an in-memory `Map` per server process. **Dev-only fallback** — in prod Vercel may run multiple function instances concurrently, each with its own memory, so attackers can multiply allowed volume by hammering different cold starts. Set Upstash creds before customer launch.
+
+**Pre-configured limits** (in `lib/rate-limit.ts`):
+- `signup` — 5/hour/IP — pre-account creation
+- `login` — 10/hour/IP — defend credential stuffing
+- `passwordReset` — 5/hour/IP — anti-enumeration
+- `contact` — 5/hour/IP — anti-spam on `/contact` form
+- `generic` — 30/min/key — default for endpoints without their own bucket
+
+**Usage pattern (Server Action / Route Handler):**
+```ts
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+const ip = getClientIp(request);
+const blocked = await checkRateLimit("signup", ip);
+if (blocked) return blocked;  // { ok: false, error: "rate_limit", retryAfterSeconds }
+```
+
+**Note:** This is for IP-based + generic time-window limits. For OTP-specific limits see `actions/otp.ts` — that uses DB-backed counting (3/hour/phone via `otp_codes` table) which doubles as audit trail.
+
+**Activation order (when ready):**
+1. Pacred owner creates Upstash account → create Redis DB (free tier OK pre-launch)
+2. เดฟ sets `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel env
+3. Redeploy → no code change needed; abstraction switches from memory to Redis on next request
+
+**Activation:** zero downtime. The lib reads env once at module load — server functions cold-start with Redis when env present.
+
+---
+
+## 14. Sentry — error tracking 🟡 (D-11)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `SENTRY_DSN` | optional | https://sentry.io → Settings → Projects → Client Keys (DSN) | Server-side. Unset = SDK no-op (no errors sent). |
+| `NEXT_PUBLIC_SENTRY_DSN` | optional | same DSN value as server | Browser. Same value, but Next 16 needs `NEXT_PUBLIC_` prefix to inline into client bundle |
+| `SENTRY_ENV` / `NEXT_PUBLIC_SENTRY_ENV` | optional | `production` / `staging` / `dev` | Overrides `NODE_ENV` for the env tag in Sentry events |
+| `SENTRY_AUTH_TOKEN` | optional (prod) | Sentry → Settings → Auth Tokens (org-level, `project:write` scope) | Required for source map upload at build (`withSentryConfig` reads this); without it, prod stack traces point at minified output |
+| `SENTRY_ORG` | optional (prod) | Sentry org slug | e.g. `pacred` |
+| `SENTRY_PROJECT` | optional (prod) | Sentry project slug | e.g. `pacred-web` |
+
+**How it integrates:**
+- Server: `instrumentation.ts` registers `sentry.{server,edge}.config.ts` based on `NEXT_RUNTIME` + Next 16's `onRequestError` hook auto-captures Server Component / Route Handler / Server Action errors
+- Client: `instrumentation-client.ts` initialises Sentry before React hydrates + `onRouterTransitionStart` adds navigation breadcrumbs
+- Logger: `lib/logger.ts` `logger.error()` ALSO calls `Sentry.captureException` — every structured error is also a Sentry event
+- Build: `next.config.ts` is wrapped in `withSentryConfig` — handles source map upload when auth token is set; otherwise passthrough
+- CSP: `connect-src 'self' https: wss:` already covers `*.ingest.sentry.io` (no change needed)
+- Tunnel: events route through `/api/monitoring` to bypass ad-blockers that block `*.sentry.io` directly
+
+**Activation order (when ready):**
+1. Create Sentry project → copy DSN
+2. Set `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` in Vercel env
+3. (Optional, for prod) create auth token → set `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`
+4. Redeploy → next error → check Sentry dashboard
+5. Smoke: throw a test error from `/admin` → confirm landing in Sentry within ~30s
+
+**Sample rates (current defaults):**
+- Traces: 10% in prod, 100% in dev
+- Replays: 0% (off — privacy + bundle size)
+
+Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
+
+---
+
+## 15. Pre-launch checklist (production-readiness)
 
 ตรวจครบทุกข้อก่อน `OTP_BYPASS=false` + open ลูกค้า:
 
@@ -159,12 +305,15 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 - [ ] `THAIBULKSMS_API_KEY` + `_SECRET` = real keys (not placeholders)
 - [ ] `LINE_CHANNEL_ACCESS_TOKEN` = real token + Pacred OA verified
 - [ ] `PROMPTPAY_ID` = Pacred company actual ID
+- [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
+- [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
+- [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
 ---
 
-## 13. Migrate dev → staging → prod
+## 16. Migrate dev → staging → prod
 
 | Env | File location | Set by |
 |---|---|---|
