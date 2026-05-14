@@ -85,6 +85,10 @@ a.trackLogin("phone");
 eq("login phone", dataLayerSink, [{ event: "login", method: "phone" }]);
 
 reset();
+a.trackSignOut();
+eq("sign_out → logout event", dataLayerSink, [{ event: "logout" }]);
+
+reset();
 a.trackGenerateLead("contact_form");
 eq("generate_lead with source", dataLayerSink, [
   { event: "generate_lead", source: "contact_form" },
@@ -104,12 +108,18 @@ eq("place_order without value omits value/currency", dataLayerSink, [
   { event: "place_order", order_type: "service_order" },
 ]);
 
-// ── (d) trackWalletDeposit ──────────────────────────────────────
-console.log("\n(d) wallet_deposit");
+// ── (d) trackWalletDeposit + trackWalletWithdrawRequest ─────────
+console.log("\n(d) wallet_deposit + wallet_withdraw_request");
 reset();
 a.trackWalletDeposit(5000);
 eq("wallet_deposit with THB amount", dataLayerSink, [
   { event: "wallet_deposit", value: 5000, currency: "THB" },
+]);
+
+reset();
+a.trackWalletWithdrawRequest(3000);
+eq("wallet_withdraw_request with THB amount", dataLayerSink, [
+  { event: "wallet_withdraw_request", value: 3000, currency: "THB" },
 ]);
 
 // ── (e) trackCtaClick ───────────────────────────────────────────

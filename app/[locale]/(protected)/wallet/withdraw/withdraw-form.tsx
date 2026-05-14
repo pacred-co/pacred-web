@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { createWithdraw } from "@/actions/wallet";
 import { Banknote, User, Hash } from "lucide-react";
+import { trackWalletWithdrawRequest } from "@/lib/analytics";
 
 const MIN_AMOUNT = 25;
 const FEE_THRESHOLD = 500;
@@ -55,6 +56,7 @@ export function WithdrawForm({ balance }: Props) {
         note:           note || undefined,
       });
       if (res.ok) {
+        trackWalletWithdrawRequest(amt);
         setDone(true);
         router.refresh();
       } else {

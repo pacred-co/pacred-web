@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { ChevronDown, LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
+import { trackSignOut } from "@/lib/analytics";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
@@ -258,7 +259,7 @@ function MobileUserMenu({ profile, onClose }: { profile: ProfileLite | null; onC
           {t("completeProfile")}
         </Link>
       )}
-      <form action="/auth/signout" method="post">
+      <form action="/auth/signout" method="post" onSubmit={() => trackSignOut()}>
         <button type="submit"
           className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/90 hover:bg-white/10">
           <LogOut className="h-4 w-4" />

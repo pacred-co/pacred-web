@@ -70,6 +70,11 @@ export function trackLogin(method: LoginMethod): void {
   track("login", { method });
 }
 
+/** Customer signed out — fired before the form-post navigation. */
+export function trackSignOut(): void {
+  track("logout");
+}
+
 /** Lead/contact form submitted — e.g., /contact, sales-rep cards. */
 export function trackGenerateLead(source: string): void {
   track("generate_lead", { source });
@@ -92,6 +97,11 @@ export function trackPlaceOrder(orderType: OrderType, valueTHB?: number): void {
  */
 export function trackWalletDeposit(valueTHB: number): void {
   track("wallet_deposit", { value: valueTHB, currency: "THB" });
+}
+
+/** Customer submitted a wallet withdraw request (admin approve still pending). */
+export function trackWalletWithdrawRequest(valueTHB: number): void {
+  track("wallet_withdraw_request", { value: valueTHB, currency: "THB" });
 }
 
 /**
