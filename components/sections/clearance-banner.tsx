@@ -3,8 +3,14 @@
 import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
+import { LINE_OA } from "@/components/seo/site";
 
-const LINE_URL = "https://lin.ee/r3b1BuOC";
+// Was hardcoded to `https://lin.ee/r3b1BuOC` (PCS Cargo legacy clearance
+// short URL — different from the main `Yg3fU0I`). Standardised to the
+// canonical Pacred OA so analytics + branding align across all entry
+// CTAs. If the legacy r3b1BuOC was a separate clearance sub-channel
+// the owner wants to keep, swap back here.
+const LINE_URL = LINE_OA.shortUrl;
 
 const SALES = [
   { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "066-125-3007", image: "/images/Character_Icon/win.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },

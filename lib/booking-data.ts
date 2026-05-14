@@ -1,4 +1,5 @@
 import type { SalesCard, DropdownSection } from '@/types/booking';
+import { LINE_OA } from '@/components/seo/site';
 
 export const HERO_IMGS: Record<string, string> = {
   default:  '/images/hero-section/banner/default.png',
@@ -29,10 +30,13 @@ export interface SalesCardData extends Omit<SalesCard, 'slogan' | 'alt' | 'butto
   personKey: 'win' | 'nat' | 'ploy';
 }
 
+// All 3 reps currently route to the main Pacred OA. Swap to per-rep
+// add-friend URLs (LINE OA Manager → "ตอบโดยอัตโนมัติ" or per-rep accounts)
+// once each rep has their own LINE channel.
 export const SALES_CARDS_DATA: SalesCardData[] = [
-  { personKey: 'win',  name: 'วิน',  phone: '066-125-3007', image: '/images/Character_Icon/win.png',  link: 'https://lin.ee/Yg3fU0I' },
-  { personKey: 'nat',  name: 'แนท',  phone: '02-421-3325',  image: '/images/pacred-logo-red.png',     link: 'https://lin.ee/Yg3fU0I' },
-  { personKey: 'ploy', name: 'พลอย', phone: '066-090-1217', image: '/images/Character_Icon/ploy.png', link: 'https://lin.ee/Yg3fU0I' },
+  { personKey: 'win',  name: 'วิน',  phone: '066-125-3007', image: '/images/Character_Icon/win.png',  link: LINE_OA.shortUrl },
+  { personKey: 'nat',  name: 'แนท',  phone: '02-421-3325',  image: '/images/pacred-logo-red.png',     link: LINE_OA.shortUrl },
+  { personKey: 'ploy', name: 'พลอย', phone: '066-090-1217', image: '/images/Character_Icon/ploy.png', link: LINE_OA.shortUrl },
 ];
 
 // Sections describe shape — `headingKey` and `chips[].labelKey` are i18n paths into `bookingCalc.data.*`.
