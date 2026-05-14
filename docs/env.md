@@ -145,7 +145,41 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 
 ---
 
-## 12. Pre-launch checklist (production-readiness)
+## 12. Sentry — error tracking 🟡 (D-11)
+
+| Var | Required? | Where to get | Notes |
+|---|---|---|---|
+| `SENTRY_DSN` | optional | https://sentry.io → Settings → Projects → Client Keys (DSN) | Server-side. Unset = SDK no-op (no errors sent). |
+| `NEXT_PUBLIC_SENTRY_DSN` | optional | same DSN value as server | Browser. Same value, but Next 16 needs `NEXT_PUBLIC_` prefix to inline into client bundle |
+| `SENTRY_ENV` / `NEXT_PUBLIC_SENTRY_ENV` | optional | `production` / `staging` / `dev` | Overrides `NODE_ENV` for the env tag in Sentry events |
+| `SENTRY_AUTH_TOKEN` | optional (prod) | Sentry → Settings → Auth Tokens (org-level, `project:write` scope) | Required for source map upload at build (`withSentryConfig` reads this); without it, prod stack traces point at minified output |
+| `SENTRY_ORG` | optional (prod) | Sentry org slug | e.g. `pacred` |
+| `SENTRY_PROJECT` | optional (prod) | Sentry project slug | e.g. `pacred-web` |
+
+**How it integrates:**
+- Server: `instrumentation.ts` registers `sentry.{server,edge}.config.ts` based on `NEXT_RUNTIME` + Next 16's `onRequestError` hook auto-captures Server Component / Route Handler / Server Action errors
+- Client: `instrumentation-client.ts` initialises Sentry before React hydrates + `onRouterTransitionStart` adds navigation breadcrumbs
+- Logger: `lib/logger.ts` `logger.error()` ALSO calls `Sentry.captureException` — every structured error is also a Sentry event
+- Build: `next.config.ts` is wrapped in `withSentryConfig` — handles source map upload when auth token is set; otherwise passthrough
+- CSP: `connect-src 'self' https: wss:` already covers `*.ingest.sentry.io` (no change needed)
+- Tunnel: events route through `/api/monitoring` to bypass ad-blockers that block `*.sentry.io` directly
+
+**Activation order (when ready):**
+1. Create Sentry project → copy DSN
+2. Set `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` in Vercel env
+3. (Optional, for prod) create auth token → set `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`
+4. Redeploy → next error → check Sentry dashboard
+5. Smoke: throw a test error from `/admin` → confirm landing in Sentry within ~30s
+
+**Sample rates (current defaults):**
+- Traces: 10% in prod, 100% in dev
+- Replays: 0% (off — privacy + bundle size)
+
+Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
+
+---
+
+## 13. Pre-launch checklist (production-readiness)
 
 ตรวจครบทุกข้อก่อน `OTP_BYPASS=false` + open ลูกค้า:
 
@@ -159,12 +193,13 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 - [ ] `THAIBULKSMS_API_KEY` + `_SECRET` = real keys (not placeholders)
 - [ ] `LINE_CHANNEL_ACCESS_TOKEN` = real token + Pacred OA verified
 - [ ] `PROMPTPAY_ID` = Pacred company actual ID
+- [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
 - [ ] Supabase OAuth providers (Google/Facebook) enabled in dashboard
 - [ ] Vercel env vars synced (use `vercel env pull` to verify locally)
 
 ---
 
-## 13. Migrate dev → staging → prod
+## 14. Migrate dev → staging → prod
 
 | Env | File location | Set by |
 |---|---|---|

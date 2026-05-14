@@ -11,7 +11,9 @@
  *
  * Behaviour:
  *   - dev (NODE_ENV !== "production"): pretty console with scope tag
- *   - prod: single-line JSON to stdout so Vercel/Sentry parse structured
+ *   - prod: single-line JSON to stdout so Vercel ingests structured
+ *   - prod + SENTRY_DSN set: `error()` calls also forwarded to Sentry
+ *     (no-op when DSN unset). `warn()` not forwarded — too noisy.
  *
  * Never log raw phone/email/UUID — use the `redact*` helpers below.
  *
@@ -19,6 +21,7 @@
  */
 
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -83,10 +86,38 @@ export const logger = {
 
   /**
    * Error log — captures stack in dev only (avoid leaking source paths in prod logs).
+   * Also forwards the underlying Error to Sentry (no-op when SENTRY_DSN unset).
    */
-  error: (scope: string, msg: string, err?: unknown, ctx?: Record<string, unknown>) =>
-    emit(makePayload("error", scope, msg, err, ctx)),
+  error: (scope: string, msg: string, err?: unknown, ctx?: Record<string, unknown>) => {
+    emit(makePayload("error", scope, msg, err, ctx));
+    forwardToSentry(scope, msg, err, ctx);
+  },
 };
+
+function forwardToSentry(scope: string, msg: string, err?: unknown, ctx?: Record<string, unknown>): void {
+  // Sentry's SDK is a no-op when not initialised (DSN unset). Wrap defensively
+  // so a logger call never throws even if the SDK glitches.
+  try {
+    if (err instanceof Error) {
+      Sentry.captureException(err, {
+        tags:  { scope, msg },
+        extra: ctx,
+      });
+    } else if (err != null) {
+      Sentry.captureMessage(`${scope}: ${msg} — ${String(err)}`, {
+        level: "error",
+        extra: ctx,
+      });
+    } else {
+      Sentry.captureMessage(`${scope}: ${msg}`, {
+        level: "error",
+        extra: ctx,
+      });
+    }
+  } catch {
+    // swallow — never let observability failures cascade
+  }
+}
 
 // ── PII redaction helpers ─────────────────────────────────────────────────
 
