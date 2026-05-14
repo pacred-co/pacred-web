@@ -20,7 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 const HOTLINE = "066-125-3007";
 
 type Mode = "cargo" | "freight";
@@ -131,9 +131,12 @@ const CARGO_CARDS: CargoCard[] = [
   },
 ];
 
-// ───────────── Freight cards (Term-varied) ─────────────
+// ───────────── Freight cards (Term-varied, split into LCL / FCL rows) ─────────────
+type FreightGroup = "lcl" | "fcl";
+
 type FreightCard = {
   id: string;
+  group: FreightGroup;
   badgeKey?: string;
   title: string;
   subtitleKey: string;
@@ -145,46 +148,69 @@ type FreightCard = {
 };
 
 const FREIGHT_CARDS: FreightCard[] = [
+  // ── LCL row (ทางรถ + ทางเรือ) — prices per Google Doc rate sheet ──
   {
-    id: "lcl",
-    badgeKey: "lclBadge",
-    title: "LCL Freight",
-    subtitleKey: "lclSubtitle",
+    id: "lcl-truck",
+    group: "lcl",
+    badgeKey: "lclTruckBadge",
+    title: "LCL ทางรถ",
+    subtitleKey: "lclTruckSubtitle",
     unitKey: "lclUnit",
-    price: { DDP: "5,500", EXW: "4,200", FOB: "3,500" },
+    price: { DDP: "5,500", EXW: "4,900", FOB: "4,200" },
     stats: [
-      { labelKey: "statTransit", valueKey: "lclTransit" },
+      { labelKey: "statTransit", valueKey: "lclTruckTransit" },
       { labelKey: "statMin",     valueKey: "lclMin" },
     ],
-    noteKey: "lclNote",
+    noteKey: "lclTruckNote",
   },
   {
+    id: "lcl-sea",
+    group: "lcl",
+    badgeKey: "lclSeaBadge",
+    title: "LCL ทางเรือ",
+    subtitleKey: "lclSeaSubtitle",
+    unitKey: "lclUnit",
+    price: { DDP: "3,500", EXW: "2,900", FOB: "2,500" },
+    stats: [
+      { labelKey: "statTransit", valueKey: "lclSeaTransit" },
+      { labelKey: "statMin",     valueKey: "lclMin" },
+    ],
+    noteKey: "lclSeaNote",
+    popular: true,
+  },
+  // ── FCL row (ตู้ 20ft + 40HQ) — DDP/EXW/FOB per Google Doc ──
+  {
     id: "fcl20",
+    group: "fcl",
     title: "FCL 20ft",
     subtitleKey: "fcl20Subtitle",
     unitKey: "fcl20Unit",
-    price: { DDP: "72,000", EXW: "63,000", FOB: "55,000" },
+    price: { DDP: "135,000", EXW: "95,000", FOB: "55,000" },
     stats: [
       { labelKey: "statTransit",  valueKey: "fcl20Transit" },
       { labelKey: "statCapacity", valueKey: "fcl20Capacity" },
     ],
     noteKey: "fcl20Note",
-    popular: true,
   },
   {
     id: "fcl40hq",
+    group: "fcl",
     badgeKey: "fcl40Badge",
     title: "FCL 40HQ",
     subtitleKey: "fcl40Subtitle",
     unitKey: "fcl40Unit",
-    price: { DDP: "98,000", EXW: "86,000", FOB: "75,000" },
+    price: { DDP: "155,000", EXW: "115,000", FOB: "75,000" },
     stats: [
       { labelKey: "statTransit",  valueKey: "fcl40Transit" },
       { labelKey: "statCapacity", valueKey: "fcl40Capacity" },
     ],
     noteKey: "fcl40Note",
+    popular: true,
   },
 ];
+
+const LCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "lcl");
+const FCL_CARDS = FREIGHT_CARDS.filter((c) => c.group === "fcl");
 
 export function PricingSection() {
   const t = useTranslations("pricing");
@@ -413,7 +439,7 @@ export function PricingSection() {
           </div>
         )}
 
-        {/* ─── Price cards (3 ใบ) — horizontal swipe on mobile ─── */}
+        {/* ─── Price cards — horizontal swipe on mobile ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           {mode === "cargo" ? (
             <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -422,15 +448,31 @@ export function PricingSection() {
               ))}
             </div>
           ) : (
-            <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {FREIGHT_CARDS.map((card) => (
-                <FreightPriceCard key={card.id} card={card} term={term} t={t} />
-              ))}
+            <div className="flex flex-col gap-7 md:gap-10">
+              {/* ═════ LCL Section ═════ */}
+              <FreightGroupRow
+                eyebrow={t("lclSectionEyebrow")}
+                title={t("lclSectionTitle")}
+                sub={t("lclSectionSub")}
+                cards={LCL_CARDS}
+                term={term}
+                t={t}
+              />
+
+              {/* ═════ FCL Section ═════ */}
+              <FreightGroupRow
+                eyebrow={t("fclSectionEyebrow")}
+                title={t("fclSectionTitle")}
+                sub={t("fclSectionSub")}
+                cards={FCL_CARDS}
+                term={term}
+                t={t}
+              />
             </div>
           )}
 
           {/* Footnote */}
-          <p className="mt-3 text-[11px] md:text-[12px] text-muted text-center leading-[1.5]">
+          <p className="mt-5 md:mt-6 text-[11px] md:text-[12px] text-muted text-center leading-[1.5]">
             {t("footnote")}
           </p>
         </div>
@@ -729,6 +771,46 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ────────────────── Freight group row (LCL or FCL with header) ──────────────────
+function FreightGroupRow({
+  eyebrow,
+  title,
+  sub,
+  cards,
+  term,
+  t,
+}: {
+  eyebrow: string;
+  title: string;
+  sub: string;
+  cards: FreightCard[];
+  term: Term;
+  t: PricingT;
+}) {
+  return (
+    <section aria-label={title}>
+      <header className="mb-3 md:mb-4">
+        <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
+          <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
+          {eyebrow}
+        </div>
+        <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
+          {title}
+        </h3>
+        <p className="mt-1 text-[12.5px] md:text-[14px] leading-[1.55] font-medium text-muted max-w-[820px]">
+          {sub}
+        </p>
+      </header>
+
+      <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory sm:mx-0 sm:px-0 sm:pb-0 sm:overflow-visible sm:grid sm:grid-cols-2 sm:gap-4 [&>*]:shrink-0 [&>*]:w-[84%] [&>*]:min-w-[280px] [&>*]:snap-start sm:[&>*]:w-auto sm:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {cards.map((card) => (
+          <FreightPriceCard key={card.id} card={card} term={term} t={t} />
+        ))}
+      </div>
+    </section>
   );
 }
 

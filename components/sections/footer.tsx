@@ -26,7 +26,7 @@ function IconLine({ className }: { className?: string }) {
   );
 }
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 const YOUTUBE_URL = "https://www.youtube.com/@PacredShipping";
 const FACEBOOK_URL = "https://www.facebook.com/PacredShippingCustomsClearanceImportExport/";
 const TIKTOK_URL = "https://www.tiktok.com/@pacred.co";

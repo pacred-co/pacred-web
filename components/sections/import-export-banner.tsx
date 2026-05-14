@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
 
-const LINE_URL = "https://lin.ee/Yg3fU0I";
+const LINE_URL = "/line";
 
 const SALES = [
   { name: "วิน",  slogan: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",       phone: "066-125-3007", image: "/images/Character_Icon/win.png", useContain: false, alt: "เซลล์วิน Pacred",  button: "ทักวินเลย"  },

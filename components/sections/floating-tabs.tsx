@@ -104,7 +104,7 @@ export function FloatingTabs() {
           {t("askMore")}
         </span>
         <a
-          href="https://lin.ee/Yg3fU0I"
+          href="/line"
           target="_blank"
           rel="noopener noreferrer"
           suppressHydrationWarning
