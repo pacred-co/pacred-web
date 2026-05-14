@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
-import { ThemeProvider } from "next-themes";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import "./globals.css";
 
 const prompt = Prompt({
@@ -36,15 +36,24 @@ export default function RootLayout({
       className={`${prompt.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/*
+          Pre-hydration theme script — runs synchronously inside the
+          server-rendered <head> BEFORE first paint to prevent FOUC.
+          Per Part P review (เดฟ, 2026-05-14): inline <script> in a
+          Server Component <head> is the only path that actually blocks
+          paint — next/script strategy="beforeInteractive" preloads but
+          does not block hydration for inline children (Next 16 docs).
+          React 19's "script in component" warning fires only on Client
+          Component re-render, not Server-rendered head content.
+        */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <ThemeProvider defaultTheme="system">{children}</ThemeProvider>
       </body>
     </html>
   );

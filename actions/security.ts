@@ -18,6 +18,34 @@ type ActionResult = { ok: true } | { ok: false; error: string };
 type OtpResult    = { ok: true; bypass?: boolean } | { ok: false; error: string };
 
 /**
+ * Re-verify the current user's password by issuing a fresh
+ * signInWithPassword call. Supports BOTH email-based and phone-based
+ * accounts — Pacred's registerPersonal() makes email optional, so a
+ * phone+password user must still be able to verify themselves.
+ */
+async function verifyCurrentPassword(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  user: { email?: string | null; phone?: string | null },
+  password: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (user.email) {
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+    if (error) return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+    return { ok: true };
+  }
+  if (user.phone) {
+    // user.phone from Supabase auth comes WITHOUT the leading "+" — normalize back.
+    const { error } = await supabase.auth.signInWithPassword({
+      phone:    normalizePhone(user.phone),
+      password,
+    });
+    if (error) return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
+    return { ok: true };
+  }
+  return { ok: false, error: "บัญชีนี้ไม่มีรหัสผ่าน (OAuth-only) — ติดต่อทีมงานเพื่อเปลี่ยน" };
+}
+
+/**
  * Change password. Verifies the current password by re-signing in with
  * Supabase before issuing the update, so a stolen session can't change
  * the password without knowing the current one. Mirrors what legacy
@@ -32,16 +60,10 @@ export async function changePassword(input: ChangePasswordInput): Promise<Action
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || !user.email) return { ok: false, error: "not_signed_in" };
+  if (!user) return { ok: false, error: "not_signed_in" };
 
-  // Verify current password by attempting a fresh sign-in
-  const { error: verifyErr } = await supabase.auth.signInWithPassword({
-    email:    user.email,
-    password: d.currentPassword,
-  });
-  if (verifyErr) {
-    return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
-  }
+  const verify = await verifyCurrentPassword(supabase, user, d.currentPassword);
+  if (!verify.ok) return verify;
 
   // Update to the new password
   const { error: updErr } = await supabase.auth.updateUser({ password: d.newPassword });
@@ -84,21 +106,10 @@ export async function requestPhoneChangeOtp(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // We require an email on file to re-verify the password. OAuth users
-  // without a password should not see this flow at all (UI hides it), but
-  // guard server-side anyway.
-  if (!user.email) {
-    return { ok: false, error: "บัญชีนี้ไม่มีรหัสผ่าน ติดต่อทีมงานเพื่อเปลี่ยนเบอร์" };
-  }
-
-  // Verify current password by re-signing in (same trick as changePassword)
-  const { error: verifyErr } = await supabase.auth.signInWithPassword({
-    email:    user.email,
-    password: d.currentPassword,
-  });
-  if (verifyErr) {
-    return { ok: false, error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" };
-  }
+  // Verify current password — supports both email and phone-only accounts
+  // (Pacred allows phone-only registration, so we can't assume email exists)
+  const verify = await verifyCurrentPassword(supabase, user, d.currentPassword);
+  if (!verify.ok) return verify;
 
   const newPhone = normalizePhone(d.newPhone);
 

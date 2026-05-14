@@ -192,13 +192,17 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
       : `${before.first_name ?? ""} ${before.last_name ?? ""}`.trim() || "ลูกค้า";
     const customerLabel = `${customerDisplay}${before.member_code ? ` (${before.member_code})` : ""}`;
 
-    // Notify old rep (silently skipped if unassigned)
+    // Notify old rep (silently skipped if unassigned).
+    // link_href points at the customer detail so the previous rep can
+    // verify the move (and see the new assignee) instead of being
+    // dead-ended on a notification with nowhere to click.
     if (previous_sales_admin_id) {
       void sendNotification(previous_sales_admin_id, {
-        category: "sales",
-        severity: "info",
-        title:    "ลูกค้าถูกย้ายออกจากทีม",
-        body:     `${customerLabel} ถูกย้ายไปทีมอื่น — เหตุผล: ${d.reason}`,
+        category:  "sales",
+        severity:  "info",
+        title:     "ลูกค้าถูกย้ายออกจากทีม",
+        body:      `${customerLabel} ถูกย้ายไปทีมอื่น — เหตุผล: ${d.reason}`,
+        link_href: `/admin/customers/${d.customer_id}`,
       });
     }
     // Notify new rep

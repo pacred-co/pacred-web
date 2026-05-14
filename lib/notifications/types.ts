@@ -11,7 +11,8 @@ export type NotifySeverity = "info" | "success" | "warning" | "error";
 
 export type NotifyReferenceType =
   | "service_order" | "forwarder" | "yuan_payment"
-  | "wallet_transaction" | "sales_commission" | "sales_payout";
+  | "wallet_transaction" | "sales_commission" | "sales_payout"
+  | "contact_message";
 
 export type NotifyPayload = {
   category:  NotifyCategory;
