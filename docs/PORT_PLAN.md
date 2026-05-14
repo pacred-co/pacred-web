@@ -2394,7 +2394,20 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 ---
 
-**End of Part P.** Snapshot ณ 2026-05-15 หลัง Sprint 6 + Track G + Sprint 6.5 complete (P-15..P-21, P-24, P-25, P-26 + D-1-LIFF + P-50..P-53 + 6 follow-ups).  **🚨 ภูม flag (2026-05-15 ค่ำ):** owner = ก๊อต+เดฟ; ห้าม activate Track G in production จนกว่าจะตัดสินใจ vendor cutoff — ดู Part R.  Next parallel work: Track A tests (~7-9h).
+**End of Part P.** Snapshot ณ 2026-05-15 ดึก หลัง Sprint 6 + Track G + Sprint 6.5 + R1 ADR + Track A complete (P-15..P-21, P-24..P-26, D-1-LIFF, P-50..P-53, 6 follow-ups, ADR 0003, P-28..P-31).  **R1 vendor cutoff RESOLVED ก๊อต+เดฟ (Option F).**  Test suite total: **260 assertions** all green across 11 test files.  Next: Sprint 6 leftover P-22 / P-23 / P-27 OR Track B production hardening — ภูม pick.
+
+### Track A shipped (this batch — P-28..P-31, ~3h actual)
+
+| # | Task | Assertions | File |
+|---|---|---|---|
+| **P-28** | OTP flow integration test | 14 | `lib/auth/otp.test.ts` |
+| **P-29** | Wallet ledger consistency (3 buckets, recompute trigger) | 14 | `lib/wallet/ledger.test.ts` |
+| **P-30** | Auth signup flow (personal + juristic + member_code) | 15 | `lib/auth/signup.test.ts` |
+| **P-31** | Cart 151-item cap trigger | 10 | `lib/service-order/cart-cap.test.ts` |
+
+Wired into `pnpm test` chain. All use the same pattern as P-26 placement test (admin client + DB-direct + cleanup-in-finally).
+
+**🚨 Finding from P-31:** PORT_PLAN Track A spec said "Insert 150 OK → 151st throws" — that's off-by-one with the actual `cart_items_cap` trigger which raises on `cnt >= 151` (so 151st succeeds; 152nd fails — matches legacy PHP `cart.php:17,76` hardcoded 151-cap). Test mirrors actual trigger behavior + comment block flags the discrepancy. **Action ก๊อต/เดฟ:** confirm desired behavior — keep trigger at >=151 (current; legacy-compatible) OR tighten to >=150 if product wants strictly 150-max.
 
 > **🟢 เดฟ merge sweep 2026-05-15 evening** — Pulled both `origin/Poom` (16 commits) + `origin/podeng` (6 commits) into `dave` + `main` (commits `e90e594` + `ccb3dc4`). Verified: pnpm install ok · eslint clean · tsc clean · pnpm build passes · all 7 test files green (147 assertions chained: calc-price 49 + thai-number 50 + extract-product-id 19 + short-url-cache 22 + akucargo-helpers 24 + laonet-helpers 31 + placement 12 env-gated).
 >
