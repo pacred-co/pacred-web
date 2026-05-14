@@ -251,16 +251,24 @@ export async function requestPayout(input: RequestPayoutInput): Promise<ActionRe
     return { ok: false, error: payErr?.message ?? "payout_insert_failed" };
   }
 
-  const { error: updErr } = await admin
+  // Link commissions to the payout. The .eq("status","unpaid") guard
+  // prevents double-claim races; .select("id") makes the UPDATE return
+  // the rows it actually touched so we can detect partial wins (e.g. a
+  // concurrent request grabbed some of these between our pre-check and
+  // here). On any mismatch we roll the payout back so we don't leave
+  // an orphan sales_payouts row pointing at fewer commissions than the
+  // amount_total covers.
+  const { data: linkedRows, error: updErr } = await admin
     .from("sales_commissions")
     .update({ payout_id: payout.id })
     .in("id", d.commission_ids)
-    .eq("status", "unpaid");          // guard against double-claim race
+    .eq("status", "unpaid")
+    .select("id");
 
-  if (updErr) {
-    // Rollback the payout if we can't link any commissions
+  if (updErr || !linkedRows || linkedRows.length !== d.commission_ids.length) {
     await admin.from("sales_payouts").delete().eq("id", payout.id);
-    return { ok: false, error: updErr.message };
+    if (updErr) return { ok: false, error: updErr.message };
+    return { ok: false, error: "concurrent_grab_some_already_claimed" };
   }
 
   revalidatePath("/sales");
