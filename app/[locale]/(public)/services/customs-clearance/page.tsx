@@ -35,6 +35,19 @@ import {
   MapPin,
   BookOpen,
   Quote,
+  Anchor,
+  Globe2,
+  Briefcase,
+  RefreshCcw,
+  ClipboardCheck,
+  HandshakeIcon,
+  LandPlot,
+  Scale,
+  CircleDollarSign,
+  Building2,
+  Headset,
+  Tag,
+  ShieldQuestion,
 } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
@@ -57,7 +70,8 @@ export async function generateMetadata({
   return buildPageMetadata({ locale, path: PATH, namespace: NS });
 }
 
-// ─── Ports with photo cards ───
+// ────────────────────────── Content arrays ──────────────────────────
+
 const PORTS = [
   { name: "สุวรรณภูมิ",       sub: "Air Cargo · Express",   image: "/images/cardclearance/suwanboys.png" },
   { name: "ดอนเมือง",         sub: "Air Freight · Courier", image: "/images/cardclearance/donmueng.png" },
@@ -71,12 +85,12 @@ const PORTS = [
 const HERO_TICKS = [
   "เคลียร์สินค้านำเข้า–ส่งออก Air Cargo / Sea Freight / Truck ครบทุกช่องทาง",
   "ลงทะเบียนผู้นำเข้า–ส่งออก จับคู่ (YY) กรมศุลกากร ภายใน 30 นาที",
-  "ดูแลเอกสารครบ AWB / B/L · D/O · INVOICE + PACKING · ใบขนสินค้า · ใบเสร็จภาษี",
-  "แก้ปัญหาสินค้าติดด่าน · ภาษีเกิน · พิกัดศุลกากรไม่ตรง · เอกสารไม่ครบ",
-  "เคลียร์ใบอนุญาต มอก. / สมอ. / กสทช. / กรมเกษตร / กรมประมง",
+  "ดูแลเอกสารครบ AWB / B/L · D/O · INVOICE + PACKING · ใบขนสินค้า · ใบเสร็จภาษี · ใบอนุญาตนำเข้า",
+  "แก้ปัญหาสินค้าติดด่าน · ภาษีเกิน · พิกัดศุลกากรไม่ตรง · เอกสารไม่ครบ · ไม่มีใบอนุญาต",
+  "เคลียร์ใบอนุญาต มอก. / สมอ. / กสทช. / กรมเกษตร / กรมประมง / หน่วยงานราชการอื่น ๆ",
   "ผู้เชี่ยวชาญพิธีการศุลกากร Shipping ประสบการณ์ 15+ ปี",
   "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) ถูกต้องตามกฎหมาย",
-  "ชำระภาษีและอากรถูกต้อง 100% — หมดปัญหากรมศุล/ตำรวจ/สรรพากร",
+  "ชำระภาษีและอากรถูกต้อง 100% — หมดปัญหากรมศุล / ตำรวจ / สรรพากร",
 ];
 
 type Channel = {
@@ -105,7 +119,7 @@ const CHANNELS: Channel[] = [
     badge: "AIR FREIGHT",
     title: "เคลียร์สินค้าทางอากาศ",
     intro:
-      "สำหรับสินค้าด่วน · สินค้ารีบขาย · สินค้ารีบใช้งาน — ดูแลตั้งแต่ตรวจเอกสารพื้นฐาน จนถึง Import Clearance ผ่านด่านได้ไว ลดค่าฝากเก็บ ลดความเสี่ยงเอกสารผิด",
+      "สำหรับสินค้าด่วน · สินค้ารีบใช้งาน · สินค้ารีบจำหน่าย — ดูแลตั้งแต่เอกสารพื้นฐานจนถึง Import Clearance ผ่านด่านได้ไว ลดค่าฝากเก็บ ลดความเสี่ยงเอกสารผิด",
     image: "/images/hero-section/banner/airbanner.png",
     imageAlt: "เคลียร์สินค้าทางอากาศ Pacred Shipping",
     accent: "from-sky-500 to-sky-700",
@@ -113,9 +127,9 @@ const CHANNELS: Channel[] = [
     carriers: ["DHL", "FedEx", "UPS", "TNT", "Air Cargo"],
     forLabel: "เหมาะสำหรับ",
     forItems: [
-      "สินค้าด่วน ลดเวลาในระบบ",
+      "สินค้าด่วน · ลดเวลาในระบบ",
       "สินค้าติดด่านสนามบิน (สุ่มตรวจ/เอกสารไม่ครบ)",
-      "สินค้าควบคุม/ต้องใช้ใบอนุญาต",
+      "สินค้าควบคุม/ต้องใช้ใบอนุญาต — เครื่องสำอาง อาหารเสริม เครื่องมือแพทย์",
     ],
     servicesLabel: "บริการหลัก",
     services: [
@@ -125,7 +139,7 @@ const CHANNELS: Channel[] = [
       "Import Clearance ยื่นข้อมูลจนผ่านด่าน",
     ],
     goodsLabel: "รองรับสินค้า",
-    goods: "เครื่องสำอาง · เครื่องใช้ไฟฟ้า · เสื้อผ้า · เครื่องจักร · สินค้าควบคุม",
+    goods: "เครื่องสำอาง · เครื่องใช้ไฟฟ้า · เสื้อผ้า · เครื่องจักร · สินค้าควบคุม และอื่น ๆ ตามเงื่อนไขด่าน",
   },
   {
     id: "sea",
@@ -133,7 +147,7 @@ const CHANNELS: Channel[] = [
     badge: "SEA FREIGHT",
     title: "เคลียร์สินค้าทางเรือ",
     intro:
-      "นำเข้าทางเรือเหมาะกับสินค้าปริมาณมาก ต้นทุนคุ้ม รองรับทั้ง FCL เหมาตู้ + LCL รวมตู้ — ประสานศุลกากร สายเรือ ท่าเรือ คลังสินค้า ดูแลครบจบ",
+      "นำเข้าทางเรือเหมาะกับสินค้าปริมาณมาก ต้นทุนคุ้ม รองรับทั้ง FCL เหมาตู้ + LCL รวมตู้ — ประสานศุลกากร · สายเรือ · ท่าเรือ · คลังสินค้า ดูแลครบรวมสุ่มตรวจ แก้เอกสาร จัดส่งต่อ",
     image: "/images/hero-section/banner/ship.png",
     imageAlt: "เคลียร์สินค้าทางเรือ Pacred Shipping",
     accent: "from-blue-600 to-blue-800",
@@ -142,13 +156,13 @@ const CHANNELS: Channel[] = [
     forLabel: "รองรับ LCL / FCL",
     forItems: [
       "LCL · เริ่มต้นไม่กี่กล่อง จ่ายตาม CBM",
-      "FCL · ตู้เต็ม 20'/40'/40HQ คุ้มสุด",
+      "FCL · เหมาตู้ 20'/40'/40HQ คุ้มที่สุด",
       "Total Landed Cost คุมได้ง่าย",
     ],
     servicesLabel: "บริการ",
     services: [
       "ทำใบขนขาเข้า + เอกสารประกอบครบ",
-      "แก้สุ่มตรวจ ลดระยะเวลารอ",
+      "แก้ปัญหาสุ่มตรวจ ลดระยะเวลารอ",
       "ประสานศุลกากร + สายเรือ ไม่สะดุด",
       "จัดส่งต่อทั่วประเทศ Door to Door",
     ],
@@ -159,9 +173,9 @@ const CHANNELS: Channel[] = [
     badge: "TRUCK · CROSS-BORDER",
     title: "เคลียร์สินค้าทางรถ · ข้ามแดน",
     intro:
-      "นำเข้าทางรถ/ข้ามแดนเหมาะกับการขนส่งจากประเทศเพื่อนบ้าน — ดูแลพิธีการศุลกากรที่ด่านชายแดน ตรวจเอกสาร จัดพิกัด ชำระภาษีแทน",
+      "นำเข้าทางรถ/ข้ามแดนเหมาะกับการขนส่งจากประเทศเพื่อนบ้าน · เส้นทางที่ต้องการความยืดหยุ่นด้านเวลา + จุดรับ-ส่ง — ดูแลพิธีการศุลกากรที่ด่านชายแดน ตรวจเอกสาร จัดพิกัด ชำระภาษีแทน",
     image: "/images/hero-section/banner/car.png",
-    imageAlt: "เคลียร์สินค้าทางรถ Pacred Shipping",
+    imageAlt: "เคลียร์สินค้าทางรถ ข้ามแดน Pacred Shipping",
     accent: "from-primary-500 to-primary-700",
     carriersLabel: "ด่านที่รองรับ",
     carriers: ["มุกดาหาร", "หนองคาย", "อรัญประเทศ", "แม่สาย", "และอื่น ๆ"],
@@ -173,47 +187,51 @@ const CHANNELS: Channel[] = [
     ],
     servicesLabel: "บริการ",
     services: [
-      "เคลียร์สินค้าติดด่านทุกกรณี",
-      "ตรวจเอกสารนำเข้า ลดความเสี่ยง",
+      "เคลียร์สินค้าติดด่านทุกกรณี — เอกสาร + ปฏิบัติ",
+      "ตรวจเอกสารนำเข้า ลดความเสี่ยงข้อมูลไม่ตรง",
       "จัดพิกัดภาษีเหมาะกับสินค้า",
       "ทำพิธีการศุลกากร + ชำระภาษีแทน",
     ],
   },
 ];
 
+type Term = { code: string; name: string; desc: string; icon: typeof Globe2 };
+
+const TERMS: Term[] = [
+  {
+    code: "CIF",
+    name: "Cost, Insurance, Freight",
+    desc: "ผู้ขายจ่ายค่าขนส่ง + ประกันถึงท่าเรือปลายทาง — ผู้ซื้อรับผิดชอบเคลียร์ + ภาษี",
+    icon: Anchor,
+  },
+  {
+    code: "FOB",
+    name: "Free On Board",
+    desc: "ผู้ขายส่งของถึงท่าเรือต้นทาง — ผู้ซื้อจ่ายค่าขนส่ง + ประกัน + เคลียร์ปลายทาง",
+    icon: Ship,
+  },
+  {
+    code: "EXW",
+    name: "Ex Works",
+    desc: "ผู้ซื้อรับของหน้าโรงงานต้นทาง — รับผิดชอบทุกอย่างจนถึงปลายทาง",
+    icon: Warehouse,
+  },
+  {
+    code: "DDP",
+    name: "Delivered Duty Paid",
+    desc: "ผู้ขายจัดการครบทุกขั้นถึงประตูปลายทาง รวมภาษีและเคลียร์ศุลกากร",
+    icon: PackageSearch,
+  },
+];
+
 type Step = { num: string; icon: typeof FileCheck2; title: string; desc: string };
 
 const STEPS: Step[] = [
-  {
-    num: "01",
-    icon: FileCheck2,
-    title: "ส่งเอกสารพื้นฐาน",
-    desc: "Invoice + Packing List (+ AWB / B/L หากมี)",
-  },
-  {
-    num: "02",
-    icon: MessageCircle,
-    title: "ทักผ่าน LINE / Email / โทร",
-    desc: "Forward อีเมล DHL/FedEx หรือถ่ายภาพให้ทีมเลย",
-  },
-  {
-    num: "03",
-    icon: Calculator,
-    title: "ประเมินราคา",
-    desc: "แจ้งค่าบริการ + แนวทางเคลียร์ โปร่งใส 100%",
-  },
-  {
-    num: "04",
-    icon: Stamp,
-    title: "เริ่มเคลียร์",
-    desc: "ดำเนินการตามขั้นตอนศุลกากรครบทุกขั้น",
-  },
-  {
-    num: "05",
-    icon: PackageSearch,
-    title: "ปลดสินค้า + จัดส่งต่อ",
-    desc: "นัดรับ/จัดส่งทั่วประเทศ Door to Door",
-  },
+  { num: "01", icon: FileCheck2,    title: "ส่งเอกสารพื้นฐาน",       desc: "Invoice + Packing List (+ AWB / B/L หากมี)" },
+  { num: "02", icon: MessageCircle, title: "ทักผ่าน LINE / Email / โทร", desc: "Forward อีเมล DHL/FedEx หรือถ่ายภาพให้ทีมเลย" },
+  { num: "03", icon: Calculator,    title: "ประเมินราคา",            desc: "แจ้งค่าบริการ + แนวทางเคลียร์ โปร่งใส 100%" },
+  { num: "04", icon: Stamp,         title: "เริ่มเคลียร์",            desc: "ดำเนินการตามขั้นตอนศุลกากรครบทุกขั้น" },
+  { num: "05", icon: PackageSearch, title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดรับ/จัดส่งทั่วประเทศ Door to Door" },
 ];
 
 const WHY = [
@@ -228,9 +246,9 @@ const WHY = [
 ];
 
 const TRUST_BADGES = [
-  { icon: FileBadge,   label: "หนังสือรับรองบริษัท",   sub: "มีตัวตน ตรวจสอบได้จริง" },
-  { icon: Receipt,     label: "ภพ.20",                   sub: "ออกใบกำกับภาษีถูกต้อง" },
-  { icon: Award,       label: "หนังสือสมาคมชิปปิ้ง",     sub: "Shipping License ตามกฎหมาย" },
+  { icon: FileBadge, label: "หนังสือรับรองบริษัท", sub: "มีตัวตน ตรวจสอบได้จริง" },
+  { icon: Receipt,   label: "ภพ.20",                sub: "ออกใบกำกับภาษีถูกต้อง" },
+  { icon: Award,     label: "หนังสือสมาคมชิปปิ้ง",  sub: "Shipping License ตามกฎหมาย" },
 ];
 
 const STATS = [
@@ -240,10 +258,70 @@ const STATS = [
   { value: "100%",  label: "ถูกกฎหมาย" },
 ];
 
+const EXPERTISE = [
+  {
+    icon: HandshakeIcon,
+    label: "รองรับ",
+    title: "นำเข้า · ส่งออก · ทุก Term",
+    items: ["CIF / FOB / EXW / DDP", "ให้คำแนะนำเอกสาร + ขั้นตอนตามแต่ละ Term"],
+  },
+  {
+    icon: Briefcase,
+    label: "บริการ",
+    title: "Air · Sea · Truck",
+    items: ["Booking Flights สำหรับงานเร่งด่วน", "เคลียร์สินค้าติดด่านทุกกรณี", "เคลียร์หน่วยงานราชการ"],
+  },
+  {
+    icon: Scale,
+    label: "เชี่ยวชาญ",
+    title: "กฎหมายศุลกากร · HS Code",
+    items: ["พิกัดอัตราศุลกากร", "ภาษีนำเข้า + การคืนภาษี", "ครบทุกเทิร์มการค้า"],
+  },
+  {
+    icon: LandPlot,
+    label: "พาร์ทเนอร์",
+    title: "ท่าเรือ · สายเรือ · คลัง · สนามบิน",
+    items: ["DHL · FedEx · TNT · UPS · BFS", "ICD · BKK · PAT", "คลังสุวรรณภูมิ · ดอนเมือง"],
+  },
+];
+
+const ADDITIONAL_SERVICES = [
+  {
+    icon: CircleDollarSign,
+    title: "ภาษีศุลกากร · ภาษีสนามบิน",
+    desc: "จัดการภาษีนำเข้า ภาษีสนามบินสุวรรณภูมิ + ดอนเมือง ครบจบ",
+  },
+  {
+    icon: RefreshCcw,
+    title: "การคืนภาษี (Tax Refund)",
+    desc: "ขอคืนภาษีสำหรับสินค้าที่มีสิทธิ์ลดหย่อน — เพิ่มกำไรให้ธุรกิจ",
+  },
+  {
+    icon: ShieldQuestion,
+    title: "ประกันสินค้า (Cargo Insurance)",
+    desc: "บริการเสริมทำประกันสินค้าทุกประเภท ลดความเสี่ยงระหว่างขนส่ง",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "ใช้สิทธิ Form E / D / AI",
+    desc: "ลดหย่อนภาษีนำเข้าผ่าน FTA ASEAN-China และอื่น ๆ ตามสิทธิ",
+  },
+  {
+    icon: Building2,
+    title: "ติดต่อกรมศุลกากรโดยตรง",
+    desc: "ประสานเจ้าหน้าที่กรมศุลกากร ลดเวลาและขั้นตอนซ้ำซ้อน",
+  },
+  {
+    icon: Headset,
+    title: "ปรึกษาฟรี ตอบไว 5 นาที",
+    desc: "ทีม Pacred พร้อมตอบ LINE/โทร ทุกวัน 8:00–18:00",
+  },
+];
+
 const PROBLEMS = [
   { icon: AlertTriangle, title: "พิกัดอัตราศุลกากร",     desc: "สินค้าโดนตีพิกัดผิด เสียภาษีเกินจริง", color: "rose"   },
   { icon: FileWarning,   title: "ใบอนุญาตนำเข้า",         desc: "มอก. · สมอ. · กสทช. · ขอแทนให้",       color: "amber"  },
-  { icon: FileBadge,     title: "เอกสารผิด/ไม่ครบ",       desc: "Invoice · Packing · B/L แก้ทันที",     color: "blue"   },
+  { icon: FileBadge,     title: "เอกสารผิด / ไม่ครบ",     desc: "Invoice · Packing · B/L แก้ทันที",     color: "blue"   },
   { icon: BadgePercent,  title: "ภาษีพิเศษ Form E/D/AI",  desc: "ลดหย่อนภาษีนำเข้าได้สูงสุด",            color: "emerald"},
   { icon: Wallet,        title: "ราคาสินค้าโดนตีเกิน",     desc: "เคลียร์ราคา-เอกสารให้ตรงกัน",          color: "violet" },
   { icon: PawPrint,      title: "นำเข้าสัตว์มีชีวิต",       desc: "แมว สุนัข + ใบอนุญาตปศุสัตว์",         color: "pink"   },
@@ -268,24 +346,76 @@ const PROBLEM_COLOR_MAP: Record<string, string> = {
 
 const KNOWLEDGE_TOPICS = [
   "HS Code คืออะไร และทำไมมีผลต่อภาษี",
-  "วิธีคำนวณภาษีนำเข้า (อากร + VAT)",
-  "ของติดด่านศุลกากรเกิดจากอะไร",
-  "เคลียร์สินค้าติดด่านทำยังไง",
-  "เคลียร์ของติดด่านใช้เวลากี่วัน",
+  "วิธีคำนวณภาษีนำเข้า (อากร + VAT + ค่าใช้จ่ายเกี่ยวข้อง)",
+  "ของติดด่านศุลกากรเกิดจากอะไร (เอกสาร/พิกัด/สุ่มตรวจ/ใบอนุญาต)",
+  "เคลียร์สินค้าติดด่านทำยังไง ขั้นตอนที่ควรรู้ก่อนเริ่ม",
+  "เคลียร์ของติดด่านใช้เวลากี่วัน · ปัจจัยที่ทำให้เร็ว/ช้า",
   "Term CIF / FOB / EXW / DDP คืออะไร",
-  "ค่าบริการเคลียร์สินค้าติดด่านคิดจากอะไร",
-  "ชิปปิ้งคืออะไร + บทบาทในงานนำเข้า-ส่งออก",
+  "ค่าบริการเคลียร์สินค้าติดด่านราคาเท่าไหร่ คิดจากอะไร",
+  "ชิปปิ้งคืออะไร · บทบาทในงานนำเข้า-ส่งออก",
+  "ชิปปิ้งเคลียร์ของสุวรรณภูมิ เหมาะกับเคสไหน",
+  "พิธีการศุลกากรขาเข้า ทำไมต้องมีใบขน",
   "LCL คืออะไร เหมาะกับสินค้าปริมาณเท่าไร",
-  "FCL คืออะไร ข้อดีของตู้เต็ม",
-  "Air Freight ข้อดี-ข้อจำกัด",
-  "Sea Freight วางแผนนำเข้าทางเรือ",
-  "Freezone คืออะไร เหมาะกับธุรกิจไหน",
-  "Import Clearance ต้องใช้อะไรบ้าง",
+  "FCL คืออะไร · ข้อดีของตู้เต็ม",
+  "Air Freight คืออะไร · ข้อดี-ข้อจำกัด",
+  "Sea Freight วางแผนนำเข้าทางเรืออย่างไรให้คุ้ม",
+  "Freezone คืออะไร เหมาะกับธุรกิจแบบไหน",
+  "Import Clearance คืออะไร ต้องใช้อะไรบ้าง",
+  "Customs Clearance ต่างจากชิปปิ้งอย่างไร",
   "ATA CARNET คืออะไร",
   "เช็ควันเรือเข้าแหลมฉบังดูยังไง",
-  "ของติดท่าเรือคลองเตย/แหลมฉบัง ปลดยังไง",
-  "ของต้องห้าม/ต้องกำกัด คืออะไร",
+  "Import Customs Clearance Procedure คืออะไร",
+  "ของติดท่าเรือคลองเตยทำยังไงดี",
+  "ขั้นตอนการนำเข้าสินค้าทางเรืออย่างถูกหลัก",
+  "ของติดท่าเรือแหลมฉบัง ปลดยังไง",
+  "Customs House คืออะไร",
+  "ของต้องห้าม / ต้องกำกัด ต่างกันยังไง",
+  "Customs Procedures กับ Customs Clearance ต่างกันยังไง",
   "โดนสนามบินสุวรรณภูมิกักของต้องทำยังไง",
+];
+
+const KEYWORDS = [
+  "เคลียร์ของสนามบิน",
+  "เร่งด่วน",
+  "เปิดตรวจสินค้า",
+  "ชิปปิ้งสุวรรณภูมิ",
+  "เคลียร์ของสุวรรณภูมิ",
+  "เคลียร์ของด่วน 1 ชั่วโมง",
+  "ชิปปิ้งดอนเมือง",
+  "เคลียร์ของดอนเมือง",
+  "ไปรษณีย์หลักสี่",
+  "เคลียร์พัสดุติดค้าง",
+  "นำเข้าทางไปรษณีย์",
+  "พัสดุต่างประเทศติดศุลกากร",
+  "ชิปปิ้งท่าเรือ",
+  "เคลียร์สินค้าท่าเรือ",
+  "LCL · FCL",
+  "Sea Freight Import",
+  "ท่าเรือคลองเตย",
+  "ท่าเรือกรุงเทพ",
+  "แหลมฉบัง",
+  "ลาดกระบัง ICD",
+  "โลจิสติกส์คลังสินค้า",
+  "เคลียร์ของนำเข้า",
+  "ของติดศุลกากร",
+  "ติดพิกัด",
+  "ติดใบอนุญาต",
+  "ติดหน่วยงาน",
+  "เคลียร์ของทั่วประเทศ",
+  "ด่านชายแดน",
+  "มุกดาหาร",
+  "ขนส่งข้ามแดน",
+  "Truck Transport",
+  "หน่วยงานราชการ",
+  "ตรวจเอกสารนำเข้า",
+  "เตรียมเอกสารศุลกากร",
+  "ขั้นตอนนำเข้า",
+  "เคลียร์ของด่วน",
+  "ปลดสินค้า",
+  "เคลียร์จบใน 1 ชั่วโมง",
+  "รับของภายใน 1 วัน",
+  "ขนส่งต่อเนื่อง",
+  "Door to Door Delivery",
 ];
 
 const LINE_URL = "/line";
@@ -329,16 +459,14 @@ export default async function CustomsClearancePage({
       <main>
         <BookingCalculator landing="customs" />
 
-        {/* ═══════ Hero intro — image background + overlay ═══════ */}
+        {/* ═══════ 1. Hero intro ═══════ */}
         <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
-          {/* Decorative bg image (subtle, scoped to this section) */}
-          <div aria-hidden className="absolute inset-x-0 top-0 h-[420px] md:h-[520px] overflow-hidden pointer-events-none">
+          <div aria-hidden className="absolute inset-x-0 top-0 h-[420px] md:h-[560px] overflow-hidden pointer-events-none">
             <Image
               src="/images/hero-section/banner/customs.png"
               alt=""
               fill
               sizes="100vw"
-              priority={false}
               className="object-cover opacity-[0.12] dark:opacity-[0.18]"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
@@ -347,32 +475,30 @@ export default async function CustomsClearancePage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 text-[11.5px] md:text-[12.5px] font-black tracking-[0.10em] uppercase shadow-[0_4px_12px_rgba(179,0,0,0.10)]">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.8} />
-              CUSTOMS CLEARANCE · ALL PORTS
+              CUSTOMS CLEARANCE · ALL PORTS · ✈️🚢📦
             </div>
-            <h2 className="text-[26px] md:text-[48px] leading-[1.12] font-black tracking-[-0.035em] text-[#111827] dark:text-white max-w-[920px]">
-              สินค้าติดด่าน? Pacred เคลียร์ให้{" "}
-              <span className="text-primary-600">เร็ว ไว ไม่มีคำว่าทำไม่ได้</span>
-              <br className="hidden md:inline" />{" "}
+            <h1 className="text-[26px] md:text-[48px] leading-[1.12] font-black tracking-[-0.035em] text-[#111827] dark:text-white max-w-[920px]">
+              สินค้าติดด่าน? Pacred Shipping เคลียร์ให้{" "}
+              <span className="text-primary-600">เร็ว ไว ไม่มีคำว่าทำไม่ได้</span>{" "}
               จบทุกเคส รู้ผลภายใน <span className="text-primary-600">1 ชั่วโมง</span>
-            </h2>
+            </h1>
             <p className="mt-3 md:mt-5 text-[14px] md:text-[17px] leading-[1.65] font-medium text-muted max-w-[820px]">
-              บริการชิปปิ้งเคลียร์สินค้าติดด่านศุลกากรครบทุกด่านในไทย · ราคาเริ่มต้น <span className="font-black text-primary-600">฿2,800</span> · รองรับ Air Freight · Sea Freight · Truck · LCL · FCL
+              บริการ Customs Clearance เคลียร์สินค้าติดด่านศุลกากรแบบครบวงจร · ราคาชัดเจน เริ่มต้น <span className="font-black text-primary-600">฿2,800</span> · รองรับ Air Freight · Sea Freight · Truck · LCL · FCL และด่านหลักทั่วไทย
             </p>
 
-            {/* CTA */}
             <div className="mt-6 md:mt-8 flex flex-wrap gap-3">
               <a
                 href={LINE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-13 px-6 md:px-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13.5px] md:text-[15px] font-black shadow-[0_12px_30px_rgba(179,0,0,0.32)] hover:scale-[1.03] transition-transform"
+                className="inline-flex items-center justify-center gap-2 h-12 md:h-[52px] px-6 md:px-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13.5px] md:text-[15px] font-black shadow-[0_12px_30px_rgba(179,0,0,0.32)] hover:scale-[1.03] transition-transform"
               >
                 <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                ทักไลน์ปรึกษาฟรี — ตอบไว 5 นาที
+                ทักไลน์ปรึกษาฟรี · ตอบไว 5 นาที
               </a>
               <a
                 href={`tel:${HOTLINE.replace(/-/g, "")}`}
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-13 px-6 md:px-7 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[13.5px] md:text-[15px] font-black hover:border-primary-400 hover:text-primary-700 transition-colors shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
+                className="inline-flex items-center justify-center gap-2 h-12 md:h-[52px] px-6 md:px-7 rounded-full bg-white dark:bg-surface text-[#111827] dark:text-white border border-border text-[13.5px] md:text-[15px] font-black hover:border-primary-400 hover:text-primary-700 transition-colors shadow-[0_6px_18px_rgba(15,23,42,0.08)]"
               >
                 <Phone className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
                 {HOTLINE}
@@ -396,7 +522,6 @@ export default async function CustomsClearancePage({
               ))}
             </div>
 
-            {/* Benefits checklist */}
             <ul className="mt-7 md:mt-10 grid grid-cols-1 md:grid-cols-2 gap-x-6 md:gap-x-10 gap-y-2.5 md:gap-y-3">
               {HERO_TICKS.map((tick) => (
                 <li key={tick} className="flex items-start gap-2.5 md:gap-3">
@@ -409,19 +534,27 @@ export default async function CustomsClearancePage({
                 </li>
               ))}
             </ul>
+
+            {/* Guarantee strip */}
+            <div className="mt-7 md:mt-10 flex items-center gap-3 rounded-2xl border border-primary-200 dark:border-primary-900/60 bg-gradient-to-r from-primary-50 via-white to-primary-50/40 dark:from-primary-950/30 dark:via-surface dark:to-primary-950/10 px-4 md:px-5 py-3 md:py-4 shadow-[0_8px_22px_rgba(179,0,0,0.08)]">
+              <span className="text-[22px] md:text-[28px] leading-none">💰</span>
+              <p className="text-[13px] md:text-[15px] font-bold text-[#111827] dark:text-white leading-snug">
+                การันตี <span className="text-primary-600">ราคาคุ้มค่า · จริงใจ · ชัดเจน</span> ต้อง POP Pacred Shipping
+              </p>
+            </div>
           </div>
         </section>
 
-        {/* ═══════ Ports we serve — photo cards ═══════ */}
+        {/* ═══════ 2. Ports we serve ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <MapPin className="w-3.5 h-3.5" strokeWidth={2.6} />
-              ALL THAI PORTS
+              ALL THAI PORTS · ทุกด่าน
             </div>
-            <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               เคลียร์ครบ <span className="text-primary-600">ทุกด่าน-ทุกท่า</span> ในไทย
-            </h3>
+            </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
               สนามบิน · ท่าเรือ · ICD · ไปรษณีย์ · ด่านชายแดน — ทีมเรามีหน้างานจริงที่ทุกด่าน
             </p>
@@ -455,16 +588,16 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ Channels: Air / Sea / Truck ═══════ */}
+        {/* ═══════ 3. Channels ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
               3 CHANNELS · ครบทุกช่องทาง
             </div>
-            <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               <span className="text-primary-600">ทางอากาศ · ทางเรือ · ทางรถ</span>
-            </h3>
+            </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
               ดูแลตั้งแต่เอกสารพื้นฐานจนปลายทาง · เลือกช่องทางที่เหมาะกับสินค้า + ไทม์ไลน์ของคุณ
             </p>
@@ -477,7 +610,6 @@ export default async function CustomsClearancePage({
                     key={c.id}
                     className="group relative flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400"
                   >
-                    {/* Image header */}
                     <div className="relative h-32 md:h-40 overflow-hidden">
                       <Image
                         src={c.image}
@@ -495,19 +627,17 @@ export default async function CustomsClearancePage({
                         </span>
                       </div>
                       <div className="absolute bottom-3 left-3 right-3">
-                        <h4 className="text-[20px] md:text-[22px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+                        <h3 className="text-[20px] md:text-[22px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
                           {c.title}
-                        </h4>
+                        </h3>
                       </div>
                     </div>
 
-                    {/* Body */}
                     <div className="flex-1 p-5 md:p-6 space-y-4">
                       <p className="text-[12.5px] md:text-[13.5px] leading-[1.6] text-muted font-medium">
                         {c.intro}
                       </p>
 
-                      {/* Carriers */}
                       <div>
                         <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
                           {c.carriersLabel}
@@ -524,7 +654,6 @@ export default async function CustomsClearancePage({
                         </div>
                       </div>
 
-                      {/* For */}
                       <div>
                         <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
                           {c.forLabel}
@@ -539,7 +668,6 @@ export default async function CustomsClearancePage({
                         </ul>
                       </div>
 
-                      {/* Services */}
                       <div>
                         <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
                           {c.servicesLabel}
@@ -572,16 +700,59 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ How to use — 5 steps ═══════ */}
+        {/* ═══════ 4. Terms supported ═══════ */}
+        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <Globe2 className="w-3.5 h-3.5" strokeWidth={2.6} />
+              INCOTERMS · ทุกเทอมการค้า
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              รองรับทุก Term — <span className="text-primary-600">CIF · FOB · EXW · DDP</span>
+            </h2>
+            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
+              ทีม Pacred แนะนำเอกสาร + ขั้นตอนที่เหมาะกับแต่ละ Term — ลดความเสี่ยง + ต้นทุนซ่อนเร้น
+            </p>
+
+            <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              {TERMS.map((term) => {
+                const Icon = term.icon;
+                return (
+                  <div
+                    key={term.code}
+                    className="relative rounded-2xl border border-border bg-white dark:bg-surface p-5 md:p-6 shadow-[0_6px_16px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_38px_rgba(179,0,0,0.12)] hover:border-primary-300 hover:-translate-y-1 transition-all duration-300"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[24px] md:text-[28px] font-black text-primary-600 leading-none tracking-tight">
+                        {term.code}
+                      </span>
+                      <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/40 dark:to-primary-900/20 text-primary-600">
+                        <Icon className="w-5 h-5" strokeWidth={2.4} />
+                      </span>
+                    </div>
+                    <h3 className="text-[13px] md:text-[14px] font-black text-[#111827] dark:text-white leading-tight tracking-tight">
+                      {term.name}
+                    </h3>
+                    <p className="mt-2 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
+                      {term.desc}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════ 5. How to use ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ListChecks className="w-3.5 h-3.5" strokeWidth={2.6} />
               5 STEPS · ใช้ง่าย จบใน 1 ชม.
             </div>
-            <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               ใช้บริการง่าย ๆ — <span className="text-primary-600">ครบจบใน 5 ขั้นตอน</span>
-            </h3>
+            </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
               วางขั้นตอนชัดเจน เริ่มได้ทันที — ไม่ต้องเดา ไม่ต้องวิ่งเอกสารหลายรอบ
             </p>
@@ -601,14 +772,13 @@ export default async function CustomsClearancePage({
                           <Icon className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.4} />
                         </span>
                       </div>
-                      <h4 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
+                      <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
                         {s.title}
-                      </h4>
+                      </h3>
                       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
                         {s.desc}
                       </p>
                     </div>
-                    {/* Connector arrow on lg+ */}
                     {!isLast && (
                       <span aria-hidden className="hidden lg:flex pointer-events-none absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-white dark:bg-surface border border-primary-200 dark:border-primary-900 items-center justify-center text-primary-500 shadow-[0_3px_8px_rgba(179,0,0,0.10)]">
                         <ArrowRight className="w-3 h-3" strokeWidth={3} />
@@ -621,22 +791,21 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ Why Pacred — 8 reasons + image side panel ═══════ */}
+        {/* ═══════ 6. Why Pacred ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Award className="w-3.5 h-3.5" strokeWidth={2.6} />
               WHY PACRED · 15+ YEARS
             </div>
-            <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               ทำไมต้อง <span className="text-primary-600">Pacred Shipping</span>
-            </h3>
+            </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
               ทีมงานหน้างานจริง ประสบการณ์ 15+ ปี · เคลียร์ทุกด่านในไทย · ราคาโปร่งใส
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-5 md:gap-7 items-start">
-              {/* Side image card */}
               <div className="relative rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-10px_rgba(15,23,42,0.18)] aspect-[5/6] lg:aspect-auto lg:h-full lg:min-h-[520px]">
                 <Image
                   src="/images/pacredoffice.jpg"
@@ -657,7 +826,6 @@ export default async function CustomsClearancePage({
                 </div>
               </div>
 
-              {/* Reasons grid */}
               <div>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
                   {WHY.map((w) => {
@@ -670,9 +838,9 @@ export default async function CustomsClearancePage({
                         <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_5px_12px_rgba(179,0,0,0.20)]">
                           <Icon className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.4} />
                         </span>
-                        <h4 className="mt-3 text-[13.5px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
+                        <h3 className="mt-3 text-[13.5px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
                           {w.title}
-                        </h4>
+                        </h3>
                         <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-[1.5] text-muted">
                           {w.desc}
                         </p>
@@ -681,7 +849,6 @@ export default async function CustomsClearancePage({
                   })}
                 </div>
 
-                {/* Trust badges row */}
                 <div className="mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {TRUST_BADGES.map((b) => {
                     const Icon = b.icon;
@@ -710,16 +877,102 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ Problems we handle — colorful cards ═══════ */}
+        {/* ═══════ 7. PCS Shipping expertise overview ═══════ */}
+        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <Briefcase className="w-3.5 h-3.5" strokeWidth={2.6} />
+              EXPERTISE · ผู้เชี่ยวชาญ
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              Pacred Shipping <span className="text-primary-600">ผู้เชี่ยวชาญด้านเคลียร์สินค้าติดด่าน</span>
+            </h2>
+            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
+              ทีมงานด้าน Shipping และ Customs Clearance มากกว่า 15 ปี · ครอบคลุมทุกท่าเรือ สนามบิน และด่านชายแดนทั่วประเทศ · รองรับทุก Term การค้าระหว่างประเทศ
+            </p>
+
+            <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+              {EXPERTISE.map((e) => {
+                const Icon = e.icon;
+                return (
+                  <div
+                    key={e.label}
+                    className="flex flex-col rounded-2xl border border-border bg-white dark:bg-surface p-5 md:p-6 shadow-[0_6px_16px_rgba(15,23,42,0.05)] hover:shadow-[0_18px_38px_rgba(179,0,0,0.10)] hover:border-primary-200 hover:-translate-y-0.5 transition-all duration-300"
+                  >
+                    <span className="inline-flex w-11 h-11 md:w-12 md:h-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_5px_12px_rgba(179,0,0,0.20)]">
+                      <Icon className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.4} />
+                    </span>
+                    <div className="mt-3 text-[10px] md:text-[10.5px] font-bold text-primary-600 tracking-[0.10em] uppercase">
+                      {e.label}
+                    </div>
+                    <h3 className="text-[14.5px] md:text-[16px] font-black text-[#111827] dark:text-white leading-tight tracking-tight">
+                      {e.title}
+                    </h3>
+                    <ul className="mt-3 space-y-1.5 flex-1">
+                      {e.items.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-[12px] md:text-[12.5px] leading-[1.5] text-muted">
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-600 shrink-0" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════ 8. Additional services ═══════ */}
+        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
+              ADDITIONAL SERVICES · บริการเสริม
+            </div>
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+              บริการเสริม <span className="text-primary-600">ครบวงจร</span>
+            </h2>
+            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
+              ไม่ใช่แค่เคลียร์ของ — Pacred ดูแลภาษี ประกัน + ทุกขั้นตอนของการนำเข้า-ส่งออก
+            </p>
+
+            <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+              {ADDITIONAL_SERVICES.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div
+                    key={s.title}
+                    className="flex items-start gap-3 md:gap-4 rounded-xl md:rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:shadow-[0_14px_30px_rgba(179,0,0,0.10)] hover:border-primary-200 hover:-translate-y-0.5 transition-all duration-300"
+                  >
+                    <span className="inline-flex w-11 h-11 md:w-12 md:h-12 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-900/30 text-primary-600 border border-primary-100 dark:border-primary-900/40 shrink-0">
+                      <Icon className="w-5 h-5" strokeWidth={2.4} />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-[14px] md:text-[15px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
+                        {s.title}
+                      </h3>
+                      <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
+                        {s.desc}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════ 9. Problems we handle ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <AlertTriangle className="w-3.5 h-3.5" strokeWidth={2.6} />
               PROBLEMS WE HANDLE · 10+
             </div>
-            <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+            <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               ปัญหาที่ Pacred <span className="text-primary-600">รับจบ จัดการให้คุณ</span>
-            </h3>
+            </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
               ครอบคลุมทุกประเด็นในนำเข้า-ส่งออก ตั้งแต่พิกัด · เอกสาร · ใบอนุญาต · ราคา จนถึงสินค้าพิเศษ
             </p>
@@ -734,12 +987,12 @@ export default async function CustomsClearancePage({
                     className="group flex items-start gap-3 rounded-xl md:rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:border-primary-300 hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(179,0,0,0.10)] transition-all duration-300"
                   >
                     <span className={`inline-flex w-11 h-11 md:w-12 md:h-12 items-center justify-center rounded-xl border shrink-0 ${colorClass} group-hover:scale-110 transition-transform`}>
-                      <Icon className="w-5 h-5 md:w-5 md:h-5" strokeWidth={2.4} />
+                      <Icon className="w-5 h-5" strokeWidth={2.4} />
                     </span>
                     <div className="min-w-0">
-                      <h4 className="text-[13.5px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
+                      <h3 className="text-[13.5px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
                         {p.title}
-                      </h4>
+                      </h3>
                       <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.5] text-muted">
                         {p.desc}
                       </p>
@@ -751,18 +1004,18 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ Knowledge / Learn ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-12 md:pb-20">
+        {/* ═══════ 10. Knowledge — 27 topics ═══════ */}
+        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="flex items-end justify-between gap-4 mb-6 md:mb-8 flex-wrap">
               <div>
                 <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
                   <BookOpen className="w-3.5 h-3.5" strokeWidth={2.6} />
-                  KNOWLEDGE · 19 TOPICS
+                  KNOWLEDGE · 27 TOPICS
                 </div>
-                <h3 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
+                <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
                   สาระน่ารู้ <span className="text-primary-600">เรื่องเคลียร์ของ-ภาษีนำเข้า</span>
-                </h3>
+                </h2>
                 <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
                   บทความเจาะลึกจากทีม Pacred — รู้ก่อนนำเข้า ลดความเสี่ยงและต้นทุนได้จริง
                 </p>
@@ -807,8 +1060,32 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ Bottom CTA — gradient hero ═══════ */}
-        <section className="relative pb-12 md:pb-20">
+        {/* ═══════ 11. SEO keyword pills ═══════ */}
+        <section className="relative pt-12 md:pt-16 pb-6 md:pb-8">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+              <Tag className="w-3.5 h-3.5" strokeWidth={2.6} />
+              SERVICES TAGS · บริการที่ครอบคลุม
+            </div>
+            <h2 className="text-[20px] md:text-[28px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
+              Pacred ดูแล <span className="text-primary-600">ทุกขอบเขต</span>การนำเข้า-ส่งออก
+            </h2>
+
+            <div className="mt-5 md:mt-6 flex flex-wrap gap-1.5 md:gap-2">
+              {KEYWORDS.map((kw) => (
+                <span
+                  key={kw}
+                  className="inline-flex items-center px-2.5 md:px-3 h-7 md:h-8 rounded-md bg-primary-50/60 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[11px] md:text-[12px] font-bold text-primary-700 dark:text-primary-300"
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════ 12. Bottom CTA ═══════ */}
+        <section className="relative pt-6 md:pt-12 pb-12 md:pb-20">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="relative overflow-hidden rounded-3xl md:rounded-[28px] border border-primary-200 dark:border-primary-900/60 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 dark:from-primary-700 dark:via-primary-800 dark:to-primary-900 shadow-[0_28px_60px_-20px_rgba(179,0,0,0.40)]">
               <span aria-hidden className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
@@ -820,9 +1097,9 @@ export default async function CustomsClearancePage({
                     <Sparkles className="w-3.5 h-3.5" strokeWidth={2.8} />
                     เริ่มต้น ฿2,800 · ตอบไว 5 นาที
                   </div>
-                  <h3 className="text-[24px] md:text-[36px] leading-[1.16] font-black tracking-[-0.035em] text-white">
+                  <h2 className="text-[24px] md:text-[36px] leading-[1.16] font-black tracking-[-0.035em] text-white">
                     สินค้าติดด่านอยู่? ส่ง <span className="text-yellow-300">Invoice + Packing</span> มาทาง LINE
-                  </h3>
+                  </h2>
                   <p className="mt-2 text-[13.5px] md:text-[15.5px] leading-[1.6] font-medium text-white/85 max-w-[600px]">
                     ทีม Pacred จะประเมินราคาภายในชั่วโมง · ปรึกษาฟรี · เคลียร์ภายในวันเดียวสำหรับเคสที่เอกสารพร้อม
                   </p>
