@@ -23,6 +23,33 @@ export const SOCIAL = {
   instagram: "https://www.instagram.com/pacred.co/",
 } as const;
 
+/**
+ * Pacred LINE OA — public IDs + add-friend URL forms.
+ *
+ * Two displayable handles exist (LINE OA tier):
+ *   - basicId:   "@683wolja"  (auto-assigned random — kept as fallback)
+ *   - premiumId: "@pacred"    (paid tier — preferred for branding)
+ *
+ * Three URL forms users can click to add the OA as friend:
+ *   - shortUrl         — Pacred-controlled short link, brandable analytics in LINE console
+ *   - premiumAddFriend — direct deep link via @pacred handle
+ *   - basicAddFriend   — direct deep link via @683wolja (fallback if premium ID lapses)
+ *
+ * Channel-side identifiers (used by lib/notifications + LIFF):
+ *   - LINE_CHANNEL_ID env var — `2009931373` (Messaging API channel)
+ *   - LINE_CHANNEL_ACCESS_TOKEN env var — long-lived push token
+ *   - NEXT_PUBLIC_LIFF_ID env var — LIFF app for D-1-LIFF customer linkage
+ */
+export const LINE_OA = {
+  basicId:          "@683wolja",
+  premiumId:        "@pacred",
+  shortUrl:         "https://lin.ee/Yg3fU0I",
+  premiumAddFriend: "https://line.me/R/ti/p/%40pacred",
+  basicAddFriend:   "https://line.me/R/ti/p/%40683wolja",
+  /** Default URL to use in CTAs — premium ID URL (most brandable). */
+  addFriendUrl:     "https://line.me/R/ti/p/%40pacred",
+} as const;
+
 export const LOGO_PATH = "/images/pacred-logo-red.png";
 
 export function absoluteUrl(path: string, locale: SiteLocale = DEFAULT_LOCALE): string {

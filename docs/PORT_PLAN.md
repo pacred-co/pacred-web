@@ -1779,6 +1779,7 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 |---|---|---|---|
 | 🟡 **L-5** | Audit + polish ทุก service landing | 6-8h | `/services/import-china`, `/services/import-china-fcl`, `/services/import-china-lcl`, `/services/export-worldwide`, `/services/china-shopping` — content, CTAs, mobile UX. (`/services/customs-clearance` already has full content via existing `Clearance*` components.) Recommendation: replace `StubPage` with real layout per service |
 | 🔴 **L-8** | Mobile responsive QA top 10 pages | 4-6h | Audit + fix layout issues with browser devtools. **Blocked: needs real device or BrowserStack testing — Claude session can only spot-check via curl/CSS** |
+| **L-line-refactor** | Centralise LINE OA URLs from hardcoded strings → `LINE_OA` constants | 1-2h | เดฟ added `components/seo/site.ts:LINE_OA` (basicId `@683wolja` + premiumId `@pacred` + addFriendUrl + shortUrl) 2026-05-14 evening after Pacred owner provided IDs. Currently 15+ files hardcode `https://lin.ee/Yg3fU0I` (footer/navbar/floating-tabs/contact-sales/import-export-banner/clearance-promo/article-content/etc.) plus 1 mismatch (`clearance-banner.tsx:7` uses `https://lin.ee/r3b1BuOC` — verify this is correct sub-channel or fix). Refactor to import `LINE_OA.shortUrl` (or `addFriendUrl` for the new premium ID URL). **Acceptance:** grep for hardcoded `lin.ee/` returns only the constant definition |
 
 > ✅ **Phase A1+A2+A3 finished as one bundle** by ปอน 2026-05-14 (commit `a0d9d83`) — pattern below applies to remaining work (L-5/L-8/L-10..L-20)
 > 🟢 **Bonus 6+7 shipped** 2026-05-14 evening — pacred.co/line shortlink + booking tabs mobile fix + LCL/FCL pricing split + drop MobileTrustRibbon
@@ -2169,7 +2170,11 @@ Make the codebase pleasant to work in for the next 6 months + close any PHP feat
 ### Bundle 3 — ✅ landed already (ไม่ต้องคุย)
 ```
 ✅ LINE OA channel access token (Pacred provided 2026-05-14)
+✅ LINE OA Basic ID (@683wolja) + Premium ID (@pacred) provided 2026-05-14
+   → in components/seo/site.ts as LINE_OA.{basicId, premiumId, addFriendUrl}
+   → premium ID add-friend URL = https://line.me/R/ti/p/%40pacred
 ✅ Sentry SDK + Rate limit + hCaptcha — scaffolded รอ creds เท่านั้น
+✅ D-12-wire + D-13-wire — rate-limit + CAPTCHA wired into 6 actions + 3 forms
 ```
 
 ## Q3. Production launch checklist (priority order)
