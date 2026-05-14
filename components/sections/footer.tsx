@@ -76,7 +76,7 @@ export function Footer() {
     { label: t("svcFcl"),     href: "/services/import-china-fcl" },
     { label: t("svcLcl"),     href: "/services/import-china-lcl" },
     { label: t("svcExport"),  href: "/services/export-worldwide" },
-    { label: t("svcCustoms"), href: "/services/customs-clearance" },
+    { label: t("svcCustoms"), href: "/customs-clearance-shipping-suvarnabhumi" },
     { label: t("svcShop"),    href: "/services/china-shopping" },
   ];
 

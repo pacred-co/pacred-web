@@ -65,7 +65,7 @@ const HOME_SERVICES: Array<{ name: string; slug: string; description: string }> 
   },
   {
     name: "เคลียร์ศุลกากร · สินค้าติดด่าน",
-    slug: "/services/customs-clearance",
+    slug: "/customs-clearance-shipping-suvarnabhumi",
     description: "ชิปปิ้งเคลียร์ภาษีและสินค้าติดด่าน รถ/เรือ/อากาศ",
   },
   {
