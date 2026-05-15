@@ -1683,21 +1683,25 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-D3 | Link the Pacred container code ↔ the carrier's physical container number | ภูม | 🟡 | ⬜ |
 | V-D4 | Split-receipt expected-vs-received box count — migration 0037 (U1-5) schema ✅; wire the UI | ภูม | 🟠 | ⬜ |
 
+> 📐 **Schema spec for V-D1/D2/D3** → [`docs/port-specs/cargo-volume-reconciliation.md`](port-specs/cargo-volume-reconciliation.md) — เดฟ prep (proposed columns + canonical cargo-type enum + legacy mapping); ภูม implements + finalises.
+
 ## V-E — Freight (FCL/LCL) document suite — net-new (Phase I2)
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
 | V-E1 | Commercial **Invoice + Packing List** generator (China shipper → Thai consignee) | ภูม | 🟠 | ⬜ |
-| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure | ภูม + ก๊อต ADR | 🟠 | ⬜ |
+| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure. Design = [ADR-0016](decisions/0016-freight-value-model.md) (🟡 DRAFT — ก๊อต to lock) | ภูม impl · ก๊อต lock ADR-0016 | 🟠 | ⬜ |
 | V-E3 | **Form E** (ASEAN-China FTA Certificate of Origin) generator — 12-box form, HS code, origin criterion | ภูม | 🟡 | ⬜ |
 | V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording | ภูม | 🟡 | ⬜ |
 | V-E5 | Range-guard **every numeric import** — legacy invoice sheets carry int32-overflow garbage (`-2146826xxx`) | ภูม | 🟡 | ⬜ |
+
+> 📐 **Schema + generation spec for V-E1/E3/E4** → [`docs/port-specs/freight-document-suite.md`](port-specs/freight-document-suite.md) — เดฟ prep (the `freight_*` tables + Invoice/PL · Form E · D/O generators); value/VAT math in [ADR-0016](decisions/0016-freight-value-model.md).
 
 ## V-F — Strategic / dependency
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — track each cutover with ก๊อต | เดฟ + ก๊อต | 🔴 | ⬜ |
+| V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — tracked in [`runbook/legacy-cutover-tracker.md`](runbook/legacy-cutover-tracker.md) (8 dependencies, F1-1…F1-8) | เดฟ + ก๊อต | 🔴 | 🏗 |
 | V-F2 | PEAK / ERP accounting-export API (follows V-A8) | เดฟ | 🟡 | ⬜ |
 | V-F3 | Legacy-infra resilience — fragile 3rd-party server, pay-or-die; cut over before any contract lapse | ก๊อต | 🟡 | ⬜ |
 

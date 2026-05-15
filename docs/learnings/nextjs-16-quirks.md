@@ -271,3 +271,26 @@ After this:
 - Memory entry `dev_in_claude_worktree` — orphan node holds port 3000 after TaskStop, need Stop-Process
 
 ---
+
+## [2026-05-16] Pre-hydration theme head-script must agree with the React provider's initial state
+
+**Context:** Pacred uses a custom theme provider (not `next-themes`). A small `<script>` in `<head>` (`THEME_INIT_SCRIPT`) runs before hydration to paint the theme class — kills FOUC. `ThemeProvider` then manages React state for in-app toggling.
+
+**Symptom:** The theme toggle needed **two clicks** to work the first time; on a dark-OS machine the site sometimes opened in dark even though the provider defaulted to light. The locale switcher *looked* like it had the same bug (it doesn't — its code is correct; it was the theme desync being noticed).
+
+**Root cause:** The head-script and the provider **disagreed on the initial theme**. The head-script resolved via OS `prefers-color-scheme` (`localStorage.getItem(k) || 'system'` → matchMedia), while `ThemeProvider` defaulted to `light`. So the DOM was painted X but React state said Y. `ThemeToggle` read `theme` (React state = Y) → the first click set the theme to X — *which was already on screen* — a silent no-op. The second click finally moved it.
+
+**Fix (commit `235dbc3`):**
+1. Make the head-script and the provider start from the **exact same value**. We made the head-script *unconditionally* paint `light` (also the product decision — always open light) and `ThemeProvider` default `light`. No OS detection anywhere → they cannot diverge.
+2. `ThemeToggle` reads **`resolvedTheme`** (the actually-painted value), never `theme`.
+3. Once head-script and provider agree, the `mounted`-guard empty-`<div>` is unnecessary — drop it so the button is live on first paint (removes a second "first click lost" window).
+
+**Why this matters next time:** Any **pre-hydration FOUC script + React state** pair MUST be kept in lockstep. If they diverge, the *first* user interaction on anything driven by that state is a silent no-op. When a toggle "needs two clicks," suspect a **head-script ↔ provider desync** — not the toggle component itself. Also: a pre-paint script that reads `localStorage`/`matchMedia` is a classic divergence source — if you don't *need* persistence/OS-detection, paint a constant and the whole class of bug disappears.
+
+**Cross-links:**
+- Commit `235dbc3` (fix: always-light + single-click toggle + dark contrast)
+- [`components/theme-provider.tsx`](../../components/theme-provider.tsx) — `THEME_INIT_SCRIPT` + the always-light rationale comment
+- [`components/theme-toggle.tsx`](../../components/theme-toggle.tsx) — reads `resolvedTheme`, no `mounted` guard
+- [`app/layout.tsx`](../../app/layout.tsx) — head-script injection + `<ThemeProvider defaultTheme="light">`
+
+---

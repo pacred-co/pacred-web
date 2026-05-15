@@ -581,4 +581,64 @@ When all of this lands, Pacred ships beta:
 
 ---
 
+## 🌙 เดฟ autonomous run — theme fix · cargo forensics · ADR-0015/16 (2026-05-16 night)
+
+Long autonomous session. **7 commits on `dave`** — 4 pushed, 3 held local (hold-push mode; เดฟ pushes on his signal).
+
+**Pushed to `origin/dave` (→ `5e6f015`):**
+1. ✅ `235dbc3` **fix(theme)** — 3 owner-reported bugs: site always opens light (head-script no longer OS-detects) · theme toggle flips on the **first** click (head-script↔provider desync killed) · dark-mode contrast (2 near-black headings paired with `dark:`).
+2. ✅ `018f747` **migrations** — `docs/setup/migrations-0023-0038.sql` (one idempotent paste-and-run file for ภูม) + README migration table extended to 0038.
+3. ✅ `32810d0` **cargo forensics** — `docs/audit/cargo-ops-forensics-2026-05-16.md` (decoded the cargo/freight model + ไอแต้ม-chat problem catalog A–F from 10 real China-cargo documents) + **PORT_PLAN Part V** (`V-A1…V-F3` backlog + `V-ADM1` admin-UI polish).
+4. ✅ `5e6f015` **ADR-0015** — withholding-tax (หัก ณ ที่จ่าย) model, DRAFT.
+
+**Held local — push on เดฟ's signal:**
+5. 🔸 `bda57be` **STRATEGY.md sync** — master single-read updated with Part V + cargo forensics + ADR-0014/0015/0016.
+6. 🔸 `647f9ed` **learnings** — theme head-script↔provider desync gotcha (`nextjs-16-quirks.md`).
+7. 🔸 `abb4ad7` **ADR-0016** — freight value model (commercial vs declared value · VAT plan), DRAFT.
+
+**Verify:** theme commit passed full `pnpm verify` (lint+tsc+test+audits); all doc commits passed `audit:md` (734 links / 66 md files ✓).
+
+**Team action items from this run:**
+- **ภูม** → pull `dave` → run `docs/setup/migrations-0023-0038.sql` on Supabase → **V-ADM1** (admin UI: remove right sidebar · white left sidebar · unify theme+bg — spec in `briefs/poom.md`) → Part V cargo backlog (🔴 `V-A2/A3/C1/D1` need no ADR; `V-A6` waits on ADR-0015 lock).
+- **ก๊อต** → review + lock **ADR-0015** (4 open Qs) and **ADR-0016** (5 open Qs) → unblocks `V-A6` / `V-E2`.
+- **ปอน** → pull `dave` (theme bugs fixed) → continue landing work.
+
+---
+
+## 🤝 เดฟ↔ภูม Part V work-split + review (night-2)
+
+เดฟ reviewed ภูม's 6-item `Poom` batch (`origin/Poom` → `7d89564`) and set the going-forward split.
+
+**Review verdict — ภูม's batch is production-quality, no rework needed:**
+- **V-A2** status rollback — `STATUS_ORDER` index check · `rollback_reason` required (≥3 chars) · reason prepended into `note_admin` (prior notes survive) · audit logs `forwarder.rollback` distinctly from `.update` for governance. ✓
+- **V-A3** reconciliation — `adminAutoClearForwarderPayment` uses verify-then-admin-client (ADR-0014) · amount sanity check vs `total_price` · race-safe optimistic `.eq(status)` · audit + notify. ✓
+- **V-A4** rate validation — `yuan_rate` max tightened 100→20 · `SUSPICIOUS_FACTOR` per-field ratio guard catches ×2/×10 typos · `confirm_unusual_rate` bypass + audit. ✓
+- **V-D1** cbm-per-source — migration `0039`, 3 columns + checks + legacy backfill + schema comments. ✓
+- **V-D4** received-vs-expected UI · **V-ADM1** admin polish. ✓
+- ⚠ **Note:** V-D1 took migration `0039` — so WHT (ADR-0015 / V-A6) now lands at `0041+`. ADR-0015's "migration 0039" line is stale; เดฟ fixes it when ก๊อต locks the ADR.
+
+**Split going forward (เดฟ instruction, 2026-05-16 night):**
+- **เดฟ = structural** — schemas / migrations / core action skeletons / state machines.
+- **ภูม = audit · test · SQL · polish** — run migrations on Supabase, wire UI, normalise imports, exploratory-test the flows + edge cases.
+
+**เดฟ just shipped (structural — `dave` `edec18b`):**
+- **V-D2 + V-D3** — migration `0040` (`cargo_shipments.cargo_type` canonical enum + `cargo_containers.carrier_container_no`) + `lib/warehouse/cargo-type.ts` (`toCanonicalCargoType()` normalises both legacy `A/M/X/O/Z` + `G/T/F` code sets, incl. the full `普通货物/ทั่วไป/A` label form) + test (38 asserts). `pnpm verify` ✓.
+
+**ภูม picks up from V-D2/D3:** run `0039`+`0040` on Supabase · add `cargo_type` to the `Shipment` type in `lib/warehouse/types.ts` · wire `cargo_type` into the admin shipment UI · call `toCanonicalCargoType()` in the MOMO/manifest import on every legacy code.
+
+**Remaining Part V split:**
+
+| Item | Owner | Note |
+|---|---|---|
+| V-D2/D3 UI wiring + import normalise | ภูม | from `edec18b` |
+| V-A5 manual adjustment line | เดฟ schema → ภูม UI | เดฟ structural |
+| V-C1 post-lock refund | เดฟ (state machine + action) → ภูม UI/test | 🔴 **เดฟ next** |
+| V-A6 WHT | เดฟ schema (migr `0041`) after ก๊อต locks ADR-0015 → ภูม wiring | blocked on ก๊อต |
+| V-A8 ภพ.30 export · V-E* freight | เดฟ structural | later / Phase I2 |
+| V-B1 reports · V-C2 bill-header · V-C3 ตัดตู้ UX · V-A1 | ภูม | admin UI/UX lane |
+
+เดฟ next structural pickup = **V-C1 post-lock refund**.
+
+---
+
 **End of checkpoint.** Update freq: when blocker resolves / new blocker appears / สำคัญ batch ship → edit this file + commit `docs(team): status checkpoint — <date> — <what changed>`.

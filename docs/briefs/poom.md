@@ -35,6 +35,7 @@ Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency ta
 9. [`.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) — skills kit; **`legacy-php-sweep`** is your bread-and-butter for cargo ports
 10. [`docs/learnings/_index.md`](../learnings/_index.md) — scan for any new gotcha entries since last session
 11. [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** — **NEW** cargo/freight forensics → backlog V-A1…V-F3 (mostly yours) + your **V-ADM1** admin-UI polish task
+12. [`docs/runbook/team-status-2026-05-16.md`](../runbook/team-status-2026-05-16.md) §"🤝 เดฟ↔ภูม Part V work-split" — **NEW** เดฟ reviewed your 6-item batch (✓ all production-quality, no rework) + set the split: **เดฟ = structural/schema · you = audit/test/SQL/UI-polish**. เดฟ shipped V-D2/D3 structural (`edec18b`) — you run `0039`+`0040` on Supabase + wire `cargo_type` into UI + import. เดฟ next = V-C1.
 
 ## 📂 Legacy reference (your most-touched external source)
 

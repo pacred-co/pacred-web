@@ -173,11 +173,16 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 | [0008](decisions/0008-dpx-erp-phase-2.md) | DPX ERP Phase 2 (V3 territory) | ✅ draft | V3 architecture discussions |
 | [0009](decisions/0009-erp-schema-sketch.md) | ERP schema sketch (M1..M14) | ✅ draft | New admin module schema |
 | [0010](decisions/0010-v2-v3-version-strategy.md) | V2 (owner-pleaser) vs V3 (employee masterpiece) | ✅ locked | When tempted to refactor mid-flight |
+| [0014](decisions/0014-customer-self-service-state-transitions.md) | Customer self-service state transitions (verify-then-admin-client) | ✅ locked | Any customer-initiated state-machine action |
+| [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | 🟡 DRAFT — ก๊อต to lock | V-A6 · juristic payments · receipt gating |
+| [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | 🟡 DRAFT — ก๊อต to lock | V-E2 · freight (FCL/LCL) invoicing |
 
 **Pending ADRs** (ก๊อต P2):
 - 0011 ERP RBAC granular roles per module
 - 0012 ERP frontend shell (same app vs separate `erp.pacred.co`)
 - 0013 ERP V2→V3 migration strategy
+- **0015 needs ก๊อต lock** — answer the 4 open questions, flip Status → Accepted (unblocks V-A6)
+- **0016 needs ก๊อต lock** — answer the 5 open questions, flip Status → Accepted (unblocks V-E2)
 
 ---
 
@@ -245,14 +250,15 @@ Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) r
 | **เดฟ** | **U2-5 multi-line bulk tracking search** | ✅ **DONE evening-10** — `/admin/forwarders` search bar toggles single↔multi mode (chat W-9 closer) |
 | **เดฟ (cargo loop closure)** | Customer pay-from-wallet (shop + forwarder) | ✅ **DONE evening-4/6** — `payServiceOrderFromWallet` + `payForwarderFromWallet`, idempotent, admin-client-after-ownership-verify pattern |
 
-### 🆕 Verified deficiency audits (2026-05-16 evening)
+### 🆕 Verified deficiency audits (2026-05-16)
 
-Two parallel audits produced concrete leak-hole + cleanup task lists:
+Three audits produced concrete leak-hole + cleanup + cargo-backlog task lists:
 
 - [`audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE groups · 6 months · 10 ranked leak holes · canonical MOMO 9-status enum · workflows team really uses
 - [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload)
+- [`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md) — the legacy developer (ไอแต้ม) chat + **10 real China-cargo documents** · decoded cargo/freight ops model (GZE truck / GZS sea · A/M/X/O/Z type taxonomy · Form E / D-O / invoice value-engineering) · problem catalog A–F (withholding tax, status rollback, CBM mismatch, the ไอแต้ม single-point-of-failure)
 
-Master task list synthesizing both: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5 — 30+ items by severity).
+Master task lists: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5) + **Part V** (V-A1…V-F3 cargo-forensics backlog + V-ADM1 admin-UI polish). WHT design = [ADR-0015](decisions/0015-withholding-tax-model.md) (DRAFT).
 
 ---
 
@@ -326,7 +332,8 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 |---|---|
 | งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` (EMERGENCY section at top) |
 | ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs) |
-| สเปกของ feature Y? | `PORT_PLAN.md` (Parts O–T) — search for ID like `T-P1` |
+| สเปกของ feature Y? | `PORT_PLAN.md` (Parts O–V) — search for an ID like `T-P1` / `V-A6` |
+| คาร์โก้/เฟรท: ระบบจริงทำงานยังไง + ปัญหาอะไร? | `audit/cargo-ops-forensics-2026-05-16.md` (decoded model + problem catalog A–F) |
 | Schema ของ table Z? | `architecture/container-centric-model.md` or `decisions/0009-erp-schema-sketch.md` |
 | Env var คืออะไร / set ยังไง? | `env.md` |
 | Process: pull/push/integrate workflow? | `team.md` §10 |
