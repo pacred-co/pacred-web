@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
@@ -485,4 +486,120 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
   revalidatePath("/service-order");
   revalidatePath("/service-order/pending");
   return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// PAY FROM WALLET — customer self-service (closes cargo loop)
+// ────────────────────────────────────────────────────────────
+//
+// Without this, every order requires admin to manually call
+// adminMarkServiceOrderPaid → admin bottleneck per order.  With this,
+// the customer self-pays once they have wallet balance ≥ total.
+//
+// Mirror of adminMarkServiceOrderPaid but customer-initiated:
+//   - status MUST be 'awaiting_payment' (no super flow like admin)
+//   - no allow_overdraw (customer must have sufficient main bucket)
+//   - no admin_id (null on wallet_tx; customer-initiated)
+//   - ownership re-verified via RLS-protected fetch BEFORE admin client mutations
+//
+// Idempotent: re-click returns existing tx without double-debit.
+export async function payServiceOrderFromWallet(
+  hNo: string,
+): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. Verify ownership + status + total via RLS-protected fetch
+  const { data: order } = await supabase
+    .from("service_orders")
+    .select("id, h_no, status, total_thb")
+    .eq("h_no", hNo)
+    .maybeSingle<{ id: string; h_no: string; status: string; total_thb: number }>();
+  if (!order)                                  return { ok: false, error: "not_found" };
+  if (order.status !== "awaiting_payment")     return { ok: false, error: "order_not_payable" };
+  const totalThb = Number(order.total_thb);
+  if (!(totalThb > 0))                         return { ok: false, error: "total_thb_invalid" };
+
+  // 2. Idempotency: existing completed payment tx for this order?
+  const { data: existingTx } = await supabase
+    .from("wallet_transactions")
+    .select("id")
+    .eq("reference_type", "order_header")
+    .eq("reference_id", order.h_no)
+    .eq("kind", "order_payment")
+    .eq("status", "completed")
+    .maybeSingle<{ id: string }>();
+  if (existingTx) {
+    // Status mismatch shouldn't happen, but return success — let UI refresh.
+    return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
+  }
+
+  // 3. Balance check (main bucket) — RLS guarantees own wallet only
+  const { data: wallet } = await supabase
+    .from("wallet")
+    .select("balance")
+    .eq("profile_id", user.id)
+    .maybeSingle<{ balance: number }>();
+  const balance = Number(wallet?.balance ?? 0);
+  if (balance < totalThb) {
+    return {
+      ok: false,
+      error: `wallet_insufficient — มี ฿${balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
+    };
+  }
+
+  // 4. Debit + status flip — admin client (gated by ownership check above)
+  const admin = createAdminClient();
+
+  const { data: tx, error: txErr } = await admin
+    .from("wallet_transactions")
+    .insert({
+      profile_id:     user.id,
+      bucket:         "main",
+      amount:         -totalThb,
+      kind:           "order_payment",
+      status:         "completed",
+      reference_type: "order_header",
+      reference_id:   order.h_no,
+      admin_id:       null,
+      note:           `ชำระค่าฝากสั่ง ${order.h_no} (ตัดจาก wallet โดยลูกค้า)`,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+
+  const { error: ordErr } = await admin
+    .from("service_orders")
+    .update({
+      status:       "ordered",
+      date_ordered: new Date().toISOString(),
+    })
+    .eq("id", order.id);
+  if (ordErr) {
+    // Don't roll back the wallet tx — preserve audit trail (mirror of
+    // adminMarkServiceOrderPaid behavior). Admin can reconcile from
+    // /admin/service-orders/<hNo>.
+    return {
+      ok: false,
+      error: `order update failed AFTER wallet debit (tx ${tx.id} stays): ${ordErr.message}`,
+    };
+  }
+
+  // 5. Notify customer (self-action confirmation)
+  void sendNotification(user.id, notify.walletTxStatusChanged({
+    kind:   "order_payment",
+    status: "completed",
+    amount: -totalThb,
+    note:   `ออเดอร์ ${order.h_no}`,
+    txId:   tx.id,
+  }));
+
+  revalidatePath(`/service-order/${order.h_no}`);
+  revalidatePath("/service-order");
+  revalidatePath("/service-order/pending");
+  revalidatePath("/wallet");
+  revalidatePath("/wallet/history");
+
+  return { ok: true, data: { tx_id: tx.id, already_paid: false } };
 }
