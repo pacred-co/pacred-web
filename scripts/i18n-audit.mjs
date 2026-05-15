@@ -111,6 +111,12 @@ const KEY_ALLOWLIST = new Set([
   "ourService.titleMobile", "ourService.orderSubMobile",
   "service.whyPacredBadge", "service.reviewsBadge",
   "reviews.eyebrow",
+  // ปอน BookingPortTabs — port-type subtitles use English logistics terms
+  // (Air Cargo / Air Freight / Express / Courier / Inland Depot) which are
+  // standard in Thai cargo industry UIs — intentionally same TH/EN.
+  "bookingCalc.customs.portTabs.bkkSub",
+  "bookingCalc.customs.portTabs.dmkSub",
+  "bookingCalc.customs.portTabs.icdSub",
 ]);
 
 function isIntentional(key, value) {

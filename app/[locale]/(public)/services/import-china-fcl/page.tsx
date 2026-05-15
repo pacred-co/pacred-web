@@ -253,7 +253,7 @@ export default async function ImportChinaFclPage({
               FCL · FULL CONTAINER LOAD
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              นำเข้าทางเรือ <span className="text-primary-600">FCL เหมาตู้</span> 20' · 40' · 40HQ
+              นำเข้าทางเรือ <span className="text-primary-600">FCL เหมาตู้</span> 20{"'"} · 40{"'"} · 40HQ
               <span className="hidden md:inline"> จากจีน Door-to-Door</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
