@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { SITE_LOCALES, SITE_URL, absoluteUrl, type SiteLocale } from "@/components/seo/site";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
+import { CUSTOMS_PORTS } from "@/components/sections/customs-port-data";
 
 type Freq = MetadataRoute.Sitemap[number]["changeFrequency"];
 
@@ -66,5 +67,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry(`/knowledge/${a.slug}`, { priority: 0.7, changeFrequency: "monthly" }),
   );
 
-  return [...staticEntries, ...articleEntries];
+  // Per-port customs detail pages — one per CUSTOMS_PORTS slug
+  const portEntries = CUSTOMS_PORTS.map((p) =>
+    entry(`/customs-clearance-shipping-suvarnabhumi/${p.slug}`, {
+      priority: 0.85,
+      changeFrequency: "monthly",
+    }),
+  );
+
+  return [...staticEntries, ...articleEntries, ...portEntries];
 }
