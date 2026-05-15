@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-3 (เดฟ via Claude) — TEAM-WIDE RUN-LONG MODE active. All 4 roles autonomous until เดฟ check-in. Full per-role queues + cross-dependency map below.
+> **Last updated:** 2026-05-16 evening-4 (เดฟ via Claude) — **CARGO LOOP CLOSURE BATCH**: customer pay-from-wallet shipped + T-D1 smoke test runbook + full per-role queues. Loop now closes end-to-end for revenue.
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -261,18 +261,35 @@ Per Part S1 + ADRs 0003-0010:
 
 ---
 
-## 📦 What เดฟ shipped this session (2026-05-16 evening — for ภูม reference)
+## 📦 What เดฟ shipped this session (2026-05-16 evening — full digest)
 
-1. ✅ **Merged `Poom → dave`** — T-P1 (driver assign + mark-paid) + T-P3 (wallet/yuan bulk approve) + team-status doc + UI components all landed in dave staging.
-2. ✅ **`docs(team): status checkpoint` — flag responses + ภูม run-long direction** (commit `92b64c8`).
-3. ✅ **`supabase/migrations/0033_containers.sql`** — `containers` + `shipments` + `shipment_tracking` + `container_status_history` + extends `admins.role` to add `'warehouse'` + `'driver'`. RLS scoped: customers read own; warehouse staff full access; drivers can write tracking events.
-4. ✅ **`supabase/migrations/0034_tax_invoices.sql`** — `tax_invoices` (immutable buyer + financial snapshot per RD Code 86) + `tax_invoice_lines` + `tax_invoice_seq` + `next_tax_invoice_serial()` security-definer function for atomic `INV-YYYYMM-NNNN` generation. RLS scoped: customer reads own; super+accounting read+write all.
-5. ✅ **`app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx`** — HTML print-friendly receipt for China-shop orders. Mirrors `/service-import/[fNo]/receipt` pattern. Shows pricing breakdown (CNY → rate → THB), customer info (juristic block if applicable), items + tracking numbers, "ดาวน์โหลด PDF" button → existing `/api/pdf/shop-order/[hNo]`.
-6. ✅ **PORT_PLAN P-31 cart cap resolved** (lines 250 + 977) — keep code at 151-cap matching legacy PHP `cart.php:17,76`; spec doc body fixed from "150 OK → 151st throws" to "151 OK → 152nd throws".
+1. ✅ **Merged `Poom → dave`** — T-P1 + T-P3 + team-status doc + UI components.
+2. ✅ **AGENTS.md handshake** (`9000c28`) — mandatory session-start protocol.
+3. ✅ **`0033_containers.sql`** — `containers` + `shipments` + `shipment_tracking` + `container_status_history` + extends `admins.role` to add `'warehouse'` + `'driver'`.
+4. ✅ **`0034_tax_invoices.sql`** — `tax_invoices` + `tax_invoice_lines` + `tax_invoice_seq` + `next_tax_invoice_serial()` security-definer fn (RD Code 86 compliant).
+5. ✅ **`app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx`** — HTML print-friendly receipt for China-shop orders. "ดาวน์โหลด PDF" button → existing `/api/pdf/shop-order/[hNo]`.
+6. ✅ **PORT_PLAN P-31 cart cap resolved** — keep 151-cap matching legacy PHP `cart.php:17,76`.
+7. ✅ **TEAM-WIDE RUN-LONG MODE** master section + per-role priority queues + cross-dep map + brief stamps (ปอน + ก๊อต).
+8. ✅ **`actions/service-order.ts::payServiceOrderFromWallet`** — **customer self-service pay action** (loop-closing). Mirror of `adminMarkServiceOrderPaid`: idempotent · balance check (no overdraw) · admin client for status flip after ownership-verified RLS fetch · notify customer via `notify.walletTxStatusChanged`. **No more admin bottleneck per order** — customer pays themselves once balance ≥ total.
+9. ✅ **`pay-from-wallet-button.tsx`** + **page.tsx update** — primary button in payment-due banner when balance sufficient; insufficient hint with shortfall otherwise; existing "ฝากเงิน" + "ดูยอด" links kept as fallback.
+10. ✅ **i18n keys** (TH + EN) — 6 new keys: `payFromWallet`, `payFromWalletBalance`, `payFromWalletConfirm`, `payInsufficientHint`, `paying`, `paySuccess`.
+11. ✅ **`docs/runbook/cargo-smoke-test-T-D1.md`** — 9-step runbook (signup → topup → admin approve → order → admin total → **customer pay-from-wallet** → admin status chain → receipt PDF → optional tax invoice). Pre-flight checklist + per-step verify points + edge-case spot-checks + what-to-do-when-broken.
 
-**Acceptance (entire batch):** `pnpm exec tsc --noEmit` ✅ clean · `pnpm exec eslint` on new page ✅ clean · migration files idempotent + commented + RLS-fenced + indexed.
+**Acceptance (entire batch):** `pnpm exec tsc --noEmit` ✅ clean · `pnpm exec eslint` on all touched files ✅ clean · migration files idempotent · i18n keys both languages.
 
-**ภูม next session:** pull `origin/dave` → merge into `Poom` → run `0033` + `0034` on dev Supabase → pick T-P5 (`/admin/accounting` stub) or jump to T-P2/T-P4 (now unblocked). Run-long mode — no need to wait.
+**Cargo loop status — actually closes end-to-end now for V1:**
+```
+signup ✅ → top up wallet ✅ → admin approves deposit ✅
+       → place service-order ✅ → admin reviews + total ✅
+       → CUSTOMER pays from wallet ✅ (NEW — no more admin bottleneck per order)
+       → admin moves status forward ✅ → receipt PDF ✅
+       → (juristic) tax invoice request → pending T-P4 G2b
+       → (admin) container assignment + customer tracking view → pending T-P2
+```
+
+**ภูม next session:** pull `origin/dave` → merge into `Poom` → run `0033` + `0034` on dev Supabase → pick T-P5 OR T-P2/T-P4 (both unblocked). Run-long mode — no wait.
+
+**เดฟ next session:** apply migrations 0023..0034 to **prod Supabase** → run T-D1 smoke test using the new runbook → DV-2 LIFF + DV-3 ThaiBulkSMS signups in parallel → T-D4 soft-launch coordination once T-D1 passes.
 
 ---
 
@@ -291,7 +308,9 @@ When all of this lands, Pacred ships beta:
 - [ ] **Pacred owner Bundle 1** (PromptPay + bank + company info + LIFF app) ← biggest single blocker
 - [ ] เดฟ DV-1..DV-4 external signups (Sentry/Upstash/hCaptcha/SMS) ← parallel to owner ask
 - [x] เดฟ T-D2 specs → ภูม T-P2 (containers) + T-P4 (tax invoice) — schemas + receipt page pushed 2026-05-16 evening
-- [ ] T-D1 cargo flow end-to-end smoke test → first 5 friendly customers (T-D4)
+- [x] **Cargo loop closure** — customer pay-from-wallet shipped (no more admin bottleneck per order)
+- [x] **T-D1 smoke test runbook** — 9-step runnable runbook with verify points (`docs/runbook/cargo-smoke-test-T-D1.md`)
+- [ ] T-D1 smoke test EXECUTED on dev + prod → first 5 friendly customers (T-D4)
 
 **Estimated time-to-beta if owner bundle arrives this week:** ~1-2 weeks.
 
