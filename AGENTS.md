@@ -10,13 +10,26 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > AGENTS.md is loaded into every Claude Code session via `@AGENTS.md` at the top of `CLAUDE.md`. Keep this file narrow: rules that change *how* agents behave, not project facts (facts live in CLAUDE.md / docs/).
 
-## 1. Read your role brief FIRST + scan learnings
+## 1. Session-start handshake (MANDATORY — do BEFORE asking what to work on)
 
-Every session opens **[`docs/briefs/<your-name>.md`](docs/briefs/)** before any other work. Routing in [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md). Skipping = wandering session.
+After `git fetch` + branch sync at the top of a session, run this handshake **proactively** — do not wait for the user to ask. Skipping = wandering session + forcing the user to re-explain context they already encoded in docs.
 
-After your brief, do a 1-min scan of [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since you last looked save you minutes-to-hours of re-debugging downstream. Compounds over time (immortal-scholar pattern — see `.claude/skills/scholar-immortal/`).
+**Step 1 — Read your role brief** ([`docs/briefs/<your-name>.md`](docs/briefs/) — routing in [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md)).
 
-The master single-read consolidation of everything else lives in [`docs/STRATEGY.md`](docs/STRATEGY.md).
+**Step 2 — Scan canonical context** (parallel reads):
+- [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~350 lines)
+- [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since last session (immortal-scholar — `.claude/skills/scholar-immortal/`)
+- Your brief's "Force-read" cross-links (e.g. PORT_PLAN Part T, relevant ADRs)
+
+**Step 3 — Surface a state summary to the user** (don't ask first — present it):
+- 🟢 **Shipped** — what's behind us (1-3 lines, latest sprint)
+- 🟡 **Your pickup list** — top 3-5 P0/P1 from your brief
+- 🔴 **Critical blockers** — who you're blocked on, who's blocked on you
+- **Recommended first task** — highest-leverage P0 with effort estimate
+
+**Step 4 — Wait for user go-ahead** before implementing. They may redirect to a different pickup.
+
+**Triggers:** any session that starts with sync ("ต่อที่ทำงาน", "เปิดมาใหม่", new worktree, machine change, fresh Claude Code window). Per memory `session_start_handshake`.
 
 ## 2. Revenue-first lens (emergency mode active)
 

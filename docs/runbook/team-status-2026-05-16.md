@@ -1,19 +1,24 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 (ภูม) — after merging เดฟ overnight batch + shipping T-P1 admin workflow gaps.
-> **Where we are on Poom:** `121ea0d` (synced with `origin/Poom`).
+> **Last updated:** 2026-05-16 evening-2 (เดฟ) — T-D2 schemas + receipt page + P-31 cart cap resolved all shipped.
+> **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 now ✅ UNBLOCKED. ภูม → `git fetch && git merge origin/dave` into Poom before starting next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
 ---
 
-## 🟢 Just shipped today (ภูม)
+## 🟢 Just shipped today (ภูม + เดฟ merge)
 
 | Commit | What |
 |---|---|
-| `121ea0d` | T-P1 admin workflow buttons (cargo revenue path): `adminAssignDriverToForwarder` + `adminMarkServiceOrderPaid` + UI on `/admin/forwarders/[fNo]` + `/admin/service-orders/[hNo]` |
-| `84ca7b5` | T-P3 bulk approve: `adminBulkApproveDeposits` + `adminBulkApproveYuanPayments` + sticky bar UI on `/admin/wallet` + `/admin/yuan-payments` (cuts per-row click cost 4→1) + this team-status checkpoint file |
-| (this batch) | T-P5 `/admin/accounting` owner overview: hero net-revenue card with prev-period delta (auto-computed when both date filters set) + 4 pending-pipeline cards (deposits / awaiting-payment / forwarder-in-flight / yuan-in-process) + 2 customer-count cards (new + active in window) — extends existing summary tab without disrupting accountant views |
+| `121ea0d` | T-P1 admin workflow buttons: `adminAssignDriverToForwarder` + `adminMarkServiceOrderPaid` + UI on `/admin/forwarders/[fNo]` + `/admin/service-orders/[hNo]` (ภูม) |
+| `84ca7b5` | T-P3 bulk approve: `adminBulkApproveDeposits` + `adminBulkApproveYuanPayments` + sticky bar UI on `/admin/wallet` + `/admin/yuan-payments` (ภูม) |
+| `5969e6d` | T-P5 `/admin/accounting` owner overview: hero net-revenue card + prev-period delta + 4 pipeline cards + 2 customer-count cards (ภูม) |
+| `175b295` | merge `Poom→dave` — เดฟ merged ภูม T-P1 + T-P3 batch after review (production-ready: RBAC per K-7, idempotency, 305 tests green) |
+| `9000c28` | AGENTS.md §1 mandatory session-start handshake (เดฟ) |
+| `f2230ed` | **T-D2 schemas:** `0033_containers.sql` + `0034_tax_invoices.sql` shipped → unblocks ภูม T-P2 + T-P4 (เดฟ) |
+| `f410640` | **T-P1 GAP 3 closed:** customer service-order receipt page (`/service-order/[hNo]/receipt`) — pre-req for T-D1 cargo smoke test (เดฟ) |
+| `32f5bcf` | P-31 cart cap doc fix (PORT_PLAN was wrong; trigger correct at >=151 per legacy) + this checkpoint header bump (เดฟ) |
 
 **Tests:** 305 assertions all green across 13 test files.
 
@@ -70,21 +75,22 @@
 | **DV-3** | ThaiBulkSMS account apply → API keys → Vercel env | 30m + paid | OTP จริง (OTP_BYPASS=false) |
 | **DV-4** | Pacred owner ติดต่อ — Bundle 1 (PromptPay + bank + company info) | 15m + รอ | ดู "Pacred owner blockers" ด้านบน |
 | **T-D1** | **Cargo flow end-to-end smoke test** (signup → topup → place order → admin marks paid → receipt) | 4-6h | confirms revenue path before public ad spend |
-| **T-D2** | **Backend specs for ภูม:** `0033_containers.sql` (CT-1) + `0034_tax_invoices.sql` (G2a) — draft + ภูม reviews + applies | 3h | unblocks ภูม T-P2 + T-P4 |
+| **T-D2** | **Backend specs for ภูม:** `0033_containers.sql` (CT-1) + `0034_tax_invoices.sql` (G2a) — draft + ภูม reviews + applies | 3h | ✅ **DONE + PUSHED** (this session) — ภูม T-P2 + T-P4 now unblocked |
 | **T-D3** | L-22 GTM verify after K-12 — events → GTM Preview Mode → GA4 → reports | depends K-12 | confirms ad attribution pipeline |
 | **T-D4** | Internal soft-launch coordination — pick 5 friendly customers + hand-hold through end-to-end | 2h coord + ongoing | first real revenue + prod stress test |
 
 ---
 
-## 🟡 ภูม queue (Part T priority — current sprint)
+## 🟢 ภูม queue (Part T priority — current sprint)
 
 | # | Task | Est | Status |
 |---|---|---|---|
-| **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE 2026-05-16** (commit `121ea0d`) — 2/3 gaps closed; receipt link gap deferred (customer-side receipt page doesn't exist yet, separate scope) |
-| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | ✅ **DONE 2026-05-16** (commit `84ca7b5`) — checkbox column + sticky bar on `/admin/wallet` + `/admin/yuan-payments` |
-| **T-P5** | `/admin/accounting` owner overview | 3-5h | ✅ **DONE 2026-05-16** (this batch) — extended existing accounting summary tab with hero net-revenue card (with prev-period delta), pending pipeline cards (4 cards), customer counts (new + active in window) |
-| **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🔴 needs T-D2 spec from เดฟ for `0034_tax_invoices.sql` |
-| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🔴 needs T-D2 spec for `0033_containers.sql` |
+| **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE + MERGED** (commit `121ea0d` → dave; receipt-page GAP 3 closed by เดฟ `f410640`) |
+| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | ✅ **DONE + MERGED** (commit `84ca7b5` → dave) |
+| **T-P5** | `/admin/accounting` owner overview | 3-5h | ✅ **DONE** (commit `5969e6d` → Poom; awaiting dave merge) |
+| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🟢 **NEXT** — `0033_containers.sql` shipped by เดฟ (`f2230ed`); ภูม implements customer-side tracking view + admin status helpers |
+| **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🟢 **UNBLOCKED** — `0034_tax_invoices.sql` shipped by เดฟ (`f2230ed`); G2b-G2f sequence ready (action + UI + PDF + cancellation flow) |
+| **T-P1 GAP 3** | Customer receipt page `/service-order/[hNo]/receipt/page.tsx` | 30m | ✅ **DONE (เดฟ `f410640`)** — pre-req for T-D1 cargo flow smoke test satisfied |
 
 ---
 
@@ -119,7 +125,7 @@ Per Part S1 + ADRs 0003-0010:
 
 ## 🗄️ Migrations status
 
-ภูม รันบน dev project ครบ 12 ไฟล์ (0023..0034 candidates). **เดฟ pending: replay batch บน production Supabase:**
+ภูม รันบน dev project ครบ 10 ไฟล์ (0023..0032). **เดฟ pending: replay batch บน production Supabase:**
 
 ```
 0023_otp_purpose_change_phone.sql
@@ -134,23 +140,77 @@ Per Part S1 + ADRs 0003-0010:
 0032_csv_imports_started_at.sql
 ```
 
-🔴 **NOT yet written** (waiting on เดฟ T-D2 spec):
+✅ **NEW from เดฟ T-D2 (this session — ภูม run on dev when picking T-P2 / T-P4):**
 ```
-0033_containers.sql                      ← T-P2 dependency
-0034_tax_invoices.sql                    ← T-P4 (G2a) dependency
+0033_containers.sql                      ← containers + shipments + tracking + history
+                                            (extends admins.role: + warehouse + driver)
+0034_tax_invoices.sql                    ← tax_invoices + lines + seq + INV-YYYYMM-NNNN
+                                            atomic serial generator (security definer)
 ```
+
+> **Note on 0033:** This migration extends `admins.role` CHECK constraint to add `'warehouse'` + `'driver'` (previously: super, ops, accounting, sales_admin). Existing rows unaffected. After applying, grant warehouse/driver roles via `insert into admins (profile_id, role)`.
 
 ---
 
-## 🔍 Findings + flags from this batch
+## 🔍 Findings + flags from this batch (เดฟ responses inline 2026-05-16 evening)
 
-1. **P-31 cart cap off-by-one** (flagged 2026-05-15) — PORT_PLAN spec said "150 OK → 151st throws" but actual `cart_items_cap` trigger raises on `cnt >= 151` (so up to 151 succeeds; 152nd fails). Test mirrors actual behavior. **ก๊อต/เดฟ**: confirm intended (matches legacy PHP `cart.php:17,76` 151-cap) OR tighten trigger to `>= 150`.
+1. **P-31 cart cap off-by-one** — PORT_PLAN spec said "150 OK → 151st throws" but actual `cart_items_cap` trigger raises on `cnt >= 151` (so up to 151 succeeds; 152nd fails). Test mirrors actual behavior.
+   → **เดฟ:** ✅ **RESOLVED.** PORT_PLAN spec doc fixed in this batch (lines 250 + 977). Code stays at 151-cap matching legacy PHP `cart.php:17,76`. ภูม no action.
 
-2. **Driver assignment notification reference type** (T-P1) — `lib/notifications/types.ts::NotifyReferenceType` doesn't include `"forwarder_driver"`. Used `"forwarder"` as the closest valid type pointing back to the parent shipment. **เดฟ/ก๊อต**: consider adding `"forwarder_driver"` to the enum if drivers need direct deep-link to the assignment row. Low priority.
+2. **Driver assignment notification reference type** (T-P1) — used `"forwarder"` because `"forwarder_driver"` isn't in `NotifyReferenceType` enum.
+   → **เดฟ:** ✅ **OK as-is, defer.** Adding to enum = K-quality. Not blocking. ภูม no action.
 
-3. **Customer-side service-order receipt PAGE missing** (deferred from T-P1 GAP 3) — `getServiceOrderForReceipt` action exists + `components/pdf/shop-order-receipt.tsx` exists, but no `app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx`. **ภูม or เดฟ**: ~30 min to add the page if needed for T-D1 smoke test.
+3. **Customer-side service-order receipt PAGE missing** (T-P1 GAP 3) — action + PDF component exist; page doesn't.
+   → **เดฟ:** ✅ **DONE.** Pushed `app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx` (this batch). Mirrors `/service-import/[fNo]/receipt` pattern (HTML print-friendly + "ดาวน์โหลด PDF" button → existing `/api/pdf/shop-order/[hNo]`).
 
-4. **`forwarder_driver.profile_id` accepts ANY profile** — no driver role flag in schema. Currently relies on admin discipline (typing the right member_code). **ก๊อต**: consider adding a `is_driver` boolean to profiles or a separate `drivers` table for safety. Out of T-P1 scope; flag for K-quality batch.
+4. **`forwarder_driver.profile_id` accepts ANY profile** — no driver role flag in schema.
+   → **เดฟ:** ⏸️ **Defer to ก๊อต K-sec-2 RLS audit.** Not blocking T-P1. ภูม no action.
+
+---
+
+## 🚀 ภูม run-long direction (per เดฟ 2026-05-16 evening)
+
+> **เดฟ:** *"ตราบใดที่น้องยังอยู่ในทาง รู้ว่าอันไหนรีบ อันไหนหลัง ก็โอเค ปล่อยรันยาวๆ เลย ไม่ต้องเฟิม"*
+
+**Mode = autonomous run-long.** No need to wait for เดฟ confirm between tasks. Push at save-points only.
+
+**Priority queue (do in order; skip current if blocked, move to next):**
+
+1. **T-P5** `/admin/accounting` stub (acc-* PHP port) — unblocked, go anytime
+2. **T-P3 polish** — if any UX bug surfaces from real-use of the bulk-approve bars, fix it
+3. **T-P2** container migration + CT-3 customer view — ✅ **unblocked**. `0033_containers.sql` already in `dave`. Spec: [`container-centric-model.md`](../architecture/container-centric-model.md) CT-1..CT-8. Apply on dev → build `lib/warehouse/*.ts` typed clients → CT-3 customer view page → admin warehouse view → MOMO sync wire.
+4. **T-P4** tax invoice G2a-G2f — ✅ **unblocked**. `0034_tax_invoices.sql` already in `dave` (G2a done). G2b-G2f per [ADR-0006](../decisions/0006-tax-invoice-flow.md). Customer-side request form attaches to existing receipt page (`/service-order/[hNo]/receipt` shipped this session).
+
+**Patterns to follow (proven good in T-P1 + T-P3 review):**
+- Zod validate every input
+- RBAC via `withAdmin([...])` per [ADR-0005](../decisions/0005-launch-operational-decisions.md) K-7 (wallet+invoice = `["super","accounting"]`; status flips = `["ops"]`)
+- Idempotency on money-moving actions (check existing tx by `reference_type + reference_id + kind + status='completed'`)
+- Granular audit log per row (not batched)
+- Customer notify via `sendNotification` (severity match outcome)
+- `revalidatePath` for every page that displays the changed row
+- Commit message style: detailed "What's in" + "DECISIONS (per §6 self-directed)" + "Acceptance" (T-P1/T-P3 style — keep doing it)
+
+**If you hit a true blocker not covered by ADRs / Part T / patterns above:**
+- Write the flag at the end of this `team-status` doc (new section or append)
+- Flip to next priority task — don't wait
+- เดฟ + ก๊อต will respond async (within session or next day)
+
+**Push discipline (per `push_frequency_strict`):** Commit local freely. Push to `origin/Poom` only at save-points: end of session · before sleep · machine change · big batch done. 1 push max per Claude Code session.
+
+---
+
+## 📦 What เดฟ shipped this session (2026-05-16 evening — for ภูม reference)
+
+1. ✅ **Merged `Poom → dave`** — T-P1 (driver assign + mark-paid) + T-P3 (wallet/yuan bulk approve) + team-status doc + UI components all landed in dave staging.
+2. ✅ **`docs(team): status checkpoint` — flag responses + ภูม run-long direction** (commit `92b64c8`).
+3. ✅ **`supabase/migrations/0033_containers.sql`** — `containers` + `shipments` + `shipment_tracking` + `container_status_history` + extends `admins.role` to add `'warehouse'` + `'driver'`. RLS scoped: customers read own; warehouse staff full access; drivers can write tracking events.
+4. ✅ **`supabase/migrations/0034_tax_invoices.sql`** — `tax_invoices` (immutable buyer + financial snapshot per RD Code 86) + `tax_invoice_lines` + `tax_invoice_seq` + `next_tax_invoice_serial()` security-definer function for atomic `INV-YYYYMM-NNNN` generation. RLS scoped: customer reads own; super+accounting read+write all.
+5. ✅ **`app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx`** — HTML print-friendly receipt for China-shop orders. Mirrors `/service-import/[fNo]/receipt` pattern. Shows pricing breakdown (CNY → rate → THB), customer info (juristic block if applicable), items + tracking numbers, "ดาวน์โหลด PDF" button → existing `/api/pdf/shop-order/[hNo]`.
+6. ✅ **PORT_PLAN P-31 cart cap resolved** (lines 250 + 977) — keep code at 151-cap matching legacy PHP `cart.php:17,76`; spec doc body fixed from "150 OK → 151st throws" to "151 OK → 152nd throws".
+
+**Acceptance (entire batch):** `pnpm exec tsc --noEmit` ✅ clean · `pnpm exec eslint` on new page ✅ clean · migration files idempotent + commented + RLS-fenced + indexed.
+
+**ภูม next session:** pull `origin/dave` → merge into `Poom` → run `0033` + `0034` on dev Supabase → pick T-P5 (`/admin/accounting` stub) or jump to T-P2/T-P4 (now unblocked). Run-long mode — no need to wait.
 
 ---
 
@@ -161,13 +221,14 @@ When all of this lands, Pacred ships beta:
 - [x] R1 + R2 + D-7 + K-4..K-8 ADRs locked
 - [x] Track G china-search code shipped (in demo mode)
 - [x] Track A test coverage (260 → 305 assertions across critical paths)
-- [x] T-P1 admin cargo workflow buttons (driver assign + mark-paid)
+- [x] T-P1 admin cargo workflow buttons (driver assign + mark-paid) — merged to dave
+- [x] T-P3 wallet + yuan-payments bulk approve — merged to dave
 - [x] LIFF code + LINE_OA constants ready
 - [x] Sentry/Upstash/hCaptcha SDK + rate-limit + captcha wired
 - [x] OTP dual-pepper rotation, PROMPTPAY soft-degrade, CI workflow, OWASP audit
 - [ ] **Pacred owner Bundle 1** (PromptPay + bank + company info + LIFF app) ← biggest single blocker
 - [ ] เดฟ DV-1..DV-4 external signups (Sentry/Upstash/hCaptcha/SMS) ← parallel to owner ask
-- [ ] เดฟ T-D2 specs → ภูม T-P2 (containers) + T-P4 (tax invoice)
+- [x] เดฟ T-D2 specs → ภูม T-P2 (containers) + T-P4 (tax invoice) — schemas + receipt page pushed 2026-05-16 evening
 - [ ] T-D1 cargo flow end-to-end smoke test → first 5 friendly customers (T-D4)
 
 **Estimated time-to-beta if owner bundle arrives this week:** ~1-2 weeks.
