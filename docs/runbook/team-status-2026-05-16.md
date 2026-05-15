@@ -12,6 +12,8 @@
 | Commit | What |
 |---|---|
 | `121ea0d` | T-P1 admin workflow buttons (cargo revenue path): `adminAssignDriverToForwarder` + `adminMarkServiceOrderPaid` + UI on `/admin/forwarders/[fNo]` + `/admin/service-orders/[hNo]` |
+| `84ca7b5` | T-P3 bulk approve: `adminBulkApproveDeposits` + `adminBulkApproveYuanPayments` + sticky bar UI on `/admin/wallet` + `/admin/yuan-payments` (cuts per-row click cost 4→1) + this team-status checkpoint file |
+| (this batch) | T-P5 `/admin/accounting` owner overview: hero net-revenue card with prev-period delta (auto-computed when both date filters set) + 4 pending-pipeline cards (deposits / awaiting-payment / forwarder-in-flight / yuan-in-process) + 2 customer-count cards (new + active in window) — extends existing summary tab without disrupting accountant views |
 
 **Tests:** 305 assertions all green across 13 test files.
 
@@ -79,10 +81,10 @@
 | # | Task | Est | Status |
 |---|---|---|---|
 | **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE 2026-05-16** (commit `121ea0d`) — 2/3 gaps closed; receipt link gap deferred (customer-side receipt page doesn't exist yet, separate scope) |
-| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | 🟡 **NEXT** (this session, after team-status writeup) |
+| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | ✅ **DONE 2026-05-16** (commit `84ca7b5`) — checkbox column + sticky bar on `/admin/wallet` + `/admin/yuan-payments` |
+| **T-P5** | `/admin/accounting` owner overview | 3-5h | ✅ **DONE 2026-05-16** (this batch) — extended existing accounting summary tab with hero net-revenue card (with prev-period delta), pending pipeline cards (4 cards), customer counts (new + active in window) |
 | **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🔴 needs T-D2 spec from เดฟ for `0034_tax_invoices.sql` |
 | **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🔴 needs T-D2 spec for `0033_containers.sql` |
-| **T-P5** | `/admin/accounting` stub (acc-* PHP port) | 3-5h | 🟢 unblocked, can do anytime |
 
 ---
 
