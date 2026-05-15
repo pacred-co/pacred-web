@@ -1554,3 +1554,83 @@ We've shipped revenue-ready when **all** of these are TRUE:
 
 **End of Part T.** Update freq: each role updates their column when they ship something. เดฟ keeps T1 critical path drawing accurate. ก๊อต updates T3 borrow→own state when each switchover lands.
 
+---
+
+# Part U — Verified deficiency audit findings (chat + legacy cleanup)
+
+**Source:** Two parallel audits 2026-05-16 evening:
+- [`docs/audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE group chats analysed (~507KB, Nov 2025 → May 2026)
+- [`docs/audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — `C:\xampp\htdocs\pcscargo` sweep
+
+These T-U* items = the "**เก็บกวาดบ้านเก่า + อุดจุดรั่ว**" batch — what kept breaking in PCS that Pacred MUST fix before cargo revenue scales, plus dead-code cleanup to deprecate PHP cleanly.
+
+## U1 — Critical leak holes (must-fix before public beta)
+
+| # | Task | Source | Owner | Est | Status |
+|---|---|---|---|---|---|
+| **U1-1** | `/status` public health-check page (Vercel + Supabase + LINE Messaging status) | chat L-1: 24x "เว็ปล่ม" | เดฟ | 2h | 🔴 |
+| **U1-2** | OTP SMS balance daily check + LINE alert when balance < 1000 messages | chat L-3 silent fail | ภูม + ก๊อต DV-3 wire | 2h | 🔴 |
+| **U1-3** | Admin "rebind tracking → container" UI (no SQL escalation) | chat L-2: ~10 asks/week | ภูม T-P2 follow-up | 3h | 🔴 |
+| **U1-4** | Admin "manual tracking entry" UI | chat IT: ~15 asks/week | ภูม T-P2 follow-up | 2h | 🔴 |
+| **U1-5** | `received_qty` + `expected_qty` per `cargo_shipments` item (split case) | chat MOMO: qty=1 bug | ภูม schema update | 1h migration + 2h UI | 🔴 |
+| **U1-6** | MOMO 9-status enum verbatim port → `MOMO_STATUS_TO_PACRED` + i18n labels | chat May 2 verbatim | ภูม T-P2 | 1h | 🟡 partial (`lib/integrations/momo-jmf/types.ts` has mapping; needs i18n labels + UI) |
+| **U1-7** | Last-sync timestamp on customer tracking pages | chat L-4 trust | ภูม T-P2 | 30m | 🔴 |
+| **U1-8** | Receipt PDF Thai-special-char unit tests (Sarabun font + edge addresses) | chat L-5 | ภูม test:unit | 2h | 🔴 |
+| **U1-9** | Patch S-3 SQL injection in PHP `header.php` (if PHP stays externally exposed) | legacy S-3 audit | ก๊อต decide | 30m or n/a | 🟡 mitigated by XAMPP local-only |
+
+## U2 — Workflow gaps from chat (must-fix for ops efficiency)
+
+| # | Task | Source | Owner | Est | Status |
+|---|---|---|---|---|---|
+| **U2-1** | Daily container bulletin auto-generator (LINE-pastable `DD/MM/YY สรุปรายการ` format) | chat W-1 | ภูม | 3h | 🟡 P2 |
+| **U2-2** | "จองรถ" truck booking form (output LINE-paste block) | chat W-2 dozens/week | ภูม + ปอน UI | 4h | 🟡 |
+| **U2-3** | Carrier admin CRUD (SPX/J&T/Flash/EMS/Lalamove) — no dev required | dev/IT chat: 4 asks | ภูม | 2h | 🔴 |
+| **U2-4** | Cost adjustment workflow post-delivery (D/O fee, gateway fee, weight rebill) | chat W-4 AIR IMPORT | ภูม | 3h | 🔴 |
+| **U2-5** | Bulk-tracking multi-line search URL (like PHP `forwarder-search-muti.php?fTracking=...%0D%0A...`) | chat W-9 | ภูม | 1h | 🔴 |
+| **U2-6** | Per-port lead-times stored (TTP/TTW/Bangkok/Laem Chabang) for ETA quotes | chat partner notes | ภูม + ก๊อต | 2h | 🟡 |
+
+## U3 — Legacy cleanup (zero-risk house cleanup)
+
+| # | Task | Source | Owner | Est | Status |
+|---|---|---|---|---|---|
+| **U3-1** | Snapshot PHP tree → `legacy-php-backup-2026-05-15.tar.zst` (out-of-tree, local) | legacy audit | เดฟ | 15m | 🔴 |
+| **U3-2** | Delete Tier 1-3 dead code (~145 .php files + 3 backup sub-dirs) — local pcscargo/ | legacy §2-4 | เดฟ | 30m | 🔴 |
+| **U3-3** | Archive `pcsc_main.sql` (2026-04-30) → `docs/audit/sql-dumps/` (gitignored) | legacy §7 | เดฟ | 15m | 🔴 |
+| **U3-4** | Verify 5 should-port admin tools (MaoMao tier, ShipBy-Freedom, monthly close, interpreter payout, etc.) — port or write deferral one-pager | legacy §6 | ภูม | 4-6h | 🟡 |
+| **U3-5** | Revoke LINE Notify OAuth client `4G0QlYx3x9BRL94COg76xR` at LINE dev console | legacy S-4 | ก๊อต | 15m | 🔴 |
+| **U3-6** | Plan short-URL redirect strategy for `/c/`, `/f/`, `/s/` (external SMS/QR links) | legacy §1 | ก๊อต + เดฟ | 1h | 🟡 |
+
+## U4 — Pre-launch security (post-Pacred cutover)
+
+| # | Task | Source | Owner | Est | Status |
+|---|---|---|---|---|---|
+| **U4-1** | Force-clear `member_password` cookie globally before any external PHP exposure | legacy S-1 (CRITICAL) | ก๊อต decide | 15m | 🟡 conditional on PHP exposure |
+| **U4-2** | Send breach-disclosure to PHP customers re: weak `pass_tam()` MD5 hash → reset on first Pacred login | legacy S-2 (CRITICAL) | พี่ป๊อป + เดฟ wording | 2h | 🟡 |
+| **U4-3** | Rotate ALL PHP-hardcoded secrets (ThaiBulkSMS / FB OAuth / SMTP / LINE Notify) post-cutover | legacy S-4/S-6 | ก๊อต | 1h | 🟡 |
+| **U4-4** | If PHP hosting changes: add `.htaccess` IP allowlist to `api/autorun/` first | legacy S-5 | ก๊อต | 30m | 🟡 conditional |
+
+## U5 — Should-fix (operationally significant; P2-P3)
+
+| # | Task | Source | Owner | Est | Status |
+|---|---|---|---|---|---|
+| **U5-1** | HS code lookup tool (cached + AI + DOC-validated) — port piloted system from Jan 2026 | chat W-3 | ภูม + ก๊อต ADR for AI provider | 6-8h | 🟢 P2 |
+| **U5-2** | LINE OA lead routing (keyword + service-slug aware first-touch attribution) | chat L-7 | ภูม | 4-5h | 🟢 P2 |
+| **U5-3** | Customer-phone search in admin → owner + last contact lookup | chat W-6 | ภูม | 2h | 🟢 P2 |
+| **U5-4** | Lalamove dispatch tracking field per shipment | chat W-8 | ภูม | 1h | 🟢 P2 |
+| **U5-5** | Customer slip-upload UX (drag-drop + auto-OCR optional) | chat customer pains | ปอน + ภูม | 4h | 🟢 P3 |
+| **U5-6** | VAT rebalancing calculator for ใบขนพ่วง (niche staff tool) | chat W-7 | ภูม | 4h | 🟢 P3 |
+| **U5-7** | Cross-rep customer attribution dashboard | chat L-7 | ภูม | 3h | 🟢 P3 |
+| **U5-8** | LP-1 Phase D shipping rates table UI (port `tb_rate_g_*` / `tb_rate_vip_*` / `tb_rate_custom_*`) | legacy audit §6 + Phase D plan | ภูม | 4-6h | 🟢 P2 |
+| **U5-9** | LP-2 TOS acceptance gate modal on login if version mismatch | legacy audit | ภูม | 2h | 🟢 P3 (blocked on TOS legal text) |
+| **U5-10** | LP-3 LINE Login OAuth (real, not stub) | legacy audit | ก๊อต Supabase OIDC + ภูม wire | 3-4h | 🟢 P2 |
+
+## Cross-links
+
+- Each U* item must reference its audit source line (chat L-N or legacy §N)
+- ภูม picks U1 first (cargo-loop-critical), then U2 (ops efficiency), then U5 (P2 backlog)
+- ก๊อต handles U1-9, U3-5, U3-6, U4-* (security + cleanup gates)
+- เดฟ handles U1-1, U3-1..U3-3 (status page + cleanup execution)
+- ปอน handles U2-2, U5-5 surfaces only (frontend)
+
+**End of Part U.** Each ✅ shipped → tick off in this table + add to team-status doc + commit `docs(port-plan,team): U-N shipped — <description>`.
+
