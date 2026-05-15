@@ -1395,7 +1395,23 @@
       "contactLabel": "เบอร์โทรติดต่อ",
       "contactPh": "เช่น 08X-XXX-XXXX",
       "hint": "ทีมงานพร้อมดำเนินการทุกด่าน ท่าเรือ สนามบิน ด่านชายแดน",
-      "calcLabel": "ติดต่อเจ้าหน้าที่"
+      "calcLabel": "ติดต่อเจ้าหน้าที่",
+      "portTabs": {
+        "bkk":       "สุวรรณภูมิ",
+        "bkkSub":    "Air Cargo · Express",
+        "dmk":       "ดอนเมือง",
+        "dmkSub":    "Air Freight · Courier",
+        "laksi":     "ไปรษณีย์หลักสี่",
+        "laksiSub":  "พัสดุนำเข้า · EMS",
+        "klong":     "คลองเตย",
+        "klongSub":  "Sea Port · LCL/FCL",
+        "laem":      "แหลมฉบัง",
+        "laemSub":   "Container Port · FCL",
+        "icd":       "ICD ลาดกระบัง",
+        "icdSub":    "Inland Depot · Sea",
+        "border":    "ด่านชายแดน",
+        "borderSub": "Truck · มุก/หนอง/แม่"
+      }
     },
     "sourcing": {
       "platformLabel": "แพลตฟอร์ม",

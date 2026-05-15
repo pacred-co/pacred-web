@@ -161,6 +161,59 @@ const SERVICES: ServiceCard[] = [
   },
 ];
 
+function ServiceCard({ card }: { card: ServiceCard }) {
+  const Icon = card.icon;
+  const isLive = card.status === "live";
+  const cardClass = [
+    "group relative flex items-start gap-3 rounded-2xl border bg-white dark:bg-surface p-4 md:p-5 transition-all duration-300",
+    isLive
+      ? "border-border hover:border-primary-300 dark:hover:border-primary-800 hover:shadow-[0_14px_30px_rgba(179,0,0,0.10)] hover:-translate-y-0.5 cursor-pointer"
+      : "border-dashed border-border opacity-70 cursor-default",
+  ].join(" ");
+
+  const body = (
+    <>
+      <div className="inline-flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-xl bg-primary-50 text-primary-600 shrink-0 dark:bg-primary-900/30 dark:text-primary-300">
+        <Icon className="w-5 h-5 md:w-5.5 md:h-5.5" strokeWidth={2.4} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white tracking-tight leading-tight">
+            {card.title}
+          </h3>
+          {!isLive && (
+            <span className="inline-flex items-center px-1.5 h-[18px] rounded-md bg-amber-100 text-amber-800 text-[9.5px] font-black tracking-wide dark:bg-amber-900/40 dark:text-amber-200">
+              เร็วๆ นี้
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-[1.5] text-muted font-medium">
+          {card.sub}
+        </p>
+      </div>
+      {isLive && (
+        <ArrowRight
+          className="w-4 h-4 text-muted shrink-0 mt-1 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all"
+          strokeWidth={2.6}
+        />
+      )}
+    </>
+  );
+
+  if (isLive) {
+    return (
+      <Link href={card.href} data-cta={`service-${card.href}`} className={cardClass}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <div aria-disabled="true" className={cardClass}>
+      {body}
+    </div>
+  );
+}
+
 const GROUPS = [
   {
     id: "cargo",
@@ -354,62 +407,9 @@ export default async function ServicesIndexPage({
                 </p>
 
                 <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-                  {cards.map((card) => {
-                    const Icon = card.icon;
-                    const isLive = card.status === "live";
-                    const cardClass = [
-                      "group relative flex items-start gap-3 rounded-2xl border bg-white dark:bg-surface p-4 md:p-5 transition-all duration-300",
-                      isLive
-                        ? "border-border hover:border-primary-300 dark:hover:border-primary-800 hover:shadow-[0_14px_30px_rgba(179,0,0,0.10)] hover:-translate-y-0.5 cursor-pointer"
-                        : "border-dashed border-border opacity-70 cursor-default",
-                    ].join(" ");
-                    const inner = (
-                      <>
-                        <div className="inline-flex items-center justify-center w-10 h-10 md:w-11 md:h-11 rounded-xl bg-primary-50 text-primary-600 shrink-0 dark:bg-primary-900/30 dark:text-primary-300">
-                          <Icon className="w-5 h-5 md:w-5.5 md:h-5.5" strokeWidth={2.4} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white tracking-tight leading-tight">
-                              {card.title}
-                            </h3>
-                            {!isLive && (
-                              <span className="inline-flex items-center px-1.5 h-[18px] rounded-md bg-amber-100 text-amber-800 text-[9.5px] font-black tracking-wide dark:bg-amber-900/40 dark:text-amber-200">
-                                เร็วๆ นี้
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-[11.5px] md:text-[12.5px] leading-[1.5] text-muted font-medium">
-                            {card.sub}
-                          </p>
-                        </div>
-                        {isLive && (
-                          <ArrowRight
-                            className="w-4 h-4 text-muted shrink-0 mt-1 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all"
-                            strokeWidth={2.6}
-                          />
-                        )}
-                      </>
-                    );
-                    return isLive ? (
-                      <Link
-                        key={card.title}
-                        href={card.href}
-                        data-cta={`service-${card.href}`}
-                        className={cardClass}
-                      >
-                        {inner}
-                      </Link>
-                    ) : (
-                      <div
-                        key={card.title}
-                        aria-disabled="true"
-                        className={cardClass}
-                      >
-                        {inner}
-                      </div>
-                    );
-                  })}
+                  {cards.map((card) => (
+                    <ServiceCard key={card.title} card={card} />
+                  ))}
                 </div>
               </div>
             </section>

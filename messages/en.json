@@ -1395,7 +1395,23 @@
       "contactLabel": "Contact phone",
       "contactPh": "e.g. 08X-XXX-XXXX",
       "hint": "Our team handles every port, airport and border checkpoint",
-      "calcLabel": "Contact an agent"
+      "calcLabel": "Contact an agent",
+      "portTabs": {
+        "bkk":       "Suvarnabhumi",
+        "bkkSub":    "Air Cargo · Express",
+        "dmk":       "Don Mueang",
+        "dmkSub":    "Air Freight · Courier",
+        "laksi":     "Lak Si Post",
+        "laksiSub":  "Inbound parcels · EMS",
+        "klong":     "Khlong Toey",
+        "klongSub":  "Sea Port · LCL/FCL",
+        "laem":      "Laem Chabang",
+        "laemSub":   "Container Port · FCL",
+        "icd":       "ICD Lat Krabang",
+        "icdSub":    "Inland Depot · Sea",
+        "border":    "Border checkpoints",
+        "borderSub": "Truck · Muk/Nong/Mae"
+      }
     },
     "sourcing": {
       "platformLabel": "Platform",
