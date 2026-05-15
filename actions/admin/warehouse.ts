@@ -11,10 +11,12 @@ import {
   attachShipmentToContainer as dbAttachShipment,
   setShipmentStatus as dbSetShipmentStatus,
   setShipmentReceivedQty as dbSetReceivedQty,
+  setShipmentCargoType as dbSetShipmentCargoType,
   createShipment as dbCreateShipment,
   appendTrackingEvent as dbAppendEvent,
   CONTAINER_STATUS_VALUES_SPINE,
   SHIPMENT_STATUS_VALUES,
+  toCanonicalCargoType,
   type ContainerStatusSpine,
   type ShipmentStatus,
   type Container,
@@ -42,13 +44,14 @@ import {
 
 const createContainerSchema = z.object({
   // Optional — server auto-generates if omitted (origin-prefix + date + seq)
-  code:           z.string().trim().min(1).max(50).optional(),
-  transport_mode: z.enum(["truck", "sea", "air"]),
-  origin:         z.string().trim().min(1).max(100),
-  destination:    z.string().trim().min(1).max(100),
-  source:         z.enum(["pacred", "momo", "self"]).default("pacred"),
-  eta:            z.string().date().optional(),
-  status:         z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
+  code:                 z.string().trim().min(1).max(50).optional(),
+  transport_mode:       z.enum(["truck", "sea", "air"]),
+  origin:               z.string().trim().min(1).max(100),
+  destination:          z.string().trim().min(1).max(100),
+  source:               z.enum(["pacred", "momo", "self"]).default("pacred"),
+  eta:                  z.string().date().optional(),
+  status:               z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
+  carrier_container_no: z.string().trim().min(1).max(50).optional(),
 });
 export type CreateContainerInput = z.infer<typeof createContainerSchema>;
 
@@ -94,22 +97,24 @@ export async function adminCreateContainer(
   return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const res = await dbCreateContainer(admin, {
-      code:           d.code,
-      transport_mode: d.transport_mode,
-      origin:         d.origin,
-      destination:    d.destination,
-      source:         d.source,
-      status:         d.status,
-      eta:            d.eta ?? null,
+      code:                 d.code,
+      transport_mode:       d.transport_mode,
+      origin:               d.origin,
+      destination:          d.destination,
+      source:               d.source,
+      status:               d.status,
+      eta:                  d.eta ?? null,
+      carrier_container_no: d.carrier_container_no ?? null,
     });
     if (!res.ok) return { ok: false, error: res.error };
 
     await logAdminAction(adminId, "container.create", "container", res.data.id, {
-      code:           res.data.code,
-      transport_mode: res.data.transport_mode,
-      origin:         res.data.origin,
-      destination:    res.data.destination,
-      source:         res.data.source,
+      code:                 res.data.code,
+      transport_mode:       res.data.transport_mode,
+      origin:               res.data.origin,
+      destination:          res.data.destination,
+      source:               res.data.source,
+      carrier_container_no: res.data.carrier_container_no,
     });
 
     revalidatePath("/admin/warehouse/containers");
@@ -231,6 +236,10 @@ const createShipmentManualSchema = z.object({
   box_count:            z.number().int().min(1).max(100_000).default(1),
   weight_kg:            z.number().min(0).max(100_000).optional(),
   volume_cbm:           z.number().min(0).max(10_000).optional(),
+  /** V-D2: canonical category. Accepts a legacy A/M/X/O/Z or G/T/F too — server
+   *  normalises via `toCanonicalCargoType()`. Empty/unknown → null (staff
+   *  reviews later). */
+  cargo_type:           z.string().trim().max(40).optional(),
   initial_scan:         z.boolean().default(true),
   initial_scan_location: z.string().trim().max(100).optional(),
 });
@@ -291,6 +300,7 @@ export async function adminCreateShipmentManual(
     }
 
     // ── 3. Create shipment ──
+    const cargoType = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
     const created = await dbCreateShipment(admin, {
       shipment_code:      d.shipment_code,
       profile_id:         profile.id,
@@ -300,6 +310,7 @@ export async function adminCreateShipmentManual(
       box_count:          d.box_count,
       weight_kg:          d.weight_kg ?? null,
       volume_cbm:         d.volume_cbm ?? null,
+      cargo_type:         cargoType,
       status:             "received_cn",       // newly registered = "received in CN"
     });
     if (!created.ok) {
@@ -334,6 +345,8 @@ export async function adminCreateShipmentManual(
       service_order_h_no: d.service_order_h_no ?? null,
       cargo_container_id: d.cargo_container_id ?? null,
       box_count:          d.box_count,
+      cargo_type:         cargoType,
+      cargo_type_raw:     d.cargo_type ?? null,
     });
 
     revalidatePath("/admin/warehouse/containers");
@@ -379,6 +392,47 @@ export async function adminSetShipmentReceivedQty(
     await logAdminAction(adminId, "shipment.set_received_qty", "shipment", d.shipment_id, {
       received_box_count: d.received_box_count,
       box_count_expected: res.data.box_count,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    return { ok: true, data: res.data };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// V-D2: SET shipment cargo_type (admin correction)
+// ────────────────────────────────────────────────────────────
+//
+// Accepts a canonical value OR a legacy A/M/X/O/Z / G/T/F code — both
+// normalise via `toCanonicalCargoType()` server-side. Empty string
+// clears (sets to null) so staff can flag a row for re-review.
+
+const setCargoTypeSchema = z.object({
+  shipment_id: z.string().uuid(),
+  cargo_type:  z.string().trim().max(40),    // "" allowed → clears
+});
+export type SetShipmentCargoTypeInput = z.infer<typeof setCargoTypeSchema>;
+
+export async function adminSetShipmentCargoType(
+  input: SetShipmentCargoTypeInput,
+): Promise<AdminActionResult<Shipment>> {
+  const parsed = setCargoTypeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  const canonical = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
+  if (d.cargo_type && !canonical) {
+    return { ok: false, error: `cargo_type "${d.cargo_type}" ไม่อยู่ใน enum (general/electrical/food_drug/brand/controlled หรือ legacy A/M/X/O/Z/G/T/F)` };
+  }
+
+  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await dbSetShipmentCargoType(admin, d.shipment_id, canonical);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "shipment.set_cargo_type", "shipment", d.shipment_id, {
+      cargo_type:     canonical,
+      cargo_type_raw: d.cargo_type || null,
     });
 
     revalidatePath("/admin/warehouse/containers");

@@ -135,15 +135,16 @@ export async function createContainer(
     .from("cargo_containers")
     .insert({
       code,
-      transport_mode:  input.transport_mode,
-      origin:          input.origin,
-      destination:     input.destination,
-      status:          input.status ?? "packing",
-      eta:             input.eta ?? null,
-      source:          input.source,
-      total_boxes:     input.total_boxes     ?? 0,
-      total_weight_kg: input.total_weight_kg ?? 0,
-      total_cbm:       input.total_cbm       ?? 0,
+      transport_mode:        input.transport_mode,
+      origin:                input.origin,
+      destination:           input.destination,
+      status:                input.status ?? "packing",
+      eta:                   input.eta ?? null,
+      source:                input.source,
+      total_boxes:           input.total_boxes     ?? 0,
+      total_weight_kg:       input.total_weight_kg ?? 0,
+      total_cbm:             input.total_cbm       ?? 0,
+      carrier_container_no:  input.carrier_container_no ?? null,
     })
     .select("*")
     .single<Container>();

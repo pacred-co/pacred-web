@@ -1,10 +1,13 @@
 /**
  * Shared types for the warehouse spine (T-P2 / CT-2).
  *
- * Mirrors the schema in `supabase/migrations/0033_containers.sql`. Lives
- * outside `server-only` so action callers + helper modules + future
- * tsx tests all share the same shape contracts.
+ * Mirrors the schema in `supabase/migrations/0033_containers.sql` +
+ * `0040_cargo_type_and_carrier_container.sql`. Lives outside
+ * `server-only` so action callers + helper modules + future tsx tests
+ * all share the same shape contracts.
  */
+
+import type { CargoType } from "./cargo-type";
 
 // ────────────────────────────────────────────────────────────
 // Containers — physical shipping unit
@@ -55,6 +58,9 @@ export type Container = {
   total_boxes:     number;
   total_weight_kg: number;
   total_cbm:       number;
+  /** V-D3: the shipping-line / carrier physical container number from
+   *  the B/L (e.g. BLOU2025012). Distinct from `code` (Pacred-issued). */
+  carrier_container_no: string | null;
   created_at:      string;
   updated_at:      string;
 };
@@ -69,6 +75,7 @@ export type ContainerInsert = Pick<
   total_boxes?:    number;
   total_weight_kg?: number;
   total_cbm?:      number;
+  carrier_container_no?: string | null;      // V-D3
 };
 
 // ────────────────────────────────────────────────────────────
@@ -113,6 +120,10 @@ export type Shipment = {
   queue_cbm:           number | null;
   /** V-D1: China manifest declaration (legacy volume_cbm backfilled here). */
   manifest_cbm:        number | null;
+  /** V-D2: canonical cargo category — drives staff clearance prompts
+   *  (มอก. for electrical, อย. for food/drug, brand check, etc.). Legacy
+   *  A/M/X/O/Z (PCS API) + G/T/F (manifest) normalise here on import. */
+  cargo_type:          CargoType | null;
   status:              ShipmentStatus;
   received_at_cn:      string | null;
   delivered_at_th:     string | null;
@@ -129,6 +140,7 @@ export type ShipmentInsert = {
   box_count?:          number;
   weight_kg?:          number | null;
   volume_cbm?:         number | null;
+  cargo_type?:         CargoType | null;     // V-D2
   status?:             ShipmentStatus;
 };
 

@@ -3,6 +3,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateShipmentManual } from "@/actions/admin/warehouse";
+import {
+  CARGO_TYPE_VALUES,
+  CARGO_TYPE_LABEL_TH,
+  CARGO_TYPE_CLEARANCE_NOTE,
+  type CargoType,
+} from "@/lib/warehouse/cargo-type";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -40,6 +46,7 @@ export function ManualShipmentForm({ containerId, containerCode }: Props) {
   const [boxCount,     setBoxCount]     = useState(1);
   const [weight,       setWeight]       = useState("");
   const [volume,       setVolume]       = useState("");
+  const [cargoType,    setCargoType]    = useState<CargoType | "">("");
   const [initialScan,  setInitialScan]  = useState(true);
   const [scanLoc,      setScanLoc]      = useState("");
 
@@ -47,6 +54,7 @@ export function ManualShipmentForm({ containerId, containerCode }: Props) {
     setShipmentCode(""); setCustomerRef("");
     setOrderType("forwarder"); setOrderRef("");
     setBoxCount(1); setWeight(""); setVolume("");
+    setCargoType("");
     setInitialScan(true); setScanLoc("");
     setErr(null);
   }
@@ -75,6 +83,7 @@ export function ManualShipmentForm({ containerId, containerCode }: Props) {
         box_count:            boxCount,
         weight_kg:            weightNum,
         volume_cbm:           volumeNum,
+        cargo_type:           cargoType || undefined,
         initial_scan:         initialScan,
         initial_scan_location: scanLoc.trim() || undefined,
       });
@@ -210,6 +219,24 @@ export function ManualShipmentForm({ containerId, containerCode }: Props) {
           />
         </label>
       </div>
+
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">ประเภทสินค้า (cargo type)</span>
+        <select
+          value={cargoType}
+          onChange={(e) => setCargoType(e.target.value as CargoType | "")}
+          className={inputCls}
+          disabled={pending}
+        >
+          <option value="">— ไม่ระบุ (รอ flag ทีหลัง) —</option>
+          {CARGO_TYPE_VALUES.map((c) => (
+            <option key={c} value={c}>{CARGO_TYPE_LABEL_TH[c]}</option>
+          ))}
+        </select>
+        {cargoType && CARGO_TYPE_CLEARANCE_NOTE[cargoType] && (
+          <span className="text-[11px] text-amber-700">⚠ {CARGO_TYPE_CLEARANCE_NOTE[cargoType]}</span>
+        )}
+      </label>
 
       <div className="rounded-lg border border-border p-2 space-y-1.5 bg-surface-alt/30">
         <label className="flex items-center gap-2 text-xs">

@@ -93,8 +93,31 @@ export async function createShipment(
       box_count:          input.box_count ?? 1,
       weight_kg:          input.weight_kg ?? null,
       volume_cbm:         input.volume_cbm ?? null,
+      cargo_type:         input.cargo_type ?? null,
       status:             input.status ?? "received_cn",
     })
+    .select("*")
+    .single<Shipment>();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data };
+}
+
+/**
+ * V-D2: update a shipment's canonical cargo_type. Used by admin to
+ * correct a wrong import value (MOMO sync set the wrong category, or
+ * manual entry picked the wrong one). Caller MUST pass a canonical
+ * value — legacy codes should normalise via `toCanonicalCargoType()`
+ * before reaching here.
+ */
+export async function setShipmentCargoType(
+  admin: SupabaseClient,
+  shipmentId: string,
+  cargoType: import("./cargo-type").CargoType | null,
+): Promise<Result<Shipment>> {
+  const { data, error } = await admin
+    .from("cargo_shipments")
+    .update({ cargo_type: cargoType })
+    .eq("id", shipmentId)
     .select("*")
     .single<Shipment>();
   if (error) return { ok: false, error: error.message };

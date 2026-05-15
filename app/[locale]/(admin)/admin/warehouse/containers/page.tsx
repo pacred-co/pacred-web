@@ -144,6 +144,9 @@ export default async function AdminWarehouseContainersPage({
                         ) : (
                           <span className="text-muted">— (no code)</span>
                         )}
+                        {c.carrier_container_no && (
+                          <p className="text-[10px] text-muted mt-0.5">B/L: {c.carrier_container_no}</p>
+                        )}
                         <p className="text-[10px] text-muted mt-0.5">{c.id.slice(0, 8)}</p>
                       </td>
                       <td className="px-4 py-3 text-xs">{transport}</td>

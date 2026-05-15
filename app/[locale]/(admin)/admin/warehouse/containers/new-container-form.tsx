@@ -26,6 +26,7 @@ export function NewContainerForm() {
   const [origin, setOrigin]               = useState("guangzhou");
   const [destination, setDestination]     = useState("Bangkok");
   const [code, setCode]                   = useState("");
+  const [carrierNo, setCarrierNo]         = useState("");
   const [eta, setEta]                     = useState("");
   const [source, setSource]               = useState<"pacred" | "momo" | "self">("pacred");
 
@@ -34,20 +35,22 @@ export function NewContainerForm() {
     setMsg(null); setErr(null);
     startTransition(async () => {
       const res = await adminCreateContainer({
-        code:           code.trim() || undefined,
-        transport_mode: transportMode,
-        origin:         origin.trim(),
-        destination:    destination.trim(),
+        code:                 code.trim() || undefined,
+        transport_mode:       transportMode,
+        origin:               origin.trim(),
+        destination:          destination.trim(),
         source,
-        eta:            eta || undefined,
+        eta:                  eta || undefined,
+        carrier_container_no: carrierNo.trim() || undefined,
         // Server defaults to 'packing'; pass explicitly so the inferred
         // input type from .default() is satisfied (Zod default makes the
         // field required in the parsed type even though it has a fallback).
-        status:         "packing",
+        status:               "packing",
       });
       if (res.ok && res.data) {
         setMsg(`สร้างตู้ ${res.data.code ?? "(no code)"} แล้ว`);
         setCode("");
+        setCarrierNo("");
         setEta("");
         router.refresh();
         setTimeout(() => setMsg(null), 4000);
@@ -142,6 +145,20 @@ export function NewContainerForm() {
           </select>
         </label>
       </div>
+
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">เลขตู้สายเรือ / B/L (carrier container no)</span>
+        <input
+          value={carrierNo}
+          onChange={(e) => setCarrierNo(e.target.value)}
+          className={inputCls + " font-mono"}
+          placeholder="เช่น BLOU2025012 (ใส่เมื่อรู้)"
+          disabled={pending}
+        />
+        <span className="text-[11px] text-muted">
+          คนละตัวกับรหัสตู้ Pacred ด้านบน — ตัวนี้คือเลขที่พิมพ์อยู่บนตู้จริงและบน B/L
+        </span>
+      </label>
 
       <Button type="submit" size="sm" disabled={pending}>
         {pending ? "กำลังสร้าง..." : "✅ สร้าง"}

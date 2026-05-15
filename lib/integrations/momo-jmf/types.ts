@@ -115,6 +115,11 @@ export interface MomoShipmentSummary {
   box_count:     number;
   weight_kg:     number | null;
   volume_cbm:    number | null;
+  /** V-D2: raw legacy code from MOMO (A/M/X/O/Z) or the full label form
+   *  "普通货物/ทั่วไป/A". Sync MUST pass this through
+   *  `toCanonicalCargoType()` (from `@/lib/warehouse/cargo-type`) before
+   *  writing to `cargo_shipments.cargo_type`. Null = unknown / staff flag. */
+  cargo_type:    string | null;
   status:        string;                         // received_cn / packed_cn / sealed_in_container / in_transit / arrived_th / unloaded / out_for_delivery / delivered
 }
 
