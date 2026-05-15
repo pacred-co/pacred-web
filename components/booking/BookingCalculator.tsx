@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BookingHero }   from "./BookingHero";
 import { BookingTabs }   from "./BookingTabs";
+import { BookingPortTabs, type CustomsPortCode } from "./BookingPortTabs";
 import { BookingSubbar } from "./BookingSubbar";
 import { SalesModal }    from "./SalesModal";
 import { CustomDropdown, TextDropdown } from "./CustomDropdown";
 import { ResultBox }     from "./ResultBox";
 import { calcLCL, calcFCL, calcTruck, calcAir } from "@/lib/booking-calculator";
 import { trackCtaClick } from "@/lib/analytics";
+import { CONTACT } from "@/components/seo/site";
 import {
   SALES_CARDS_DATA,
   ORIGIN_SECTIONS_KEYS,
@@ -79,7 +81,10 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   const tRemit = useTranslations("bookingCalc.remit");
   const tSales = useTranslations("salesTeam");
 
-  const tel = t("tel");
+  // Phone shown in the panel footer hint — import from the canonical
+  // CONTACT constant (per AGENTS.md §7) instead of a hardcoded i18n
+  // string, so updating the sales number ripples to every surface.
+  const tel = CONTACT.phoneDisplay;
   const callPrefix = t("callPrefix");
   const contactLabel = t("contactQuote");
 
@@ -108,11 +113,18 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
     button: tSales(`${c.personKey}.button`),
   })), [tSales]);
 
+  const isCustomsLanding = landing === "customs";
+
   const [activeTab,  setActiveTab]  = useState<TabMode | null>(landing ?? null);
   // Form panel stays closed by default — tab is highlighted via `activeTab` but
   // user has to click the tab to expand the form. Lets landing pages (eg.
   // /customs-clearance-shipping-suvarnabhumi) pre-highlight a tab without forcing the form open.
   const [panelOpen,  setPanelOpen]  = useState(false);
+  // Customs landing tab strip — replaces the 6 mode tabs with 7 port tabs
+  // (สุวรรณภูมิ / ดอนเมือง / ไปรษณีย์หลักสี่ / คลองเตย / แหลมฉบัง / ICD / ด่านชายแดน).
+  // The selected port auto-fills customsForm.port + portLabel, so the form
+  // below drops the "ด่านศุลกากร / ท่าเรือ" dropdown when in customs-landing mode.
+  const [customsPort, setCustomsPort] = useState<CustomsPortCode | null>(null);
   const [seaMode,    setSeaMode]    = useState<SeaMode>("lcl");
   const [lclTerm,    setLclTerm]    = useState<Term>("ddp");
   const [fclTerm,    setFclTerm]    = useState<Term>("ddp");
@@ -174,6 +186,22 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
     setAlertMsg("");
   }
 
+  function handleCustomsPortChange(port: CustomsPortCode) {
+    if (panelOpen && customsPort === port) {
+      setPanelOpen(false);
+    } else {
+      setCustomsPort(port);
+      setActiveTab("customs");
+      setPanelOpen(true);
+      setCustomsForm((f) => ({
+        ...f,
+        port,
+        portLabel: tCustoms(`portTabs.${port}`),
+      }));
+    }
+    setAlertMsg("");
+  }
+
   function showAlert(msg: string) {
     setAlertMsg(msg);
     setTimeout(() => setAlertMsg(""), 4000);
@@ -209,7 +237,14 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
       <div className="relative z-10 max-w-[1150px] mx-auto -mt-8 md:-mt-12 px-3 md:px-5">
         <div className="bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100">
 
-          <BookingTabs active={activeTab} onChange={handleTabChange} />
+          {isCustomsLanding ? (
+            <BookingPortTabs
+              active={customsPort}
+              onChange={handleCustomsPortChange}
+            />
+          ) : (
+            <BookingTabs active={activeTab} onChange={handleTabChange} />
+          )}
 
           {panelOpen && activeTab && (
             <BookingSubbar
@@ -374,19 +409,37 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           {/* ── Customs Panel ── */}
           {panelOpen && activeTab === "customs" && (
             <div className="p-4 md:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                <CustomDropdown label={tCustoms("portLabel")} displayValue={customsForm.portLabel} sections={CUSTOMS_PORT_SECTIONS}
-                  onSelect={(v, l) => setCustomsForm(f => ({ ...f, port: v, portLabel: l }))} />
+              {/* Layout
+                 - customs landing (4 fields, port dropdown hidden):
+                     mobile  → row1: country+product (2-col) · row2: AWB (full) · row3: phone (full) = 3 rows
+                     desktop → 2 cols × 2 rows = balanced 4-field grid
+                 - non-customs landing (5 fields incl. port dropdown):
+                     keeps the original 3-col grid (3 dropdowns row 1, 2 inputs row 2) */}
+              <div
+                className={
+                  isCustomsLanding
+                    ? "grid grid-cols-2 gap-4 items-end"
+                    : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
+                }
+              >
+                {/* Port dropdown only shown when the tab strip ISN'T the port
+                    tab strip — on the customs landing the active port tab
+                    already populates customsForm.port, so this would be
+                    redundant. */}
+                {!isCustomsLanding && (
+                  <CustomDropdown label={tCustoms("portLabel")} displayValue={customsForm.portLabel} sections={CUSTOMS_PORT_SECTIONS}
+                    onSelect={(v, l) => setCustomsForm(f => ({ ...f, port: v, portLabel: l }))} />
+                )}
                 <CustomDropdown label={tCustoms("countryLabel")} displayValue={customsForm.countryLabel} sections={CUSTOMS_COUNTRY_SECTIONS}
                   onSelect={(v, l) => setCustomsForm(f => ({ ...f, country: v, countryLabel: l }))} />
                 <CustomDropdown label={tCustoms("productLabel")} displayValue={customsForm.productLabel} sections={CUSTOMS_PRODUCT_SECTIONS}
                   onSelect={(v, l) => setCustomsForm(f => ({ ...f, productType: v, productLabel: l }))} />
-                <div className="flex flex-col gap-1.5">
+                <div className={`flex flex-col gap-1.5 ${isCustomsLanding ? "col-span-2 md:col-span-1" : ""}`}>
                   <FieldLabel>{tCustoms("awbLabel")}</FieldLabel>
                   <input type="text" placeholder={tCustoms("awbPh")} className={ctrl()}
                     value={customsForm.awb} onChange={e => setCustomsForm(f => ({ ...f, awb: e.target.value }))} />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className={`flex flex-col gap-1.5 ${isCustomsLanding ? "col-span-2 md:col-span-1" : ""}`}>
                   <FieldLabel>{tCustoms("contactLabel")}</FieldLabel>
                   <input type="text" placeholder={tCustoms("contactPh")} className={ctrl()}
                     value={customsForm.contact} onChange={e => setCustomsForm(f => ({ ...f, contact: e.target.value }))} />

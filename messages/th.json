@@ -1290,7 +1290,6 @@
     "purposePh": "เช่น ชำระค่าสินค้า"
   },
   "bookingCalc": {
-    "tel": "02-055-6063",
     "callPrefix": "โทร",
     "contactQuote": "ติดต่อด่วน / ออกใบเสนอราคา",
     "alertWeightCbm": "กรุณากรอก CBM หรือน้ำหนัก",
@@ -1402,7 +1401,23 @@
       "contactLabel": "เบอร์โทรติดต่อ",
       "contactPh": "เช่น 08X-XXX-XXXX",
       "hint": "ทีมงานพร้อมดำเนินการทุกด่าน ท่าเรือ สนามบิน ด่านชายแดน",
-      "calcLabel": "ติดต่อเจ้าหน้าที่"
+      "calcLabel": "ติดต่อเจ้าหน้าที่",
+      "portTabs": {
+        "bkk":       "สุวรรณภูมิ",
+        "bkkSub":    "Air Cargo · Express",
+        "dmk":       "ดอนเมือง",
+        "dmkSub":    "Air Freight · Courier",
+        "laksi":     "ไปรษณีย์หลักสี่",
+        "laksiSub":  "พัสดุนำเข้า · EMS",
+        "klong":     "คลองเตย",
+        "klongSub":  "Sea Port · LCL/FCL",
+        "laem":      "แหลมฉบัง",
+        "laemSub":   "Container Port · FCL",
+        "icd":       "ICD ลาดกระบัง",
+        "icdSub":    "Inland Depot · Sea",
+        "border":    "ด่านชายแดน",
+        "borderSub": "Truck · มุก/หนอง/แม่"
+      }
     },
     "sourcing": {
       "platformLabel": "แพลตฟอร์ม",
@@ -1659,7 +1674,7 @@
     "company1": "เกี่ยวกับ Pacred",
     "company2": "คำถามที่พบบ่อย",
     "company3": "โปรโมชัน",
-    "company4": "วันหยุด PCS 2026",
+    "company4": "วันหยุด Pacred 2026",
     "company5": "ร่วมงานกับเรา",
     "company6": "นโยบายความเป็นส่วนตัว",
     "company7": "เงื่อนไขการใช้บริการ",

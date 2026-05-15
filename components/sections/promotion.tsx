@@ -85,15 +85,34 @@ export function Promotion() {
                     : "bg-white dark:bg-surface border-border hover:border-red-300 hover:shadow-[0_8px_20px_rgba(220,38,38,0.10)]",
                 ].join(" ")}
               >
+                {/* Stretched link — clicking anywhere on the card (except the
+                    claim button) opens LINE OA. Uses the same href the card
+                    already carried in benefits[] but was previously unused. */}
+                <a
+                  href={b.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`ทักไลน์ Pacred — ${b.title}`}
+                  onClick={() =>
+                    trackCtaClick("promotion_line", "home_promotion", {
+                      promo_idx: i,
+                      promo_title: b.title,
+                    })
+                  }
+                  className="absolute inset-0 z-[1]"
+                />
+
                 {/* Notch circles (ticket tear effect) */}
-                <span className="absolute top-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5]" />
-                <span className="absolute bottom-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5]" />
+                <span className="absolute top-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5] pointer-events-none" />
+                <span className="absolute bottom-[-6px] right-[75px] w-3 h-3 rounded-full bg-background z-[5] pointer-events-none" />
 
                 {/* Dashed divider */}
-                <span className={`absolute right-[80px] top-2 bottom-2 z-[2] border-l border-dashed ${b.first ? "border-white/30" : "border-border"}`} />
+                <span className={`absolute right-[80px] top-2 bottom-2 z-[2] pointer-events-none border-l border-dashed ${b.first ? "border-white/30" : "border-border"}`} />
 
-                {/* Inner */}
-                <div className="flex items-center w-full gap-2.5 z-[3]">
+                {/* Inner — pointer-events-none so the stretched <a> handles
+                    clicks on the icon/text area; the claim button re-enables
+                    its own pointer events below. */}
+                <div className="relative flex items-center w-full gap-2.5 z-[3] pointer-events-none">
 
                   {/* Icon box */}
                   <div className={`w-[38px] h-[38px] rounded-lg flex items-center justify-center shrink-0 p-1 ${b.first ? "bg-white/20" : "bg-red-50 dark:bg-red-950/20"}`}>
@@ -123,13 +142,14 @@ export function Promotion() {
                     </p>
                   </div>
 
-                  {/* Action */}
-                  <div className="w-[65px] shrink-0 text-right">
+                  {/* Action — pointer-events-auto so clicks bypass the
+                      stretched link and go to /register instead. */}
+                  <div className="w-[65px] shrink-0 text-right pointer-events-auto">
                     <Link
                       href="/register"
                       onClick={() => trackCtaClick("promotion_claim", "home_promotion", { promo_idx: i, promo_title: b.title })}
                       className={[
-                        "inline-block text-[10px] font-bold px-1.5 py-1 rounded transition-colors",
+                        "inline-block text-[10px] font-bold px-1.5 py-1 rounded transition-colors relative z-[4]",
                         b.first
                           ? "bg-white text-primary-600"
                           : "bg-red-50 text-primary-600 group-hover:bg-primary-600 group-hover:text-white",
