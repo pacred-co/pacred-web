@@ -1,6 +1,6 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-16 night (cargo forensics + PORT_PLAN Part V + ADR-0015/0016)
 Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authority: second-tier owner
 
 ---
@@ -65,6 +65,13 @@ Infrastructure scaffolds shipped + wired:
 - **Audit scripts** — `pnpm audit:md / env / i18n / all` + `pnpm verify` umbrella in CI
 - **Migration sweeps + Track A integration tests** (consolidated from ภูม Poom)
 
+**2026-05-16 night session (autonomous run):**
+- **Theme 3-bug fix** (`235dbc3`) — always-light-on-open · single-click toggle · dark-mode contrast
+- **Combined migration SQL** — `docs/setup/migrations-0023-0038.sql` (one idempotent paste-and-run file for ภูม)
+- **Cargo-ops forensics** — decoded the cargo/freight model from the ไอแต้ม chat + 10 real China-cargo documents → `docs/audit/cargo-ops-forensics-2026-05-16.md` + **PORT_PLAN Part V** (`V-A1…V-F3` backlog + `V-ADM1` admin polish)
+- **ADR-0015** (withholding tax) + **ADR-0016** (freight value model) — DRAFTs awaiting ก๊อต lock
+- STRATEGY.md synced · theme-desync learning captured · team-status checkpoint
+
 ### 🟡 Pending — your pickup list (priority order)
 
 #### P0 — Landing pivot (cover ปอน — Part P4 strategic shift)
@@ -78,11 +85,13 @@ Infrastructure scaffolds shipped + wired:
 
 #### P1 — Backend prep for ภูม
 
+✅ Shipped: Phase G2 schema (`0034`) · MOMO scaffold (`lib/integrations/momo-jmf/`) · container schema (`0033`). Current prep = **Part V** (cargo-forensics backlog) — spec it so ภูม implements fast:
+
 | # | Task | Effort | Source |
 |---|---|---|---|
-| **Phase G2 schema spec** | Draft migration files matching ADR-0006 tax invoice + ADR-0009 schema sketches | ~2h | ADR-0006 G2a |
-| **MOMO sync scaffold** | Create `lib/integrations/momo-jmf/*.ts` skeleton ready for ก๊อต's endpoint inventory | ~1h | momo-jmf.md Step 3 |
-| **Container schema migration** | Write `00NN_containers.sql` per [container-centric-model](../architecture/container-centric-model.md) — ภูม reviews + applies | ~2h | container model |
+| **V-D schema spec** | Spec the container/volume-integrity cluster — V-D1 CBM-per-source · V-D2 canonical cargo-type enum · V-D3 carrier container-no link → `docs/port-specs/` | ~2h | PORT_PLAN Part V |
+| **ADR-0015/0016 lock-chase** | Get ก๊อต to review + lock the 2 DRAFT ADRs (WHT + freight value) → unblocks V-A6 / V-E2 | ~30m | ADR-0015/0016 |
+| **V-F1 migration burn-down** | Track each legacy cutover (China product API · server · SMS) that removes the ไอแต้ม single-point-of-failure | ongoing | PORT_PLAN Part V V-F1 |
 
 #### P1 — Production hardening (when ก๊อต creds land)
 
