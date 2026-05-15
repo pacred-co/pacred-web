@@ -56,8 +56,11 @@ Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links 
 | `THAIBULKSMS_API_KEY` | thaibulksms.com Dashboard → API | Server-only |
 | `THAIBULKSMS_API_SECRET` | Same | Server-only |
 | `THAIBULKSMS_SENDER` | `Pacred` (default) | Sender name shown in SMS |
+| `SMS_LOW_THRESHOLD` | integer, default `100` | If remaining credit < this value, cron `/api/cron/sms-balance-check` alerts admins. Lower for prod (e.g. `50`) when you want earlier warning. |
 
-**Code:** `lib/sms/gateway.ts`. If `OTP_BYPASS=true` (dev), SMS not actually sent — logged to console.
+**Code:** `lib/sms/gateway.ts` (`sendSms` + `checkSmsBalance`). If `OTP_BYPASS=true` (dev), SMS not actually sent — logged to console; balance returns fake healthy value.
+
+**Cron registry:** see [`runbook/cron-registry.md`](runbook/cron-registry.md) for all SMS-related crons.
 
 ---
 
@@ -157,7 +160,21 @@ LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging AP
 
 Vercel cron sends `x-vercel-cron` header; app verifies + checks `Authorization: Bearer ${CRON_SECRET}` if set.
 
-⚠️ ไม่ตั้ง = `/api/cron/auto-cancel-orders` endpoint unprotected (malicious actor can trigger auto-cancel manually)
+⚠️ ไม่ตั้ง = `/api/cron/*` endpoints unprotected (malicious actor can trigger auto-cancel / sms-balance-check / etc. manually)
+
+**Registry:** see [`runbook/cron-registry.md`](runbook/cron-registry.md) for all 6 cron routes + schedules + Pacred Vercel plan analysis.
+
+---
+
+## 9.5 Vercel Auto-Provided 🟢 (no manual set)
+
+Vercel injects these at build/runtime — listed for env-audit script + docs:
+
+| Var | Source | Used by |
+|---|---|---|
+| `VERCEL_GIT_COMMIT_SHA` | Vercel build context | `/status` page (shows short SHA as build identifier) |
+
+You don't set these locally; in `.env.example` they have empty values + a comment.
 
 ---
 

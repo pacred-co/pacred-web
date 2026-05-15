@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-10 (เดฟ via Claude) — **U1-1 + U1-2 + U1-8-audit + U2-5 batch:** /status page · OTP balance check cron scaffold · PDF audit (Sarabun confirmed handles Thai) · multi-line bulk tracking search · Footer /status link · 7 learnings. Part U progress: 4/9 critical leak holes addressed.
+> **Last updated:** 2026-05-16 evening-11 (เดฟ via Claude) — **test coverage + docs batch:** +63 unit test assertions (phone + bkk-zip) · cron registry runbook · env.md updates. Total test:unit chain now 10 files. Part U progress: 4/9 critical + 1/6 workflow closed.
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
