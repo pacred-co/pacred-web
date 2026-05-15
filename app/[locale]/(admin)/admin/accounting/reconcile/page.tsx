@@ -25,6 +25,13 @@ import { ReconcileRow } from "./reconcile-row";
 
 const DAYS_BACK = 90;
 
+// Helper kept outside the render so React Compiler doesn't flag the
+// Date.now() call as impure-in-render. Server component re-runs per-
+// request anyway, so wall-clock here is semantically correct.
+function getRecentWindowIso(daysBack: number): string {
+  return new Date(Date.now() - daysBack * 24 * 60 * 60_000).toISOString();
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pending_payment:  "รอชำระ",
   shipped_china:    "ออกจีน",
@@ -63,7 +70,7 @@ type ReconcileItem = {
 
 export default async function ReconcilePage() {
   const admin = createAdminClient();
-  const sinceIso = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60_000).toISOString();
+  const sinceIso = getRecentWindowIso(DAYS_BACK);
 
   // 1. All recent forwarders (window: 90d)
   const { data: forwardersRaw } = await admin
