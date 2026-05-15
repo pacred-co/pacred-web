@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { DriverAssignForm } from "./driver-assign-form";
+import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   const { fNo } = await params;
@@ -32,6 +33,15 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .from("forwarder_items")
     .select("id, product_name, product_tracking, product_qty")
     .eq("forwarder_id", f.id);
+
+  // U2-4: load cost adjustments for this forwarder
+  const { data: costAdjRaw } = await admin
+    .from("forwarder_cost_adjustments")
+    .select("id, kind, amount_thb, note, status, created_at, paid_at, cancellation_reason")
+    .eq("forwarder_id", f.id)
+    .order("created_at", { ascending: false })
+    .returns<CostAdjustmentRow[]>();
+  const costAdjustments = costAdjRaw ?? [];
 
   // T-P1: load all driver assignments (history + active) for this forwarder
   const { data: assignmentsRaw } = await admin
@@ -146,6 +156,11 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
           <DriverAssignForm
             forwarderId={f.id}
             assignments={assignments}
+          />
+          <CostAdjustmentsPanel
+            forwarderId={f.id}
+            fNo={f.f_no}
+            existing={costAdjustments}
           />
         </aside>
       </div>

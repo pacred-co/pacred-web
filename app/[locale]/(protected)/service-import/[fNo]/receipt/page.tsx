@@ -67,6 +67,36 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
   const isPaid     = f.status === "delivered";
 
+  // U2-4: post-delivery cost adjustments (D/O fee · gateway · weight rebill).
+  // RLS scopes to profile_id automatically — customer sees only their own.
+  type CostAdjRow = {
+    id:         string;
+    kind:       string;
+    amount_thb: number;
+    note:       string | null;
+    status:     string;
+    created_at: string;
+    paid_at:    string | null;
+  };
+  const { data: costAdjRaw } = await supabase
+    .from("forwarder_cost_adjustments")
+    .select("id, kind, amount_thb, note, status, created_at, paid_at")
+    .eq("forwarder_id", f.id)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .returns<CostAdjRow[]>();
+  const costAdjustments = costAdjRaw ?? [];
+  const totalUnpaidExtra = costAdjustments
+    .filter((r) => r.status === "unpaid")
+    .reduce((sum, r) => sum + Number(r.amount_thb), 0);
+  const COST_ADJ_LABEL: Record<string, string> = {
+    do_fee:        "ค่า D/O",
+    gateway_fee:   "ค่า gateway",
+    weight_rebill: "ค่าน้ำหนักเพิ่ม",
+    customs_extra: "ค่าศุลกากรเพิ่ม",
+    other:         "อื่นๆ",
+  };
+
   return (
     <div className="bg-white text-black min-h-screen">
       {/* Print-only styles + auto-print on load (optional) */}
@@ -164,6 +194,53 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
             </tbody>
           </table>
         </section>
+
+        {/* U2-4: post-delivery cost adjustments (hidden on print — admin-issued) */}
+        {costAdjustments.length > 0 && (
+          <section className="no-print rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <h3 className="font-bold text-sm">ค่าใช้จ่ายเพิ่มเติม</h3>
+              {totalUnpaidExtra > 0 && (
+                <span className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                  ค้างชำระ ฿{totalUnpaidExtra.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <ul className="text-xs space-y-1">
+              {costAdjustments.map((r) => (
+                <li key={r.id} className="flex items-start justify-between gap-3 border-b border-amber-200 pb-1 last:border-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="font-medium">{COST_ADJ_LABEL[r.kind] ?? r.kind}</p>
+                    {r.note && <p className="text-amber-900/70 text-[10px]">📝 {r.note}</p>}
+                    <p className="text-[10px] text-amber-900/60">
+                      {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      {r.paid_at && (
+                        <> · ชำระเมื่อ {new Date(r.paid_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
+                      )}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-mono font-medium">
+                      ฿{Number(r.amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </p>
+                    <span className={`inline-block mt-0.5 rounded-full border px-2 py-0.5 text-[10px] ${
+                      r.status === "paid"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-amber-100 text-amber-800 border-amber-300"
+                    }`}>
+                      {r.status === "paid" ? "ชำระแล้ว" : "รอชำระ"}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {totalUnpaidExtra > 0 && (
+              <p className="text-[11px] text-amber-800 pt-1 border-t border-amber-300">
+                💬 กรุณาติดต่อทีมงานเพื่อชำระค่าใช้จ่ายเพิ่มเติม (LINE @pacred / โทร {CONTACT.phoneCompanyDisplay})
+              </p>
+            )}
+          </section>
+        )}
 
         {/* T-P4 G2b: tax invoice request panel (hidden on print) */}
         {isPaid && (
