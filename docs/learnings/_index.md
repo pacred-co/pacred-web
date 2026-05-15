@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-16 (pacred-domain-knowledge +1 — decoded cargo/freight ops model from 10 real China-cargo documents)
+Last reviewed: 2026-05-16 (+2 — pacred-domain-knowledge: decoded cargo/freight model · nextjs-16-quirks: theme head-script desync)
 
 ---
 
@@ -15,7 +15,7 @@ Last reviewed: 2026-05-16 (pacred-domain-knowledge +1 — decoded cargo/freight 
 | Topic | What's captured | Last entry |
 |---|---|---|
 | [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions / Vercel / pnpm + git pathspec literal-brackets | 2026-05-16 |
-| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` collision · react/no-unescaped-entities · Zod UUID v4 strictness) | 2026-05-16 |
+| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` collision · react/no-unescaped-entities · Zod UUID v4 strictness · theme head-script↔provider desync) | 2026-05-16 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations | 2026-05-16 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |
