@@ -15,7 +15,7 @@ Last reviewed: 2026-05-15 (seeded)
 | Topic | What's captured | Last entry |
 |---|---|---|
 | [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions / Vercel / pnpm + git pathspec literal-brackets | 2026-05-16 |
-| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` collision · react/no-unescaped-entities) | 2026-05-16 |
+| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` collision · react/no-unescaped-entities · Zod UUID v4 strictness) | 2026-05-16 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations | 2026-05-16 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |

@@ -134,6 +134,59 @@ Used option 1 in `/status` page footer because the page is for English customers
 
 ---
 
+## [2026-05-16] Zod's `z.uuid()` requires v4 format (rejects all-zeros placeholder)
+
+**Context:** Writing unit tests for `placeOrderSchema` (cart validator). Used placeholder UUID `00000000-0000-0000-0000-000000000001` as test data — Zod kept rejecting it as "Invalid UUID".
+
+**Symptom:**
+```
+{
+  "code": "invalid_format",
+  "format": "uuid",
+  "pattern": "/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/",
+  "path": ["cart_item_ids", 0],
+  "message": "Invalid UUID"
+}
+```
+All "happy path" assertions failed even though the format LOOKED like a UUID.
+
+**Root cause:** Zod's `z.uuid()` (since v4 — used in Pacred) defaults to **strict UUID v4 spec**:
+- Position 13 (after 2nd dash) must be a **version digit** `1-8` (not `0` or `9-f`)
+- Position 17 (after 3rd dash) must be a **variant digit** `8/9/a/b/A/B`
+
+Only the **nil UUID** (`00000000-0000-0000-0000-000000000000`) and **max UUID** (`ffffffff-ffff-ffff-ffff-ffffffffffff`) are special-cased.
+
+A "looks-like-UUID" placeholder like `00000000-0000-0000-0000-000000000001` fails because:
+- Position 13 = `0` (no version) ❌
+- Position 17 = `0` (no variant) ❌
+
+**Fix:** Use a valid UUIDv4 pattern in placeholders. Format: `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` where `y ∈ {8,9,a,b}`.
+
+```typescript
+// BAD — Zod rejects
+const cartItemId = "00000000-0000-0000-0000-000000000001";
+
+// GOOD — valid v4
+const cartItemId = "00000000-0000-4000-8000-000000000001";
+
+// ALSO GOOD — typical v4 from crypto.randomUUID()
+const cartItemId = "123e4567-e89b-42d3-a456-426614174000";
+```
+
+**Why this matters next time:** When seeding test data with UUIDs:
+1. Use `crypto.randomUUID()` if running in Node ≥ 14.17 / Bun / modern browsers
+2. OR hardcode with the `-4xxx-8xxx-` pattern in positions 13 + 17
+3. OR use the nil UUID `00000000-...` if you want a recognisable placeholder (works because Zod special-cases it)
+
+**Affected code:** Caught during `lib/validators/cart.test.ts` work (commit `5643226`). Test UUIDs updated to `00000000-0000-4000-8000-...` pattern.
+
+**Cross-links:**
+- Zod v4 release notes: https://github.com/colinhacks/zod/releases (UUID validation tightened from v3)
+- `lib/validators/cart.test.ts` — canonical example of v4-compliant placeholder UUIDs
+- RFC 4122 §4.4 — UUID v4 spec (random with version + variant bits)
+
+---
+
 ## [2026-05-15] Tailwind v4 has no `tailwind.config.js`
 
 **Context:** Adding a new color token.
