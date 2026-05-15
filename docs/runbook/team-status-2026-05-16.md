@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-12 (เดฟ via Claude) — **validator tests + STRATEGY refresh + ADR-0014:** +136 assertions (wallet 36 + cart 54 + profile 46) → 14 test:unit files total. STRATEGY §9 + §10 DoD updated. **ADR-0014** locks the canonical admin-client-after-ownership-verify pattern (used by both pay-from-wallet flows). Local commits held; pushing on เดฟ command.
+> **Last updated:** 2026-05-16 evening-13 (เดฟ via Claude) — validator tests + STRATEGY refresh + **ADR-0014** + **tax-invoice lib scaffold**. Local commits stacked (3 ahead of origin); pushing on เดฟ command. Tax-invoice types unblock ภูม T-P4 G2b/G2c/G2e from re-deriving schema contract.
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
