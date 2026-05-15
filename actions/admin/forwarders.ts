@@ -12,6 +12,21 @@ const STATUSES = [
   "out_for_delivery","delivered","cancelled",
 ] as const;
 
+// V-A2: forward-direction lifecycle order. 'cancelled' is terminal-anywhere.
+// Going from a higher-index status back to a lower-index = rollback → reason required.
+const STATUS_ORDER: ReadonlyArray<string> = [
+  "pending_payment","shipped_china","in_transit","arrived_thailand",
+  "out_for_delivery","delivered",
+];
+function isStatusRollback(fromStatus: string, toStatus: string): boolean {
+  if (fromStatus === toStatus) return false;
+  if (toStatus === "cancelled") return false;          // cancellation is its own path
+  if (fromStatus === "cancelled") return false;        // un-cancel = forward repair, not rollback
+  const fi = STATUS_ORDER.indexOf(fromStatus);
+  const ti = STATUS_ORDER.indexOf(toStatus);
+  return fi >= 0 && ti >= 0 && ti < fi;
+}
+
 const updateForwarderSchema = z.object({
   f_no:             z.string(),
   status:           z.enum(STATUSES).optional(),
@@ -20,6 +35,9 @@ const updateForwarderSchema = z.object({
   cabinet_number:   z.string().trim().max(255).optional(),
   partner_warehouse: z.enum(["sang","ctt","mk","mx","jmf"]).optional(),
   note_admin:       z.string().trim().max(2000).optional(),
+  // V-A2: required when status change is a rollback (going backward).
+  // Optional otherwise; ignored unless a rollback transition is detected.
+  rollback_reason:  z.string().trim().max(500).optional(),
 });
 export type UpdateForwarderInput = z.infer<typeof updateForwarderSchema>;
 
@@ -41,18 +59,36 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Fetch existing for diff + customer notification
+    // Fetch existing for diff + customer notification + V-A2 rollback note merging
     const { data: existing } = await admin
       .from("forwarders")
-      .select("id, profile_id, status, total_price")
+      .select("id, profile_id, status, total_price, note_admin")
       .eq("f_no", d.f_no)
-      .maybeSingle<{ id: string; profile_id: string; status: string; total_price: number }>();
+      .maybeSingle<{ id: string; profile_id: string; status: string; total_price: number; note_admin: string | null }>();
     if (!existing) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
     let statusChanged = false;
+    let isRollback    = false;
 
     if (d.status && d.status !== existing.status) {
+      // V-A2: rollback path requires a reason
+      isRollback = isStatusRollback(existing.status, d.status);
+      if (isRollback) {
+        const reason = (d.rollback_reason ?? "").trim();
+        if (reason.length < 3) {
+          return {
+            ok: false,
+            error: `rollback ${existing.status} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
+          };
+        }
+        // Stamp the reason into note_admin so it surfaces in admin UI thread.
+        // Prepend (not replace) so prior notes survive.
+        update.note_admin = `[ROLLBACK ${existing.status}→${d.status}] ${reason}`
+          + (existing.note_admin && existing.note_admin !== d.note_admin
+              ? `\n${existing.note_admin}` : (d.note_admin ? `\n${d.note_admin}` : ""));
+      }
+
       update.status = d.status;
       statusChanged = true;
       const dateCol = STATUS_DATE_COL[d.status];
@@ -62,7 +98,7 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
     if (d.tracking_th       != null) update.tracking_th       = d.tracking_th || null;
     if (d.cabinet_number    != null) update.cabinet_number    = d.cabinet_number || null;
     if (d.partner_warehouse != null) update.partner_warehouse = d.partner_warehouse;
-    if (d.note_admin        != null) update.note_admin        = d.note_admin || null;
+    if (d.note_admin        != null && !isRollback) update.note_admin = d.note_admin || null;
 
     const { error } = await admin
       .from("forwarders")
@@ -71,17 +107,36 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
 
     if (error) return { ok: false, error: error.message };
 
-    await logAdminAction(adminId, "forwarder.update", "forwarder", existing.id, {
-      f_no: d.f_no, before: { status: existing.status }, after: update,
+    // V-A2: audit log marks rollback distinctly from forward-update so reports
+    // can flag rollback frequency per admin (governance signal).
+    await logAdminAction(adminId, isRollback ? "forwarder.rollback" : "forwarder.update", "forwarder", existing.id, {
+      f_no:      d.f_no,
+      before:    { status: existing.status },
+      after:     update,
+      ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
     });
 
-    // Notify customer when status changes
+    // Notify customer when status changes. V-A2: rollback gets a distinct
+    // payload so the customer sees the reason + warning severity, not just
+    // a plain "status changed" line.
     if (statusChanged && d.status) {
-      void sendNotification(existing.profile_id, notify.forwarderStatusChanged({
-        fNo:         d.f_no,
-        status:      d.status,
-        forwarderId: existing.id,
-      }));
+      if (isRollback && d.rollback_reason) {
+        void sendNotification(existing.profile_id, {
+          category: "forwarder",
+          severity: "warning",
+          title:    `ฝากนำเข้า ${d.f_no} ถูกย้อนสถานะ`,
+          body:     `กลับเป็น ${d.status} · เหตุผล: ${d.rollback_reason.trim()}`,
+          link_href: `/service-import/${d.f_no}`,
+          reference_type: "forwarder",
+          reference_id:   existing.id,
+        });
+      } else {
+        void sendNotification(existing.profile_id, notify.forwarderStatusChanged({
+          fNo:         d.f_no,
+          status:      d.status,
+          forwarderId: existing.id,
+        }));
+      }
     }
 
     revalidatePath("/admin/forwarders");

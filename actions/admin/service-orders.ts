@@ -10,10 +10,25 @@ const STATUSES = [
   "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed","cancelled",
 ] as const;
 
+// V-A2: forward lifecycle. Going to a lower-index status = rollback.
+// 'cancelled' is its own path (excluded from rollback detection).
+const STATUS_ORDER: ReadonlyArray<string> = [
+  "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed",
+];
+function isStatusRollback(fromStatus: string, toStatus: string): boolean {
+  if (fromStatus === toStatus) return false;
+  if (toStatus === "cancelled" || fromStatus === "cancelled") return false;
+  const fi = STATUS_ORDER.indexOf(fromStatus);
+  const ti = STATUS_ORDER.indexOf(toStatus);
+  return fi >= 0 && ti >= 0 && ti < fi;
+}
+
 const updateSchema = z.object({
   h_no:    z.string(),
   status:  z.enum(STATUSES).optional(),
   note_admin: z.string().trim().max(2000).optional(),
+  // V-A2: required when status change is a rollback. Optional otherwise.
+  rollback_reason: z.string().trim().max(500).optional(),
 });
 export type AdminUpdateServiceOrderInput = z.infer<typeof updateSchema>;
 
@@ -44,27 +59,53 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
     let statusChanged = false;
+    let isRollback    = false;
+
     if (d.status && d.status !== existing.status) {
+      // V-A2: rollback path requires reason
+      isRollback = isStatusRollback(existing.status, d.status);
+      if (isRollback) {
+        const reason = (d.rollback_reason ?? "").trim();
+        if (reason.length < 3) {
+          return {
+            ok: false,
+            error: `rollback ${existing.status} → ${d.status} ต้องระบุเหตุผล (≥3 ตัว) — ใส่ใน rollback_reason`,
+          };
+        }
+        // Stamp reason in note_admin so it surfaces in admin UI
+        update.note_admin = `[ROLLBACK ${existing.status}→${d.status}] ${reason}`;
+      }
+
       update.status = d.status;
       statusChanged = true;
       const dateCol = STATUS_DATE_COL[d.status];
       if (dateCol) update[dateCol] = new Date().toISOString();
     }
-    if (d.note_admin != null) update.note_admin = d.note_admin || null;
+    if (d.note_admin != null && !isRollback) update.note_admin = d.note_admin || null;
 
     const { error } = await admin.from("service_orders").update(update).eq("id", existing.id);
     if (error) return { ok: false, error: error.message };
 
-    await logAdminAction(adminId, "service_order.update", "service_order", existing.id, {
-      h_no: d.h_no, before: { status: existing.status }, after: update,
+    // V-A2: audit log marks rollback distinctly from forward-update
+    await logAdminAction(adminId, isRollback ? "service_order.rollback" : "service_order.update", "service_order", existing.id, {
+      h_no:   d.h_no,
+      before: { status: existing.status },
+      after:  update,
+      ...(isRollback && d.rollback_reason ? { rollback_reason: d.rollback_reason.trim() } : {}),
     });
 
     if (statusChanged && d.status) {
       void sendNotification(existing.profile_id, {
         category: "order",
-        severity: d.status === "cancelled" ? "warning" : "info",
-        title:    `ฝากสั่ง ${d.h_no} อัพเดทแล้ว`,
-        body:     `สถานะ: ${STATUS_LABEL[d.status] ?? d.status}`,
+        // V-A2: rollback notifications use 'warning' severity so customer
+        // is aware admin reverted state (they may have planned around the
+        // earlier status — e.g., already saw "completed" then it bounced back).
+        severity: (d.status === "cancelled" || isRollback) ? "warning" : "info",
+        title:    isRollback
+          ? `ฝากสั่ง ${d.h_no} ถูกย้อนสถานะ`
+          : `ฝากสั่ง ${d.h_no} อัพเดทแล้ว`,
+        body:     `สถานะ: ${STATUS_LABEL[d.status] ?? d.status}`
+          + (isRollback && d.rollback_reason ? ` · เหตุผล: ${d.rollback_reason.trim()}` : ""),
         link_href: `/service-order/${d.h_no}`,
         reference_type: "service_order",
         reference_id:   existing.id,

@@ -54,6 +54,22 @@ export function AdminForwarderUpdateForm(p: Props) {
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null); setError(null);
+
+    // V-A2: detect rollback against the original prop status (DB truth at
+    // page load). If rollback, prompt for reason before submit.
+    let rollbackReason: string | undefined = undefined;
+    if (isRollbackAttempt(p.status, status)) {
+      const r = window.prompt(
+        `กำลังย้อนสถานะจาก "${p.status}" → "${status}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
+      );
+      if (r == null) return;
+      if (r.trim().length < 3) {
+        setError("เหตุผลต้องอย่างน้อย 3 ตัวอักษร");
+        return;
+      }
+      rollbackReason = r.trim();
+    }
+
     startTransition(async () => {
       const res = await adminUpdateForwarder({
         f_no: p.fNo,
@@ -63,11 +79,14 @@ export function AdminForwarderUpdateForm(p: Props) {
         cabinet_number: cabinet,
         partner_warehouse: (warehouse || undefined) as Parameters<typeof adminUpdateForwarder>[0]["partner_warehouse"],
         note_admin: note,
+        rollback_reason: rollbackReason,
       });
       if (res.ok) {
-        setMsg("บันทึกแล้ว — ลูกค้าได้รับการแจ้งเตือนแล้ว");
+        setMsg(rollbackReason
+          ? "↩️ ย้อนสถานะ + บันทึกแล้ว — ลูกค้าได้รับแจ้งเตือนพร้อมเหตุผล"
+          : "บันทึกแล้ว — ลูกค้าได้รับการแจ้งเตือนแล้ว");
         router.refresh();
-        setTimeout(() => setMsg(null), 4000);
+        setTimeout(() => setMsg(null), 5000);
       } else {
         setError(res.error);
       }
@@ -86,18 +105,43 @@ export function AdminForwarderUpdateForm(p: Props) {
   const currentIdx = STATUS_FLOW.findIndex((s) => s.value === status);
   const nextStatus = currentIdx >= 0 && currentIdx < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIdx + 1] : null;
 
+  // V-A2: detect if a status change goes backward in the lifecycle
+  // (admin rolling back). Cancelled = its own path, not rollback.
+  function isRollbackAttempt(from: string, to: string): boolean {
+    if (from === to) return false;
+    if (to === "cancelled" || from === "cancelled") return false;
+    const fi = STATUS_FLOW.findIndex((s) => s.value === from);
+    const ti = STATUS_FLOW.findIndex((s) => s.value === to);
+    return fi >= 0 && ti >= 0 && ti < fi;
+  }
+
   function quickSet(value: string) {
     setMsg(null); setError(null);
+    let rollbackReason: string | undefined = undefined;
+    if (isRollbackAttempt(status, value)) {
+      const r = window.prompt(
+        `กำลังย้อนสถานะจาก "${status}" → "${value}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
+      );
+      if (r == null) return;             // user cancelled prompt
+      if (r.trim().length < 3) {
+        setError("เหตุผลต้องอย่างน้อย 3 ตัวอักษร");
+        return;
+      }
+      rollbackReason = r.trim();
+    }
     startTransition(async () => {
       const res = await adminUpdateForwarder({
         f_no: p.fNo,
         status: value as Parameters<typeof adminUpdateForwarder>[0]["status"],
+        rollback_reason: rollbackReason,
       });
       if (res.ok) {
         setStatus(value);
-        setMsg("อัพเดทสถานะแล้ว — ลูกค้าได้รับการแจ้งเตือน");
+        setMsg(rollbackReason
+          ? `↩️ ย้อนสถานะแล้ว — ลูกค้าได้รับแจ้งเตือนพร้อมเหตุผล`
+          : "อัพเดทสถานะแล้ว — ลูกค้าได้รับการแจ้งเตือน");
         router.refresh();
-        setTimeout(() => setMsg(null), 4000);
+        setTimeout(() => setMsg(null), 5000);
       } else {
         setError(res.error);
       }

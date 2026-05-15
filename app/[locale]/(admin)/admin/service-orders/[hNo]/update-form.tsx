@@ -26,18 +26,39 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin, totalThb 
   const currentIdx = STATUS_FLOW.findIndex((s) => s.value === st);
   const nextStatus = currentIdx >= 0 && currentIdx < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIdx + 1] : null;
 
+  // V-A2: rollback detection (cancelled excluded from lifecycle order)
+  function isRollbackAttempt(from: string, to: string): boolean {
+    if (from === to) return false;
+    if (to === "cancelled" || from === "cancelled") return false;
+    const fi = STATUS_FLOW.findIndex((s) => s.value === from);
+    const ti = STATUS_FLOW.findIndex((s) => s.value === to);
+    return fi >= 0 && ti >= 0 && ti < fi;
+  }
+
   function quickSet(value: string) {
     setMsg(null); setError(null);
+    let rollbackReason: string | undefined = undefined;
+    if (isRollbackAttempt(st, value)) {
+      const r = window.prompt(
+        `กำลังย้อนสถานะจาก "${st}" → "${value}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
+      );
+      if (r == null) return;
+      if (r.trim().length < 3) { setError("เหตุผลต้องอย่างน้อย 3 ตัวอักษร"); return; }
+      rollbackReason = r.trim();
+    }
     startTransition(async () => {
       const res = await adminUpdateServiceOrder({
         h_no: hNo,
         status: value as Parameters<typeof adminUpdateServiceOrder>[0]["status"],
+        rollback_reason: rollbackReason,
       });
       if (res.ok) {
         setSt(value);
-        setMsg("อัพเดทสถานะแล้ว — ลูกค้าได้รับการแจ้งเตือน");
+        setMsg(rollbackReason
+          ? "↩️ ย้อนสถานะแล้ว — ลูกค้าได้รับแจ้งเตือนพร้อมเหตุผล"
+          : "อัพเดทสถานะแล้ว — ลูกค้าได้รับการแจ้งเตือน");
         router.refresh();
-        setTimeout(() => setMsg(null), 4000);
+        setTimeout(() => setMsg(null), 5000);
       } else setError(res.error);
     });
   }
@@ -65,16 +86,31 @@ export function AdminServiceOrderUpdateForm({ hNo, status, note_admin, totalThb 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null); setError(null);
+
+    // V-A2: rollback against the saved-state status (prop)
+    let rollbackReason: string | undefined = undefined;
+    if (isRollbackAttempt(status, st)) {
+      const r = window.prompt(
+        `กำลังย้อนสถานะจาก "${status}" → "${st}".\nระบุเหตุผล (≥3 ตัว) — ลูกค้าจะเห็นเหตุผลในการแจ้งเตือน:`,
+      );
+      if (r == null) return;
+      if (r.trim().length < 3) { setError("เหตุผลต้องอย่างน้อย 3 ตัวอักษร"); return; }
+      rollbackReason = r.trim();
+    }
+
     startTransition(async () => {
       const res = await adminUpdateServiceOrder({
         h_no: hNo,
         status: st as Parameters<typeof adminUpdateServiceOrder>[0]["status"],
         note_admin: note,
+        rollback_reason: rollbackReason,
       });
       if (res.ok) {
-        setMsg("บันทึกแล้ว");
+        setMsg(rollbackReason
+          ? "↩️ ย้อนสถานะ + บันทึกแล้ว — ลูกค้าได้รับแจ้งเตือนพร้อมเหตุผล"
+          : "บันทึกแล้ว");
         router.refresh();
-        setTimeout(() => setMsg(null), 4000);
+        setTimeout(() => setMsg(null), 5000);
       } else {
         setError(res.error);
       }

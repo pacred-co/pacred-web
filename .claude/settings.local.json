@@ -75,7 +75,9 @@
       "Bash(echo \"exit: $?\")",
       "Bash(node scripts/split-port-plan.mjs)",
       "Bash(pnpm audit:md)",
-      "Bash(pnpm audit:i18n)"
+      "Bash(pnpm audit:i18n)",
+      "Bash(git commit -m 'feat\\(admin-ui+v-d4\\): Phase E — V-ADM1 polish complete + V-D4 list-page progress \\(ภูม\\) *)",
+      "Bash(git commit -m 'feat\\(v-a2\\): Phase F — status rollback w/ required reason + audit \\(ภูม\\) *)"
     ]
   }
 }
