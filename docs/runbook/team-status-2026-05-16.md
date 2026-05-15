@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-6 (เดฟ via Claude) — **Forwarder pay-from-wallet shipped** (mirror of service-order). Import loop now also closes customer self-service. ภูม pickup: mirror `adminMarkForwarderPaid` admin action per T-P1 pattern.
+> **Last updated:** 2026-05-16 evening-7 (เดฟ via Claude) — Forwarder pay-from-wallet shipped (evening-6) + **MOMO JMF lib scaffold ready** for ภูม (types + client + sync skeleton). Both cargo loop sides + partner integration foundation now in dave. Vercel cron audit confirmed (existing doc valid — เดฟ pending Pro plan check in dashboard).
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -150,6 +150,38 @@ export async function adminMarkForwarderPaid(input: {
 **UI:** add the "บันทึกการชำระเงิน" panel to `/admin/forwarders/[fNo]` mirror of `update-form.tsx` in `/admin/service-orders/[hNo]/` — two buttons: "💰 บันทึกชำระจาก wallet" + "💵 รับเงินสด/นอกระบบ (override)".
 
 **Est:** ~2-3h (mostly copy-paste from T-P1 + adjust column names). Run-long priority: insert between T-P5 (done) and T-P2.
+
+---
+
+## 🆕 MOMO JMF lib scaffold (added 2026-05-16 evening-7 — เดฟ prep for ภูม)
+
+Created `lib/integrations/momo-jmf/` skeleton so ภูม can move fast once ก๊อต MOMO-1 lands (endpoint inventory call to MOMO dev).
+
+**Files shipped:**
+- `lib/integrations/momo-jmf/types.ts` — typed shapes for `MomoContainerSummary` / `MomoContainerDetail` / `MomoShipmentSummary` / `MomoTrackingEvent` / `MomoWebhookPayload` + `MOMO_STATUS_TO_PACRED` mapping → `cargo_containers.status` (per 0033)
+- `lib/integrations/momo-jmf/client.ts` — typed HTTP client with `Authorization: Bearer ${MOMO_JMF_TOKEN}` + `MOMO_JMF_BASE_URL`. **Demo mode** when env not set → returns `{ ok: false, error: "not_configured" }` (no exceptions in customer paths). Public methods: `listContainers(updatedSince?)` / `getContainer(code)` / `getContainerManifest(code)` / `getShipmentTracking(shipmentCode)`.
+- `lib/integrations/momo-jmf/sync.ts` — **skeleton** `syncContainersFromMomo(since?)`. Body intentionally minimal pending ก๊อต MOMO-1. JSDoc above the function has the FULL pseudo-code for the upsert loop ภูม fills (per migration 0033 cargo_* tables). Pattern reference: existing `actions/admin/csv-imports.ts` upsert+audit+idempotency conventions.
+- `lib/integrations/momo-jmf/index.ts` — public re-export surface (import from `@/lib/integrations/momo-jmf`).
+
+**ภูม pickup (after ก๊อต MOMO-1):**
+1. Verify `MomoContainerSummary` matches actual MOMO response → adjust `types.ts` if not
+2. Fill `syncContainersFromMomo` upsert loop per the JSDoc TODO checklist
+3. Add `/api/cron/momo-jmf-sync/route.ts` calling `syncContainersFromMomo` with CRON_SECRET check (mirror existing cron routes)
+4. Add cron entry to `vercel.json` — pending เดฟ confirms Pro plan (already at 5 crons; Pro allows 100)
+5. Add `/api/webhooks/momo-jmf/route.ts` receiver for inbound status pushes
+6. Build customer view `/service-import/[fNo]/container` showing the cargo_container card + cargo_shipment_tracking timeline (per container-centric-model.md design)
+7. Build admin view `/admin/warehouse/containers` + `/admin/warehouse/containers/[code]`
+
+---
+
+## 📋 Vercel cron audit (resolved evening-7)
+
+`docs/runbook/vercel-cron-plan.md` already exists with full diagnosis:
+- 5 cron jobs in `vercel.json` (auto-cancel every 15min · sales-daily-digest 17:05 · refresh-active-customers 01:00 · expire-probation 02:00 · expire-driver-assignments hourly)
+- Hobby plan = max 2 crons + daily-only schedules → Pacred needs **Pro plan** ($20/mo)
+- Pro plan = 100 cron limit + any schedule → ample headroom
+
+**Status:** ✅ doc is current; **เดฟ pending: confirm Pacred Vercel project is on Pro tier** (Vercel dashboard → Project → Settings → General → Plan). If Hobby, upgrade before next deploy to avoid Vercel silently dropping crons #3-5.
 
 ---
 
