@@ -30,9 +30,11 @@ function TransportIcon({ type }: { type: string }) {
 export async function ForwarderList({
   items,
   activeFilter = "all",
+  containerByFno,
 }: {
   items: ForwarderSummary[];
   activeFilter?: string;
+  containerByFno?: Map<string, { code: string; shipment_code: string }>;
 }) {
   const t = await getTranslations("forwarder");
 
@@ -122,6 +124,18 @@ export async function ForwarderList({
                       </div>
                     )}
                     {!f.tracking_chn && !f.tracking_th && <span className="text-muted">—</span>}
+                    {(() => {
+                      const c = f.f_no ? containerByFno?.get(f.f_no) : undefined;
+                      if (!c) return null;
+                      return (
+                        <Link
+                          href={`/shipments/${c.shipment_code}`}
+                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] text-blue-700 hover:bg-blue-100"
+                        >
+                          📦 ตู้ <span className="font-mono">{c.code}</span> →
+                        </Link>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 align-top">
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[f.status]}`}>

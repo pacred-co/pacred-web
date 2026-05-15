@@ -1,6 +1,7 @@
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { listForwarders, type ForwarderSummary } from "@/actions/forwarder";
+import { createClient } from "@/lib/supabase/server";
 import { ForwarderList } from "./forwarder-list";
 import { Package, Plus, ChevronRight, Home, MapPin } from "lucide-react";
 
@@ -30,6 +31,27 @@ export default async function ServiceImportPage({ searchParams }: { searchParams
 
   const activeTab = (sp.q && TAB_DEFS.some((t) => t.key === sp.q)) ? sp.q : "all";
   const filtered = activeTab === "all" ? allItems : allItems.filter((f) => f.status === activeTab);
+
+  // Pull container code per forwarder for inline badge (cargo spine visibility).
+  // RLS on cargo_shipments_customer_read keeps this scoped to own rows.
+  const fNos = allItems.map((f) => f.f_no).filter((s): s is string => !!s);
+  const containerByFno = new Map<string, { code: string; shipment_code: string }>();
+  if (fNos.length > 0) {
+    const sb = await createClient();
+    const { data: rows } = await sb
+      .from("cargo_shipments")
+      .select("shipment_code, forwarder_f_no, container:cargo_containers!cargo_container_id(code)")
+      .in("forwarder_f_no", fNos);
+    type Embed = { code: string | null };
+    type Row = { shipment_code: string; forwarder_f_no: string | null; container: Embed | Embed[] | null };
+    for (const r of (rows ?? []) as Row[]) {
+      if (!r.forwarder_f_no) continue;
+      const cont = Array.isArray(r.container) ? (r.container[0] ?? null) : r.container;
+      if (cont?.code && !containerByFno.has(r.forwarder_f_no)) {
+        containerByFno.set(r.forwarder_f_no, { code: cont.code, shipment_code: r.shipment_code });
+      }
+    }
+  }
 
   // Sum of pending-payment so the bottom checkout bar can render a useful total
   const pendingTotal = allItems
@@ -117,7 +139,7 @@ export default async function ServiceImportPage({ searchParams }: { searchParams
           </div>
         </div>
 
-        <ForwarderList items={filtered} activeFilter={activeTab} />
+        <ForwarderList items={filtered} activeFilter={activeTab} containerByFno={containerByFno} />
       </main>
 
       {/* Fixed bottom payment bar (legacy PCS .b-pay) — only when there's pending */}
