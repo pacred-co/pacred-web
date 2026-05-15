@@ -5,6 +5,12 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 ---
 
+## 🚀 TEAM-WIDE RUN-LONG MODE ACTIVE (2026-05-16 evening → เดฟ check-in)
+
+ทั้งทีม autonomous mode. ดู [`../runbook/team-status-2026-05-16.md`](../runbook/team-status-2026-05-16.md) — มี cross-dep map + ปอน's full run-long queue + escape hatch. **เริ่ม T-N1 SEO audit ก่อนเลย** (P0, ~3h, ปลด Ads waste). L-5 priority order = home → import-china → china-shopping → customs-clearance (เดฟ confirmed; ไม่ต้องรอ).
+
+---
+
 ## 🔥 EMERGENCY (read FIRST — overrides normal priority)
 
 Google Ads ยิงไม่ติด · Search หา pacred.co ไม่เจอ · FB Ads ก็มี inquiry เข้าแต่ระบบยังไม่พร้อม. **ปอนคือ visibility lever** — ถ้า landing rank ไม่ได้ + quality score ต่ำ = Ad budget ทิ้งไปเปล่าๆ.
