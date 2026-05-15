@@ -99,7 +99,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
         </div>
 
         <aside>
-          <AdminServiceOrderUpdateForm hNo={o.h_no!} status={o.status} note_admin={o.note_admin} />
+          <AdminServiceOrderUpdateForm hNo={o.h_no!} status={o.status} note_admin={o.note_admin} totalThb={Number(o.total_thb)} />
         </aside>
       </div>
     </main>

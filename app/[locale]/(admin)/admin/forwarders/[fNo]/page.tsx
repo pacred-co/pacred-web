@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AdminForwarderUpdateForm } from "./update-form";
+import { DriverAssignForm } from "./driver-assign-form";
 
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   const { fNo } = await params;
@@ -31,6 +32,25 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .from("forwarder_items")
     .select("id, product_name, product_tracking, product_qty")
     .eq("forwarder_id", f.id);
+
+  // T-P1: load all driver assignments (history + active) for this forwarder
+  const { data: assignmentsRaw } = await admin
+    .from("forwarder_driver")
+    .select(`
+      id, status, fd_date, accepted_at, completed_at,
+      driver:profiles!profile_id ( member_code, first_name, last_name, phone )
+    `)
+    .eq("forwarder_id", f.id)
+    .order("fd_date", { ascending: false });
+  type DriverShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
+  const assignments = ((assignmentsRaw ?? []) as Array<{
+    id: string; status: number; fd_date: string;
+    accepted_at: string | null; completed_at: string | null;
+    driver: DriverShape | DriverShape[] | null;
+  }>).map((a) => ({
+    ...a,
+    driver: Array.isArray(a.driver) ? (a.driver[0] ?? null) : a.driver,
+  }));
 
   return (
     <main className="p-6 lg:p-8 space-y-6">
@@ -112,7 +132,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
           )}
         </div>
 
-        <aside>
+        <aside className="space-y-4">
           <AdminForwarderUpdateForm
             fNo={f.f_no}
             status={f.status}
@@ -121,6 +141,10 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
             cabinet_number={f.cabinet_number}
             partner_warehouse={f.partner_warehouse}
             note_admin={f.note_admin}
+          />
+          <DriverAssignForm
+            forwarderId={f.id}
+            assignments={assignments}
           />
         </aside>
       </div>
