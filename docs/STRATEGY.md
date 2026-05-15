@@ -175,13 +175,14 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 | [0010](decisions/0010-v2-v3-version-strategy.md) | V2 (owner-pleaser) vs V3 (employee masterpiece) | ✅ locked | When tempted to refactor mid-flight |
 | [0014](decisions/0014-customer-self-service-state-transitions.md) | Customer self-service state transitions (verify-then-admin-client) | ✅ locked | Any customer-initiated state-machine action |
 | [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | 🟡 DRAFT — ก๊อต to lock | V-A6 · juristic payments · receipt gating |
+| [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | 🟡 DRAFT — ก๊อต to lock | V-E2 · freight (FCL/LCL) invoicing |
 
 **Pending ADRs** (ก๊อต P2):
 - 0011 ERP RBAC granular roles per module
 - 0012 ERP frontend shell (same app vs separate `erp.pacred.co`)
 - 0013 ERP V2→V3 migration strategy
 - **0015 needs ก๊อต lock** — answer the 4 open questions, flip Status → Accepted (unblocks V-A6)
-- **0016 (suggested)** — freight value model for V-E2 (real vs declared value, "แผน VAT")
+- **0016 needs ก๊อต lock** — answer the 5 open questions, flip Status → Accepted (unblocks V-E2)
 
 ---
 

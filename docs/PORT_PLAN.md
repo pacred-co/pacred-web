@@ -1688,7 +1688,7 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
 | V-E1 | Commercial **Invoice + Packing List** generator (China shipper → Thai consignee) | ภูม | 🟠 | ⬜ |
-| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure | ภูม + ก๊อต ADR | 🟠 | ⬜ |
+| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure. Design = [ADR-0016](decisions/0016-freight-value-model.md) (🟡 DRAFT — ก๊อต to lock) | ภูม impl · ก๊อต lock ADR-0016 | 🟠 | ⬜ |
 | V-E3 | **Form E** (ASEAN-China FTA Certificate of Origin) generator — 12-box form, HS code, origin criterion | ภูม | 🟡 | ⬜ |
 | V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording | ภูม | 🟡 | ⬜ |
 | V-E5 | Range-guard **every numeric import** — legacy invoice sheets carry int32-overflow garbage (`-2146826xxx`) | ภูม | 🟡 | ⬜ |

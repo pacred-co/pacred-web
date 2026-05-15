@@ -195,6 +195,7 @@ These problem IDs are carried verbatim into [`docs/PORT_PLAN.md`](../PORT_PLAN.m
 - 🤝 Partner sync (MOMO) feeds the same containers → [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md)
 - 🧾 Tax-invoice pairs with → [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) · migration `0034`
 - 💸 Withholding-tax model (A6) design → [`docs/decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) (🟡 DRAFT — ก๊อต to lock)
+- 🚢 Freight value model (E2) design → [`docs/decisions/0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) (🟡 DRAFT — ก๊อต to lock)
 - 🔁 State-change audit pattern → [`docs/decisions/0014-customer-self-service-state-transitions.md`](../decisions/0014-customer-self-service-state-transitions.md)
 - 💬 Customer-side chat audit → [`docs/audit/chat-analysis-2026-05-16.md`](chat-analysis-2026-05-16.md)
 - 🧹 Legacy PHP dead-file sweep → [`docs/audit/legacy-cleanup-2026-05-16.md`](legacy-cleanup-2026-05-16.md)
