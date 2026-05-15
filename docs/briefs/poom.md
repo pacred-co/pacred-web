@@ -34,6 +34,7 @@ Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency ta
 8. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
 9. [`.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) — skills kit; **`legacy-php-sweep`** is your bread-and-butter for cargo ports
 10. [`docs/learnings/_index.md`](../learnings/_index.md) — scan for any new gotcha entries since last session
+11. [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** — **NEW** cargo/freight forensics → backlog V-A1…V-F3 (mostly yours) + your **V-ADM1** admin-UI polish task
 
 ## 📂 Legacy reference (your most-touched external source)
 
@@ -141,12 +142,18 @@ Order recommendation:
 - P-23 Meeting room booking (~2–3h)
 - P-27 DPX ERP phase 2 ADR co-authoring (with เดฟ + ก๊อต)
 
-### Theme + UX (per เดฟ brief 2026-05-16)
+### V-ADM1 — Admin UI polish (เดฟ instruction 2026-05-16 evening — do before the next big batch)
 
-- Admin sidebar bg = **white** (no dark variant for sidebar)
-- Main content area = same theme tokens as landing (per `app/globals.css` `@theme inline`)
-- Use `Link` from `@/i18n/navigation` for nav (not `next/link`)
-- Mobile-first responsive — admin UI must work on mobile too (warehouse staff scan goods on tablets)
+Small, fast cleanup so `/admin` stops looking like a separate app. Tracked as **V-ADM1** in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V.
+
+- **Remove the right-hand sidebar entirely** — `/admin` keeps only the left sidebar.
+- **Left sidebar → white background** — `bg-white dark:bg-surface` (no admin-only palette).
+- Every other admin surface → the **same theme tokens** as the public site + customer portal: `bg-surface` / `bg-background` / `text-foreground` / `text-muted` / `border-border` from `app/globals.css` `@theme inline`. No bespoke admin colors.
+- **Apply the public/customer body background** — the radial red-cloud gradient in [`app/globals.css`](../../app/globals.css) `body { … }` — to the `/admin` shell too, so admin matches หน้าบ้าน + หลังบ้านลูกค้า.
+- Use `Link` from `@/i18n/navigation` (not `next/link`).
+- Mobile-first responsive — warehouse staff scan on tablets.
+
+**Acceptance:** open `/admin` → no right sidebar · left sidebar white · same red-cloud body background as `/` · light + dark both coherent (and the site still opens light per the theme fix).
 
 ---
 

@@ -135,3 +135,55 @@ This means: **idempotency check is keyed on `(reference_type, reference_id, kind
 - Commit `936dff7` — 0033 hotfix that caught + prevented this collision
 
 ---
+
+## [2026-05-16] Decoded cargo/freight ops model — from 10 real China-cargo documents
+
+**Context:** เดฟ handed over 10 live spreadsheets + the ไอแต้ม (legacy dev) chat.
+Decoding them gave the *real* cargo/freight data model — knowledge no training data
+has. Full narrative + problem catalog → [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md).
+The terse facts a future agent needs:
+
+**Container & code scheme:**
+- `GZE{YYMMDD}-{seq}` = Guangzhou **truck** container · `GZS{YYMMDD}-{seq}` = **sea** container (เดฟ confirmed). Truck route: Pingxiang → Vietnam/Laos → Mukdahan. Sea: Nansha → Laem Chabang.
+- `A{YY}{seq}` (e.g. `A2600200036`) = single-consignee **freight job** number.
+- For freight, **the commercial invoice number = the container code** (`INV no = GZE260328-1`).
+- A container has **two identifiers**: the Pacred code (`GZE260407-1`) *and* the carrier's physical container number (`BLOU2025012`, `SLVU4871649`) — keep both, linked.
+- Box barcode `CG#########[-NNN]` (`-NNN` = box within a parcel). Receipt no `FRC{YYMM}-{NNNNN}-{N}`. Cargo customer = `PCS#####`. ฝากสั่งซื้อ order = `P#####`.
+
+**Two business lines, one container namespace:**
+- **Cargo** (LCL consolidation) — many `PCS#####` customers' parcels per container, billed per parcel by weight or CBM. PHP modelled this.
+- **Freight** (FCL, single consignee) — one importer, full Commercial Invoice + Packing List + Form E + D/O. **PHP never modelled this — it runs on loose Excel today.**
+
+**⚠️ Cargo-type taxonomy is INCONSISTENT between the two legacy systems** — same Chinese/Thai label, different latin code:
+
+| label | PCS API "Shipment Report" | warehouse manifest (装柜明细) |
+|---|---|---|
+| ทั่วไป (general) | `A` | `G` |
+| มอก. electrical | `M` | `T` |
+| อย. drug/food | `O` | `F` |
+| พิเศษ brand-name | `X` | — |
+| ควบคุม controlled | `Z` | — |
+
+→ Pacred must pick **one** canonical enum and map both legacy sets onto it (task V-D2).
+
+**Two CBM gotchas (revenue-critical):**
+- The same container measures different CBM in 3 places: PCS-API-on-receipt, "รวมคิว" (queue-sum), and the China "ปิดตู้" manifest. **Real case GZE260422-1 = 16.79 vs 21.28 CBM** — customers dispute the bill. Store CBM *per source* and show the diff before billing (V-D1).
+- "ตัดตู้" (assign parcels → container) **fails silently unless the container close-date (วันที่ปิดตู้) is set first** — the report filters by close-date only.
+
+**Freight invoice data corruption:** legacy invoice spreadsheets carry **int32-overflow garbage** in a numeric field — values like `-2146826265` / `-2146826273` (≈ −2³¹). Range-guard *every* numeric import (V-E5).
+
+**"แผน VAT" = invoice value engineering:** freight invoices have alternate VAT-plan sheets — the **declared customs value is intentionally decoupled** from the real commercial value, VAT 7% computed on the declared figure. Model `real_value` / `declared_value` / `vat_plan` as separate fields — never conflate (V-E2).
+
+**The legacy backend is MongoDB** — the PCS API "Shipment Report" export filename embeds a MongoDB ObjectId.
+
+**Why this matters next time:**
+- Building any cargo/freight feature → start from [`cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + PORT_PLAN Part V, not from scratch.
+- Withholding tax (หัก ณ ที่จ่าย) is unmodelled in legacy and is the #1 accounting pain — see V-A6.
+- The whole legacy stack (China API + server + SMS) bills through one freelancer (ไอแต้ม) — single point of failure; finishing the migration *is* the mitigation (V-F1).
+
+**Cross-links:**
+- [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) — full narrative + problem catalog A–F
+- [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V — task backlog V-A1…V-F3
+- [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the `cargo_*` schema spine
+
+---

@@ -40,6 +40,8 @@ The company is burning runway (per `cash_burning_p0_emergency` memory). Default 
 
 Cargo system getting customers > everything else (V3 prep, refactors, "nice-to-have" features, broad cleanup).
 
+📋 The decoded cargo revenue backlog = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) **Part V**, sourced from [`docs/audit/cargo-ops-forensics-2026-05-16.md`](docs/audit/cargo-ops-forensics-2026-05-16.md) (8 months of legacy-system pain + 10 real cargo documents decoded into tasks `V-A1…V-F3`). Start cargo work there.
+
 ## 3. Don't preempt brand cleanup
 
 Pacred is splitting from **PCS CARGO + TTP + ไอแต้ม**. References to these survive in code because some APIs are still "borrowed" interim. **Do not scrub these references** until ก๊อต confirms the matching API switchover. The rule lives in [`docs/runbook/pcs-scrub-plan.md`](docs/runbook/pcs-scrub-plan.md).
