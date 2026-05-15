@@ -5,6 +5,12 @@ Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memo
 
 ---
 
+## 🚀 TEAM-WIDE RUN-LONG MODE ACTIVE (2026-05-16 evening → เดฟ check-in)
+
+ทั้งทีม autonomous mode. ดู [`../runbook/team-status-2026-05-16.md`](../runbook/team-status-2026-05-16.md) — มี cross-dep map + ก๊อต's full run-long queue + escape hatch. **เริ่ม K-12 GTM + K-13 Clarity + DV-1a/b/c parallel signups** (P0, ~2h รวม, ปลดทั้งทีม). When blocked on signups/calls → ADR-0011/0012/0013 หรือ K-sec-2 RLS audit.
+
+---
+
 ## 🔥 EMERGENCY (read FIRST — overrides normal priority)
 
 บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. Cargo system ต้องรับลูกค้าได้ ASAP → revenue → stop burn.
