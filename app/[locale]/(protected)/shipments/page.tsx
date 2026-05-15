@@ -157,6 +157,34 @@ function ShipmentCard({ shipment: s }: { shipment: ShipmentSummary }) {
         </div>
       )}
 
+      {/* V-D4: received-vs-expected mini progress bar (same shape as detail page) */}
+      {s.box_count != null && s.box_count > 0 && (
+        <div className="text-xs border-t border-border pt-2 space-y-1">
+          <div className="flex justify-between">
+            <span className="text-muted">รับเข้าโกดังไทย</span>
+            <span className="font-medium">
+              <span className="font-mono">{s.received_box_count}</span>
+              {" / "}
+              <span className="font-mono">{s.box_count}</span>
+              {" กล่อง"}
+              {s.received_box_count >= s.box_count && (
+                <span className="ml-1 text-green-600">✓</span>
+              )}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-surface-alt overflow-hidden">
+            <div
+              className={`h-full transition-all ${
+                s.received_box_count >= s.box_count ? "bg-green-500" : "bg-primary-500"
+              }`}
+              style={{
+                width: `${Math.min(100, (s.received_box_count / s.box_count) * 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {s.latest_event && (
         <div className="text-xs border-t border-border pt-2">
           <span className="font-medium">{s.latest_event.event}</span>

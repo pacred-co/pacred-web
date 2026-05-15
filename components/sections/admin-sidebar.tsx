@@ -102,7 +102,7 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
       */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-white dark:bg-[#0f0a0a]
+          bg-white dark:bg-surface
           text-foreground
           border-r border-border
           shadow-sm
