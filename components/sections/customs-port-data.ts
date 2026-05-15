@@ -113,7 +113,7 @@ export const TEMPLATES: Record<
   sea: {
     title: "ทางเรือ · Sea Freight Clearance",
     intro:
-      "งานนำเข้าทางเรือเหมาะกับสินค้าปริมาณมาก ต้นทุนขนส่งคุ้มค่า และรองรับทั้งแบบตู้เต็ม (FCL) และแบบรวมตู้ (LCL) — Pacred Shipping ช่วยประสานงานทั้งฝั่งศุลกากร สายเรือ ท่าเรือ และคลังสินค้า พร้อมดูแลประเด็นสำคัญ เช่น การสุ่มตรวจ การแก้ไขเอกสาร และการจัดส่งต่อ",
+      "งานนำเข้าทางเรือเหมาะกับสินค้าปริมาณมาก ต้นทุนขนส่งคุ้มค่า และรองรับทั้งแบบตู้เต็ม (FCL) และแบบรวมตู้ (LCL) — Pacred Shipping ช่วยประสานงานทั้งฝั่งศุลกากร สายเรือ Port และคลังสินค้า พร้อมดูแลประเด็นสำคัญ เช่น การสุ่มตรวจ การแก้ไขเอกสาร และการจัดส่งต่อ",
     carriersLabel: "รองรับสายเรือหลัก",
     carriers: [
       "Maersk",
@@ -176,11 +176,11 @@ const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
   },
   {
     icon: "📦",
-    heading: "ค่าใช้จ่ายสายการบิน / ท่า",
+    heading: "ค่าใช้จ่ายสายการบิน / Port",
     items: [
       { label: "D/O",                  value: "รอเช็ค" },
       { label: "ค่าแลก D/O",            value: "421 บาท" },
-      { label: "ค่าผ่านท่า",            value: "500 บาท" },
+      { label: "ค่าผ่าน Port",            value: "500 บาท" },
       { label: "ค่าเช่าพื้นที่ (RENT)",  value: "รอเช็ค" },
       { label: "ยิงใบขนอิเล็กทรอนิกส์", value: "350 บาท" },
       { label: "ค่าธรรมเนียมกรมศุล",    value: "200 บาท" },
@@ -217,11 +217,11 @@ const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
   },
   {
     icon: "📦",
-    heading: "ค่าใช้จ่ายสายการบิน / ท่า",
+    heading: "ค่าใช้จ่ายสายการบิน / Port",
     items: [
       { label: "D/O",                  value: "รอเช็ค" },
       { label: "ค่าแลก D/O",            value: "421 บาท" },
-      { label: "ค่าผ่านท่า",            value: "450 บาท" },
+      { label: "ค่าผ่าน Port",            value: "450 บาท" },
       { label: "ยิงใบขนอิเล็กทรอนิกส์", value: "350 บาท" },
       { label: "ค่าธรรมเนียมกรมศุล",    value: "200 บาท" },
       { label: "ค่าล่วงเวลาศุลกากร",    value: "500 บาท" },
@@ -296,11 +296,11 @@ const SEA_PRICE_SECTIONS_KLONG: PriceSection[] = [
   },
   {
     icon: "⚓",
-    heading: "ค่าใช้จ่ายสายเรือ / ท่า",
+    heading: "ค่าใช้จ่ายสายเรือ / Port",
     items: [
       { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
       { label: "ค่าแลก D/O",             value: "500 บาท" },
-      { label: "ค่าผ่านท่า PAT",         value: "1,500 บาท" },
+      { label: "ค่าผ่าน Port PAT",         value: "1,500 บาท" },
       { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
       { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
       { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
@@ -337,11 +337,11 @@ const SEA_PRICE_SECTIONS_LAEM: PriceSection[] = [
   },
   {
     icon: "🚢",
-    heading: "ค่าใช้จ่ายสายเรือ / ท่า",
+    heading: "ค่าใช้จ่ายสายเรือ / Port",
     items: [
       { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
       { label: "ค่าแลก D/O",             value: "500 บาท" },
-      { label: "ค่าผ่านท่า LCBT",        value: "1,800 บาท" },
+      { label: "ค่าผ่าน Port LCBT",        value: "1,800 บาท" },
       { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
       { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
       { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
@@ -378,11 +378,11 @@ const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
   },
   {
     icon: "📦",
-    heading: "ค่าใช้จ่ายสายเรือ / ท่า",
+    heading: "ค่าใช้จ่ายสายเรือ / Port",
     items: [
       { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
       { label: "ค่าแลก D/O",             value: "500 บาท" },
-      { label: "ค่าผ่านท่า ICD",         value: "1,200 บาท" },
+      { label: "ค่าผ่าน Port ICD",         value: "1,200 บาท" },
       { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
       { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
       { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
@@ -532,11 +532,11 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     imageAlt: "เคลียร์สินค้า คลองเตย Pacred",
     customsServiceFee: "3,500",
     shortDesc:
-      "เคลียร์ของติดด่านท่าเรือคลองเตย — FCL / LCL ครบ ประสานสายเรือ + ศุลกากรครบทุกขั้น",
+      "เคลียร์ของติดด่าน Port คลองเตย — FCL / LCL ครบ ประสานสายเรือ + ศุลกากรครบทุกขั้น",
     subKeywords: [
       "เคลียร์สินค้าทางเรือ",
       "เคลียร์ของติดด่านคลองเตย",
-      "เคลียร์สินค้าท่าเรือ PAT",
+      "เคลียร์สินค้า Port PAT",
     ],
     pricingSections: SEA_PRICE_SECTIONS_KLONG,
     summaryLabel: "สรุปเบื้องต้น",
@@ -556,10 +556,10 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     imageAlt: "เคลียร์สินค้า แหลมฉบัง Pacred",
     customsServiceFee: "3,500",
     shortDesc:
-      "เคลียร์ของติดด่านท่าเรือแหลมฉบัง — FCL Container Port หลัก รองรับสายเรือยอดนิยม",
+      "เคลียร์ของติดด่าน Port แหลมฉบัง — FCL Container Port หลัก รองรับสายเรือยอดนิยม",
     subKeywords: [
       "เคลียร์สินค้าทางเรือ",
-      "เคลียร์สินค้าท่าเรือแหลมฉบัง",
+      "เคลียร์สินค้า Port แหลมฉบัง",
       "เคลียร์ของติดด่าน LCBT",
     ],
     pricingSections: SEA_PRICE_SECTIONS_LAEM,

@@ -154,7 +154,7 @@ export function ClearancePromo() {
           บริการชิปปิ้ง เคลียร์สินค้าติดด่าน พิธีการกรมศุลกากร
         </h2>
         <p className="mt-1.5 md:mt-3 text-[12px] md:text-[16px] font-bold text-muted leading-[1.45]">
-          สนามบินสุวรรณภูมิ · ดอนเมือง · ท่าเรือคลองเตย · แหลมฉบัง · ICD · ด่านชายแดน
+          สนามบินสุวรรณภูมิ · ดอนเมือง · Port คลองเตย · แหลมฉบัง · ICD · ด่านชายแดน
         </p>
 
         {/* Hero red banner */}

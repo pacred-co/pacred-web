@@ -93,13 +93,13 @@ const TERMS: Term[] = [
   {
     code: "CIF",
     name: "Cost, Insurance, Freight",
-    desc: "ผู้ขายจ่ายค่าขนส่ง + ประกันถึงท่าเรือปลายทาง — ผู้ซื้อรับผิดชอบเคลียร์ + ภาษี",
+    desc: "ผู้ขายจ่ายค่าขนส่ง + ประกันถึง Port ปลายทาง — ผู้ซื้อรับผิดชอบเคลียร์ + ภาษี",
     icon: Anchor,
   },
   {
     code: "FOB",
     name: "Free On Board",
-    desc: "ผู้ขายส่งของถึงท่าเรือต้นทาง — ผู้ซื้อจ่ายค่าขนส่ง + ประกัน + เคลียร์ปลายทาง",
+    desc: "ผู้ขายส่งของถึง Port ต้นทาง — ผู้ซื้อจ่ายค่าขนส่ง + ประกัน + เคลียร์ปลายทาง",
     icon: Ship,
   },
   {
@@ -160,12 +160,12 @@ const EXPERTISE = [
     icon: Scale,
     label: "เชี่ยวชาญ",
     title: "กฎหมายศุลกากร · HS Code",
-    items: ["พิกัดอัตราศุลกากร", "ภาษีนำเข้า + การคืนภาษี", "ครบทุกเทิร์มการค้า"],
+    items: ["พิกัดอัตราศุลกากร", "ภาษีนำเข้า + การคืนภาษี", "ครบทุกTermการค้า"],
   },
   {
     icon: LandPlot,
     label: "พาร์ทเนอร์",
-    title: "ท่าเรือ · สายเรือ · คลัง · สนามบิน",
+    title: "Port · สายเรือ · คลัง · สนามบิน",
     items: ["DHL · FedEx · TNT · UPS · BFS", "ICD · BKK · PAT", "คลังสุวรรณภูมิ · ดอนเมือง"],
   },
 ];
@@ -250,9 +250,9 @@ const KNOWLEDGE_TOPICS = [
   "ATA CARNET คืออะไร",
   "เช็ควันเรือเข้าแหลมฉบังดูยังไง",
   "Import Customs Clearance Procedure คืออะไร",
-  "ของติดท่าเรือคลองเตยทำยังไงดี",
+  "ของติด Port คลองเตยทำยังไงดี",
   "ขั้นตอนการนำเข้าสินค้าทางเรืออย่างถูกหลัก",
-  "ของติดท่าเรือแหลมฉบัง ปลดยังไง",
+  "ของติด Port แหลมฉบัง ปลดยังไง",
   "Customs House คืออะไร",
   "ของต้องห้าม / ต้องกำกัด ต่างกันยังไง",
   "Customs Procedures กับ Customs Clearance ต่างกันยังไง",
@@ -272,12 +272,12 @@ const KEYWORDS = [
   "เคลียร์พัสดุติดค้าง",
   "นำเข้าทางไปรษณีย์",
   "พัสดุต่างประเทศติดศุลกากร",
-  "ชิปปิ้งท่าเรือ",
-  "เคลียร์สินค้าท่าเรือ",
+  "ชิปปิ้ง Port",
+  "เคลียร์สินค้า Port",
   "LCL · FCL",
   "Sea Freight Import",
-  "ท่าเรือคลองเตย",
-  "ท่าเรือกรุงเทพ",
+  "Port คลองเตย",
+  "Port กรุงเทพ",
   "แหลมฉบัง",
   "ลาดกระบัง ICD",
   "โลจิสติกส์คลังสินค้า",
@@ -516,10 +516,10 @@ export default async function CustomsClearancePage({
               ALL THAI PORTS · ทุกด่าน
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              เคลียร์ครบ <span className="text-primary-600">ทุกด่าน-ทุกท่า</span> ในไทย
+              เคลียร์ครบ <span className="text-primary-600">ทุกด่าน · ทุก Port</span> ในไทย
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              สนามบิน · ท่าเรือ · ICD · ไปรษณีย์ · ด่านชายแดน — ทีมเรามีหน้างานจริงที่ทุกด่าน
+              สนามบิน · Port · ICD · ไปรษณีย์ · ด่านชายแดน — ทีมเรามีหน้างานจริงที่ทุกด่าน
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
@@ -560,13 +560,13 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              PRICING BY PORT · ราคาตามด่าน / ท่า
+              PRICING BY PORT · ราคาตามด่าน / Port
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ราคาเริ่มต้น <span className="text-primary-600">แต่ละด่าน · แต่ละท่า</span>
+              ราคาเริ่มต้น <span className="text-primary-600">แต่ละด่าน · แต่ละ Port</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              เลื่อนซ้าย-ขวาเลือกท่า / ด่านที่ใช้ — ดูราคาตั้งต้นก่อนทักไลน์ปรึกษา ราคาเป็นเบื้องต้น (ไม่รวมภาษีนำเข้า + ค่าใช้จ่ายแปรผัน) เมื่อแจ้งสินค้าจริงทีม Pacred ออก Quote ครบทุกหัวให้ก่อนยืนยัน
+              เลื่อนซ้าย-ขวาเลือก Port / ด่านที่ใช้ — ดูราคาตั้งต้นก่อนทักไลน์ปรึกษา ราคาเป็นเบื้องต้น (ไม่รวมภาษีนำเข้า + ค่าใช้จ่ายแปรผัน) เมื่อแจ้งสินค้าจริงทีม Pacred ออก Quote ครบทุกหัวให้ก่อนยืนยัน
             </p>
           </div>
 
@@ -763,7 +763,7 @@ export default async function CustomsClearancePage({
               Pacred Shipping <span className="text-primary-600">ผู้เชี่ยวชาญด้านเคลียร์สินค้าติดด่าน</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ทีมงานด้าน Shipping และ Customs Clearance มากกว่า 15 ปี · ครอบคลุมทุกท่าเรือ สนามบิน และด่านชายแดนทั่วประเทศ · รองรับทุก Term การค้าระหว่างประเทศ
+              ทีมงานด้าน Shipping และ Customs Clearance มากกว่า 15 ปี · ครอบคลุมทุก Port สนามบิน และด่านชายแดนทั่วประเทศ · รองรับทุก Term การค้าระหว่างประเทศ
             </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
