@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-8 (เดฟ via Claude) — **Major audit batch:** 7 LINE chats + pcscargo PHP cleanup sweep both analysed. Findings → 2 NEW audit docs + **Part U** (30+ tracked items T-U1..T-U5) in PORT_PLAN. Identified **6 NEW critical security findings** in PHP + **10 ranked leak holes** from chat + canonical 9-value MOMO status enum.
+> **Last updated:** 2026-05-16 evening-9 (เดฟ via Claude) — Audit batch evening-8 + **U1-1 `/status` health page shipped**. Public route `app/[locale]/(public)/status/page.tsx` — Supabase live ping + 11 service config checks + traffic-light dots + bilingual TH/EN. Closes chat audit L-1 (PHP เว็ปล่ม 24x — Pacred customers now have transparency).
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -221,7 +221,7 @@ Two parallel audits completed 2026-05-16 evening:
 - U5-5 slip upload UX (drag-drop + OCR)
 
 **เดฟ (next session pickup):**
-- U1-1 `/status` health check page (2h)
+- ~~U1-1 `/status` health check page~~ ✅ **DONE evening-9** — public route at `/status` with Supabase live ping + 11 service config checks (LINE/SMS/MOMO/Sentry/Upstash/hCaptcha/GTM/Clarity/PromptPay/Resend/LIFF). Traffic-light dots + 60s server-side cache. Bilingual TH/EN. Closes chat audit L-1.
 - U3-1 PHP tree snapshot tarball (15m, do anytime locally)
 - U3-2 delete Tier 1-3 dead code in pcscargo (30m, do anytime locally — pcscargo is not in git)
 - U3-3 archive SQL dump (15m)
