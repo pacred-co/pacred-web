@@ -73,6 +73,7 @@ const items: NavItem[] = [
   { href: "/admin/rates/custom-user",label: "แก้เรท Custom-user (LP-1)", icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
   { href: "/admin/rates/custom-hs",  label: "แก้เรท Custom-HS (LP-1)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
   { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
+  { href: "/admin/audit",            label: "Audit log",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
 ];
 
