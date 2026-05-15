@@ -9,6 +9,8 @@ import {
 } from "@/lib/warehouse";
 import { ContainerStatusForm } from "./status-form";
 import { ScanEventForm } from "./scan-form";
+import { ShipmentRowControls } from "./shipment-row-controls";
+import { ManualShipmentForm } from "./manual-shipment-form";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -218,7 +220,11 @@ export default async function AdminContainerDetailPage({
                             {SHIPMENT_STATUS_LABEL[s.status] ?? s.status}
                           </span>
                           <p className="text-muted mt-1">
-                            {s.box_count} กล่อง · {Number(s.weight_kg ?? 0).toFixed(1)} kg
+                            <span className={s.received_box_count >= s.box_count ? "text-green-700" : ""}>
+                              {s.received_box_count}/{s.box_count}
+                            </span>
+                            {" กล่อง · "}
+                            {Number(s.weight_kg ?? 0).toFixed(1)} kg
                           </p>
                         </div>
                       </div>
@@ -229,6 +235,14 @@ export default async function AdminContainerDetailPage({
                           <> · {new Date(latest.scanned_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
                         </p>
                       )}
+                      {/* U1-5 + U1-3: shipment-row controls (received qty + rebind to other container) */}
+                      <ShipmentRowControls
+                        shipmentId={s.id}
+                        shipmentCode={s.shipment_code}
+                        currentBoxCount={s.box_count}
+                        currentReceived={s.received_box_count}
+                        currentContainerId={container.id}
+                      />
                       <ScanEventForm shipmentId={s.id} shipmentCode={s.shipment_code} />
                     </li>
                   );
@@ -265,6 +279,7 @@ export default async function AdminContainerDetailPage({
 
         <aside className="space-y-4">
           <ContainerStatusForm containerId={container.id} currentStatus={container.status} />
+          <ManualShipmentForm containerId={container.id} containerCode={container.code ?? ""} />
         </aside>
       </div>
     </main>

@@ -116,6 +116,31 @@ export async function attachShipmentToContainer(
   return { ok: true, data };
 }
 
+/**
+ * U1-5: update received_box_count + stamp received_at_partial.
+ * Called when staff partial-receives boxes for a shipment in TH warehouse.
+ */
+export async function setShipmentReceivedQty(
+  admin: SupabaseClient,
+  shipmentId: string,
+  receivedBoxCount: number,
+): Promise<Result<Shipment>> {
+  if (!Number.isInteger(receivedBoxCount) || receivedBoxCount < 0) {
+    return { ok: false, error: "received_box_count must be a non-negative integer" };
+  }
+  const { data, error } = await admin
+    .from("cargo_shipments")
+    .update({
+      received_box_count:  receivedBoxCount,
+      received_at_partial: new Date().toISOString(),
+    })
+    .eq("id", shipmentId)
+    .select("*")
+    .single<Shipment>();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data };
+}
+
 export async function setShipmentStatus(
   admin: SupabaseClient,
   shipmentId: string,

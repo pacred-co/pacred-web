@@ -10,6 +10,8 @@ import {
   refreshContainerTotals,
   attachShipmentToContainer as dbAttachShipment,
   setShipmentStatus as dbSetShipmentStatus,
+  setShipmentReceivedQty as dbSetReceivedQty,
+  createShipment as dbCreateShipment,
   appendTrackingEvent as dbAppendEvent,
   CONTAINER_STATUS_VALUES_SPINE,
   SHIPMENT_STATUS_VALUES,
@@ -198,6 +200,185 @@ export async function adminSetShipmentStatus(
 
     await logAdminAction(adminId, "shipment.set_status", "shipment", d.shipment_id, {
       to_status: d.status,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    return { ok: true, data: res.data };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// U1-4: CREATE shipment manually (batch-ingest from supplier WeChat)
+// ────────────────────────────────────────────────────────────
+//
+// Per chat IT (~15 asks/week): staff has tracking numbers from supplier
+// WeChat batches and wants to register cargo_shipment rows BEFORE MOMO
+// sync gets there (or when MOMO never gets there). This action:
+//   1. Resolves customer by either profile_id (UUID) or member_code (PR####).
+//   2. Validates source order belongs to that customer (forwarder OR
+//      service_order; exactly one).
+//   3. Creates cargo_shipment with optional container attachment.
+//   4. Optional initial scan_receive event so the timeline shows a
+//      "registered" entry for transparency (default ON).
+
+const createShipmentManualSchema = z.object({
+  shipment_code:        z.string().trim().min(2).max(80),
+  /** Customer lookup — accepts profile_id (UUID) OR member_code (PR####). */
+  customer_ref:         z.string().trim().min(2).max(50),
+  forwarder_f_no:       z.string().trim().max(50).optional(),
+  service_order_h_no:   z.string().trim().max(50).optional(),
+  cargo_container_id:   z.string().uuid().optional(),
+  box_count:            z.number().int().min(1).max(100_000).default(1),
+  weight_kg:            z.number().min(0).max(100_000).optional(),
+  volume_cbm:           z.number().min(0).max(10_000).optional(),
+  initial_scan:         z.boolean().default(true),
+  initial_scan_location: z.string().trim().max(100).optional(),
+});
+export type CreateShipmentManualInput = z.infer<typeof createShipmentManualSchema>;
+
+type CreateShipmentManualResult = {
+  shipment_id:   string;
+  shipment_code: string;
+  customer_id:   string;
+  customer_member_code: string | null;
+};
+
+export async function adminCreateShipmentManual(
+  input: CreateShipmentManualInput,
+): Promise<AdminActionResult<CreateShipmentManualResult>> {
+  const parsed = createShipmentManualSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  // Cross-field: exactly one source order
+  const hasFwd  = !!d.forwarder_f_no;
+  const hasOrd  = !!d.service_order_h_no;
+  if (hasFwd === hasOrd) {
+    return { ok: false, error: "ต้องระบุ forwarder f_no หรือ service_order h_no อย่างใดอย่างหนึ่ง" };
+  }
+
+  return withAdmin<CreateShipmentManualResult>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // ── 1. Resolve customer ──
+    const refLooksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.customer_ref);
+    const profileQuery = admin
+      .from("profiles")
+      .select("id, member_code")
+      .limit(1);
+    const { data: profile } = refLooksLikeUuid
+      ? await profileQuery.eq("id", d.customer_ref).maybeSingle<{ id: string; member_code: string | null }>()
+      : await profileQuery.eq("member_code", d.customer_ref.toUpperCase()).maybeSingle<{ id: string; member_code: string | null }>();
+    if (!profile) return { ok: false, error: `ไม่พบลูกค้า "${d.customer_ref}"` };
+
+    // ── 2. Validate source order belongs to this customer ──
+    if (hasFwd) {
+      const { data: f } = await admin
+        .from("forwarders")
+        .select("id, profile_id")
+        .eq("f_no", d.forwarder_f_no!)
+        .maybeSingle<{ id: string; profile_id: string }>();
+      if (!f)                          return { ok: false, error: "ไม่พบ forwarder f_no นี้" };
+      if (f.profile_id !== profile.id) return { ok: false, error: "forwarder ไม่ใช่ของลูกค้านี้" };
+    } else {
+      const { data: o } = await admin
+        .from("service_orders")
+        .select("id, profile_id")
+        .eq("h_no", d.service_order_h_no!)
+        .maybeSingle<{ id: string; profile_id: string }>();
+      if (!o)                          return { ok: false, error: "ไม่พบ service_order h_no นี้" };
+      if (o.profile_id !== profile.id) return { ok: false, error: "service_order ไม่ใช่ของลูกค้านี้" };
+    }
+
+    // ── 3. Create shipment ──
+    const created = await dbCreateShipment(admin, {
+      shipment_code:      d.shipment_code,
+      profile_id:         profile.id,
+      cargo_container_id: d.cargo_container_id ?? null,
+      forwarder_f_no:     d.forwarder_f_no ?? null,
+      service_order_h_no: d.service_order_h_no ?? null,
+      box_count:          d.box_count,
+      weight_kg:          d.weight_kg ?? null,
+      volume_cbm:         d.volume_cbm ?? null,
+      status:             "received_cn",       // newly registered = "received in CN"
+    });
+    if (!created.ok) {
+      // Friendlier messages for common errors
+      if (created.error.includes("duplicate") || created.error.includes("23505")) {
+        return { ok: false, error: `shipment_code "${d.shipment_code}" มีอยู่แล้ว — ใช้รหัสอื่นหรือแก้ของเดิม` };
+      }
+      return { ok: false, error: created.error };
+    }
+
+    // ── 4. Initial scan event (default ON) ──
+    if (d.initial_scan) {
+      await dbAppendEvent(admin, {
+        cargo_shipment_id: created.data.id,
+        event:             "scan_receive",
+        location:          d.initial_scan_location ?? "manual_register",
+        scanned_by:        adminId,
+        source:            "pacred",
+        note:              "ลงทะเบียนด้วยมือ (admin manual entry — U1-4)",
+      });
+    }
+
+    // ── 5. Refresh container totals if attached ──
+    if (d.cargo_container_id) {
+      await refreshContainerTotals(admin, d.cargo_container_id);
+    }
+
+    await logAdminAction(adminId, "shipment.create_manual", "shipment", created.data.id, {
+      shipment_code:      d.shipment_code,
+      customer_member:    profile.member_code,
+      forwarder_f_no:     d.forwarder_f_no ?? null,
+      service_order_h_no: d.service_order_h_no ?? null,
+      cargo_container_id: d.cargo_container_id ?? null,
+      box_count:          d.box_count,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    if (d.cargo_container_id) {
+      // We don't have the container code here; revalidating the parent
+      // is enough — admin clicks back into the detail to see the new row.
+    }
+
+    return {
+      ok: true,
+      data: {
+        shipment_id:          created.data.id,
+        shipment_code:        created.data.shipment_code,
+        customer_id:          profile.id,
+        customer_member_code: profile.member_code,
+      },
+    };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// U1-5: SET shipment received_box_count (split-receipt aware)
+// ────────────────────────────────────────────────────────────
+
+const setReceivedQtySchema = z.object({
+  shipment_id:        z.string().uuid(),
+  received_box_count: z.number().int().min(0).max(100_000),
+});
+export type SetShipmentReceivedQtyInput = z.infer<typeof setReceivedQtySchema>;
+
+export async function adminSetShipmentReceivedQty(
+  input: SetShipmentReceivedQtyInput,
+): Promise<AdminActionResult<Shipment>> {
+  const parsed = setReceivedQtySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await dbSetReceivedQty(admin, d.shipment_id, d.received_box_count);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "shipment.set_received_qty", "shipment", d.shipment_id, {
+      received_box_count: d.received_box_count,
+      box_count_expected: res.data.box_count,
     });
 
     revalidatePath("/admin/warehouse/containers");

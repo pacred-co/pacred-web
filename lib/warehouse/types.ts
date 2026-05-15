@@ -95,7 +95,14 @@ export type Shipment = {
   profile_id:          string;
   forwarder_f_no:      string | null;
   service_order_h_no:  string | null;
+  /** Expected boxes (declared at origin / packed in China). U1-5: compare
+   *  against received_box_count to detect partial receipt. */
   box_count:           number;
+  /** Actual boxes received at TH warehouse. 0 until staff scans in. May
+   *  exceed box_count if extra/unmanifested boxes arrive. */
+  received_box_count:  number;
+  /** Last time received_box_count changed — for "last partial scan" UI. */
+  received_at_partial: string | null;
   weight_kg:           number | null;
   volume_cbm:          number | null;
   status:              ShipmentStatus;

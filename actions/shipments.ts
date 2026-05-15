@@ -33,7 +33,9 @@ export type ShipmentSummary = {
   id:               string;
   shipment_code:    string;
   status:           string;
-  box_count:        number | null;
+  box_count:        number | null;          // expected
+  received_box_count: number;               // U1-5 actual received (split-aware)
+  received_at_partial: string | null;       // U1-5 last partial-receive timestamp
   weight_kg:        number | null;
   volume_cbm:       number | null;
   received_at_cn:   string | null;
@@ -82,7 +84,8 @@ export async function listMyShipments(
   const { data: rows, error } = await supabase
     .from("cargo_shipments")
     .select(`
-      id, shipment_code, status, box_count, weight_kg, volume_cbm,
+      id, shipment_code, status, box_count, received_box_count, received_at_partial,
+      weight_kg, volume_cbm,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
       container:cargo_containers!cargo_container_id (
         id, code, transport_mode, origin, destination, status, eta, actual_arrival
@@ -153,7 +156,8 @@ export async function getMyShipment(
   const { data, error } = await supabase
     .from("cargo_shipments")
     .select(`
-      id, shipment_code, status, box_count, weight_kg, volume_cbm,
+      id, shipment_code, status, box_count, received_box_count, received_at_partial,
+      weight_kg, volume_cbm,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
       container:cargo_containers!cargo_container_id (
         id, code, transport_mode, origin, destination, status, eta, actual_arrival

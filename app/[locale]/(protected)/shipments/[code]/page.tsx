@@ -177,12 +177,46 @@ export default async function ShipmentDetailPage({
 
       {/* Shipment metrics */}
       {(s.box_count || s.weight_kg || s.volume_cbm) && (
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
-          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">รายละเอียด</h3>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            {s.box_count != null && <Cell label="จำนวนกล่อง" value={`${s.box_count} กล่อง`} />}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+          <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">รายละเอียด</h3>
+
+          {/* U1-5: received/expected progress — "ได้รับแล้ว 40 / 85 กล่อง" */}
+          {s.box_count != null && s.box_count > 0 && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">ได้รับแล้ว</span>
+                <span className="font-medium">
+                  <span className="font-mono">{s.received_box_count}</span>
+                  {" / "}
+                  <span className="font-mono">{s.box_count}</span>
+                  {" กล่อง"}
+                  {s.received_box_count >= s.box_count && (
+                    <span className="ml-2 text-green-600">✓ ครบ</span>
+                  )}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-surface-alt overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    s.received_box_count >= s.box_count ? "bg-green-500" : "bg-primary-500"
+                  }`}
+                  style={{
+                    width: `${Math.min(100, (s.received_box_count / s.box_count) * 100)}%`,
+                  }}
+                />
+              </div>
+              {s.received_at_partial && s.received_box_count > 0 && s.received_box_count < s.box_count && (
+                <p className="text-[10px] text-muted">
+                  รับเพิ่มล่าสุด: {relativeTimeTh(s.received_at_partial)}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3 text-sm border-t border-border pt-3">
             {s.weight_kg != null && <Cell label="น้ำหนัก" value={`${Number(s.weight_kg).toFixed(2)} kg`} />}
             {s.volume_cbm != null && <Cell label="ปริมาตร" value={`${Number(s.volume_cbm).toFixed(3)} CBM`} />}
+            {s.box_count != null && <Cell label="กล่องคาดรับ" value={`${s.box_count} กล่อง`} />}
           </div>
         </div>
       )}
