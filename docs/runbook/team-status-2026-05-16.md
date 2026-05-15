@@ -1,17 +1,20 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 (ภูม) — after merging เดฟ overnight batch + shipping T-P1 admin workflow gaps.
-> **Where we are on Poom:** `121ea0d` (synced with `origin/Poom`).
+> **Last updated:** 2026-05-16 evening (เดฟ) — merged `Poom → dave` + flag responses + ภูม run-long mode confirmed by ป๊อป-tier.
+> **dave HEAD:** post-merge — T-P1 + T-P3 + AGENTS.md handshake all in. ภูม → `git fetch && git merge origin/dave` into Poom before starting next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
 ---
 
-## 🟢 Just shipped today (ภูม)
+## 🟢 Just shipped today (ภูม + เดฟ merge)
 
 | Commit | What |
 |---|---|
-| `121ea0d` | T-P1 admin workflow buttons (cargo revenue path): `adminAssignDriverToForwarder` + `adminMarkServiceOrderPaid` + UI on `/admin/forwarders/[fNo]` + `/admin/service-orders/[hNo]` |
+| `121ea0d` | T-P1 admin workflow buttons (cargo revenue path): `adminAssignDriverToForwarder` + `adminMarkServiceOrderPaid` + UI on `/admin/forwarders/[fNo]` + `/admin/service-orders/[hNo]` (ภูม) |
+| `84ca7b5` | T-P3 bulk approve: `adminBulkApproveDeposits` + `adminBulkApproveYuanPayments` + sticky bar UI on `/admin/wallet` + `/admin/yuan-payments` (ภูม) |
+| `9000c28` | AGENTS.md §1 mandatory session-start handshake (เดฟ) |
+| merge `Poom→dave` | เดฟ merged ภูม batch after review (production-ready: RBAC per K-7, idempotency, 305 tests green) |
 
 **Tests:** 305 assertions all green across 13 test files.
 
@@ -68,21 +71,22 @@
 | **DV-3** | ThaiBulkSMS account apply → API keys → Vercel env | 30m + paid | OTP จริง (OTP_BYPASS=false) |
 | **DV-4** | Pacred owner ติดต่อ — Bundle 1 (PromptPay + bank + company info) | 15m + รอ | ดู "Pacred owner blockers" ด้านบน |
 | **T-D1** | **Cargo flow end-to-end smoke test** (signup → topup → place order → admin marks paid → receipt) | 4-6h | confirms revenue path before public ad spend |
-| **T-D2** | **Backend specs for ภูม:** `0033_containers.sql` (CT-1) + `0034_tax_invoices.sql` (G2a) — draft + ภูม reviews + applies | 3h | unblocks ภูม T-P2 + T-P4 |
+| **T-D2** | **Backend specs for ภูม:** `0033_containers.sql` (CT-1) + `0034_tax_invoices.sql` (G2a) — draft + ภูม reviews + applies | 3h | 🟡 **IN PROGRESS this session (เดฟ)** — pushes in next commit |
 | **T-D3** | L-22 GTM verify after K-12 — events → GTM Preview Mode → GA4 → reports | depends K-12 | confirms ad attribution pipeline |
 | **T-D4** | Internal soft-launch coordination — pick 5 friendly customers + hand-hold through end-to-end | 2h coord + ongoing | first real revenue + prod stress test |
 
 ---
 
-## 🟡 ภูม queue (Part T priority — current sprint)
+## 🟢 ภูม queue (Part T priority — current sprint)
 
 | # | Task | Est | Status |
 |---|---|---|---|
-| **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE 2026-05-16** (commit `121ea0d`) — 2/3 gaps closed; receipt link gap deferred (customer-side receipt page doesn't exist yet, separate scope) |
-| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | 🟡 **NEXT** (this session, after team-status writeup) |
-| **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🔴 needs T-D2 spec from เดฟ for `0034_tax_invoices.sql` |
-| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🔴 needs T-D2 spec for `0033_containers.sql` |
-| **T-P5** | `/admin/accounting` stub (acc-* PHP port) | 3-5h | 🟢 unblocked, can do anytime |
+| **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE + MERGED** (commit `121ea0d` → dave) |
+| **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | ✅ **DONE + MERGED** (commit `84ca7b5` → dave) |
+| **T-P5** | `/admin/accounting` stub (acc-* PHP port) | 3-5h | 🟢 **NEXT — run-long mode, no confirm needed** |
+| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🟡 **will unblock when** เดฟ pushes `0033_containers.sql` (this session, end of batch) |
+| **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🟡 **will unblock when** เดฟ pushes `0034_tax_invoices.sql` (this session, end of batch) |
+| **Customer receipt page** | T-P1 GAP 3 — `/service-order/[hNo]/receipt/page.tsx` | 30m | 🟡 **เดฟ taking this** (pre-req for T-D1; push in same batch as schemas) |
 
 ---
 
@@ -140,15 +144,50 @@ Per Part S1 + ADRs 0003-0010:
 
 ---
 
-## 🔍 Findings + flags from this batch
+## 🔍 Findings + flags from this batch (เดฟ responses inline 2026-05-16 evening)
 
-1. **P-31 cart cap off-by-one** (flagged 2026-05-15) — PORT_PLAN spec said "150 OK → 151st throws" but actual `cart_items_cap` trigger raises on `cnt >= 151` (so up to 151 succeeds; 152nd fails). Test mirrors actual behavior. **ก๊อต/เดฟ**: confirm intended (matches legacy PHP `cart.php:17,76` 151-cap) OR tighten trigger to `>= 150`.
+1. **P-31 cart cap off-by-one** — PORT_PLAN spec said "150 OK → 151st throws" but actual `cart_items_cap` trigger raises on `cnt >= 151` (so up to 151 succeeds; 152nd fails). Test mirrors actual behavior.
+   → **เดฟ:** ✅ **Keep code as-is (151-cap matches legacy PHP `cart.php:17,76`).** Will fix PORT_PLAN spec doc in same batch as schemas. No action for ภูม.
 
-2. **Driver assignment notification reference type** (T-P1) — `lib/notifications/types.ts::NotifyReferenceType` doesn't include `"forwarder_driver"`. Used `"forwarder"` as the closest valid type pointing back to the parent shipment. **เดฟ/ก๊อต**: consider adding `"forwarder_driver"` to the enum if drivers need direct deep-link to the assignment row. Low priority.
+2. **Driver assignment notification reference type** (T-P1) — used `"forwarder"` because `"forwarder_driver"` isn't in `NotifyReferenceType` enum.
+   → **เดฟ:** ✅ **OK as-is, defer.** Adding to enum = K-quality. Not blocking. ภูม no action.
 
-3. **Customer-side service-order receipt PAGE missing** (deferred from T-P1 GAP 3) — `getServiceOrderForReceipt` action exists + `components/pdf/shop-order-receipt.tsx` exists, but no `app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx`. **ภูม or เดฟ**: ~30 min to add the page if needed for T-D1 smoke test.
+3. **Customer-side service-order receipt PAGE missing** (T-P1 GAP 3) — action + PDF component exist; page doesn't.
+   → **เดฟ:** ✅ **เดฟ takes this** (~30 min, pre-req for T-D1 smoke test). Pushes in same batch as schemas.
 
-4. **`forwarder_driver.profile_id` accepts ANY profile** — no driver role flag in schema. Currently relies on admin discipline (typing the right member_code). **ก๊อต**: consider adding a `is_driver` boolean to profiles or a separate `drivers` table for safety. Out of T-P1 scope; flag for K-quality batch.
+4. **`forwarder_driver.profile_id` accepts ANY profile** — no driver role flag in schema.
+   → **เดฟ:** ⏸️ **Defer to ก๊อต K-sec-2 RLS audit.** Not blocking T-P1. ภูม no action.
+
+---
+
+## 🚀 ภูม run-long direction (per เดฟ 2026-05-16 evening)
+
+> **เดฟ:** *"ตราบใดที่น้องยังอยู่ในทาง รู้ว่าอันไหนรีบ อันไหนหลัง ก็โอเค ปล่อยรันยาวๆ เลย ไม่ต้องเฟิม"*
+
+**Mode = autonomous run-long.** No need to wait for เดฟ confirm between tasks. Push at save-points only.
+
+**Priority queue (do in order; skip current if blocked, move to next):**
+
+1. **T-P5** `/admin/accounting` stub (acc-* PHP port) — unblocked, go anytime
+2. **T-P3 polish** — if any UX bug surfaces from real-use of the bulk-approve bars, fix it
+3. **T-P2** container migration + CT-3 customer view — kicks off when เดฟ pushes `0033_containers.sql` (this session, end of batch). Spec: [`container-centric-model.md`](../architecture/container-centric-model.md) CT-1..CT-8
+4. **T-P4** tax invoice G2a-G2f — kicks off when เดฟ pushes `0034_tax_invoices.sql` (this session, end of batch). Spec: [ADR-0006](../decisions/0006-tax-invoice-flow.md)
+
+**Patterns to follow (proven good in T-P1 + T-P3 review):**
+- Zod validate every input
+- RBAC via `withAdmin([...])` per [ADR-0005](../decisions/0005-launch-operational-decisions.md) K-7 (wallet+invoice = `["super","accounting"]`; status flips = `["ops"]`)
+- Idempotency on money-moving actions (check existing tx by `reference_type + reference_id + kind + status='completed'`)
+- Granular audit log per row (not batched)
+- Customer notify via `sendNotification` (severity match outcome)
+- `revalidatePath` for every page that displays the changed row
+- Commit message style: detailed "What's in" + "DECISIONS (per §6 self-directed)" + "Acceptance" (T-P1/T-P3 style — keep doing it)
+
+**If you hit a true blocker not covered by ADRs / Part T / patterns above:**
+- Write the flag at the end of this `team-status` doc (new section or append)
+- Flip to next priority task — don't wait
+- เดฟ + ก๊อต will respond async (within session or next day)
+
+**Push discipline (per `push_frequency_strict`):** Commit local freely. Push to `origin/Poom` only at save-points: end of session · before sleep · machine change · big batch done. 1 push max per Claude Code session.
 
 ---
 
@@ -159,7 +198,8 @@ When all of this lands, Pacred ships beta:
 - [x] R1 + R2 + D-7 + K-4..K-8 ADRs locked
 - [x] Track G china-search code shipped (in demo mode)
 - [x] Track A test coverage (260 → 305 assertions across critical paths)
-- [x] T-P1 admin cargo workflow buttons (driver assign + mark-paid)
+- [x] T-P1 admin cargo workflow buttons (driver assign + mark-paid) — merged to dave
+- [x] T-P3 wallet + yuan-payments bulk approve — merged to dave
 - [x] LIFF code + LINE_OA constants ready
 - [x] Sentry/Upstash/hCaptcha SDK + rate-limit + captcha wired
 - [x] OTP dual-pepper rotation, PROMPTPAY soft-degrade, CI workflow, OWASP audit
