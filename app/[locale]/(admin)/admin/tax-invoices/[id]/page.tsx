@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { IssueButton } from "./issue-button";
+import { CancelButton } from "./cancel-button";
 
 /**
  * /admin/tax-invoices/[id] — detail view (T-P4 G2c).
@@ -234,30 +235,42 @@ export default async function AdminTaxInvoiceDetailPage({
             <li>ตรวจสอบยอด + รายการ ให้ตรงกับออเดอร์อ้างอิง</li>
             <li>เมื่อกด &quot;ออกใบกำกับภาษี&quot; ระบบจะจองเลขที่ + สร้าง PDF + lock ข้อมูลทั้งใบ — แก้ไม่ได้อีก</li>
             <li>หากต้องแก้ไขภายหลัง: ยกเลิกใบเดิม + ออกใบลดหนี้ + ออกใบใหม่ (ตามกฎ มาตรา 86)</li>
+            <li>หากข้อมูลผู้ซื้อ/ยอดผิด สามารถปฏิเสธคำขอได้ที่ปุ่มยกเลิก (ลูกค้าต้องส่งคำขอใหม่)</li>
           </ul>
-          <IssueButton id={header.id} />
+          <div className="flex flex-wrap items-start gap-3">
+            <IssueButton id={header.id} />
+            <CancelButton id={header.id} status="pending" />
+          </div>
         </section>
       )}
 
       {header.status === "issued" && (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-5 flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-sm font-bold text-green-800">ออกใบกำกับภาษีเรียบร้อย</p>
-            <p className="text-xs text-green-700 mt-0.5">
-              เลขที่ <span className="font-mono">{header.serial_no}</span>
-              {header.issued_at && (
-                <> · ออกเมื่อ {new Date(header.issued_at).toLocaleString("th-TH")}</>
-              )}
-            </p>
+        <section className="rounded-2xl border border-green-200 bg-green-50 p-5 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-sm font-bold text-green-800">ออกใบกำกับภาษีเรียบร้อย</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                เลขที่ <span className="font-mono">{header.serial_no}</span>
+                {header.issued_at && (
+                  <> · ออกเมื่อ {new Date(header.issued_at).toLocaleString("th-TH")}</>
+                )}
+              </p>
+            </div>
+            <a
+              href={`/api/tax-invoice/${header.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+            >
+              ดาวน์โหลด PDF →
+            </a>
           </div>
-          <a
-            href={`/api/tax-invoice/${header.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
-          >
-            ดาวน์โหลด PDF →
-          </a>
+          <div className="border-t border-green-200 pt-3">
+            <p className="text-xs text-green-800 mb-2">
+              พบข้อผิดพลาด? ยกเลิกใบนี้ → ลูกค้าจะขอใบใหม่ได้ทันที (จะได้เลขใหม่)
+            </p>
+            <CancelButton id={header.id} status="issued" />
+          </div>
         </section>
       )}
 

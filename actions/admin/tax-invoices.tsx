@@ -206,6 +206,113 @@ export async function issueTaxInvoice(
 }
 
 // ────────────────────────────────────────────────────────────
+// CANCEL tax invoice (admin) — T-P4 G2e-1
+// ────────────────────────────────────────────────────────────
+//
+// Per ADR-0006 §7: Once status='issued', the row is immutable per RD
+// Code 86. To correct an error, admin marks the row 'cancelled' (with
+// reason) — the original PDF stays in Storage but the download route
+// re-renders it with a CANCELLED watermark.
+//
+// After cancellation:
+//   - Customer can request a NEW tax invoice for the same order (G2b
+//     idempotency check uses .neq("status","cancelled") so cancelled
+//     rows don't block new requests).
+//   - Admin issues the new invoice with a fresh serial via G2c flow.
+//
+// Credit note (ใบลดหนี้, G2e-2) is a separate action for actual money
+// refunds — defer to follow-up. The cancel flow alone covers the common
+// typo-correction case.
+
+const cancelSchema = z.object({
+  id:     z.string().uuid(),
+  reason: z.string().trim().min(3, "กรุณาระบุเหตุผลอย่างน้อย 3 ตัวอักษร").max(500),
+});
+export type CancelTaxInvoiceInput = z.infer<typeof cancelSchema>;
+
+export async function cancelTaxInvoice(
+  input: CancelTaxInvoiceInput,
+): Promise<AdminActionResult<{ cancelled_at: string }>> {
+  const parsed = cancelSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: header, error: headErr } = await admin
+      .from("tax_invoices")
+      .select("id, profile_id, status, serial_no, order_h_no, forwarder_f_no")
+      .eq("id", d.id)
+      .maybeSingle<{
+        id:             string;
+        profile_id:     string;
+        status:         "pending" | "issued" | "cancelled";
+        serial_no:      string | null;
+        order_h_no:     string | null;
+        forwarder_f_no: string | null;
+      }>();
+    if (headErr) return { ok: false, error: headErr.message };
+    if (!header) return { ok: false, error: "not_found" };
+
+    if (header.status === "cancelled") {
+      return { ok: false, error: "already_cancelled" };
+    }
+    // Pending invoices haven't consumed a serial — admin can still cancel
+    // (acts as "reject the request"). Issued invoices are the typical case
+    // (typo correction). Either path: metadata-only mutation, no PDF/storage
+    // change needed (download route re-renders with watermark for cancelled).
+
+    const cancelledAt = new Date().toISOString();
+    const { error: updErr } = await admin
+      .from("tax_invoices")
+      .update({
+        status:              "cancelled",
+        cancelled_at:        cancelledAt,
+        cancelled_by_admin:  adminId,
+        cancellation_reason: d.reason,
+      })
+      .eq("id", header.id)
+      .neq("status", "cancelled");                 // optimistic — race-safe
+    if (updErr) {
+      return { ok: false, error: `update_failed: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tax_invoice.cancel", "tax_invoice", header.id, {
+      serial_no:  header.serial_no,
+      reason:     d.reason,
+      before:     { status: header.status },
+    });
+
+    // Notify customer — only when cancelling an ISSUED invoice (pending
+    // cancellation = silent rejection; usually preceded by a back-channel
+    // conversation about the issue).
+    if (header.status === "issued" && header.serial_no) {
+      const orderRef = header.order_h_no ?? header.forwarder_f_no ?? "";
+      if (orderRef) {
+        void sendNotification(
+          header.profile_id,
+          notify.taxInvoiceCancelled({
+            serialNo: header.serial_no,
+            reason:   d.reason,
+            orderRef,
+          }),
+        );
+      }
+    }
+
+    revalidatePath("/admin/tax-invoices");
+    revalidatePath(`/admin/tax-invoices/${header.id}`);
+    if (header.order_h_no)     revalidatePath(`/service-order/${header.order_h_no}/receipt`);
+    if (header.forwarder_f_no) revalidatePath(`/service-import/${header.forwarder_f_no}/receipt`);
+
+    return { ok: true, data: { cancelled_at: cancelledAt } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // Internal types — not re-exported (admin pages query directly).
 // ────────────────────────────────────────────────────────────
 
