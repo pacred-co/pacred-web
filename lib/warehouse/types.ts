@@ -104,7 +104,15 @@ export type Shipment = {
   /** Last time received_box_count changed — for "last partial scan" UI. */
   received_at_partial: string | null;
   weight_kg:           number | null;
+  /** Legacy single-source CBM. New code should read the three per-source
+   *  columns below + show diff. V-D1. */
   volume_cbm:          number | null;
+  /** V-D1: TH warehouse receive-scan measurement (source of truth). */
+  received_cbm:        number | null;
+  /** V-D1: queue/billed CBM that the customer was charged on. */
+  queue_cbm:           number | null;
+  /** V-D1: China manifest declaration (legacy volume_cbm backfilled here). */
+  manifest_cbm:        number | null;
   status:              ShipmentStatus;
   received_at_cn:      string | null;
   delivered_at_th:     string | null;

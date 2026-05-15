@@ -228,6 +228,13 @@ export default async function AdminContainerDetailPage({
                           </p>
                         </div>
                       </div>
+                      {/* V-D1: CBM per source — surface diff before billing */}
+                      <CbmDiffBadge
+                        receivedCbm={s.received_cbm}
+                        queueCbm={s.queue_cbm}
+                        manifestCbm={s.manifest_cbm}
+                        legacyCbm={s.volume_cbm}
+                      />
                       {latest && (
                         <p className="text-[11px] text-muted bg-surface-alt rounded px-2 py-1">
                           📍 last scan: <span className="font-medium">{latest.event}</span>
@@ -291,6 +298,51 @@ function Cell({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs text-muted">{label}</p>
       <p className="mt-0.5 text-sm font-medium font-mono">{value}</p>
+    </div>
+  );
+}
+
+/**
+ * V-D1: CBM-per-source diff badge. Renders the 3 source values + flags
+ * any pair-wise diff > 0.5 CBM (typical bill-dispute threshold from
+ * cargo-ops-forensics). Hidden if all sources are null/zero.
+ */
+function CbmDiffBadge({
+  receivedCbm, queueCbm, manifestCbm, legacyCbm,
+}: {
+  receivedCbm: number | null;
+  queueCbm:    number | null;
+  manifestCbm: number | null;
+  legacyCbm:   number | null;
+}) {
+  const r = receivedCbm != null ? Number(receivedCbm) : null;
+  const q = queueCbm    != null ? Number(queueCbm)    : null;
+  const m = manifestCbm != null ? Number(manifestCbm) : Number(legacyCbm ?? 0) || null;
+  // Bail out if 0 or 1 source exists — no diff to surface
+  const present = [r, q, m].filter((x): x is number => x != null && x > 0);
+  if (present.length < 1) return null;
+
+  // Compute max pair-wise diff across the present sources
+  let maxDiff = 0;
+  for (let i = 0; i < present.length; i++) {
+    for (let j = i + 1; j < present.length; j++) {
+      maxDiff = Math.max(maxDiff, Math.abs(present[i] - present[j]));
+    }
+  }
+  const flagDiff = maxDiff > 0.5;
+  return (
+    <div className={`text-[11px] rounded px-2 py-1 ${
+      flagDiff ? "bg-amber-50 border border-amber-200 text-amber-900" : "bg-surface-alt text-muted"
+    }`}>
+      <span className="font-medium">CBM:</span>
+      {r != null && <> · รับเข้า <span className="font-mono">{r.toFixed(3)}</span></>}
+      {q != null && <> · คิว <span className="font-mono">{q.toFixed(3)}</span></>}
+      {m != null && <> · manifest <span className="font-mono">{m.toFixed(3)}</span></>}
+      {flagDiff && (
+        <span className="ml-2 font-bold text-red-700">
+          ⚠ diff {maxDiff.toFixed(2)} — ตรวจก่อนบิล
+        </span>
+      )}
     </div>
   );
 }
