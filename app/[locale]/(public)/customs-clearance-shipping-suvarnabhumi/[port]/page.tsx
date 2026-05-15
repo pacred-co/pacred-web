@@ -170,8 +170,78 @@ export default async function CustomsPortDetailPage({
                   {port.sub} · ค่าพิธีการเริ่มต้น <span className="text-primary-600 font-bold">{port.customsServiceFee} บาท</span> + ค่าใช้จ่ายอื่นตามจริง
                 </h2>
 
-                {/* Template intro */}
+                {/* Full pricing breakdown — moved right under the title
+                    per ปอน: customers should see the per-line breakdown
+                    immediately after they read "เคลียร์ที่ไหน". The
+                    long-form Air/Sea/Truck template content sits below
+                    the breakdown for users who want context. */}
                 <div className="mt-6 md:mt-8">
+                  <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
+                    FULL PRICING · ค่าใช้จ่ายทุกหัว
+                  </div>
+                  <h3 className="text-[20px] md:text-[26px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
+                    รายละเอียดค่าใช้จ่ายเต็ม
+                  </h3>
+                  <p className="mt-2 text-[12.5px] md:text-[14px] leading-[1.6] font-medium text-muted">
+                    ราคาเบื้องต้น — ทีม Pacred Shipping ออก Quote ตามสินค้าจริงก่อนยืนยันทุกครั้ง ไม่มีค่าใช้จ่ายแอบ
+                  </p>
+
+                  <div className="mt-5 md:mt-6 space-y-4 md:space-y-5">
+                    {port.pricingSections.map((sec) => (
+                      <div
+                        key={sec.heading}
+                        className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
+                      >
+                        <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
+                          <span aria-hidden className="text-[18px]">{sec.icon}</span>
+                          <span>{sec.heading}</span>
+                        </div>
+                        <ul className="divide-y divide-border/70">
+                          {sec.items.map((item) => (
+                            <li
+                              key={item.label}
+                              className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0 text-[12.5px] md:text-[13.5px] leading-snug"
+                            >
+                              <span className="text-foreground/85 font-medium">
+                                {item.label}
+                              </span>
+                              <span className="text-foreground font-bold whitespace-nowrap">
+                                {item.value}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    {/* Summary card */}
+                    <div className="rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
+                      <div>
+                        <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
+                          📌 {port.summaryLabel}
+                        </div>
+                        <div className="mt-1.5 text-[22px] md:text-[28px] font-black text-primary-700 dark:text-primary-300 leading-tight">
+                          {port.summaryPrice}
+                        </div>
+                        <p className="mt-1 text-[11.5px] md:text-[12.5px] text-muted font-medium">
+                          {port.summaryNote}
+                        </p>
+                      </div>
+                      <Link
+                        href="/register"
+                        data-cta="quote-summary"
+                        className="inline-flex items-center justify-center gap-2 h-12 px-5 md:px-6 rounded-xl bg-primary-600 text-white font-black text-[13.5px] md:text-[14.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
+                      >
+                        ขอใบเสนอราคา ฟรี
+                        <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Template intro (now below the price breakdown) */}
+                <div className="mt-8 md:mt-10">
                   <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white tracking-tight">
                     {template.title}
                   </h3>
@@ -244,72 +314,6 @@ export default async function CustomsPortDetailPage({
                     </p>
                   </div>
                 )}
-
-                {/* Full pricing breakdown */}
-                <div className="mt-8 md:mt-10">
-                  <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-                    <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    FULL PRICING · ค่าใช้จ่ายทุกหัว
-                  </div>
-                  <h3 className="text-[20px] md:text-[26px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-                    รายละเอียดค่าใช้จ่ายเต็ม
-                  </h3>
-                  <p className="mt-2 text-[12.5px] md:text-[14px] leading-[1.6] font-medium text-muted">
-                    ราคาเบื้องต้น — ทีม Pacred Shipping ออก Quote ตามสินค้าจริงก่อนยืนยันทุกครั้ง ไม่มีค่าใช้จ่ายแอบ
-                  </p>
-
-                  <div className="mt-5 md:mt-6 space-y-4 md:space-y-5">
-                    {port.pricingSections.map((sec) => (
-                      <div
-                        key={sec.heading}
-                        className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
-                      >
-                        <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
-                          <span aria-hidden className="text-[18px]">{sec.icon}</span>
-                          <span>{sec.heading}</span>
-                        </div>
-                        <ul className="divide-y divide-border/70">
-                          {sec.items.map((item) => (
-                            <li
-                              key={item.label}
-                              className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0 text-[12.5px] md:text-[13.5px] leading-snug"
-                            >
-                              <span className="text-foreground/85 font-medium">
-                                {item.label}
-                              </span>
-                              <span className="text-foreground font-bold whitespace-nowrap">
-                                {item.value}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-
-                    {/* Summary card */}
-                    <div className="rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
-                      <div>
-                        <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
-                          📌 {port.summaryLabel}
-                        </div>
-                        <div className="mt-1.5 text-[22px] md:text-[28px] font-black text-primary-700 dark:text-primary-300 leading-tight">
-                          {port.summaryPrice}
-                        </div>
-                        <p className="mt-1 text-[11.5px] md:text-[12.5px] text-muted font-medium">
-                          {port.summaryNote}
-                        </p>
-                      </div>
-                      <Link
-                        href="/register"
-                        data-cta="quote-summary"
-                        className="inline-flex items-center justify-center gap-2 h-12 px-5 md:px-6 rounded-xl bg-primary-600 text-white font-black text-[13.5px] md:text-[14.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
-                      >
-                        ขอใบเสนอราคา ฟรี
-                        <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* ═══ RIGHT aside: image + quote box (sticky on desktop) ═══ */}
