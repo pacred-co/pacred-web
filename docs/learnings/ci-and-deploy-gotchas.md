@@ -80,3 +80,67 @@ Don't dive into the source first. 90% of the time it's deploy lag or cache.
 - Commit (in git history search for "rename audit to audit:all")
 
 ---
+
+## [2026-05-16] `pnpm audit:all` fails when an env var is referenced in code but absent from `.env.example`
+
+**Context:** Phase D verify-loop. Lint + tsc + tests all green, but `pnpm audit:all` (env-audit step) failed with:
+```
+⚠ Used but NOT in .env.example (2):
+  CHINA_SEARCH_DEBUG
+  VERCEL_GIT_COMMIT_SHA
+[ELIFECYCLE] Command failed with exit code 1.
+```
+
+**Root cause:** `scripts/env-audit.mjs` walks all source files for `process.env.<NAME>` references, then cross-checks against `.env.example` declarations. Any name used in code MUST appear in `.env.example` (even commented-out — script just looks for the bare key name). Otherwise: exit 1 → entire `pnpm verify` fails.
+
+**Fix paths (pick the most honest):**
+- **Temporary debug var** → remove the `process.env.X` reference entirely. Don't hide debug behind env-only gates that get forgotten.
+- **Vercel-injected** (`VERCEL_GIT_COMMIT_SHA`, `VERCEL_URL`, etc.) → add commented declaration in `.env.example` under "Vercel-injected (DO NOT SET MANUALLY)" section — locally-undefined is fine because consumers should fall back gracefully.
+- **Legitimate optional** → add as `OPTIONAL_VAR=` (empty value) in `.env.example` with a comment explaining when to set it.
+
+**Why this matters next time:** Whenever you add `process.env.NEW_VAR` to any source file (even one-shot debug logging), audit catches it. Saves a CI failure later. Quick check: `grep -rE "process\.env\.[A-Z_]+" <new-file>` and confirm each name is in `.env.example`.
+
+**Cross-links:** `scripts/env-audit.mjs` · `.env.example` · `phase-verify-loop` step 4 (audit:all gate)
+
+---
+
+## [2026-05-16] Node.js fetch timeouts to Supabase while curl succeeds — IPv6 resolution suspect
+
+**Context:** Phase D verify-loop. User reports "3 Issues + notifications page hangs" in browser. Dev server log shows constant 10-second `ConnectTimeoutError` to `*.supabase.co` and `104.18.38.10` (Cloudflare CDN) on every server-side fetch.
+
+**Symptom:**
+- Every page load takes ~21s (proxy.ts middleware Supabase session refresh = 10s timeout, then page-level Supabase data fetch = 10s timeout).
+- Server log packed with:
+  ```
+  TypeError: fetch failed
+    [cause]: Error [ConnectTimeoutError]: Connect Timeout Error
+      (attempted address: <project>.supabase.co:443, timeout: 10000ms)
+  ```
+- Browser dev overlay shows "3 Issues" stack of these errors.
+- Pages that don't need Supabase (login, /status without ping) load fine.
+
+**Verification that it's NOT app code:**
+- `curl -s -o /dev/null https://<project>.supabase.co/` → **404 in 0.12s** (DNS works, TLS works, Supabase is alive — root path 404 is correct behavior).
+- All app code unchanged from a known-working state. Tests + lint + tsc all green.
+- Issue persisted across `pnpm dev` restart + `.next/` cache nuke.
+
+**Root cause hypothesis (top 3, untested locally):**
+1. **IPv6 resolution preference** — Node.js 18+ defaults to `--dns-result-order=verbatim` which can return AAAA (IPv6) records first. If user's network has broken IPv6 (common on home ISPs in TH), Node tries IPv6 → 10s timeout → Node should fall back to IPv4 but doesn't always reliably in `undici` (the fetch impl).
+2. **Sentry SDK doubling fetch retries** — Sentry's `instrumentNodeFetch` wraps every fetch with span tracking. If Sentry's own ingest endpoint (also Cloudflare-routed via 104.18.x.x) is unreachable, every primary fetch may double-up retries.
+3. **Local firewall/AV** silently dropping outbound TLS to specific hosts — Trend Micro / Bitdefender behavior. Curl uses different TLS lib than Node.
+
+**Workarounds (try in order):**
+1. **Fastest test for theory 1:** restart dev with IPv4-first DNS:
+   ```powershell
+   $env:NODE_OPTIONS="--dns-result-order=ipv4first"
+   pnpm dev
+   ```
+   If timeouts disappear → IPv6 was the issue → consider committing `NODE_OPTIONS` to a `package.json` script for the team.
+2. **Test for theory 2:** temporarily unset `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` in `.env.local` + restart. If timeouts disappear → Sentry is the doubler.
+3. **Test for theory 3:** add `*.supabase.co` to firewall/AV allowlist OR temporarily disable AV.
+
+**Why this matters next time:** If multiple devs hit ConnectTimeout on Pacred dev servers but Vercel prod works fine → bias toward (1) IPv6 first; ipv4first flag is the cheapest fix. Don't chase code changes for what's an environmental issue.
+
+**Cross-links:** `proxy.ts` (Supabase session refresh runs here) · `lib/supabase/server.ts` · `instrumentation.ts` (Sentry hook) · `docs/learnings/nextjs-16-quirks.md` (Turbopack route cache — different but related diagnostic skill)
+
+---

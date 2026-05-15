@@ -190,6 +190,11 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   const [priceOverrideMap, setPriceMap]   = useState<Record<string, number>>({});
   const [colorMap, setColorMap]           = useState<Record<string, string>>({});
   const [sizeMap, setSizeMap]             = useState<Record<string, string>>({});
+  // Selected axis values for the variant picker (Taobao-style chips per axis).
+  // Map: axisName → selected valueLabel. Acts as a filter on `rows` so user
+  // converges on 1 SKU by clicking chips. Clearing an axis (clicking the
+  // same chip again) reverts to "show all SKUs that match other selections".
+  const [selectedAxis, setSelectedAxis]   = useState<Record<string, string>>({});
 
   async function onSearch() {
     if (!url.trim()) return;
@@ -209,6 +214,7 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
       return;
     }
     setDetail(detailRes.detail);
+    setSelectedAxis({});                  // reset axis picks when product changes
     if (rateRes?.yuan_rate) setYuanRate(Number(rateRes.yuan_rate));
   }
 
@@ -249,6 +255,37 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   const totalQty = Object.values(qtyMap).reduce((s, n) => s + (n || 0), 0);
   const totalCny = rows.reduce((s, r) => s + ((qtyMap[r.key] || 0) * priceFor(r.key, r.price)), 0);
   const totalThb = Math.round(totalCny * yuanRate * 100) / 100;
+
+  // Axis-picker derived state (Taobao-style chip selector).
+  // - filteredRows = rows whose prop_path matches every currently-selected axis.
+  // - axisChipDisabled(axisName, valueLabel) = true if picking this would
+  //   yield zero matching rows (out-of-stock combination indicator).
+  const sku_axes = detail?.sku_axes ?? [];
+  const filteredRows = sku_axes.length === 0
+    ? rows
+    : rows.filter((r) => {
+        for (const [axisName, valLabel] of Object.entries(selectedAxis)) {
+          if (!valLabel) continue;            // axis not picked = wildcard
+          if (r.data[axisName] !== valLabel) return false;
+        }
+        return true;
+      });
+  function isChipAvailable(axisName: string, valLabel: string): boolean {
+    return rows.some((r) => {
+      if (r.data[axisName] !== valLabel) return false;
+      for (const [a, v] of Object.entries(selectedAxis)) {
+        if (a === axisName || !v) continue;
+        if (r.data[a] !== v) return false;
+      }
+      return true;
+    });
+  }
+  function toggleChip(axisName: string, valLabel: string): void {
+    setSelectedAxis((prev) => ({
+      ...prev,
+      [axisName]: prev[axisName] === valLabel ? "" : valLabel,
+    }));
+  }
 
   function onAddSelected() {
     if (!detail || totalQty === 0) return;
@@ -310,14 +347,75 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
           <div className="space-y-3">
             <ProductHero detail={detail} yuanRate={yuanRate} />
 
-            {/* Variant rows */}
+            {/* Axis pickers (Taobao-style chips per axis: 颜色 / 尺码 / 套餐 ...) */}
+            {sku_axes.length > 0 && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-5 space-y-3">
+                {sku_axes.map((axis) => (
+                  <div key={axis.name}>
+                    <p className="text-xs text-muted mb-1.5">
+                      <span className="font-medium text-foreground">{axis.name}</span>
+                      {selectedAxis[axis.name] && (
+                        <span className="ml-2 text-primary-600">: {selectedAxis[axis.name]}</span>
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {axis.values.map((v) => {
+                        const active    = selectedAxis[axis.name] === v.label;
+                        const available = isChipAvailable(axis.name, v.label);
+                        return (
+                          <button
+                            key={v.label}
+                            type="button"
+                            disabled={!available}
+                            onClick={() => toggleChip(axis.name, v.label)}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
+                              active
+                                ? "bg-primary-600 text-white border-primary-600 font-medium shadow-sm"
+                                : available
+                                  ? "bg-white dark:bg-surface border-border hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-950/20"
+                                  : "bg-surface-alt text-muted border-border opacity-40 cursor-not-allowed line-through"
+                            }`}
+                          >
+                            {v.image && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={v.image} alt="" className="w-5 h-5 rounded object-cover" />
+                            )}
+                            {v.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {Object.values(selectedAxis).some(Boolean) && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAxis({})}
+                    className="text-[10px] text-muted hover:underline"
+                  >
+                    × ล้างตัวเลือก
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Variant rows — filtered by current axis selection */}
             <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-border flex items-center justify-between bg-surface-alt/30">
-                <h4 className="font-bold text-sm">เลือกตัวเลือก ({rows.length} แบบ)</h4>
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between bg-surface-alt/30 gap-2 flex-wrap">
+                <h4 className="font-bold text-sm">
+                  {sku_axes.length > 0 && filteredRows.length < rows.length
+                    ? `แบบที่ตรงกับตัวเลือก (${filteredRows.length} จาก ${rows.length})`
+                    : `เลือกจำนวน (${rows.length} แบบ)`}
+                </h4>
                 <span className="text-xs text-muted">เรท ฿{yuanRate.toFixed(4)}/¥</span>
               </div>
+              {sku_axes.length > 0 && filteredRows.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted">
+                  ไม่มี SKU ตรงกับตัวเลือก — ลองเปลี่ยนค่า
+                </p>
+              ) : (
               <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
-                {rows.map((r) => {
+                {filteredRows.map((r) => {
                   const qty = qtyMap[r.key] || 0;
                   const effectivePrice = priceFor(r.key, r.price);
                   const lineCny = qty * effectivePrice;
@@ -389,6 +487,7 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
                   );
                 })}
               </div>
+              )}
             </div>
           </div>
 
