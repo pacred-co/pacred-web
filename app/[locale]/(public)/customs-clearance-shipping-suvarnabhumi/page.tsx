@@ -935,7 +935,7 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ 7. PCS Shipping expertise overview ═══════ */}
+        {/* ═══════ 7. Pacred Shipping expertise overview ═══════ */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
