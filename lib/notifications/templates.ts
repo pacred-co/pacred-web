@@ -302,4 +302,35 @@ export const notify = {
       link_href: "/admin/dashboard",
     };
   },
+
+  // ── Tax invoice requested by customer (admin-recipient notification).
+  //    Fires when customer clicks "ขอใบกำกับภาษี" on receipt page.
+  //    super + accounting admins review at /admin/tax-invoices/[id] and
+  //    issue via adminIssueTaxInvoice action (ภูม T-P4 G2c). ──
+  taxInvoiceRequested(opts: { taxInvoiceId: string; buyerName: string; parentLabel: string }): NotifyPayload {
+    return {
+      category:       "system",
+      severity:       "info",
+      title:          "📄 ลูกค้าขอใบกำกับภาษี",
+      body:           `${opts.buyerName} ขอใบกำกับภาษีสำหรับ ${opts.parentLabel} — กรุณาตรวจสอบและออกใบ`,
+      link_href:      `/admin/tax-invoices/${opts.taxInvoiceId}`,
+      reference_type: "contact_message",
+      reference_id:   opts.taxInvoiceId,
+    };
+  },
+
+  // ── Tax invoice issued (customer-recipient).
+  //    Fires when admin issues via adminIssueTaxInvoice. Customer can
+  //    download from receipt page once status='issued'. ──
+  taxInvoiceIssued(opts: { taxInvoiceId: string; serialNo: string; receiptPath: string }): NotifyPayload {
+    return {
+      category:       "order",
+      severity:       "success",
+      title:          `📄 ออกใบกำกับภาษี ${opts.serialNo} เรียบร้อย`,
+      body:           "ดาวน์โหลดใบกำกับภาษีได้จากหน้าใบเสร็จ",
+      link_href:      opts.receiptPath,
+      reference_type: "contact_message",
+      reference_id:   opts.taxInvoiceId,
+    };
+  },
 };
