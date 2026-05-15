@@ -224,7 +224,7 @@ const GROUPS = [
   {
     id: "customs",
     label: "เคลียร์ศุลกากร",
-    desc: "สินค้าติดด่าน · เคลียร์ Air/Sea/Truck · ทุกท่าทุกด่าน",
+    desc: "สินค้าติดด่าน · เคลียร์ Air/Sea/Truck · ทุก Port ทุกด่าน",
     accent: "from-rose-500 to-rose-700",
   },
   {

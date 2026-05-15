@@ -97,7 +97,7 @@ const MODES: Mode[] = [
     title: "FCL — Full Container Load",
     subtitle: "เหมาตู้ 20'/40'/40HQ จากโรงงานจีน",
     intro:
-      "สำหรับคำสั่งซื้อปริมาณมาก เหมาตู้คุ้มที่สุด รับสินค้าหน้าโรงงาน · ลำเลียงตู้ตรงสู่ท่าเรือไทย · เคลียร์ภาษีครบ Term EXW / FOB / CIF / DDP",
+      "สำหรับคำสั่งซื้อปริมาณมาก เหมาตู้คุ้มที่สุด รับสินค้าหน้าโรงงาน · ลำเลียงตู้ตรงสู่ Port ไทย · เคลียร์ภาษีครบ Term EXW / FOB / CIF / DDP",
     image: "/images/hero-section/banner/ship.png",
     imageAlt: "นำเข้า FCL จากจีน Pacred",
     accent: "from-blue-600 to-blue-800",
@@ -257,7 +257,7 @@ const TERMS_QUICK = [
   {
     code: "FOB",
     name: "Free On Board",
-    desc: "ผู้ขายส่งถึงท่าเรือต้นทาง · ผู้ซื้อจ่ายขนส่ง+ภาษี+เคลียร์ปลายทาง",
+    desc: "ผู้ขายส่งถึง Port ต้นทาง · ผู้ซื้อจ่ายขนส่ง+ภาษี+เคลียร์ปลายทาง",
     icon: Anchor,
   },
   {
@@ -269,7 +269,7 @@ const TERMS_QUICK = [
   {
     code: "CIF",
     name: "Cost · Insurance · Freight",
-    desc: "ผู้ขายจ่ายขนส่ง+ประกันถึงท่าเรือปลายทาง · ผู้ซื้อเคลียร์+ภาษี",
+    desc: "ผู้ขายจ่ายขนส่ง+ประกันถึง Port ปลายทาง · ผู้ซื้อเคลียร์+ภาษี",
     icon: Ship,
   },
 ];

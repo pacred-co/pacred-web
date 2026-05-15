@@ -1,476 +1,121 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 import {
-  Plane,
-  Anchor,
-  Truck,
-  Mail,
-  Ship,
-  Container,
   ChevronLeft,
   ChevronRight,
-  MessageCircle,
-  Phone,
+  ArrowRight,
+  FileText,
 } from "lucide-react";
-import { CONTACT, LINE_OA } from "@/components/seo/site";
+import { Link } from "@/i18n/navigation";
 import { trackCtaClick } from "@/lib/analytics";
+import { CUSTOMS_PORTS, type CustomsPort } from "./customs-port-data";
+
+const PARENT_PATH = "/customs-clearance-shipping-suvarnabhumi";
 
 /**
  * Per-port pricing carousel for the customs-clearance landing.
  *
- * Replaces the old "3 Channels (Air/Sea/Truck)" section: ปอน asked for
- * location-based cards instead, each with a price breakdown the customer
- * can glance at before tapping LINE. 7 ports total (matches the
- * BookingPortTabs order). Snap-scroll carousel on both mobile and
- * desktop; on desktop mount we scroll-center สุวรรณภูมิ so it lands as
- * the default "main" card.
+ * Cards loop infinitely (เลื่อนหมุนเป็นวงกลม per ปอน 2026-05-15).
  *
- * Pricing is ballpark / "เริ่มต้น" — the canonical numbers ปอน gave for
- * สุวรรณภูมิ were used verbatim, the other 6 ports follow the same shape
- * with realistic delta (sea D/O > air D/O · postal has no D/O · border
- * inland transport dominates). Marked `noteSummary` so customers
- * understand the figure is an estimate and won't anchor on it.
+ * Mechanic: render 3 identical copies of CUSTOMS_PORTS so the scroller's
+ * scrollWidth = 3 × setWidth. Mount-time we centre the start of the
+ * middle set on screen, then a requestAnimationFrame ticker nudges
+ * scrollLeft forward 0.4px per frame. When scrollLeft crosses 2 sets we
+ * subtract one setWidth (jump back invisibly because the next set
+ * renders identical content). Going left under 0 we add one setWidth.
+ *
+ * Manual control:
+ *   - hover (desktop) or touchstart/wheel (mobile/scroll wheel) pauses
+ *     auto-rotation; idle 1.5s after release resumes
+ *   - chevron buttons call scrollBy(±card) on the same scroller, which
+ *     plays nicely with the loop because of the edge-jump check
  */
-
-type PriceItem = { label: string; value: string };
-type PriceSection = { icon: string; heading: string; items: PriceItem[] };
-
-type Port = {
-  code: "bkk" | "dmk" | "laksi" | "klong" | "laem" | "icd" | "border";
-  name: string;
-  sub: string;
-  modeBadge: string;
-  modeIcon: typeof Plane;
-  accent: string;
-  image: string;
-  imageAlt: string;
-  serviceTitle: string;
-  sections: PriceSection[];
-  summaryLabel: string;
-  summaryPrice: string;
-  summaryNote: string;
-};
-
-const PORTS: Port[] = [
-  {
-    code: "bkk",
-    name: "สุวรรณภูมิ",
-    sub: "BKK · Air Cargo / Express",
-    modeBadge: "AIR FREIGHT",
-    modeIcon: Plane,
-    accent: "from-sky-500 to-sky-700",
-    image: "/images/cardclearance/suwanboys.png",
-    imageAlt: "เคลียร์สินค้า สุวรรณภูมิ Pacred",
-    serviceTitle: "นำเข้าสินค้าทาง AIR · สุวรรณภูมิ",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "📦",
-        heading: "ค่าใช้จ่ายสายการบิน / ท่า",
-        items: [
-          { label: "D/O",                  value: "รอเช็ค" },
-          { label: "ค่าแลก D/O",            value: "421 บาท" },
-          { label: "ค่าผ่านท่า",            value: "500 บาท" },
-          { label: "ค่าเช่าพื้นที่ (RENT)",  value: "รอเช็ค" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์", value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",    value: "200 บาท" },
-          { label: "ค่าล่วงเวลาศุลกากร",    value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าขนส่งในไทย (ถ้ามี)",
-        items: [
-          { label: "รถ 4-6 ล้อ (BKK + ปริมณฑล)", value: "500-5,000 บาท" },
-          { label: "แรงงานลงสินค้า",            value: "3,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
-          { label: "ภาษีนำเข้า + VAT 7%",   value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "7,000+ บาท / บิล",
-    summaryNote: "ไม่รวมภาษี + ค่าใช้จ่ายแปรผัน",
-  },
-  {
-    code: "dmk",
-    name: "ดอนเมือง",
-    sub: "DMK · Air Freight / Courier",
-    modeBadge: "AIR FREIGHT",
-    modeIcon: Plane,
-    accent: "from-sky-400 to-sky-600",
-    image: "/images/cardclearance/donmueng.png",
-    imageAlt: "เคลียร์สินค้า ดอนเมือง Pacred",
-    serviceTitle: "นำเข้าสินค้าทาง AIR · ดอนเมือง",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "📦",
-        heading: "ค่าใช้จ่ายสายการบิน / ท่า",
-        items: [
-          { label: "D/O",                  value: "รอเช็ค" },
-          { label: "ค่าแลก D/O",            value: "421 บาท" },
-          { label: "ค่าผ่านท่า",            value: "450 บาท" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์", value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",    value: "200 บาท" },
-          { label: "ค่าล่วงเวลาศุลกากร",    value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าขนส่งในไทย (ถ้ามี)",
-        items: [
-          { label: "รถ 4-6 ล้อ (BKK + ปริมณฑล)", value: "500-5,000 บาท" },
-          { label: "แรงงานลงสินค้า",            value: "3,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
-          { label: "ภาษีนำเข้า + VAT 7%",   value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "6,800+ บาท / บิล",
-    summaryNote: "ไม่รวมภาษี + ค่าใช้จ่ายแปรผัน",
-  },
-  {
-    code: "laksi",
-    name: "ไปรษณีย์หลักสี่",
-    sub: "Postal · พัสดุนำเข้า / EMS",
-    modeBadge: "POSTAL",
-    modeIcon: Mail,
-    accent: "from-rose-400 to-rose-600",
-    image: "/images/cardclearance/praisaneelaksee.png",
-    imageAlt: "เคลียร์พัสดุ ไปรษณีย์หลักสี่ Pacred",
-    serviceTitle: "เคลียร์พัสดุนำเข้า · ไปรษณีย์หลักสี่",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "2,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "📬",
-        heading: "ค่าใช้จ่ายไปรษณีย์ / ด่าน",
-        items: [
-          { label: "ค่าตรวจไปรษณีย์",         value: "รอเช็ค" },
-          { label: "ค่าผ่านศูนย์",            value: "300 บาท" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
-          { label: "ค่าล่วงเวลา (ถ้ามี)",      value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าจัดส่ง (ถ้ามี)",
-        items: [
-          { label: "Messenger / Lalamove", value: "180-1,200 บาท" },
-          { label: "Kerry / Flash / SPX",  value: "ตามน้ำหนัก / ปลายทาง" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
-          { label: "ภาษีนำเข้า + VAT 7%",   value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "5,000+ บาท / บิล",
-    summaryNote: "พัสดุไปรษณีย์ ไม่มี D/O",
-  },
-  {
-    code: "klong",
-    name: "คลองเตย",
-    sub: "PAT · Sea Port (LCL / FCL)",
-    modeBadge: "SEA FREIGHT",
-    modeIcon: Ship,
-    accent: "from-blue-600 to-blue-800",
-    image: "/images/cardclearance/klongtoey.png",
-    imageAlt: "เคลียร์สินค้า คลองเตย Pacred",
-    serviceTitle: "นำเข้าสินค้าทางเรือ · คลองเตย",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "⚓",
-        heading: "ค่าใช้จ่ายสายเรือ / ท่า",
-        items: [
-          { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
-          { label: "ค่าแลก D/O",             value: "500 บาท" },
-          { label: "ค่าผ่านท่า PAT",         value: "1,500 บาท" },
-          { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
-          { label: "ค่าล่วงเวลา",             value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าขนส่งในไทย (ถ้ามี)",
-        items: [
-          { label: "รถบรรทุก 10 ล้อ / ตู้",  value: "4,000-15,000 บาท" },
-          { label: "แรงงานลงสินค้า",          value: "3,500-5,000 บาท" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
-          { label: "ภาษีนำเข้า + VAT 7%",     value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "14,000+ บาท / ตู้",
-    summaryNote: "FCL · ไม่รวมภาษี + ค่าใช้จ่ายแปรผัน",
-  },
-  {
-    code: "laem",
-    name: "แหลมฉบัง",
-    sub: "LCBT · Container Port (FCL)",
-    modeBadge: "SEA FREIGHT",
-    modeIcon: Container,
-    accent: "from-blue-700 to-blue-900",
-    image: "/images/cardclearance/laemport.png",
-    imageAlt: "เคลียร์สินค้า แหลมฉบัง Pacred",
-    serviceTitle: "นำเข้าสินค้าทางเรือ · แหลมฉบัง",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "🚢",
-        heading: "ค่าใช้จ่ายสายเรือ / ท่า",
-        items: [
-          { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
-          { label: "ค่าแลก D/O",             value: "500 บาท" },
-          { label: "ค่าผ่านท่า LCBT",        value: "1,800 บาท" },
-          { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
-          { label: "ค่าล่วงเวลา",             value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าขนส่งในไทย (ถ้ามี)",
-        items: [
-          { label: "ค่ารถลาก (LCBT → BKK)", value: "3,500-6,500 บาท" },
-          { label: "ขนส่งต่อ / แรงงาน",      value: "4,000-15,000 บาท" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
-          { label: "ภาษีนำเข้า + VAT 7%",     value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "16,000+ บาท / ตู้",
-    summaryNote: "FCL · ไม่รวมภาษี + ค่าใช้จ่ายแปรผัน",
-  },
-  {
-    code: "icd",
-    name: "ICD ลาดกระบัง",
-    sub: "Inland Depot · Sea (Drayed)",
-    modeBadge: "INLAND DEPOT",
-    modeIcon: Container,
-    accent: "from-indigo-600 to-indigo-800",
-    image: "/images/cardclearance/laemport.png",
-    imageAlt: "เคลียร์สินค้า ICD ลาดกระบัง Pacred",
-    serviceTitle: "นำเข้าสินค้าทางเรือ · ICD ลาดกระบัง",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร",        value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "📦",
-        heading: "ค่าใช้จ่ายสายเรือ / ท่า",
-        items: [
-          { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
-          { label: "ค่าแลก D/O",             value: "500 บาท" },
-          { label: "ค่าผ่านท่า ICD",         value: "1,200 บาท" },
-          { label: "ค่าเช่าพื้นที่ (ถ้ามี)",   value: "คิดต่อวัน" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
-          { label: "ค่าล่วงเวลา",             value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚚",
-        heading: "ค่าขนส่งในไทย (ถ้ามี)",
-        items: [
-          { label: "รถบรรทุก (BKK metro)",   value: "4,500-12,000 บาท" },
-          { label: "แรงงานลงสินค้า",          value: "3,500 บาท" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
-          { label: "ภาษีนำเข้า + VAT 7%",     value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "14,500+ บาท / ตู้",
-    summaryNote: "FCL · ไม่รวมภาษี + ค่าใช้จ่ายแปรผัน",
-  },
-  {
-    code: "border",
-    name: "ด่านชายแดน",
-    sub: "Truck · มุก / หนอง / อรัญ / แม่",
-    modeBadge: "TRUCK · CROSS-BORDER",
-    modeIcon: Truck,
-    accent: "from-primary-500 to-primary-700",
-    image: "/images/cardclearance/mukdahanport.png",
-    imageAlt: "เคลียร์สินค้า ด่านชายแดน Pacred",
-    serviceTitle: "นำเข้าสินค้าทางรถ · ด่านชายแดน",
-    sections: [
-      {
-        icon: "💰",
-        heading: "ค่าบริการหลัก",
-        items: [
-          { label: "ลงทะเบียนกรมศุลกากร",     value: "1,500 บาท" },
-          { label: "ค่าพิธีการศุลกากร / ด่าน", value: "3,500 บาท" },
-          { label: "อย / มอก / เกษตร อื่นๆ", value: "1,500 (ถ้ามี)" },
-        ],
-      },
-      {
-        icon: "🛂",
-        heading: "ค่าใช้จ่ายด่าน",
-        items: [
-          { label: "ค่าธรรมเนียมด่าน",        value: "500-1,500 บาท" },
-          { label: "ค่าฝ่ายปฏิบัติฯ",         value: "ตามด่าน" },
-          { label: "ยิงใบขนอิเล็กทรอนิกส์",   value: "350 บาท" },
-          { label: "ค่าธรรมเนียมกรมศุล",     value: "200 บาท" },
-          { label: "ค่าล่วงเวลา",             value: "500 บาท" },
-        ],
-      },
-      {
-        icon: "🚛",
-        heading: "ค่าขนส่งข้ามแดน",
-        items: [
-          { label: "รถบรรทุก (ตามด่าน + ปลายทาง)", value: "8,000-25,000 บาท" },
-          { label: "แรงงานลงสินค้า",              value: "3,500-5,000 บาท" },
-        ],
-      },
-      {
-        icon: "⚠️",
-        heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
-        items: [
-          { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
-          { label: "ภาษีนำเข้า + VAT 7%",   value: "ตามมูลค่าสินค้า" },
-        ],
-      },
-    ],
-    summaryLabel: "สรุปเบื้องต้น",
-    summaryPrice: "12,000+ บาท / เที่ยว",
-    summaryNote: "ตามด่าน + ระยะทาง · ไม่รวมภาษี",
-  },
-];
+const SETS = 3;
+const TRIPLED_PORTS: CustomsPort[] = Array.from({ length: SETS }, () =>
+  CUSTOMS_PORTS,
+).flat();
+const MIDDLE_SET_INDEX = CUSTOMS_PORTS.length;
+/**
+ * Sub-pixel accumulator approach — many browsers (Chromium-based,
+ * Firefox via some embedders) floor `scrollLeft` to integer when set,
+ * so a sub-1px increment never lands. Accumulate fractional progress
+ * separately, only writing to scrollLeft when at least 1px has built
+ * up. This makes the speed look genuinely slow (~30 px/sec ≈ a slow
+ * cinema crawl) without stalling.
+ */
+const SPEED_PX_PER_FRAME = 0.5;
 
 export function PortPricingCarousel() {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const [canLeft, setCanLeft] = useState(false);
-  const [canRight, setCanRight] = useState(true);
+  const rafRef = useRef<number | null>(null);
+  const pauseUntilRef = useRef(0);
+  const accumulatorRef = useRef(0);
 
-  // On desktop mount, scroll-center สุวรรณภูมิ so it lands as the default
-  // hero card; on mobile it's already index 0 = first card so no shift
-  // is needed.
+  /* Mount setup + RAF auto-rotation + edge-jump in a single effect so
+     the start-position scroll and the ticker share the same lifecycle.
+     Hover-pause was dropped because iframe sandboxes (Vercel preview,
+     CMS embeds, etc.) auto-fire mouseenter when focused and never fire
+     mouseleave — pausedRef would stay true forever. Touchstart + wheel
+     pause for 4s is enough to stop motion when the user actually
+     interacts. */
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
-      const bkk = el.querySelector<HTMLDivElement>('[data-port="bkk"]');
-      if (bkk) {
-        const offset =
-          bkk.offsetLeft - el.clientWidth / 2 + bkk.offsetWidth / 2;
-        el.scrollTo({ left: offset, behavior: "instant" });
-      }
-    }
-  }, []);
 
-  // Track scroll affordances on both edges
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const buttons = Array.from(el.querySelectorAll<HTMLElement>("[data-port]"));
-    const first = buttons[0];
-    const last = buttons[buttons.length - 1];
-    if (!first || !last) return;
+    // Scroll to start of middle set immediately + once more after a
+     // frame for layout-after-image-load adjustment.
+    const setStartPosition = () => {
+      const middleFirst = el.querySelector<HTMLElement>(
+        `[data-tri-index="${MIDDLE_SET_INDEX}"]`,
+      );
+      if (!middleFirst) return;
+      const isDesktop = window.innerWidth >= 1024;
+      const target = isDesktop
+        ? middleFirst.offsetLeft -
+          el.clientWidth / 2 +
+          middleFirst.offsetWidth / 2
+        : middleFirst.offsetLeft - 16;
+      el.scrollLeft = Math.max(0, target);
+    };
+    setStartPosition();
+    const initRaf = requestAnimationFrame(setStartPosition);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.target === first) setCanLeft(!e.isIntersecting);
-          if (e.target === last) setCanRight(!e.isIntersecting);
+    const tick = () => {
+      const now = performance.now();
+      const w = el.scrollWidth / SETS;
+      if (now > pauseUntilRef.current && w > 0) {
+        accumulatorRef.current += SPEED_PX_PER_FRAME;
+        if (accumulatorRef.current >= 1) {
+          const whole = Math.floor(accumulatorRef.current);
+          el.scrollLeft += whole;
+          accumulatorRef.current -= whole;
         }
-      },
-      { root: el, threshold: 0.85 },
-    );
-    observer.observe(first);
-    observer.observe(last);
-    return () => observer.disconnect();
+      }
+      if (el.scrollLeft >= w * 2) {
+        el.scrollLeft -= w;
+      } else if (el.scrollLeft <= 0 && w > 0) {
+        el.scrollLeft += w;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    const pauseTransient = () => {
+      pauseUntilRef.current = performance.now() + 4000;
+    };
+    el.addEventListener("touchstart", pauseTransient, { passive: true });
+    el.addEventListener("wheel", pauseTransient, { passive: true });
+    el.addEventListener("pointerdown", pauseTransient);
+
+    return () => {
+      cancelAnimationFrame(initRaf);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      el.removeEventListener("touchstart", pauseTransient);
+      el.removeEventListener("wheel", pauseTransient);
+      el.removeEventListener("pointerdown", pauseTransient);
+    };
   }, []);
 
   function scrollByCard(direction: 1 | -1) {
@@ -478,39 +123,32 @@ export function PortPricingCarousel() {
     if (!el) return;
     const card = el.querySelector<HTMLDivElement>("[data-port]");
     const step = card ? card.offsetWidth + 16 : el.clientWidth * 0.9;
+    pauseUntilRef.current = performance.now() + 4000;
     el.scrollBy({ left: step * direction, behavior: "smooth" });
   }
 
   return (
-    <div className="relative">
+    <div className="relative group/carousel">
       <div
         ref={scrollerRef}
-        className="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 md:-mx-5 px-4 md:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-3 md:gap-4 overflow-x-auto pb-3 -mx-4 md:-mx-5 px-4 md:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [scroll-snap-type:none]"
       >
-        {/* Invisible left spacer — only on lg+ — gives enough room for
-            สุวรรณภูมิ (the first real card) to scroll to viewport
-            center on desktop mount. Mobile keeps bkk flush as first. */}
-        <div
-          aria-hidden
-          className="hidden lg:block shrink-0 snap-none w-[calc(50%-200px)]"
-        />
-        {PORTS.map((port) => (
-          <PortCard key={port.code} port={port} />
+        {TRIPLED_PORTS.map((port, i) => (
+          <PortCard
+            key={`${port.code}-${i}`}
+            port={port}
+            triIndex={i}
+            isCloneSet={i < MIDDLE_SET_INDEX || i >= MIDDLE_SET_INDEX * 2}
+          />
         ))}
-        {/* Matching right spacer so the last card can also scroll to
-            viewport center on desktop. */}
-        <div
-          aria-hidden
-          className="hidden lg:block shrink-0 snap-none w-[calc(50%-200px)]"
-        />
       </div>
 
-      {/* Desktop scroll buttons */}
+      {/* Desktop chevron buttons */}
       <button
         type="button"
         aria-label="เลื่อนซ้าย"
         onClick={() => scrollByCard(-1)}
-        className={`hidden md:flex absolute left-[-18px] top-[42%] -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all ${canLeft ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all opacity-100`}
       >
         <ChevronLeft className="w-5 h-5" strokeWidth={2.6} />
       </button>
@@ -518,42 +156,63 @@ export function PortPricingCarousel() {
         type="button"
         aria-label="เลื่อนขวา"
         onClick={() => scrollByCard(1)}
-        className={`hidden md:flex absolute right-[-18px] top-[42%] -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all ${canRight ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all opacity-100`}
       >
         <ChevronRight className="w-5 h-5" strokeWidth={2.6} />
       </button>
 
-      {/* Mobile pulsing chevrons */}
+      {/* Mobile pulsing chevrons (always visible since loop is infinite) */}
       <span
         aria-hidden
-        className={`pointer-events-none md:hidden absolute top-[42%] left-1 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-primary-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse transition-opacity duration-200 ${canLeft ? "opacity-100" : "opacity-0"}`}
+        className="pointer-events-none md:hidden absolute top-1/2 left-1 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-primary-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse"
       >
         <ChevronLeft className="w-4 h-4" strokeWidth={3.2} />
       </span>
       <span
         aria-hidden
-        className={`pointer-events-none md:hidden absolute top-[42%] right-1 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-primary-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse transition-opacity duration-200 ${canRight ? "opacity-100" : "opacity-0"}`}
+        className="pointer-events-none md:hidden absolute top-1/2 right-1 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-primary-600 text-white shadow-[0_4px_12px_rgba(220,38,38,0.40)] ring-2 ring-white animate-pulse"
       >
         <ChevronRight className="w-4 h-4" strokeWidth={3.2} />
       </span>
+
+      {/* Loop hint pill on the carousel header — communicates "rotating" */}
+      <div className="hidden md:flex absolute -top-9 right-0 items-center gap-1.5 text-[11px] font-bold tracking-wide text-primary-600/80">
+        <span className="relative flex w-1.5 h-1.5">
+          <span className="absolute inline-flex w-full h-full rounded-full bg-primary-500 opacity-75 animate-ping" />
+          <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-primary-600" />
+        </span>
+        เลื่อนหมุนต่อกันไม่จบ · เลือกท่าที่ใช้ได้เลย
+      </div>
     </div>
   );
 }
 
-function PortCard({ port }: { port: Port }) {
+function PortCard({
+  port,
+  triIndex,
+  isCloneSet,
+}: {
+  port: CustomsPort;
+  triIndex: number;
+  isCloneSet: boolean;
+}) {
   const Icon = port.modeIcon;
+  // Clones are aria-hidden so screen readers + crawlers see the canonical
+  // 7 cards only; the middle set is the "real" one.
   return (
     <article
       data-port={port.code}
-      className="snap-start lg:snap-center shrink-0 w-[88%] sm:w-[400px] lg:w-[400px] flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
+      data-tri-index={triIndex}
+      aria-hidden={isCloneSet ? "true" : undefined}
+      tabIndex={isCloneSet ? -1 : undefined}
+      className="shrink-0 w-[85%] sm:w-[340px] lg:w-[360px] flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
     >
-      {/* Image header */}
       <div className="relative h-32 md:h-36 overflow-hidden">
         <Image
           src={port.image}
           alt={port.imageAlt}
           fill
-          sizes="(max-width: 640px) 88vw, 400px"
+          sizes="(max-width: 640px) 85vw, 360px"
           className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
         />
         <div
@@ -570,85 +229,62 @@ function PortCard({ port }: { port: Port }) {
           <h3 className="text-[18px] md:text-[20px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
             {port.name}
           </h3>
-          <p className="mt-0.5 text-[11px] md:text-[12px] text-white/85 font-medium drop-shadow">
+          <p className="mt-0.5 text-[11px] md:text-[12px] text-white/90 font-medium drop-shadow">
             {port.sub}
           </p>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 flex flex-col p-4 md:p-5 gap-4">
-        <p className="text-[12px] md:text-[12.5px] font-bold text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
-          {port.serviceTitle}
-        </p>
-
-        {port.sections.map((sec) => (
-          <div key={sec.heading}>
-            <div className="text-[11.5px] md:text-[12px] font-black text-[#111827] dark:text-white mb-2 flex items-center gap-1.5">
-              <span aria-hidden>{sec.icon}</span>
-              <span>{sec.heading}</span>
-            </div>
-            <ul className="space-y-1.5">
-              {sec.items.map((item) => (
-                <li
-                  key={item.label}
-                  className="flex items-baseline justify-between gap-3 text-[11.5px] md:text-[12.5px] leading-snug"
-                >
-                  <span className="text-muted font-medium">{item.label}</span>
-                  <span className="text-foreground font-bold whitespace-nowrap">
-                    {item.value}
-                  </span>
-                </li>
-              ))}
-            </ul>
+      <div className="flex-1 flex flex-col gap-3 p-4 md:p-5">
+        <div className="rounded-xl bg-primary-50/60 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800 px-3.5 py-3">
+          <div className="text-[10.5px] md:text-[11px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
+            ค่าพิธีการศุลกากร · เริ่มต้น
           </div>
-        ))}
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-[28px] md:text-[32px] font-black text-primary-600 dark:text-primary-300 leading-none tracking-tight">
+              {port.customsServiceFee}
+            </span>
+            <span className="text-[14px] md:text-[15px] font-bold text-primary-700 dark:text-primary-300">
+              บาท
+            </span>
+            <span className="ml-auto text-[10.5px] md:text-[11px] text-muted font-medium">
+              + ค่าใช้จ่ายอื่นตามจริง
+            </span>
+          </div>
+        </div>
+
+        <p className="text-[12.5px] md:text-[13px] leading-[1.55] text-foreground/85 font-medium">
+          {port.shortDesc}
+        </p>
       </div>
 
-      {/* Footer — summary + CTA */}
-      <div className="border-t border-border bg-primary-50/40 dark:bg-primary-900/15 px-4 md:px-5 py-3.5 md:py-4">
-        <div className="flex items-center gap-2 mb-2.5">
-          <span aria-hidden className="text-[18px]">📌</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.08em] uppercase leading-none">
-              {port.summaryLabel}
-            </div>
-            <div className="mt-0.5 text-[15px] md:text-[16px] font-black text-primary-700 dark:text-primary-300 leading-tight">
-              {port.summaryPrice}
-            </div>
-            <div className="text-[10.5px] md:text-[11px] text-muted font-medium mt-0.5">
-              {port.summaryNote}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <a
-            href={LINE_OA.shortUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() =>
-              trackCtaClick("line_cta", "customs_port_pricing", {
-                port: port.code,
-              })
-            }
-            className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-[#06C755] text-white font-black text-[12.5px] md:text-[13px] hover:bg-[#05B04C] transition-colors shadow-[0_4px_12px_rgba(6,199,85,0.30)]"
-          >
-            <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
-            ทักไลน์
-          </a>
-          <a
-            href={`tel:${CONTACT.phone}`}
-            onClick={() =>
-              trackCtaClick("phone_cta", "customs_port_pricing", {
-                port: port.code,
-              })
-            }
-            className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-primary-200 bg-white text-primary-700 font-black text-[12.5px] md:text-[13px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
-          >
-            <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-            โทรเลย
-          </a>
-        </div>
+      <div className="border-t border-border bg-surface/60 dark:bg-background/60 px-4 md:px-5 py-3.5 md:py-4 space-y-2">
+        <Link
+          href="/register"
+          onClick={() =>
+            trackCtaClick("request_quote", "customs_port_pricing", {
+              port: port.code,
+              position: "card_primary",
+            })
+          }
+          className="inline-flex w-full items-center justify-center gap-1.5 h-11 rounded-lg bg-primary-600 text-white font-black text-[13px] md:text-[13.5px] hover:bg-primary-700 transition-colors shadow-[0_4px_12px_rgba(220,38,38,0.25)]"
+        >
+          ขอใบเสนอราคา ฟรี
+          <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
+        </Link>
+        <Link
+          href={`${PARENT_PATH}/${port.slug}`}
+          onClick={() =>
+            trackCtaClick("view_port_detail", "customs_port_pricing", {
+              port: port.code,
+              position: "card_secondary",
+            })
+          }
+          className="inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-lg border border-primary-200 bg-white text-primary-700 font-bold text-[12.5px] md:text-[13px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
+        >
+          <FileText className="w-3.5 h-3.5" strokeWidth={2.6} />
+          ดูค่าใช้จ่ายเต็ม + รายละเอียด
+        </Link>
       </div>
     </article>
   );

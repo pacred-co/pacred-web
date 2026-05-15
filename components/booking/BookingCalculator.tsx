@@ -123,7 +123,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   // Customs landing tab strip — replaces the 6 mode tabs with 7 port tabs
   // (สุวรรณภูมิ / ดอนเมือง / ไปรษณีย์หลักสี่ / คลองเตย / แหลมฉบัง / ICD / ด่านชายแดน).
   // The selected port auto-fills customsForm.port + portLabel, so the form
-  // below drops the "ด่านศุลกากร / ท่าเรือ" dropdown when in customs-landing mode.
+  // below drops the "ด่านศุลกากร / Port" dropdown when in customs-landing mode.
   const [customsPort, setCustomsPort] = useState<CustomsPortCode | null>(null);
   const [seaMode,    setSeaMode]    = useState<SeaMode>("lcl");
   const [lclTerm,    setLclTerm]    = useState<Term>("ddp");

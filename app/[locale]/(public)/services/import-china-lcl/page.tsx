@@ -63,7 +63,7 @@ const STEPS = [
   { num: "01", icon: MessageCircle, title: "แจ้งสเปก + ปริมาณ", desc: "ประเภทสินค้า · น้ำหนัก/CBM · ปลายทาง — ทีม quote ให้ก่อน" },
   { num: "02", icon: Warehouse, title: "ส่งของถึงโกดังจีน", desc: "Pacred รับที่กวางโจว/เซินเจิ้น/อี้อู — หรือซัพพลายเออร์ส่งเข้าโกดังเอง" },
   { num: "03", icon: PackageSearch, title: "ตรวจ-แพ็ค-รวมตู้", desc: "ตรวจสภาพ · ห่อกันกระแทก · รวมส่งกับลูกค้ารายอื่น" },
-  { num: "04", icon: Ship, title: "ขนส่งทางเรือ", desc: "Sea Freight LCL ถึงท่าเรือไทย (คลองเตย/แหลมฉบัง)" },
+  { num: "04", icon: Ship, title: "ขนส่งทางเรือ", desc: "Sea Freight LCL ถึง Port ไทย (คลองเตย/แหลมฉบัง)" },
   { num: "05", icon: Stamp, title: "เคลียร์ + ส่งต่อ", desc: "เคลียร์ภาษี + ส่งถึงประตู Door-to-Door ทั่วประเทศ" },
 ];
 
