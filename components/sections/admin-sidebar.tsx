@@ -37,6 +37,7 @@ const items: NavItem[] = [
 
   // Finance
   { href: "/admin/wallet",           label: "กระเป๋าเงิน",     icon: <Wallet className="w-5 h-5" />,          roles: ["accounting"], group: "การเงิน" },
+  { href: "/admin/tax-invoices",     label: "ใบกำกับภาษี",     icon: <Receipt className="w-5 h-5" />,         roles: ["accounting"], group: "การเงิน" },
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
 

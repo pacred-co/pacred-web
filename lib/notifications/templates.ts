@@ -289,4 +289,33 @@ export const notify = {
       body:     opts.message,
     };
   },
+
+  // ── tax invoice (T-P4 G2c) ──
+  // Reference type omitted — adding 'tax_invoice' to the reference enum
+  // would require a notifications-table migration. The deep link in the
+  // body covers the common case (customer clicks → lands on receipt page
+  // where the invoice card now shows status='issued').
+  taxInvoiceIssued(opts: { serialNo: string; totalThb: number; orderRef: string }): NotifyPayload {
+    return {
+      category:  "payment",
+      severity:  "success",
+      title:     `ออกใบกำกับภาษี ${opts.serialNo} แล้ว`,
+      body:      `${opts.orderRef} · ยอด ${thb(opts.totalThb)} — ดาวน์โหลดได้จากหน้าใบเสร็จ`,
+      link_href: opts.orderRef.startsWith("ON")
+        ? `/service-order/${opts.orderRef}/receipt`
+        : `/service-import/${opts.orderRef}/receipt`,
+    };
+  },
+
+  taxInvoiceCancelled(opts: { serialNo: string; reason: string; orderRef: string }): NotifyPayload {
+    return {
+      category:  "payment",
+      severity:  "warning",
+      title:     `ใบกำกับภาษี ${opts.serialNo} ถูกยกเลิก`,
+      body:      `${opts.orderRef} · เหตุผล: ${opts.reason} — ติดต่อทีมงานหากต้องการใบใหม่`,
+      link_href: opts.orderRef.startsWith("ON")
+        ? `/service-order/${opts.orderRef}/receipt`
+        : `/service-import/${opts.orderRef}/receipt`,
+    };
+  },
 };

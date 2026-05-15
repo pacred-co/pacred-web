@@ -238,9 +238,9 @@ function ExistingInvoiceCard({ existing }: { existing: CustomerTaxInvoiceSummary
           >
             {isIssued ? "ออกแล้ว" : isPending ? "รออนุมัติ" : "ยกเลิก"}
           </span>
-          {isIssued && existing.pdf_storage_path && (
+          {isIssued && (
             <a
-              href={`/api/tax-invoice/${existing.id}.pdf`}
+              href={`/api/tax-invoice/${existing.id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700"

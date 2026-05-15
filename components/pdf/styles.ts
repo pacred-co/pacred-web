@@ -78,6 +78,21 @@ export const styles = StyleSheet.create({
     fontSize: 9,
     color: COLORS.muted,
   },
+  // Tax invoice extras (G2c)
+  receiptTitleEn: {
+    fontSize: 8,
+    fontWeight: "normal",
+    color: COLORS.muted,
+    letterSpacing: 1,
+    marginBottom: 4,
+    marginTop: -2,
+  },
+  originalCopy: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginTop: 2,
+    fontStyle: "italic",
+  },
 
   // ── Customer block ───────────────────────────────────────────────────
   customerBlock: {
@@ -95,6 +110,10 @@ export const styles = StyleSheet.create({
   },
   customerColLast: {
     marginRight: 0,
+  },
+  // Tax invoice — buyer block takes more horizontal space than payment-method block
+  buyerColWide: {
+    flex: 2,
   },
   customerLabel: {
     fontSize: 8,
@@ -265,6 +284,29 @@ export const styles = StyleSheet.create({
   signatureLabel: {
     fontSize: 8,
     color: COLORS.muted,
+  },
+
+  // ── Cancelled watermark (tax invoice) ────────────────────────────────
+  // Diagonal stamp drawn over the page when status='cancelled'. Big +
+  // semi-transparent so the underlying invoice is still readable for
+  // audit purposes but unmistakably marked as voided.
+  cancelledOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelledText: {
+    fontSize: 80,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    opacity: 0.18,
+    transform: "rotate(-30deg)",
+    letterSpacing: 8,
   },
 });
 
