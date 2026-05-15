@@ -122,10 +122,13 @@ export default async function AdminRatesPage() {
             <p className="text-sm font-semibold text-primary-700">General rate</p>
             <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
           </Link>
-          <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
-            <p className="text-sm font-semibold text-muted">VIP rate</p>
-            <p className="text-[11px] text-muted mt-1">LP-1b (รอ)</p>
-          </div>
+          <Link
+            href="/admin/rates/vip"
+            className="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">VIP rate</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
+          </Link>
           <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
             <p className="text-sm font-semibold text-muted">Custom rate</p>
             <p className="text-[11px] text-muted mt-1">LP-1c (รอ)</p>

@@ -138,3 +138,103 @@ export async function adminDeleteGeneralRate(
     return { ok: true, data: { id: d.id } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// LP-1b: rate_vip (flat single rate, same composite key shape as general)
+// ────────────────────────────────────────────────────────────
+
+const upsertVipRateSchema = z.object({
+  customer_group:   z.string().trim().min(1).max(20),
+  source_warehouse: z.enum(SOURCE_WAREHOUSE),
+  transport_type:   z.enum(TRANSPORT_TYPE),
+  product_type:     z.enum(PRODUCT_TYPE),
+  basis:            z.enum(BASIS),
+  rate:             z.number().positive().max(100_000),
+});
+export type UpsertVipRateInput = z.infer<typeof upsertVipRateSchema>;
+
+export async function adminUpsertVipRate(
+  input: UpsertVipRateInput,
+): Promise<AdminActionResult<{ id: string; created: boolean }>> {
+  const parsed = upsertVipRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string; created: boolean }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("rate_vip")
+      .select("id, rate")
+      .eq("customer_group",   d.customer_group)
+      .eq("source_warehouse", d.source_warehouse)
+      .eq("transport_type",   d.transport_type)
+      .eq("product_type",     d.product_type)
+      .eq("basis",            d.basis)
+      .maybeSingle<{ id: string; rate: number }>();
+
+    const { data: written, error } = await admin
+      .from("rate_vip")
+      .upsert(
+        {
+          ...(existing?.id ? { id: existing.id } : {}),
+          customer_group:   d.customer_group,
+          source_warehouse: d.source_warehouse,
+          transport_type:   d.transport_type,
+          product_type:     d.product_type,
+          basis:            d.basis,
+          rate:             d.rate,
+          admin_id_update:  adminId,
+        },
+        { onConflict: "customer_group,source_warehouse,transport_type,product_type,basis" },
+      )
+      .select("id")
+      .single<{ id: string }>();
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, existing ? "rate_vip.update" : "rate_vip.insert", "rate_vip", written.id, {
+      key: {
+        customer_group:   d.customer_group,
+        source_warehouse: d.source_warehouse,
+        transport_type:   d.transport_type,
+        product_type:     d.product_type,
+        basis:            d.basis,
+      },
+      before: existing ? { rate: existing.rate } : null,
+      after:  { rate: d.rate },
+    });
+
+    revalidatePath("/admin/rates");
+    revalidatePath("/admin/rates/vip");
+    return { ok: true, data: { id: written.id, created: !existing } };
+  });
+}
+
+const deleteVipRateSchema = z.object({ id: z.string().uuid() });
+export type DeleteVipRateInput = z.infer<typeof deleteVipRateSchema>;
+
+export async function adminDeleteVipRate(
+  input: DeleteVipRateInput,
+): Promise<AdminActionResult<{ id: string }>> {
+  const parsed = deleteVipRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: before } = await admin
+      .from("rate_vip")
+      .select("customer_group, source_warehouse, transport_type, product_type, basis, rate")
+      .eq("id", d.id)
+      .maybeSingle();
+    if (!before) return { ok: false, error: "not_found" };
+
+    const { error } = await admin.from("rate_vip").delete().eq("id", d.id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "rate_vip.delete", "rate_vip", d.id, { before });
+
+    revalidatePath("/admin/rates");
+    revalidatePath("/admin/rates/vip");
+    return { ok: true, data: { id: d.id } };
+  });
+}
