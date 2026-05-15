@@ -74,6 +74,15 @@
 - [`docs/briefs/got.md`](docs/briefs/got.md) · [`docs/briefs/dave.md`](docs/briefs/dave.md) · [`docs/briefs/poom.md`](docs/briefs/poom.md) · [`docs/briefs/podeng.md`](docs/briefs/podeng.md)
 - 👷 [`docs/briefs/ops-roles.md`](docs/briefs/ops-roles.md) — 14 STAFF role workspaces (system design input)
 
+**🎯 Master strategy (single-read consolidation — all briefs + ADRs + plans condensed):**
+- [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
+
+**🛠 Skills kit (playbooks the agent follows when triggered):**
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 9 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep
+
+**📚 Learnings (compounding knowledge — read before re-debugging):**
+- [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
+
 **Living docs (เดฟ updates):**
 - 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — current sprints + hand-off batches (Parts O–S only; ~1435 lines)
 - 📚 [`docs/sprints/archive-a-to-n.md`](docs/sprints/archive-a-to-n.md) — historic survey (Parts A–N — moved out to keep PORT_PLAN under 2000-line agent ceiling)

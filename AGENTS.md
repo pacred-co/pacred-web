@@ -10,9 +10,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > AGENTS.md is loaded into every Claude Code session via `@AGENTS.md` at the top of `CLAUDE.md`. Keep this file narrow: rules that change *how* agents behave, not project facts (facts live in CLAUDE.md / docs/).
 
-## 1. Read your role brief FIRST
+## 1. Read your role brief FIRST + scan learnings
 
 Every session opens **[`docs/briefs/<your-name>.md`](docs/briefs/)** before any other work. Routing in [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md). Skipping = wandering session.
+
+After your brief, do a 1-min scan of [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since you last looked save you minutes-to-hours of re-debugging downstream. Compounds over time (immortal-scholar pattern — see `.claude/skills/scholar-immortal/`).
+
+The master single-read consolidation of everything else lives in [`docs/STRATEGY.md`](docs/STRATEGY.md).
 
 ## 2. Revenue-first lens (emergency mode active)
 
@@ -49,4 +53,27 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ---
 
+## 9. Skills are playbooks — invoke them
+
+The `.claude/skills/` directory contains 9 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+
+- `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
+- `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
+- `audit-kpi-dashboard` — generate dashboards from operational data
+- `test-coverage-writer` — write unit + integration tests systematically
+- `refactor-readability` — refactor without behavior change
+- `performance-hunter` — measured perf fixes, never blind
+- `scholar-immortal` — capture every learning to `docs/learnings/` (knowledge compounds)
+- `copyist-unlimited` — clone templates at scale (N variants)
+- `legacy-php-sweep` — port from `D:\xampp\htdocs\pcscargo` to Pacred Next.js
+
+When a situation matches a skill's description → invoke via the Skill tool (`skill: <name>`). Or describe the situation and let the harness match.
+
+## 10. Capture learnings (immortal scholar)
+
+Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a working solution after debugging, a partner-API quirk — write to `docs/learnings/<topic>.md` per the `scholar-immortal` SKILL.md protocol. Even small entries compound. Pacred-specific knowledge that no LLM training has = our moat.
+
+---
+
 For project facts (architecture, schema, env, branches, decisions): see [CLAUDE.md](CLAUDE.md) and the linked docs.
+For master strategic single-read: see [docs/STRATEGY.md](docs/STRATEGY.md).

@@ -81,6 +81,14 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 ## 🗺️ Documentation map
 
+### 🎯 Master strategy + skills (read once per session)
+
+| File | คืออะไร |
+|---|---|
+| [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~600-line read. Open every session for full context. |
+| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 9 starter skills — playbooks the agent follows when triggered (verify-loop · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep) |
+| [`learnings/_index.md`](learnings/_index.md) | Compounding knowledge corpus — every dev / agent adds new gotchas via `scholar-immortal` skill. 1-min scan each session. |
+
 ### 🧑‍💻 Role briefs (force-read — open YOUR file first)
 
 | File | คืออะไร | ใครอ่าน |
@@ -266,7 +274,87 @@ git push origin <my-branch>
   - Add-friend: https://line.me/R/ti/p/%40pacred
   - Code: import `LINE_OA` from `components/seo/site.ts`
 - **Pacred company info:** [`docs/pacred-info.md`](pacred-info.md) (addresses + phones + emails + sales reps)
-- Legacy PHP source (read-only ref): `C:\xampp\htdocs\pcscargo\` (เดฟ's machine — full audit at [`docs/audit/php-pcscargo-integrations.md`](audit/php-pcscargo-integrations.md))
+- Legacy PHP source (read-only ref): **`D:\xampp\htdocs\pcscargo\`** (เดฟ's machine — canonical path per 2026-05-15 brief — full audit at [`docs/audit/php-pcscargo-integrations.md`](audit/php-pcscargo-integrations.md) — sweep skill at [`.claude/skills/legacy-php-sweep/`](../.claude/skills/legacy-php-sweep/SKILL.md))
+
+---
+
+## 🌳 Appendix — Obsidian brain bridge (future routing)
+
+> **Why this section.** เดฟ asked: "ไปจบที่ทำสมองใน obsidian หรือมีแนะนำก็บอก". Captured here at the end of HANDBOOK because it's deliberately scoped as future work (don't build now; the foundations needed for it land first).
+
+### What problem this solves
+
+The repo accumulates:
+- ADRs (`docs/decisions/`)
+- Learnings (`docs/learnings/`)
+- Briefs (`docs/briefs/`)
+- Strategy + audits + runbooks (`docs/`)
+- Skills (`.claude/skills/`)
+- Memories (in `~/.claude/projects/.../memory/`)
+
+These work *inside* a Claude Code session. But the user wants a brain that:
+- Persists across machines + repos (not just `pacred-web`)
+- Lets เดฟ + ก๊อต *browse* the knowledge graph as humans (not via grep)
+- Captures non-code observations (sales call notes, partner-meeting takeaways, owner conversations)
+- Has bi-directional links + tag search + visual graph
+- Eventually feeds back into the agent (RAG via files-on-disk)
+
+Obsidian fits naturally because it's flat markdown + bi-directional links + works without internet + has plugin ecosystem.
+
+### Recommended approach (when we get there)
+
+**Tier 1 — Mirror, don't fork (recommended start):**
+- Create a Pacred-org Obsidian vault on shared drive (Google Drive / iCloud / a Pacred-owned NAS)
+- Vault structure mirrors `docs/` plus non-code zones:
+  ```
+  pacred-vault/
+  ├── 00-meta/              (vault README, tag conventions, MOC index)
+  ├── 10-strategy/          (mirror of pacred-web docs/STRATEGY.md + roadmap notes)
+  ├── 20-decisions/         (mirror of docs/decisions/ ADRs + meeting notes feeding them)
+  ├── 30-people/            (1 note per team member + per Pacred staff role + per customer-contact)
+  ├── 40-partners/          (MOMO, TAM, LINE, ThaiBulkSMS, Vercel, Supabase notes)
+  ├── 50-learnings/         (mirror of docs/learnings/ + non-code learnings: sales / process / customer feedback)
+  ├── 60-experiments/       (Ad campaigns, A/B results, customer interview transcripts)
+  ├── 70-finance/           (when bank acct is sorted)
+  ├── 80-projects/          (one note per project — pacred-web V2 · pacred-DPX V3 · etc)
+  └── 90-inbox/             (capture inbox — daily notes / ideas / quick captures)
+  ```
+- **Sync rule:** `docs/` and `docs/learnings/` are *source of truth* for code-related notes. Obsidian mirrors them via a sync script (cron / pre-commit hook). Non-code notes live ONLY in Obsidian.
+
+**Tier 2 — Plugins to install:**
+- **Dataview** — query notes like a DB (e.g., "show every ADR locked in last 30 days")
+- **Templater** — note templates (matching the `scholar-immortal` skill protocol)
+- **Linter** — auto-format frontmatter
+- **Calendar / Daily notes** — for daily standups
+- **Tasks** — pull T-G / T-P / T-N / T-D Part T tasks into a dashboard
+- **Excalidraw** — for system diagrams when text doesn't suffice
+- **Smart Connections** (optional) — semantic search via embeddings; useful when corpus is large
+
+**Tier 3 — Feed agents from the vault:**
+- Vault on local disk → Claude Code reads via filesystem (no special integration needed)
+- Add path to `.claude/skills/scholar-immortal/SKILL.md` once vault exists: "also write to `$PACRED_VAULT_PATH/50-learnings/...`"
+- ก๊อต ADRs / strategy updates flow vault→repo via the same sync script
+
+### When to start
+
+Not now. Pre-requisites:
+- Pacred revenue path live (cargo system ships, customers transacting)
+- 3-4 weeks of `docs/learnings/` entries accumulated → enough corpus to make a vault worth opening
+- ก๊อต has bandwidth for a 1-week setup sprint
+
+Track on `docs/v3-wishlist.md` (TBD file — ก๊อต creates per ADR-0010).
+
+### Alternative routes considered
+
+| Tool | Why considered | Why not (yet) |
+|---|---|---|
+| **Notion** | Pretty UI, blocks editor, real-time collab | Vendor lock-in; markdown export is lossy; ลูก-knowledge stays inside their data centers (privacy concern post-IPO) |
+| **Roam Research** | Bi-directional links pioneered | Subscription cost · less plugin ecosystem · markdown-export less clean than Obsidian |
+| **Logseq** | Open source · markdown · graph view | Less mature plugin ecosystem · steeper learning curve for non-devs (ปอน / ภูม) |
+| **Plain markdown in repo only** | What we have now | Doesn't bridge to non-code notes · no browse UI · ปอน/ภูม don't open Claude Code daily |
+| **Confluence / Linear / Jira** | Enterprise-grade | Heavy · costs scale per seat · markdown round-trip lossy · ลูก-locked |
+
+**Recommendation:** Obsidian (Tier 1 setup) when pre-reqs met. Free for personal use. Sync via plain markdown. Easy migration if we change tools later.
 
 ---
 

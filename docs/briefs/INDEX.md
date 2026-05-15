@@ -106,6 +106,9 @@ This pattern is now **mandatory** per [`/CLAUDE.md`](../../CLAUDE.md) "Read brie
 
 | Doc | Purpose |
 |---|---|
+| [`../STRATEGY.md`](../STRATEGY.md) | **Master strategic single-read** — all briefs/ADRs/plans condensed (use as session warm-up) |
+| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 9 playbooks for repeatable patterns |
+| [`../learnings/_index.md`](../learnings/_index.md) | Compounding learnings — scan at session start |
 | [`../HANDBOOK.md`](../HANDBOOK.md) | Master index — start of everything |
 | [`../team.md`](../team.md) | Role + branch + workflow rules |
 | [`../conventions.md`](../conventions.md) | Code style + commit format |

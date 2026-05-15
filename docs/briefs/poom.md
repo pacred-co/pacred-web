@@ -25,12 +25,23 @@ Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency ta
 ## 🔒 Force-read before any work
 
 1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-P1..T-P5)
-2. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
-3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part O2 (normal pipeline)
-4. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — NEW data spine for warehouse + container + shipment
-5. [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you wire
-6. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0009-erp-schema-sketch.md`](../decisions/0009-erp-schema-sketch.md) — schema specs you implement
-7. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
+2. [`docs/STRATEGY.md`](../STRATEGY.md) — master strategy single-read
+3. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow) + §10 (integration cycle)
+4. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part O2 (normal pipeline)
+5. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — NEW data spine for warehouse + container + shipment
+6. [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you wire
+7. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0009-erp-schema-sketch.md`](../decisions/0009-erp-schema-sketch.md) — schema specs you implement
+8. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
+9. [`.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) — skills kit; **`legacy-php-sweep`** is your bread-and-butter for cargo ports
+10. [`docs/learnings/_index.md`](../learnings/_index.md) — scan for any new gotcha entries since last session
+
+## 📂 Legacy reference (your most-touched external source)
+
+**`D:\xampp\htdocs\pcscargo\`** — read-only PHP source for everything in cargo. Use [`.claude/skills/legacy-php-sweep/SKILL.md`](../../.claude/skills/legacy-php-sweep/SKILL.md) before every port. Specifically:
+- `member/include/function.php` — 2451 LOC business helpers
+- `member/include/header.php` — auth + dashboard precompute
+- `member/pcs-admin/` — 187 admin files
+- DB schema dump `C:\Users\Admin\Desktop\SQLWPPCS\somedata-2026-03-19-1348-pcsc_main.sql` (`Grep` only, never `Read` whole)
 
 ---
 
