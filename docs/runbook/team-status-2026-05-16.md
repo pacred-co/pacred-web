@@ -1,8 +1,8 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-15 (เดฟ via Claude) — **7 local commits ahead** (hold-push mode). +397 test assertions · ADR-0014 · tax-invoice types + customer action + admin list page + notify templates. ภูม T-P4 G2b customer side complete; G2c admin issuance is now just detail page + action wiring (PDF gen + Storage + serial reservation).
-> **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
+> **Last updated:** 2026-05-16 evening-16 (เดฟ via Claude) — **🔀 BIG INTEGRATION MERGE.** Pulled `origin/Poom` (ภูม — T-P4 G2 complete + Phase A-D Part U items + 4 migrations) + `origin/podeng` (ปอน — 5 L-5 landing pages + customs polish + port pricing carousel) into `dave`. Resolved 4 conflicts (tax-invoices page → ภูม's · templates → merged · package.json test chains → merged · _index.md → ภูม's). `pnpm verify` ✅ all gates pass. ก๊อต `main` unchanged (no new push).
+> **dave HEAD:** post-merge — both น้องๆ branches integrated + เดฟ 8-commit hold-batch (validator tests +438 · ADR-0014 · STRATEGY refresh). Cargo loop V1 closes end-to-end incl. juristic tax invoice. Everyone → `git fetch && git merge origin/dave` before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
 ---
