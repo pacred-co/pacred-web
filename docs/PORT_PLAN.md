@@ -1695,6 +1695,8 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording | ภูม | 🟡 | ⬜ |
 | V-E5 | Range-guard **every numeric import** — legacy invoice sheets carry int32-overflow garbage (`-2146826xxx`) | ภูม | 🟡 | ⬜ |
 
+> 📐 **Schema + generation spec for V-E1/E3/E4** → [`docs/port-specs/freight-document-suite.md`](port-specs/freight-document-suite.md) — เดฟ prep (the `freight_*` tables + Invoice/PL · Form E · D/O generators); value/VAT math in [ADR-0016](decisions/0016-freight-value-model.md).
+
 ## V-F — Strategic / dependency
 
 | # | Task | Owner | Rev | Status |
