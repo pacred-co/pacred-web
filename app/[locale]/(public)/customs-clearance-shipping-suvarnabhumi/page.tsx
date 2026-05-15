@@ -501,8 +501,8 @@ export default async function CustomsClearancePage({
               </span>
 
               <div
-                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
+                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(6,199,85,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(6,199,85,0.5)] group-hover:-translate-y-0.5"
+                style={{ background: "linear-gradient(135deg, #00B900 0%, #06C755 45%, #02A340 100%)" }}
               >
                 {/* Decorative diagonal sheen */}
                 <span
@@ -528,7 +528,7 @@ export default async function CustomsClearancePage({
                     aria-hidden
                     className="absolute inset-0 -m-6 rounded-full bg-white/15 blur-2xl"
                   />
-                  <p className="relative text-[48px] md:text-[120px] font-black text-white leading-none tracking-tight whitespace-nowrap [-webkit-text-stroke:2px_#1a0303] md:[-webkit-text-stroke:4.5px_#1a0303] [paint-order:stroke_fill] [text-shadow:0_8px_24px_rgba(0,0,0,0.7),0_0_44px_rgba(255,255,255,0.35)]">
+                  <p className="relative text-[48px] md:text-[120px] font-black text-white leading-none tracking-tight whitespace-nowrap [-webkit-text-stroke:2px_#013a14] md:[-webkit-text-stroke:4.5px_#013a14] [paint-order:stroke_fill] [text-shadow:0_8px_24px_rgba(0,0,0,0.55),0_0_44px_rgba(255,255,255,0.35)]">
                     1<span className="text-[26px] md:text-[64px] tracking-tight">ชม.</span>
                   </p>
                 </div>
@@ -544,12 +544,15 @@ export default async function CustomsClearancePage({
                     </p>
                   </div>
 
-                  {/* Center messages — quoted, single line, large on desktop */}
+                  {/* Center messages — quoted, single line, large on desktop.
+                      Bold text-stroke + soft shadow keep the white headline
+                      crisp on the LINE-green gradient (lighter background than
+                      the old dark-red banner). */}
                   <div className="min-w-0">
-                    <p className="text-[12px] md:text-[39px] font-bold text-white leading-snug whitespace-nowrap">
+                    <p className="text-[12px] md:text-[39px] font-bold text-white leading-snug whitespace-nowrap [-webkit-text-stroke:0.5px_#013a14] md:[-webkit-text-stroke:1px_#013a14] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(1,58,20,0.45),0_1px_2px_rgba(0,0,0,0.35)]">
                       เคลียร์ให้จบ รวดเร็ว ราคาคุ้มค่า ถูกต้อง รู้ผลใน
                     </p>
-                    <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
+                    <p className="hidden md:block mt-1.5 text-[13px] text-white leading-snug [text-shadow:0_1px_2px_rgba(1,58,20,0.5)]">
                       ทีมผู้เชี่ยวชาญพิธีการศุลกากร ครบทุกขั้นตอน — เอกสาร เคลียร์ภาษี ปล่อยสินค้า รองรับ Air · Sea · Truck
                     </p>
                     {/* CTA hint — yellow accent matches the site theme (paired with red banner) */}
