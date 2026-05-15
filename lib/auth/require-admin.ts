@@ -15,7 +15,9 @@ import "server-only";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
-export type AdminRole = "super" | "ops" | "accounting" | "sales_admin";
+// 'warehouse' + 'driver' added by migration 0033 — extended admins.role
+// CHECK constraint to support warehouse spine + driver scan flows.
+export type AdminRole = "super" | "ops" | "accounting" | "sales_admin" | "warehouse" | "driver";
 
 export async function requireAdmin(requiredRoles?: AdminRole[]): Promise<{
   user: { id: string; email: string | null };

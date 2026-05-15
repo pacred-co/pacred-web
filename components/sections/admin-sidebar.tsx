@@ -30,12 +30,16 @@ const items: NavItem[] = [
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/yuan-payments",    label: "ฝากโอนหยวน",      icon: <Languages className="w-5 h-5" />,       roles: ["accounting"], group: "ปฏิบัติการ" },
-  { href: "/admin/containers",       label: "รายการตู้",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
+  { href: "/admin/warehouse/containers", label: "ตู้คอนเทนเนอร์ (Spine)", icon: <Package className="w-5 h-5" />, roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
+  { href: "/admin/warehouse/bulletin",   label: "บุลเลตินตู้รายวัน",      icon: <ClipboardCheck className="w-5 h-5" />, roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
+  { href: "/admin/containers",       label: "รายการตู้ (legacy)", icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/drivers",          label: "คนขับส่งของ",       icon: <Truck className="w-5 h-5" />,           roles: ["ops"], group: "ปฏิบัติการ" },
+  { href: "/admin/carriers",         label: "ขนส่ง (SPX/J&T/...)", icon: <Truck className="w-5 h-5" />,         roles: ["super","ops"], group: "ปฏิบัติการ" },
 
   // Finance
   { href: "/admin/wallet",           label: "กระเป๋าเงิน",     icon: <Wallet className="w-5 h-5" />,          roles: ["accounting"], group: "การเงิน" },
+  { href: "/admin/tax-invoices",     label: "ใบกำกับภาษี",     icon: <Receipt className="w-5 h-5" />,         roles: ["accounting"], group: "การเงิน" },
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
 

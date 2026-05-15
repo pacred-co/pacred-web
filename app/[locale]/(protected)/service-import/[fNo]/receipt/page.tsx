@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { getForwarderByNo } from "@/actions/forwarder";
+import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
+import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
+import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 /**
@@ -14,6 +17,85 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   const res = await getForwarderByNo(fNo);
   if (!res.ok || !res.data) notFound();
   const f = res.data;
+
+  // T-P4 G2b: existing tax invoice (if any) + buyer-info pre-population
+  // from the customer's profile + corporate row. RLS scopes both.
+  const taxInv = await getMyTaxInvoiceForOrder("forwarder", fNo);
+  const existingInvoice = taxInv.ok ? taxInv.data : null;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  let companyName    = "";
+  let companyAddress = "";
+  let buyerTaxId     = "";
+  let buyerName      = "";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, account_type, company_name, tax_id")
+      .eq("id", user.id)
+      .maybeSingle<{
+        first_name: string | null;
+        last_name:  string | null;
+        account_type: "personal" | "juristic" | null;
+        company_name: string | null;
+        tax_id:       string | null;
+      }>();
+    buyerName = profile?.company_name
+      ?? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
+    buyerTaxId = profile?.tax_id ?? "";
+    companyName = profile?.company_name ?? "";
+
+    if (profile?.account_type === "juristic") {
+      const { data: corp } = await supabase
+        .from("corporate")
+        .select("company_name, tax_id, company_address")
+        .eq("profile_id", user.id)
+        .maybeSingle<{
+          company_name:    string | null;
+          tax_id:          string | null;
+          company_address: string | null;
+        }>();
+      if (corp) {
+        if (corp.company_name)    { buyerName = corp.company_name; companyName = corp.company_name; }
+        if (corp.tax_id)          buyerTaxId = corp.tax_id;
+        if (corp.company_address) companyAddress = corp.company_address;
+      }
+    }
+  }
+  void companyName; // referenced in case of future juristic-only branch
+  const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
+  const isPaid     = f.status === "delivered";
+
+  // U2-4: post-delivery cost adjustments (D/O fee · gateway · weight rebill).
+  // RLS scopes to profile_id automatically — customer sees only their own.
+  type CostAdjRow = {
+    id:         string;
+    kind:       string;
+    amount_thb: number;
+    note:       string | null;
+    status:     string;
+    created_at: string;
+    paid_at:    string | null;
+  };
+  const { data: costAdjRaw } = await supabase
+    .from("forwarder_cost_adjustments")
+    .select("id, kind, amount_thb, note, status, created_at, paid_at")
+    .eq("forwarder_id", f.id)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .returns<CostAdjRow[]>();
+  const costAdjustments = costAdjRaw ?? [];
+  const totalUnpaidExtra = costAdjustments
+    .filter((r) => r.status === "unpaid")
+    .reduce((sum, r) => sum + Number(r.amount_thb), 0);
+  const COST_ADJ_LABEL: Record<string, string> = {
+    do_fee:        "ค่า D/O",
+    gateway_fee:   "ค่า gateway",
+    weight_rebill: "ค่าน้ำหนักเพิ่ม",
+    customs_extra: "ค่าศุลกากรเพิ่ม",
+    other:         "อื่นๆ",
+  };
 
   return (
     <div className="bg-white text-black min-h-screen">
@@ -112,6 +194,68 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
             </tbody>
           </table>
         </section>
+
+        {/* U2-4: post-delivery cost adjustments (hidden on print — admin-issued) */}
+        {costAdjustments.length > 0 && (
+          <section className="no-print rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <h3 className="font-bold text-sm">ค่าใช้จ่ายเพิ่มเติม</h3>
+              {totalUnpaidExtra > 0 && (
+                <span className="rounded-full border border-amber-300 bg-white px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                  ค้างชำระ ฿{totalUnpaidExtra.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <ul className="text-xs space-y-1">
+              {costAdjustments.map((r) => (
+                <li key={r.id} className="flex items-start justify-between gap-3 border-b border-amber-200 pb-1 last:border-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="font-medium">{COST_ADJ_LABEL[r.kind] ?? r.kind}</p>
+                    {r.note && <p className="text-amber-900/70 text-[10px]">📝 {r.note}</p>}
+                    <p className="text-[10px] text-amber-900/60">
+                      {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      {r.paid_at && (
+                        <> · ชำระเมื่อ {new Date(r.paid_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
+                      )}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-mono font-medium">
+                      ฿{Number(r.amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </p>
+                    <span className={`inline-block mt-0.5 rounded-full border px-2 py-0.5 text-[10px] ${
+                      r.status === "paid"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-amber-100 text-amber-800 border-amber-300"
+                    }`}>
+                      {r.status === "paid" ? "ชำระแล้ว" : "รอชำระ"}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {totalUnpaidExtra > 0 && (
+              <p className="text-[11px] text-amber-800 pt-1 border-t border-amber-300">
+                💬 กรุณาติดต่อทีมงานเพื่อชำระค่าใช้จ่ายเพิ่มเติม (LINE @pacred / โทร {CONTACT.phoneCompanyDisplay})
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* T-P4 G2b: tax invoice request panel (hidden on print) */}
+        {isPaid && (
+          <TaxInvoiceRequestPanel
+            orderType="forwarder"
+            orderId={f.f_no ?? fNo}
+            defaults={{
+              name:    buyerName,
+              address: companyAddress,
+              taxId:   buyerTaxId,
+            }}
+            existing={existingInvoice}
+            eligible={isEligible}
+          />
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-600">

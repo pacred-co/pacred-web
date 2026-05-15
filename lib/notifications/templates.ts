@@ -303,34 +303,32 @@ export const notify = {
     };
   },
 
-  // ── Tax invoice requested by customer (admin-recipient notification).
-  //    Fires when customer clicks "ขอใบกำกับภาษี" on receipt page.
-  //    super + accounting admins review at /admin/tax-invoices/[id] and
-  //    issue via adminIssueTaxInvoice action (ภูม T-P4 G2c). ──
-  taxInvoiceRequested(opts: { taxInvoiceId: string; buyerName: string; parentLabel: string }): NotifyPayload {
+  // ── tax invoice (T-P4 G2c — ภูม) ──
+  // Reference type omitted — adding 'tax_invoice' to the reference enum
+  // would require a notifications-table migration. The deep link in the
+  // body covers the common case (customer clicks → lands on receipt page
+  // where the invoice card now shows status='issued').
+  taxInvoiceIssued(opts: { serialNo: string; totalThb: number; orderRef: string }): NotifyPayload {
     return {
-      category:       "system",
-      severity:       "info",
-      title:          "📄 ลูกค้าขอใบกำกับภาษี",
-      body:           `${opts.buyerName} ขอใบกำกับภาษีสำหรับ ${opts.parentLabel} — กรุณาตรวจสอบและออกใบ`,
-      link_href:      `/admin/tax-invoices/${opts.taxInvoiceId}`,
-      reference_type: "contact_message",
-      reference_id:   opts.taxInvoiceId,
+      category:  "payment",
+      severity:  "success",
+      title:     `ออกใบกำกับภาษี ${opts.serialNo} แล้ว`,
+      body:      `${opts.orderRef} · ยอด ${thb(opts.totalThb)} — ดาวน์โหลดได้จากหน้าใบเสร็จ`,
+      link_href: opts.orderRef.startsWith("ON")
+        ? `/service-order/${opts.orderRef}/receipt`
+        : `/service-import/${opts.orderRef}/receipt`,
     };
   },
 
-  // ── Tax invoice issued (customer-recipient).
-  //    Fires when admin issues via adminIssueTaxInvoice. Customer can
-  //    download from receipt page once status='issued'. ──
-  taxInvoiceIssued(opts: { taxInvoiceId: string; serialNo: string; receiptPath: string }): NotifyPayload {
+  taxInvoiceCancelled(opts: { serialNo: string; reason: string; orderRef: string }): NotifyPayload {
     return {
-      category:       "order",
-      severity:       "success",
-      title:          `📄 ออกใบกำกับภาษี ${opts.serialNo} เรียบร้อย`,
-      body:           "ดาวน์โหลดใบกำกับภาษีได้จากหน้าใบเสร็จ",
-      link_href:      opts.receiptPath,
-      reference_type: "contact_message",
-      reference_id:   opts.taxInvoiceId,
+      category:  "payment",
+      severity:  "warning",
+      title:     `ใบกำกับภาษี ${opts.serialNo} ถูกยกเลิก`,
+      body:      `${opts.orderRef} · เหตุผล: ${opts.reason} — ติดต่อทีมงานหากต้องการใบใหม่`,
+      link_href: opts.orderRef.startsWith("ON")
+        ? `/service-order/${opts.orderRef}/receipt`
+        : `/service-import/${opts.orderRef}/receipt`,
     };
   },
 };
