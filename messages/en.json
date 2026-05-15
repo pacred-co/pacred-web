@@ -1283,7 +1283,6 @@
     "purposePh": "e.g. Supplier payment"
   },
   "bookingCalc": {
-    "tel": "02-055-6063",
     "callPrefix": "Call",
     "contactQuote": "Urgent contact / Request a quote",
     "alertWeightCbm": "Please enter CBM or weight",

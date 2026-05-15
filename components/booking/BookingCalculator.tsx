@@ -11,6 +11,7 @@ import { CustomDropdown, TextDropdown } from "./CustomDropdown";
 import { ResultBox }     from "./ResultBox";
 import { calcLCL, calcFCL, calcTruck, calcAir } from "@/lib/booking-calculator";
 import { trackCtaClick } from "@/lib/analytics";
+import { CONTACT } from "@/components/seo/site";
 import {
   SALES_CARDS_DATA,
   ORIGIN_SECTIONS_KEYS,
@@ -80,7 +81,10 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
   const tRemit = useTranslations("bookingCalc.remit");
   const tSales = useTranslations("salesTeam");
 
-  const tel = t("tel");
+  // Phone shown in the panel footer hint — import from the canonical
+  // CONTACT constant (per AGENTS.md §7) instead of a hardcoded i18n
+  // string, so updating the sales number ripples to every surface.
+  const tel = CONTACT.phoneDisplay;
   const callPrefix = t("callPrefix");
   const contactLabel = t("contactQuote");
 
@@ -405,7 +409,19 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
           {/* ── Customs Panel ── */}
           {panelOpen && activeTab === "customs" && (
             <div className="p-4 md:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+              {/* Layout
+                 - customs landing (4 fields, port dropdown hidden):
+                     mobile  → row1: country+product (2-col) · row2: AWB (full) · row3: phone (full) = 3 rows
+                     desktop → 2 cols × 2 rows = balanced 4-field grid
+                 - non-customs landing (5 fields incl. port dropdown):
+                     keeps the original 3-col grid (3 dropdowns row 1, 2 inputs row 2) */}
+              <div
+                className={
+                  isCustomsLanding
+                    ? "grid grid-cols-2 gap-4 items-end"
+                    : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end"
+                }
+              >
                 {/* Port dropdown only shown when the tab strip ISN'T the port
                     tab strip — on the customs landing the active port tab
                     already populates customsForm.port, so this would be
@@ -418,12 +434,12 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
                   onSelect={(v, l) => setCustomsForm(f => ({ ...f, country: v, countryLabel: l }))} />
                 <CustomDropdown label={tCustoms("productLabel")} displayValue={customsForm.productLabel} sections={CUSTOMS_PRODUCT_SECTIONS}
                   onSelect={(v, l) => setCustomsForm(f => ({ ...f, productType: v, productLabel: l }))} />
-                <div className="flex flex-col gap-1.5">
+                <div className={`flex flex-col gap-1.5 ${isCustomsLanding ? "col-span-2 md:col-span-1" : ""}`}>
                   <FieldLabel>{tCustoms("awbLabel")}</FieldLabel>
                   <input type="text" placeholder={tCustoms("awbPh")} className={ctrl()}
                     value={customsForm.awb} onChange={e => setCustomsForm(f => ({ ...f, awb: e.target.value }))} />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className={`flex flex-col gap-1.5 ${isCustomsLanding ? "col-span-2 md:col-span-1" : ""}`}>
                   <FieldLabel>{tCustoms("contactLabel")}</FieldLabel>
                   <input type="text" placeholder={tCustoms("contactPh")} className={ctrl()}
                     value={customsForm.contact} onChange={e => setCustomsForm(f => ({ ...f, contact: e.target.value }))} />
