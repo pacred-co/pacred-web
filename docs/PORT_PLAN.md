@@ -247,7 +247,7 @@ The biggest production risk for Pacred today is silent regressions in cargo math
 | **P-28** | OTP flow integration test | 2-3h | Cover: requestOtp → rate limit (3/h via DB) → verifyOtp success + wrong-code reject + expired reject → consumed-once enforcement. Mock SMS gateway. **Acceptance:** 6 cases green |
 | **P-29** | Wallet ledger consistency test | 2-3h | Deposit → admin approve → trigger recomputes balance correctly. Multiple types (main/cashback/credit). Verify pending → completed transitions don't double-count. **Acceptance:** 4 cases green |
 | **P-30** | Auth signup flow integration test | 2h | Personal signup → OAuth callback → complete-profile → status='active' → first login. Plus juristic flow. **Acceptance:** 2 happy paths green |
-| **P-31** | Cart 151-item cap test (DB trigger) | 1h | Insert 150 items OK → 151st throws `cart cap reached (151 items)`. Verify trigger fires before insert. **Acceptance:** 1 case green |
+| **P-31** | Cart 151-item cap test (DB trigger) | 1h | Insert 151 items OK → 152nd throws `cart cap reached (151 items)` (cap matches legacy PHP `cart.php:17,76`). Verify trigger fires on insert when existing count >= 151. **Acceptance:** 1 case green |
 
 ### Track B — Production hardening (~10-15h)
 
@@ -974,7 +974,7 @@ Spec from Part Q + Part O2 line 1749. What's in:
 
 Wired into `pnpm test` chain. All use the same pattern as P-26 placement test (admin client + DB-direct + cleanup-in-finally).
 
-**🚨 Finding from P-31:** PORT_PLAN Track A spec said "Insert 150 OK → 151st throws" — that's off-by-one with the actual `cart_items_cap` trigger which raises on `cnt >= 151` (so 151st succeeds; 152nd fails — matches legacy PHP `cart.php:17,76` hardcoded 151-cap). Test mirrors actual trigger behavior + comment block flags the discrepancy. **Action ก๊อต/เดฟ:** confirm desired behavior — keep trigger at >=151 (current; legacy-compatible) OR tighten to >=150 if product wants strictly 150-max.
+**🚨 Finding from P-31 (RESOLVED 2026-05-16 evening, เดฟ):** PORT_PLAN Track A spec previously said "Insert 150 OK → 151st throws" — off-by-one with the actual `cart_items_cap` trigger which raises on `cnt >= 151` (151st succeeds; 152nd fails — matches legacy PHP `cart.php:17,76` hardcoded 151-cap). **Decision:** keep trigger at `>=151` (legacy-compatible). PORT_PLAN spec body fixed in same commit. ภูม test + actual code already align; no code change needed.
 
 > **🟢 เดฟ merge sweep 2026-05-15 evening** — Pulled both `origin/Poom` (16 commits) + `origin/podeng` (6 commits) into `dave` + `main` (commits `e90e594` + `ccb3dc4`). Verified: pnpm install ok · eslint clean · tsc clean · pnpm build passes · all 7 test files green (147 assertions chained: calc-price 49 + thai-number 50 + extract-product-id 19 + short-url-cache 22 + akucargo-helpers 24 + laonet-helpers 31 + placement 12 env-gated).
 >
