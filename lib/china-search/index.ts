@@ -272,6 +272,24 @@ function normaliseTamitDetail(
     }
   }
 
+  // ── DEBUG (temporary, U-debug-1): dump raw TAMIT shape for taobao
+  // when env CHINA_SEARCH_DEBUG=1. Helps us see why color/size axes
+  // aren't extracted from Taobao responses. Remove after parser fixed.
+  if (process.env.CHINA_SEARCH_DEBUG === "1" && platform === "taobao") {
+    const summary = {
+      productId,
+      hasRoot_sku:        Array.isArray(root.sku)        ? `array(${(root.sku as unknown[]).length})`        : typeof root.sku,
+      hasRoot_skuMap:     Array.isArray(root.skuMap)     ? `array(${(root.skuMap as unknown[]).length})`     : typeof root.skuMap,
+      hasRoot_skuProps:   Array.isArray(root.skuProps)   ? `array(${(root.skuProps as unknown[]).length})`   : typeof root.skuProps,
+      hasRoot_props:      Array.isArray(root.props)      ? `array(${(root.props as unknown[]).length})`      : typeof root.props,
+      hasRoot_attributes: Array.isArray(root.attributes) ? `array(${(root.attributes as unknown[]).length})` : typeof root.attributes,
+      sample_skuMap_first: Array.isArray(root.skuMap) && root.skuMap.length > 0 ? root.skuMap[0] : null,
+      sample_sku_first:    Array.isArray(root.sku)    && root.sku.length    > 0 ? root.sku[0]    : null,
+      allRootKeys: Object.keys(root),
+    };
+    console.log("[CHINA-DEBUG taobao]", JSON.stringify(summary, null, 2));
+  }
+
   // sku axes — TAMIT shape: [{ name, value: [{label, image?, data?, isImage?}] }]
   type SkuValueRaw = { label?: string; image?: string; data?: string; isImage?: number | boolean };
   type SkuAxisRaw  = { name?: string; value?: SkuValueRaw[] };
@@ -286,19 +304,51 @@ function normaliseTamitDetail(
     })),
   }));
 
-  // sku map — propPath is "axisId:valId;axisId:valId" (legacy 1688 style).
-  // Best-effort lookup against axes by index/name; UI prettifies further.
-  type SkuMapRaw = { skuId?: string | number; price?: number | string; stock?: number; propPath?: string; image?: string };
+  // sku map — multi-shape parser:
+  //   (a) 1688-style propPath: "axisId:valId;axisId:valId"
+  //   (b) Taobao-style props: { axisName: valueLabel } object
+  //   (c) Inline axis names directly on the row (e.g. { color, size, ... })
+  //
+  // Whichever shape lands, normalise to prop_path: { axisKey → valLabel }.
+  type SkuMapRaw = {
+    skuId?:    string | number;
+    price?:    number | string;
+    stock?:    number;
+    propPath?: string;
+    image?:    string;
+    props?:    Record<string, string | number>;     // (b) Taobao alt
+    color?:    string;
+    size?:     string;
+    spec?:     string;
+    style?:    string;
+  };
   const sku_map = Array.isArray(root.skuMap)
     ? (root.skuMap as SkuMapRaw[]).map((m) => {
         const path: Record<string, string> = {};
-        if (typeof m.propPath === "string") {
-          const parts = m.propPath.split(";").filter(Boolean);
-          for (const p of parts) {
+
+        // (a) 1688 propPath string
+        if (typeof m.propPath === "string" && m.propPath.length > 0) {
+          for (const p of m.propPath.split(";").filter(Boolean)) {
             const [axisId, valId] = p.split(":");
             if (axisId && valId) path[axisId] = valId;
           }
         }
+
+        // (b) Taobao props object — axis-name → value-label directly
+        if (Object.keys(path).length === 0 && m.props && typeof m.props === "object") {
+          for (const [k, v] of Object.entries(m.props)) {
+            if (k && v != null) path[k] = String(v);
+          }
+        }
+
+        // (c) Inline common axis fields (some Taobao variants ship these flat)
+        if (Object.keys(path).length === 0) {
+          if (m.color) path["สี"]    = String(m.color);
+          if (m.size)  path["ขนาด"]  = String(m.size);
+          if (m.spec)  path["รุ่น"]  = String(m.spec);
+          if (m.style) path["แบบ"]   = String(m.style);
+        }
+
         return {
           sku_id:    String(m.skuId ?? ""),
           prop_path: path,
@@ -308,6 +358,27 @@ function normaliseTamitDetail(
         };
       })
     : [];
+
+  // If `root.sku` (axes) was empty but skuMap props produced labels,
+  // derive axes by collecting distinct values per axis-key from all SKUs.
+  // This makes prettifyPropPath have something to render against, and
+  // (downstream) gives the UI a chance to build proper color/size dropdowns.
+  if (sku_axes.length === 0 && sku_map.some((m) => Object.keys(m.prop_path).length > 0)) {
+    const axisKeys = new Set<string>();
+    for (const m of sku_map) for (const k of Object.keys(m.prop_path)) axisKeys.add(k);
+    for (const key of axisKeys) {
+      const seen = new Set<string>();
+      const vals: Array<{ label: string; image: string | undefined; data: string | undefined; is_image: boolean }> = [];
+      for (const m of sku_map) {
+        const v = m.prop_path[key];
+        if (v && !seen.has(v)) {
+          seen.add(v);
+          vals.push({ label: v, image: undefined, data: v, is_image: false });
+        }
+      }
+      sku_axes.push({ name: key, values: vals });
+    }
+  }
 
   // Stock total — TAMIT may give it as string "in stock" or number, defensive.
   let stock_total: number | undefined;

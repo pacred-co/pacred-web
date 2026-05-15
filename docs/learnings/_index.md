@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-16 (testing-patterns +2 entries)
+Last reviewed: 2026-05-16 (testing-patterns +2 + nextjs-16-quirks Turbopack route cache)
 
 ---
 
@@ -15,7 +15,7 @@ Last reviewed: 2026-05-16 (testing-patterns +2 entries)
 | Topic | What's captured | Last entry |
 |---|---|---|
 | [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions / Vercel / pnpm version pitfalls | 2026-05-15 |
-| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 behavior different from training data | 2026-05-15 |
+| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 behavior different from training data | 2026-05-16 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS policy patterns that work for Pacred | 2026-05-15 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed — pending first entry) |

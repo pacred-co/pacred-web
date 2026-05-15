@@ -90,27 +90,46 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
       {/* Mobile toggle */}
       <button
         onClick={() => setOpenMobile((v) => !v)}
-        className="lg:hidden fixed top-3 left-3 z-[60] inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary-500 text-white shadow-lg"
+        className="lg:hidden fixed top-3 left-3 z-[60] inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary-600 text-white shadow-lg hover:bg-primary-700 transition-colors"
         aria-label="Menu"
       >
         {openMobile ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
       </button>
 
+      {/*
+        Light-theme sidebar (white default, dark variant per next-themes toggle).
+        Per ภูม + เดฟ confirm 2026-05-16 evening — admin redesign B/W theme support.
+      */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#1a0000] text-white flex flex-col transition-transform lg:translate-x-0 ${
-          openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
+          bg-white dark:bg-[#0f0a0a]
+          text-foreground
+          border-r border-border
+          shadow-sm
+          ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        <div className="px-5 py-5 border-b border-white/10">
-          <p className="text-xs uppercase tracking-widest text-white/50">Pacred</p>
-          <h2 className="text-lg font-bold">Admin</h2>
-          <p className="mt-1 text-[10px] text-white/40">{roles.join(" · ")}</p>
+        {/* Brand header — primary-600 accent stripe + role chip */}
+        <div className="px-5 py-5 border-b border-border bg-gradient-to-b from-primary-50/40 to-transparent dark:from-primary-950/30">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg font-black tracking-tight text-primary-700 dark:text-primary-400">PACRED</h2>
+            <span className="text-[10px] uppercase tracking-widest text-muted">Admin</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {roles.map((r) => (
+              <span
+                key={r}
+                className="rounded-full border border-primary-200 bg-primary-50 dark:bg-primary-950/40 dark:border-primary-900 px-2 py-0.5 text-[10px] font-medium text-primary-700 dark:text-primary-300"
+              >
+                {r}
+              </span>
+            ))}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
           {grouped.map((sec) => (
-            <div key={sec.group} className="space-y-1">
-              <p className="px-3 pt-1 pb-1 text-[10px] uppercase tracking-widest text-white/40">
+            <div key={sec.group} className="space-y-0.5">
+              <p className="px-3 pt-1 pb-1.5 text-[10px] uppercase tracking-widest text-muted font-semibold">
                 {sec.group}
               </p>
               {sec.items.map((it) => {
@@ -121,10 +140,12 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
                     href={it.href}
                     onClick={() => setOpenMobile(false)}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                      active ? "bg-primary-600 text-white font-semibold" : "text-white/80 hover:bg-white/10 hover:text-white"
+                      active
+                        ? "bg-primary-600 text-white font-semibold shadow-sm"
+                        : "text-foreground/75 hover:bg-surface-alt hover:text-foreground dark:hover:bg-white/5"
                     }`}
                   >
-                    {it.icon}
+                    <span className={active ? "text-white" : "text-muted"}>{it.icon}</span>
                     <span>{it.label}</span>
                   </Link>
                 );
@@ -133,11 +154,11 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-white/10 space-y-1">
+        <div className="px-3 py-3 border-t border-border space-y-1 bg-surface-alt/40 dark:bg-white/5">
           <Link
             href="/dashboard"
             onClick={() => setOpenMobile(false)}
-            className="block rounded-lg px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white"
+            className="block rounded-lg px-3 py-2 text-xs text-muted hover:bg-surface-alt hover:text-foreground dark:hover:bg-white/10 transition-colors"
           >
             ← กลับฝั่งลูกค้า
           </Link>

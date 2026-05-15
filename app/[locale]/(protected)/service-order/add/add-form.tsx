@@ -226,9 +226,16 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
         data: {},
       }];
     }
+    // Build labels first — if all paths are empty (Taobao SKUs sometimes
+    // ship with no propPath), labels would all collapse to "ตัวเลือกเดียว".
+    // In that case differentiate via price + stock so user can pick.
+    const labels = skuMap.map((m) => prettifyPropPath(m.prop_path, detail.sku_axes));
+    const allSame = labels.every((l) => l === labels[0]);
     return skuMap.map((m, i) => ({
       key: m.sku_id || `row_${i}`,
-      label: prettifyPropPath(m.prop_path, detail.sku_axes),
+      label: allSame && skuMap.length > 1
+        ? `แบบ #${i + 1} · ¥${Number(m.price_cny).toFixed(2)}${m.stock ? ` · สต๊อก ${m.stock}` : ""}`
+        : labels[i],
       price: m.price_cny,
       stock: m.stock,
       image: m.image ?? detail.main_image,

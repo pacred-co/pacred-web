@@ -95,3 +95,58 @@ Tailwind picks up tokens directly, no build config needed.
 - [Tailwind v4 docs](https://tailwindcss.com/docs/v4-beta)
 
 ---
+
+## [2026-05-16] Turbopack stale route cache → routes that exist on disk return 404
+
+**Context:** Phase D run-long session — added several new admin route files (`/admin/warehouse/bulletin/`, `/admin/forwarders/bulk-search/`, `/admin/carriers/`). Started `pnpm dev` AFTER all files were created. Some routes resolved (200) but the new ones returned 404.
+
+**Symptom:** Browser shows Next.js 404 page for known-existing routes:
+```
+GET /admin/warehouse/bulletin 404 in 234ms (next.js: 5ms, application-code: 19ms)
+GET /admin/forwarders/bulk-search 404 in 306ms (next.js: 6ms, application-code: 31ms)
+```
+The `application-code: <20ms` is the giveaway — far too fast to have rendered the page; Next.js short-circuited because it never compiled/registered the route.
+
+Inspecting `.next/server/app/[locale]/(admin)/admin/`:
+- ✅ Contains: `accounting/`, `wallet/`, `containers/` (legacy), etc.
+- ❌ Missing: `warehouse/`, `tax-invoices/`, `carriers/`, `forwarders/bulk-search/`
+
+But `/admin/carriers` returned 200! Because Turbopack DOES discover on-demand AT REQUEST TIME — but only for some directory layouts. Newly-added 2-level deep route group children sometimes get missed by the initial filesystem scan.
+
+**Root cause:** Turbopack route discovery is incomplete after a previous `.next/` cache was built without these directories. The cache is treated as authoritative and new files don't always trigger re-scan.
+
+Possible contributing factors (any one is sufficient):
+- Files added during a different session than current dev session
+- Filesystem watcher race when many directories appear in quick succession
+- (Possibly) git checkout/merge happens while dev is running
+
+**Fix:** Hard reset.
+
+```bash
+# In Windows PowerShell from the worktree dir:
+TaskStop <dev-bash-id>           # kill the bash that holds pnpm dev
+Stop-Process -Id <orphan-node-pids> -Force   # kill the orphaned next-server child
+Remove-Item -Recurse -Force .next            # nuke the route manifest cache
+pnpm dev                          # restart — full re-discovery
+```
+
+After this:
+- All routes that exist on disk resolve normally (200 or 307→/login if not authed)
+- "Ready in 392ms" — even faster than the original boot, since cache invalidation overhead is gone
+
+**Why this matters next time:** If you see Next.js 404 on a route whose file definitely exists at `app/[locale]/.../page.tsx`, BEFORE you debug imports or middleware:
+1. Hit `.next/server/app/[locale]/.../page.js` and check if it's compiled
+2. If missing — it's the cache, not your code
+3. Don't try `next build` or anything expensive — just kill + delete `.next/` + restart
+
+**Note for `requireAdmin` 404s:** there's a SECOND class of legitimate 404 from Next.js that has nothing to do with this:
+- `lib/auth/require-admin.ts::requireAdmin(["super","ops","warehouse"])` calls `notFound()` when the signed-in user lacks the required role
+- That's an intentional invisibility-to-customers feature, not a Turbopack bug
+- Distinguish them: route-cache 404 happens BEFORE auth (very fast, no DB query); requireAdmin 404 happens AFTER auth check (~400ms+, hits Supabase)
+
+**Cross-links:**
+- `proxy.ts` — middleware untouched by this issue
+- `lib/auth/require-admin.ts` — the auth-induced 404 path
+- Memory entry `dev_in_claude_worktree` — orphan node holds port 3000 after TaskStop, need Stop-Process
+
+---

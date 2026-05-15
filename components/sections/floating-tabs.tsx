@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
@@ -18,6 +19,15 @@ function callRandomSalesRep() {
 export function FloatingTabs() {
   const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
+  const pathname = usePathname();
+
+  // Don't render in admin back-office — admin gets its own dedicated
+  // sidebar UI and the customer-facing floating tabs would clutter the
+  // workflow. Pattern matches `/admin` AND `/<locale>/admin`.
+  // Per ภูม + เดฟ confirm 2026-05-16 evening.
+  if (pathname && /^(?:\/[a-z]{2})?\/admin(?:\/|$)/.test(pathname)) {
+    return null;
+  }
 
   const desktopTabs = [
     { label: t("home"),       icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
