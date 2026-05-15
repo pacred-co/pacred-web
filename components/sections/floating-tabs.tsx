@@ -24,11 +24,12 @@ export function FloatingTabs() {
     { label: t("services"),   icon: "/images/home/iconfloating/pcs-shop.png",         href: "#services" },
     { label: t("promotions"), icon: "/images/home/iconfloating/ranka.png",            href: "#promotions" },
     { label: t("blog"),       icon: "/images/home/iconfloating/checklistred.png",     href: "/knowledge" },
-    { label: t("partner"),    icon: "/images/home/iconfloating/people.png",           href: "#partner" },
+    // Per ปอน 2026-05-15: partner tab swapped out for Pacred News.
+    { label: t("news"),       icon: "/images/home/iconfloating/pcs-line-notify.png",  href: "/news" },
     { label: t("contact"),    icon: "/images/home/iconfloating/pcs-call-center.png",  href: "#contact" },
   ];
 
-  // Mobile bottom nav drops `partner` + `contact` — those slots get a centered call FAB instead.
+  // Mobile bottom nav drops `news` + `contact` — those slots get a centered call FAB instead.
   const mobileTabs = [
     desktopTabs[0],
     desktopTabs[1],

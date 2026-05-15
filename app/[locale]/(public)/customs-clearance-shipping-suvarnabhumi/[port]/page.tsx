@@ -321,7 +321,7 @@ export default async function CustomsPortDetailPage({
                 {/* Image */}
                 <div className="relative aspect-[16/10] lg:aspect-[4/3] rounded-2xl md:rounded-3xl overflow-hidden">
                   <Image
-                    src={port.image}
+                    src={port.heroImage ?? port.image}
                     alt={port.imageAlt}
                     fill
                     sizes="(max-width: 1024px) 100vw, 360px"

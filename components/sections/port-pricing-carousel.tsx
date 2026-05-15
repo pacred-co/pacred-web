@@ -175,14 +175,6 @@ export function PortPricingCarousel() {
         <ChevronRight className="w-4 h-4" strokeWidth={3.2} />
       </span>
 
-      {/* Loop hint pill on the carousel header — communicates "rotating" */}
-      <div className="hidden md:flex absolute -top-9 right-0 items-center gap-1.5 text-[11px] font-bold tracking-wide text-primary-600/80">
-        <span className="relative flex w-1.5 h-1.5">
-          <span className="absolute inline-flex w-full h-full rounded-full bg-primary-500 opacity-75 animate-ping" />
-          <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-primary-600" />
-        </span>
-        เลื่อนหมุนต่อกันไม่จบ · เลือกท่าที่ใช้ได้เลย
-      </div>
     </div>
   );
 }

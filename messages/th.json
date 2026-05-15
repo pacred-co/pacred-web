@@ -1144,6 +1144,7 @@
     "promotions": "โปรโมชั่น",
     "blog": "บทความ",
     "partner": "พาร์ทเนอร์",
+    "news": "ข่าวสาร",
     "contact": "ติดต่อ",
     "askMore": "สอบถามเพิ่มเติม",
     "chatAria": "พูดคุยทาง LINE",
@@ -1570,17 +1571,21 @@
     "payment": "ฝากโอนชำระ",
     "warehouse": "ที่อยู่โกดังเรา",
     "about": "เกี่ยวกับเรา",
-    "lclTitle": "LCL (แชร์ตู้ / รวมตู้)",
-    "fclTitle": "FCL (เหมาตู้ / ปิดตู้)",
+    "lclTitle": "LCL",
+    "fclTitle": "FCL",
     "china": "ประเทศจีน",
     "whTh": "โกดังไทย",
     "whCn": "โกดังจีน",
     "customsHot": "ชิปปิ้งเคลียร์สินค้าติดด่าน",
     "importChina": "นำเข้าสินค้าจากจีน",
+    "importChinaLcl": "นำเข้าสินค้าจากจีน แชร์ตู้/รวมตู้",
+    "importChinaFcl": "นำเข้าสินค้าจากจีน เหมาตู้/ปิดตู้",
+    "orderChina": "ประเทศจีน 1688/Taobao/Alibaba",
     "whThPhetkasem": "โกดังเพชรเกษม 118",
     "whGuangzhou": "โกดังกวางโจว",
     "whYiwu": "โกดังอี้อู",
     "aboutPacred": "เกี่ยวกับ Pacred",
+    "news": "ข่าวสาร Pacred",
     "knowledge": "สาระน่ารู้",
     "faq": "คำถามที่พบบ่อย",
     "join": "ร่วมใช้งาน กับ Pacred",
@@ -1997,6 +2002,12 @@
       "index": {
         "title": "สาระน่ารู้ · นำเข้า ส่งออก เคลียร์ศุลกากร",
         "description": "บทความวิชาการจาก Pacred Shipping — รู้ลึกเรื่องนำเข้าจีน Term CIF/FOB/EXW เคลียร์ด่าน ใบอนุญาต และวิธีลดความเสี่ยง"
+      }
+    },
+    "news": {
+      "index": {
+        "title": "ข่าวสาร Pacred · ประกาศ + อัปเดตบริการ",
+        "description": "ติดตามประกาศจาก Pacred Shipping — มาตรการขนส่ง อัปเดตบริการ และกิจกรรมล่าสุดของบริษัท"
       }
     },
     "faq": {

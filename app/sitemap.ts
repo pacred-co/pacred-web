@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE_LOCALES, SITE_URL, absoluteUrl, type SiteLocale } from "@/components/seo/site";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
 import { CUSTOMS_PORTS } from "@/components/sections/customs-port-data";
+import { PACRED_NEWS } from "@/components/sections/pacred-news-data";
 
 type Freq = MetadataRoute.Sitemap[number]["changeFrequency"];
 
@@ -24,6 +25,7 @@ const STATIC_ROUTES: Route[] = [
   { path: "/contact",                     priority: 0.7, changeFrequency: "monthly" },
   { path: "/booking",                     priority: 0.7, changeFrequency: "monthly" },
   { path: "/knowledge",                   priority: 0.8, changeFrequency: "weekly"  },
+  { path: "/news",                        priority: 0.8, changeFrequency: "weekly"  },
   { path: "/faq",                         priority: 0.7, changeFrequency: "monthly" },
   { path: "/warehouses/china",            priority: 0.7, changeFrequency: "monthly" },
   { path: "/warehouses/guangzhou",        priority: 0.6, changeFrequency: "monthly" },
@@ -75,5 +77,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }),
   );
 
-  return [...staticEntries, ...articleEntries, ...portEntries];
+  // Pacred News detail pages — one per PACRED_NEWS slug
+  const newsEntries = PACRED_NEWS.map((n) =>
+    entry(`/news/${n.slug}`, { priority: 0.7, changeFrequency: "monthly" }),
+  );
+
+  return [...staticEntries, ...articleEntries, ...portEntries, ...newsEntries];
 }

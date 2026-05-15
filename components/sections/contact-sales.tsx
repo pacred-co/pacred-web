@@ -57,9 +57,11 @@ interface ContactSalesProps {
   featuredName?: string;
   /** Hide the bottom assurance strip (ตอบไว · ปรึกษาฟรี · 14+ ปี) */
   hideAssuranceStrip?: boolean;
+  /** Tighter vertical padding — for pages with many sections (ปอน's customs page). */
+  compact?: boolean;
 }
 
-export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false }: ContactSalesProps = {}) {
+export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
   // Reorder so the requested person lands at index 1 (the "featured" middle card)
   const featuredIdx = SALES.findIndex((s) => s.name === featuredName);
   const orderedSales: SalesPerson[] =
@@ -72,7 +74,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         })();
 
   return (
-    <section id="contact-sales" className="relative py-5 md:py-14 overflow-hidden">
+    <section id="contact-sales" className={`relative overflow-hidden ${compact ? "py-2 md:py-4" : "py-5 md:py-14"}`}>
       {/* Decorative background */}
       <div
         aria-hidden
