@@ -3,6 +3,8 @@ import { getTranslations } from "next-intl/server";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getForwarderByNo } from "@/actions/forwarder";
+import { createClient } from "@/lib/supabase/server";
+import { PayFromWalletButton } from "./pay-from-wallet-button";
 
 const STATUS_BADGE: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -26,6 +28,22 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
   const f = res.data;
 
   const cover = f.images.find((i) => i.is_cover) ?? f.images[0];
+
+  // Fetch main wallet balance only when relevant (status='pending_payment')
+  // — closes the import loop by letting customer self-pay from balance.
+  let walletBalance: number | null = null;
+  if (f.status === "pending_payment") {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: wallet } = await supabase
+        .from("wallet")
+        .select("balance")
+        .eq("profile_id", user.id)
+        .maybeSingle<{ balance: number }>();
+      walletBalance = Number(wallet?.balance ?? 0);
+    }
+  }
 
   return (
     <>
@@ -55,13 +73,22 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
 
         {/* Payment banner for pending */}
         {f.status === "pending_payment" && (
-          <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5">
-            <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
-            <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
-              ฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/wallet/deposit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
+          <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
+              <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
+                ฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            {/* Primary pay action — wallet balance permitting */}
+            {walletBalance !== null && f.f_no && (
+              <PayFromWalletButton fNo={f.f_no} totalThb={Number(f.total_price)} walletBalance={walletBalance} />
+            )}
+
+            {/* Fallback / wallet management links */}
+            <div className="flex flex-wrap gap-2">
+              <Link href="/wallet/deposit" className="rounded-lg bg-white border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-900 hover:bg-yellow-100">
                 {t("payNowDeposit")}
               </Link>
               <Link href="/wallet/history" className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt">

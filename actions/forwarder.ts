@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { forwarderSchema, type ForwarderInput } from "@/lib/validators/forwarder";
 import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forwarder/calc-price";
 import { sendNotification } from "@/lib/notifications";
@@ -484,4 +485,117 @@ export async function createForwarder(
     ok: true,
     data: { id: created.id, f_no: created.f_no, total_price: breakdown.total_price },
   };
+}
+
+// ────────────────────────────────────────────────────────────
+// PAY FROM WALLET — customer self-service (closes import loop)
+// ────────────────────────────────────────────────────────────
+//
+// Mirror of payServiceOrderFromWallet for the ฝากนำเข้า (service-import)
+// side.  Without this, every forwarder payment requires admin to flip
+// status manually + the wallet movement is fragmented (entered via
+// /admin/wallet, no atomic debit-on-status-change).  With this, customer
+// self-pays once wallet balance ≥ total_price.
+//
+// Flow:
+//   status='pending_payment' → customer clicks pay → wallet debit
+//     (kind='import_payment', amount=-total_price, ref to f_no)
+//   → flips status to 'shipped_china' (Pacred staff handles actual
+//     china-side dispatch + tracking number from there)
+//
+// Idempotent: re-click returns the existing tx without double-debit.
+// Admin can still override via /admin/forwarders/<fNo> if needed
+// (pending: ภูม mirrors adminMarkForwarderPaid per T-P1 pattern).
+export async function payForwarderFromWallet(
+  fNo: string,
+): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. Verify ownership + status + total via RLS-protected fetch
+  const { data: forwarder } = await supabase
+    .from("forwarders")
+    .select("id, f_no, status, total_price")
+    .eq("f_no", fNo)
+    .maybeSingle<{ id: string; f_no: string; status: string; total_price: number }>();
+  if (!forwarder)                                 return { ok: false, error: "not_found" };
+  if (forwarder.status !== "pending_payment")     return { ok: false, error: "forwarder_not_payable" };
+  const totalThb = Number(forwarder.total_price);
+  if (!(totalThb > 0))                            return { ok: false, error: "total_price_invalid" };
+
+  // 2. Idempotency: existing completed payment tx for this forwarder?
+  const { data: existingTx } = await supabase
+    .from("wallet_transactions")
+    .select("id")
+    .eq("reference_type", "forwarder")
+    .eq("reference_id", forwarder.f_no)
+    .eq("kind", "import_payment")
+    .eq("status", "completed")
+    .maybeSingle<{ id: string }>();
+  if (existingTx) {
+    return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
+  }
+
+  // 3. Balance check (main bucket) — RLS guarantees own wallet only
+  const { data: wallet } = await supabase
+    .from("wallet")
+    .select("balance")
+    .eq("profile_id", user.id)
+    .maybeSingle<{ balance: number }>();
+  const balance = Number(wallet?.balance ?? 0);
+  if (balance < totalThb) {
+    return {
+      ok: false,
+      error: `wallet_insufficient — มี ฿${balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
+    };
+  }
+
+  // 4. Debit + status flip — admin client (gated by ownership check above)
+  const admin = createAdminClient();
+
+  const { data: tx, error: txErr } = await admin
+    .from("wallet_transactions")
+    .insert({
+      profile_id:     user.id,
+      bucket:         "main",
+      amount:         -totalThb,
+      kind:           "import_payment",
+      status:         "completed",
+      reference_type: "forwarder",
+      reference_id:   forwarder.f_no,
+      admin_id:       null,
+      note:           `ชำระค่าฝากนำเข้า ${forwarder.f_no} (ตัดจาก wallet โดยลูกค้า)`,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+
+  const { error: fwdErr } = await admin
+    .from("forwarders")
+    .update({ status: "shipped_china" })
+    .eq("id", forwarder.id);
+  if (fwdErr) {
+    return {
+      ok: false,
+      error: `forwarder update failed AFTER wallet debit (tx ${tx.id} stays): ${fwdErr.message}`,
+    };
+  }
+
+  // 5. Notify customer (self-action confirmation)
+  void sendNotification(user.id, notify.walletTxStatusChanged({
+    kind:   "import_payment",
+    status: "completed",
+    amount: -totalThb,
+    note:   `ฝากนำเข้า ${forwarder.f_no}`,
+    txId:   tx.id,
+  }));
+
+  revalidatePath(`/service-import/${forwarder.f_no}`);
+  revalidatePath("/service-import");
+  revalidatePath("/service-import/pending");
+  revalidatePath("/wallet");
+  revalidatePath("/wallet/history");
+
+  return { ok: true, data: { tx_id: tx.id, already_paid: false } };
 }
