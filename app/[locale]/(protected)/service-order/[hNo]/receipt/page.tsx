@@ -45,6 +45,10 @@ export default async function ShopOrderReceiptPage({
 
   const isPaid       = o.status === "completed";
   const docLabel     = isPaid ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
+  // The tax-invoice panel is allowed once the order is paid ('ordered'+),
+  // matching requestTaxInvoice's server gate (awaiting_payment is the only
+  // ineligible status that reaches this page).
+  const canRequestTaxInvoice = o.status !== "awaiting_payment";
   const rate         = Number(o.yuan_rate_locked ?? 0);
   const subtotalThb  = rate > 0 ? o.subtotal_cny       * rate : 0;
   const domesticThb  = rate > 0 ? o.domestic_china_cny * rate : 0;
@@ -234,7 +238,7 @@ export default async function ShopOrderReceiptPage({
         </section>
 
         {/* T-P4 G2b: tax invoice request panel (hidden on print) */}
-        {isPaid && (
+        {canRequestTaxInvoice && (
           <TaxInvoiceRequestPanel
             orderType="service_order"
             orderId={o.h_no ?? hNo}

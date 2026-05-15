@@ -254,22 +254,41 @@ export async function saveJuristicStep2(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
+  // Company details are canonical in `corporate` (read by /profile, both
+  // receipt pages, and tax-invoice eligibility) — writing profiles.* only
+  // left `corporate` empty and broke juristic tax-invoice eligibility.
+  const companyAddress = [
+    data.addressLine,
+    data.subdistrict,
+    data.district,
+    data.province,
+    data.postcode,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  // guard_corporate_account_type needs profiles.account_type='juristic'
+  // — set by registerJuristicStep1.
   const { error } = await supabase
-    .from("profiles")
-    .update({
-      tax_id: data.taxId,
-      company_name: data.companyName,
-      address: {
-        line: data.addressLine,
-        subdistrict: data.subdistrict ?? null,
-        district: data.district ?? null,
-        province: data.province ?? null,
-        postcode: data.postcode || null,
+    .from("corporate")
+    .upsert(
+      {
+        profile_id:      user.id,
+        tax_id:          data.taxId,
+        company_name:    data.companyName,
+        company_address: companyAddress,
       },
-    })
+      { onConflict: "profile_id" },
+    );
+  if (error) return { ok: false, error: "update_failed" };
+
+  // Mirror to profiles for quick lookup (best-effort, matches upsertCorporate).
+  await supabase
+    .from("profiles")
+    .update({ tax_id: data.taxId, company_name: data.companyName })
     .eq("id", user.id);
 
-  if (error) return { ok: false, error: "update_failed" };
   return { ok: true };
 }
 

@@ -8,6 +8,32 @@
 
 ---
 
+## 🔍 Code-audit findings — 2026-05-15 (เดฟ via Claude)
+
+A static code audit traced the full loop (signup → topup → admin approve → order →
+pay-from-wallet → fulfilment → receipt → tax invoice) against the merged `dave` HEAD.
+The core money path is **sound**: the `wallet_recompute_balance` trigger fires on
+insert/update/delete, RLS forces the admin client on every status flip, and the
+status / `kind` / `reference_type` enums are consistent across migrations + actions + UI.
+Gaps found:
+
+| # | Severity | Gap | Status |
+|---|---|---|---|
+| G1 | doc | Order is created directly at `awaiting_payment` (no `pending` stage); old Steps 4–5 implied a `pending` stage + admin status-set | ✅ runbook corrected below |
+| G2 | low | No customer self-cancel of a pending deposit (`actions/wallet.ts` — deferred to Phase G; customer contacts admin) | hand-off ภูม |
+| G3 | doc | `h_no` is `O<YYMMDD>-<seq>` (`generate_service_order_no()`, migration 0011), not `ONS<…>`. CLAUDE.md PORT_PLAN feature-map also says `ONS` — stale | ✅ runbook corrected; CLAUDE.md flagged |
+| G5 | med | Receipt page gated the "ขอใบกำกับภาษี" panel to `status='completed'`, but `requestTaxInvoice` accepts any paid order (`ordered`+) → paid juristic customers couldn't request until delivery | ✅ fixed — `service-order/[hNo]/receipt/page.tsx` |
+| G6 | low | Personal accounts with a `profiles.tax_id` can't request a tax invoice — `getServiceOrderForReceipt` reads tax_id only for `account_type='juristic'`, though 0034 + the panel allow personal-with-tax-ID | hand-off ภูม |
+| **G7** | **HIGH** | `saveJuristicStep2` wrote company info to `profiles.*` only and never created the `corporate` row. Every juristic registrant had an empty `corporate` → the receipt eligibility check (reads `corporate`) failed → tax invoice broken for the >50%-revenue B2B segment | ✅ fixed — `actions/auth.ts` now upserts `corporate` (mirrors `upsertCorporate`) |
+| G8 | design | Old Step 5 assumed admin can adjust `total_thb` pre-payment, but no action does (`adminUpdateServiceOrder` takes status/note only) | confirm design w/ ภูม |
+
+**Not runtime-tested** — this was a static code audit. Run the live smoke test below on
+dev Supabase to confirm the G5 + G7 fixes behave end-to-end. Juristic accounts created
+*before* the G7 fix have no `corporate` row — they must re-save company info once via
+`/profile` to backfill it.
+
+---
+
 ## Pre-flight checklist (do once before first run)
 
 - [ ] **Migrations applied** on the target Supabase project (dev or prod):
@@ -97,28 +123,28 @@
 5. Submit order
 
 **Verify:**
-- [ ] Order created at `/service-order/<hNo>` with `status='pending'` (or `awaiting_payment` if total auto-calc'd)
-- [ ] `service_orders` row exists with `h_no` like `ONS<YYMMDD>-<seq>`
-- [ ] Customer received notification: "วางออเดอร์ ONS... เรียบร้อย"
-- [ ] Order shows in `/admin/orders` and `/admin/service-orders` admin lists
+- [ ] Order created at `/service-order/<hNo>` with `status='awaiting_payment'` — `placeServiceOrder` computes `total_thb` and sets the 24h `payment_due_at` timer at creation; there is **no separate `pending` stage** in the current flow
+- [ ] `service_orders` row exists with `h_no` like `O<YYMMDD>-<seq>` (e.g. `O260515-1` — single leading `O`, from the `generate_service_order_no()` trigger)
+- [ ] Customer received a notification for the placed order
+- [ ] Order shows in the `/admin/service-orders` admin list
 
 ---
 
-## Step 5 — Admin reviews + calculates total
+## Step 5 — Admin reviews the order
 
 **As admin:**
 
 1. Open `/admin/service-orders/<hNo>` (from list)
 2. Verify the items, address, warehouse
-3. Update order status to **`awaiting_payment`** via the status dropdown OR adjust total_thb if needed (depending on rate logic; legacy used yuan_rate × subtotal + service_fee — verify the calculated `total_thb` matches expectations)
-4. Save
+3. The order is **already** `awaiting_payment` with `total_thb` + `payment_due_at` set from Step 4 — no admin status change is needed here
 
 **Verify:**
-- [ ] `service_orders.status = 'awaiting_payment'`
+- [ ] `service_orders.status = 'awaiting_payment'` (set at creation, not by admin)
 - [ ] `service_orders.date_awaiting_payment` stamped
-- [ ] `service_orders.total_thb` is the correct THB amount (≤500 for smoke; let's say ฿400)
-- [ ] `service_orders.payment_due_at` is set (default policy = 24h after awaiting_payment)
-- [ ] Customer received notification: "ฝากสั่ง ONS... อัพเดทแล้ว — สถานะ: รอชำระเงิน"
+- [ ] `service_orders.total_thb` = `subtotal_cny × yuan_rate + service_fee` (yuan_rate + service_fee from the `settings` row `id=1`; falls back to 5.0 / ฿50 if `settings` is empty)
+- [ ] `service_orders.payment_due_at` is set (24h after creation)
+
+> ⚠️ **Gap G8** — there is currently **no admin action to adjust `total_thb`** before payment (`adminUpdateServiceOrder` takes status/note only). If admin price-correction before payment is required, that action is unbuilt — confirm intended design with ภูม.
 
 ---
 
@@ -183,16 +209,22 @@
 
 ---
 
-## Step 9 — (When T-P4 G2b ships) Juristic customer requests tax invoice
+## Step 9 — Juristic customer requests tax invoice
 
-**Skip if T-P4 hasn't shipped yet.** This becomes the test once ภูม picks up T-P4 G2b-G2f.
+T-P4 G2b–G2f has shipped — this is now a live step.
+
+**Pre-req:** the juristic customer must have a `corporate` row (tax_id + company_name).
+The receipt panel reads `corporate`; if it is empty the panel shows a "not eligible"
+hint. Gap G7 (fixed 2026-05-15) makes `saveJuristicStep2` create that row at
+registration — accounts registered *before* the fix must re-save once via `/profile`.
 
 **As juristic customer:**
 
-1. On `/service-order/<hNo>/receipt`, click **"ขอใบกำกับภาษี"** (juristic-only button)
-2. Confirm buyer snapshot: company_name + tax_id + company_address (pulled from `corporate` table)
-3. Choose VAT mode: **inclusive** (default) or **exclusive**
-4. Submit
+1. On `/service-order/<hNo>/receipt`, the **"ขอใบกำกับภาษี"** panel appears once the
+   order is paid (status `ordered` onward — Gap G5 fixed 2026-05-15; it previously
+   showed only at `completed`)
+2. Open the panel — buyer fields pre-fill from `corporate`; VAT is inclusive 7% per ADR-0006
+3. Submit
 
 **Verify:**
 - [ ] `tax_invoices` row created: `status='pending'`, buyer fields populated, `subtotal_thb` + `vat_thb` + `total_thb` snapshotted
