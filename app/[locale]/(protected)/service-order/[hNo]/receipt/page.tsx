@@ -97,11 +97,13 @@ export default async function ShopOrderReceiptPage({
           </div>
         </div>
 
-        {/* Customer */}
+        {/* Customer — V-C2: bill_to_name_override wins over default name */}
         <section>
           <h3 className="mb-2 text-sm font-bold">ลูกค้า:</h3>
           <p className="text-sm">
-            {o.customer.first_name} {o.customer.last_name}
+            {o.bill_to_name_override?.trim() ||
+              `${o.customer.first_name ?? ""} ${o.customer.last_name ?? ""}`.trim() ||
+              "—"}
             {o.customer.member_code && (
               <span className="ml-2 font-mono text-xs text-gray-600">
                 ({o.customer.member_code})

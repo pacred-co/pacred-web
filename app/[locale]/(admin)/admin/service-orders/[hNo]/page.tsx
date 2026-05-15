@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AdminServiceOrderUpdateForm } from "./update-form";
+import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 
 export default async function AdminServiceOrderDetail({ params }: { params: Promise<{ hNo: string }> }) {
   const { hNo } = await params;
@@ -14,6 +15,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
       warehouse_china, transport_type, pay_method, crate, free_shipping, ship_by, note_admin, note_user,
       payment_due_at, created_at,
       ship_first_name, ship_last_name, ship_phone, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
+      bill_to_name_override,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
     `)
     .eq("h_no", hNo)
@@ -98,8 +100,14 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
           )}
         </div>
 
-        <aside>
+        <aside className="space-y-4">
           <AdminServiceOrderUpdateForm hNo={o.h_no!} status={o.status} note_admin={o.note_admin} totalThb={Number(o.total_thb)} />
+          <BillToOverridePanel
+            kind="service_order"
+            hNo={o.h_no!}
+            defaultName={[profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || ""}
+            current={(o as { bill_to_name_override: string | null }).bill_to_name_override ?? null}
+          />
         </aside>
       </div>
     </main>

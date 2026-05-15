@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
+import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   const { fNo } = await params;
@@ -18,6 +19,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
       domestic_china_thb, thailand_delivery_thb, other_price,
       tracking_chn, tracking_th, cabinet_number, partner_warehouse, note_admin, note_user, detail,
       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
+      bill_to_name_override,
       created_at, date_arrived_thailand, date_delivered,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
     `)
@@ -161,6 +163,12 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
             forwarderId={f.id}
             fNo={f.f_no}
             existing={costAdjustments}
+          />
+          <BillToOverridePanel
+            kind="forwarder"
+            fNo={f.f_no}
+            defaultName={[f.ship_first_name, f.ship_last_name].filter(Boolean).join(" ") || ""}
+            current={f.bill_to_name_override ?? null}
           />
         </aside>
       </div>
