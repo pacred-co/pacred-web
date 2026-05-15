@@ -38,6 +38,7 @@
     "walletHistory": "Transaction History",
     "walletWithdraw": "Withdraw",
     "walletDeposit": "Deposit",
+    "shipments": "Track Shipments",
     "addresses": "Shipping Addresses",
     "profile": "My Profile",
     "notifications": "Notifications",
@@ -580,6 +581,12 @@
     "changePassword": "Change password",
     "passwordChanged": "Password updated.",
     "changePhoneLink": "Change phone number →"
+  },
+  "shipments": {
+    "kicker": "TRACK SHIPMENTS",
+    "title": "Track my shipments",
+    "subtitle": "See current status and location of your shipments in transit — updated whenever staff scan.",
+    "loadError": "Failed to load: {error}"
   },
   "liff": {
     "title": "Link your LINE account",

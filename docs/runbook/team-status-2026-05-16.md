@@ -19,6 +19,7 @@
 | `f2230ed` | **T-D2 schemas:** `0033_containers.sql` + `0034_tax_invoices.sql` shipped → unblocks ภูม T-P2 + T-P4 (เดฟ) |
 | `f410640` | **T-P1 GAP 3 closed:** customer service-order receipt page (`/service-order/[hNo]/receipt`) — pre-req for T-D1 cargo smoke test (เดฟ) |
 | `32f5bcf` | P-31 cart cap doc fix (PORT_PLAN was wrong; trigger correct at >=151 per legacy) + this checkpoint header bump (เดฟ) |
+| (this batch) | **T-P2 CT-3 customer-side shipment tracking** — `actions/shipments.ts` (RLS-scoped via `shipments_customer_read`) + `/shipments` list with status pills + container info + latest event hint + `/shipments/[code]` detail timeline (newest-first events with timeline pin styling) + sidebar nav entry + i18n (ภูม) |
 
 **Tests:** 305 assertions all green across 13 test files.
 
@@ -88,7 +89,7 @@
 | **T-P1** | Admin workflow buttons (driver assign + mark-paid) | 6-10h | ✅ **DONE + MERGED** (commit `121ea0d` → dave; receipt-page GAP 3 closed by เดฟ `f410640`) |
 | **T-P3** | Wallet/yuan-payments admin **bulk approve** | 2-3h | ✅ **DONE + MERGED** (commit `84ca7b5` → dave) |
 | **T-P5** | `/admin/accounting` owner overview | 3-5h | ✅ **DONE** (commit `5969e6d` → Poom; awaiting dave merge) |
-| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | 🟢 **NEXT** — `0033_containers.sql` shipped by เดฟ (`f2230ed`); ภูม implements customer-side tracking view + admin status helpers |
+| **T-P2** | CT-1 container migration + CT-3 customer view | 4-8h | ✅ **CT-3 DONE** (this batch) — `actions/shipments.ts` + `/shipments` list + `/shipments/[code]` detail timeline + sidebar nav + i18n. Admin status helpers (CT-2) remain for future batch |
 | **T-P4** | G2 tax invoice issuance per ADR-0006 — phases G2a-G2f | 14-19h | 🟢 **UNBLOCKED** — `0034_tax_invoices.sql` shipped by เดฟ (`f2230ed`); G2b-G2f sequence ready (action + UI + PDF + cancellation flow) |
 | **T-P1 GAP 3** | Customer receipt page `/service-order/[hNo]/receipt/page.tsx` | 30m | ✅ **DONE (เดฟ `f410640`)** — pre-req for T-D1 cargo flow smoke test satisfied |
 

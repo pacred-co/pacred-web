@@ -14,6 +14,7 @@ import {
   Package,
   ShoppingCart,
   TrendingUp,
+  Truck,
   User,
   Wallet,
 } from "lucide-react";
@@ -104,6 +105,7 @@ const MENU: MenuItem[] = [
       { href: "/wallet/deposit", labelKey: "walletDeposit" },
     ],
   },
+  { href: "/shipments", labelKey: "shipments", Icon: Truck },
   { href: "/addresses", labelKey: "addresses", Icon: MapPin },
   { href: "/profile", labelKey: "profile", Icon: User },
   { href: "/notifications", labelKey: "notifications", Icon: Bell, badgeKey: "notifications" },
