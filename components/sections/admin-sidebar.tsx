@@ -26,6 +26,14 @@ const items: NavItem[] = [
   { href: "/admin/reports/containers-hs", label: "รายงาน HS code",  icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ภาพรวม" },
   { href: "/admin/accounting",       label: "บัญชี Cargo/Freight", icon: <Wallet className="w-5 h-5" />,    roles: ["accounting"], group: "ภาพรวม" },
 
+  // Self-serve reports (V-B1) — staff sees the operational state without dev tickets
+  { href: "/admin/reports/pending-payments",      label: "รอชำระเงิน",        icon: <Receipt className="w-5 h-5" />,    roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+  { href: "/admin/reports/credit-pending",        label: "เครดิตค้างนำเข้า",  icon: <Receipt className="w-5 h-5" />,    roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+  { href: "/admin/reports/containers-awaiting-th",label: "ตู้รอเข้าไทย",       icon: <Package className="w-5 h-5" />,    roles: ["ops","warehouse","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+  { href: "/admin/reports/debtors",               label: "ลูกค้าติดหนี้",      icon: <Wallet className="w-5 h-5" />,     roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+  { href: "/admin/reports/refunds",               label: "คืนเงิน",            icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+  { href: "/admin/reports/monthly-orders",        label: "ออเดอร์รายเดือน",   icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+
   // Operations
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
