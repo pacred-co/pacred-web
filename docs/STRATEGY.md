@@ -218,15 +218,16 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 `/admin/customers/[id]` · `/admin/forwarders/[fNo]` · `/admin/service-orders/[hNo]` · `/admin/wallet` · `/admin/yuan-payments` · `/admin/containers` · `/admin/team-leaders` · `/admin/sales-payouts` · `/admin/settings` · `/admin/juristic-check`
 
-### 🔴 Stub modules (port from legacy)
+### 🟢 ~~Stub modules~~ — actually shipped (re-audited 2026-05-16 evening)
 
-- `/admin/accounting` — 7 PHP files (acc-forwarder, acc-payment, acc-shop, acc-shop-refund, acc-system-cargo, acc-topup, acc-withdraw)
-- `/admin/reports` — 30+ PHP files (driver/forwarder/shop/sale/payment/system/OTP/SMS/promo)
-- `/admin/barcode` — 9 PHP files
-- `/admin/learning` — shell only (deprecate or merge into HR)
-- Phase I 9 new services (1, 5-13 in §4) — landing pages + backend modules
+Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) re-audit, the following were marked "stub" but are now functionally **complete**:
+- ✅ `/admin/accounting` — 7 tabs (summary/forwarder/yuan/shop/topup/withdraw/refund) + CSV + monthly closing
+- ✅ `/admin/reports` — 5 tabs (forwarder/shop/yuan/sales/payment) + CSV + status breakdown
+- ✅ `/admin/barcode` — intake/prepare/driver workflows
+- 🟡 `/admin/rates` — basic done; **Phase D shipping rates table** (port `tb_rate_g_*`) remains as LP-1
+- 🔴 Phase I 9 new services (1, 5-13 in §4) — landing pages + backend modules (separate roadmap)
 
-### 🔴 Critical blockers (block production beta)
+### 🔴 Critical blockers (block production beta — updated 2026-05-16 evening with audit findings)
 
 | Owner | Blocker | Unblocks |
 |---|---|---|
@@ -234,8 +235,22 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 | ก๊อต | T-G5 Sentry DSN + Upstash + hCaptcha | Production error visibility + DoS prevention + bot filter |
 | ก๊อต | T-G2 MOMO endpoint inventory call | Container tracking customer view |
 | Pacred owner | T-G3 bundle: bank/PromptPay/tax-ID/legal name/LIFF ID | wallet payments + tax invoice + receipts |
-| ภูม | T-P1 admin workflow buttons (cargo path) | Staff can fulfill orders without SQL |
+| ภูม | T-P1 admin workflow buttons (cargo path) | ✅ DONE (shipped 2026-05-16) |
 | ภูม | T-P2 container migration + customer view | "Where's my container?" feature |
+| **ภูม** | **U1-3 admin "rebind tracking → container" UI** | ✅ closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
+| **ภูม** | **U1-4 admin "manual tracking entry" UI** | ✅ closes daily SQL escalations |
+| **ภูม + ก๊อต** | **U1-2 OTP SMS balance daily check + LINE alert** | ✅ closes silent registration-fail incidents (chat audit L-3) |
+| **เดฟ** | **U1-1 `/status` health page** | UX trust + transparency (chat audit L-1: PHP เว็ปล่ม 24x) |
+| **ภูม** | **U1-5 `received_qty` / `expected_qty` per cargo_shipments** | container-split case (chat audit: qty=1 bug) |
+
+### 🆕 Verified deficiency audits (2026-05-16 evening)
+
+Two parallel audits produced concrete leak-hole + cleanup task lists:
+
+- [`audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE groups · 6 months · 10 ranked leak holes · canonical MOMO 9-status enum · workflows team really uses
+- [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload)
+
+Master task list synthesizing both: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5 — 30+ items by severity).
 
 ---
 
