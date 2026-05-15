@@ -180,7 +180,12 @@ create table if not exists public.shipment_tracking (
   event        text not null,                   -- 'scan_receive','scan_pack','scan_seal','scan_unload', etc.
   location     text,                            -- warehouse code or carrier name
   scanned_at   timestamptz not null default now(),
-  scanned_by   uuid references public.admins(profile_id),
+  -- FK references profiles(id), NOT admins(profile_id), because admins
+  -- has composite PK (profile_id, role) — profile_id alone isn't unique.
+  -- Admin-role check happens via RLS (shipment_tracking_admin_all gates
+  -- write to ['super','ops','warehouse','driver']) — the FK only proves
+  -- the scanner exists.
+  scanned_by   uuid references public.profiles(id),
   source       text not null check (source in ('pacred','momo','customer_scan')) default 'pacred',
   note         text,
   created_at   timestamptz not null default now()
@@ -199,7 +204,10 @@ create table if not exists public.container_status_history (
   to_status         text not null,
   note              text,
   changed_at        timestamptz not null default now(),
-  changed_by_admin  uuid references public.admins(profile_id),
+  -- See shipment_tracking.scanned_by note — FK to profiles(id), not
+  -- admins(profile_id), because admins composite PK can't be referenced
+  -- by profile_id alone. Admin-role enforced via RLS.
+  changed_by_admin  uuid references public.profiles(id),
   source            text not null check (source in ('pacred','momo','self')) default 'pacred'
 );
 
