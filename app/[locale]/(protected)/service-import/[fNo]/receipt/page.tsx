@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { getForwarderByNo } from "@/actions/forwarder";
+import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
+import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
+import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 /**
@@ -14,6 +17,55 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   const res = await getForwarderByNo(fNo);
   if (!res.ok || !res.data) notFound();
   const f = res.data;
+
+  // T-P4 G2b: existing tax invoice (if any) + buyer-info pre-population
+  // from the customer's profile + corporate row. RLS scopes both.
+  const taxInv = await getMyTaxInvoiceForOrder("forwarder", fNo);
+  const existingInvoice = taxInv.ok ? taxInv.data : null;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  let companyName    = "";
+  let companyAddress = "";
+  let buyerTaxId     = "";
+  let buyerName      = "";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, account_type, company_name, tax_id")
+      .eq("id", user.id)
+      .maybeSingle<{
+        first_name: string | null;
+        last_name:  string | null;
+        account_type: "personal" | "juristic" | null;
+        company_name: string | null;
+        tax_id:       string | null;
+      }>();
+    buyerName = profile?.company_name
+      ?? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim();
+    buyerTaxId = profile?.tax_id ?? "";
+    companyName = profile?.company_name ?? "";
+
+    if (profile?.account_type === "juristic") {
+      const { data: corp } = await supabase
+        .from("corporate")
+        .select("company_name, tax_id, company_address")
+        .eq("profile_id", user.id)
+        .maybeSingle<{
+          company_name:    string | null;
+          tax_id:          string | null;
+          company_address: string | null;
+        }>();
+      if (corp) {
+        if (corp.company_name)    { buyerName = corp.company_name; companyName = corp.company_name; }
+        if (corp.tax_id)          buyerTaxId = corp.tax_id;
+        if (corp.company_address) companyAddress = corp.company_address;
+      }
+    }
+  }
+  void companyName; // referenced in case of future juristic-only branch
+  const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
+  const isPaid     = f.status === "delivered";
 
   return (
     <div className="bg-white text-black min-h-screen">
@@ -112,6 +164,21 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
             </tbody>
           </table>
         </section>
+
+        {/* T-P4 G2b: tax invoice request panel (hidden on print) */}
+        {isPaid && (
+          <TaxInvoiceRequestPanel
+            orderType="forwarder"
+            orderId={f.f_no ?? fNo}
+            defaults={{
+              name:    buyerName,
+              address: companyAddress,
+              taxId:   buyerTaxId,
+            }}
+            existing={existingInvoice}
+            eligible={isEligible}
+          />
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-600">
