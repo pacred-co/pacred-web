@@ -289,4 +289,17 @@ export const notify = {
       body:     opts.message,
     };
   },
+
+  // ── SMS balance low alert (cron — admin recipients opted-in via
+  //    notify_channels.sms_balance_alert). Closes chat audit L-3 silent
+  //    SMS credit depletion. Severity 'warning' bumps urgency on LINE push. ──
+  smsBalanceLow(opts: { balance: number; unit: string; threshold: number }): NotifyPayload {
+    return {
+      category: "system",
+      severity: "warning",
+      title:    "⚠️ SMS credit ใกล้หมด — เติมก่อน OTP ใช้ไม่ได้",
+      body:     `ยอดคงเหลือ ${opts.balance.toLocaleString("th-TH")} ${opts.unit} (เกณฑ์เตือน: ${opts.threshold}) — เติมที่ ThaiBulkSMS Console ก่อนลูกค้าสมัครไม่ได้`,
+      link_href: "/admin/dashboard",
+    };
+  },
 };

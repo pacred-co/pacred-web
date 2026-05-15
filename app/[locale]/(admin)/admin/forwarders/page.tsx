@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
 type SearchParams = {
   status?: string;
   q?: string;
+  q_multi?: string;     // U2-5: multi-line bulk tracking search (one term per line)
   date_from?: string;
   date_to?: string;
 };
@@ -56,8 +57,26 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
   }));
 
-  // Client-side text search across multiple fields
-  if (sp.q) {
+  // Client-side text search across multiple fields.
+  // q_multi (U2-5): multi-line bulk search — match if ANY line matches ANY field.
+  // q       (legacy single): one keyword across all fields.
+  if (sp.q_multi) {
+    const lines = sp.q_multi
+      .split(/\r?\n/)
+      .map((l) => l.trim().toLowerCase())
+      .filter(Boolean);
+    if (lines.length > 0) {
+      rows = rows.filter((r) => {
+        const fields = [
+          r.f_no.toLowerCase(),
+          (r.tracking_chn ?? "").toLowerCase(),
+          (r.tracking_th  ?? "").toLowerCase(),
+          (r.profile?.member_code ?? "").toLowerCase(),
+        ];
+        return lines.some((q) => fields.some((f) => f.includes(q)));
+      });
+    }
+  } else if (sp.q) {
     const keyword = sp.q.toLowerCase();
     rows = rows.filter((r) =>
       r.f_no.toLowerCase().includes(keyword) ||

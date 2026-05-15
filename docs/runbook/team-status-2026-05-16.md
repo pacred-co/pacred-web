@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-9 (เดฟ via Claude) — Audit batch evening-8 + **U1-1 `/status` health page shipped**. Public route `app/[locale]/(public)/status/page.tsx` — Supabase live ping + 11 service config checks + traffic-light dots + bilingual TH/EN. Closes chat audit L-1 (PHP เว็ปล่ม 24x — Pacred customers now have transparency).
+> **Last updated:** 2026-05-16 evening-10 (เดฟ via Claude) — **U1-1 + U1-2 + U1-8-audit + U2-5 batch:** /status page · OTP balance check cron scaffold · PDF audit (Sarabun confirmed handles Thai) · multi-line bulk tracking search · Footer /status link · 7 learnings. Part U progress: 4/9 critical leak holes addressed.
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -221,7 +221,10 @@ Two parallel audits completed 2026-05-16 evening:
 - U5-5 slip upload UX (drag-drop + OCR)
 
 **เดฟ (next session pickup):**
-- ~~U1-1 `/status` health check page~~ ✅ **DONE evening-9** — public route at `/status` with Supabase live ping + 11 service config checks (LINE/SMS/MOMO/Sentry/Upstash/hCaptcha/GTM/Clarity/PromptPay/Resend/LIFF). Traffic-light dots + 60s server-side cache. Bilingual TH/EN. Closes chat audit L-1.
+- ~~U1-1 `/status` health check page~~ ✅ **DONE evening-9** — public route at `/status` with Supabase live ping + 11 service config checks + traffic-light dots + 60s server-side cache + bilingual TH/EN. Now linked from Footer (evening-10).
+- ~~U1-2 OTP SMS balance check cron scaffold~~ ✅ **DONE evening-10** — `app/api/cron/sms-balance-check/route.ts` + `lib/sms/gateway.ts::checkSmsBalance()` + `notify.smsBalanceLow` template. Daily alert to admins opted-in via `notify_channels.sms_balance_alert`. **Not yet in vercel.json** — pending Pro plan confirm. ภูม/ก๊อต: confirm exact ThaiBulkSMS balance endpoint when DV-3 SMS keys arrive (best-guess `GET /credits` in scaffold).
+- ~~U1-8 PDF audit (Sarabun + WHT)~~ ✅ **verified evening-10** — Sarabun font already registered (`lib/pdf/register-fonts.ts`) handles Thai special chars cleanly. WHT (ภาษีหัก ณ ที่จ่าย) deferred per ADR-0006 §8 (await first B2B juristic need). Chat L-5 finding closed by existing implementation.
+- ~~U2-5 multi-line bulk tracking search~~ ✅ **DONE evening-10** — `/admin/forwarders` search bar toggles between single-line + multi-line textarea. Multi-mode persists via `?q_multi=` URL param. Matches if ANY line appears in ANY of f_no/tracking_chn/tracking_th/member_code. Closes chat W-9 daily workflow.
 - U3-1 PHP tree snapshot tarball (15m, do anytime locally)
 - U3-2 delete Tier 1-3 dead code in pcscargo (30m, do anytime locally — pcscargo is not in git)
 - U3-3 archive SQL dump (15m)
