@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { YuanPaymentActions } from "./actions-cell";
+import { YuanBulkApproveBar, YuanRowCheckbox } from "./bulk-approve-bar";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -46,6 +47,8 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
 
       <FilterBar currentStatus={sp.status} />
 
+      <YuanBulkApproveBar />
+
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
@@ -54,6 +57,7 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
+                  <th className="px-2 py-3 w-8"></th>
                   <th className="px-4 py-3">วันที่</th>
                   <th className="px-4 py-3">ลูกค้า</th>
                   <th className="px-4 py-3">ช่องทาง</th>
@@ -68,6 +72,11 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border align-top">
+                    <td className="px-2 py-3">
+                      {/* T-P3: bulk-select shown only for pending rows
+                          (adminBulkApproveYuanPayments only acts on pending) */}
+                      {r.status === "pending" ? <YuanRowCheckbox id={r.id} /> : null}
+                    </td>
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleString("th-TH")}</td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono">{r.profile?.member_code ?? "—"}</div>

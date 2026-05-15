@@ -101,3 +101,96 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
     return { ok: true };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// T-P3: BULK approve pending yuan_payments (cargo revenue path)
+// ────────────────────────────────────────────────────────────
+//
+// Same pattern as adminBulkApproveDeposits (wallet.ts) — but for
+// yuan_payments. Skips already-progressed rows silently.
+//
+// "Approve" here = transition pending → processing (admin starts
+// transferring to the customer's Alipay account). Final 'completed'
+// requires per-row context (cost rate, profit, proof URL) so it stays
+// single-row.
+
+const yuanBulkSchema = z.object({
+  ids:  z.array(z.string().uuid()).min(1, "ต้องเลือกอย่างน้อย 1 รายการ").max(50, "เลือกได้สูงสุด 50 รายการต่อรอบ"),
+  note: z.string().trim().max(500).optional(),
+});
+export type AdminBulkApproveYuanPaymentsInput = z.infer<typeof yuanBulkSchema>;
+
+type YuanBulkResult = { approved: number; skipped: number; errors: Array<{ id: string; reason: string }> };
+
+export async function adminBulkApproveYuanPayments(
+  input: AdminBulkApproveYuanPaymentsInput,
+): Promise<AdminActionResult<YuanBulkResult>> {
+  const parsed = yuanBulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { ids } = parsed.data;
+
+  return withAdmin<YuanBulkResult>(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: rows, error: selErr } = await admin
+      .from("yuan_payments")
+      .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet")
+      .in("id", ids);
+    if (selErr) return { ok: false, error: selErr.message };
+
+    const result: YuanBulkResult = { approved: 0, skipped: 0, errors: [] };
+    type Row = { id: string; profile_id: string; status: string; yuan_amount: number; thb_amount: number; paid_via_wallet: boolean };
+
+    for (const row of (rows ?? []) as Row[]) {
+      if (row.status !== "pending") {
+        result.skipped++;
+        continue;
+      }
+
+      const { error: updErr } = await admin
+        .from("yuan_payments")
+        .update({
+          status:          "processing",
+          executed_at:     new Date().toISOString(),
+          admin_id_update: adminId,
+        })
+        .eq("id", row.id);
+
+      if (updErr) {
+        result.errors.push({ id: row.id, reason: updErr.message });
+        continue;
+      }
+
+      result.approved++;
+
+      await logAdminAction(adminId, "yuan_payment.bulk_approve", "yuan_payment", row.id, {
+        yuan_amount: row.yuan_amount,
+        thb_amount:  row.thb_amount,
+        before:      { status: "pending" },
+        after:       { status: "processing" },
+      });
+
+      void sendNotification(row.profile_id, {
+        category: "yuan_payment",
+        severity: "info",
+        title:    `ฝากโอนหยวน — ${STATUS_LABEL.processing}`,
+        body:     `¥${Number(row.yuan_amount).toFixed(2)} = ฿${Number(row.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })} — กำลังโอนไป Alipay`,
+        link_href: `/service-payment`,
+        reference_type: "yuan_payment",
+        reference_id:   row.id,
+      });
+    }
+
+    const seenIds = new Set((rows ?? []).map((r) => r.id));
+    for (const id of ids) {
+      if (!seenIds.has(id)) {
+        result.errors.push({ id, reason: "not_found" });
+      }
+    }
+
+    revalidatePath("/admin/yuan-payments");
+    return { ok: true, data: result };
+  });
+}
