@@ -1683,6 +1683,8 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-D3 | Link the Pacred container code ↔ the carrier's physical container number | ภูม | 🟡 | ⬜ |
 | V-D4 | Split-receipt expected-vs-received box count — migration 0037 (U1-5) schema ✅; wire the UI | ภูม | 🟠 | ⬜ |
 
+> 📐 **Schema spec for V-D1/D2/D3** → [`docs/port-specs/cargo-volume-reconciliation.md`](port-specs/cargo-volume-reconciliation.md) — เดฟ prep (proposed columns + canonical cargo-type enum + legacy mapping); ภูม implements + finalises.
+
 ## V-E — Freight (FCL/LCL) document suite — net-new (Phase I2)
 
 | # | Task | Owner | Rev | Status |
