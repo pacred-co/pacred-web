@@ -11,17 +11,15 @@
 
 ## 🟡 รอ decision จาก เดฟ / ก๊อต
 
-### D-1 · LP-1c2 rate_custom_hs schema — UNIQUE constraint หรือไม่
+### D-1 · LP-1c2 rate_custom_hs schema — UNIQUE constraint? (พร้อม shipped option b)
 **Context:** Migration `0009_rates.sql` สร้าง `rate_custom_hs` แต่ comment เขียนว่า "placeholder shape" + ไม่มี `UNIQUE (profile_id, hs_code, source_warehouse, transport_type, product_type, basis)`.
 
-**ทางเลือก:**
-- **(a) เพิ่ม UNIQUE constraint** ใน migration `0044_rate_custom_hs_unique.sql` → ใช้ `upsert(..., { onConflict: ... })` แบบเดียวกับ rate_general/vip/custom_user. คลีน. แต่เข้าเลน schema ของเดฟ.
-- **(b) SELECT-then-UPDATE/INSERT** ใน admin action โดยไม่แตะ schema. ยุ่งกว่าหน่อย + race-window เล็กระหว่าง select กับ insert (low risk เพราะ admin tab เดียวที่แก้ตอนเดียว).
+**Status:** ✅ ภูม shipped LP-1c2 with **option (b) SELECT-then-write** ใน commit `0d35f1f`. Feature ทำงาน ได้ — race-window เล็กแค่ admin 2 คนแก้ตู้เดียวกันพร้อมกัน (ไม่ใช่ scale Pacred).
 
-**ภูม proceed กับ (b)** ใน LP-1c2 รอบนี้ — ไม่ block. ถ้าเดฟต้องการ (a) แก้ทีหลังเป็น 1 migration + ลบ SELECT-then-write logic ได้.
+**ทางเลือก (a) UNIQUE constraint — เดฟ choose later:**
+- ลง migration `0044_rate_custom_hs_unique.sql` แล้วแก้ `actions/admin/rates.ts::adminUpsertCustomHsRate` ให้ใช้ `.upsert({ onConflict: ... })` (ลบ SELECT-then-INSERT/UPDATE branch). 5-10 นาที.
 
-**Owner of decision:** เดฟ (structural lane)
-**By when:** ก่อนภูม pickup LP-1c2 ต่อ หรือ LP-1d ใหม่ (ไม่เร่ง — feature ทำงานได้ทั้ง 2 ทาง)
+**Owner of decision:** เดฟ — refactor optional. ไม่ block.
 
 ---
 
@@ -55,15 +53,11 @@
 
 ## ⚪ Followup ที่ภูม ทำเอง (low priority, ไม่ block)
 
-### F-1 · BillToOverridePanel "default name" สำหรับลูกค้านิติบุคคล
-**Issue:** `/admin/service-orders/[hNo]` BillToOverridePanel แสดง "ชื่อเริ่มต้น = first_name + last_name" แต่ PDF จริงใช้ `corporate.company_name` ถ้า account_type=juristic.
+### F-1 · BillToOverridePanel "default name" สำหรับลูกค้านิติบุคคล ✅
+**Status:** Shipped ใน commit `0d35f1f` — profile select เพิ่ม `account_type` + ถ้า juristic ดึง `corporate.company_name` มา feed `defaultName` prop.
 
-**Fix:** ขยาย select profile ใน `app/[locale]/(admin)/admin/service-orders/[hNo]/page.tsx` ให้ join corporate + ส่ง company_name เป็น defaultName เมื่อ juristic. (ภูม ทำใน F-1 ถัด commit นี้)
-
-**Effort:** ~15 นาที. ภูม จะทำใน batch ถัดไป.
-
-### F-2 · LP-1c2 rate_custom_hs UI (after D-1 decision)
-ใช้ pattern เดียวกับ LP-1c1 แต่เพิ่ม hs_code + rate_before column. รอ D-1.
+### F-2 · LP-1c2 rate_custom_hs UI ✅
+Shipped ใน commit `0d35f1f` พร้อม F-1 (เลือก option (b) ตาม D-1).
 
 ---
 
