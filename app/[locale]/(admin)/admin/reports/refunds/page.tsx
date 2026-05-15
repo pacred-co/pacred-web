@@ -11,7 +11,7 @@ type Profile = { member_code: string | null; first_name: string | null; last_nam
 type Raw = {
   id: string; profile_id: string; bucket: string; amount: number; status: string;
   reference_type: string | null; reference_id: string | null;
-  note: string | null; created_at: string;
+  note: string | null; created_at: string; slip_transferred_at: string | null;
   profile: Profile | Profile[] | null;
 };
 type Row = Omit<Raw, "profile"> & { profile: Profile };
@@ -44,7 +44,7 @@ export default async function RefundsReport({
 
   let q = admin
     .from("wallet_transactions")
-    .select(`id, profile_id, bucket, amount, status, reference_type, reference_id, note, created_at,
+    .select(`id, profile_id, bucket, amount, status, reference_type, reference_id, note, created_at, slip_transferred_at,
       profile:profiles!profile_id(member_code, first_name, last_name, phone)`)
     .eq("kind", "refund")
     .eq("status", "completed")
@@ -62,28 +62,30 @@ export default async function RefundsReport({
   }, {});
 
   const csvRows = rows.map((r) => ({
-    id:             r.id,
-    created_at:     r.created_at,
-    member_code:    r.profile?.member_code ?? "",
-    name:           [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" "),
-    phone:          r.profile?.phone ?? "",
-    bucket:         r.bucket,
-    amount:         Math.abs(Number(r.amount)),
-    reference_type: r.reference_type ?? "",
-    reference_id:   r.reference_id ?? "",
-    note:           r.note ?? "",
+    id:                  r.id,
+    created_at:          r.created_at,
+    slip_transferred_at: r.slip_transferred_at ?? "",
+    member_code:         r.profile?.member_code ?? "",
+    name:                [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" "),
+    phone:               r.profile?.phone ?? "",
+    bucket:              r.bucket,
+    amount:              Math.abs(Number(r.amount)),
+    reference_type:      r.reference_type ?? "",
+    reference_id:        r.reference_id ?? "",
+    note:                r.note ?? "",
   }));
   const csvCols = [
-    { key: "created_at",     label: "วันที่" },
-    { key: "id",             label: "Tx ID" },
-    { key: "member_code",    label: "รหัสลูกค้า" },
-    { key: "name",           label: "ชื่อลูกค้า" },
-    { key: "phone",          label: "เบอร์" },
-    { key: "bucket",         label: "กระเป๋า" },
-    { key: "amount",         label: "ยอดคืน (บาท)" },
-    { key: "reference_type", label: "ref type" },
-    { key: "reference_id",   label: "ref id" },
-    { key: "note",           label: "หมายเหตุ" },
+    { key: "created_at",          label: "วันที่ระบบ" },
+    { key: "slip_transferred_at", label: "วันที่โอนจริง (สลิป)" },
+    { key: "id",                  label: "Tx ID" },
+    { key: "member_code",         label: "รหัสลูกค้า" },
+    { key: "name",                label: "ชื่อลูกค้า" },
+    { key: "phone",               label: "เบอร์" },
+    { key: "bucket",              label: "กระเป๋า" },
+    { key: "amount",              label: "ยอดคืน (บาท)" },
+    { key: "reference_type",      label: "ref type" },
+    { key: "reference_id",        label: "ref id" },
+    { key: "note",                label: "หมายเหตุ" },
   ];
 
   return (
@@ -119,7 +121,7 @@ export default async function RefundsReport({
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-4 py-3">วันที่</th>
+                  <th className="px-4 py-3">วันที่ระบบ / โอนจริง</th>
                   <th className="px-4 py-3">ลูกค้า</th>
                   <th className="px-4 py-3 text-right">ยอดคืน</th>
                   <th className="px-4 py-3">กระเป๋า</th>
@@ -130,8 +132,15 @@ export default async function RefundsReport({
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border">
-                    <td className="px-4 py-3 text-xs">
-                      {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <div className="text-muted">
+                        {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      </div>
+                      {r.slip_transferred_at && (
+                        <div className="mt-0.5 text-foreground">
+                          ⏱ {new Date(r.slip_transferred_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <p>{[r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" ") || "—"}</p>
