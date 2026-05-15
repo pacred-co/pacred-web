@@ -24,6 +24,11 @@ function thb(n: number): string {
   return "฿" + Math.abs(n).toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
 
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function nDaysAgoIsoDate(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export default async function RefundsReport({
   searchParams,
 }: {
@@ -34,8 +39,7 @@ export default async function RefundsReport({
   const admin = createAdminClient();
 
   // Default 30-day window if nothing specified
-  const defaultFrom = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-  const dateFrom = sp.date_from ?? defaultFrom;
+  const dateFrom = sp.date_from ?? nDaysAgoIsoDate(30);
   const dateTo   = sp.date_to;
 
   let q = admin

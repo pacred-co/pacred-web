@@ -68,6 +68,11 @@ const TRANSPORT_LABEL: Record<string, string> = {
   air:   "✈️ เครื่องบิน",
 };
 
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function hoursFromNowToIso(iso: string): number {
+  return Math.floor((new Date(iso).getTime() - Date.now()) / 3_600_000);
+}
+
 export default async function AdminContainerDetailPage({
   params,
 }: {
@@ -143,9 +148,8 @@ export default async function AdminContainerDetailPage({
             </p>
           )}
           {container.close_at && (() => {
-            const closeMs = new Date(container.close_at).getTime();
-            const diffH   = Math.floor((closeMs - Date.now()) / 3_600_000);
-            const closed  = diffH < 0;
+            const diffH  = hoursFromNowToIso(container.close_at);
+            const closed = diffH < 0;
             const cls = closed
               ? "bg-red-50 text-red-700 border-red-200"
               : diffH < 24

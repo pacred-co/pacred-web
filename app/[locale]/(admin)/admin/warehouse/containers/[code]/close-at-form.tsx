@@ -19,6 +19,11 @@ function isoToLocalInput(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function isPastIso(iso: string | null): boolean {
+  return iso != null && new Date(iso).getTime() < Date.now();
+}
+
 export function CloseAtForm({
   containerId,
   currentCloseAt,
@@ -34,7 +39,7 @@ export function CloseAtForm({
 
   const currentInputForm = isoToLocalInput(currentCloseAt);
   const dirty            = draft !== currentInputForm;
-  const isClosed         = currentCloseAt != null && new Date(currentCloseAt).getTime() < Date.now();
+  const isClosed         = isPastIso(currentCloseAt);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();

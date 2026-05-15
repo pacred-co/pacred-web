@@ -41,7 +41,6 @@ export default async function DebtorsReport() {
 
   const totalMain   = rows.reduce((s, r) => s + (Number(r.balance)        < 0 ? Number(r.balance)        : 0), 0);
   const totalCredit = rows.reduce((s, r) => s + (Number(r.credit_balance) < 0 ? Number(r.credit_balance) : 0), 0);
-  const totalOwed   = totalMain + totalCredit;
 
   const csvRows = rows.map((r) => ({
     profile_id:       r.profile_id,

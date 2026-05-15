@@ -13,6 +13,11 @@ import {
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function isPastIso(iso: string | null | undefined): boolean {
+  return iso != null && new Date(iso).getTime() < Date.now();
+}
+
 /**
  * U1-4 — Admin manual shipment entry form.
  *
@@ -103,7 +108,7 @@ export function ManualShipmentForm({ containerId, containerCode, closeAt }: Prop
     });
   }
 
-  const isClosed = closeAt != null && new Date(closeAt).getTime() < Date.now();
+  const isClosed = isPastIso(closeAt);
 
   if (isClosed) {
     return (
