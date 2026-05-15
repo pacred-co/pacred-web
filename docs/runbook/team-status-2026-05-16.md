@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-5 (เดฟ via Claude) — **0033 HOTFIX + LEGACY PORT AUDIT**. Migration 0033 tables renamed to `cargo_*` to avoid collision with legacy `public.containers` from 0016. Audit shows admin-side legacy port is ~95% done; remaining = Phase D shipping rates table only.
+> **Last updated:** 2026-05-16 evening-7 (เดฟ via Claude) — Forwarder pay-from-wallet shipped (evening-6) + **MOMO JMF lib scaffold ready** for ภูม (types + client + sync skeleton). Both cargo loop sides + partner integration foundation now in dave. Vercel cron audit confirmed (existing doc valid — เดฟ pending Pro plan check in dashboard).
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -130,6 +130,68 @@ Use this to prioritise the items that unblock the most downstream work.
 | Renovate | Auto-dep PRs setup | ~1h | 🟢 P3 (quick win when bored) |
 
 **Run-long sequence:** browser/call work first (K-12 → K-13 → DV-1a/b/c → MOMO-1 → T-G3) in any order, parallel friendly · then while waiting on owner/MOMO callback, draft ADRs (0011/0012/0013) or K-sec-2 RLS audit · finally CSP + Renovate as polish. Push to `main` is review-only — your work surfaces via ADR files + env vars in Vercel + audit docs.
+
+---
+
+## 🆕 ภูม mirror pickup — `adminMarkForwarderPaid` (added 2026-05-16 evening-6)
+
+Parallel to ภูม's T-P1 work where she shipped `adminMarkServiceOrderPaid`, the **forwarder side also needs an admin mark-paid action**. เดฟ just shipped `payForwarderFromWallet` (customer self-service, closes import loop the same way pay-from-wallet closes shop-order loop). The admin override / cash-on-delivery path is still needed.
+
+**Pattern to mirror exactly from `adminMarkServiceOrderPaid` (T-P1 / commit `121ea0d`):**
+
+```ts
+// actions/admin/forwarders.ts  (or wherever forwarder admin actions live)
+export async function adminMarkForwarderPaid(input: {
+  f_no: string;
+  allow_overdraw?: boolean;
+}): Promise<AdminActionResult<{ tx_id: string; already_paid: boolean }>>
+```
+
+- `withAdmin(["super", "accounting"])` per ADR-0005 K-7 (wallet movements = accounting)
+- Validates status: reject `cancelled` and `delivered`; allow `pending_payment` (and arguably any pre-shipped status, mirror customer flow)
+- Idempotency check on `wallet_transactions` (reference_type='forwarder', reference_id=f_no, kind='import_payment', status='completed')
+- Balance check (unless `allow_overdraw=true`)
+- Insert wallet_tx: bucket='main', amount=-total_price, kind='import_payment', reference_type='forwarder', reference_id=f_no, admin_id=adminId, note with override flag
+- Flip `forwarders.status` → 'shipped_china' (matches `payForwarderFromWallet` behavior — though admin can override the status via the existing status workflow if a different next-state is needed)
+- `logAdminAction(adminId, "forwarder.mark_paid", "forwarder", forwarder_id, { ... })`
+- `sendNotification(profile_id, ...)` — success severity, link_href = `/service-import/${f_no}`
+- `revalidatePath` on admin + customer pages
+
+**UI:** add the "บันทึกการชำระเงิน" panel to `/admin/forwarders/[fNo]` mirror of `update-form.tsx` in `/admin/service-orders/[hNo]/` — two buttons: "💰 บันทึกชำระจาก wallet" + "💵 รับเงินสด/นอกระบบ (override)".
+
+**Est:** ~2-3h (mostly copy-paste from T-P1 + adjust column names). Run-long priority: insert between T-P5 (done) and T-P2.
+
+---
+
+## 🆕 MOMO JMF lib scaffold (added 2026-05-16 evening-7 — เดฟ prep for ภูม)
+
+Created `lib/integrations/momo-jmf/` skeleton so ภูม can move fast once ก๊อต MOMO-1 lands (endpoint inventory call to MOMO dev).
+
+**Files shipped:**
+- `lib/integrations/momo-jmf/types.ts` — typed shapes for `MomoContainerSummary` / `MomoContainerDetail` / `MomoShipmentSummary` / `MomoTrackingEvent` / `MomoWebhookPayload` + `MOMO_STATUS_TO_PACRED` mapping → `cargo_containers.status` (per 0033)
+- `lib/integrations/momo-jmf/client.ts` — typed HTTP client with `Authorization: Bearer ${MOMO_JMF_TOKEN}` + `MOMO_JMF_BASE_URL`. **Demo mode** when env not set → returns `{ ok: false, error: "not_configured" }` (no exceptions in customer paths). Public methods: `listContainers(updatedSince?)` / `getContainer(code)` / `getContainerManifest(code)` / `getShipmentTracking(shipmentCode)`.
+- `lib/integrations/momo-jmf/sync.ts` — **skeleton** `syncContainersFromMomo(since?)`. Body intentionally minimal pending ก๊อต MOMO-1. JSDoc above the function has the FULL pseudo-code for the upsert loop ภูม fills (per migration 0033 cargo_* tables). Pattern reference: existing `actions/admin/csv-imports.ts` upsert+audit+idempotency conventions.
+- `lib/integrations/momo-jmf/index.ts` — public re-export surface (import from `@/lib/integrations/momo-jmf`).
+
+**ภูม pickup (after ก๊อต MOMO-1):**
+1. Verify `MomoContainerSummary` matches actual MOMO response → adjust `types.ts` if not
+2. Fill `syncContainersFromMomo` upsert loop per the JSDoc TODO checklist
+3. Add `/api/cron/momo-jmf-sync/route.ts` calling `syncContainersFromMomo` with CRON_SECRET check (mirror existing cron routes)
+4. Add cron entry to `vercel.json` — pending เดฟ confirms Pro plan (already at 5 crons; Pro allows 100)
+5. Add `/api/webhooks/momo-jmf/route.ts` receiver for inbound status pushes
+6. Build customer view `/service-import/[fNo]/container` showing the cargo_container card + cargo_shipment_tracking timeline (per container-centric-model.md design)
+7. Build admin view `/admin/warehouse/containers` + `/admin/warehouse/containers/[code]`
+
+---
+
+## 📋 Vercel cron audit (resolved evening-7)
+
+`docs/runbook/vercel-cron-plan.md` already exists with full diagnosis:
+- 5 cron jobs in `vercel.json` (auto-cancel every 15min · sales-daily-digest 17:05 · refresh-active-customers 01:00 · expire-probation 02:00 · expire-driver-assignments hourly)
+- Hobby plan = max 2 crons + daily-only schedules → Pacred needs **Pro plan** ($20/mo)
+- Pro plan = 100 cron limit + any schedule → ample headroom
+
+**Status:** ✅ doc is current; **เดฟ pending: confirm Pacred Vercel project is on Pro tier** (Vercel dashboard → Project → Settings → General → Plan). If Hobby, upgrade before next deploy to avoid Vercel silently dropping crons #3-5.
 
 ---
 
@@ -291,14 +353,23 @@ Per Part S1 + ADRs 0003-0010:
 
 **Acceptance (entire batch):** `pnpm exec tsc --noEmit` ✅ clean · `pnpm exec eslint` on all touched files ✅ clean · migration files idempotent · i18n keys both languages.
 
-**Cargo loop status — actually closes end-to-end now for V1:**
+**Cargo loop status — actually closes end-to-end now for V1 (BOTH service-order + service-import):**
 ```
+shop-order (ฝากสั่งซื้อ):
 signup ✅ → top up wallet ✅ → admin approves deposit ✅
        → place service-order ✅ → admin reviews + total ✅
-       → CUSTOMER pays from wallet ✅ (NEW — no more admin bottleneck per order)
-       → admin moves status forward ✅ → receipt PDF ✅
-       → (juristic) tax invoice request → pending T-P4 G2b
-       → (admin) container assignment + customer tracking view → pending T-P2
+       → CUSTOMER pays from wallet ✅ → admin moves status ✅ → receipt PDF ✅
+
+forwarder (ฝากนำเข้า):
+signup ✅ → top up wallet ✅ → admin approves deposit ✅
+       → create forwarder ✅ → admin reviews + total ✅
+       → CUSTOMER pays from wallet ✅ (NEW evening-6, mirror of shop pay)
+       → status flips to shipped_china ✅ → admin tracks + driver assign ✅
+       → status flow to delivered ✅ → receipt PDF ✅
+
+→ (juristic) tax invoice request → pending T-P4 G2b
+→ (admin) container assignment + customer tracking → pending T-P2 (cargo_* tables)
+→ (admin) mark-paid override path for forwarder → pending ภูม mirror pickup
 ```
 
 **ภูม next session:** pull `origin/dave` → merge into `Poom` → run `0033` + `0034` on dev Supabase → pick T-P5 OR T-P2/T-P4 (both unblocked). Run-long mode — no wait.
