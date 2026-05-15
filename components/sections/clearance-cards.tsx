@@ -193,7 +193,7 @@ export function ClearanceCards() {
               boxShadow: "0 8px 16px rgba(220,38,38,0.22)",
             }}
           />
-          <h2 className="m-0 mb-1.5 md:mb-2 text-[22px] md:text-[clamp(28px,3vw,40px)] leading-[1.22] md:leading-[1.18] font-black tracking-[-0.04em] text-[#111827]">
+          <h2 className="m-0 mb-1.5 md:mb-2 text-[22px] md:text-[clamp(28px,3vw,40px)] leading-[1.22] md:leading-[1.18] font-black tracking-[-0.04em] text-[#111827] dark:text-foreground">
             {SECTION_TITLE}
           </h2>
           <p className="m-0 text-[12.5px] md:text-[15px] leading-[1.45] md:leading-[1.55] font-bold text-[#6b7280] md:text-[#4b5563] md:whitespace-nowrap md:overflow-hidden md:text-ellipsis line-clamp-2 md:line-clamp-none">

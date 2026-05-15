@@ -38,6 +38,7 @@
     "walletHistory": "รายการเดินบัญชี",
     "walletWithdraw": "ถอนเงิน",
     "walletDeposit": "เติมเงิน",
+    "shipments": "ติดตามสินค้า",
     "addresses": "ที่อยู่จัดส่งสินค้า",
     "profile": "ข้อมูลส่วนตัว",
     "notifications": "การแจ้งเตือน",
@@ -580,6 +581,12 @@
     "changePassword": "เปลี่ยนรหัสผ่าน",
     "passwordChanged": "เปลี่ยนรหัสผ่านแล้ว",
     "changePhoneLink": "เปลี่ยนเบอร์โทร →"
+  },
+  "shipments": {
+    "kicker": "ติดตามสินค้า",
+    "title": "ติดตามสินค้าของฉัน",
+    "subtitle": "ดูสถานะและตำแหน่งของสินค้าที่กำลังเดินทาง — อัพเดททุกครั้งที่ทีมงานสแกน",
+    "loadError": "โหลดข้อมูลไม่สำเร็จ: {error}"
   },
   "liff": {
     "title": "เชื่อมบัญชี LINE",
@@ -1603,6 +1610,7 @@
     "aboutPrivacy": "นโยบายความเป็นส่วนตัว",
     "aboutDelivery": "พื้นที่จัดส่ง Pacred เหมาๆ",
     "aboutHolidays": "วันหยุดประจำปี Pacred",
+    "aboutStatus": "สถานะระบบ (Status)",
     "svcFcl": "นำเข้าสินค้าจากจีน FCL ปิดตู้/เหมาตู้",
     "svcLcl": "นำเข้าสินค้าจากจีน LCL แชร์ตู้/รวมตู้",
     "svcExport": "ส่งออกสินค้าทั่วโลก",

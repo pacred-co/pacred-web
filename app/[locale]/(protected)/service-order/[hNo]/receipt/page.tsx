@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getServiceOrderForReceipt } from "@/actions/service-order";
+import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { PrintButton } from "@/components/print-button";
+import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 
 /**
@@ -30,6 +32,16 @@ export default async function ShopOrderReceiptPage({
   const res = await getServiceOrderForReceipt(hNo);
   if (!res.ok || !res.data) notFound();
   const o = res.data;
+
+  // T-P4 G2b: existing tax invoice (if any) for showing status card
+  // instead of request form.
+  const taxInv = await getMyTaxInvoiceForOrder("service_order", hNo);
+  const existingInvoice = taxInv.ok ? taxInv.data : null;
+
+  // Eligible if profile has a tax_id (juristic) OR juristic with corporate.tax_id.
+  // Service-order receipt only carries the snapshot fields — derive both paths.
+  const buyerTaxId = o.customer.tax_id ?? "";
+  const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
 
   const isPaid       = o.status === "completed";
   const docLabel     = isPaid ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
@@ -220,6 +232,22 @@ export default async function ShopOrderReceiptPage({
                   : o.transport_type}
           </p>
         </section>
+
+        {/* T-P4 G2b: tax invoice request panel (hidden on print) */}
+        {isPaid && (
+          <TaxInvoiceRequestPanel
+            orderType="service_order"
+            orderId={o.h_no ?? hNo}
+            defaults={{
+              name:    o.customer.company_name
+                ?? `${o.customer.first_name ?? ""} ${o.customer.last_name ?? ""}`.trim(),
+              address: o.customer.company_address ?? "",
+              taxId:   buyerTaxId,
+            }}
+            existing={existingInvoice}
+            eligible={isEligible}
+          />
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-300 pt-3 text-[10px] text-gray-600">

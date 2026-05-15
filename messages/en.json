@@ -38,6 +38,7 @@
     "walletHistory": "Transaction History",
     "walletWithdraw": "Withdraw",
     "walletDeposit": "Deposit",
+    "shipments": "Track Shipments",
     "addresses": "Shipping Addresses",
     "profile": "My Profile",
     "notifications": "Notifications",
@@ -580,6 +581,12 @@
     "changePassword": "Change password",
     "passwordChanged": "Password updated.",
     "changePhoneLink": "Change phone number →"
+  },
+  "shipments": {
+    "kicker": "TRACK SHIPMENTS",
+    "title": "Track my shipments",
+    "subtitle": "See current status and location of your shipments in transit — updated whenever staff scan.",
+    "loadError": "Failed to load: {error}"
   },
   "liff": {
     "title": "Link your LINE account",
@@ -1603,6 +1610,7 @@
     "aboutPrivacy": "Privacy policy",
     "aboutDelivery": "Pacred flat-rate delivery zones",
     "aboutHolidays": "Pacred annual holidays",
+    "aboutStatus": "System status",
     "svcFcl": "FCL container import from China",
     "svcLcl": "LCL shared-container import from China",
     "svcExport": "Worldwide export",

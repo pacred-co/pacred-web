@@ -1,0 +1,193 @@
+/**
+ * U1-8 — PDF render smoke test for Thai special characters.
+ *
+ * Per chat audit L-5 (mPDF brittleness): Thai addresses with combining
+ * vowel marks / repetition mark ๆ / paiyannoi ฯ / vocalic ฤ ฦ used to
+ * render as squares. Pacred uses @react-pdf/renderer + Sarabun font;
+ * this test asserts that suspicion-prone characters render WITHOUT
+ * throwing OR producing empty buffers.
+ *
+ * Test surface (no DB):
+ *   1. ForwarderReceipt — base + edge address case
+ *   2. TaxInvoice — base + cancelled (watermark) variant
+ *
+ * What "passing" means:
+ *   - renderToBuffer resolves to a Buffer
+ *   - Buffer length > 1500 bytes (a rendered PDF baseline; empty/error
+ *     buffers are typically <500)
+ *   - Buffer starts with %PDF- magic (valid PDF header)
+ *
+ * Render is the slowest test in the unit bucket (~1-2s each = ~5s total)
+ * — that's the cost of validating the L-5 audit gap before customers
+ * report broken receipts.
+ */
+
+import path from "node:path";
+import { Font, renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
+import type { ReactElement } from "react";
+import { ForwarderReceipt, type ForwarderReceiptData } from "@/components/pdf/forwarder-receipt";
+import { TaxInvoice, type TaxInvoiceData } from "@/components/pdf/tax-invoice";
+
+// Inline font registration mirroring lib/pdf/register-fonts.ts (avoid
+// importing it because it depends on `server-only` which is a Next.js
+// virtual module unavailable in raw tsx).
+function registerSarabunForTest(): void {
+  const fontsDir = path.join(process.cwd(), "public", "fonts");
+  Font.register({
+    family: "Sarabun",
+    fonts: [
+      { src: path.join(fontsDir, "Sarabun-Regular.ttf"), fontWeight: "normal" },
+      { src: path.join(fontsDir, "Sarabun-Bold.ttf"),    fontWeight: "bold"   },
+    ],
+  });
+  Font.registerHyphenationCallback((word) => [word]);
+}
+
+let pass = 0;
+let fail = 0;
+function assert(label: string, cond: boolean): void {
+  if (cond) { pass++; console.log("  ✓", label); }
+  else      { fail++; console.error("  ✗", label); }
+}
+
+// ── Edge Thai-character bank (per chat L-5 audit) ──
+const EDGE_NAME    = "บริษัท แพคเรด (ประเทศไทย) จำกัด ฯ";
+const EDGE_ADDRESS = [
+  "เลขที่ ๒๓๔/๕ ซอยริมคลองฤๅษี",          // Thai numerals + ฤ
+  "ถนนสุขุมวิท ๖๒/๑ แขวงพระโขนง ๆ ที่ ๒",  // ๆ repetition mark
+  "เขตคลองเตย กรุงเทพมหานคร ๑๐๒๖๐ ฯลฯ",   // ฯลฯ paiyannoi-noi
+  "(อาคาร เอ ชั้น ๓ ห้อง ๓๐๑ ก่ก้ก๊ก๋)",     // combining-mark stress test
+].join("\n");
+const EDGE_BUYER_TAX_ID = "0105560123459";
+
+// ────────────────────────────────────────────────────────────
+// Fixtures
+// ────────────────────────────────────────────────────────────
+
+function baseForwarder(): ForwarderReceiptData {
+  return {
+    f_no:        "F260516001",
+    created_at:  "2026-05-16T10:30:00Z",
+    ship_first_name: "สมชาย",
+    ship_last_name:  "ใจดี",
+    ship_phone:      "0812345678",
+    ship_phone2:     null,
+    ship_address_line: "123 ถนนสุขุมวิท",
+    ship_sub_district: "คลองตัน",
+    ship_district:     "คลองเตย",
+    ship_province:     "กรุงเทพฯ",
+    ship_postal_code:  "10110",
+    source_warehouse: "yiwu",
+    transport_type:   "truck",
+    box_count:        5,
+    weight_kg:        12.5,
+    volume_cbm:       0.345,
+    transport_price:  1500,
+    service_fee:      150,
+    crate:            true,
+    crate_price:      200,
+    qc:               false,
+    qc_price:         0,
+    domestic_china_thb:    0,
+    thailand_delivery_thb: 100,
+    other_price:           0,
+    total_price:           1950,
+    items: [
+      { id: "i1", product_name: "เสื้อยืด", product_qty: 10, weight_per_item_kg: 0.25 },
+    ],
+  };
+}
+
+function edgeForwarder(): ForwarderReceiptData {
+  const f = baseForwarder();
+  f.ship_first_name   = "สมชาย ก่ก้";
+  f.ship_last_name    = "ใจดี ๆ";
+  f.ship_address_line = EDGE_ADDRESS.split("\n").join(" ");
+  f.items = [
+    { id: "i1", product_name: "เสื้อยืดสั่งทำ ฯลฯ ๒๓ สี", product_qty: 100, weight_per_item_kg: 0.25 },
+    { id: "i2", product_name: "หน้ากากผ้าฤดูร้อน",       product_qty: 50,  weight_per_item_kg: null },
+  ];
+  return f;
+}
+
+function baseTaxInvoice(): TaxInvoiceData {
+  return {
+    serial_no:    "INV-202605-0001",
+    status:       "issued",
+    issued_at:    "2026-05-16T10:30:00Z",
+    created_at:   "2026-05-16T10:00:00Z",
+    buyer_name:    "บริษัท ตัวอย่าง จำกัด",
+    buyer_address: "123 ถนนสุขุมวิท แขวงคลองตัน เขตคลองเตย กรุงเทพฯ 10110",
+    buyer_tax_id:  "0105560123459",
+    buyer_branch:  "สำนักงานใหญ่",
+    subtotal_thb:  1822.43,
+    vat_thb:       127.57,
+    total_thb:     1950.00,
+    vat_mode:      "inclusive",
+    payment_method: "Wallet",
+    lines: [
+      {
+        position: 1,
+        description: "ฝากนำเข้า F260516001 — yiwu/truck — 5 กล่อง",
+        qty: 1,
+        unit_price_thb: 1822.43,
+        amount_thb:     1822.43,
+        vat_thb:        127.57,
+      },
+    ],
+    order_h_no:     null,
+    forwarder_f_no: "F260516001",
+  };
+}
+
+function edgeTaxInvoice(): TaxInvoiceData {
+  const t = baseTaxInvoice();
+  t.buyer_name    = EDGE_NAME;
+  t.buyer_address = EDGE_ADDRESS;
+  t.buyer_tax_id  = EDGE_BUYER_TAX_ID;
+  return t;
+}
+
+function cancelledTaxInvoice(): TaxInvoiceData {
+  const t = baseTaxInvoice();
+  t.status = "cancelled";
+  return t;
+}
+
+// ────────────────────────────────────────────────────────────
+// Run tests
+// ────────────────────────────────────────────────────────────
+
+const PDF_MAGIC = Buffer.from("%PDF-");
+
+async function renderAndAssert(label: string, doc: ReactElement<DocumentProps>): Promise<void> {
+  try {
+    const buf = await renderToBuffer(doc);
+    const isPdf  = buf.length >= PDF_MAGIC.length && buf.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC);
+    const sized  = buf.length > 1500;
+    assert(`${label} — renderToBuffer resolves`,         true);
+    assert(`${label} — buffer length > 1500 (${buf.length})`, sized);
+    assert(`${label} — buffer starts with %PDF- magic`,  isPdf);
+  } catch (e) {
+    assert(`${label} — renderToBuffer resolves (got: ${(e as Error).message})`, false);
+  }
+}
+
+(async () => {
+  console.log("PDF render — Thai special-char smoke (U1-8)");
+
+  // Sarabun registered once globally — react-pdf caches.
+  registerSarabunForTest();
+
+  console.log("  ForwarderReceipt");
+  await renderAndAssert("base case",        <ForwarderReceipt data={baseForwarder()} />);
+  await renderAndAssert("edge Thai chars",  <ForwarderReceipt data={edgeForwarder()} />);
+
+  console.log("  TaxInvoice");
+  await renderAndAssert("base issued",      <TaxInvoice data={baseTaxInvoice()} />);
+  await renderAndAssert("edge Thai chars",  <TaxInvoice data={edgeTaxInvoice()} />);
+  await renderAndAssert("cancelled (watermark)", <TaxInvoice data={cancelledTaxInvoice()} />);
+
+  console.log(`\n${pass} pass, ${fail} fail`);
+  if (fail > 0) process.exit(1);
+})();

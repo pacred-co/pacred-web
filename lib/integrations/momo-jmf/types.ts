@@ -18,26 +18,72 @@
  * @see docs/architecture/container-centric-model.md
  */
 
-// MOMO's container status enum (guess — pending MOMO-1 confirmation).
+/**
+ * MOMO's container status enum (U1-6: verbatim port from PCS DEV chat
+ * 2026-05-02 — endpoint `https://api-cn.alilogisticshub.com/?api=container-list`).
+ *
+ * Confirmed by chat audit `docs/audit/chat-analysis-2026-05-16.md` §
+ * "MOMO canonical status enum (port verbatim)". When ก๊อต MOMO-1 lands
+ * with the actual MOMO endpoint inventory, re-verify this list against
+ * live responses. If MOMO ships additional values, add them here +
+ * extend MOMO_STATUS_TO_PACRED below.
+ */
 export type MomoContainerStatus =
-  | "open"        // packing in progress at MOMO warehouse
-  | "packing"     // alias for open (some legacy endpoints used this)
-  | "closed"      // sealed; manifest finalised
-  | "in_transit" // on carrier (truck/ship/plane)
-  | "arrived"    // landed at destination warehouse
-  | "unloading"  // breaking out of the container
-  | "released";   // all shipments dispatched; container retired
+  | "loading_container"          // China warehouse packing into the container
+  | "ek_left_china_border"       // truck/road: departed China border (Ek = EK route)
+  | "ek_arrived_vietnam_border"  // truck/road: at Vietnam border
+  | "in_transit"                 // generic transit (also sea-truck combo)
+  | "sea_leaving_china"          // sea: departed Chinese port
+  | "sea_arrived_thailand_port"  // sea: at TH port (e.g. Laem Chabang)
+  | "ek_arrived_mukdahan"        // truck/road: at Mukdahan border (TH entry)
+  | "unloading_in_thailand"      // unloading at TH warehouse
+  | "unloaded_completed";        // all shipments out, container retired
 
-// Map MOMO status → Pacred cargo_containers.status (per migration 0033).
-// ภูม: extend mapping if MOMO returns additional values.
+/**
+ * Map MOMO status → Pacred cargo_containers.status (per migration 0033).
+ * Per chat audit §canonical mapping table.
+ */
 export const MOMO_STATUS_TO_PACRED: Record<MomoContainerStatus, string> = {
-  open:       "packing",
-  packing:    "packing",
-  closed:     "sealed",
-  in_transit: "in_transit",
-  arrived:    "arrived",
-  unloading:  "unloading",
-  released:   "closed",
+  loading_container:         "packing",
+  ek_left_china_border:      "in_transit",
+  sea_leaving_china:         "in_transit",
+  ek_arrived_vietnam_border: "in_transit",   // intermediate; mid-route
+  in_transit:                "in_transit",
+  sea_arrived_thailand_port: "arrived",
+  ek_arrived_mukdahan:       "arrived",
+  unloading_in_thailand:     "unloading",
+  unloaded_completed:        "closed",
+};
+
+/**
+ * Thai labels for the 9 MOMO statuses — used by admin UI when displaying
+ * raw MOMO status (e.g., on /admin/warehouse/containers/[code] when MOMO
+ * sync writes back the source status). Customer-facing pages use the
+ * Pacred-side labels (STATUS_LABEL in /shipments) instead.
+ */
+export const MOMO_STATUS_LABEL_TH: Record<MomoContainerStatus, string> = {
+  loading_container:         "กำลังบรรจุที่จีน",
+  ek_left_china_border:      "ออกจากด่านจีน (รถ)",
+  ek_arrived_vietnam_border: "ถึงด่านเวียดนาม (รถ)",
+  in_transit:                "กำลังเดินทาง",
+  sea_leaving_china:         "ออกจากท่าเรือจีน",
+  sea_arrived_thailand_port: "ถึงท่าเรือไทย",
+  ek_arrived_mukdahan:       "ถึงด่านมุกดาหาร (รถ)",
+  unloading_in_thailand:     "กำลังลงสินค้าที่ไทย",
+  unloaded_completed:        "ลงสินค้าเสร็จสิ้น",
+};
+
+/** English labels — same key set; for EN locale toggling. */
+export const MOMO_STATUS_LABEL_EN: Record<MomoContainerStatus, string> = {
+  loading_container:         "Loading at China warehouse",
+  ek_left_china_border:      "Left China border (truck)",
+  ek_arrived_vietnam_border: "At Vietnam border (truck)",
+  in_transit:                "In transit",
+  sea_leaving_china:         "Departed Chinese port (sea)",
+  sea_arrived_thailand_port: "At Thai port (sea)",
+  ek_arrived_mukdahan:       "At Mukdahan border (truck)",
+  unloading_in_thailand:     "Unloading in Thailand",
+  unloaded_completed:        "Unloaded — container retired",
 };
 
 export interface MomoContainerSummary {

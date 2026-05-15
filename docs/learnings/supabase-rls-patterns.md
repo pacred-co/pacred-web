@@ -96,3 +96,69 @@ Codify in migration template — see `.claude/skills/copyist-unlimited/SKILL.md`
 - Pacred migrations 0001..0032 — examples to copy from
 
 ---
+
+## [2026-05-16] Admin client for customer-initiated cross-table mutations (verify-ownership-then-bypass)
+
+**Context:** Customer-side "pay from wallet" action — customer needs to:
+1. Verify their own order exists + is in `awaiting_payment` status
+2. Insert a `wallet_transactions` row (debit)
+3. Flip `service_orders.status` → `ordered`
+
+Step 3 is a server-controlled state machine transition — RLS should NOT let a customer change `status='ordered'` directly (otherwise they'd skip payment entirely). But for a server action where we've ALREADY verified ownership server-side, the admin client is the clean way to bypass.
+
+**Symptom (anti-pattern):** Trying to do everything through `createClient()` (RLS-respecting):
+- Customer inserts wallet_tx → works if RLS allows own inserts
+- Customer updates service_orders.status → BLOCKED by RLS (correctly — they shouldn't have direct update access)
+
+So the action gets stuck.
+
+**Root cause:** RLS protects against direct API access by malicious customers. But within a server action that runs server-only code (with full auth context), the admin client is appropriate AFTER the ownership check.
+
+**Fix — secure pattern:**
+```typescript
+export async function payServiceOrderFromWallet(hNo: string) {
+  // Step 1: RLS-protected fetch confirms ownership
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const { data: order } = await supabase
+    .from("service_orders")
+    .select("id, status, total_thb")
+    .eq("h_no", hNo)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "not_found" };  // RLS denied → null
+  if (order.status !== "awaiting_payment") return { ok: false, error: "not_payable" };
+
+  // Step 2+3: admin client for state-machine transition (ownership already confirmed)
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("wallet_transactions")
+    .insert({ profile_id: user.id, amount: -order.total_thb, ... })
+    .select("id")
+    .single();
+  await admin
+    .from("service_orders")
+    .update({ status: "ordered", date_ordered: now })
+    .eq("id", order.id);
+
+  return { ok: true, data: { tx_id: tx.id } };
+}
+```
+
+**Pattern rule:**
+- Fetch with RLS-respecting client → confirms ownership
+- Mutate with admin client → bypasses RLS for state-machine transitions
+- NEVER skip step 1 — RLS-bypass without ownership check = direct API exposure
+
+**Why this matters next time:**
+- Any "customer self-service" action that flips order status / triggers downstream effects follows this pattern
+- Used in: `payServiceOrderFromWallet` (shop-order) + `payForwarderFromWallet` (forwarder) — both in commits `323906b` + `2be9eb5`
+- Other future use cases: customer cancels order (flip to cancelled with refund), customer marks delivery received (flip to completed), customer requests tax invoice (insert tax_invoices row referencing service_orders row they own)
+
+**Cross-links:**
+- `actions/service-order.ts::payServiceOrderFromWallet` (canonical example)
+- `actions/forwarder.ts::payForwarderFromWallet` (mirror)
+- `docs/decisions/0002-admin-architecture.md`
+
+---

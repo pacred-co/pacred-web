@@ -17,7 +17,11 @@ export type {
   MomoWebhookPayload,
 } from "./types";
 
-export { MOMO_STATUS_TO_PACRED } from "./types";
+export {
+  MOMO_STATUS_TO_PACRED,
+  MOMO_STATUS_LABEL_TH,
+  MOMO_STATUS_LABEL_EN,
+} from "./types";
 
 export type { MomoResult } from "./client";
 export {

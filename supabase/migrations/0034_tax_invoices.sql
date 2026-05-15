@@ -47,7 +47,11 @@ create table if not exists public.tax_invoices (
   status              text not null check (status in ('pending','issued','cancelled')) default 'pending',
   serial_no           text unique,                  -- INV-YYYYMM-NNNN (null while pending)
   issued_at           timestamptz,
-  issued_by_admin     uuid references public.admins(profile_id),
+  -- FK references profiles(id), NOT admins(profile_id), because admins
+  -- has composite PK (profile_id, role) — profile_id alone isn't unique.
+  -- Admin-role check happens via RLS (super/accounting per ADR-0005 K-7);
+  -- the FK only proves the issuer exists.
+  issued_by_admin     uuid references public.profiles(id),
 
   -- Financial snapshot (frozen at issuance; not refreshed when order updates)
   subtotal_thb        numeric(12,2) not null,
@@ -61,7 +65,8 @@ create table if not exists public.tax_invoices (
 
   -- Cancellation
   cancelled_at        timestamptz,
-  cancelled_by_admin  uuid references public.admins(profile_id),
+  -- See issued_by_admin note — FK to profiles(id), not admins(profile_id).
+  cancelled_by_admin  uuid references public.profiles(id),
   cancellation_reason text,
   credit_note_id      uuid references public.tax_invoices(id),
 

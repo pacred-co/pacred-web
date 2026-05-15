@@ -1,6 +1,6 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-16 (+ Part V cargo-forensics ADR-0015/0016 hand-off)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
 ---
@@ -92,6 +92,16 @@ Per เดฟ brief 2026-05-16: "**ให้กอตจัดการงาน
 | **MOMO-1** | Call MOMO dev → confirm endpoint inventory + base URL → fill [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) | ~1–2h call + ~1h doc | New 2026-05-16 |
 | **MOMO-2** | Reverse-engineer legacy `pcs-admin/api-forwarder-jmf/*.php` if MOMO mirrors cargo-thai pattern | ~2–3h | Reference: [`audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) §9 |
 | **MOMO-3** | Decide webhook signature verification (request `MOMO_JMF_WEBHOOK_SECRET` from MOMO if available) | ~30m call + decision | New |
+
+#### P0.7 — Part V cargo-forensics ADR locks (NEW 2026-05-16 — เดฟ hand-off)
+
+Two DRAFT ADRs from the cargo-ops forensics need your review + lock. **ADR-0015 unblocks 🔴 revenue** — do it before P1. Both are scaffolded with options + a recommendation; you just answer the open questions + flip Status.
+
+| # | Task | Effort | Source |
+|---|---|---|---|
+| **ADR-0015 lock** | Review [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — answer the **4 open questions**, flip Status → Accepted. Unblocks 🔴 **V-A6** (withholding tax — the #1 accounting pain in the ไอแต้ม chat). | ~45m | PORT_PLAN Part V |
+| **ADR-0016 lock** | Review [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — answer the **5 open questions** (incl. who issues Form E), flip Status → Accepted. Unblocks **V-E2** (freight value model). | ~45m | PORT_PLAN Part V |
+| **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ~30m | PORT_PLAN Part V |
 
 #### P1 (production hardening — pre-public-beta)
 

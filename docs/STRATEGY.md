@@ -173,11 +173,16 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 | [0008](decisions/0008-dpx-erp-phase-2.md) | DPX ERP Phase 2 (V3 territory) | ✅ draft | V3 architecture discussions |
 | [0009](decisions/0009-erp-schema-sketch.md) | ERP schema sketch (M1..M14) | ✅ draft | New admin module schema |
 | [0010](decisions/0010-v2-v3-version-strategy.md) | V2 (owner-pleaser) vs V3 (employee masterpiece) | ✅ locked | When tempted to refactor mid-flight |
+| [0014](decisions/0014-customer-self-service-state-transitions.md) | Customer self-service state transitions (verify-then-admin-client) | ✅ locked | Any customer-initiated state-machine action |
+| [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | 🟡 DRAFT — ก๊อต to lock | V-A6 · juristic payments · receipt gating |
+| [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | 🟡 DRAFT — ก๊อต to lock | V-E2 · freight (FCL/LCL) invoicing |
 
 **Pending ADRs** (ก๊อต P2):
 - 0011 ERP RBAC granular roles per module
 - 0012 ERP frontend shell (same app vs separate `erp.pacred.co`)
 - 0013 ERP V2→V3 migration strategy
+- **0015 needs ก๊อต lock** — answer the 4 open questions, flip Status → Accepted (unblocks V-A6)
+- **0016 needs ก๊อต lock** — answer the 5 open questions, flip Status → Accepted (unblocks V-E2)
 
 ---
 
@@ -236,21 +241,24 @@ Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) r
 | ก๊อต | T-G2 MOMO endpoint inventory call | Container tracking customer view |
 | Pacred owner | T-G3 bundle: bank/PromptPay/tax-ID/legal name/LIFF ID | wallet payments + tax invoice + receipts |
 | ภูม | T-P1 admin workflow buttons (cargo path) | ✅ DONE (shipped 2026-05-16) |
-| ภูม | T-P2 container migration + customer view | "Where's my container?" feature |
-| **ภูม** | **U1-3 admin "rebind tracking → container" UI** | ✅ closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
-| **ภูม** | **U1-4 admin "manual tracking entry" UI** | ✅ closes daily SQL escalations |
-| **ภูม + ก๊อต** | **U1-2 OTP SMS balance daily check + LINE alert** | ✅ closes silent registration-fail incidents (chat audit L-3) |
-| **เดฟ** | **U1-1 `/status` health page** | UX trust + transparency (chat audit L-1: PHP เว็ปล่ม 24x) |
-| **ภูม** | **U1-5 `received_qty` / `expected_qty` per cargo_shipments** | container-split case (chat audit: qty=1 bug) |
+| ภูม | T-P2 container migration + customer view | "Where's my container?" feature (T-D2 schemas ✅; UI pending) |
+| ภูม | U1-3 admin "rebind tracking → container" UI | closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
+| ภูม | U1-4 admin "manual tracking entry" UI | closes daily SQL escalations |
+| **เดฟ + ภูม** | **U1-2 OTP SMS balance scaffold** | ✅ **DONE evening-10** — cron route + `checkSmsBalance` + notify template + alert pattern; pending vercel.json entry (Pro plan confirm) + ThaiBulkSMS endpoint confirm |
+| **เดฟ** | **U1-1 `/status` health page** | ✅ **DONE evening-9** — public route, Supabase live ping + 11 service config checks, traffic-light dots, 60s cache, bilingual TH/EN, Footer link |
+| ภูม | U1-5 `received_qty` / `expected_qty` per cargo_shipments | container-split case (chat audit: qty=1 bug) |
+| **เดฟ** | **U2-5 multi-line bulk tracking search** | ✅ **DONE evening-10** — `/admin/forwarders` search bar toggles single↔multi mode (chat W-9 closer) |
+| **เดฟ (cargo loop closure)** | Customer pay-from-wallet (shop + forwarder) | ✅ **DONE evening-4/6** — `payServiceOrderFromWallet` + `payForwarderFromWallet`, idempotent, admin-client-after-ownership-verify pattern |
 
-### 🆕 Verified deficiency audits (2026-05-16 evening)
+### 🆕 Verified deficiency audits (2026-05-16)
 
-Two parallel audits produced concrete leak-hole + cleanup task lists:
+Three audits produced concrete leak-hole + cleanup + cargo-backlog task lists:
 
 - [`audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE groups · 6 months · 10 ranked leak holes · canonical MOMO 9-status enum · workflows team really uses
 - [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload)
+- [`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md) — the legacy developer (ไอแต้ม) chat + **10 real China-cargo documents** · decoded cargo/freight ops model (GZE truck / GZS sea · A/M/X/O/Z type taxonomy · Form E / D-O / invoice value-engineering) · problem catalog A–F (withholding tax, status rollback, CBM mismatch, the ไอแต้ม single-point-of-failure)
 
-Master task list synthesizing both: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5 — 30+ items by severity).
+Master task lists: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5) + **Part V** (V-A1…V-F3 cargo-forensics backlog + V-ADM1 admin-UI polish). WHT design = [ADR-0015](decisions/0015-withholding-tax-model.md) (DRAFT).
 
 ---
 
@@ -258,17 +266,19 @@ Master task list synthesizing both: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T
 
 When this checklist hits 100% → Pacred confidently scales Ads:
 
-- [ ] Customer can sign up (TH OTP works · juristic lookup works)
-- [ ] Customer can top up wallet (PromptPay live · slip upload · admin approves <1h)
-- [ ] Customer can create service-import order (forwarder rate engine · uploads work)
-- [ ] Customer can pay (wallet or PromptPay)
-- [ ] Customer receives receipt PDF (Pacred legal + tax-ID + bank info)
-- [ ] Customer can request tax invoice if juristic (per ADR-0006)
-- [ ] Customer can see container/shipment status (CT-3 view · MOMO sync OR manual)
-- [ ] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL)
-- [ ] Conversion events flow GTM → GA4 (K-12 active)
-- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod
-- [ ] At least 5 friendly customers completed full loop end-to-end
+- [x] Customer can sign up (TH OTP works in dev · juristic lookup works) — `OTP_BYPASS=true` in dev; prod awaits ก๊อต DV-3 ThaiBulkSMS keys
+- [x] Customer can top up wallet (slip upload working; PromptPay awaits Pacred owner Bundle 1)
+- [x] Customer can create service-import order (forwarder rate engine · uploads work) — full flow shipped
+- [x] **Customer can pay from wallet self-service** (BOTH service-order + service-import) — closed by `payServiceOrderFromWallet` (evening-4) + `payForwarderFromWallet` (evening-6) — no more admin bottleneck per order
+- [x] Customer receives receipt PDF (Pacred legal + tax-ID + bank info) — receipt page + PDF route shipped evening-3
+- [ ] Customer can request tax invoice if juristic (per ADR-0006) — pending ภูม T-P4 G2b form + admin issuance flow; schema 0034 ready
+- [ ] Customer can see container/shipment status (CT-3 view · MOMO sync OR manual) — pending ภูม T-P2 UI + MOMO endpoint inventory (ก๊อต MOMO-1)
+- [x] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL) — `adminMarkServiceOrderPaid` (T-P1) + `adminAssignDriverToForwarder` (T-P1) + bulk approve (T-P3) all shipped
+- [ ] Conversion events flow GTM → GA4 (K-12 active) — code shipped, awaits ก๊อต K-12 GTM_ID signup
+- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod — awaits ก๊อต DV-1..DV-3 + Pacred owner Bundle 1
+- [ ] At least 5 friendly customers completed full loop end-to-end — T-D4 awaits T-D1 smoke (runbook ready evening-4) + Pacred owner bundle
+- [x] **`/status` health page** — closed chat audit L-1 (เว็ปล่ม 24x in PHP); public route `app/[locale]/(public)/status/page.tsx`
+- [x] **Defensive test coverage growing** — `pnpm test:unit` 14 files (+251 new assertions today: phone 28 + bkk-zip 35 + auth-validators 52 + wallet-validators 36 + cart-validators 54 + profile-validators 46)
 
 📋 Full DoD detail → [`PORT_PLAN.md`](PORT_PLAN.md) Part T5
 
@@ -322,7 +332,8 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 |---|---|
 | งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` (EMERGENCY section at top) |
 | ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs) |
-| สเปกของ feature Y? | `PORT_PLAN.md` (Parts O–T) — search for ID like `T-P1` |
+| สเปกของ feature Y? | `PORT_PLAN.md` (Parts O–V) — search for an ID like `T-P1` / `V-A6` |
+| คาร์โก้/เฟรท: ระบบจริงทำงานยังไง + ปัญหาอะไร? | `audit/cargo-ops-forensics-2026-05-16.md` (decoded model + problem catalog A–F) |
 | Schema ของ table Z? | `architecture/container-centric-model.md` or `decisions/0009-erp-schema-sketch.md` |
 | Env var คืออะไร / set ยังไง? | `env.md` |
 | Process: pull/push/integrate workflow? | `team.md` §10 |

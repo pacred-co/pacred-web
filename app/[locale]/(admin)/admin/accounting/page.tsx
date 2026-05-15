@@ -102,6 +102,14 @@ export default async function AdminAccountingPage({
 
   // summary-tab aggregate sums
   let sForwarder = 0, sYuan = 0, sShop = 0, sTopup = 0, sWithdraw = 0, sRefund = 0;
+  // T-P5 owner-overview additions
+  let sPrevNet = 0;          // total net revenue in the previous same-length window
+  let nPendingDeposits = 0;  // count of pending wallet deposits (revenue waiting to land)
+  let vAwaitingPayment = 0;  // baht value of service-orders in awaiting_payment status (revenue in flight)
+  let vForwarderInFlight = 0;// baht value of forwarders not yet delivered (revenue in flight)
+  let vYuanInProcess = 0;    // baht value of yuan_payments in pending+processing
+  let nNewCustomers = 0;     // profiles created within current period
+  let nActiveCustomers = 0;  // distinct profile_ids with any completed revenue tx in current period
   // other tabs: running totals computed after fetch
   let tabTotal = 0, tabCount = 0, tabPending = 0;
   let tabExtra = 0; // e.g. total weight for forwarder, total CNY for yuan
@@ -152,6 +160,81 @@ export default async function AdminAccountingPage({
     sWithdraw  = sumCol(wD.data, "amount");
     sRefund    = sumCol(rD.data, "amount");
 
+    // T-P5 owner-overview: previous-period comparison + pending pipeline +
+    // customer counts. All run in parallel; each query degrades to 0 if
+    // dateFrom/dateTo aren't set (full-history view → no comparison).
+    const sNetCurrent = sForwarder + sYuan + sShop;
+
+    // Compute previous-period window (same length as current, immediately before).
+    let prevFrom: string | undefined, prevTo: string | undefined;
+    if (dateFrom && dateTo) {
+      const cFrom = new Date(dateFrom);
+      const cTo   = new Date(dateTo);
+      const lenMs = cTo.getTime() - cFrom.getTime();
+      if (lenMs > 0) {
+        const pTo   = new Date(cFrom.getTime() - 1);                 // one ms before current window
+        const pFrom = new Date(pTo.getTime() - lenMs);
+        prevFrom = pFrom.toISOString().slice(0, 10);
+        prevTo   = pTo.toISOString().slice(0, 10);
+      }
+    }
+
+    const [prevF, prevY, prevS, pendDep, awaitPay, fwdInFlight, yuanInProc, newCust, activeCust] = await Promise.all([
+      // PREV PERIOD revenue — only if both dates are set (else returns 0)
+      prevFrom && prevTo
+        ? admin.from("forwarders").select("total_price").eq("status", "delivered")
+            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ total_price: number }> }),
+      prevFrom && prevTo
+        ? admin.from("yuan_payments").select("thb_amount").eq("status", "completed")
+            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ thb_amount: number }> }),
+      prevFrom && prevTo
+        ? admin.from("service_orders").select("total_thb").eq("status", "completed")
+            .gte("created_at", prevFrom).lte("created_at", prevTo + "T23:59:59")
+        : Promise.resolve({ data: [] as Array<{ total_thb: number }> }),
+
+      // PIPELINE — what's in flight that will become revenue (independent of date window)
+      admin.from("wallet_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "deposit").eq("status", "pending"),
+      admin.from("service_orders").select("total_thb").eq("status", "awaiting_payment"),
+      admin.from("forwarders").select("total_price")
+        .not("status", "in", "(delivered,cancelled)"),
+      admin.from("yuan_payments").select("thb_amount").in("status", ["pending", "processing"]),
+
+      // CUSTOMER COUNTS — gated on date window (else "all-time" doesn't make sense)
+      (() => {
+        let q = admin.from("profiles").select("id", { count: "exact", head: true })
+          .eq("status", "active");
+        if (dateFrom) q = q.gte("created_at", dateFrom);
+        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        return q;
+      })(),
+      // active = distinct profile_ids that paid us anything in the window. Use
+      // wallet_transactions as the join point — every revenue event lands a
+      // wallet row.  amount<0 = customer paid us (debit).
+      (() => {
+        let q = admin.from("wallet_transactions")
+          .select("profile_id")
+          .eq("status", "completed")
+          .lt("amount", 0);
+        if (dateFrom) q = q.gte("created_at", dateFrom);
+        if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
+        return q;
+      })(),
+    ]);
+
+    sPrevNet = sumCol(prevF.data, "total_price") + sumCol(prevY.data, "thb_amount") + sumCol(prevS.data, "total_thb");
+    nPendingDeposits   = pendDep.count ?? 0;
+    vAwaitingPayment   = sumCol(awaitPay.data, "total_thb");
+    vForwarderInFlight = sumCol(fwdInFlight.data, "total_price");
+    vYuanInProcess     = sumCol(yuanInProc.data, "thb_amount");
+    nNewCustomers      = newCust.count ?? 0;
+    nActiveCustomers   = new Set(((activeCust.data ?? []) as Array<{ profile_id: string }>).map((r) => r.profile_id)).size;
+
+    // Stash for the render block (so we don't recompute or pass extra args).
+    void sNetCurrent;
   } else if (tab === "forwarder") {
     let q = admin
       .from("forwarders")
@@ -333,14 +416,91 @@ export default async function AdminAccountingPage({
       {/* ── Summary tab ───────────────────────────────────────────────── */}
       {tab === "summary" && (
         <div className="space-y-4">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <SumCard label="ฝากนำเข้า (ส่งมอบแล้ว)" value={sForwarder} tone="green" />
-            <SumCard label="ฝากโอนหยวน (สำเร็จ)"   value={sYuan}      tone="green" />
-            <SumCard label="ฝากสั่งซื้อ (สำเร็จ)"   value={sShop}      tone="green" />
-            <SumCard label="เติมเงินรวม (อนุมัติ)"   value={sTopup}     tone="blue" />
-            <SumCard label="ถอนเงินรวม (จ่ายแล้ว)"  value={sWithdraw}  tone="red" />
-            <SumCard label="คืนเงินรวม (สำเร็จ)"     value={sRefund}    tone="red" />
+          {/* T-P5 owner-overview hero — net revenue big number + delta vs prev period */}
+          <OwnerHero
+            netCurrent={sForwarder + sYuan + sShop}
+            netPrev={sPrevNet}
+            hasComparison={Boolean(dateFrom && dateTo) && sPrevNet > 0}
+          />
+
+          {/* T-P5 pipeline cards — what's in flight (future revenue) */}
+          <div>
+            <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
+              💼 รายได้ที่กำลังจะเข้า (Pending pipeline)
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <PipelineCard
+                label="Deposits รอตรวจสลิป"
+                value={`${nPendingDeposits} รายการ`}
+                hint="ลูกค้าโอนแล้ว รอ admin อนุมัติ"
+                href="/admin/wallet?kind=deposit&status=pending"
+                tone="yellow"
+              />
+              <PipelineCard
+                label="ฝากสั่งรอชำระ"
+                value={thb(vAwaitingPayment)}
+                hint="ออเดอร์ที่ลูกค้ายังไม่จ่าย"
+                href="/admin/service-orders?status=awaiting_payment"
+                tone="yellow"
+              />
+              <PipelineCard
+                label="ฝากนำเข้ายังไม่ส่งมอบ"
+                value={thb(vForwarderInFlight)}
+                hint="กำลังเดินทาง / รอชำระ / เคลียร์ด่าน"
+                href="/admin/forwarders"
+                tone="blue"
+              />
+              <PipelineCard
+                label="ฝากโอนหยวนกำลังโอน"
+                value={thb(vYuanInProcess)}
+                hint="pending + processing"
+                href="/admin/yuan-payments?status=pending"
+                tone="blue"
+              />
+            </div>
           </div>
+
+          {/* T-P5 customer counts — only meaningful if a date window is set */}
+          {(dateFrom || dateTo) && (
+            <div>
+              <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
+                👥 ลูกค้าในช่วงนี้
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <PipelineCard
+                  label="ลูกค้าใหม่ (สมัครในช่วงนี้)"
+                  value={`${nNewCustomers} คน`}
+                  hint="status=active, สมัครภายในช่วงเวลา"
+                  href="/admin/customers"
+                  tone="green"
+                />
+                <PipelineCard
+                  label="ลูกค้าที่ใช้บริการ (จ่ายเงินจริง)"
+                  value={`${nActiveCustomers} คน`}
+                  hint="distinct profile ที่จ่ายเงิน Pacred ในช่วง"
+                  href="/admin/customers"
+                  tone="green"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Existing breakdown cards — by revenue source */}
+          <div>
+            <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
+              📊 รายได้แยกประเภท
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <SumCard label="ฝากนำเข้า (ส่งมอบแล้ว)" value={sForwarder} tone="green" />
+              <SumCard label="ฝากโอนหยวน (สำเร็จ)"   value={sYuan}      tone="green" />
+              <SumCard label="ฝากสั่งซื้อ (สำเร็จ)"   value={sShop}      tone="green" />
+              <SumCard label="เติมเงินรวม (อนุมัติ)"   value={sTopup}     tone="blue" />
+              <SumCard label="ถอนเงินรวม (จ่ายแล้ว)"  value={sWithdraw}  tone="red" />
+              <SumCard label="คืนเงินรวม (สำเร็จ)"     value={sRefund}    tone="red" />
+            </div>
+          </div>
+
+          {/* Existing net-revenue card — kept as bottom recap */}
           <div className="rounded-2xl border border-primary-200 bg-primary-50 p-5">
             <p className="text-xs text-muted font-medium">รายรับสุทธิ (ฝากนำเข้า + ฝากโอน + ฝากสั่ง)</p>
             <p className="mt-1 text-3xl font-bold font-mono text-primary-700">
@@ -553,6 +713,83 @@ function SumCard({ label, value, tone = "green" }: { label: string; value: numbe
         ฿{value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
       </p>
     </div>
+  );
+}
+
+// T-P5: Hero "net revenue" card with comparison to previous same-length window.
+// Falls back to a simpler card (no delta) if `hasComparison` is false — that
+// happens when the date filter isn't a closed window (all-time view).
+function OwnerHero({ netCurrent, netPrev, hasComparison }: { netCurrent: number; netPrev: number; hasComparison: boolean }) {
+  const deltaAbs = netCurrent - netPrev;
+  const deltaPct = netPrev > 0 ? ((netCurrent - netPrev) / netPrev) * 100 : null;
+  const trendColor =
+    !hasComparison      ? "text-muted"
+    : deltaAbs > 0      ? "text-green-700"
+    : deltaAbs < 0      ? "text-red-700"
+    :                     "text-muted";
+  const trendIcon =
+    !hasComparison      ? ""
+    : deltaAbs > 0      ? "↑"
+    : deltaAbs < 0      ? "↓"
+    :                     "→";
+
+  return (
+    <div className="rounded-3xl border border-primary-300 bg-gradient-to-br from-primary-50 to-white dark:from-primary-950/30 dark:to-surface p-6 shadow-md">
+      <p className="text-xs font-semibold text-primary-700 uppercase tracking-widest">รายรับสุทธิ {hasComparison ? "ในช่วงที่เลือก" : "(ทั้งหมด)"}</p>
+      <p className="mt-2 text-5xl font-bold font-mono text-primary-700">
+        ฿{netCurrent.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+      </p>
+      {hasComparison && (
+        <p className={`mt-3 text-sm font-medium ${trendColor}`}>
+          {trendIcon} {deltaAbs >= 0 ? "+" : ""}฿{deltaAbs.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          {deltaPct !== null && (
+            <> ({deltaAbs >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)</>
+          )}
+          <span className="text-muted font-normal"> เทียบช่วงเดียวกันก่อนหน้า (รวม ฿{netPrev.toLocaleString("th-TH", { minimumFractionDigits: 2 })})</span>
+        </p>
+      )}
+      {!hasComparison && (
+        <p className="mt-3 text-xs text-muted">
+          เลือกช่วงเวลา (ทั้ง &ldquo;ตั้งแต่&rdquo; และ &ldquo;ถึง&rdquo;) เพื่อดูเทียบกับช่วงก่อนหน้า
+        </p>
+      )}
+    </div>
+  );
+}
+
+// T-P5: pipeline / quick-look card. value is a string so it can show
+// counts ("12 รายการ") or money ("฿4,500.00") — owner shouldn't have to
+// guess units.
+function PipelineCard({
+  label,
+  value,
+  hint,
+  href,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  href: string;
+  tone: "yellow" | "blue" | "green";
+}) {
+  const borderColor =
+    tone === "yellow" ? "border-yellow-200"
+    : tone === "blue" ? "border-blue-200"
+    :                   "border-green-200";
+  const valueColor =
+    tone === "yellow" ? "text-yellow-700"
+    : tone === "blue" ? "text-blue-700"
+    :                   "text-green-700";
+  return (
+    <Link
+      href={href}
+      className={`rounded-2xl border ${borderColor} bg-white dark:bg-surface p-4 shadow-sm hover:shadow-md transition-shadow block`}
+    >
+      <p className="text-xs text-muted font-medium">{label}</p>
+      <p className={`mt-1 text-lg font-bold font-mono ${valueColor}`}>{value}</p>
+      <p className="mt-1 text-[11px] text-muted">{hint}</p>
+    </Link>
   );
 }
 
