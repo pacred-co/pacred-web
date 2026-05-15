@@ -73,14 +73,14 @@ export function OurService() {
           </div>
 
           {/* Desktop title */}
-          <h2 className="hidden md:block text-[42px] leading-[1.22] font-black tracking-[-0.04em] text-[#111827]">
+          <h2 className="hidden md:block text-[42px] leading-[1.22] font-black tracking-[-0.04em] text-[#111827] dark:text-foreground">
             {t("titlePrefix")}
             <span className="text-red-600">{t("titleHighlight")}</span>
           </h2>
 
           {/* Mobile title */}
           <div className="md:hidden text-center">
-            <h2 className="text-[22px] leading-[1.12] font-black tracking-[-0.03em] text-[#111827]">
+            <h2 className="text-[22px] leading-[1.12] font-black tracking-[-0.03em] text-[#111827] dark:text-foreground">
               {t("titleMobile")}
             </h2>
             <div className="w-[40px] h-[3px] rounded-full bg-red-600 mx-auto mt-2" />
