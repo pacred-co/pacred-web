@@ -238,3 +238,131 @@ export async function adminDeleteVipRate(
     return { ok: true, data: { id: d.id } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// LP-1c: rate_custom_user (per-customer flat override) — wins over VIP/general
+// ────────────────────────────────────────────────────────────
+//
+// Caller passes EITHER profile_id (UUID) OR member_code (PR####) via
+// `customer_ref`; server resolves to profile_id. Mirrors the pattern in
+// adminCreateShipmentManual.
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveCustomerToProfileId(
+  admin: ReturnType<typeof createAdminClient>,
+  customerRef: string,
+): Promise<{ ok: true; profile_id: string; member_code: string | null } | { ok: false; error: string }> {
+  const ref = customerRef.trim();
+  if (!ref) return { ok: false, error: "ระบุลูกค้า (member_code หรือ UUID)" };
+  const isUuid = UUID_RE.test(ref);
+  const q = admin.from("profiles").select("id, member_code").limit(1);
+  const { data: profile } = isUuid
+    ? await q.eq("id", ref).maybeSingle<{ id: string; member_code: string | null }>()
+    : await q.eq("member_code", ref.toUpperCase()).maybeSingle<{ id: string; member_code: string | null }>();
+  if (!profile) return { ok: false, error: `ไม่พบลูกค้า "${ref}"` };
+  return { ok: true, profile_id: profile.id, member_code: profile.member_code };
+}
+
+const upsertCustomUserRateSchema = z.object({
+  customer_ref:     z.string().trim().min(2).max(50),
+  source_warehouse: z.enum(SOURCE_WAREHOUSE),
+  transport_type:   z.enum(TRANSPORT_TYPE),
+  product_type:     z.enum(PRODUCT_TYPE),
+  basis:            z.enum(BASIS),
+  rate:             z.number().positive().max(100_000),
+});
+export type UpsertCustomUserRateInput = z.infer<typeof upsertCustomUserRateSchema>;
+
+export async function adminUpsertCustomUserRate(
+  input: UpsertCustomUserRateInput,
+): Promise<AdminActionResult<{ id: string; created: boolean; profile_id: string; member_code: string | null }>> {
+  const parsed = upsertCustomUserRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string; created: boolean; profile_id: string; member_code: string | null }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const lookup = await resolveCustomerToProfileId(admin, d.customer_ref);
+      if (!lookup.ok) return { ok: false, error: lookup.error };
+
+      const { data: existing } = await admin
+        .from("rate_custom_user")
+        .select("id, rate")
+        .eq("profile_id",       lookup.profile_id)
+        .eq("source_warehouse", d.source_warehouse)
+        .eq("transport_type",   d.transport_type)
+        .eq("product_type",     d.product_type)
+        .eq("basis",            d.basis)
+        .maybeSingle<{ id: string; rate: number }>();
+
+      const { data: written, error } = await admin
+        .from("rate_custom_user")
+        .upsert(
+          {
+            ...(existing?.id ? { id: existing.id } : {}),
+            profile_id:       lookup.profile_id,
+            source_warehouse: d.source_warehouse,
+            transport_type:   d.transport_type,
+            product_type:     d.product_type,
+            basis:            d.basis,
+            rate:             d.rate,
+            admin_id_update:  adminId,
+          },
+          { onConflict: "profile_id,source_warehouse,transport_type,product_type,basis" },
+        )
+        .select("id")
+        .single<{ id: string }>();
+      if (error) return { ok: false, error: error.message };
+
+      await logAdminAction(adminId, existing ? "rate_custom_user.update" : "rate_custom_user.insert", "rate_custom_user", written.id, {
+        key: {
+          profile_id:       lookup.profile_id,
+          member_code:      lookup.member_code,
+          source_warehouse: d.source_warehouse,
+          transport_type:   d.transport_type,
+          product_type:     d.product_type,
+          basis:            d.basis,
+        },
+        before: existing ? { rate: existing.rate } : null,
+        after:  { rate: d.rate },
+      });
+
+      revalidatePath("/admin/rates");
+      revalidatePath("/admin/rates/custom-user");
+      return { ok: true, data: { id: written.id, created: !existing, profile_id: lookup.profile_id, member_code: lookup.member_code } };
+    },
+  );
+}
+
+const deleteCustomUserRateSchema = z.object({ id: z.string().uuid() });
+export type DeleteCustomUserRateInput = z.infer<typeof deleteCustomUserRateSchema>;
+
+export async function adminDeleteCustomUserRate(
+  input: DeleteCustomUserRateInput,
+): Promise<AdminActionResult<{ id: string }>> {
+  const parsed = deleteCustomUserRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: before } = await admin
+      .from("rate_custom_user")
+      .select("profile_id, source_warehouse, transport_type, product_type, basis, rate")
+      .eq("id", d.id)
+      .maybeSingle();
+    if (!before) return { ok: false, error: "not_found" };
+
+    const { error } = await admin.from("rate_custom_user").delete().eq("id", d.id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "rate_custom_user.delete", "rate_custom_user", d.id, { before });
+
+    revalidatePath("/admin/rates");
+    revalidatePath("/admin/rates/custom-user");
+    return { ok: true, data: { id: d.id } };
+  });
+}
