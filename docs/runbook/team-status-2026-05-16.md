@@ -1,7 +1,15 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 night-3 (ภูม via Claude) — **ภูม run-long: Part V + LP-1 batch shipped to `origin/Poom`.** 14 commits `171080d..0d35f1f` covering V-D2/D3 wiring · V-B1 self-serve reports · V-C2 bill-header · V-C3 ตัดตู้ · V-A1 slip-time · V-A7 N/A docs · React-purity fix · polish · LP-1a/b/c1/c2 rates UI · BillToOverridePanel juristic default fix (F-1). Plus hand-off + test-playbook docs. Push cadence relaxed to **real-time after verify-green** per ภูม's request (overrides master-rule-6 "save-points only" for his branch — home-machine context). เดฟ pull `Poom` when ready to merge into `dave`.
+> **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
+> - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
+> - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)
+> - `66fcd1d` /admin/reports header — 6 quick-link cards with live counts for V-B1 reports
+> - `4c45bf5` /admin/audit viewer (super only) — filter admin_audit_log by admin/action/target with payload expand + cross-link to target history
+>
+> Push cadence: **real-time after verify-green** per ภูม instruction (overrides master-rule-6 for `Poom` branch in home-machine context). เดฟ pull `Poom` when ready to merge into `dave`.
+>
+> **Previous night-3:** 14 commits `171080d..0d35f1f` covering V-D2/D3 wiring · V-B1 self-serve reports · V-C2 bill-header · V-C3 ตัดตู้ · V-A1 slip-time · V-A7 N/A docs · React-purity fix · polish · LP-1a/b/c1/c2 rates UI · BillToOverridePanel juristic default fix (F-1). Plus hand-off + test-playbook docs.
 > **Last updated:** 2026-05-16 evening-16 (เดฟ via Claude) — **🔀 BIG INTEGRATION MERGE.** Pulled `origin/Poom` (ภูม — T-P4 G2 complete + Phase A-D Part U items + 4 migrations) + `origin/podeng` (ปอน — 5 L-5 landing pages + customs polish + port pricing carousel) into `dave`. Resolved 4 conflicts (tax-invoices page → ภูม's · templates → merged · package.json test chains → merged · _index.md → ภูม's). `pnpm verify` ✅ all gates pass. ก๊อต `main` unchanged (no new push).
 > **dave HEAD:** post-merge — both น้องๆ branches integrated + เดฟ 8-commit hold-batch (validator tests +438 · ADR-0014 · STRATEGY refresh). Cargo loop V1 closes end-to-end incl. juristic tax invoice. Everyone → `git fetch && git merge origin/dave` before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.

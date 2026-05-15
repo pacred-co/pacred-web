@@ -132,6 +132,30 @@
 ### R. CSV imports (P-19)
 - [ ] `/admin/csv-imports` → upload CSV → ดู import + audit
 
+### S. **NEW** — รีพอร์ตเฉพาะกิจ quick-link cards (V-B1 polish)
+- [ ] `/admin/reports` header → เห็น 6 cards บนสุด (รอชำระ / เครดิตค้าง / ตู้รอเข้าไทย / ลูกค้าติดหนี้ [แดง ถ้ามี] / คืนเงิน 30 วัน / ออเดอร์เดือนนี้) — ตัวเลขสด
+- [ ] กดแต่ละ card → ไปหน้ารายงานที่เกี่ยวข้อง
+
+### T. **NEW** — Customer detail แสดง custom rates (LP-1c surface)
+- [ ] `/admin/customers/<id-ของลูกค้าที่มี custom rate>` → ส่วน "🏷️ Custom rates" → เห็น Per-customer flat + Per-customer + HS list ครบ
+- [ ] กด "จัดการทั้งหมด →" → ไป /admin/rates/custom-user?member=<member_code> หรือ custom-hs?member=
+
+### U. **NEW** — Forwarder/Service-order detail แสดง cargo shipments inline
+- [ ] `/admin/forwarders/[fNo]` → ถ้ามี shipment ผูก → ส่วน "📦 Cargo shipments" แสดง: status / received/expected / cargo_type / B/L / ETA / ตัดตู้
+- [ ] กด "↗ ตู้ <code>" → ไป /admin/warehouse/containers/[code]
+- [ ] เหมือนกันที่ `/admin/service-orders/[hNo]`
+
+### V. **NEW** — Audit log viewer (super only)
+- [ ] `/admin/audit` (super) → 4 fields filter: admin / action prefix / target_type / target_id
+- [ ] ดู rows recent ที่ภูมิเพิ่ง shipped (rate_general.* / forwarder.set_bill_to_override / container.* / shipment.set_cargo_type / etc.)
+- [ ] กด details "payload" → expand JSON
+- [ ] กด "↗ history of target" → กรองดู timeline ของ target นั้น
+- [ ] ทดสอบ filter ด้วย action prefix "rate_custom_user" → ดู insert/update/delete รวม
+
+### W. **NEW** — /admin/dashboard redirect
+- [ ] เปิด `/admin/dashboard` → ควร redirect → `/admin` ทันที (ไม่เห็นหน้า stub เดิม)
+- [ ] login เป็น admin → ควรไป `/admin` ตรง ๆ ไม่ผ่าน /admin/dashboard
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
