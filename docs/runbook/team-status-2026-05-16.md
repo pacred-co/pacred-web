@@ -1,7 +1,7 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
-> **Last updated:** 2026-05-16 evening-4 (เดฟ via Claude) — **CARGO LOOP CLOSURE BATCH**: customer pay-from-wallet shipped + T-D1 smoke test runbook + full per-role queues. Loop now closes end-to-end for revenue.
+> **Last updated:** 2026-05-16 evening-5 (เดฟ via Claude) — **0033 HOTFIX + LEGACY PORT AUDIT**. Migration 0033 tables renamed to `cargo_*` to avoid collision with legacy `public.containers` from 0016. Audit shows admin-side legacy port is ~95% done; remaining = Phase D shipping rates table only.
 > **dave HEAD:** T-D2 batch shipped — `0033_containers.sql` + `0034_tax_invoices.sql` + customer receipt page + cart cap doc fix. ภูม T-P2 + T-P4 ✅ UNBLOCKED. Everyone → `git fetch && git merge origin/dave` into own branch before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
 
@@ -208,13 +208,17 @@ Per Part S1 + ADRs 0003-0010:
 
 ✅ **NEW from เดฟ T-D2 (this session — ภูม run on dev when picking T-P2 / T-P4):**
 ```
-0033_containers.sql                      ← containers + shipments + tracking + history
+0033_containers.sql                      ← cargo_containers + cargo_shipments
+                                            + cargo_shipment_tracking
+                                            + cargo_container_status_history
                                             (extends admins.role: + warehouse + driver)
 0034_tax_invoices.sql                    ← tax_invoices + lines + seq + INV-YYYYMM-NNNN
                                             atomic serial generator (security definer)
 ```
 
-> **Note on 0033:** This migration extends `admins.role` CHECK constraint to add `'warehouse'` + `'driver'` (previously: super, ops, accounting, sales_admin). Existing rows unaffected. After applying, grant warehouse/driver roles via `insert into admins (profile_id, role)`.
+> **⚠️ Note on 0033 (HOTFIX evening-5):** Tables use `cargo_*` prefix to avoid collision with legacy `public.containers` (from 0016 — keeps old ops-tracking shape used by `/admin/containers` + `forwarders.container_id`). The two coexist. ภูม picking T-P2 uses NEW `cargo_*` tables; existing `/admin/containers` keeps working unchanged. See [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) "Implementation table-name note" for full mapping.
+>
+> **Migration also extends `admins.role`** to add `'warehouse'` + `'driver'` (previously: super, ops, accounting, sales_admin). Existing rows unaffected. After applying, grant warehouse/driver roles via `insert into admins (profile_id, role)`.
 
 ---
 
@@ -290,6 +294,62 @@ signup ✅ → top up wallet ✅ → admin approves deposit ✅
 **ภูม next session:** pull `origin/dave` → merge into `Poom` → run `0033` + `0034` on dev Supabase → pick T-P5 OR T-P2/T-P4 (both unblocked). Run-long mode — no wait.
 
 **เดฟ next session:** apply migrations 0023..0034 to **prod Supabase** → run T-D1 smoke test using the new runbook → DV-2 LIFF + DV-3 ThaiBulkSMS signups in parallel → T-D4 soft-launch coordination once T-D1 passes.
+
+---
+
+## 📋 Legacy PHP port audit — what's actually left (2026-05-16 evening-5)
+
+Re-audited all customer-side + admin-side pages against the PHP `D:\xampp\htdocs\pcscargo` feature map. **Good news: legacy port is ~95% done.** Most pages CLAUDE.md flagged as "placeholder" months ago are now fully implemented.
+
+**Customer-side — all major modules SHIPPED + working:**
+- ✅ auth (signup/login/OAuth Google/Facebook · forgot-password · complete-profile · profile/security/change-phone)
+- ✅ wallet (deposit/withdraw/history · pay-from-wallet — shipped this session)
+- ✅ service-order (cart, place, list, detail, **receipt page shipped this session**)
+- ✅ service-import (forwarder add/list/pending/receipts)
+- ✅ service-payment (yuan transfer)
+- ✅ notifications (LINE Messaging API + LIFF scaffolded)
+- ✅ sales (referral commission history)
+- 🟡 OTP UI for production (hidden while `OTP_BYPASS=true`; ready when bypass=false)
+- 🔴 LINE Login OAuth (currently stub button — Google/Facebook OAuth work; LINE pending custom OIDC)
+- 🔴 URL→cart converter + 1688/Taobao search + image search (Track G code in repo, **DISABLED in prod** per ADR-0003 Option E)
+
+**Admin-side — all major modules SHIPPED + working:**
+- ✅ identity/RBAC (admins · admin-actions · HR org-chart/employees/recruitment/attendance/leaves/training/policies/audit)
+- ✅ customer mgmt (customers list/detail · pending · recently-active · transfer-rep · convert-to-juristic · juristic-check)
+- ✅ wallet ops (single + bulk approve · withdrawals)
+- ✅ yuan payments (single + bulk approve)
+- ✅ service-orders (list + detail + mark-paid + status flips)
+- ✅ forwarders (list + detail + driver-assign + status flips)
+- ✅ drivers (list + detail)
+- ✅ containers (legacy ops tracking from 0016)
+- ✅ accounting (7 tabs: summary/forwarder/yuan/shop/topup/withdraw/refund + CSV + date filters + monthly closing)
+- ✅ reports (5 tabs: forwarder/shop/yuan/sales/payment + CSV + status breakdown)
+- ✅ rates (exchange rate + service fees + juristic discount + free shipping; **shipping-rates-table = Phase D placeholder, see below**)
+- ✅ barcode (intake + prepare + driver pickup workflows)
+- ✅ csv-imports (upload + import + stale recovery)
+- ✅ team-leaders + sales-payouts + forwarder-sales
+- ✅ contact-messages + settings (incl. notifications-settings)
+- ✅ HS codes (ratings + containers HS rates)
+- ✅ Cron jobs: 5 routes scaffolded (auto-cancel-orders · expire-driver-assignments · expire-probation · refresh-active-customers · sales-daily-digest)
+
+**🔴 Actually remaining legacy gaps (low priority — not blocking cargo revenue):**
+
+| # | Gap | Source PHP | Effort | Priority | Owner |
+|---|---|---|---|---|---|
+| **LP-1** | Shipping rates table UI in `/admin/rates` — port `tb_rate_g_*` / `tb_rate_vip_*` / `tb_rate_custom_*` from PHP | rate.php · rate-vip.php · settings.php | ~4-6h | 🟡 P2 (forwarder rate engine already runs from `settings`; this UI is admin-facing rate adjustment for VIP customers) | ภูม when free |
+| **LP-2** | TOS acceptance gate — modal on login if version mismatch | tb_terms_service | ~2h | 🟡 P2 (legal compliance polish; not blocking signup) | ภูม |
+| **LP-3** | LINE Login OAuth (real, not stub) | fb-callback.php pattern + custom OIDC | ~3-4h | 🟡 P2 (FB + Google already work; LINE optional for now) | ภูม + ก๊อต (Supabase custom OIDC setup) |
+| **LP-4** | Verify-tel — phone re-verification post-signup | verify-tel.php | ~2h | 🟢 P3 (change-phone flow exists; full re-verify is polish) | ภูม |
+| **LP-5** | URL→cart converter, search, image search activation | shops.php, search.php, searchIMG.php, convertURL.php | depends on ก๊อต ADR-0003 | 🔴 P3 (locked DISABLED by ก๊อต Option E; track in repo but no Vercel env vars) | ก๊อต decision |
+| **LP-6** | mPDF→@react-pdf for remaining legacy receipts | invoiceF.php · printReceiptF.php · receipt-f-hs.php | mostly done; spot-check edge cases | 🟢 P3 (forwarder + shop-order PDFs ship; "f-hs" customs declaration PDF may be partial) | ภูม |
+
+**Decision lens:** "งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?" — None of LP-1..LP-6 block the cargo revenue loop. They're polish items.
+
+**ภูม run-long priority remains:**
+1. T-P5 `/admin/accounting` stub — **Note: actually already DONE** (just verified — accounting page has 7 tabs + CSV + monthly closing). Can re-evaluate this entry.
+2. T-P2 cargo container UI (use **`cargo_*` tables** per 0033 hotfix above) — customer view `/(protected)/service-import/[fNo]/container` + admin `/admin/warehouse/containers`
+3. T-P4 tax invoice G2b-G2f (form on receipt page → admin issuance → PDF → cancel/credit note)
+4. Then LP-1..LP-6 as filler
 
 ---
 

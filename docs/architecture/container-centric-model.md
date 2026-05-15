@@ -5,6 +5,34 @@
 
 ---
 
+## ⚠️ Implementation table-name note (added 2026-05-16 evening)
+
+The DB migration `supabase/migrations/0033_containers.sql` uses the **`cargo_*` prefix** for the new tables to **avoid colliding with the legacy `public.containers` table** (created in migration 0016, which keeps the old ops-tracking shape: `container_no`, `vendor_container_id`, `vessel`, `carrier`, `origin_warehouse`, status enum `preparing/sealed/.../delivered/cancelled`, etc.).
+
+The two coexist:
+
+| Table | Source | Purpose | Used by |
+|---|---|---|---|
+| `public.containers` | migration 0016 | Legacy ops cargo container tracking | `/admin/containers/*` page · `forwarders.container_id` · `service_orders.container_id` |
+| `public.cargo_containers` | migration 0033 | New container-centric spine with shipments breakdown | `/admin/warehouse/*` (T-P2 future) · MOMO sync · per-shipment customer tracking timeline |
+
+**Mapping when reading this doc:**
+
+| Design name (in this doc) | Implementation table | FK column |
+|---|---|---|
+| `containers` | `public.cargo_containers` | — |
+| `shipments` | `public.cargo_shipments` | `cargo_container_id` |
+| `shipment_tracking` | `public.cargo_shipment_tracking` | `cargo_shipment_id` |
+| `container_status_history` | `public.cargo_container_status_history` | `cargo_container_id` |
+
+Column shapes + status enums match the design exactly. RLS uses `is_admin(array['super','ops','warehouse'])` for admin policies + `is_admin(array['super','ops','warehouse','driver'])` for shipment_tracking writes (drivers scan their own runs).
+
+Long-term consolidation of the two `containers` tables may happen (V3 territory). For now they coexist so the new design doesn't break the existing `/admin/containers` page.
+
+---
+
+---
+
 ## Core principle
 
 > **ตู้คอนเทนเนอร์เป็นหลัก** — the container is the system's spine. Customers + shipments hang off it, not the other way around.
