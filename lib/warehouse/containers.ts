@@ -40,7 +40,7 @@ export async function getContainerById(
   id: string,
 ): Promise<Result<Container | null>> {
   const { data, error } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .select("*")
     .eq("id", id)
     .maybeSingle<Container>();
@@ -53,7 +53,7 @@ export async function getContainerByCode(
   code: string,
 ): Promise<Result<Container | null>> {
   const { data, error } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .select("*")
     .eq("code", code)
     .maybeSingle<Container>();
@@ -76,7 +76,7 @@ export async function listContainers(
   filter: ListContainersFilter = {},
 ): Promise<Result<Container[]>> {
   let q = admin
-    .from("containers")
+    .from("cargo_containers")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(Math.min(filter.limit ?? 50, 200));
@@ -115,7 +115,7 @@ async function nextCodeForOrigin(
   const trial = buildContainerCode({ origin, date, seq: 1 });
   const prefix = trial.split("-")[0]; // "GZ260516"
   const { data } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .select("code")
     .like("code", `${prefix}-%`);
 
@@ -132,7 +132,7 @@ export async function createContainer(
 ): Promise<Result<Container>> {
   const code = input.code ?? (await nextCodeForOrigin(admin, input.origin ?? "XX", new Date()));
   const { data, error } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .insert({
       code,
       transport_mode:  input.transport_mode,
@@ -194,7 +194,7 @@ export async function setContainerStatus(
   if (toStatus === "arrived"   && !before.data.actual_arrival) update.actual_arrival = nowIso;
 
   const { data, error } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .update(update)
     .eq("id", containerId)
     .select("*")
@@ -204,9 +204,9 @@ export async function setContainerStatus(
   // Audit log — fire-and-forget; if it fails the status update still
   // stuck. Caller can replay history reconstruction from updated_at if
   // needed.
-  await admin.from("container_status_history").insert({
-    container_id:     containerId,
-    from_status:      before.data.status,
+  await admin.from("cargo_container_status_history").insert({
+    cargo_container_id: containerId,
+    from_status:        before.data.status,
     to_status:        toStatus,
     note:             opts.note ?? null,
     changed_by_admin: opts.changedByAdmin ?? null,
@@ -226,9 +226,9 @@ export async function refreshContainerTotals(
   containerId: string,
 ): Promise<Result<Container>> {
   const { data: ships, error: sErr } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .select("box_count, weight_kg, volume_cbm")
-    .eq("container_id", containerId);
+    .eq("cargo_container_id", containerId);
   if (sErr) return { ok: false, error: sErr.message };
 
   type SRow = { box_count: number | null; weight_kg: number | null; volume_cbm: number | null };
@@ -238,7 +238,7 @@ export async function refreshContainerTotals(
   const total_cbm       = rows.reduce((s, r) => s + Number(r.volume_cbm ?? 0), 0);
 
   const { data, error } = await admin
-    .from("containers")
+    .from("cargo_containers")
     .update({ total_boxes, total_weight_kg, total_cbm })
     .eq("id", containerId)
     .select("*")

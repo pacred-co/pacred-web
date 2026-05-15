@@ -32,7 +32,7 @@ export async function getShipmentById(
   id: string,
 ): Promise<Result<Shipment | null>> {
   const { data, error } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .select("*")
     .eq("id", id)
     .maybeSingle<Shipment>();
@@ -45,7 +45,7 @@ export async function getShipmentByCode(
   code: string,
 ): Promise<Result<Shipment | null>> {
   const { data, error } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .select("*")
     .eq("shipment_code", code)
     .maybeSingle<Shipment>();
@@ -59,9 +59,9 @@ export async function listShipmentsByContainer(
   containerId: string,
 ): Promise<Result<Shipment[]>> {
   const { data, error } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .select("*")
-    .eq("container_id", containerId)
+    .eq("cargo_container_id", containerId)
     .order("created_at", { ascending: true })
     .returns<Shipment[]>();
   if (error) return { ok: false, error: error.message };
@@ -83,11 +83,11 @@ export async function createShipment(
   }
 
   const { data, error } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .insert({
       shipment_code:      input.shipment_code,
       profile_id:         input.profile_id,
-      container_id:       input.container_id ?? null,
+      cargo_container_id: input.cargo_container_id ?? null,
       forwarder_f_no:     input.forwarder_f_no ?? null,
       service_order_h_no: input.service_order_h_no ?? null,
       box_count:          input.box_count ?? 1,
@@ -107,8 +107,8 @@ export async function attachShipmentToContainer(
   containerId: string,
 ): Promise<Result<Shipment>> {
   const { data, error } = await admin
-    .from("shipments")
-    .update({ container_id: containerId })
+    .from("cargo_shipments")
+    .update({ cargo_container_id: containerId })
     .eq("id", shipmentId)
     .select("*")
     .single<Shipment>();
@@ -130,7 +130,7 @@ export async function setShipmentStatus(
   if (toStatus === "delivered")   update.delivered_at_th = nowIso;
 
   const { data, error } = await admin
-    .from("shipments")
+    .from("cargo_shipments")
     .update(update)
     .eq("id", shipmentId)
     .select("*")

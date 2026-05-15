@@ -26,9 +26,9 @@ export async function appendTrackingEvent(
   input: TrackingEventInsert,
 ): Promise<Result<TrackingEvent>> {
   const { data, error } = await admin
-    .from("shipment_tracking")
+    .from("cargo_shipment_tracking")
     .insert({
-      shipment_id: input.shipment_id,
+      cargo_shipment_id: input.cargo_shipment_id,
       box_no:      input.box_no ?? null,
       event:       input.event,
       location:    input.location ?? null,
@@ -53,9 +53,9 @@ export async function listTrackingEvents(
   shipmentId: string,
 ): Promise<Result<TrackingEvent[]>> {
   const { data, error } = await admin
-    .from("shipment_tracking")
+    .from("cargo_shipment_tracking")
     .select("*")
-    .eq("shipment_id", shipmentId)
+    .eq("cargo_shipment_id", shipmentId)
     .order("scanned_at", { ascending: false })
     .returns<TrackingEvent[]>();
   if (error) return { ok: false, error: error.message };
@@ -73,16 +73,16 @@ export async function latestEventsByShipments(
 ): Promise<Result<Map<string, TrackingEvent>>> {
   if (shipmentIds.length === 0) return { ok: true, data: new Map() };
   const { data, error } = await admin
-    .from("shipment_tracking")
+    .from("cargo_shipment_tracking")
     .select("*")
-    .in("shipment_id", shipmentIds)
+    .in("cargo_shipment_id", shipmentIds)
     .order("scanned_at", { ascending: false })
     .returns<TrackingEvent[]>();
   if (error) return { ok: false, error: error.message };
 
   const latest = new Map<string, TrackingEvent>();
   for (const e of (data ?? [])) {
-    if (!latest.has(e.shipment_id)) latest.set(e.shipment_id, e);
+    if (!latest.has(e.cargo_shipment_id)) latest.set(e.cargo_shipment_id, e);
   }
   return { ok: true, data: latest };
 }

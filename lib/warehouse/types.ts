@@ -91,7 +91,7 @@ export type ShipmentStatus = (typeof SHIPMENT_STATUS_VALUES)[number];
 export type Shipment = {
   id:                  string;
   shipment_code:       string;
-  container_id:        string | null;
+  cargo_container_id:  string | null;
   profile_id:          string;
   forwarder_f_no:      string | null;
   service_order_h_no:  string | null;
@@ -108,7 +108,7 @@ export type Shipment = {
 export type ShipmentInsert = {
   shipment_code:       string;
   profile_id:          string;
-  container_id?:       string | null;
+  cargo_container_id?: string | null;
   forwarder_f_no?:     string | null;
   service_order_h_no?: string | null;
   box_count?:          number;
@@ -139,7 +139,7 @@ export type TrackingSource = "pacred" | "momo" | "customer_scan";
 
 export type TrackingEvent = {
   id:          string;
-  shipment_id: string;
+  cargo_shipment_id: string;
   box_no:      string | null;
   event:       TrackingEventKind;
   location:    string | null;
@@ -151,7 +151,7 @@ export type TrackingEvent = {
 };
 
 export type TrackingEventInsert = {
-  shipment_id: string;
+  cargo_shipment_id: string;
   event:       TrackingEventKind;
   box_no?:     string | null;
   location?:   string | null;
@@ -166,8 +166,8 @@ export type TrackingEventInsert = {
 // ────────────────────────────────────────────────────────────
 
 export type ContainerStatusChange = {
-  id:               string;
-  container_id:     string;
+  id:                 string;
+  cargo_container_id: string;
   from_status:      ContainerStatus | null;
   to_status:        ContainerStatus;
   note:             string | null;

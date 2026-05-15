@@ -8,16 +8,21 @@ import { createClient } from "@/lib/supabase/server";
  * Per Part T-P2: "Where's my container?" is the #1 customer churn factor.
  * Customer can see → return rate ↑.
  *
- * Auth: relies on Supabase RLS — `shipments_customer_read` policy lets
- * `auth.uid() = profile_id` read their own shipments + container join +
- * shipment_tracking events. So we use the regular `createClient()` (not
- * admin client). If RLS blocks for any reason, we get empty arrays —
- * never a crash, never another customer's data.
+ * Auth: relies on Supabase RLS — `cargo_shipments_customer_read` policy
+ * lets `auth.uid() = profile_id` read their own cargo_shipments +
+ * cargo_containers join + cargo_shipment_tracking events. So we use the
+ * regular `createClient()` (not admin client). If RLS blocks for any
+ * reason, we get empty arrays — never a crash, never another customer's
+ * data.
  *
  * The container record is reachable via FK and the
- * `containers_customer_read` policy lets a customer see any container
- * where they own ≥1 shipment. So `container:containers!container_id`
- * embed works without admin escalation.
+ * `cargo_containers_customer_read` policy lets a customer see any
+ * container where they own ≥1 shipment. So
+ * `container:cargo_containers!cargo_container_id` embed works without
+ * admin escalation.
+ *
+ * Tables are `cargo_*` prefixed per the dave hotfix `936dff7` — distinct
+ * from the legacy `public.containers` (0016 phase-H ops-tracking shape).
  */
 
 type ActionResult<T = void> =
@@ -75,11 +80,11 @@ export async function listMyShipments(
   // separately to grab "latest event per shipment" without N+1 — single
   // query, group in TS.
   const { data: rows, error } = await supabase
-    .from("shipments")
+    .from("cargo_shipments")
     .select(`
       id, shipment_code, status, box_count, weight_kg, volume_cbm,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
-      container:containers!container_id (
+      container:cargo_containers!cargo_container_id (
         id, code, transport_mode, origin, destination, status, eta, actual_arrival
       )
     `)
@@ -102,21 +107,21 @@ export async function listMyShipments(
   if (shipments.length === 0) return { ok: true, data: shipments };
 
   // Latest event lookup — one query pulls the most-recent event per
-  // shipment_id via "DESC + distinct on" emulated client-side (Supabase
-  // JS doesn't expose distinct on; group manually).
+  // cargo_shipment_id via "DESC + distinct on" emulated client-side
+  // (Supabase JS doesn't expose distinct on; group manually).
   const ids = shipments.map((s) => s.id);
   const { data: events } = await supabase
-    .from("shipment_tracking")
-    .select("shipment_id, event, location, scanned_at")
-    .in("shipment_id", ids)
+    .from("cargo_shipment_tracking")
+    .select("cargo_shipment_id, event, location, scanned_at")
+    .in("cargo_shipment_id", ids)
     .order("scanned_at", { ascending: false });
 
   const latestByShipment = new Map<string, ShipmentSummary["latest_event"]>();
   for (const e of (events ?? []) as Array<{
-    shipment_id: string; event: string; location: string | null; scanned_at: string;
+    cargo_shipment_id: string; event: string; location: string | null; scanned_at: string;
   }>) {
-    if (!latestByShipment.has(e.shipment_id)) {
-      latestByShipment.set(e.shipment_id, {
+    if (!latestByShipment.has(e.cargo_shipment_id)) {
+      latestByShipment.set(e.cargo_shipment_id, {
         event:      e.event,
         location:   e.location,
         scanned_at: e.scanned_at,
@@ -146,11 +151,11 @@ export async function getMyShipment(
   }
 
   const { data, error } = await supabase
-    .from("shipments")
+    .from("cargo_shipments")
     .select(`
       id, shipment_code, status, box_count, weight_kg, volume_cbm,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
-      container:containers!container_id (
+      container:cargo_containers!cargo_container_id (
         id, code, transport_mode, origin, destination, status, eta, actual_arrival
       )
     `)
@@ -173,11 +178,11 @@ export async function getMyShipment(
   };
 
   // Full timeline (newest first) — RLS lets the customer read these via
-  // shipment_tracking_customer_read (parent-shipment ownership check).
+  // cargo_shipment_tracking_customer_read (parent-shipment ownership check).
   const { data: events } = await supabase
-    .from("shipment_tracking")
+    .from("cargo_shipment_tracking")
     .select("id, event, location, scanned_at, note, source")
-    .eq("shipment_id", shipment.id)
+    .eq("cargo_shipment_id", shipment.id)
     .order("scanned_at", { ascending: false });
 
   shipment.events = (events ?? []) as ShipmentDetail["events"];

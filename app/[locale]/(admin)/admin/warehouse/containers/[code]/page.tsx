@@ -109,9 +109,9 @@ export default async function AdminContainerDetailPage({
 
   // Container status history (full audit trail)
   const { data: historyRaw } = await admin
-    .from("container_status_history")
+    .from("cargo_container_status_history")
     .select("id, from_status, to_status, note, changed_at, source")
-    .eq("container_id", container.id)
+    .eq("cargo_container_id", container.id)
     .order("changed_at", { ascending: false })
     .limit(20);
   type H = { id: string; from_status: string | null; to_status: string; note: string | null; changed_at: string; source: string };

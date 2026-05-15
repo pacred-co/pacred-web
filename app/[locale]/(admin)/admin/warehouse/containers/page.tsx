@@ -78,12 +78,12 @@ export default async function AdminWarehouseContainersPage({
   const shipmentCountByContainer = new Map<string, number>();
   if (ids.length > 0) {
     const { data } = await admin
-      .from("shipments")
-      .select("container_id")
-      .in("container_id", ids);
-    type Row = { container_id: string };
+      .from("cargo_shipments")
+      .select("cargo_container_id")
+      .in("cargo_container_id", ids);
+    type Row = { cargo_container_id: string };
     for (const r of (data ?? []) as Row[]) {
-      shipmentCountByContainer.set(r.container_id, (shipmentCountByContainer.get(r.container_id) ?? 0) + 1);
+      shipmentCountByContainer.set(r.cargo_container_id, (shipmentCountByContainer.get(r.cargo_container_id) ?? 0) + 1);
     }
   }
 

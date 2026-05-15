@@ -3,7 +3,9 @@ import { getTranslations } from "next-intl/server";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getServiceOrder } from "@/actions/service-order";
+import { createClient } from "@/lib/supabase/server";
 import { CancelButton } from "./cancel-button";
+import { PayFromWalletButton } from "./pay-from-wallet-button";
 
 const STATUS_BADGE: Record<string, string> = {
   pending:               "bg-gray-50 text-gray-700 border-gray-200",
@@ -28,6 +30,22 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   const canCancel = o.status === "pending" || o.status === "awaiting_payment";
   const canPrintReceipt = o.status !== "pending" && o.status !== "cancelled";   // mirrors PHP printShop.php (status 2..5 only)
   const itemsTotalCny = o.items.reduce((s, it) => s + Number(it.price_cny) * Number(it.amount), 0);
+
+  // Fetch main wallet balance only when relevant (status='awaiting_payment')
+  // — closes the cargo loop by letting customer self-pay from balance.
+  let walletBalance: number | null = null;
+  if (o.status === "awaiting_payment") {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: wallet } = await supabase
+        .from("wallet")
+        .select("balance")
+        .eq("profile_id", user.id)
+        .maybeSingle<{ balance: number }>();
+      walletBalance = Number(wallet?.balance ?? 0);
+    }
+  }
 
   return (
     <>
@@ -64,14 +82,23 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
 
         {/* Payment-due banner */}
         {o.status === "awaiting_payment" && o.payment_due_at && (
-          <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5">
-            <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
-            <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
-              ฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/wallet/deposit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">
+          <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>
+              <p className="text-2xl font-bold font-mono text-yellow-800 mt-1">
+                ฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
+            </div>
+
+            {/* Primary pay action — wallet balance permitting */}
+            {walletBalance !== null && o.h_no && (
+              <PayFromWalletButton hNo={o.h_no} totalThb={Number(o.total_thb)} walletBalance={walletBalance} />
+            )}
+
+            {/* Fallback / wallet management links */}
+            <div className="flex flex-wrap gap-2">
+              <Link href="/wallet/deposit" className="rounded-lg bg-white border border-yellow-300 px-4 py-2 text-sm font-medium text-yellow-900 hover:bg-yellow-100">
                 {t("payNowDeposit")}
               </Link>
               <Link href="/wallet/history" className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium hover:bg-surface-alt">

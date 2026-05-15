@@ -221,13 +221,13 @@ export async function adminAddTrackingEvent(
   return withAdmin<TrackingEvent>(["super", "ops", "warehouse", "driver"], async ({ adminId }) => {
     const admin = createAdminClient();
     const res = await dbAppendEvent(admin, {
-      shipment_id: d.shipment_id,
-      event:       d.event,
-      location:    d.location,
-      box_no:      d.box_no,
-      note:        d.note,
-      scanned_by:  adminId,
-      source:      "pacred",
+      cargo_shipment_id: d.shipment_id,
+      event:             d.event,
+      location:          d.location,
+      box_no:            d.box_no,
+      note:              d.note,
+      scanned_by:        adminId,
+      source:            "pacred",
     });
     if (!res.ok) return { ok: false, error: res.error };
 
