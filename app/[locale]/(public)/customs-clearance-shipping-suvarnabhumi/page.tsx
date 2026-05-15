@@ -56,6 +56,7 @@ import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { ClearanceCards } from "@/components/sections/clearance-cards";
 import { ContactSales } from "@/components/sections/contact-sales";
+import { PortPricingCarousel } from "@/components/sections/port-pricing-carousel";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -84,108 +85,6 @@ const PORTS = [
   { name: "แหลมฉบัง",         sub: "Container Port · FCL",  image: "/images/cardclearance/laemport.png" },
   { name: "ICD ลาดกระบัง",    sub: "Inland Depot · Sea",    image: "/images/cardclearance/laemport.png" },
   { name: "ด่านชายแดน",       sub: "Truck · มุก/หนอง/แม่",  image: "/images/cardclearance/mukdahanport.png" },
-];
-
-type Channel = {
-  id: "air" | "sea" | "truck";
-  icon: typeof Plane;
-  badge: string;
-  title: string;
-  intro: string;
-  image: string;
-  imageAlt: string;
-  accent: string;
-  carriersLabel: string;
-  carriers: string[];
-  forLabel: string;
-  forItems: string[];
-  servicesLabel: string;
-  services: string[];
-  goodsLabel?: string;
-  goods?: string;
-};
-
-const CHANNELS: Channel[] = [
-  {
-    id: "air",
-    icon: Plane,
-    badge: "AIR FREIGHT",
-    title: "เคลียร์สินค้าทางอากาศ",
-    intro:
-      "สำหรับสินค้าด่วน · สินค้ารีบใช้งาน · สินค้ารีบจำหน่าย — ดูแลตั้งแต่เอกสารพื้นฐานจนถึง Import Clearance ผ่านด่านได้ไว ลดค่าฝากเก็บ ลดความเสี่ยงเอกสารผิด",
-    image: "/images/hero-section/banner/airbanner.png",
-    imageAlt: "เคลียร์สินค้าทางอากาศ Pacred Shipping",
-    accent: "from-sky-500 to-sky-700",
-    carriersLabel: "รองรับผู้ให้บริการยอดนิยม",
-    carriers: ["DHL", "FedEx", "UPS", "TNT", "Air Cargo"],
-    forLabel: "เหมาะสำหรับ",
-    forItems: [
-      "สินค้าด่วน · ลดเวลาในระบบ",
-      "สินค้าติดด่านสนามบิน (สุ่มตรวจ/เอกสารไม่ครบ)",
-      "สินค้าควบคุม/ต้องใช้ใบอนุญาต — เครื่องสำอาง อาหารเสริม เครื่องมือแพทย์",
-    ],
-    servicesLabel: "บริการหลัก",
-    services: [
-      "ตรวจ Invoice / Packing List ตรงตามรายการจริง",
-      "ตรวจ HS Code จัดพิกัด ลดเสียภาษีเกิน",
-      "ชำระภาษีนำเข้าตามขั้นตอนถูกต้อง",
-      "Import Clearance ยื่นข้อมูลจนผ่านด่าน",
-    ],
-    goodsLabel: "รองรับสินค้า",
-    goods: "เครื่องสำอาง · เครื่องใช้ไฟฟ้า · เสื้อผ้า · เครื่องจักร · สินค้าควบคุม และอื่น ๆ ตามเงื่อนไขด่าน",
-  },
-  {
-    id: "sea",
-    icon: Ship,
-    badge: "SEA FREIGHT",
-    title: "เคลียร์สินค้าทางเรือ",
-    intro:
-      "นำเข้าทางเรือเหมาะกับสินค้าปริมาณมาก ต้นทุนคุ้ม รองรับทั้ง FCL เหมาตู้ + LCL รวมตู้ — ประสานศุลกากร · สายเรือ · ท่าเรือ · คลังสินค้า ดูแลครบรวมสุ่มตรวจ แก้เอกสาร จัดส่งต่อ",
-    image: "/images/hero-section/banner/ship.png",
-    imageAlt: "เคลียร์สินค้าทางเรือ Pacred Shipping",
-    accent: "from-blue-600 to-blue-800",
-    carriersLabel: "รองรับสายเรือหลัก",
-    carriers: ["Maersk", "MSC", "ONE", "CMA CGM", "Evergreen", "COSCO", "HMM", "PIL"],
-    forLabel: "รองรับ LCL / FCL",
-    forItems: [
-      "LCL · เริ่มต้นไม่กี่กล่อง จ่ายตาม CBM",
-      "FCL · เหมาตู้ 20'/40'/40HQ คุ้มที่สุด",
-      "Total Landed Cost คุมได้ง่าย",
-    ],
-    servicesLabel: "บริการ",
-    services: [
-      "ทำใบขนขาเข้า + เอกสารประกอบครบ",
-      "แก้ปัญหาสุ่มตรวจ ลดระยะเวลารอ",
-      "ประสานศุลกากร + สายเรือ ไม่สะดุด",
-      "จัดส่งต่อทั่วประเทศ Door to Door",
-    ],
-  },
-  {
-    id: "truck",
-    icon: Truck,
-    badge: "TRUCK · CROSS-BORDER",
-    title: "เคลียร์สินค้าทางรถ · ข้ามแดน",
-    intro:
-      "นำเข้าทางรถ/ข้ามแดนเหมาะกับการขนส่งจากประเทศเพื่อนบ้าน · เส้นทางที่ต้องการความยืดหยุ่นด้านเวลา + จุดรับ-ส่ง — ดูแลพิธีการศุลกากรที่ด่านชายแดน ตรวจเอกสาร จัดพิกัด ชำระภาษีแทน",
-    image: "/images/hero-section/banner/car.png",
-    imageAlt: "เคลียร์สินค้าทางรถ ข้ามแดน Pacred Shipping",
-    accent: "from-primary-500 to-primary-700",
-    carriersLabel: "ด่านที่รองรับ",
-    carriers: ["มุกดาหาร", "หนองคาย", "อรัญประเทศ", "แม่สาย", "และอื่น ๆ"],
-    forLabel: "เหมาะสำหรับ",
-    forItems: [
-      "สินค้าทุกประเภทเข้าไทยผ่านด่านรถ",
-      "อีคอมเมิร์ซ + งานหมุนสต๊อกเร็ว",
-      "สินค้าพรีออเดอร์ คุมไทม์ไลน์",
-    ],
-    servicesLabel: "บริการ",
-    services: [
-      "เคลียร์สินค้าติดด่านทุกกรณี — เอกสาร + ปฏิบัติ",
-      "ตรวจเอกสารนำเข้า ลดความเสี่ยงข้อมูลไม่ตรง",
-      "จัดพิกัดภาษีเหมาะกับสินค้า",
-      "ทำพิธีการศุลกากร + ชำระภาษีแทน",
-    ],
-  },
 ];
 
 type Term = { code: string; name: string; desc: string; icon: typeof Globe2 };
@@ -652,115 +551,27 @@ export default async function CustomsClearancePage({
           </div>
         </section>
 
-        {/* ═══════ 3. Channels ═══════ */}
+        {/* ═══════ 3. Per-port pricing carousel ═══════
+             Per ปอน 2026-05-15: replace the 3-channel (Air/Sea/Truck)
+             cards with location-based cards that surface a price
+             breakdown. Swipe carousel on both mobile and desktop;
+             desktop scroll-centers สุวรรณภูมิ on mount. */}
         <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              3 CHANNELS · ครบทุกช่องทาง
+              PRICING BY PORT · ราคาตามด่าน / ท่า
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              <span className="text-primary-600">ทางอากาศ · ทางเรือ · ทางรถ</span>
+              ราคาเริ่มต้น <span className="text-primary-600">แต่ละด่าน · แต่ละท่า</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ดูแลตั้งแต่เอกสารพื้นฐานจนปลายทาง · เลือกช่องทางที่เหมาะกับสินค้า + ไทม์ไลน์ของคุณ
+              เลื่อนซ้าย-ขวาเลือกท่า / ด่านที่ใช้ — ดูราคาตั้งต้นก่อนทักไลน์ปรึกษา ราคาเป็นเบื้องต้น (ไม่รวมภาษีนำเข้า + ค่าใช้จ่ายแปรผัน) เมื่อแจ้งสินค้าจริงทีม Pacred ออก Quote ครบทุกหัวให้ก่อนยืนยัน
             </p>
+          </div>
 
-            <div className="mt-6 md:mt-8 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-              {CHANNELS.map((c) => {
-                const Icon = c.icon;
-                return (
-                  <article
-                    key={c.id}
-                    className="group relative flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400"
-                  >
-                    <div className="relative h-32 md:h-40 overflow-hidden">
-                      <Image
-                        src={c.image}
-                        alt={c.imageAlt}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 380px"
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-                      />
-                      <div className={`absolute inset-0 bg-gradient-to-br ${c.accent} mix-blend-multiply opacity-30`} />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                      <div className="absolute top-3 left-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[10px] md:text-[11px] font-black tracking-[0.10em] shadow-md">
-                          <Icon className="w-3.5 h-3.5" strokeWidth={2.6} />
-                          {c.badge}
-                        </span>
-                      </div>
-                      <div className="absolute bottom-3 left-3 right-3">
-                        <h3 className="text-[20px] md:text-[22px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-                          {c.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 p-5 md:p-6 space-y-4">
-                      <p className="text-[12.5px] md:text-[13.5px] leading-[1.6] text-muted font-medium">
-                        {c.intro}
-                      </p>
-
-                      <div>
-                        <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
-                          {c.carriersLabel}
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {c.carriers.map((car) => (
-                            <span
-                              key={car}
-                              className="inline-flex items-center px-2.5 h-7 rounded-md bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[11px] md:text-[11.5px] font-bold text-primary-700 dark:text-primary-300"
-                            >
-                              {car}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
-                          {c.forLabel}
-                        </div>
-                        <ul className="space-y-1.5">
-                          {c.forItems.map((item) => (
-                            <li key={item} className="flex items-start gap-2 text-[12.5px] md:text-[13px] leading-[1.5] text-[#111827] dark:text-white/90">
-                              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-600 shrink-0" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div>
-                        <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
-                          {c.servicesLabel}
-                        </div>
-                        <ul className="space-y-1.5">
-                          {c.services.map((s) => (
-                            <li key={s} className="flex items-start gap-2 text-[12.5px] md:text-[13px] leading-[1.5] text-muted">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.6} />
-                              <span>{s}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {c.goods && c.goodsLabel && (
-                        <div className="rounded-xl border border-dashed border-border bg-surface/50 px-3 py-2.5">
-                          <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-1">
-                            {c.goodsLabel}
-                          </div>
-                          <p className="text-[12px] md:text-[12.5px] leading-[1.55] text-[#111827] dark:text-white/90 font-medium">
-                            {c.goods}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5 mt-6 md:mt-8">
+            <PortPricingCarousel />
           </div>
         </section>
 
