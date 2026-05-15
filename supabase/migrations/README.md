@@ -34,6 +34,29 @@
 | 19 | [0019_hr_recruitment.sql](0019_hr_recruitment.sql) | job_postings + job_applicants + resumes bucket + seed 3 sample postings (powers /admin/hr/recruitment pipeline: applied → screening → interviewing → offered → hired / rejected) | **H · HR** |
 | 20 | [0020_hr_attendance.sql](0020_hr_attendance.sql) | attendance_logs + leave_requests + trigger that auto-computes late_minutes/worked_minutes and applies approved leaves to attendance (powers /admin/hr/attendance + /admin/hr/attendance/leaves) | **H · HR** |
 | 21 | [0021_hr_learning_policies_audit.sql](0021_hr_learning_policies_audit.sql) | training_courses + training_enrollments + policies + policy_acknowledgments + employee_audit_entries + seed (3 courses, 4 policies). Powers /admin/hr/training + /admin/hr/policies + /admin/hr/audit | **H · HR** |
+| 22 | [0022_contact_messages.sql](0022_contact_messages.sql) | contact_messages — ฟอร์มติดต่อ /contact | **P-6** |
+| 23 | [0023_otp_purpose_change_phone.sql](0023_otp_purpose_change_phone.sql) | otp_codes.purpose += `change_phone` | **P-3** |
+| 24 | [0024_notification_ref_contact_message.sql](0024_notification_ref_contact_message.sql) | notifications.reference_type += `contact_message` | **0024** |
+| 25 | [0025_profiles_notify_channels_daily_digest.sql](0025_profiles_notify_channels_daily_digest.sql) | profiles.notify_channels.daily_digest flag | **P-15** |
+| 26 | [0026_notification_category_sales_digest.sql](0026_notification_category_sales_digest.sql) | notifications.category += `sales_digest` | **P-15** |
+| 27 | [0027_admin_contact_extras_contract_end_date.sql](0027_admin_contact_extras_contract_end_date.sql) | admin_contact_extras.contract_end_date | **P-17** |
+| 28 | [0028_forwarder_driver.sql](0028_forwarder_driver.sql) | forwarder_driver — driver assignment table | **P-18** |
+| 29 | [0029_csv_imports.sql](0029_csv_imports.sql) | csv_imports + csv-imports storage bucket | **P-19** |
+| 30 | [0030_hs_codes_rates.sql](0030_hs_codes_rates.sql) | hs_codes + container_hs_lines + seed | **P-20** |
+| 31 | [0031_hs_codes_rls_authenticated.sql](0031_hs_codes_rls_authenticated.sql) | hs_codes RLS → authenticated-only read | **P-20** |
+| 32 | [0032_csv_imports_started_at.sql](0032_csv_imports_started_at.sql) | csv_imports.started_at + stale-import recovery | **P-19** |
+| 33 | [0033_containers.sql](0033_containers.sql) | cargo_containers + cargo_shipments + tracking + history | **T-P2** |
+| 34 | [0034_tax_invoices.sql](0034_tax_invoices.sql) | tax_invoices + lines + serial generator | **T-P4 G2** |
+| 35 | [0035_tax_invoices_storage.sql](0035_tax_invoices_storage.sql) | tax-invoices storage bucket | **T-P4 G2** |
+| 36 | [0036_carriers.sql](0036_carriers.sql) | carriers + seed (SPX/J&T/Flash/EMS/Lalamove) | **U2-3** |
+| 37 | [0037_cargo_shipments_received_qty.sql](0037_cargo_shipments_received_qty.sql) | cargo_shipments.received_box_count (split-receipt) | **U1-5** |
+| 38 | [0038_forwarder_cost_adjustments.sql](0038_forwarder_cost_adjustments.sql) | forwarder_cost_adjustments — post-delivery rebill | **U2-4** |
+
+> ⚡ **Shortcut for 0023–0038:** instead of pasting 16 files one by one,
+> open [`../../docs/setup/migrations-0023-0038.sql`](../../docs/setup/migrations-0023-0038.sql)
+> — a single combined, idempotent file — paste the whole thing into the
+> SQL Editor and **Run** once. (0022 is standalone; run it first if the
+> `contact_messages` table doesn't exist yet.)
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 
