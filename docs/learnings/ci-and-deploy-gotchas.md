@@ -202,23 +202,41 @@ But don't change this without confirming with the team — `safecrlf=true` is a 
 - All app code unchanged from a known-working state. Tests + lint + tsc all green.
 - Issue persisted across `pnpm dev` restart + `.next/` cache nuke.
 
-**Root cause hypothesis (top 3, untested locally):**
-1. **IPv6 resolution preference** — Node.js 18+ defaults to `--dns-result-order=verbatim` which can return AAAA (IPv6) records first. If user's network has broken IPv6 (common on home ISPs in TH), Node tries IPv6 → 10s timeout → Node should fall back to IPv4 but doesn't always reliably in `undici` (the fetch impl).
-2. **Sentry SDK doubling fetch retries** — Sentry's `instrumentNodeFetch` wraps every fetch with span tracking. If Sentry's own ingest endpoint (also Cloudflare-routed via 104.18.x.x) is unreachable, every primary fetch may double-up retries.
-3. **Local firewall/AV** silently dropping outbound TLS to specific hosts — Trend Micro / Bitdefender behavior. Curl uses different TLS lib than Node.
+**Root cause CONFIRMED (2026-05-16 evening — second occurrence + targeted fix):** **Theory 1 — IPv6 resolution preference**.
 
-**Workarounds (try in order):**
-1. **Fastest test for theory 1:** restart dev with IPv4-first DNS:
-   ```powershell
-   $env:NODE_OPTIONS="--dns-result-order=ipv4first"
-   pnpm dev
-   ```
-   If timeouts disappear → IPv6 was the issue → consider committing `NODE_OPTIONS` to a `package.json` script for the team.
-2. **Test for theory 2:** temporarily unset `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` in `.env.local` + restart. If timeouts disappear → Sentry is the doubler.
-3. **Test for theory 3:** add `*.supabase.co` to firewall/AV allowlist OR temporarily disable AV.
+**Confirmation:** ภูม's local dev server hit the SAME pattern again, this time degenerating into 7-minute page loads (POST `/notifications` showed `application-code: 7.1min`). Applied the IPv4-first fix → response time dropped to 0.5-1.4s on the FIRST request after restart. ZERO `ConnectTimeoutError` in subsequent log. Theory 2 (Sentry retry doubling) was a contributor maybe but theory 1 alone fixed it.
 
-**Why this matters next time:** If multiple devs hit ConnectTimeout on Pacred dev servers but Vercel prod works fine → bias toward (1) IPv6 first; ipv4first flag is the cheapest fix. Don't chase code changes for what's an environmental issue.
+**Permanent fix (now committed for the team):**
 
-**Cross-links:** `proxy.ts` (Supabase session refresh runs here) · `lib/supabase/server.ts` · `instrumentation.ts` (Sentry hook) · `docs/learnings/nextjs-16-quirks.md` (Turbopack route cache — different but related diagnostic skill)
+`package.json` `dev` script changed from:
+```json
+"dev": "next dev",
+```
+to:
+```json
+"dev": "node --dns-result-order=ipv4first node_modules/next/dist/bin/next dev",
+```
+
+Whole team running `pnpm dev` automatically gets IPv4-first DNS resolution — no `NODE_OPTIONS` env to remember.
+
+**Why `NODE_OPTIONS` env didn't work as a script alternative:** Windows `cross-env`-free scripts can't set NODE_OPTIONS reliably across PowerShell + cmd + bash. The `node --dns-result-order=ipv4first <bin>` form works on every shell.
+
+**Why Vercel prod isn't affected:** Vercel's Linux build env has working IPv6 paths. The issue is local-Windows-network-specific.
+
+**Symptom signature (recognise it next time in seconds):**
+- Page loads taking minutes not ms
+- `proxy.ts: 10000+ms` in dev server log
+- `application-code: <huge>` per request
+- `TypeError: fetch failed [ConnectTimeoutError]` to `*.supabase.co` or `104.18.x.x`
+- curl to the SAME url works in <200ms
+
+If you see those four → the fix is already in `package.json`. If a future dev hits this → likely they ran `next dev` directly bypassing the wrapper.
+
+**Original 3 hypotheses left for posterity:**
+1. ✅ IPv6 resolution preference — CONFIRMED
+2. (Possibly contributing) Sentry SDK doubling fetch retries — didn't need to test once #1 fixed
+3. (Possibly contributing) Local firewall/AV dropping outbound TLS — N/A, fix #1 was sufficient
+
+**Cross-links:** `package.json` `dev` script · `proxy.ts` (Supabase session refresh runs here) · `lib/supabase/server.ts` · `instrumentation.ts` (Sentry hook) · `docs/learnings/nextjs-16-quirks.md` (Turbopack route cache — different diagnostic skill)
 
 ---
