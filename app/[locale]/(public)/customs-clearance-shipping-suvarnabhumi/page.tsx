@@ -445,12 +445,15 @@ export default async function CustomsClearancePage({
       <main>
         <BookingCalculator landing="customs" />
 
-        {/* Breadcrumb — under booking tabs, links back to home */}
+        {/* Breadcrumb — under booking tabs, links back to home.
+            Trailing crumb stays on one line on every viewport: short
+            label (no full sentence) + whitespace-nowrap, no truncate
+            so the text never shows "...". */}
         <nav
           aria-label="Breadcrumb"
           className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-3 md:pt-4"
         >
-          <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px]">
+          <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px] whitespace-nowrap">
             <li>
               <Link
                 href="/"
@@ -463,8 +466,8 @@ export default async function CustomsClearancePage({
             <li aria-hidden className="text-gray-300 dark:text-border">
               <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
             </li>
-            <li aria-current="page" className="font-bold text-foreground truncate">
-              บริการเคลียร์ พิธีการกรมศุลกากร รถ เรือ แอร์
+            <li aria-current="page" className="font-bold text-foreground">
+              เคลียร์ศุลกากร
             </li>
           </ol>
         </nav>
