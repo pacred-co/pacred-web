@@ -28,11 +28,14 @@ export function NewContainerForm() {
   const [code, setCode]                   = useState("");
   const [carrierNo, setCarrierNo]         = useState("");
   const [eta, setEta]                     = useState("");
+  const [closeAt, setCloseAt]             = useState("");
   const [source, setSource]               = useState<"pacred" | "momo" | "self">("pacred");
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null); setErr(null);
+    // datetime-local has no TZ — interpret as Bangkok-local, stamp to ISO
+    const closeAtIso = closeAt ? new Date(closeAt).toISOString() : undefined;
     startTransition(async () => {
       const res = await adminCreateContainer({
         code:                 code.trim() || undefined,
@@ -42,6 +45,7 @@ export function NewContainerForm() {
         source,
         eta:                  eta || undefined,
         carrier_container_no: carrierNo.trim() || undefined,
+        close_at:             closeAtIso,
         // Server defaults to 'packing'; pass explicitly so the inferred
         // input type from .default() is satisfied (Zod default makes the
         // field required in the parsed type even though it has a fallback).
@@ -52,6 +56,7 @@ export function NewContainerForm() {
         setCode("");
         setCarrierNo("");
         setEta("");
+        setCloseAt("");
         router.refresh();
         setTimeout(() => setMsg(null), 4000);
       } else if (!res.ok) {
@@ -157,6 +162,20 @@ export function NewContainerForm() {
         />
         <span className="text-[11px] text-muted">
           คนละตัวกับรหัสตู้ Pacred ด้านบน — ตัวนี้คือเลขที่พิมพ์อยู่บนตู้จริงและบน B/L
+        </span>
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">วันที่ตัดตู้ (close_at) — V-C3</span>
+        <input
+          type="datetime-local"
+          value={closeAt}
+          onChange={(e) => setCloseAt(e.target.value)}
+          className={inputCls}
+          disabled={pending}
+        />
+        <span className="text-[11px] text-muted">
+          หลังเวลานี้ ระบบจะไม่รับ shipment ใหม่เข้าตู้นี้ — ปล่อยว่างถ้ายังไม่กำหนด
         </span>
       </label>
 

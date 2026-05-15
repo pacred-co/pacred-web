@@ -61,6 +61,10 @@ export type Container = {
   /** V-D3: the shipping-line / carrier physical container number from
    *  the B/L (e.g. BLOU2025012). Distinct from `code` (Pacred-issued). */
   carrier_container_no: string | null;
+  /** V-C3: forward-looking "ตัดตู้" deadline. Past now() = no new
+   *  shipments accepted (enforced server-side in attach/manual-create
+   *  actions). NULL = no deadline. */
+  close_at:        string | null;
   created_at:      string;
   updated_at:      string;
 };
@@ -76,6 +80,7 @@ export type ContainerInsert = Pick<
   total_weight_kg?: number;
   total_cbm?:      number;
   carrier_container_no?: string | null;      // V-D3
+  close_at?:       string | null;            // V-C3
 };
 
 // ────────────────────────────────────────────────────────────

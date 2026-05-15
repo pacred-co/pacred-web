@@ -145,6 +145,7 @@ export async function createContainer(
       total_weight_kg:       input.total_weight_kg ?? 0,
       total_cbm:             input.total_cbm       ?? 0,
       carrier_container_no:  input.carrier_container_no ?? null,
+      close_at:              input.close_at ?? null,
     })
     .select("*")
     .single<Container>();
@@ -214,6 +215,26 @@ export async function setContainerStatus(
     source:           opts.source ?? "pacred",
   });
 
+  return { ok: true, data };
+}
+
+/**
+ * V-C3: set / clear the forward-looking ตัดตู้ deadline (close_at).
+ * Pass null to clear. Server-side attach/manual-create actions reject
+ * new shipments past this point.
+ */
+export async function setContainerCloseAt(
+  admin: SupabaseClient,
+  containerId: string,
+  closeAt: string | null,
+): Promise<Result<Container>> {
+  const { data, error } = await admin
+    .from("cargo_containers")
+    .update({ close_at: closeAt })
+    .eq("id", containerId)
+    .select("*")
+    .single<Container>();
+  if (error) return { ok: false, error: error.message };
   return { ok: true, data };
 }
 

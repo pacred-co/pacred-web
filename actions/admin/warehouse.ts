@@ -7,6 +7,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   createContainer as dbCreateContainer,
   setContainerStatus as dbSetContainerStatus,
+  setContainerCloseAt as dbSetContainerCloseAt,
   refreshContainerTotals,
   attachShipmentToContainer as dbAttachShipment,
   setShipmentStatus as dbSetShipmentStatus,
@@ -52,6 +53,7 @@ const createContainerSchema = z.object({
   eta:                  z.string().date().optional(),
   status:               z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
   carrier_container_no: z.string().trim().min(1).max(50).optional(),
+  close_at:             z.string().datetime({ offset: true }).optional(),   // V-C3
 });
 export type CreateContainerInput = z.infer<typeof createContainerSchema>;
 
@@ -105,6 +107,7 @@ export async function adminCreateContainer(
       status:               d.status,
       eta:                  d.eta ?? null,
       carrier_container_no: d.carrier_container_no ?? null,
+      close_at:             d.close_at ?? null,
     });
     if (!res.ok) return { ok: false, error: res.error };
 
@@ -115,6 +118,7 @@ export async function adminCreateContainer(
       destination:          res.data.destination,
       source:               res.data.source,
       carrier_container_no: res.data.carrier_container_no,
+      close_at:             res.data.close_at,
     });
 
     revalidatePath("/admin/warehouse/containers");
@@ -171,6 +175,17 @@ export async function adminAttachShipmentToContainer(
 
   return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
+
+    // V-C3: reject attach when container already past its ตัดตู้ deadline
+    const { data: target } = await admin
+      .from("cargo_containers")
+      .select("close_at, code")
+      .eq("id", d.container_id)
+      .maybeSingle<{ close_at: string | null; code: string | null }>();
+    if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
+      return { ok: false, error: `ตู้ ${target.code ?? d.container_id.slice(0,8)} ปิดรับ shipment ใหม่แล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไป` };
+    }
+
     const res = await dbAttachShipment(admin, d.shipment_id, d.container_id);
     if (!res.ok) return { ok: false, error: res.error };
 
@@ -297,6 +312,18 @@ export async function adminCreateShipmentManual(
         .maybeSingle<{ id: string; profile_id: string }>();
       if (!o)                          return { ok: false, error: "ไม่พบ service_order h_no นี้" };
       if (o.profile_id !== profile.id) return { ok: false, error: "service_order ไม่ใช่ของลูกค้านี้" };
+    }
+
+    // V-C3: reject when target container already past its ตัดตู้ deadline
+    if (d.cargo_container_id) {
+      const { data: target } = await admin
+        .from("cargo_containers")
+        .select("close_at, code")
+        .eq("id", d.cargo_container_id)
+        .maybeSingle<{ close_at: string | null; code: string | null }>();
+      if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
+        return { ok: false, error: `ตู้ ${target.code ?? d.cargo_container_id.slice(0,8)} ปิดรับแล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไปก่อนค่อยสร้าง shipment` };
+      }
     }
 
     // ── 3. Create shipment ──
@@ -436,6 +463,47 @@ export async function adminSetShipmentCargoType(
     });
 
     revalidatePath("/admin/warehouse/containers");
+    return { ok: true, data: res.data };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// V-C3: set / clear cargo_containers.close_at (ตัดตู้ deadline)
+// ────────────────────────────────────────────────────────────
+// Empty string clears (NULL in DB). Datetime is parsed as ISO8601;
+// the UI's <input type="datetime-local"> value gets stamped with the
+// browser's UTC offset before send (caller's job).
+
+const setContainerCloseAtSchema = z.object({
+  container_id: z.string().uuid(),
+  close_at:     z.string().trim().max(40),    // "" → clear; else ISO datetime
+});
+export type SetContainerCloseAtInput = z.infer<typeof setContainerCloseAtSchema>;
+
+export async function adminSetContainerCloseAt(
+  input: SetContainerCloseAtInput,
+): Promise<AdminActionResult<Container>> {
+  const parsed = setContainerCloseAtSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  let next: string | null = null;
+  if (d.close_at.length > 0) {
+    const dt = new Date(d.close_at);
+    if (Number.isNaN(dt.getTime())) return { ok: false, error: "close_at รูปแบบไม่ถูกต้อง" };
+    next = dt.toISOString();
+  }
+
+  return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await dbSetContainerCloseAt(admin, d.container_id, next);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "container.set_close_at", "container", d.container_id, {
+      close_at: next,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    if (res.data.code) revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
     return { ok: true, data: res.data };
   });
 }

@@ -12,6 +12,7 @@ import { ContainerStatusForm } from "./status-form";
 import { ScanEventForm } from "./scan-form";
 import { ShipmentRowControls } from "./shipment-row-controls";
 import { ManualShipmentForm } from "./manual-shipment-form";
+import { CloseAtForm } from "./close-at-form";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -141,6 +142,28 @@ export default async function AdminContainerDetailPage({
               </span>
             </p>
           )}
+          {container.close_at && (() => {
+            const closeMs = new Date(container.close_at).getTime();
+            const diffH   = Math.floor((closeMs - Date.now()) / 3_600_000);
+            const closed  = diffH < 0;
+            const cls = closed
+              ? "bg-red-50 text-red-700 border-red-200"
+              : diffH < 24
+              ? "bg-amber-50 text-amber-700 border-amber-200"
+              : "bg-blue-50 text-blue-700 border-blue-200";
+            return (
+              <p className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[11px] ${cls}`}>
+                ⏰ ตัดตู้: {new Date(container.close_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                <span className="ml-1 font-semibold">
+                  {closed
+                    ? ` (ปิดรับแล้ว ${Math.abs(diffH)} ชม.)`
+                    : diffH < 24
+                    ? ` (อีก ${diffH} ชม.)`
+                    : ` (อีก ${Math.floor(diffH / 24)} วัน)`}
+                </span>
+              </p>
+            );
+          })()}
         </div>
         <Link
           href="/admin/warehouse/containers"
@@ -306,7 +329,12 @@ export default async function AdminContainerDetailPage({
 
         <aside className="space-y-4">
           <ContainerStatusForm containerId={container.id} currentStatus={container.status} />
-          <ManualShipmentForm containerId={container.id} containerCode={container.code ?? ""} />
+          <CloseAtForm containerId={container.id} currentCloseAt={container.close_at} />
+          <ManualShipmentForm
+            containerId={container.id}
+            containerCode={container.code ?? ""}
+            closeAt={container.close_at}
+          />
         </aside>
       </div>
     </main>
