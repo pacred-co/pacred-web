@@ -1699,7 +1699,7 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — track each cutover with ก๊อต | เดฟ + ก๊อต | 🔴 | ⬜ |
+| V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — tracked in [`runbook/legacy-cutover-tracker.md`](runbook/legacy-cutover-tracker.md) (8 dependencies, F1-1…F1-8) | เดฟ + ก๊อต | 🔴 | 🏗 |
 | V-F2 | PEAK / ERP accounting-export API (follows V-A8) | เดฟ | 🟡 | ⬜ |
 | V-F3 | Legacy-infra resilience — fragile 3rd-party server, pay-or-die; cut over before any contract lapse | ก๊อต | 🟡 | ⬜ |
 

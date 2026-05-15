@@ -201,3 +201,4 @@ These problem IDs are carried verbatim into [`docs/PORT_PLAN.md`](../PORT_PLAN.m
 - 🧹 Legacy PHP dead-file sweep → [`docs/audit/legacy-cleanup-2026-05-16.md`](legacy-cleanup-2026-05-16.md)
 - 🧠 Permanent domain knowledge → [`docs/learnings/pacred-domain-knowledge.md`](../learnings/pacred-domain-knowledge.md)
 - 🛑 Don't scrub legacy refs early → [`docs/runbook/pcs-scrub-plan.md`](../runbook/pcs-scrub-plan.md)
+- 🔌 V-F1 dependency burn-down → [`docs/runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) (the ไอแต้ม single-point-of-failure, tracked to ✅)
