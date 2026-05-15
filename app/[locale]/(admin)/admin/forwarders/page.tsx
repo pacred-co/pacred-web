@@ -93,6 +93,12 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           <h1 className="mt-1 text-2xl font-bold">ฝากนำเข้า — Ops</h1>
           <p className="text-sm text-muted mt-0.5">{rows.length} รายการ</p>
         </div>
+        <Link
+          href="/admin/forwarders/bulk-search"
+          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+        >
+          🔍 ค้นหา tracking หลายเลข
+        </Link>
       </div>
 
       {/* Advanced search */}

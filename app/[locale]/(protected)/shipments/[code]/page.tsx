@@ -1,6 +1,16 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getMyShipment } from "@/actions/shipments";
+import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
+
+/** U1-7: same freshness palette as the list page. */
+const FRESHNESS_PILL: Record<ReturnType<typeof freshnessClass>, string> = {
+  fresh:      "bg-green-50 text-green-700 border-green-200",
+  recent:     "bg-gray-50 text-gray-600 border-gray-200",
+  stale:      "bg-amber-50 text-amber-700 border-amber-200",
+  "very-old": "bg-red-50 text-red-700 border-red-200",
+  unknown:    "bg-gray-50 text-gray-500 border-gray-200",
+};
 
 /**
  * Customer-side shipment detail with full tracking timeline (T-P2 / CT-3).
@@ -74,6 +84,10 @@ export default async function ShipmentDetailPage({
   const statusLabel = STATUS_LABEL[s.status] ?? s.status;
   const transport   = s.container?.transport_mode ? TRANSPORT_LABEL[s.container.transport_mode] : null;
 
+  // U1-7 freshness: most recent scanned_at across all events
+  const latestScannedAt = s.events[0]?.scanned_at ?? null;
+  const freshness = freshnessClass(latestScannedAt);
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -96,10 +110,29 @@ export default async function ShipmentDetailPage({
             <p className="text-xs text-muted">สถานะปัจจุบัน</p>
             <p className="mt-1 text-2xl font-bold">{statusLabel}</p>
           </div>
-          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadge}`}>
-            {statusLabel}
-          </span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadge}`}>
+              {statusLabel}
+            </span>
+            {/* U1-7: per-shipment freshness — closes chat L-4 (customer trust). */}
+            {latestScannedAt && (
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium ${FRESHNESS_PILL[freshness]}`}
+                title={`scan ล่าสุด: ${new Date(latestScannedAt).toLocaleString("th-TH")}`}
+              >
+                🔄 {relativeTimeTh(latestScannedAt)}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Stale data hint — explicit nudge per chat audit L-4 */}
+        {(freshness === "stale" || freshness === "very-old") && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            ข้อมูลไม่ได้อัพเดทมา {relativeTimeTh(latestScannedAt)} —
+            หากต้องการสอบถามสถานะล่าสุด กรุณาติดต่อทีมงาน
+          </div>
+        )}
 
         {s.container && (
           <div className="border-t border-border pt-3 grid grid-cols-2 gap-y-2 text-sm">

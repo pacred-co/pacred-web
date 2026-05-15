@@ -1,6 +1,19 @@
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import { listMyShipments, type ShipmentSummary } from "@/actions/shipments";
+import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
+
+/**
+ * U1-7 freshness pill — displayed prominently so customer knows whether
+ * data is current or stale. Maps freshness bucket → Tailwind classes.
+ */
+const FRESHNESS_PILL: Record<ReturnType<typeof freshnessClass>, string> = {
+  fresh:      "bg-green-50 text-green-700 border-green-200",
+  recent:     "bg-gray-50 text-gray-600 border-gray-200",
+  stale:      "bg-amber-50 text-amber-700 border-amber-200",
+  "very-old": "bg-red-50 text-red-700 border-red-200",
+  unknown:    "bg-gray-50 text-gray-500 border-gray-200",
+};
 
 /**
  * Customer-side shipment tracking list (T-P2 / CT-3).
@@ -59,13 +72,41 @@ export default async function ShipmentsPage() {
 
   const shipments = res.data;
 
+  // U1-7: latest scan-event timestamp across all shipments = "data fresh
+  // as of this moment". Customer can compare to wall-clock to decide if
+  // the system has been updated recently.
+  const latestEventAt = shipments
+    .map((s) => s.latest_event?.scanned_at)
+    .filter((x): x is string => !!x)
+    .sort()
+    .reverse()[0] ?? null;
+  const freshness = freshnessClass(latestEventAt);
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")}</p>
-        <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
-        <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")}</p>
+          <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
+          <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
+        </div>
+        {latestEventAt && (
+          <div
+            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${FRESHNESS_PILL[freshness]}`}
+            title={new Date(latestEventAt).toLocaleString("th-TH")}
+          >
+            🔄 ข้อมูลล่าสุด: {relativeTimeTh(latestEventAt)}
+          </div>
+        )}
       </div>
+
+      {/* Stale / very-old data hint — nudge customer to contact sales if data hasn't moved */}
+      {(freshness === "stale" || freshness === "very-old") && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          ข้อมูลไม่ได้อัพเดทมา {relativeTimeTh(latestEventAt)} —
+          ถ้าคุณคาดว่าน่าจะมีการเคลื่อนไหวล่าสุด กรุณาติดต่อทีมงานเพื่อตรวจสอบ
+        </div>
+      )}
 
       {shipments.length === 0 ? (
         <EmptyState />
