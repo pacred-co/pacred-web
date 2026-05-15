@@ -8,7 +8,12 @@
 -- This migration introduces:
 --   1. admins.role enum extended: + 'warehouse' + 'driver'
 --      (per memory staff_roles_pacred; was tracked in ADR-0010 P-38).
---   2. containers — physical shipping unit (truck/sea/air)
+--   2. containers — extends EXISTING 0016 phase-H containers table
+--      with the spine columns. 0016 created the table with vendor /
+--      vessel / carrier / status flow for ops daily-tracking; 0033
+--      adds the design-locked spine fields (code, transport_mode,
+--      origin, destination, source, packed_at, sealed_at,
+--      actual_arrival, total_boxes, total_cbm).
 --   3. shipments — one customer's portion of a container, linked
 --      back to existing forwarders (cargo-import) or service_orders
 --      (China-shop) via optional FKs
@@ -17,6 +22,13 @@
 --
 -- MOMO sync writes to source='momo'. Pacred-self writes source='pacred'.
 -- Customer-direct scan (future) writes source='customer_scan' (tracking only).
+--
+-- 🐛 FIX 2026-05-17 (ภูม): rewrote container section from naive
+-- `create table if not exists` (which silently skipped column adds when
+-- 0016 had already created the table) to ALTER TABLE ADD COLUMN IF NOT
+-- EXISTS pattern. Original failed with `42703: column "source" does
+-- not exist` when the index step ran against the unmodified 0016
+-- schema. Now runs cleanly whether or not 0016 ran first.
 --
 -- Idempotent.
 -- ════════════════════════════════════════════════════════════
@@ -28,31 +40,78 @@ alter table public.admins drop constraint if exists admins_role_check;
 alter table public.admins add  constraint admins_role_check
   check (role in ('super','ops','accounting','sales_admin','warehouse','driver'));
 
--- 2) containers ----------------------------------------------------
+-- 2) containers — extend the 0016 phase-H table -------------------
+--
+-- The minimal `create table if not exists` ensures fresh DBs (where
+-- 0016 didn't run) get a basic table. Existing DBs (0016 already ran)
+-- get the columns added via ALTER, which is what was missing in the
+-- original 0033.
 create table if not exists public.containers (
-  id              uuid primary key default gen_random_uuid(),
-  -- Container code. Self-issued format: <origin>-<YYMMDD>-<seq>
-  -- (e.g. "GZE260516-1" = Guangzhou-Eastbound, 2026-05-16, seq 1).
-  -- MOMO-issued: whatever JMF returns (mirror the partner contract).
-  code            text unique not null,
-  transport_mode  text not null check (transport_mode in ('truck','sea','air')),
-  origin          text not null,
-  destination     text not null,
-  status          text not null check (status in (
-                    'packing','sealed','in_transit','arrived','unloading','closed'
-                  )) default 'packing',
-  packed_at       timestamptz,
-  sealed_at       timestamptz,
-  eta             date,
-  actual_arrival  timestamptz,
-  source          text not null check (source in ('pacred','momo','self')) default 'momo',
-  -- denorm cache, refreshable from MOMO or our own sum
-  total_boxes     int           not null default 0,
-  total_weight_kg numeric(12,2) not null default 0,
-  total_cbm       numeric(10,3) not null default 0,
-  created_at      timestamptz   not null default now(),
-  updated_at      timestamptz   not null default now()
+  id           uuid primary key default gen_random_uuid(),
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
 );
+
+-- Spine columns from container-centric-model.md spec.
+-- All NULLABLE on add (no default conflicts with existing rows from 0016);
+-- application backfills as it adopts the new fields.
+alter table public.containers
+  add column if not exists code            text,
+  add column if not exists transport_mode  text,
+  add column if not exists origin          text,
+  add column if not exists destination     text,
+  add column if not exists packed_at       timestamptz,
+  add column if not exists sealed_at       timestamptz,
+  add column if not exists actual_arrival  timestamptz,
+  add column if not exists source          text,
+  add column if not exists total_boxes     int            not null default 0,
+  add column if not exists total_cbm       numeric(10,3)  not null default 0;
+
+-- Defaults for new columns where the original spec called for them.
+-- Apply only to rows that don't already have a value (no-op for fresh DBs).
+update public.containers set source         = 'momo'  where source         is null;
+update public.containers set transport_mode = 'truck' where transport_mode is null;
+
+-- Lock NOT NULL on the columns spec said are required. Use a guard so
+-- this is safe to re-run.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'containers'
+       and column_name  = 'source'         and is_nullable = 'YES'
+  ) then alter table public.containers alter column source         set not null; end if;
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'containers'
+       and column_name  = 'transport_mode' and is_nullable = 'YES'
+  ) then alter table public.containers alter column transport_mode set not null; end if;
+end $$;
+
+-- Drop pre-existing CHECK constraints that 0016 added (different value
+-- enums) and replace with unions that accept both 0016 + 0033 values.
+-- App code decides which value to write; the DB allows both during the
+-- migration period.
+alter table public.containers drop constraint if exists containers_status_check;
+alter table public.containers add  constraint containers_status_check
+  check (status in (
+    -- 0016 phase-H values
+    'preparing','sealed','in_transit','arrived_port','cleared_customs','delivered','cancelled',
+    -- 0033 spine values
+    'packing','arrived','unloading','closed'
+  ));
+
+alter table public.containers drop constraint if exists containers_transport_mode_check;
+alter table public.containers add  constraint containers_transport_mode_check
+  check (transport_mode in ('truck','sea','air'));
+
+alter table public.containers drop constraint if exists containers_source_check;
+alter table public.containers add  constraint containers_source_check
+  check (source in ('pacred','momo','self'));
+
+-- Unique index on code (only when set — coexists with 0016 container_no).
+create unique index if not exists containers_code_unique_idx
+  on public.containers(code) where code is not null;
 
 create index if not exists containers_status_eta_idx
   on public.containers(status, eta);
@@ -154,6 +213,9 @@ alter table public.shipment_tracking        enable row level security;
 alter table public.container_status_history enable row level security;
 
 -- containers: customer sees a container only if they own ≥1 shipment in it
+-- (Note: 0016 created `containers_select_via_my_orders` for the same intent
+-- via forwarders.container_id / service_orders.container_id. We keep that
+-- policy intact; this new policy adds the shipments-table path.)
 drop policy if exists containers_customer_read on public.containers;
 create policy containers_customer_read
   on public.containers for select
@@ -211,9 +273,9 @@ create policy container_status_history_admin_all
 
 -- 7) Comments ------------------------------------------------------
 comment on table  public.containers is
-  'Physical shipping unit (truck/sea/air). One container has many shipments and many customers. See docs/architecture/container-centric-model.md.';
+  'Physical shipping unit (truck/sea/air). 0016 phase-H created with vendor/vessel/carrier columns; 0033 extended with code/source/transport_mode spine fields. One container has many shipments and many customers. See docs/architecture/container-centric-model.md.';
 comment on column public.containers.code is
-  'Container code. Self-issued format <origin>-<YYMMDD>-<seq> (e.g. GZE260516-1) OR MOMO-issued (whatever JMF returns).';
+  'Container code (0033 spine). Self-issued format <origin>-<YYMMDD>-<seq> (e.g. GZE260516-1) OR MOMO-issued (whatever JMF returns). Coexists with 0016-era container_no.';
 comment on column public.containers.source is
   'pacred = Pacred-managed; momo = synced from MOMO JMF partner; self = future customer-direct scan source.';
 

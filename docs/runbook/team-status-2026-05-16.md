@@ -20,6 +20,7 @@
 | `f410640` | **T-P1 GAP 3 closed:** customer service-order receipt page (`/service-order/[hNo]/receipt`) — pre-req for T-D1 cargo smoke test (เดฟ) |
 | `32f5bcf` | P-31 cart cap doc fix (PORT_PLAN was wrong; trigger correct at >=151 per legacy) + this checkpoint header bump (เดฟ) |
 | (this batch) | **T-P2 CT-3 customer-side shipment tracking** — `actions/shipments.ts` (RLS-scoped via `shipments_customer_read`) + `/shipments` list with status pills + container info + latest event hint + `/shipments/[code]` detail timeline (newest-first events with timeline pin styling) + sidebar nav entry + i18n (ภูม) |
+| (this batch) | 🐛 **Fix migration 0033 schema collision** — original `create table if not exists public.containers` silently skipped column adds when 0016 phase-H had already created the table → `42703: column "source" does not exist` on index step. Rewrote to `alter table ... add column if not exists` pattern + status CHECK constraint expanded to union of 0016 + 0033 enum values. Re-runnable safely. **Action ก๊อต/เดฟ:** when running 0033 on prod, this rewritten version is the right one (ภูม commit superseded original `f2230ed` containers section) |
 
 **Tests:** 305 assertions all green across 13 test files.
 
