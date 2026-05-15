@@ -366,3 +366,134 @@ export async function adminDeleteCustomUserRate(
     return { ok: true, data: { id: d.id } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// LP-1c2: rate_custom_hs (per-customer + HS-code override) — wins everything
+// ────────────────────────────────────────────────────────────
+//
+// No UNIQUE constraint on the composite key in the schema (migration 0009
+// marks it "placeholder shape"). Until a follow-up migration adds the
+// constraint (see docs/runbook/poom-handoff D-1), we SELECT-then-write
+// manually — tiny race window but only matters for two admins editing the
+// same row simultaneously, which is not a Pacred-scale concern.
+
+const upsertCustomHsRateSchema = z.object({
+  customer_ref:     z.string().trim().min(2).max(50),
+  hs_code:          z.string().trim().min(2).max(20),
+  source_warehouse: z.enum(SOURCE_WAREHOUSE),
+  transport_type:   z.enum(TRANSPORT_TYPE),
+  product_type:     z.enum(PRODUCT_TYPE),
+  basis:            z.enum(BASIS),
+  rate_before:      z.number().nonnegative().max(100_000).nullable(),
+  rate:             z.number().positive().max(100_000),
+});
+export type UpsertCustomHsRateInput = z.infer<typeof upsertCustomHsRateSchema>;
+
+export async function adminUpsertCustomHsRate(
+  input: UpsertCustomHsRateInput,
+): Promise<AdminActionResult<{ id: string; created: boolean; profile_id: string; member_code: string | null }>> {
+  const parsed = upsertCustomHsRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string; created: boolean; profile_id: string; member_code: string | null }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const lookup = await resolveCustomerToProfileId(admin, d.customer_ref);
+      if (!lookup.ok) return { ok: false, error: lookup.error };
+
+      // SELECT-then-write (no UNIQUE constraint to onConflict against)
+      const { data: existing } = await admin
+        .from("rate_custom_hs")
+        .select("id, rate, rate_before")
+        .eq("profile_id",       lookup.profile_id)
+        .eq("hs_code",          d.hs_code)
+        .eq("source_warehouse", d.source_warehouse)
+        .eq("transport_type",   d.transport_type)
+        .eq("product_type",     d.product_type)
+        .eq("basis",            d.basis)
+        .maybeSingle<{ id: string; rate: number; rate_before: number | null }>();
+
+      let writtenId: string;
+      if (existing) {
+        const { error } = await admin
+          .from("rate_custom_hs")
+          .update({
+            rate:            d.rate,
+            rate_before:     d.rate_before,
+            admin_id_update: adminId,
+          })
+          .eq("id", existing.id);
+        if (error) return { ok: false, error: error.message };
+        writtenId = existing.id;
+      } else {
+        const { data: inserted, error } = await admin
+          .from("rate_custom_hs")
+          .insert({
+            profile_id:       lookup.profile_id,
+            hs_code:          d.hs_code,
+            source_warehouse: d.source_warehouse,
+            transport_type:   d.transport_type,
+            product_type:     d.product_type,
+            basis:            d.basis,
+            rate:             d.rate,
+            rate_before:      d.rate_before,
+            admin_id_update:  adminId,
+          })
+          .select("id")
+          .single<{ id: string }>();
+        if (error) return { ok: false, error: error.message };
+        writtenId = inserted.id;
+      }
+
+      await logAdminAction(adminId, existing ? "rate_custom_hs.update" : "rate_custom_hs.insert", "rate_custom_hs", writtenId, {
+        key: {
+          profile_id:       lookup.profile_id,
+          member_code:      lookup.member_code,
+          hs_code:          d.hs_code,
+          source_warehouse: d.source_warehouse,
+          transport_type:   d.transport_type,
+          product_type:     d.product_type,
+          basis:            d.basis,
+        },
+        before: existing ? { rate: existing.rate, rate_before: existing.rate_before } : null,
+        after:  { rate: d.rate, rate_before: d.rate_before },
+      });
+
+      revalidatePath("/admin/rates");
+      revalidatePath("/admin/rates/custom-hs");
+      return { ok: true, data: { id: writtenId, created: !existing, profile_id: lookup.profile_id, member_code: lookup.member_code } };
+    },
+  );
+}
+
+const deleteCustomHsRateSchema = z.object({ id: z.string().uuid() });
+export type DeleteCustomHsRateInput = z.infer<typeof deleteCustomHsRateSchema>;
+
+export async function adminDeleteCustomHsRate(
+  input: DeleteCustomHsRateInput,
+): Promise<AdminActionResult<{ id: string }>> {
+  const parsed = deleteCustomHsRateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: before } = await admin
+      .from("rate_custom_hs")
+      .select("profile_id, hs_code, source_warehouse, transport_type, product_type, basis, rate, rate_before")
+      .eq("id", d.id)
+      .maybeSingle();
+    if (!before) return { ok: false, error: "not_found" };
+
+    const { error } = await admin.from("rate_custom_hs").delete().eq("id", d.id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, "rate_custom_hs.delete", "rate_custom_hs", d.id, { before });
+
+    revalidatePath("/admin/rates");
+    revalidatePath("/admin/rates/custom-hs");
+    return { ok: true, data: { id: d.id } };
+  });
+}

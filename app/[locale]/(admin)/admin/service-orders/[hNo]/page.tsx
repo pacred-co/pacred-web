@@ -16,15 +16,28 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
       payment_due_at, created_at,
       ship_first_name, ship_last_name, ship_phone, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
       bill_to_name_override,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
+      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email, account_type )
     `)
     .eq("h_no", hNo)
     .maybeSingle();
 
   if (!data) notFound();
-  type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
+  type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; account_type: "personal" | "juristic" | null };
   const o = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(o.profile) ? o.profile[0] ?? null : o.profile;
+
+  // F-1: for juristic customers, the PDF/receipt uses corporate.company_name as
+  // the default bill-to name. Surface that as the "ชื่อเริ่มต้น" hint in the
+  // override panel so the displayed default matches the actual default.
+  let corporateName: string | null = null;
+  if (profile?.account_type === "juristic") {
+    const { data: corp } = await admin
+      .from("corporate")
+      .select("company_name")
+      .eq("profile_id", o.profile_id)
+      .maybeSingle<{ company_name: string | null }>();
+    corporateName = corp?.company_name ?? null;
+  }
 
   const { data: items } = await admin
     .from("service_order_items")
@@ -105,7 +118,10 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
           <BillToOverridePanel
             kind="service_order"
             hNo={o.h_no!}
-            defaultName={[profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || ""}
+            defaultName={
+              // F-1: juristic uses company_name in PDF/receipt; non-juristic uses first+last
+              (corporateName ?? [profile?.first_name, profile?.last_name].filter(Boolean).join(" ")) || ""
+            }
             current={(o as { bill_to_name_override: string | null }).bill_to_name_override ?? null}
           />
         </aside>

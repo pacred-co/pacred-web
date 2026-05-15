@@ -58,7 +58,7 @@
 ### F-1 · BillToOverridePanel "default name" สำหรับลูกค้านิติบุคคล
 **Issue:** `/admin/service-orders/[hNo]` BillToOverridePanel แสดง "ชื่อเริ่มต้น = first_name + last_name" แต่ PDF จริงใช้ `corporate.company_name` ถ้า account_type=juristic.
 
-**Fix:** ขยาย select profile ใน [page.tsx](../../app/[locale]/(admin)/admin/service-orders/[hNo]/page.tsx) ให้ join corporate + ส่ง company_name เป็น defaultName เมื่อ juristic.
+**Fix:** ขยาย select profile ใน `app/[locale]/(admin)/admin/service-orders/[hNo]/page.tsx` ให้ join corporate + ส่ง company_name เป็น defaultName เมื่อ juristic. (ภูม ทำใน F-1 ถัด commit นี้)
 
 **Effort:** ~15 นาที. ภูม จะทำใน batch ถัดไป.
 

@@ -137,6 +137,15 @@ export default async function AdminRatesPage() {
             <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
           </Link>
         </div>
+        <div className="mt-2">
+          <Link
+            href="/admin/rates/custom-hs"
+            className="block w-full rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">Custom-HS rate (ลูกค้า + HS code)</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ → (wins ทุกอย่างใน waterfall)</p>
+          </Link>
+        </div>
       </RateSection>
 
       {/* Last updated note */}
