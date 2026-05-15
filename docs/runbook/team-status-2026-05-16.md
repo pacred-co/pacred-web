@@ -581,4 +581,28 @@ When all of this lands, Pacred ships beta:
 
 ---
 
+## 🌙 เดฟ autonomous run — theme fix · cargo forensics · ADR-0015/16 (2026-05-16 night)
+
+Long autonomous session. **7 commits on `dave`** — 4 pushed, 3 held local (hold-push mode; เดฟ pushes on his signal).
+
+**Pushed to `origin/dave` (→ `5e6f015`):**
+1. ✅ `235dbc3` **fix(theme)** — 3 owner-reported bugs: site always opens light (head-script no longer OS-detects) · theme toggle flips on the **first** click (head-script↔provider desync killed) · dark-mode contrast (2 near-black headings paired with `dark:`).
+2. ✅ `018f747` **migrations** — `docs/setup/migrations-0023-0038.sql` (one idempotent paste-and-run file for ภูม) + README migration table extended to 0038.
+3. ✅ `32810d0` **cargo forensics** — `docs/audit/cargo-ops-forensics-2026-05-16.md` (decoded the cargo/freight model + ไอแต้ม-chat problem catalog A–F from 10 real China-cargo documents) + **PORT_PLAN Part V** (`V-A1…V-F3` backlog + `V-ADM1` admin-UI polish).
+4. ✅ `5e6f015` **ADR-0015** — withholding-tax (หัก ณ ที่จ่าย) model, DRAFT.
+
+**Held local — push on เดฟ's signal:**
+5. 🔸 `bda57be` **STRATEGY.md sync** — master single-read updated with Part V + cargo forensics + ADR-0014/0015/0016.
+6. 🔸 `647f9ed` **learnings** — theme head-script↔provider desync gotcha (`nextjs-16-quirks.md`).
+7. 🔸 `abb4ad7` **ADR-0016** — freight value model (commercial vs declared value · VAT plan), DRAFT.
+
+**Verify:** theme commit passed full `pnpm verify` (lint+tsc+test+audits); all doc commits passed `audit:md` (734 links / 66 md files ✓).
+
+**Team action items from this run:**
+- **ภูม** → pull `dave` → run `docs/setup/migrations-0023-0038.sql` on Supabase → **V-ADM1** (admin UI: remove right sidebar · white left sidebar · unify theme+bg — spec in `briefs/poom.md`) → Part V cargo backlog (🔴 `V-A2/A3/C1/D1` need no ADR; `V-A6` waits on ADR-0015 lock).
+- **ก๊อต** → review + lock **ADR-0015** (4 open Qs) and **ADR-0016** (5 open Qs) → unblocks `V-A6` / `V-E2`.
+- **ปอน** → pull `dave` (theme bugs fixed) → continue landing work.
+
+---
+
 **End of checkpoint.** Update freq: when blocker resolves / new blocker appears / สำคัญ batch ship → edit this file + commit `docs(team): status checkpoint — <date> — <what changed>`.
