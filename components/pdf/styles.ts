@@ -88,10 +88,12 @@ export const styles = StyleSheet.create({
     marginTop: -2,
   },
   originalCopy: {
+    // U1-8 fix: removed `fontStyle: italic` — Sarabun italic variant is
+    // not registered (only Regular + Bold in public/fonts/). Visual
+    // distinction comes from the smaller size + muted color instead.
     fontSize: 8,
     color: COLORS.muted,
     marginTop: 2,
-    fontStyle: "italic",
   },
 
   // ── Customer block ───────────────────────────────────────────────────
@@ -231,8 +233,10 @@ export const styles = StyleSheet.create({
   },
 
   amountInWords: {
+    // U1-8 fix: removed `fontStyle: italic` — Sarabun italic isn't
+    // registered (only Regular + Bold available). Visual distinction
+    // comes from the surface-alt background + smaller font.
     fontSize: 9,
-    fontStyle: "italic",
     color: COLORS.foreground,
     marginTop: 8,
     padding: 6,

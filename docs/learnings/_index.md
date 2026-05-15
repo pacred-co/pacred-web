@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-15 (seeded)
+Last reviewed: 2026-05-16 (testing-patterns +2 entries)
 
 ---
 
@@ -19,7 +19,7 @@ Last reviewed: 2026-05-15 (seeded)
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS policy patterns that work for Pacred | 2026-05-15 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed — pending first entry) |
-| [`testing-patterns.md`](testing-patterns.md) | Pacred-specific test mocks + harness quirks | (empty seed) |
+| [`testing-patterns.md`](testing-patterns.md) | Pacred-specific test mocks + harness quirks | 2026-05-16 |
 | [`partner-apis-quirks.md`](partner-apis-quirks.md) | MOMO JMF / TAM / ThaiBulkSMS / LINE behavior | (empty seed) |
 | [`php-port-patterns.md`](php-port-patterns.md) | Legacy `D:\xampp\htdocs\pcscargo` port gotchas | (empty seed) |
 | [`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) | Cargo flow business logic + juristic rules | (empty seed) |
