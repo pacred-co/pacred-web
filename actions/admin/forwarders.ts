@@ -146,3 +146,165 @@ export async function adminBulkUpdateForwarderStatus(
     return { ok: true, updated: existing.length };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// adminMarkForwarderPaid — admin override mirror of
+// `payForwarderFromWallet` (customer self-service, dave commit `2be9eb5`)
+// ────────────────────────────────────────────────────────────
+//
+// Why this exists:
+//   The customer-side `payForwarderFromWallet` closed the import loop for
+//   self-pay-from-wallet, but admin still needs an override path for:
+//     - Customer paid via bank transfer / cash / OOB → admin records it
+//     - Customer can't self-pay (slow internet, technical issue, account
+//       has zero balance + admin agreed to receive cash)
+//
+// Pattern is the EXACT mirror of `adminMarkServiceOrderPaid` (T-P1) with
+// forwarder column names:
+//   - kind = 'import_payment' (vs 'order_payment')
+//   - reference_type = 'forwarder' (vs 'order_header')
+//   - reference_id = f_no
+//   - status flip: pending_payment → shipped_china (matches customer flow)
+//
+// Idempotency: existing completed (kind='import_payment', ref to f_no)
+// → return { already_paid: true } without double-debit.
+//
+// Per ADR-0005 K-7: wallet movements gated by accounting role (super
+// inherits all). Audit log captures override flag for compliance.
+
+const markForwarderPaidSchema = z.object({
+  f_no:           z.string(),
+  allow_overdraw: z.boolean().optional(),
+});
+export type AdminMarkForwarderPaidInput = z.infer<typeof markForwarderPaidSchema>;
+
+type MarkForwarderPaidData = { tx_id: string; already_paid: boolean };
+
+export async function adminMarkForwarderPaid(
+  input: AdminMarkForwarderPaidInput,
+): Promise<AdminActionResult<MarkForwarderPaidData>> {
+  const parsed = markForwarderPaidSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<MarkForwarderPaidData>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: forwarder } = await admin
+      .from("forwarders")
+      .select("id, profile_id, f_no, status, total_price")
+      .eq("f_no", d.f_no)
+      .maybeSingle<{ id: string; profile_id: string; f_no: string; status: string; total_price: number }>();
+    if (!forwarder) return { ok: false, error: "not_found" };
+
+    if (forwarder.status === "cancelled") {
+      return { ok: false, error: "ฝากนำเข้าถูกยกเลิกแล้ว — บันทึกชำระไม่ได้" };
+    }
+    if (forwarder.status === "delivered") {
+      return { ok: false, error: "ฝากนำเข้าส่งสำเร็จแล้ว — ไม่ต้องบันทึกชำระซ้ำ" };
+    }
+    // pending_payment is the canonical pre-payment state. We allow other
+    // pre-delivered statuses too in case the row was status-flipped without
+    // payment recorded (legacy/recovery path).
+
+    // Idempotency check
+    const { data: existingTx } = await admin
+      .from("wallet_transactions")
+      .select("id")
+      .eq("reference_type", "forwarder")
+      .eq("reference_id",   forwarder.f_no)
+      .eq("kind",           "import_payment")
+      .eq("status",         "completed")
+      .maybeSingle<{ id: string }>();
+    if (existingTx) {
+      // Already paid — nudge status forward if still pending_payment
+      if (forwarder.status === "pending_payment") {
+        await admin
+          .from("forwarders")
+          .update({ status: "shipped_china", admin_id_update: adminId })
+          .eq("id", forwarder.id);
+      }
+      return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
+    }
+
+    const totalThb = Number(forwarder.total_price);
+    if (!(totalThb > 0)) return { ok: false, error: "total_price ไม่ถูกต้อง — บันทึกชำระไม่ได้" };
+
+    // Balance check (skip if admin overrides via cash/bank-direct path)
+    if (!d.allow_overdraw) {
+      const { data: wallet } = await admin
+        .from("wallet")
+        .select("balance")
+        .eq("profile_id", forwarder.profile_id)
+        .maybeSingle<{ balance: number }>();
+      const balance = Number(wallet?.balance ?? 0);
+      if (balance < totalThb) {
+        return {
+          ok: false,
+          error: `ยอด wallet ไม่พอ (มี ฿${balance.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
+        };
+      }
+    }
+
+    // Insert debit wallet_tx (admin_id stamped — distinguishes from
+    // customer self-pay which uses null)
+    const { data: tx, error: txErr } = await admin
+      .from("wallet_transactions")
+      .insert({
+        profile_id:     forwarder.profile_id,
+        bucket:         "main",
+        amount:         -totalThb,
+        kind:           "import_payment",
+        status:         "completed",
+        reference_type: "forwarder",
+        reference_id:   forwarder.f_no,
+        admin_id:       adminId,
+        note:           `ชำระค่าฝากนำเข้า ${forwarder.f_no}${d.allow_overdraw ? " (admin override — รับเงินสด/โอนตรง)" : ""}`,
+      })
+      .select("id")
+      .single<{ id: string }>();
+    if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+
+    // Status flip pending_payment → shipped_china (matches customer flow)
+    const { error: fwdErr } = await admin
+      .from("forwarders")
+      .update({
+        status:           "shipped_china",
+        admin_id_update:  adminId,
+        date_shipped_china: new Date().toISOString(),
+      })
+      .eq("id", forwarder.id);
+    if (fwdErr) {
+      // Don't auto-rollback the wallet tx — admin can resolve manually +
+      // we surface the error so the audit trail is complete.
+      return {
+        ok: false,
+        error: `forwarder update failed AFTER wallet debit (tx ${tx.id} stays): ${fwdErr.message}`,
+      };
+    }
+
+    await logAdminAction(adminId, "forwarder.mark_paid", "forwarder", forwarder.id, {
+      f_no:           forwarder.f_no,
+      total_thb:      totalThb,
+      tx_id:          tx.id,
+      allow_overdraw: !!d.allow_overdraw,
+      before:         { status: forwarder.status },
+      after:          { status: "shipped_china" },
+    });
+
+    void sendNotification(forwarder.profile_id, {
+      category: "forwarder",
+      severity: "success",
+      title:    `ชำระเงินสำเร็จ — ${forwarder.f_no}`,
+      body:     `รับเงิน ฿${totalThb.toLocaleString()} แล้ว — ระบบเริ่มดำเนินการสั่งสินค้า`,
+      link_href: `/service-import/${forwarder.f_no}`,
+      reference_type: "forwarder",
+      reference_id:   forwarder.id,
+    });
+
+    revalidatePath("/admin/forwarders");
+    revalidatePath(`/admin/forwarders/${forwarder.f_no}`);
+    revalidatePath("/admin/wallet");
+    return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+  });
+}

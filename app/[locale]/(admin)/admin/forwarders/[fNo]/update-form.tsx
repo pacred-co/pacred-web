@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { adminUpdateForwarder } from "@/actions/admin/forwarders";
+import { adminUpdateForwarder, adminMarkForwarderPaid } from "@/actions/admin/forwarders";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
 type Props = {
   fNo: string;
   status: string;
+  totalPrice: number;       // for the mark-paid panel
   tracking_chn: string | null;
   tracking_th: string | null;
   cabinet_number: string | null;
@@ -28,6 +29,27 @@ export function AdminForwarderUpdateForm(p: Props) {
   const [msg,    setMsg]        = useState<string | null>(null);
   const [error,  setError]      = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // T-P1 mirror: explicit "mark paid" — debits wallet + flips status atomically
+  function markPaid(allowOverdraw: boolean) {
+    setMsg(null); setError(null);
+    startTransition(async () => {
+      const res = await adminMarkForwarderPaid({
+        f_no:           p.fNo,
+        allow_overdraw: allowOverdraw,
+      });
+      if (res.ok) {
+        setStatus("shipped_china");
+        setMsg(
+          res.data?.already_paid
+            ? "ฝากนำเข้านี้ชำระไปแล้ว — เปลี่ยนสถานะให้เรียบร้อย"
+            : `ชำระสำเร็จ — หัก wallet ลูกค้า ฿${p.totalPrice.toLocaleString()} แล้ว ลูกค้าได้รับการแจ้งเตือน`,
+        );
+        router.refresh();
+        setTimeout(() => setMsg(null), 5000);
+      } else setError(res.error);
+    });
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,6 +110,38 @@ export function AdminForwarderUpdateForm(p: Props) {
 
       {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-2 text-xs text-green-700">{msg}</div>}
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
+
+      {/* T-P1 mirror: explicit "mark paid" panel — only shows when payment hasn't landed yet */}
+      {status === "pending_payment" && (
+        <div className="rounded-lg border border-primary-200 bg-primary-50/50 dark:bg-primary-950/20 p-3 space-y-2">
+          <p className="text-xs font-medium">บันทึกการชำระเงิน</p>
+          <p className="text-xs text-muted">
+            ยอด ฿{p.totalPrice.toLocaleString()} — กดเพื่อหัก wallet ลูกค้า + เปลี่ยนสถานะเป็น &ldquo;ออกจากจีน&rdquo;
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => markPaid(false)}
+              disabled={pending}
+              className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-green-700 disabled:opacity-50"
+            >
+              💰 บันทึกชำระจาก wallet
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("รับเงินสด/โอนตรงโดยไม่หัก wallet ใช่ไหม? (ใช้เมื่อลูกค้าโอนนอกระบบ)")) {
+                  markPaid(true);
+                }
+              }}
+              disabled={pending}
+              className="rounded-lg border border-amber-300 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-50 disabled:opacity-50"
+            >
+              💵 รับเงินสด/นอกระบบ (override)
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Quick workflow buttons */}
       <div className="space-y-2">

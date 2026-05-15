@@ -136,6 +136,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
           <AdminForwarderUpdateForm
             fNo={f.f_no}
             status={f.status}
+            totalPrice={Number(f.total_price)}
             tracking_chn={f.tracking_chn}
             tracking_th={f.tracking_th}
             cabinet_number={f.cabinet_number}
