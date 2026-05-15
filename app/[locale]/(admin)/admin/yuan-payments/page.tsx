@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { YuanPaymentActions } from "./actions-cell";
 import { YuanBulkApproveBar, YuanRowCheckbox } from "./bulk-approve-bar";
+import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -21,7 +22,7 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
   let q = admin.from("yuan_payments")
     .select(`
       id, channel, recipient_detail, yuan_amount, exchange_rate, thb_amount,
-      paid_via_wallet, slip_url, id_doc_url, status, created_at,
+      paid_via_wallet, slip_url, id_doc_url, status, created_at, slip_transferred_at,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone )
     `)
     .order("created_at", { ascending: false })
@@ -58,7 +59,7 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
-                  <th className="px-4 py-3">วันที่</th>
+                  <th className="px-4 py-3">วันที่ระบบ / โอนจริง</th>
                   <th className="px-4 py-3">ลูกค้า</th>
                   <th className="px-4 py-3">ช่องทาง</th>
                   <th className="px-4 py-3">ปลายทาง</th>
@@ -77,7 +78,15 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
                           (adminBulkApproveYuanPayments only acts on pending) */}
                       {r.status === "pending" ? <YuanRowCheckbox id={r.id} /> : null}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <div className="text-muted">{new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</div>
+                      <div className="mt-1 text-[10px] text-muted">⏱ โอน:</div>
+                      <SlipTransferredAtCell
+                        kind="yuan_payment"
+                        id={r.id}
+                        currentValue={(r as { slip_transferred_at: string | null }).slip_transferred_at ?? null}
+                      />
+                    </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
                       <div>{r.profile?.first_name} {r.profile?.last_name}</div>
