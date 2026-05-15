@@ -22,7 +22,7 @@ import {
   breadcrumbSchema,
   serviceSchema,
 } from "@/components/seo/schemas";
-import { absoluteUrl, CONTACT, LINE_OA, SITE_URL } from "@/components/seo/site";
+import { CONTACT, LINE_OA } from "@/components/seo/site";
 import {
   CUSTOMS_PORTS,
   TEMPLATES,
@@ -46,8 +46,7 @@ export async function generateMetadata({
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const path = `${PARENT_PATH}/${port.slug}`;
-  // Root layout's title.template appends " | Pacred" already — don't
-  // duplicate the brand here.
+  // Root layout's title template appends " | Pacred" — don't duplicate it.
   const title =
     typedLocale === "th"
       ? `เคลียร์ศุลกากร ${port.name} · ค่าใช้จ่ายครบทุกหัว`
@@ -121,7 +120,7 @@ export default async function CustomsPortDetailPage({
         {/* Breadcrumb */}
         <nav
           aria-label="Breadcrumb"
-          className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-4 md:pt-5"
+          className="mx-auto w-full max-w-[1180px] px-4 md:px-5 pt-4 md:pt-5"
         >
           <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px] flex-wrap">
             <li>
@@ -147,271 +146,281 @@ export default async function CustomsPortDetailPage({
             <li aria-hidden className="text-gray-300 dark:text-border">
               <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.2} />
             </li>
-            <li
-              aria-current="page"
-              className="font-bold text-foreground"
-            >
+            <li aria-current="page" className="font-bold text-foreground">
               {port.name}
             </li>
           </ol>
         </nav>
 
-        {/* ─── Hero ─── */}
-        <section className="relative pt-4 md:pt-6 pb-6 md:pb-8">
-          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8 items-stretch">
-              {/* Image header */}
-              <div className="relative aspect-[16/10] md:aspect-auto md:min-h-[340px] rounded-2xl md:rounded-3xl overflow-hidden">
-                <Image
-                  src={port.image}
-                  alt={port.imageAlt}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 520px"
-                  className="object-cover"
-                  priority
-                />
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${port.accent} mix-blend-multiply opacity-30`}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                <div className="absolute top-4 left-4">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[11px] md:text-[12px] font-black tracking-[0.10em] shadow-md">
-                    <port.modeIcon className="w-3.5 h-3.5" strokeWidth={2.6} />
-                    {port.modeBadge}
-                  </span>
+        {/* ─── Main 2-col layout ─── */}
+        <section className="relative pt-4 md:pt-6 pb-8 md:pb-12">
+          <div className="mx-auto w-full max-w-[1180px] px-4 md:px-5">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 lg:gap-10 items-start">
+              {/* ═══ LEFT/CENTER content column ═══ */}
+              <div className="min-w-0 lg:order-1 order-2">
+                {/* Mode badge + title */}
+                <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+                  <port.modeIcon className="w-3.5 h-3.5" strokeWidth={2.6} />
+                  {port.modeBadge}
                 </div>
-                <div className="absolute bottom-4 left-4 right-4">
-                  <h1 className="text-[26px] md:text-[36px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
-                    {port.name}
-                  </h1>
-                  <p className="mt-0.5 text-[12.5px] md:text-[14px] text-white/90 font-medium drop-shadow">
-                    {port.sub}
+                <h1 className="text-[24px] md:text-[40px] leading-[1.15] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
+                  เคลียร์ศุลกากร · <span className="text-primary-600">{port.name}</span>
+                </h1>
+                <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted">
+                  {port.sub} · ค่าพิธีการเริ่มต้น <span className="text-primary-600 font-bold">{port.customsServiceFee} บาท</span> + ค่าใช้จ่ายอื่นตามจริง
+                </h2>
+
+                {/* Template intro */}
+                <div className="mt-6 md:mt-8">
+                  <h3 className="text-[18px] md:text-[22px] font-black text-[#111827] dark:text-white tracking-tight">
+                    {template.title}
+                  </h3>
+                  <p className="mt-3 text-[13px] md:text-[15px] leading-[1.7] text-foreground/85 font-medium">
+                    {template.intro}
                   </p>
                 </div>
-              </div>
 
-              {/* Quote box */}
-              <div className="flex flex-col rounded-2xl md:rounded-3xl border border-primary-100 dark:border-primary-900/50 bg-white dark:bg-surface p-5 md:p-7 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
-                <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
-                  ค่าพิธีการศุลกากร · เริ่มต้น
-                </div>
-                <div className="mt-2 flex items-baseline gap-2 flex-wrap">
-                  <span className="text-[44px] md:text-[58px] font-black text-primary-600 dark:text-primary-300 leading-none tracking-tight">
-                    {port.customsServiceFee}
-                  </span>
-                  <span className="text-[18px] md:text-[22px] font-black text-primary-700 dark:text-primary-300">
-                    บาท
-                  </span>
-                </div>
-                <p className="mt-2 text-[12.5px] md:text-[13.5px] text-muted font-medium leading-[1.55]">
-                  + ค่าใช้จ่ายอื่นตามจริง (สายการบิน · ท่า · ขนส่งในไทย · ภาษีนำเข้า) — ดูค่าใช้จ่ายเต็มด้านล่าง
-                </p>
-
-                <div className="mt-5 grid grid-cols-1 gap-2.5">
-                  <Link
-                    href="/register"
-                    data-cta="quote-hero"
-                    className="inline-flex w-full items-center justify-center gap-2 h-12 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[15px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
-                  >
-                    ขอใบเสนอราคา ฟรี · ตอบไว 5 นาที
-                    <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
-                  </Link>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <a
-                      href={LINE_OA.shortUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-cta="line-hero"
-                      className="inline-flex items-center justify-center gap-1.5 h-11 rounded-xl bg-[#06C755] text-white font-bold text-[12.5px] md:text-[13.5px] hover:bg-[#05B04C] transition-colors shadow-[0_4px_12px_rgba(6,199,85,0.30)]"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
-                      ทักไลน์
-                    </a>
-                    <a
-                      href={`tel:${CONTACT.phone}`}
-                      data-cta="phone-hero"
-                      className="inline-flex items-center justify-center gap-1.5 h-11 rounded-xl border border-primary-200 bg-white text-primary-700 font-bold text-[12.5px] md:text-[13.5px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
-                    >
-                      <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                      โทร {CONTACT.phoneDisplay}
-                    </a>
-                  </div>
-                </div>
-
-                {/* SEO sub-keywords as inline chips */}
-                <div className="mt-5 pt-4 border-t border-border">
-                  <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
-                    <Search className="inline w-3 h-3 mr-1" strokeWidth={2.6} />
-                    คำที่ใช้ค้นหาบริการนี้
+                {/* Carriers */}
+                <div className="mt-6 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
+                  <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
+                    {template.carriersLabel}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {port.subKeywords.map((kw) => (
+                    {template.carriers.map((c) => (
                       <span
-                        key={kw}
-                        className="inline-flex items-center px-2 h-6 rounded-md bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[10.5px] md:text-[11px] font-bold text-primary-700 dark:text-primary-300"
+                        key={c}
+                        className="inline-flex items-center px-2.5 h-7 rounded-md bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[11.5px] md:text-[12px] font-bold text-primary-700 dark:text-primary-300"
                       >
-                        {kw}
+                        {c}
                       </span>
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        {/* ─── Full pricing breakdown ─── */}
-        <section className="relative pt-8 md:pt-12 pb-6 md:pb-8">
-          <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
-            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-              <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
-              FULL PRICING · ค่าใช้จ่ายทุกหัว
-            </div>
-            <h2 className="text-[22px] md:text-[30px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ค่าใช้จ่ายเต็ม · <span className="text-primary-600">{port.name}</span>
-            </h2>
-            <p className="mt-2 text-[12.5px] md:text-[14px] leading-[1.6] font-medium text-muted">
-              ราคาเบื้องต้น — ทีม Pacred Shipping ออก Quote ตามสินค้าจริงก่อนยืนยันทุกครั้ง ไม่มีค่าใช้จ่ายแอบ
-            </p>
-
-            <div className="mt-6 md:mt-8 space-y-5 md:space-y-6">
-              {port.pricingSections.map((sec) => (
-                <div
-                  key={sec.heading}
-                  className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
-                >
-                  <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
-                    <span aria-hidden className="text-[18px]">{sec.icon}</span>
-                    <span>{sec.heading}</span>
+                {/* เหมาะสำหรับ */}
+                <div className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
+                  <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
+                    {template.forLabel}
                   </div>
-                  <ul className="divide-y divide-border/70">
-                    {sec.items.map((item) => (
+                  <ul className="space-y-2">
+                    {template.forItems.map((it) => (
                       <li
-                        key={item.label}
-                        className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0 text-[12.5px] md:text-[13.5px] leading-snug"
+                        key={it}
+                        className="flex items-start gap-2 text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85"
                       >
-                        <span className="text-foreground/85 font-medium">
-                          {item.label}
-                        </span>
-                        <span className="text-foreground font-bold whitespace-nowrap">
-                          {item.value}
-                        </span>
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-600 shrink-0" />
+                        <span>{it}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
-              ))}
 
-              {/* Summary card */}
-              <div className="rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
-                    📌 {port.summaryLabel}
+                {/* บริการหลัก */}
+                <div className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
+                  <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
+                    {template.servicesLabel}
                   </div>
-                  <div className="mt-1.5 text-[22px] md:text-[28px] font-black text-primary-700 dark:text-primary-300 leading-tight">
-                    {port.summaryPrice}
+                  <ul className="space-y-2">
+                    {template.services.map((s) => (
+                      <li
+                        key={s}
+                        className="flex items-start gap-2 text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.6} />
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* รองรับสินค้า (air only) */}
+                {template.goods && template.goodsLabel && (
+                  <div className="mt-5 rounded-2xl border border-dashed border-border bg-surface/50 dark:bg-background/30 p-4 md:p-5">
+                    <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-1.5">
+                      {template.goodsLabel}
+                    </div>
+                    <p className="text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85 font-medium">
+                      {template.goods}
+                    </p>
                   </div>
-                  <p className="mt-1 text-[11.5px] md:text-[12.5px] text-muted font-medium">
-                    {port.summaryNote}
+                )}
+
+                {/* Full pricing breakdown */}
+                <div className="mt-8 md:mt-10">
+                  <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
+                    <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
+                    FULL PRICING · ค่าใช้จ่ายทุกหัว
+                  </div>
+                  <h3 className="text-[20px] md:text-[26px] leading-[1.18] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
+                    รายละเอียดค่าใช้จ่ายเต็ม
+                  </h3>
+                  <p className="mt-2 text-[12.5px] md:text-[14px] leading-[1.6] font-medium text-muted">
+                    ราคาเบื้องต้น — ทีม Pacred Shipping ออก Quote ตามสินค้าจริงก่อนยืนยันทุกครั้ง ไม่มีค่าใช้จ่ายแอบ
                   </p>
+
+                  <div className="mt-5 md:mt-6 space-y-4 md:space-y-5">
+                    {port.pricingSections.map((sec) => (
+                      <div
+                        key={sec.heading}
+                        className="rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5"
+                      >
+                        <div className="text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white mb-3 flex items-center gap-1.5">
+                          <span aria-hidden className="text-[18px]">{sec.icon}</span>
+                          <span>{sec.heading}</span>
+                        </div>
+                        <ul className="divide-y divide-border/70">
+                          {sec.items.map((item) => (
+                            <li
+                              key={item.label}
+                              className="flex items-baseline justify-between gap-3 py-2 first:pt-0 last:pb-0 text-[12.5px] md:text-[13.5px] leading-snug"
+                            >
+                              <span className="text-foreground/85 font-medium">
+                                {item.label}
+                              </span>
+                              <span className="text-foreground font-bold whitespace-nowrap">
+                                {item.value}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+
+                    {/* Summary card */}
+                    <div className="rounded-2xl border border-primary-200 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-800 p-5 md:p-6 flex items-center justify-between gap-4 flex-wrap">
+                      <div>
+                        <div className="text-[11px] md:text-[12px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
+                          📌 {port.summaryLabel}
+                        </div>
+                        <div className="mt-1.5 text-[22px] md:text-[28px] font-black text-primary-700 dark:text-primary-300 leading-tight">
+                          {port.summaryPrice}
+                        </div>
+                        <p className="mt-1 text-[11.5px] md:text-[12.5px] text-muted font-medium">
+                          {port.summaryNote}
+                        </p>
+                      </div>
+                      <Link
+                        href="/register"
+                        data-cta="quote-summary"
+                        className="inline-flex items-center justify-center gap-2 h-12 px-5 md:px-6 rounded-xl bg-primary-600 text-white font-black text-[13.5px] md:text-[14.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
+                      >
+                        ขอใบเสนอราคา ฟรี
+                        <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-                <Link
-                  href="/register"
-                  data-cta="quote-summary"
-                  className="inline-flex items-center justify-center gap-2 h-12 px-5 md:px-6 rounded-xl bg-primary-600 text-white font-black text-[13.5px] md:text-[14.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
-                >
-                  ขอใบเสนอราคา ฟรี
-                  <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
-                </Link>
               </div>
-            </div>
-          </div>
-        </section>
 
-        {/* ─── Template content (Air / Sea / Truck) ─── */}
-        <section className="relative pt-8 md:pt-12 pb-6 md:pb-8">
-          <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
-            <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-              <port.modeIcon className="w-3.5 h-3.5" strokeWidth={2.6} />
-              {port.modeBadge}
-            </div>
-            <h2 className="text-[22px] md:text-[30px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              {template.title}
-            </h2>
-            <p className="mt-3 text-[13px] md:text-[15px] leading-[1.7] text-foreground/85 font-medium">
-              {template.intro}
-            </p>
-
-            {/* Carriers / ด่านที่รองรับ */}
-            <div className="mt-6 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
-              <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
-                {template.carriersLabel}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {template.carriers.map((c) => (
-                  <span
-                    key={c}
-                    className="inline-flex items-center px-2.5 h-7 rounded-md bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[11.5px] md:text-[12px] font-bold text-primary-700 dark:text-primary-300"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* เหมาะสำหรับ */}
-            <div className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
-              <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
-                {template.forLabel}
-              </div>
-              <ul className="space-y-2">
-                {template.forItems.map((it) => (
-                  <li
-                    key={it}
-                    className="flex items-start gap-2 text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85"
-                  >
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-600 shrink-0" />
-                    <span>{it}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* บริการหลัก */}
-            <div className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-4 md:p-5">
-              <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-2.5">
-                {template.servicesLabel}
-              </div>
-              <ul className="space-y-2">
-                {template.services.map((s) => (
-                  <li
-                    key={s}
-                    className="flex items-start gap-2 text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" strokeWidth={2.6} />
-                    <span>{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* รองรับสินค้า (air only) */}
-            {template.goods && template.goodsLabel && (
-              <div className="mt-5 rounded-2xl border border-dashed border-border bg-surface/50 dark:bg-background/30 p-4 md:p-5">
-                <div className="text-[10.5px] md:text-[11px] font-bold text-muted tracking-[0.10em] uppercase mb-1.5">
-                  {template.goodsLabel}
+              {/* ═══ RIGHT aside: image + quote box (sticky on desktop) ═══ */}
+              <aside className="lg:order-2 order-1 lg:sticky lg:top-24 self-start space-y-3 md:space-y-4">
+                {/* Image */}
+                <div className="relative aspect-[16/10] lg:aspect-[4/3] rounded-2xl md:rounded-3xl overflow-hidden">
+                  <Image
+                    src={port.image}
+                    alt={port.imageAlt}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 360px"
+                    className="object-cover"
+                    priority
+                  />
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${port.accent} mix-blend-multiply opacity-25`}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                  <div className="absolute top-3 left-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[10.5px] md:text-[11px] font-black tracking-[0.10em] shadow-md">
+                      <port.modeIcon className="w-3.5 h-3.5" strokeWidth={2.6} />
+                      {port.modeBadge}
+                    </span>
+                  </div>
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <h2 className="text-[18px] md:text-[22px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+                      {port.name}
+                    </h2>
+                    <p className="mt-0.5 text-[11px] md:text-[12px] text-white/90 font-medium drop-shadow">
+                      {port.sub}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-[12.5px] md:text-[13.5px] leading-[1.6] text-foreground/85 font-medium">
-                  {template.goods}
-                </p>
-              </div>
-            )}
+
+                {/* Quote box */}
+                <div className="rounded-2xl md:rounded-3xl border border-primary-100 dark:border-primary-900/50 bg-white dark:bg-surface p-4 md:p-5 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+                  <div className="text-[10.5px] md:text-[11px] font-bold text-primary-700/80 dark:text-primary-300/80 tracking-[0.10em] uppercase leading-none">
+                    ค่าพิธีการศุลกากร · เริ่มต้น
+                  </div>
+                  <div className="mt-1.5 flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-[36px] md:text-[44px] font-black text-primary-600 dark:text-primary-300 leading-none tracking-tight">
+                      {port.customsServiceFee}
+                    </span>
+                    <span className="text-[15px] md:text-[18px] font-black text-primary-700 dark:text-primary-300">
+                      บาท
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11.5px] md:text-[12.5px] text-muted font-medium leading-[1.5]">
+                    + ค่าใช้จ่ายอื่นตามจริง — สรุปรวม{" "}
+                    <span className="text-primary-700 dark:text-primary-300 font-bold">
+                      {port.summaryPrice}
+                    </span>
+                  </p>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2">
+                    <Link
+                      href="/register"
+                      data-cta="quote-aside"
+                      className="inline-flex w-full items-center justify-center gap-2 h-11 rounded-xl bg-primary-600 text-white font-black text-[13px] md:text-[13.5px] hover:bg-primary-700 transition-colors shadow-[0_6px_18px_rgba(220,38,38,0.30)]"
+                    >
+                      ขอใบเสนอราคา ฟรี · ตอบไว 5 นาที
+                      <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
+                    </Link>
+                    <div className="grid grid-cols-2 gap-2">
+                      <a
+                        href={LINE_OA.shortUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-cta="line-aside"
+                        className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-[#06C755] text-white font-bold text-[12px] md:text-[12.5px] hover:bg-[#05B04C] transition-colors shadow-[0_4px_12px_rgba(6,199,85,0.30)]"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
+                        ทักไลน์
+                      </a>
+                      <a
+                        href={`tel:${CONTACT.phone}`}
+                        data-cta="phone-aside"
+                        className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg border border-primary-200 bg-white text-primary-700 font-bold text-[12px] md:text-[12.5px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
+                      >
+                        <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
+                        โทร
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* SEO sub-keywords */}
+                  <div className="mt-4 pt-3 border-t border-border">
+                    <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-1.5">
+                      <Search className="inline w-3 h-3 mr-1" strokeWidth={2.6} />
+                      คำที่ใช้ค้นหา
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {port.subKeywords.map((kw) => (
+                        <span
+                          key={kw}
+                          className="inline-flex items-center px-1.5 h-5 rounded bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[10px] md:text-[10.5px] font-bold text-primary-700 dark:text-primary-300"
+                        >
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         </section>
 
         <ContactSales hideAssuranceStrip />
 
-        {/* ─── Final CTA card ─── */}
+        {/* Final CTA card */}
         <section className="relative pt-8 md:pt-12 pb-12 md:pb-16">
           <div className="mx-auto w-full max-w-[820px] px-4 md:px-5">
             <div className="rounded-3xl border border-primary-200 bg-gradient-to-br from-primary-50 to-white dark:from-primary-900/20 dark:to-surface dark:border-primary-800 p-6 md:p-10 text-center">
