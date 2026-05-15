@@ -1656,7 +1656,7 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-A3 | Payment↔order **reconciliation** — a matched slip auto-clears "เครดิตค้างนำเข้า"; mismatch surfaced to staff | ภูม | 🔴 | ⬜ |
 | V-A4 | Rate-entry **validation** — exchange/price rate range-guarded; block the "เรทเบิ้ล" (doubled-rate) class of error | ภูม | 🟠 | ⬜ |
 | V-A5 | **Manual adjustment line** on an invoice (±amount, reason, audited) — ends the per-cent dev tickets | ภูม | 🟡 | ⬜ |
-| V-A6 | **Withholding-tax model** — invoice gross → WHT 1%/3% → net paid; receipt issuance **gated on WHT-certificate (50 ทวิ) upload**. Pair with ADR-0006 + migration 0034 | ภูม + ก๊อต ADR | 🔴 | ⬜ |
+| V-A6 | **Withholding-tax model** — invoice gross → WHT 1%/3% → net paid; receipt issuance **gated on WHT-certificate (50 ทวิ) upload**. Design = [ADR-0015](decisions/0015-withholding-tax-model.md) (🟡 DRAFT — ก๊อต to lock); pairs w/ ADR-0006 + migration 0034 | ภูม impl · ก๊อต lock ADR-0015 | 🔴 | ⬜ |
 | V-A7 | Receipt-number cleanup — one canonical number, drop the error-prone `-N` suffix | ภูม | 🟡 | ⬜ |
 | V-A8 | Accounting export reconcilable with **ภพ.30** (sales-tax report = filed VAT return) | ภูม | 🟡 | ⬜ |
 
