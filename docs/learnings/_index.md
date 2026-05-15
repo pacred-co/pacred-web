@@ -14,15 +14,15 @@ Last reviewed: 2026-05-15 (seeded)
 
 | Topic | What's captured | Last entry |
 |---|---|---|
-| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions / Vercel / pnpm version pitfalls | 2026-05-15 |
-| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 behavior different from training data | 2026-05-15 |
-| [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS policy patterns that work for Pacred | 2026-05-15 |
+| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions / Vercel / pnpm + git pathspec literal-brackets | 2026-05-16 |
+| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` collision · react/no-unescaped-entities) | 2026-05-16 |
+| [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations | 2026-05-16 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
-| [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed — pending first entry) |
+| [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |
 | [`testing-patterns.md`](testing-patterns.md) | Pacred-specific test mocks + harness quirks | (empty seed) |
 | [`partner-apis-quirks.md`](partner-apis-quirks.md) | MOMO JMF / TAM / ThaiBulkSMS / LINE behavior | (empty seed) |
 | [`php-port-patterns.md`](php-port-patterns.md) | Legacy `D:\xampp\htdocs\pcscargo` port gotchas | (empty seed) |
-| [`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) | Cargo flow business logic + juristic rules | (empty seed) |
+| [`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) | Cargo flow + MOMO 9-status enum + containers schema coexistence | 2026-05-16 |
 
 ---
 
