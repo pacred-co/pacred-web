@@ -179,24 +179,19 @@ export default async function NewsArticlePage({
               </div>
             </header>
 
-            {/* Hero cover — uses inlineImage (e.g. prakob01) so the article-page hero
-                is different from the listing-card cover (news.image / khao01). */}
-            <figure className="mx-auto w-full max-w-[920px] mb-6 md:mb-8">
-              <div className="relative aspect-[16/10] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
+            {/* Hero cover — uses news.image (the announcement poster) centered, portrait. */}
+            <figure className="mx-auto w-full max-w-[480px] mb-6 md:mb-8">
+              <div className="relative aspect-[4/5] rounded-2xl md:rounded-3xl overflow-hidden border border-border shadow-[0_14px_36px_-12px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background">
                 <Image
-                  src={news.inlineImage ?? news.image}
-                  alt={news.inlineImageAlt ?? news.title}
+                  src={news.image}
+                  alt={news.title}
                   fill
-                  sizes="(max-width: 920px) 100vw, 920px"
+                  sizes="(max-width: 480px) 100vw, 480px"
+                  quality={92}
                   className="object-cover"
                   priority
                 />
               </div>
-              {news.inlineImageCaption && (
-                <figcaption className="mt-2.5 md:mt-3 text-center text-[12px] md:text-[13px] text-muted leading-[1.55] italic">
-                  {news.inlineImageCaption}
-                </figcaption>
-              )}
             </figure>
 
             {/* Article content */}
