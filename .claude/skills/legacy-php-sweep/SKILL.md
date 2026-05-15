@@ -175,6 +175,7 @@ Already ported: `components/pdf/forwarder-receipt.tsx`, `components/pdf/shop-ord
 
 - `D:\xampp\htdocs\pcscargo\` — canonical legacy source (READ-ONLY)
 - [`docs/audit/php-pcscargo-integrations.md`](../../../docs/audit/php-pcscargo-integrations.md) — integration inventory from initial sweep
+- [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../../../docs/audit/cargo-ops-forensics-2026-05-16.md) — decoded cargo/freight ops model from 10 real China-cargo documents (the *data shapes* + the *problems* a port must solve; pairs with the PHP logic sweep) → backlog in [`docs/PORT_PLAN.md`](../../../docs/PORT_PLAN.md) Part V
 - [`docs/sprints/archive-a-to-n.md`](../../../docs/sprints/archive-a-to-n.md) — Phase D / E / F port phases
 - [`docs/PORT_PLAN.md`](../../../docs/PORT_PLAN.md) — current port status per feature
 - [`test-coverage-writer`](../test-coverage-writer/SKILL.md) — wrap ports in tests

@@ -121,8 +121,8 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 | [`integrations/momo-jmf.md`](integrations/momo-jmf.md) | MOMO partner API spec — JWT auth, endpoint inventory TBD, ก๊อต MOMO-1..MOMO-3 |
 | [`PACRED-SECOND-BRAIN.md`](PACRED-SECOND-BRAIN.md) | Context notes + gotchas |
 | [`decisions/*.md`](decisions/) | ADRs 0001–0010 — LINE Notify replacement · admin architecture · china-search vendor · payment gateway · launch ops · tax invoice · analytics+A/B · DPX ERP phase 2 · ERP schema sketch · **V2/V3 version strategy** |
-| [`audit/*.md`](audit/) | Deep audits — `php-pcscargo-integrations.md` (legacy PHP mapping) · `owasp-2026-05.md` (pre-launch OWASP Top-10) |
-| [`runbook/*.md`](runbook/) | Operational runbooks — `vercel-cron-plan.md` · `pcs-scrub-plan.md` · `otp-pepper-rotation.md` |
+| [`audit/*.md`](audit/) | Deep audits — `php-pcscargo-integrations.md` (legacy PHP mapping) · `owasp-2026-05.md` (pre-launch OWASP Top-10) · **NEW** `chat-analysis-2026-05-16.md` (7 LINE groups, 10 leak holes, MOMO 9-status enum) · **NEW** `legacy-cleanup-2026-05-16.md` (~115 dead files + 6 NEW critical security findings) |
+| [`runbook/*.md`](runbook/) | Operational runbooks — `vercel-cron-plan.md` · `pcs-scrub-plan.md` · `otp-pepper-rotation.md` · **NEW** `cargo-smoke-test-T-D1.md` (9-step T-D1 runbook) · **NEW** `cron-registry.md` (all 6 cron routes documented) · `team-status-2026-05-16.md` (live coordination) |
 
 ### 🛠️ Setup guides
 

@@ -103,13 +103,13 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]"
       >
         <GtmNoscript />
-        {/* Light theme default per ปอน's first-visit lock UX (commit da60747).
-            ปอน wanted enableSystem={false} + disableTransitionOnChange too —
-            current `theme-provider.tsx` (ภูม commit 0da2e71) doesn't yet
-            expose those props. Flagged as follow-up: extend ThemeProvider to
-            support `enableSystem`/`disableTransitionOnChange` to fully match
-            next-themes API. For now `defaultTheme="light"` covers the most
-            user-visible part of the intent. */}
+        {/* Always-light-on-open (เดฟ, 2026-05-16): THEME_INIT_SCRIPT paints
+            `light` pre-hydration and ThemeProvider starts `light` to match —
+            no OS `prefers-color-scheme` detection, no head-script↔React
+            desync, so the theme toggle flips on its first click. The site
+            opens white on every fresh load; in-session dark toggling still
+            works. `defaultTheme` is kept for API parity. See
+            components/theme-provider.tsx for the full rationale. */}
         <ThemeProvider defaultTheme="light">{children}</ThemeProvider>
       </body>
     </html>

@@ -1,19 +1,14 @@
 "use client";
 
 import { useTheme } from "@/components/theme-provider";
-import { useEffect, useState } from "react";
 
 export function ThemeToggle({ variant = "default" }: { variant?: "default" | "on-primary" }) {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // SSR-safe: skip first render until client mounts to avoid theme mismatch
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) return <div className="w-9 h-9" />;
-
-  const isDark = theme === "dark";
+  // `resolvedTheme` is the actually-painted value and matches the
+  // head-script on first render, so the first click always flips for real
+  // (no double-click). No `mounted` guard needed — server and client both
+  // start light, so there is no theme mismatch to defer past.
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const styles =
     variant === "on-primary"

@@ -1634,3 +1634,90 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 **End of Part U.** Each ✅ shipped → tick off in this table + add to team-status doc + commit `docs(port-plan,team): U-N shipped — <description>`.
 
+---
+
+# 🔬 Part V — Legacy Cargo Forensics → revenue-ready backlog (2026-05-16)
+
+> **Source:** [`docs/audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md)
+> — decoded from the ไอแต้ม (legacy system developer) LINE chat + 10 real
+> China-cargo spreadsheets เดฟ handed over (invoices · packing lists · Form E ·
+> D/O letter · warehouse loading manifests). That doc is the **why**; this Part
+> is the **schedule**.
+>
+> Revenue lens: 🔴 = unblocks cargo revenue now · 🟠 = daily ops pain · 🟡 = fix soon.
+> Default owner = ภูม (cargo backend). Each task keeps its forensics ID (A1…F3).
+
+## V-A — Money & accounting integrity
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-A1 | Payment record stores the **slip transfer time** (editable + audited) — not the approval-click time | ภูม | 🟠 | ⬜ |
+| V-A2 | Order/payment **status rollback** with reason + audit row — staff self-serve, no dev (ADR-0014) | ภูม | 🔴 | ⬜ |
+| V-A3 | Payment↔order **reconciliation** — a matched slip auto-clears "เครดิตค้างนำเข้า"; mismatch surfaced to staff | ภูม | 🔴 | ⬜ |
+| V-A4 | Rate-entry **validation** — exchange/price rate range-guarded; block the "เรทเบิ้ล" (doubled-rate) class of error | ภูม | 🟠 | ⬜ |
+| V-A5 | **Manual adjustment line** on an invoice (±amount, reason, audited) — ends the per-cent dev tickets | ภูม | 🟡 | ⬜ |
+| V-A6 | **Withholding-tax model** — invoice gross → WHT 1%/3% → net paid; receipt issuance **gated on WHT-certificate (50 ทวิ) upload**. Design = [ADR-0015](decisions/0015-withholding-tax-model.md) (🟡 DRAFT — ก๊อต to lock); pairs w/ ADR-0006 + migration 0034 | ภูม impl · ก๊อต lock ADR-0015 | 🔴 | ⬜ |
+| V-A7 | Receipt-number cleanup — one canonical number, drop the error-prone `-N` suffix | ภูม | 🟡 | ⬜ |
+| V-A8 | Accounting export reconcilable with **ภพ.30** (sales-tax report = filed VAT return) | ภูม | 🟡 | ⬜ |
+
+## V-B — Self-serve reports
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-B1 | Admin report screens (zero dev tickets): pending-import payments · credit-pending imports · containers awaiting TH warehouse · debtors · refunds issued · month's orders — CSV export each | ภูม | 🟠 | ⬜ |
+
+## V-C — Order-lifecycle flexibility
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-C1 | **Post-lock refund** path — refund over-collected shipping when the carrier changes after "preparing to ship" | ภูม | 🔴 | ⬜ |
+| V-C2 | Bill-header (buyer name) **editable by staff**, audited | ภูม | 🟠 | ⬜ |
+| V-C3 | "ตัดตู้" UX — enforce + explain the container close-date (วันที่ปิดตู้) before assigning parcels | ภูม | 🟠 | ⬜ |
+
+## V-D — Container & volume integrity (revenue-critical)
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-D1 | Store CBM **per source** (received / queue / manifest) on `cargo_shipments`; surface the diff to staff **before billing** (real case GZE260422-1: 16.79 vs 21.28) | ภูม | 🔴 | ⬜ |
+| V-D2 | One **canonical cargo-type enum**; map both legacy sets (API `A/M/X/O/Z` + manifest `G/T/F`) onto it | ภูม | 🟠 | ⬜ |
+| V-D3 | Link the Pacred container code ↔ the carrier's physical container number | ภูม | 🟡 | ⬜ |
+| V-D4 | Split-receipt expected-vs-received box count — migration 0037 (U1-5) schema ✅; wire the UI | ภูม | 🟠 | ⬜ |
+
+## V-E — Freight (FCL/LCL) document suite — net-new (Phase I2)
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-E1 | Commercial **Invoice + Packing List** generator (China shipper → Thai consignee) | ภูม | 🟠 | ⬜ |
+| V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure | ภูม + ก๊อต ADR | 🟠 | ⬜ |
+| V-E3 | **Form E** (ASEAN-China FTA Certificate of Origin) generator — 12-box form, HS code, origin criterion | ภูม | 🟡 | ⬜ |
+| V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording | ภูม | 🟡 | ⬜ |
+| V-E5 | Range-guard **every numeric import** — legacy invoice sheets carry int32-overflow garbage (`-2146826xxx`) | ภูม | 🟡 | ⬜ |
+
+## V-F — Strategic / dependency
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — track each cutover with ก๊อต | เดฟ + ก๊อต | 🔴 | ⬜ |
+| V-F2 | PEAK / ERP accounting-export API (follows V-A8) | เดฟ | 🟡 | ⬜ |
+| V-F3 | Legacy-infra resilience — fragile 3rd-party server, pay-or-die; cut over before any contract lapse | ก๊อต | 🟡 | ⬜ |
+
+## V-ADM1 — Admin UI polish (เดฟ instruction, 2026-05-16)
+
+ภูม: small `/admin` theme cleanup so the back office matches the rest of the app —
+- **remove the right-hand sidebar** entirely;
+- **left sidebar → white background** (`bg-white dark:bg-surface`);
+- every other surface → adopt the **same theme tokens** as the public site + customer portal (`bg-surface` / `text-foreground` / `border-border` — no admin-only palette);
+- apply the public/customer **body background** (the radial red-cloud gradient in [`app/globals.css`](../app/globals.css)) to `/admin` too.
+
+Full hand-off + acceptance criteria → [`docs/briefs/poom.md`](briefs/poom.md).
+
+## Cross-links
+
+- The **why** behind every V task → [`docs/audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md) §4-5
+- Schema spine for V-D* → [`docs/architecture/container-centric-model.md`](architecture/container-centric-model.md)
+- V-A6 WHT pairs with → [`docs/decisions/0006-tax-invoice-flow.md`](decisions/0006-tax-invoice-flow.md) + migration `0034`
+- Audit-row pattern for V-A2 / V-C* → [`docs/decisions/0014-customer-self-service-state-transitions.md`](decisions/0014-customer-self-service-state-transitions.md)
+- Permanent decoded model → [`docs/learnings/pacred-domain-knowledge.md`](learnings/pacred-domain-knowledge.md)
+
+**End of Part V.** Each ✅ shipped → tick the table + commit `docs(port-plan): V-N shipped — <description>`. New cargo-forensics findings → append rows here, never rewrite history.
+

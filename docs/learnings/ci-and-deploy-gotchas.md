@@ -64,6 +64,84 @@ Don't dive into the source first. 90% of the time it's deploy lag or cache.
 
 ---
 
+## [2026-05-16] `git add` with literal bracket paths needs `:(literal)` pathspec magic
+
+**Context:** Pacred uses Next.js App Router with `[locale]` + `[hNo]` dynamic segments. Filenames like `app/[locale]/(protected)/service-order/[hNo]/page.tsx` literally contain `[` and `]` characters.
+
+**Symptom:**
+```bash
+git add app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx
+# fatal: pathspec '...' did not match any files
+```
+Git's default pathspec interprets `[locale]` as a CHARACTER CLASS (matches one of `l`,`o`,`c`,`a`,`l`,`e`) — but the literal directory is named `[locale]` not any single character of those. Match fails.
+
+**Failed attempt:** `--literal-pathspecs` flag is GIT-LEVEL (before subcommand), not a `git add` option:
+```bash
+# Wrong (silently fails / wrong behavior depending on git version)
+git add --literal-pathspecs '...'
+
+# Wrong (subcommand-level flag — git add doesn't accept it)
+git -C path add --literal-pathspecs '...'
+
+# Correct as a global flag
+git --literal-pathspecs add '...'
+```
+
+**Fix:** Use git's pathspec magic prefix `:(literal)`:
+```bash
+git -C C:/Users/Admin/pacred-web add ':(literal)app/[locale]/(protected)/service-order/[hNo]/receipt/page.tsx'
+```
+The `:(literal)` prefix tells git "treat this string as a literal path, no glob expansion". Works with `-C`, works inside heredoc, works in any git subcommand that accepts pathspecs.
+
+**Alternative:** add the parent directory if it's all-new:
+```bash
+git add ':(literal)app/[locale]/(protected)/service-order/[hNo]/receipt'
+```
+Adds everything under that dir.
+
+**Why this matters next time:** On Pacred-web (Next 16 App Router), every customer-facing route has at least one bracket pair. Plain `git add` on a new bracket-path file ALWAYS fails this way. Memorize `:(literal)`.
+
+**Cross-links:**
+- Commits where this was applied: `f410640` (receipt page), `323906b` (pay-from-wallet), `2be9eb5` (forwarder pay), `3447e26` (/status page)
+- Git pathspec docs: https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
+
+---
+
+## [2026-05-16] LF→CRLF warnings on `git add` (Windows) are harmless
+
+**Context:** Pacred is developed on Windows (เดฟ uses XAMPP setup) + deployed via Vercel on Linux.
+
+**Symptom:** Every `git add` of a new .ts/.tsx/.sql file prints:
+```
+warning: in the working copy of 'lib/integrations/momo-jmf/client.ts', LF will be replaced by CRLF the next time Git touches it
+```
+
+**Root cause:** Windows git has `core.autocrlf=true` by default. Working copy uses CRLF; the index (and remote) uses LF. The warning fires whenever git is about to convert a file with LF endings to CRLF on the next checkout.
+
+**Why this is OK:**
+- Files committed to git are always LF (canonical)
+- Vercel build runs on Linux, reads LF — works correctly
+- Local Windows working copy may show CRLF — also works in VS Code / IDE
+- No functional impact
+
+**Fix:** None needed. Suppress mentally; not in commit output.
+
+If you want to suppress globally:
+```bash
+git config --global core.safecrlf warn  # default
+git config --global core.safecrlf false  # suppress entirely
+```
+
+But don't change this without confirming with the team — `safecrlf=true` is a safety net for line-ending issues that bite in mixed-OS teams.
+
+**Why this matters next time:** Don't try to "fix" these warnings by changing line-ending tooling. They're informational. Real problems would be `error:` not `warning:`.
+
+**Cross-links:**
+- `.gitattributes` controls per-extension behavior if needed
+- Existing repo doesn't customize — uses Windows defaults
+
+---
+
 ## [2026-05-15] `pnpm audit` shadowed by built-in security audit
 
 **Context:** Wrote custom audit script umbrella, named it `audit` in package.json scripts.

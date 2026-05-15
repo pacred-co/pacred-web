@@ -236,12 +236,14 @@ Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) r
 | ก๊อต | T-G2 MOMO endpoint inventory call | Container tracking customer view |
 | Pacred owner | T-G3 bundle: bank/PromptPay/tax-ID/legal name/LIFF ID | wallet payments + tax invoice + receipts |
 | ภูม | T-P1 admin workflow buttons (cargo path) | ✅ DONE (shipped 2026-05-16) |
-| ภูม | T-P2 container migration + customer view | "Where's my container?" feature |
-| **ภูม** | **U1-3 admin "rebind tracking → container" UI** | ✅ closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
-| **ภูม** | **U1-4 admin "manual tracking entry" UI** | ✅ closes daily SQL escalations |
-| **ภูม + ก๊อต** | **U1-2 OTP SMS balance daily check + LINE alert** | ✅ closes silent registration-fail incidents (chat audit L-3) |
-| **เดฟ** | **U1-1 `/status` health page** | UX trust + transparency (chat audit L-1: PHP เว็ปล่ม 24x) |
-| **ภูม** | **U1-5 `received_qty` / `expected_qty` per cargo_shipments** | container-split case (chat audit: qty=1 bug) |
+| ภูม | T-P2 container migration + customer view | "Where's my container?" feature (T-D2 schemas ✅; UI pending) |
+| ภูม | U1-3 admin "rebind tracking → container" UI | closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
+| ภูม | U1-4 admin "manual tracking entry" UI | closes daily SQL escalations |
+| **เดฟ + ภูม** | **U1-2 OTP SMS balance scaffold** | ✅ **DONE evening-10** — cron route + `checkSmsBalance` + notify template + alert pattern; pending vercel.json entry (Pro plan confirm) + ThaiBulkSMS endpoint confirm |
+| **เดฟ** | **U1-1 `/status` health page** | ✅ **DONE evening-9** — public route, Supabase live ping + 11 service config checks, traffic-light dots, 60s cache, bilingual TH/EN, Footer link |
+| ภูม | U1-5 `received_qty` / `expected_qty` per cargo_shipments | container-split case (chat audit: qty=1 bug) |
+| **เดฟ** | **U2-5 multi-line bulk tracking search** | ✅ **DONE evening-10** — `/admin/forwarders` search bar toggles single↔multi mode (chat W-9 closer) |
+| **เดฟ (cargo loop closure)** | Customer pay-from-wallet (shop + forwarder) | ✅ **DONE evening-4/6** — `payServiceOrderFromWallet` + `payForwarderFromWallet`, idempotent, admin-client-after-ownership-verify pattern |
 
 ### 🆕 Verified deficiency audits (2026-05-16 evening)
 
@@ -258,17 +260,19 @@ Master task list synthesizing both: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T
 
 When this checklist hits 100% → Pacred confidently scales Ads:
 
-- [ ] Customer can sign up (TH OTP works · juristic lookup works)
-- [ ] Customer can top up wallet (PromptPay live · slip upload · admin approves <1h)
-- [ ] Customer can create service-import order (forwarder rate engine · uploads work)
-- [ ] Customer can pay (wallet or PromptPay)
-- [ ] Customer receives receipt PDF (Pacred legal + tax-ID + bank info)
-- [ ] Customer can request tax invoice if juristic (per ADR-0006)
-- [ ] Customer can see container/shipment status (CT-3 view · MOMO sync OR manual)
-- [ ] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL)
-- [ ] Conversion events flow GTM → GA4 (K-12 active)
-- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod
-- [ ] At least 5 friendly customers completed full loop end-to-end
+- [x] Customer can sign up (TH OTP works in dev · juristic lookup works) — `OTP_BYPASS=true` in dev; prod awaits ก๊อต DV-3 ThaiBulkSMS keys
+- [x] Customer can top up wallet (slip upload working; PromptPay awaits Pacred owner Bundle 1)
+- [x] Customer can create service-import order (forwarder rate engine · uploads work) — full flow shipped
+- [x] **Customer can pay from wallet self-service** (BOTH service-order + service-import) — closed by `payServiceOrderFromWallet` (evening-4) + `payForwarderFromWallet` (evening-6) — no more admin bottleneck per order
+- [x] Customer receives receipt PDF (Pacred legal + tax-ID + bank info) — receipt page + PDF route shipped evening-3
+- [ ] Customer can request tax invoice if juristic (per ADR-0006) — pending ภูม T-P4 G2b form + admin issuance flow; schema 0034 ready
+- [ ] Customer can see container/shipment status (CT-3 view · MOMO sync OR manual) — pending ภูม T-P2 UI + MOMO endpoint inventory (ก๊อต MOMO-1)
+- [x] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL) — `adminMarkServiceOrderPaid` (T-P1) + `adminAssignDriverToForwarder` (T-P1) + bulk approve (T-P3) all shipped
+- [ ] Conversion events flow GTM → GA4 (K-12 active) — code shipped, awaits ก๊อต K-12 GTM_ID signup
+- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod — awaits ก๊อต DV-1..DV-3 + Pacred owner Bundle 1
+- [ ] At least 5 friendly customers completed full loop end-to-end — T-D4 awaits T-D1 smoke (runbook ready evening-4) + Pacred owner bundle
+- [x] **`/status` health page** — closed chat audit L-1 (เว็ปล่ม 24x in PHP); public route `app/[locale]/(public)/status/page.tsx`
+- [x] **Defensive test coverage growing** — `pnpm test:unit` 14 files (+251 new assertions today: phone 28 + bkk-zip 35 + auth-validators 52 + wallet-validators 36 + cart-validators 54 + profile-validators 46)
 
 📋 Full DoD detail → [`PORT_PLAN.md`](PORT_PLAN.md) Part T5
 

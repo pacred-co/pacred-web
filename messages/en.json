@@ -1290,7 +1290,6 @@
     "purposePh": "e.g. Supplier payment"
   },
   "bookingCalc": {
-    "tel": "02-055-6063",
     "callPrefix": "Call",
     "contactQuote": "Urgent contact / Request a quote",
     "alertWeightCbm": "Please enter CBM or weight",
@@ -1402,7 +1401,23 @@
       "contactLabel": "Contact phone",
       "contactPh": "e.g. 08X-XXX-XXXX",
       "hint": "Our team handles every port, airport and border checkpoint",
-      "calcLabel": "Contact an agent"
+      "calcLabel": "Contact an agent",
+      "portTabs": {
+        "bkk":       "Suvarnabhumi",
+        "bkkSub":    "Air Cargo · Express",
+        "dmk":       "Don Mueang",
+        "dmkSub":    "Air Freight · Courier",
+        "laksi":     "Lak Si Post",
+        "laksiSub":  "Inbound parcels · EMS",
+        "klong":     "Khlong Toey",
+        "klongSub":  "Sea Port · LCL/FCL",
+        "laem":      "Laem Chabang",
+        "laemSub":   "Container Port · FCL",
+        "icd":       "ICD Lat Krabang",
+        "icdSub":    "Inland Depot · Sea",
+        "border":    "Border checkpoints",
+        "borderSub": "Truck · Muk/Nong/Mae"
+      }
     },
     "sourcing": {
       "platformLabel": "Platform",
@@ -1595,6 +1610,7 @@
     "aboutPrivacy": "Privacy policy",
     "aboutDelivery": "Pacred flat-rate delivery zones",
     "aboutHolidays": "Pacred annual holidays",
+    "aboutStatus": "System status",
     "svcFcl": "FCL container import from China",
     "svcLcl": "LCL shared-container import from China",
     "svcExport": "Worldwide export",
@@ -1658,7 +1674,7 @@
     "company1": "About Pacred",
     "company2": "FAQ",
     "company3": "Promotions",
-    "company4": "PCS 2026 holidays",
+    "company4": "Pacred 2026 holidays",
     "company5": "Careers",
     "company6": "Privacy policy",
     "company7": "Terms of service",

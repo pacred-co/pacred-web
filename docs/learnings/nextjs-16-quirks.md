@@ -66,6 +66,127 @@ import { Link } from "@/i18n/navigation";
 
 ---
 
+## [2026-05-16] JSDoc `*/` inside URL paths breaks TypeScript parsing
+
+**Context:** Writing `lib/integrations/momo-jmf/client.ts` with a JSDoc comment describing what paths the partner integration covers.
+
+**Symptom:** `pnpm exec tsc --noEmit` fails with:
+```
+lib/integrations/momo-jmf/client.ts(12,47): error TS1435: Unknown keyword or identifier. Did you mean 'continue'?
+```
+Line 12 col 47 of the file looks fine — it's just JSDoc text.
+
+**Root cause:** The JSDoc comment included an URL path example like `/service-import/*/container` or `/admin/warehouse/*` — the `*/` sequence inside the comment **closes the comment block early**. Whatever comes after is parsed as code → garbled syntax error.
+
+**Fix:** Avoid `*/` sequences in JSDoc bodies. Options:
+1. Rephrase: `/service-import/.../container` instead of `/service-import/*/container`
+2. Escape: split across lines so `*` is on one line and `/` starts the next
+3. Replace `*` with `(any)` placeholder when describing wildcards in comments
+
+Example before/after:
+```ts
+// BAD — comment ends at the */container slash
+/**
+ * Used in /service-import/*/container or /admin/warehouse/* paths.
+ */
+
+// GOOD
+/**
+ * Used in /service-import/.../container or admin warehouse pages.
+ */
+```
+
+**Why this matters next time:** If you see `TS1435 Unknown keyword` on a line that looks like English in a comment, immediately scan the surrounding JSDoc for `*/` patterns — most likely you wrote an URL path or a regex placeholder with `*` adjacent to `/`.
+
+**Cross-links:**
+- Commit `b9b91a9` (MOMO scaffold — fix was line-12 rewording in `lib/integrations/momo-jmf/client.ts`)
+
+---
+
+## [2026-05-16] `react/no-unescaped-entities` blocks plain English apostrophes in JSX
+
+**Context:** Adding a customer-help note inside a React component:
+```tsx
+<p>If you're trying to log in and seeing errors... we're already aware.</p>
+```
+
+**Symptom:** ESLint fails:
+```
+error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+```
+Both `you're` and `we're` trigger.
+
+**Root cause:** `react/no-unescaped-entities` rule treats raw `'` / `"` / `<` / `>` inside JSX text as potentially-broken markup.
+
+**Fix (pick one):**
+1. **Rephrase** to avoid apostrophes (cleanest): `you're` → `you are`, `we're` → `we are`
+2. **HTML entity:** `you&apos;re`, `we&apos;re`
+3. **Numeric entity:** `you&#39;re`, `we&#39;re`
+4. **Wrap in expression:** `{"you're"}` (ugly but works)
+
+Used option 1 in `/status` page footer because the page is for English customers in troubleshooting mode — formal English reads fine and there's nothing to escape.
+
+**Why this matters next time:** If you're writing English copy with contractions in JSX, plan ahead — either rephrase or escape from the start. Don't ship + push without a final eslint pass.
+
+**Cross-links:**
+- Commit `3447e26` (/status page — initial draft had contractions, rephrased)
+- ESLint rule docs: https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/no-unescaped-entities.md
+
+---
+
+## [2026-05-16] Zod's `z.uuid()` requires v4 format (rejects all-zeros placeholder)
+
+**Context:** Writing unit tests for `placeOrderSchema` (cart validator). Used placeholder UUID `00000000-0000-0000-0000-000000000001` as test data — Zod kept rejecting it as "Invalid UUID".
+
+**Symptom:**
+```
+{
+  "code": "invalid_format",
+  "format": "uuid",
+  "pattern": "/^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/",
+  "path": ["cart_item_ids", 0],
+  "message": "Invalid UUID"
+}
+```
+All "happy path" assertions failed even though the format LOOKED like a UUID.
+
+**Root cause:** Zod's `z.uuid()` (since v4 — used in Pacred) defaults to **strict UUID v4 spec**:
+- Position 13 (after 2nd dash) must be a **version digit** `1-8` (not `0` or `9-f`)
+- Position 17 (after 3rd dash) must be a **variant digit** `8/9/a/b/A/B`
+
+Only the **nil UUID** (`00000000-0000-0000-0000-000000000000`) and **max UUID** (`ffffffff-ffff-ffff-ffff-ffffffffffff`) are special-cased.
+
+A "looks-like-UUID" placeholder like `00000000-0000-0000-0000-000000000001` fails because:
+- Position 13 = `0` (no version) ❌
+- Position 17 = `0` (no variant) ❌
+
+**Fix:** Use a valid UUIDv4 pattern in placeholders. Format: `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` where `y ∈ {8,9,a,b}`.
+
+```typescript
+// BAD — Zod rejects
+const cartItemId = "00000000-0000-0000-0000-000000000001";
+
+// GOOD — valid v4
+const cartItemId = "00000000-0000-4000-8000-000000000001";
+
+// ALSO GOOD — typical v4 from crypto.randomUUID()
+const cartItemId = "123e4567-e89b-42d3-a456-426614174000";
+```
+
+**Why this matters next time:** When seeding test data with UUIDs:
+1. Use `crypto.randomUUID()` if running in Node ≥ 14.17 / Bun / modern browsers
+2. OR hardcode with the `-4xxx-8xxx-` pattern in positions 13 + 17
+3. OR use the nil UUID `00000000-...` if you want a recognisable placeholder (works because Zod special-cases it)
+
+**Affected code:** Caught during `lib/validators/cart.test.ts` work (commit `5643226`). Test UUIDs updated to `00000000-0000-4000-8000-...` pattern.
+
+**Cross-links:**
+- Zod v4 release notes: https://github.com/colinhacks/zod/releases (UUID validation tightened from v3)
+- `lib/validators/cart.test.ts` — canonical example of v4-compliant placeholder UUIDs
+- RFC 4122 §4.4 — UUID v4 spec (random with version + variant bits)
+
+---
+
 ## [2026-05-15] Tailwind v4 has no `tailwind.config.js`
 
 **Context:** Adding a new color token.
