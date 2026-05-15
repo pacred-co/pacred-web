@@ -42,22 +42,39 @@ export function SettingsForm(initial: Props) {
       return;
     }
 
+    submitWith(false);
+  }
+
+  // V-A4: shared submit path that supports the "confirm unusual rate"
+  // bypass. First call sends without the flag; if server rejects with
+  // suspicious-change error, UI prompts user → submitWith(true) retries.
+  function submitWith(confirmUnusualRate: boolean) {
     startTransition(async () => {
       const res = await adminUpdateSettings({
         service_fee:                 Number(serviceFee) || 0,
         juristic_discount_threshold: Number(jurThresh) || 0,
-        juristic_discount_pct:       parsedJurPct / 100,
+        juristic_discount_pct:       (Number(jurPctPct) || 0) / 100,
         qc_fee_per_item:             Number(qcFee) || 0,
         crate_fee_base:              Number(crateFee) || 0,
         free_shipping_enabled:       freeShipEn,
         free_shipping_threshold:     freeShipMin ? Number(freeShipMin) : null,
         yuan_rate:                   Number(yuanRate) || 0,
+        ...(confirmUnusualRate ? { confirm_unusual_rate: true } : {}),
       });
       if (res.ok) {
-        setMsg("บันทึกแล้ว");
+        setMsg(confirmUnusualRate ? "บันทึกแล้ว (bypass สั่งพิสูจน์การเปลี่ยนค่า)" : "บันทึกแล้ว");
         router.refresh();
-        setTimeout(() => setMsg(null), 3000);
+        setTimeout(() => setMsg(null), 4000);
       } else {
+        // V-A4: detect the suspicious-change rejection → ask user to confirm
+        if (res.error.includes("ตรวจพบการเปลี่ยนค่าผิดปกติ") && !confirmUnusualRate) {
+          if (window.confirm(
+            `${res.error}\n\nยืนยันว่าตั้งใจเปลี่ยนค่าตามนี้จริง?`,
+          )) {
+            submitWith(true);
+          }
+          return;
+        }
         setError(res.error);
       }
     });
