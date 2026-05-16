@@ -320,6 +320,31 @@
 - [ ] PDF endpoint /api/freight-quote/[id] ยังไม่มี — V-E6.1
 - [ ] LINE notification on send — V-E6.1
 
+### GG. **NEW (F-11) — pay-from-wallet double-debit guard** ⚠️ **PRE-FLIGHT: รัน migration 0049 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0049_wallet_order_payment_unique.sql` ใน Supabase Studio → verify index ปรากฏ:
+  ```sql
+  select indexname from pg_indexes where tablename = 'wallet_transactions' and indexname = 'wallet_tx_order_payment_uniq';
+  -- expected: 1 row
+  ```
+
+**Manual concurrency test (เน้น race เปิด 2 tabs):**
+- [ ] เปิด `/service-order/<hNo>` ที่ status=awaiting_payment + wallet balance พอ ใน 2 tabs
+- [ ] กดปุ่มจ่ายเงินใน tab 1 + กดทันที tab 2 → tab แรกได้ result success, tab สอง — ตามทฤษฎี — ได้ already_paid: true (ไม่ debit ซ้ำ)
+- [ ] ตรวจ wallet_transactions ใน Supabase Studio: `where reference_id='<hNo>' and kind='order_payment'` → ต้องมี **เพียง 1 row**
+
+**Admin double-click test:**
+- [ ] role=accounting → /admin/service-orders/<hNo> → กด "บันทึกชำระ" 2 ครั้งติด → ปุ่ม disabled พักหนึ่ง; second click ที่หลังจาก disabled หาย → result already_paid; ledger ไม่ debit ซ้ำ
+
+**Negative cases:**
+- [ ] customer ไม่มีสิทธิ์: เปิด order ของคนอื่น → fail "not_found" (RLS)
+- [ ] order status='cancelled': กดจ่าย → fail "ออเดอร์ยกเลิก"
+- [ ] wallet ไม่พอ: balance < total_thb → fail "wallet_insufficient" (กรณี customer-side); admin มี allow_overdraw=true override ได้
+
+**Sentry watch:**
+- [ ] หลัง launch ดู Sentry ว่ามี `wallet insert race: 23505 but no peer tx found` หรือไม่ — ถ้ามี = partial-index predicate มี edge case ที่ admin ไม่ทันคิด — ping ภูม
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
