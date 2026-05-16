@@ -17,6 +17,17 @@
 | **B4** | เดฟ | DV-3 ThaiBulkSMS signup + `OTP_BYPASS=false` flip in Vercel | ⏳ pending (เดฟ owns) |
 | **B5** | ก๊อต | Sign up K-12 GTM + K-13 Clarity + DV-1a Sentry + DV-1b Upstash + DV-1c hCaptcha | ✅ DONE 2026-05-16 night (all 5 signups + Vercel env set + redeployed) |
 
+> 🆕 **Post-B2 — ภูม Phase-I2 migration batch (`0044`-`0051` + `0060`).** Shipped to
+> git 2026-05-17 (WHT · QA · org_contacts · TOS · freight quotes · F-11 wallet
+> guard · V-E1 freight shipments+invoices · member_code). เดฟ/agent reviewed all
+> 9 SQL files — sound. **ภูม applies on dev + prod** (ascending number order) —
+> `0049` before public launch 2pm. Steps → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
+
+> 🆕 **OAuth dashboard config — ก๊อต, Mon morning.** `NEXT_PUBLIC_SITE_URL`
+> (dead `v2.pacred.co`) + Supabase Site/Redirect URLs + Facebook app → Live +
+> Google redirect URI. Only blocks social login — phone+OTP works regardless.
+> Steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md).
+
 ---
 
 ## 🟡 Soft blockers (degrade gracefully — OK to launch without)
@@ -56,7 +67,10 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/dashboard  # 307 
 
 # 4. Pacred db migration verify (manual via Supabase Dashboard SQL Editor)
 select name from supabase_migrations.schema_migrations order by name desc limit 5;
-# Expected: 0043_slip_transferred_at as latest
+# Expected: latest = 0060_member_code_3digit once ภูม applies the Phase-I2 batch
+# (0044-0051 + 0060); 0043_slip_transferred_at if that batch isn't applied yet.
+# (If migrations were pasted by hand rather than `supabase db push`, verify by
+#  table existence instead — see poom-apply-migrations-2026-05-17.md verify block.)
 ```
 
 ---
@@ -64,6 +78,13 @@ select name from supabase_migrations.schema_migrations order by name desc limit 
 ## 🧪 T-D1 smoke test (Sunday — dev + prod)
 
 Use runbook [`docs/runbook/cargo-smoke-test-T-D1.md`](cargo-smoke-test-T-D1.md). Estimated 2-3h per environment.
+
+> ✅ **Route-level production smoke — done 2026-05-17 (เดฟ).** `pnpm build && next start`
+> + curl every new/changed route (customs landing + `[port]` · services · register ·
+> `/line` · admin freight quotes/shipments/reports/qa) → **zero 500s**, all routes
+> classify `ƒ` (dynamic) — no static-leak. Re-run after ภูม applies the migration
+> batch + after the DV-3 `OTP_BYPASS=false` flip. The **functional-flow checkboxes
+> below** (signup → order → receipt) still need a live run on dev/prod with real data.
 
 ### 7.1 Dev environment (Sunday morning)
 
