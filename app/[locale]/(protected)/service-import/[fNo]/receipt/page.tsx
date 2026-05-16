@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
+import { CustomerWhtUploadPanel } from "@/components/customer-wht-upload-panel";
 
 /**
  * Print-ready receipt view. No NavBar/sidebar/footer — just the body.
@@ -90,9 +91,10 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
   // RLS allows the customer to read OWN withholding_tax_entries row.
   const { data: whtRow } = await supabase
     .from("withholding_tax_entries")
-    .select("cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
+    .select("id, cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
     .eq("forwarder_f_no", f.f_no ?? fNo)
     .maybeSingle<{
+      id:                 string;
       cert_status:        "pending" | "received" | "waived";
       wht_rate_pct:       number;
       wht_amount_thb:     number;
@@ -242,9 +244,13 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
               <strong>โอนสุทธิ ฿{Number(whtRow.net_expected_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
             </p>
             {whtRow.cert_status === "pending" && (
-              <p className="text-xs text-amber-800">
-                ⚠️ กรุณาส่งหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) ให้ Pacred — มิเช่นนั้นจะออกใบกำกับภาษีให้ไม่ได้
-              </p>
+              <>
+                <p className="text-xs text-amber-800">
+                  ⚠️ กรุณาส่งหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) ให้ Pacred — มิเช่นนั้นจะออกใบกำกับภาษีให้ไม่ได้
+                </p>
+                {/* V-A6.1: customer self-upload */}
+                <CustomerWhtUploadPanel whtEntryId={whtRow.id} />
+              </>
             )}
             {whtRow.cert_status === "received" && (
               <p className="text-xs text-green-700">✅ ได้รับใบ 50 ทวิ ครบแล้ว — สามารถออกใบกำกับภาษีได้</p>
