@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { Quote, ChevronLeft, ChevronRight } from "lucide-react";
 
+// Slide order: หนังสือรับรองนิติบุคคล (DBD) appears first per ปอน 2026-05-17.
+// Auto-rotate removed — user controls via chevron / dot indicators.
 const SLIDES = [
   {
     src: "/images/aboutus/rubrong.png",
@@ -28,17 +30,8 @@ const SLIDES = [
   },
 ];
 
-const INTERVAL_MS = 4500;
-
 export function CertsSlideshow() {
   const [idx, setIdx] = useState(0);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setIdx((i) => (i + 1) % SLIDES.length);
-    }, INTERVAL_MS);
-    return () => clearInterval(t);
-  }, []);
 
   const active = SLIDES[idx];
 

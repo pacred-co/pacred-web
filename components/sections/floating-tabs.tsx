@@ -34,12 +34,14 @@ export function FloatingTabs() {
     { label: t("contact"),    icon: "/images/home/iconfloating/pcs-call-center.png",  href: "#contact" },
   ];
 
-  // Mobile bottom nav drops `news` + `contact` — those slots get a centered call FAB instead.
+  // Mobile bottom nav drops `promotions` + `contact` — those slots get a
+  // centered call FAB instead. Per ปอน 2026-05-17: swap `promotions` for
+  // `news` on mobile (kept `promotions` on desktop where there's room).
   const mobileTabs = [
-    desktopTabs[0],
-    desktopTabs[1],
-    desktopTabs[2],
-    desktopTabs[3],
+    desktopTabs[0], // home
+    desktopTabs[1], // services
+    desktopTabs[4], // news (replaces promotions)
+    desktopTabs[3], // blog
   ];
 
   return (
