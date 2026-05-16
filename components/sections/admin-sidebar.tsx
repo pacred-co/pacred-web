@@ -40,6 +40,9 @@ const items: NavItem[] = [
   { href: "/admin/reports/hs-code-revenue",       label: "HS-code revenue (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
   { href: "/admin/reports/user-sales-history",    label: "ประวัติยอด/ลูกค้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
 
+  // Freight stack (V-E6+)
+  { href: "/admin/freight/quotes",   label: "ใบเสนอราคา (V-E6)",   icon: <Receipt className="w-5 h-5" />, roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
+
   // Operations
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
