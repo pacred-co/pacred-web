@@ -30,6 +30,83 @@ const STATUS_LABEL: Record<Status, string> = {
   4: "ส่งงานเสร็จ",
 };
 
+// ────────────────────────────────────────────────────────────
+// CT-7: driver self-updates own assignment status
+// ────────────────────────────────────────────────────────────
+// Driver lands on /admin/driver-runs, accepts (1→2) and completes (2→4)
+// their own rows without admin/ops intervention. Self-row check enforced
+// in the action so driver can't modify someone else's assignment.
+
+const driverSelfUpdateSchema = z.object({
+  id:     z.string().uuid(),
+  action: z.enum(["accept", "complete"]),
+});
+export type DriverSelfUpdateInput = z.infer<typeof driverSelfUpdateSchema>;
+
+export async function driverUpdateOwnAssignmentStatus(
+  input: DriverSelfUpdateInput,
+): Promise<AdminActionResult> {
+  const parsed = driverSelfUpdateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["driver", "ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("forwarder_driver")
+      .select("id, status, profile_id, forwarder_id, accepted_at")
+      .eq("id", d.id)
+      .maybeSingle<{ id: string; status: Status; profile_id: string; forwarder_id: string; accepted_at: string | null }>();
+    if (!existing) return { ok: false, error: "not_found" };
+
+    // Self-row check — driver can only update OWN assignments. ops/super bypass for admin overrides.
+    // (adminId is the profile id from common.ts withAdmin context.)
+    const isSelf = existing.profile_id === adminId;
+    if (!isSelf) {
+      // Only ops/super may touch others' rows — verify by re-reading the wrapper's
+      // role context indirectly via a second admin lookup.
+      const { data: caller } = await admin
+        .from("admins")
+        .select("role")
+        .eq("profile_id", adminId)
+        .in("role", ["ops", "super"])
+        .maybeSingle();
+      if (!caller) return { ok: false, error: "ไม่อนุญาต — งานนี้ไม่ใช่ของคุณ" };
+    }
+
+    // Allowed transitions
+    let nextStatus: Status;
+    if (d.action === "accept") {
+      if (existing.status !== 1) return { ok: false, error: "งานนี้ไม่ได้อยู่ในสถานะรอรับ" };
+      nextStatus = 2;
+    } else {
+      if (existing.status !== 2) return { ok: false, error: "ต้องรับงานก่อน + ยังไม่ครบเงื่อนไขส่งสำเร็จ" };
+      nextStatus = 4;
+    }
+
+    const update: Record<string, unknown> = { status: nextStatus };
+    if (nextStatus === 2) update.accepted_at  = new Date().toISOString();
+    if (nextStatus === 4) update.completed_at = new Date().toISOString();
+
+    const { error } = await admin
+      .from("forwarder_driver")
+      .update(update)
+      .eq("id", existing.id);
+    if (error) return { ok: false, error: error.message };
+
+    await logAdminAction(adminId, `forwarder_driver.driver_${d.action}`, "forwarder_driver", existing.id, {
+      forwarder_id: existing.forwarder_id,
+      by_self:      isSelf,
+      before:       { status: existing.status },
+      after:        { status: nextStatus, label: STATUS_LABEL[nextStatus] },
+    });
+
+    revalidatePath("/admin/driver-runs");
+    revalidatePath("/admin/drivers");
+    return { ok: true };
+  });
+}
+
 export async function adminUpdateDriverAssignmentStatus(
   input: AdminUpdateDriverAssignmentInput,
 ): Promise<AdminActionResult> {
