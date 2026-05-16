@@ -31,6 +31,10 @@ import {
 
 const PARENT_PATH = "/customs-clearance-shipping-suvarnabhumi";
 
+// Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
+// static prerender would throw DYNAMIC_SERVER_USAGE in production.
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return CUSTOMS_PORTS.map((port) => ({ port: port.slug }));
 }

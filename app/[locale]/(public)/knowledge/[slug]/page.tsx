@@ -33,6 +33,10 @@ const CATEGORY_BADGE: Record<string, string> = {
   ส่งออก:  "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-900/50",
 };
 
+// Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
+// static prerender would throw DYNAMIC_SERVER_USAGE in production.
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return KNOWLEDGE_ARTICLES.map((a) => ({ slug: a.slug }));
 }

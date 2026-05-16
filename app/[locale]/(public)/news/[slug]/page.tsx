@@ -40,6 +40,10 @@ function formatThaiDate(iso: string): string {
   return `${d} ${months[m - 1]} ${y + 543}`;
 }
 
+// Dynamic render — the shared <NavBar> reads auth cookies (a dynamic API);
+// static prerender would throw DYNAMIC_SERVER_USAGE in production.
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return PACRED_NEWS.map((n) => ({ slug: n.slug }));
 }
