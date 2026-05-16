@@ -225,21 +225,28 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 | **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 |
 | **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 |
 
-#### P2 (V3 prep — Track D ADRs)
+#### P2 (V3 prep — Track D ADRs) — 🆕 เดฟ preempted all 3 with DRAFTs
 
-| # | Task | Effort | Source |
-|---|---|---|---|
-| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 |
-| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 |
-| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 |
+| # | Task | Effort | Source | Status |
+|---|---|---|---|---|
+| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 | ✅ DRAFT by เดฟ → [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md); ก๊อต reviews + answers 5 open Qs + flips Accepted |
+| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md); same review pattern |
+| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md); same review pattern |
 
-#### P3 (Strategic decisions)
+#### P3 (Strategic decisions) — 🆕 เดฟ pre-researched 2 of 3 decision matrices
 
-| # | Task | Effort | Source |
-|---|---|---|---|
-| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 |
-| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 |
-| **Pacred owner call** | bundle: bank/PromptPay/tax-ID/legal name | ~30m | Part Q Bundle 1 |
+| # | Task | Effort | Source | Status |
+|---|---|---|---|---|
+| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 | 📋 matrix ready by เดฟ → [`decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md); **recommend Omise** + ก๊อต confirms with พี่ป๊อป owner call |
+| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 | 📋 matrix ready by เดฟ → [`decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md); **recommend defer to T+30d** + SaaS RFP if demand confirmed |
+| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan | Part O5 K3 | 📋 plan ready by เดฟ → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md); **recommend Aiwen Tech** (~฿150-200k) at T+30d post-launch |
+| **Pacred owner call** | bundle: bank/PromptPay/tax-ID/legal name | ~30m | Part Q Bundle 1 | ⏳ ก๊อต-only (call พี่ป๊อป) |
+
+---
+
+#### 📋 Pre-launch checklist (single source of truth for Sunday-night → Monday)
+
+🆕 [`docs/runbook/pre-launch-checklist-2026-05-18.md`](../runbook/pre-launch-checklist-2026-05-18.md) — Sunday-night blockers (B1-B5) + soft blockers + verify gates + T-D1 smoke + Monday timeline + crisis playbook. All in one doc. **Read this on Saturday morning to align day-of work.**
 
 ---
 
