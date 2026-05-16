@@ -123,15 +123,15 @@ Per เดฟ brief 2026-05-16: "**ให้กอตจัดการงาน
 | **MOMO-2** | Reverse-engineer legacy `pcs-admin/api-forwarder-jmf/*.php` if MOMO mirrors cargo-thai pattern | ~2–3h | Reference: [`audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) §9 |
 | **MOMO-3** | Decide webhook signature verification (request `MOMO_JMF_WEBHOOK_SECRET` from MOMO if available) | ~30m call + decision | New |
 
-#### P0.7 — Part V cargo-forensics ADR locks (NEW 2026-05-16 — เดฟ hand-off)
+#### P0.7 — Part V cargo-forensics ADR locks (✅ DONE 2026-05-16 night — ก๊อต ack + เดฟ flip)
 
-Two DRAFT ADRs from the cargo-ops forensics need your review + lock. **ADR-0015 unblocks 🔴 revenue** — do it before P1. Both are scaffolded with options + a recommendation; you just answer the open questions + flip Status.
+ก๊อต said "ทำต่อให้เลย" → เดฟ flipped both ADRs ตาม fastlane pre-answers below. **V-A6 + V-E2 unblocked.** ภูม Monday morning ลุย V-A6 (WHT) ได้ทันที.
 
-| # | Task | Effort | Source |
-|---|---|---|---|
-| **ADR-0015 lock** | Review [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — answer the **4 open questions**, flip Status → Accepted. Unblocks 🔴 **V-A6** (withholding tax — the #1 accounting pain in the ไอแต้ม chat). **🎯 fastlane below** = pre-answered. | ~5m w/ fastlane | PORT_PLAN Part V |
-| **ADR-0016 lock** | Review [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — answer the **5 open questions** (incl. who issues Form E), flip Status → Accepted. Unblocks **V-E2** (freight value model). **🎯 fastlane below** = pre-answered. | ~5m w/ fastlane | PORT_PLAN Part V |
-| **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ~30m | PORT_PLAN Part V |
+| # | Task | Status |
+|---|---|---|
+| **ADR-0015 lock** | [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — Status ✅ **Accepted** — 4 Qs resolved (rate set `{1,1.5,2,3,5}` · admin-only V1 · single approver · dedicated `wht-certs`). | ✅ done |
+| **ADR-0016 lock** | [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — Status ✅ **Accepted** — 5 Qs resolved (staff-entered rate V1 · Option A · super+accounting single editor · snapshot from `hs_codes` · no new ADR for V-E3/E4). | ✅ done |
+| **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ⏳ ก๊อต ~30m |
 
 #### 📋 docs-dedup decision (NEW 2026-05-16 — เดฟ hand-off · DECIDE tonight)
 
@@ -157,9 +157,13 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 
 **Recommended: A** — safe (pointers + audit gate), `CLAUDE.md` is the clear 80% win, and you're online tonight to review. Say go and an agent executes it; you just review the diff + FF to `main`.
 
-#### 🎯 P0.7-fastlane — ADR-0015/0016 pre-answered for tonight (เดฟ hand-off · ลด ก๊อต 45m → 5m)
+#### 🎯 P0.7-fastlane — ADR-0015/0016 (✅ ALL 9 Qs ACCEPTED 2026-05-16 night)
 
-เดฟ pre-answered all 9 open questions ในสอง DRAFT ADR ด้วย recommendation + หลักฐานจาก forensics — ปลดล็อค **V-A6 (WHT, 🔴 #1 chat complaint)** + V-E2 ได้เลย. **อ่าน 5 นาที · 👍 / 👎 / ✏️ ทีละข้อ · เซ็น Status → Accepted**
+ก๊อต กลับมา + อ่าน fastlane → ack → เดฟ flip Status → Accepted on both ADRs. **V-A6 (🔴 #1 chat complaint) + V-E2 unblocked.** ภูม Monday morning ลุยได้ทันที.
+
+Resolved-questions sections อยู่ที่ด้านล่างของแต่ละ ADR ([0015](../decisions/0015-withholding-tax-model.md) · [0016](../decisions/0016-freight-value-model.md)) — เก็บไว้สำหรับ trace.
+
+Pre-answers (kept below for posterity):
 
 ---
 
@@ -207,13 +211,10 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 
 ---
 
-**Tonight action (ทำขนานกับ docs-dedup):**
-1. Read 4 Q + 5 Q + reactions (5 min)
-2. If you agree → edit each ADR: flip Status `🟡 DRAFT` → `✅ Accepted` + paste/edit the answers into a new "Resolved questions" section at the bottom of each ADR + bump date
-3. Commit `docs(adr): lock 0015/0016 — pre-answers per เดฟ hand-off`
-4. ภูม unblocks V-A6 (🔴) + V-E2 immediately tomorrow morning
-
-**If you disagree on any answer:** ✏️ note + push back to เดฟ; the ADR stays DRAFT until consensus. (We've got time on V-E2 — it's Phase I2; V-A6 is the urgent one.)
+**Action — ✅ DONE 2026-05-16 night:**
+1. ก๊อต กลับมา + อ่าน fastlane + said "ทำต่อให้เลย" → เดฟ flipped both Status → ✅ Accepted
+2. Resolved-questions sections paste-edited into each ADR
+3. ภูม Monday morning ลุย V-A6 (🔴) ได้ทันที · V-E2 unblocked สำหรับ Phase I2
 
 #### P1 (production hardening — pre-public-beta)
 

@@ -23,25 +23,33 @@
 
 ---
 
-### D-2 · Migration numbering — ภูม ครอง 0041-0043 + WHT ต้องเลื่อน
-**Context:** team-status night เคยบอกว่า WHT (ADR-0015 / V-A6) จะลง `0041+`. ภูม ใช้:
-- `0041` bill_to_name_override (V-C2)
-- `0042` cargo_containers.close_at (V-C3)
-- `0043` slip_transferred_at (V-A1)
+### D-2 · Migration numbering — ✅ confirmed 2026-05-16 night
+**ภูม ใช้:** `0041` bill_to_name_override (V-C2) · `0042` cargo_containers.close_at (V-C3) · `0043` slip_transferred_at (V-A1)
 
-**เดฟ to take `0044+`** สำหรับ WHT migration เมื่อ ก๊อต lock ADR-0015.
+**ภูม Monday morning takes `0044_withholding_tax.sql`** สำหรับ V-A6 (ADR-0015 ✅ locked → spec ready in ADR §"Schema sketch — migration `0039_withholding_tax.sql`" — rename to 0044 + apply).
 
-**Owner:** เดฟ (heads-up only — ไม่มี decision)
+**Owner:** ✅ resolved
 
 ---
 
 ## 🔴 รอ external (ก๊อต / พี่ป๊อป)
 
-### E-1 · ADR-0015 WHT lock — block V-A6
-ภูม ไม่ทำ V-A6 จนกว่า ก๊อต lock. ไม่ block อย่างอื่น.
+### E-1 · ADR-0015 WHT lock — ✅ UNBLOCKED 2026-05-16 night
+**ก๊อต locked ADR-0015** (Status ✅ Accepted, 4 Qs resolved). **ภูม Monday morning ลุย V-A6 ได้เลย** ตาม spec ใน [ADR-0015](../decisions/0015-withholding-tax-model.md):
+- Migration `0044_withholding_tax.sql` (rate set `{1, 1.5, 2, 3, 5}`)
+- New bucket `wht-certs` (DEDICATED, RLS mirror `tax-invoices` pattern)
+- Admin-only V1 (customer self-upload deferred to V1.1)
+- `waived` = SINGLE approver `super` OR `accounting` + `waived_reason` + audit log row
+- UI defaults: 1 (cargo/forwarder) · 3 (pure service)
+- Receipt + tax-invoice issuance gate active
 
-### E-2 · ADR-0016 freight value model — block V-E2
-ภูม ไม่ทำ V-E* freight document suite จนกว่า ก๊อต lock. ไม่ block.
+### E-2 · ADR-0016 freight value model — ✅ UNBLOCKED 2026-05-16 night
+**ก๊อต locked ADR-0016** (Status ✅ Accepted, 5 Qs resolved). **ภูม V-E2 unblocked for Phase I2** (post-Monday launch — cargo loop 🔴 still first) ตาม spec ใน [ADR-0016](../decisions/0016-freight-value-model.md):
+- `rate_source` enum = `{'staff_entered'}` only V1
+- Option A: store committed VAT plan only, what-if = calculator UI
+- Declared-value edit: super + accounting both (single editor) + `declared_value_basis` required + audit log
+- Duty rate: snapshot from `hs_codes` at issuance, overridable + logged
+- V-E3 (Form E) / V-E4 (D/O) = pure templating, no new ADR needed
 
 ### E-3 · MOMO endpoint inventory — block MOMO sync wire
 `lib/integrations/momo-jmf/sync.ts` ยังเป็น skeleton. ภูม ไม่กรอกจนกว่า ก๊อต MOMO-1 confirm shape. ไม่ block.

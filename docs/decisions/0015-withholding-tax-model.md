@@ -1,9 +1,9 @@
 # ADR-0015 — Withholding-tax (ภาษีหัก ณ ที่จ่าย) model
 
-**Status:** 🟡 **DRAFT** — เดฟ scaffold 2026-05-16. ก๊อต to review + lock. ภูม implements as **V-A6** after lock.
-**Date:** 2026-05-16
+**Status:** ✅ **Accepted** — locked by ก๊อต 2026-05-16 night (เดฟ pre-answered fastlane accepted as-is). ภูม implements as **V-A6** Monday morning.
+**Date:** 2026-05-16 (drafted) · 2026-05-16 (locked)
 **Phase:** Part V — Legacy Cargo Forensics backlog (task `V-A6`)
-**Owner:** เดฟ (scaffold author) · ก๊อต (review + lock) · ภูม (implementation)
+**Owner:** เดฟ (scaffold author) · ก๊อต (locked) · ภูม (implementation)
 
 > **ADR-number note:** 0011-0013 are reserved for ก๊อต Sprint 7+ Track D (per [ADR-0014](0014-customer-self-service-state-transitions.md) reservation note). 0014 = state transitions. This ADR slots in at **0015**.
 
@@ -138,12 +138,23 @@ create table public.withholding_tax_entries (
 In: migration `0039` · `wht-certs` bucket · Zod validator `lib/validators/withholding-tax.ts` · admin UI to record an entry + mark cert received/waived · the receipt + tax-invoice **issuance gate** · the V-A3 reconciliation read.
 Deferred: customer self-upload of the certificate (V1.1) · 50 ทวิ OCR · line-level WHT base · auto-generating Pacred's own ภ.ง.ด.53 summary.
 
-## Open questions for ก๊อต (lock these)
+## Resolved questions (locked by ก๊อต 2026-05-16 night)
 
-1. Confirm the allowed rate set — is `1.5` / `2` ever used for Pacred services, or just `{1, 3}`?
-2. Should the customer be able to self-upload the 50 ทวิ certificate in V1, or admin-only first?
-3. Does `waived` need a second-approver, or is a single super/accounting + logged reason enough?
-4. Bucket: dedicated `wht-certs`, or reuse `slips`?
+**Q1 — Allowed rate set: `{1, 1.5, 2, 3, 5}` or just `{1, 3}`?**
+- ✅ **KEEP `{1, 1.5, 2, 3, 5}` in DB check; UI default = 1 (cargo/forwarder) · 3 (pure service).**
+- Why: `1.5` (transport-specific) · `2` (advertising) · `5` (rent) are unlikely for Pacred today, but adding them costs zero — removing later = migration. Conservative DB + opinionated UI = cheap insurance against future service expansion.
+
+**Q2 — Customer self-upload of 50 ทวิ in V1?**
+- ✅ **ADMIN-ONLY V1.** Customer self-upload deferred to V1.1.
+- Why: Customer-side upload = new UI + RLS + bucket policy + customer instructions = ~4-6h extra. Admin-only V1 ships the revenue-unblocking gate in ~2h. V1.1 adds self-upload once staff workflow is validated.
+
+**Q3 — Does `waived` need a second approver?**
+- ✅ **SINGLE approver + logged reason, role = `super` OR `accounting` (not `ops`).**
+- Why: Audit row + `waived_reason` already provides accountability (ADR-0014 pattern). Dual-approval = friction during launch when ops just need to unblock a customer. Tighten via follow-up ADR if waivers become frequent (>5/wk in steady state).
+
+**Q4 — Bucket: dedicated `wht-certs` or reuse `slips`?**
+- ✅ **DEDICATED `wht-certs`.**
+- Why: Different retention class (tax doc → longer legal retention) · different access pattern (admin read vs customer upload pattern in V1.1) · the precedent `tax-invoices` got its own bucket (migration `0035`). Avoids RLS-policy entanglement; trivial to create.
 
 ## Cross-references
 
@@ -155,4 +166,4 @@ Deferred: customer self-upload of the certificate (V1.1) · 50 ทวิ OCR · 
 
 ---
 
-**End of ADR-0015 (DRAFT).** ก๊อต: review, answer the open questions, flip Status to Accepted. ภูม: do not implement V-A6 until Status = Accepted.
+**End of ADR-0015 (✅ Accepted 2026-05-16 night).** ภูม: V-A6 unblocked — implement Monday morning per spec above + `lib/validators/withholding-tax.ts` per the resolved Qs.

@@ -160,7 +160,7 @@ From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit
 - 📐 [`port-specs/admin-polish-bundle.md`](../port-specs/admin-polish-bundle.md) — V-G1 bulk forwarder · V-G2 bulk transfer customers · V-G3 admin broadcast · V-G4 TOS version mgmt · V-G5 org contacts CRUD · V-G6 4 new reports · V-G7 6 feature-parity audits
 
 **Implementation order (recommended after Monday launch):**
-1. V-A6 WHT (after ก๊อต locks ADR-0015) — unblocks juristic customers
+1. V-A6 WHT — ✅ ก๊อต locked ADR-0015 2026-05-16 night → unblocked. Use migration `0044_withholding_tax.sql` + bucket `wht-certs`. Schema spec in [ADR-0015](../decisions/0015-withholding-tax-model.md) §"Schema sketch". Resolved-questions section ใน ADR ตอบ rate set / admin-only / single-approver / dedicated-bucket แล้ว — unblocks juristic customers
 2. V-E10 QA/QC inspection — needed before V-E7 billing gate
 3. V-E6 quotation — unlock freight sales funnel
 4. V-E1 commercial invoice + V-E7 receipt/payment — full freight billing loop

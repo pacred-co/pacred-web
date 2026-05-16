@@ -1,9 +1,9 @@
 # ADR-0016 — Freight value model (commercial value · declared customs value · VAT plan)
 
-**Status:** 🟡 **DRAFT** — เดฟ scaffold 2026-05-16. ก๊อต to review + lock. ภูม implements as part of **V-E1/V-E2** (Phase I2 freight build).
-**Date:** 2026-05-16
+**Status:** ✅ **Accepted** — locked by ก๊อต 2026-05-16 night (เดฟ pre-answered fastlane accepted as-is). ภูม implements as part of **V-E1/V-E2** (Phase I2 — post Monday launch).
+**Date:** 2026-05-16 (drafted) · 2026-05-16 (locked)
 **Phase:** Part V — Legacy Cargo Forensics backlog (task `V-E2`); Phase I2 freight expansion
-**Owner:** เดฟ (scaffold author) · ก๊อต (review + lock) · ภูม (implementation)
+**Owner:** เดฟ (scaffold author) · ก๊อต (locked) · ภูม (implementation)
 
 > **ADR-number note:** 0011-0013 reserved for ก๊อต Sprint 7+ Track D; 0014 = state transitions; 0015 = withholding tax. This ADR = **0016**.
 
@@ -106,13 +106,27 @@ Every alternative VAT plan stored as a row; one flagged `chosen`.
 
 ---
 
-## Open questions for ก๊อต (lock these)
+## Resolved questions (locked by ก๊อต 2026-05-16 night)
 
-1. **Exchange-rate source** — staff-entered per shipment, a daily BOT/bank reference rate, or an FX API? (`rate_source` enum depends on this.)
-2. **VAT plans** — confirm Option A (calculator UI, store only the committed plan) for V1, or is stored what-if history (Option B) needed from day one?
-3. **Declared-value authority** — super + accounting only, or accounting alone? Does it need a second approver?
-4. **HS-code → duty rate** — read the rate live from `hs_codes` at issuance and snapshot it, or fully manual? (Recommend: snapshot from `hs_codes`, overridable + logged.)
-5. Does freight need its own ADR for the **Form E generator** (V-E3) and the **D/O letter** (V-E4), or are those pure templating with no decision to lock?
+**Q1 — Exchange-rate source: staff-entered · BOT reference · FX API?**
+- ✅ **STAFF-ENTERED V1, range-guarded.** `rate_source` enum = `{'staff_entered'}` only for V1.
+- Why: Legacy spreadsheets already do this (frozen rates observed: 31.4109 / 32.8526 / 33.162). FX API = vendor selection + cost + external dep before freight volume justifies. Add `bot_reference` / `fx_api` as enum values later when volume warrants.
+
+**Q2 — VAT plans: Option A (calculator UI · store committed only) or B (stored what-if history)?**
+- ✅ **OPTION A V1** (matches ADR's own recommendation).
+- Why: Legacy "แผน2 VAT" naming = humans choose, then file = chosen plan. Calculator can hold inputs in URL params (zero history loss for what-if comparison). Option B migrates cleanly from A later when audit-history demand is real.
+
+**Q3 — Declared-value authority: super + accounting both, or accounting alone? Second approver?**
+- ✅ **super + accounting both can edit · ops cannot · single editor.**
+- Why: Audit row + required `declared_value_basis` IS the accountability (per ADR-0014). Gating both ways pre-launch = revenue drag. Compliance line in §Context already covers misdeclaration-prevention intent. Tighten to dual-approver if audit log shows pattern of contested edits.
+
+**Q4 — HS-code → duty rate: live + snapshot or fully manual?**
+- ✅ **SNAPSHOT from `hs_codes` at issuance · overridable + logged** (matches ADR's own recommendation).
+- Why: Keeps duty honest at issuance (rate changes later don't retro-modify invoice) · override allows edge cases (Form E preference, special declarations) · override writes same audit-row pattern as declared-value.
+
+**Q5 — Does V-E3 (Form E) / V-E4 (D/O letter) need its own ADR?**
+- ✅ **NO new ADR for V-E3/E4.** Pure templating + data-flow.
+- Why: Decisions in ADR-0016 + ADR-0006 cover value/invoice. Form E + D/O = PDF generators over existing fields. Content choices (HS-code list embed · port codes pre-populated) → capture in [`docs/port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) instead of escalating.
 
 ## Cross-references
 
@@ -125,4 +139,4 @@ Every alternative VAT plan stored as a row; one flagged `chosen`.
 
 ---
 
-**End of ADR-0016 (DRAFT).** ก๊อต: review, answer the 5 open questions, flip Status → Accepted. ภูม: this is Phase I2 — the 🔴 cargo loop (Part V V-A/V-C/V-D) comes first.
+**End of ADR-0016 (✅ Accepted 2026-05-16 night).** ภูม: V-E1/V-E2 unblocked for Phase I2 — but 🔴 cargo loop (Part V V-A/V-C/V-D) still comes first per launch priority.

@@ -17,7 +17,7 @@
 |---|---|---|
 | **B1** OTP UI prod | เดฟ | ✅ shipped (73cbf0d) |
 | **B2** Migrations apply prod Supabase | ลูกพี่/กอต | ✅ **DONE** (ลูกพี่ apply วันนี้) |
-| **B3** ก๊อต lock ADR-0015/0016 | **ก๊อต ⬇️** | ⏳ ~5 นาที (fastlane ระดับเซ็น) |
+| **B3** ก๊อต lock ADR-0015/0016 | **ก๊อต + เดฟ** | ✅ **DONE** 2026-05-16 night (ก๊อต ack fastlane → เดฟ flip Status. Both ADRs ✅ Accepted. ภูม Mon morning ลุย V-A6) |
 | **B4** DV-3 ThaiBulkSMS signup | เดฟ | ⏳ ~30m (เดฟ ทำเอง) |
 | **B5** ก๊อต signups K-12/K-13/DV-1a/b/c | **ก๊อต ⬇️** | ⏳ ~2.5h browser |
 
@@ -107,14 +107,11 @@
 
 ของพร้อม ทุกอันมี recommendation + open questions ตอบไว้แล้ว. กอต แค่อ่าน + เห็นด้วย หรือ ปฏิเสธ (พร้อม reason).
 
-### 3.1 🔥 ADR locks (~5 นาที — fastlane)
-ทั้งสอง DRAFT มี pre-answered open questions ในรูป fastlane ที่ [`docs/briefs/got.md`](got.md) section "🎯 P0.7-fastlane":
-- **ADR-0015** WHT (withholding tax) — 4 Qs pre-answered ([`decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md))
-  - **Unblocks:** ภูม implement V-A6 (the #1 chat-complaint pain point) Monday morning
-- **ADR-0016** freight value model — 5 Qs pre-answered ([`decisions/0016-freight-value-model.md`](../decisions/0016-freight-value-model.md))
-  - **Unblocks:** V-E2 freight invoicing Phase I2
+### 3.1 ✅ ADR locks — DONE 2026-05-16 night
+- **ADR-0015** WHT — ✅ Accepted (4 Qs resolved · ภูม Mon morning ลุย V-A6)
+- **ADR-0016** freight value — ✅ Accepted (5 Qs resolved · V-E2 unblocked Phase I2)
 
-**Action:** อ่าน fastlane → เห็นด้วย → แก้สถานะ `🟡 DRAFT` → `✅ Accepted` ใน 2 ไฟล์นั้น + add resolved-questions section + commit `docs(adr): lock 0015/0016`.
+ก๊อต ack fastlane → เดฟ flip status + resolved-questions section + commit.
 
 ### 3.2 docs-dedup decision (~5 นาที — Option A/B/C)
 ใน [`docs/briefs/got.md`](got.md) "docs-dedup decision". เดฟ recommend **Option A** = agent dedup CLAUDE.md ตอนนี้ (pointers, no info loss). **เดฟ ทำไปแล้วเอง** (CLAUDE.md 552→359 lines, commit 6764944) — ตอนนี้แค่กอต อ่าน + เห็นด้วย → mark ✅.
@@ -208,7 +205,7 @@ Per [`docs/runbook/pre-launch-checklist-2026-05-18.md`](../runbook/pre-launch-ch
 ## 7. 🎯 Recommended order ทำงาน (ถ้ากอตอยากเรียง)
 
 **คืนนี้ (Sat night → Sun morning):**
-1. ADR-0015 + ADR-0016 fastlane sign (5m) — unblocks ภูม Monday morning
+1. ~~ADR-0015 + ADR-0016 fastlane sign (5m)~~ ✅ DONE
 2. Renovate GitHub App install (10m)
 3. K-sec audits + V-F3 + K-sec-4 + D-7 + R1 + CSP-1 reads (45m)
 
