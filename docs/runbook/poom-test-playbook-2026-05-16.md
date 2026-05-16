@@ -345,6 +345,58 @@
 **Sentry watch:**
 - [ ] หลัง launch ดู Sentry ว่ามี `wallet insert race: 23505 but no peer tx found` หรือไม่ — ถ้ามี = partial-index predicate มี edge case ที่ admin ไม่ทันคิด — ping ภูม
 
+### HH. **NEW (V-E1) — Freight shipments + invoices V1** ⚠️ **PRE-FLIGHT: รัน migrations 0050 + 0051 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0050_freight_shipments.sql` ใน Supabase Studio
+- [ ] รัน `0051_freight_invoices.sql`
+- [ ] Verify (1) tables: `freight_shipments`, `freight_parties`, `freight_invoices`, `freight_invoice_lines` (2) sequences: `freight_job_seq`, `freight_invoice_seq` (3) functions: `next_freight_job_no`, `next_freight_invoice_serial` (4) `freight_qa_inspections.freight_shipment_id` FK exists (backfill from 0050)
+- [ ] Verify CHECK constraints: insert shipment พร้อม commercial_value_usd แต่ exchange_rate=null → error (paired); insert invoice พร้อม status='issued' แต่ invoice_no=null → error
+
+**Admin create shipment (super):**
+- [ ] เปิด `/admin/freight/shipments` → ปุ่ม "➕ สร้างงานใหม่"
+- [ ] กรอก profile UUID (copy จาก /admin/customers) + transport_mode=sea_lcl + container_code=GZS2614 + ports + incoterm=CIF → "✓ สร้าง draft + ไปหน้า detail" → redirect พร้อม job_no `A26{NNNNN}` (5-digit running)
+- [ ] หน้า detail สถานะ `ร่าง`: panels = customer + logistics + value-block (ทั้งหมด —) + parties (empty) + invoice (สร้าง draft ปุ่ม) + status actions
+- [ ] กรอก Shipper (จีน) + Consignee (ไทย + tax_id 13 หลัก + branch) → "✓ บันทึก" ทั้ง 2 panels
+- [ ] กด "ยืนยัน" → สถานะ `ยืนยันแล้ว` + audit log freight_shipment.confirm
+- [ ] กด "🚢 เริ่มขนส่ง" → `กำลังขนส่ง` → "📋 ผ่านศุลกากร" → `ผ่านศุลฯ` → "📦 ส่งมอบแล้ว" → `ส่งมอบแล้ว` (terminal)
+
+**Admin invoice flow (in parallel with shipment status):**
+- [ ] กลับมาที่ shipment สถานะ confirmed → ปุ่ม "➕ สร้าง draft invoice" → invoice row ปรากฏ status=draft
+- [ ] "➕ เพิ่ม line item" → กรอก description="Cosmetic boxes" + qty=100 + unit=CTN + unit_price_usd=15.50 + cartons=100 + kg=2500 + hs_code="3304.99" → "✓ เพิ่ม" → ปรากฏ + amount_usd=$1550.00
+- [ ] เพิ่ม 2-3 lines → footer summary แสดงรวม USD + รวม cartons + รวม kg
+- [ ] ลอง "📨 ออกใบ" โดยไม่กรอก value block → ปุ่ม disabled (tooltip "ต้องกรอก commercial_value_usd + exchange_rate ก่อน issue")
+
+**Value block edit (ADR-0016 — currently read-only UI; เรียก action ตรง):**
+- [ ] ใน server console: `await adminUpdateFreightShipment({ id: '<shipment-uuid>', commercial_value_usd: 5500, exchange_rate: 34.5, rate_date: '2026-05-17', hs_code: '3304.99', duty_rate_pct: 5 })` → commercial_value_thb / duty_thb / vat_base_thb / vat_thb คำนวณ + ปรากฏใน read-only panel
+- [ ] ลอง update declared_customs_value_thb เป็น role=ops → error `declared_value_requires_super_or_accounting` (ADR-0016 Q3)
+- [ ] role=accounting → declared_customs_value_thb + declared_value_basis="ตามใบ B/L 1234" → สำเร็จ
+- [ ] update declared_customs_value_thb โดยไม่ส่ง declared_value_basis → error `declared_value_basis_required`
+
+**Issue invoice (snapshot freeze):**
+- [ ] หลัง value block + 2 parties ครบ → กด "📨 ออกใบ" → status `ออกแล้ว` + invoice_no `FI{YYMMDD}-0001` + ALL snapshot fields (shipper_name_snapshot, consignee_*_snapshot, port_*_snapshot, value block) freeze
+- [ ] ตรวจใน Studio: `select * from freight_invoices where id = '<id>'` → snapshot fields = ค่าที่ frozen ตอน issue
+- [ ] กลับมาแก้ shipment commercial_value_usd ทีหลัง → invoice snapshot ไม่เปลี่ยน (immutability ตาม ADR-0016)
+
+**Cancel invoice + re-issue:**
+- [ ] กด "✗ ยกเลิก" ที่ invoice issued → กรอกเหตุผล ≥3 → invoice status=cancelled + reason ปรากฏใน banner
+- [ ] partial-unique allow re-issue → กด "สร้าง draft invoice" ใหม่ได้ → invoice_no ใหม่
+
+**RBAC negative cases:**
+- [ ] role=warehouse → /admin/freight/shipments → 404 (ไม่ allowed)
+- [ ] role=sales_admin → เข้าได้ + edit ได้ (รวม invoice line items ถ้า status=draft) — แต่ adminIssueFreightInvoice ที่ require ['super','ops','accounting'] → 404 (sales_admin ไม่อยู่ใน list)
+
+**V-E6 → V-E1 conversion (the big test):**
+- [ ] เปิด V-E6 quote สถานะ `ลูกค้ายืนยัน` (accepted) + มี profile_id → กด "🚚 แปลงเป็น freight shipment" → success + redirect ไป shipment ใหม่ที่มี source_quote_id link
+- [ ] กลับมาที่ quote → ปุ่มเปลี่ยนเป็น "✅ แปลงเป็น shipment แล้ว (ID: ...)"
+- [ ] ลองกด convert ซ้ำ (2 tabs / API replay) → return shipment เดิม (idempotent ผ่าน UNIQUE source_quote_id + 23505 catch)
+
+**Audit trail:**
+- [ ] `/admin/audit` → filter target_type=`freight_shipment` หรือ `freight_invoice` → เห็น action ครบ: create / update / party_upsert / confirm / in_progress / cleared / delivered / cancel / line_add / line_update / line_delete / issue / cancel + payload
+
+**V-E10 QA integration sanity:**
+- [ ] สร้าง freight_qa_inspections row ผ่าน admin UI / Supabase Studio ที่ key เป็น freight_shipment_id (FK ใหม่จาก 0050) → row ใส่ได้; XOR constraint ยังอนุญาต (cargo_shipment_id=null + freight_shipment_id=non-null)
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร

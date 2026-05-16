@@ -94,13 +94,28 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see playbook section **FF**
 **Approval RBAC:** ✅ use existing `super` role for V1 (เดฟ + ลูกพี่ ack 2026-05-17) — no new `manager` role pre-launch.
 
-### V-E1 — Commercial invoice + packing list
+### V-E1 — Commercial invoice + packing list ✅ V1 SHIPPED 2026-05-17 (commit 6478efe)
 **Blocker:** ✅ ALL CLEAR (ADR-0016 locked 2026-05-16 night, 5 Qs resolved)
-**Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md#field-model-sketch--final-table-layout-part-of-the-v-e1-freight-schema-migration) for shipment-level fields
-**Migration:** `0050_freight_shipments.sql` + `0051_freight_invoices.sql` — **ภูม owns both** (ADR-0016 has the schema sketch ภูม wrote — single-owner per migration)
-**New entities:** `freight_shipments` (cargo spine for freight, w/ `commercial_value_*` + `declared_customs_value_thb` + `exchange_rate` + `vat_plan_label` per ADR §"Field model") + `freight_invoices` + `freight_invoice_lines`
-**Rules per ADR-0016 locked:** `rate_source` enum = `{'staff_entered'}` V1 · Option A (committed plan only, what-if = calculator UI) · declared-value edit = super+accounting + `declared_value_basis` + audit log · duty rate = snapshot from `hs_codes` at issuance, overridable + logged
-**Effort:** ~10-15h (spine alone; receipt/payment is V-E7 separate)
+**Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md)
+**Migrations:** ✅ `0050_freight_shipments.sql` + ✅ `0051_freight_invoices.sql` — needs `db push` on dev+prod
+**V1 shipped:**
+- ✅ Migration 0050 — `freight_shipments` + `freight_parties` (per role) + `freight_job_seq` + `next_freight_job_no()` (A{YY}{NNNNN} yearly reset) + RLS + V-E10 FK backfill (freight_qa_inspections.freight_shipment_id)
+- ✅ Migration 0051 — `freight_invoices` + `freight_invoice_lines` + `freight_invoice_seq` + `next_freight_invoice_serial()` (FI{YYMMDD}-{NNNN} daily reset) + partial-unique (one issued invoice per shipment) + RLS
+- ✅ `lib/validators/freight-shipment.ts` — Zod for shipment + invoice + line + computeValueBlock helper (derives commercial_value_thb / duty_thb / vat_base_thb / vat_thb per ADR-0016)
+- ✅ `actions/admin/freight-shipments.ts` — 8 actions (create / update with ADR-0016 Q3 declared_value role-gate / upsert party / 4 status flips / cancel)
+- ✅ `actions/admin/freight-invoices.ts` — 6 actions (create draft / line CRUD ×3 / issue with snapshot + serial / cancel)
+- ✅ `/admin/freight/shipments` — list (status chips + search) + new (header+logistics) + detail (parties + invoice + line items + status actions + value-block read-only + audit timeline)
+- ✅ V-E6 `adminConvertQuoteToShipment` stub → real INSERT (UNIQUE source_quote_id race-safe via 23505 catch)
+- ✅ Sidebar Freight group expanded with V-E1 link
+**V1 deferred (= V-E1.1):**
+- Customer-side portal `/(protected)/freight/shipments`
+- PDF generators: components/pdf/freight-commercial-invoice.tsx + freight-packing-list.tsx + freight-form-e.tsx + freight-do-letter.tsx + /api/freight-invoice/[id]/route.ts
+- Customer-picker dropdown in new shipment form (V1 = paste profile UUID)
+- Inline value-block editor on detail page (V1 = read-only display)
+- WHT freight integration (V-A6 was cargo-only; V-A6.1 adds freight_shipment_id support)
+- QA gate enforcement on freight invoice issuance (FK now exists; gate logic = V-E7)
+**Test list:** see playbook section **HH**
+**Next sequence:** V-E7 receipt + payment (~15-20h) — all prereqs (V-A6 ✅ + V-E10 ✅ + V-E1 ✅) cleared.
 
 ### V-E7 — Receipt + payment tracking
 **Blocker:** V-E1 (freight_invoices) + V-A6 WHT (ADR-0015) + V-E10 (QA gate)
@@ -194,8 +209,8 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0047` | **tos_versions** (V-G4) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0048` | **freight_quotes + items** (V-E6) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0049` | **wallet_order_payment_unique** (G9 / F-11 fix) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 53c11f8) — needs `db push` on dev+prod before public launch 2pm |
-| `0050` | freight_shipments (V-E1) | ภูม | ⬜ next — ADR-0016 locked — post-launch |
-| `0051` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0050 + 0044 |
+| `0050` | **freight_shipments + freight_parties** (V-E1 part 1) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
+| `0051` | **freight_invoices + freight_invoice_lines** (V-E1 part 2) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
 | `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0051 + V-E10 QA-pass gate |
 | `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
 | `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
