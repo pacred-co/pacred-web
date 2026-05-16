@@ -1,123 +1,131 @@
 # 🗄️ ภูม — apply the Phase-I2 migrations to Supabase (dev + prod)
 
-> **For: ภูม.** เดฟ reviewed every SQL file in the batch (2026-05-17). This is
-> the exact "what to do" checklist ภูม asked for. Pairs with
+> **For: ภูม.** เดฟ/agent reviews every SQL file as it lands; **ภูม owns
+> applying** — there is no zip hand-off. The migration files are already in git
+> under `supabase/migrations/`; apply them straight from there. Pairs with
 > [`supabase/migrations/README.md`](../../supabase/migrations/README.md).
 
 ---
 
 ## TL;DR
 
-7 migrations are committed to git but **not yet applied to Supabase**. Apply
-them to **dev first**, verify, then **production**. Combined one-paste file:
-[`docs/setup/migrations-0044-0060.sql`](../setup/migrations-0044-0060.sql).
+**9 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+on **dev first**, verifies, then **production** — `supabase db push`, or paste
+each file into the SQL Editor **in ascending number order**.
 
-| Migration | Adds | Feature |
-|---|---|---|
-| `0044_withholding_tax.sql` | `withholding_tax_entries` + `wht-certs` bucket | V-A6 WHT |
-| `0045_freight_qa_inspections.sql` | `freight_qa_inspections` + `qa_inspection_seq` + `qa-inspection-photos` bucket | V-E10 QA/QC |
-| `0046_org_contacts.sql` | `org_contacts` | V-G5 contacts |
-| `0047_tos_versions.sql` | `tos_versions` + `tos_acceptances` | V-G4 TOS |
-| `0048_freight_quotes.sql` | `freight_quotes` + `freight_quote_items` + `freight_quote_seq` | V-E6 quotation |
-| `0049_wallet_order_payment_unique.sql` | `wallet_tx_order_payment_uniq` partial-unique index | F-11/G9 wallet double-debit guard |
-| `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` |
+| # | File | Adds | Feature | Review |
+|---|---|---|---|---|
+| 0044 | `0044_withholding_tax.sql` | `withholding_tax_entries` + `wht-certs` bucket | V-A6 WHT | ✅ |
+| 0045 | `0045_freight_qa_inspections.sql` | `freight_qa_inspections` + `qa_inspection_seq` + photos bucket | V-E10 QA/QC | ✅ |
+| 0046 | `0046_org_contacts.sql` | `org_contacts` | V-G5 contacts | ✅ |
+| 0047 | `0047_tos_versions.sql` | `tos_versions` + `tos_acceptances` | V-G4 TOS | ✅ |
+| 0048 | `0048_freight_quotes.sql` | `freight_quotes` + `freight_quote_items` + `freight_quote_seq` | V-E6 quotation | ✅ |
+| 0049 | `0049_wallet_order_payment_unique.sql` | `wallet_tx_order_payment_uniq` partial-unique index | F-11/G9 wallet guard | ✅ |
+| 0050 | `0050_freight_shipments.sql` | `freight_shipments` + `freight_parties` + `freight_job_seq` + QA FK backfill | V-E1 spine | ✅ |
+| 0051 | `0051_freight_invoices.sql` | `freight_invoices` + `freight_invoice_lines` + `freight_invoice_seq` | V-E1 CI | ✅ |
+| 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
 
 ---
 
-## ✅ SQL review result (เดฟ, 2026-05-17) — all 7 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 9 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
-  replace` / `create unique index if not exists` / `drop+recreate` trigger+policy
-  / `on conflict do nothing`. Re-running is safe, never destroys data.
-- **Dependencies satisfied** — all 7 only need the `0002`-`0043` base (already
-  live on dev + prod). `set_updated_at()` is in `schema.sql`; `is_admin(text[])`
-  is in `0015`; the `warehouse` admin role used by `0045` was already added by
-  `0033`. FK targets `service_orders.h_no` + `forwarders.f_no` are both `unique`.
-  `0049`'s partial index columns (`reference_type`/`kind`/`status`) all exist in
-  `wallet_transactions` with the literal values used (`order_header` /
-  `order_payment` / `completed`) — verified against the CHECK constraints.
-- **Mutually independent** — apply order among the 7 does not matter.
-- **`0047` does NOT collide with `0006`** — `0006_tos_acceptance.sql` only added
-  two *columns* to `profiles`; `0047` creates new *tables*. No overlap.
-- **No bugs found.** The SQL is ready as-is.
+  replace` / `create [unique] index if not exists` / `drop+recreate`
+  trigger+policy / `do $$ if not exists $$` / `on conflict do nothing`.
+  Re-running is safe — never destroys data.
+- **Dependencies** — `0044`-`0049` only need the `0002`-`0043` base.
+  **`0050` depends on `0045` + `0048`** (it FK-links `freight_quotes` and adds
+  the reserved FK onto `freight_qa_inspections`); **`0051` depends on `0050`**.
+  → **Apply in ascending number order** and every dependency is satisfied.
+- Verified present: `set_updated_at()` (schema.sql) · `is_admin(text[])` (0015)
+  · `warehouse` role (0033) · `hs_codes.code` PK · `service_orders.h_no` +
+  `forwarders.f_no` unique · `wallet_transactions` columns + CHECK values.
+- **No bugs found.** SQL is ready as-is.
 
-> ⚠️ **One caveat on `0049`** — it builds a UNIQUE index. If production
-> `wallet_transactions` already holds a double-debited order (2 completed
-> `order_payment` rows for the same `h_no`), the index build fails with
-> *"could not create unique index"*. Pre-launch the table is empty / test-only,
-> so this is not expected — but if it happens, dedupe the offending rows first,
-> then re-run. Zero data migration otherwise.
-
-> The `0050`-`0059` gap is intentional — reserved for ภูม's freight block
-> (`freight_shipments` onward). `0060` member_code was numbered there on purpose
-> so เดฟ never collides with ภูม's migration numbers. Migrations apply in sorted
-> version order, so `0060` simply sorts last — the gap is harmless.
+> ⚠️ **`0049` caveat** — it builds a UNIQUE index on `wallet_transactions`.
+> If production already holds a double-debited order (2 completed `order_payment`
+> rows for one `h_no`), the index build fails. Pre-launch the table is
+> empty/test-only → not expected; if it happens, dedupe first then re-run.
 
 ---
 
-## 📋 Steps — do this on dev, then repeat on production
+## 📋 Steps — ภูม runs this (dev first, then prod)
 
 ### 1. dev Supabase
-1. Supabase Dashboard → **dev** project → **SQL Editor** → New query.
-2. Open [`docs/setup/migrations-0044-0060.sql`](../setup/migrations-0044-0060.sql),
-   copy the **whole file**, paste, **Run**.
-3. `"already exists"` / `"duplicate"` notices = **safe** (idempotent). A red
-   error that aborts the run is NOT safe — stop and ping เดฟ with the message.
-4. The file ends with a **4-part verify** block. Expected results:
-   - **(1)** 9 rows — `freight_qa_inspections`, `freight_quote_items`,
-     `freight_quote_seq`, `freight_quotes`, `org_contacts`, `qa_inspection_seq`,
-     `tos_acceptances`, `tos_versions`, `withholding_tax_entries`.
-   - **(2)** 2 rows — `qa-inspection-photos`, `wht-certs`.
-   - **(3)** 1 row — index `wallet_tx_order_payment_uniq` (F-11 double-debit guard).
-   - **(4)** 1 row, `pads_to_3 = true` — member_code generator now min-3-digit.
-5. Dashboard → **Database → Schema** → **Reload Schema Cache** (or wait ~1 min)
-   so PostgREST picks up the new tables.
+1. **`supabase db push`** against the dev project — OR — Supabase Dashboard →
+   dev → **SQL Editor**, open each file `0044` → `0045` → … → `0051` → `0060`
+   **in order**, paste + **Run** one at a time.
+2. `"already exists"` / `"duplicate"` notices = **safe** (idempotent). A red
+   error that aborts a file = NOT safe — stop, fix or ping เดฟ with the message.
+3. Run the **verify block** below — eyeball each result set.
+4. Dashboard → **Database → Schema → Reload Schema Cache** (or wait ~1 min).
 
 ### 2. production Supabase
-Repeat steps 1-5 on the **production** project. Same file, same expected
-results. The `0060` backfill rewrites existing `profiles.member_code` values
-(`PR00001`→`PR001`) — the running *number* is preserved, only the zero-padding
-changes; `member_code_seq` is untouched so the next signup continues cleanly.
+Repeat steps 1-4 on the **production** project. The `0060` backfill rewrites
+existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* preserved,
+only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post in the team thread: "migrations 0044-0049 + 0060 applied to dev + prod ✅".
-เดฟ updates [`team-status-2026-05-17.md`](team-status-2026-05-17.md) (it currently
-flags these as "in git but NOT applied").
+Post: "migrations 0044-0051 + 0060 applied to dev + prod ✅". เดฟ flips the
+status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
+
+---
+
+## 🔎 Verify block — run after applying
+
+```sql
+-- (1) Expected: 15 rows — the new tables.
+select table_name from information_schema.tables
+ where table_schema = 'public' and table_name in (
+   'withholding_tax_entries',
+   'freight_qa_inspections','qa_inspection_seq',
+   'org_contacts',
+   'tos_versions','tos_acceptances',
+   'freight_quotes','freight_quote_items','freight_quote_seq',
+   'freight_shipments','freight_parties','freight_job_seq',
+   'freight_invoices','freight_invoice_lines','freight_invoice_seq'
+ ) order by table_name;
+
+-- (2) Expected: 2 rows — new Storage buckets.
+select id from storage.buckets
+ where id in ('wht-certs','qa-inspection-photos') order by id;
+
+-- (3) Expected: 1 row — F-11 double-debit guard index.
+select indexname from pg_indexes
+ where schemaname='public' and indexname='wallet_tx_order_payment_uniq';
+
+-- (4) Expected: 1 row, pads_to_3 = true — member_code generator min-3-digit.
+select proname, pg_get_functiondef(oid) like '%lpad%3%' as pads_to_3
+  from pg_proc where proname='generate_member_code';
+```
 
 ---
 
 ## ⚠️ Notes
 
-- **`OTP_BYPASS` / env** — no env changes needed for these migrations.
-- **First QA inspection / first freight quote** — `inspection_no` (`QA-YYMMDD-NNNN`)
-  and `quote_no` (`FQYYMMDD-NNNN`) are filled by the server actions calling the
-  RPC `next_qa_inspection_no()` / `next_freight_quote_no()`. The RPCs are
-  `security definer` + granted to `service_role` only — that is intentional.
-- **F-11 (`0049`)** — after the index lands, `payServiceOrderFromWallet` +
-  `adminMarkServiceOrderPaid` catch Postgres `23505` and re-SELECT idempotently.
-  The index is the atomic backstop; the existing check-then-act SELECT stays as
-  the fast path. Apply `0049` **before public launch 2pm** — it closes the
-  pay-from-wallet double-debit race.
-- **member_code** — after `0060`, any UI / validator that shows a member code
-  expects `PR` + **minimum 3 digits** (`PR001` … `PR999` → `PR1000` → `PR12345`,
-  overflow-safe). The 3 validators + 8 UI placeholders + tests are already
-  updated on `main` (เดฟ, 2026-05-17).
-- **If a verify count is short** — a migration didn't fully run. Re-run the
-  combined file (idempotent) and reload the schema cache.
+- **No env changes** needed for any of these migrations.
+- **Serials** — `inspection_no` / `quote_no` / `job_no` / `invoice_no` are filled
+  by server actions calling the `security definer` RPCs (granted to
+  `service_role` only — intentional).
+- **F-11 (`0049`)** — apply **before public launch 2pm**; it closes the
+  pay-from-wallet double-debit race (actions catch `23505` + re-SELECT).
+- **member_code** — after `0060`, member codes are `PR` + **min 3 digits**
+  (`PR001`…`PR999`→`PR1000`, overflow-safe). Validators/UI already updated on `main`.
+- **If a verify count is short** — a file didn't fully run. Re-run it
+  (idempotent) and reload the schema cache.
 
 ---
 
-## 🔓 What this unblocks (post-launch Phase I2)
+## 🔓 Next
 
-Once applied, ภูม's next freight migration starts at **`0050`** (`freight_shipments`,
-V-E1). Full numbering map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
+ภูม's next freight migration = **`0052`** (`freight_invoice_payments`, V-E7).
+Full numbering map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 §"Migration numbering map".
 
 ---
 
 ## Cross-references
 
-- Combined file → [`docs/setup/migrations-0044-0060.sql`](../setup/migrations-0044-0060.sql)
 - Runbook table → [`supabase/migrations/README.md`](../../supabase/migrations/README.md)
 - Migration numbering map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 - ภูม brief → [`docs/briefs/poom.md`](../briefs/poom.md)

@@ -73,7 +73,7 @@ After deploy: a freshly-registered customer with zero orders correctly shows und
 - 4 test files (`signup` / `phone` / `analytics` / `pdf`) — assertions + fixtures updated; `phone.test.ts` gained `PR001`/`PR1000` cases (the old "PR123 → phone fallback" assertion was inverted by the new regex and is now `→ memberCode`).
 - All docs (`CLAUDE.md`, `PACRED-SECOND-BRAIN.md`, setup guides, architecture, legacy-schema, momo-1-call-prep) — `PR00001` example → `PR001`.
 
-**Migration numbering:** ภูม shipped `0044`-`0049` (WHT / qa / org_contacts / tos_versions / freight_quotes / wallet_order_payment_unique) autonomously 2026-05-17; member_code took **`0060`** — numbered clear of ภูม's `0044`-`005x` freight block so the two devs never collide. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map".
+**Migration numbering:** ภูม shipped `0044`-`0051` (WHT / qa / org_contacts / tos_versions / freight_quotes / wallet guard / freight_shipments / freight_invoices) autonomously 2026-05-17; member_code took **`0060`** — numbered clear of ภูม's `0044`-`005x` freight block so the two devs never collide. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map".
 
 ---
 

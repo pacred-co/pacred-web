@@ -26,15 +26,16 @@
 
 ## Diagnosis — ✅ resolved 2026-05-17
 
-**Pacred is on Vercel Pro** (เดฟ confirmed 2026-05-17). The Pro ceiling is 100
-concurrent crons at any frequency. Pacred runs **6** → ~94 crons of headroom.
-No consolidation needed — every cron runs at its true schedule, so
-`auto-cancel-orders` keeps sweeping every 15 min and the `awaiting_payment`
-SLA stays tight.
+**Pacred has been on Vercel Pro from day one** — เดฟ confirmed 2026-05-17 (the
+earlier "confirm the plan" action item was never a real risk; the project was
+provisioned on Pro from the start). The Pro ceiling is 100 concurrent crons at
+any frequency. Pacred runs **6** → ~94 crons of headroom. No consolidation
+needed — every cron runs at its true schedule, so `auto-cancel-orders` keeps
+sweeping every 15 min and the `awaiting_payment` SLA stays tight.
 
 **Action items — all done:**
 
-- [x] **เดฟ** confirmed Vercel project plan = **Pro** (2026-05-17)
+- [x] **เดฟ** confirmed Vercel project plan = **Pro** (on Pro since the start)
 - [x] `sms-balance-check` wired into `vercel.json` (cron #6, `0 23 * * *` = 06:00 ICT)
 - [x] No Hobby consolidation needed — Pro covers all 6 + headroom
 

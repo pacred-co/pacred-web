@@ -137,7 +137,7 @@ Plus 1 line in [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts)
 2. ✅ BOTH actions wrap the wallet INSERT to catch `error.code='23505'` → re-SELECT canonical tx → return `{ ok: true, data: { tx_id, already_paid: true } }`. Defensive: if 23505 fires but no peer row visible, surfaces descriptive error rather than swallowing.
 3. ✅ `adminMarkServiceOrderPaid` catch path also nudges order status forward (mirrors fast-path's existing logic).
 
-**Needs:** `db push` migration 0049 on dev + prod before public launch 2pm Mon. Combined apply file at `docs/setup/migrations-0044-0060.sql` does NOT include 0049 (was shipped after that file generated) — paste 0049 separately or include in the next combined re-gen.
+**Needs:** ภูม `db push` migration `0049` on dev + prod before public launch 2pm Mon — apply straight from `supabase/migrations/` in ascending number order with the rest of the Phase-I2 batch. Steps → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 
 **Verified:** `pnpm verify EXIT=0` · all wallet/payment tests pass.
 

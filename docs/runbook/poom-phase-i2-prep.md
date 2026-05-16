@@ -94,10 +94,10 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see playbook section **FF**
 **Approval RBAC:** ✅ use existing `super` role for V1 (เดฟ + ลูกพี่ ack 2026-05-17) — no new `manager` role pre-launch.
 
-### V-E1 — Commercial invoice + packing list
+### V-E1 — Commercial invoice + packing list ✅ V1 SHIPPED 2026-05-17 (commit 6478efe)
 **Blocker:** ✅ ALL CLEAR (ADR-0016 locked 2026-05-16 night, 5 Qs resolved)
 **Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md#field-model-sketch--final-table-layout-part-of-the-v-e1-freight-schema-migration) for shipment-level fields
-**Migration:** `0050_freight_shipments.sql` + `0051_freight_invoices.sql` — **ภูม owns both** (ADR-0016 has the schema sketch ภูม wrote — single-owner per migration)
+**Migration:** ✅ `0050_freight_shipments.sql` (+ freight_parties + freight_job_seq + V-E10 QA FK backfill) + `0051_freight_invoices.sql` (+ freight_invoice_lines + freight_invoice_seq) shipped — needs `db push` on dev/prod
 **New entities:** `freight_shipments` (cargo spine for freight, w/ `commercial_value_*` + `declared_customs_value_thb` + `exchange_rate` + `vat_plan_label` per ADR §"Field model") + `freight_invoices` + `freight_invoice_lines`
 **Rules per ADR-0016 locked:** `rate_source` enum = `{'staff_entered'}` V1 · Option A (committed plan only, what-if = calculator UI) · declared-value edit = super+accounting + `declared_value_basis` + audit log · duty rate = snapshot from `hs_codes` at issuance, overridable + logged
 **Effort:** ~10-15h (spine alone; receipt/payment is V-E7 separate)
@@ -181,7 +181,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 > (freight/commission stack). เดฟ's member_code migration was moved **out of that
 > block to `0060`** so ภูม can keep numbering freight migrations sequentially
 > without colliding with เดฟ. Migrations apply in **sorted version order**, so the
-> `0050`-`0059` gap is harmless — `0060` simply runs last. ภูม's next free = **`0050`**.
+> `0052`-`0059` gap is harmless — `0060` simply runs last. ภูม's next free = **`0052`**.
 
 | Number | Item | Owner | Status |
 |---|---|---|---|
@@ -194,17 +194,18 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0047` | **tos_versions** (V-G4) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0048` | **freight_quotes + items** (V-E6) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0049` | **wallet_order_payment_unique** (G9 / F-11 fix) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 53c11f8) — needs `db push` on dev+prod before public launch 2pm |
-| `0050` | freight_shipments (V-E1) | ภูม | ⬜ next — ADR-0016 locked — post-launch |
-| `0051` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0050 + 0044 |
-| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0051 + V-E10 QA-pass gate |
+| `0050` | **freight_shipments + parties** (V-E1) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
+| `0051` | **freight_invoices + lines** (V-E1) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
+| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ next — dep 0051 + V-E10 QA-pass gate |
 | `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
 | `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
 | `0055`-`0059` | *(reserved headroom for ภูม's freight block — fill sequentially)* | ภูม | — |
 | `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 
-> ⚠️ **7 migrations (`0044`-`0049` + `0060`) shipped to git but NOT yet applied
-> to Supabase.** Run `supabase db push` (or paste each into the SQL Editor) on
-> dev + prod before launch / before the features that depend on them.
+> ⚠️ **9 migrations (`0044`-`0051` + `0060`) shipped to git but NOT yet applied
+> to Supabase.** ภูม applies them on dev + prod — `supabase db push` (or paste
+> each into the SQL Editor in ascending number order). `0050`/`0051` reference
+> `0045`/`0048`, so number order satisfies every dependency.
 
 **Note:** `0044`-`0059` block = ภูม (freight/commission stack). `0060`
 (member_code) = เดฟ — deliberately numbered clear of ภูม's block so the two devs

@@ -62,14 +62,16 @@
 | 47 | [0047_tos_versions.sql](0047_tos_versions.sql) | tos_versions + tos_acceptances — TOS version mgmt (V-G4) | **V-G4 · I2** |
 | 48 | [0048_freight_quotes.sql](0048_freight_quotes.sql) | freight_quotes + freight_quote_items + freight_quote_seq (V-E6) | **V-E6 · I2** |
 | 49 | [0049_wallet_order_payment_unique.sql](0049_wallet_order_payment_unique.sql) | partial-unique guard — double-debit fix on pay-from-wallet (F-11/G9) | **F-11 · I2** |
-| 50 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
+| 50 | [0050_freight_shipments.sql](0050_freight_shipments.sql) | freight_shipments + freight_parties + freight_job_seq + V-E10 QA FK backfill (V-E1) | **V-E1 · I2** |
+| 51 | [0051_freight_invoices.sql](0051_freight_invoices.sql) | freight_invoices + freight_invoice_lines + freight_invoice_seq (V-E1) | **V-E1 · I2** |
+| 52 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
 
-> ⚡ **Shortcut for 0044–0060 (ภูม Phase-I2 batch + เดฟ member_code):** open
-> [`../../docs/setup/migrations-0044-0060.sql`](../../docs/setup/migrations-0044-0060.sql)
-> — combined, idempotent, ends with a verify query. Paste the whole
-> file → **Run** once, on **dev AND production**. The 7 migrations are mutually
-> independent (only need the 0002-0043 base). The `0050`-`0059` gap is
-> intentional — reserved for ภูม's freight block; `0060` simply sorts last.
+> 📋 **Phase-I2 batch (`0044`-`0051` + `0060`) — ภูม applies.** ภูม owns running
+> these on **dev + production** Supabase — paste each file into the SQL Editor in
+> ascending number order, or `supabase db push`. Apply in number order:
+> `0050`/`0051` reference `0045`/`0048`, so ascending order satisfies every
+> dependency. เดฟ/agent reviews the SQL; ภูม applies — no zip hand-off. Status +
+> per-file detail → [`../../docs/runbook/poom-apply-migrations-2026-05-17.md`](../../docs/runbook/poom-apply-migrations-2026-05-17.md).
 
 > ⚡ **Shortcut for 0023–0038:** instead of pasting 16 files one by one,
 > open [`../../docs/setup/migrations-0023-0038.sql`](../../docs/setup/migrations-0023-0038.sql)
