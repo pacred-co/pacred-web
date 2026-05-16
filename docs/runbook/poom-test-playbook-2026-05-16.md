@@ -268,6 +268,20 @@
 - [ ] Footer + contact-us page ยังใช้ constants ใน `components/seo/site.ts` — ไม่เปลี่ยนพฤติกรรม
 - [ ] DB rows ที่เพิ่ม **ไม่กระทบ** หน้า public ใดๆ ใน V1 — สามารถ test ได้ปลอดภัยบน prod
 
+### EE. **NEW (V-G6) — 4 analytical admin reports** (no migration, additive)
+
+**Roles eligible:** super, ops, accounting (+ sales_admin for sales-by-rep + user-sales-history).
+
+- [ ] `/admin/reports` → ดู section ใหม่ "📊 รีพอร์ตวิเคราะห์ (V-G6)" มี 4 quick-cards
+- [ ] **forwarder-volume**: เปิด → เห็น aggregations (warehouse × transport_type) + summary cards + table + CSV button; เปลี่ยน 7d/30d/90d/365d filter; ลอง CSV download
+- [ ] **sales-by-rep**: เปิด → เห็น list ทุก rep (ที่มี profile.sales_admin_id) + ยอด fw/so/yp + รวม lifetime + เฉลี่ยต่อ rep; ลูกค้าไม่มี rep จัดกลุ่ม "(ไม่มี sales rep)"
+- [ ] **hs-code-revenue**: เปิด → เห็น HS codes sorted by value desc; แต่ละแถวคลิก hs_code → ไป containers-hs ที่ filter HS นั้น; ถ้ายังไม่มี container_hs_lines เลย → empty state link ไป /admin/containers
+- [ ] **user-sales-history** (entry): เปิด → เห็น top 50 ลูกค้า 90 วันล่าสุด sorted by revenue; search box → กรอก PR-code หรือ email บางส่วน → redirect ไป detail
+- [ ] **user-sales-history/[customer_id]**: หลัง search → เห็น customer info card + summary cards (fw/so/yp/lifetime) + chronological timeline + คลิก ref → ไปหน้า detail ของ transaction นั้น
+- [ ] Sidebar group "รีพอร์ตวิเคราะห์" มี 4 entries ใหม่
+
+**Performance check:** แต่ละ report ควร load < 2s บน data 1 ปี
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
