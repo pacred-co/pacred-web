@@ -1,6 +1,6 @@
 # ปอน — Frontend / Landing / SEO / Marketing
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-16 night (+ T-N1 + T-N2 playbook by เดฟ → [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md))
 Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
 
 ---
