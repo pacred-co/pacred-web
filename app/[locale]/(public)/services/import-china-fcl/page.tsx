@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import {
   Container,
   Ship,
-  CheckCircle2,
   ShieldCheck,
   Wallet,
   BadgePercent,
@@ -18,13 +17,10 @@ import {
   ArrowRight,
   Anchor,
   Globe2,
-  Truck,
-  Boxes,
   HandCoins,
   Award,
   PackageSearch,
   Sparkles,
-  Zap,
 } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";

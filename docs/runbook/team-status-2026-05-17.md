@@ -105,12 +105,18 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 
 ## ⏳ What's left before Monday launch
 
+### ✅ T-D1 production smoke gate — done 2026-05-17 evening (เดฟ)
+
+`pnpm build && pnpm start` + curl every route → **🟢 PASS, zero 500s** on all customer routes (public · auth · 7 customs `[port]` dynamic · knowledge `[slug]` · en-locale · protected/admin guest-307). Re-traced register+OTP (no B1 regression), G7 corporate row (held), wallet deposit/withdraw (clean) against current HEAD. Details: [`cargo-smoke-test-T-D1.md`](cargo-smoke-test-T-D1.md) §"Re-audit 2026-05-17".
+
+**1 finding — G9 (low-med, NOT a launch blocker):** `payServiceOrderFromWallet` idempotency is check-then-act → edge-case double-debit race (2-tab / back-button). Pay button `disabled={pending}` blocks the common case. → ภูม week-1 fix F-11 (partial unique index — exact SQL in [`poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)).
+
 ### Tomorrow morning (Mon ~6-8am BKK)
 
 | # | Owner | Item | Effort |
 |---|---|---|---|
 | 1 | เดฟ | DV-3 ThaiBulkSMS signup + flip `OTP_BYPASS=false` in Vercel | ~30m |
-| 2 | เดฟ | T-D1 smoke test prod (`next start` + curl every NEW/CHANGED route) per AGENTS.md §11 | ~1h |
+| 2 | เดฟ | Re-run T-D1 smoke on the **post-DV-3 prod deploy** (OTP_BYPASS=false changes the register path) | ~30m |
 | 3 | ลูกพี่ + เดฟ + ก๊อต | LINE + workstation standby starting ~9am | — |
 | 4 | All | T-D4 soft launch 10am — 5 friendly customers per pre-launch-checklist | ~2-3h coordination |
 | 5 | All | Public launch 2pm if T-D4 green | — |
@@ -130,6 +136,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 
 | Owner | Pickup | Effort |
 |---|---|---|
+| **ภูม** | F-11 pay-from-wallet double-debit fix (G9 — partial unique index + catch 23505 in 2 actions) — week-1, before ad-driven concurrency | ~30-45m |
 | **ภูม** | V-A6 WHT impl per ADR-0015 (migration `0044_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) | ~8-12h |
 | **ภูม** | V-E10 QA/QC intake inspection (no blocker, prereq for V-E7) | ~4-6h |
 | **ภูม** | V-E6 quotation workflow (opens freight sales funnel) | ~6-8h |

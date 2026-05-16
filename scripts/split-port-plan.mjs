@@ -41,10 +41,6 @@ if (splitIdx === -1) {
   process.exit(1);
 }
 
-// Carve out the pre-Part-O section (header + TL;DR + Parts A–N) for the archive
-const headLines = [];
-const archiveLines = [];
-
 // Header detection: keep everything before the first `# Part A` in PORT_PLAN
 let firstPartIdx = -1;
 for (let i = 0; i < splitIdx; i++) {

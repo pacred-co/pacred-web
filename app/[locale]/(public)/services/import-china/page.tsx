@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import {
-  Plane,
   Ship,
   Truck,
   CheckCircle2,
@@ -21,7 +20,6 @@ import {
   PackageSearch,
   MessageCircle,
   Phone,
-  MapPin,
   Home,
   ChevronRight,
   ArrowRight,

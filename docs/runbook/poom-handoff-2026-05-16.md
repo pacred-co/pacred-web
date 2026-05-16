@@ -129,6 +129,27 @@ Plus 1 line in [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts)
 **Status:** ~30+ PHP report files; Pacred has 5 main tabs + 6 V-B1 reports + containers-hs. Missing = operational monitoring reports (system errors / SMS log / promo tracking).
 **Recommendation:** Use Sentry + admin_audit_log + existing logs instead. Skip dedicated UI in V2.
 
+### F-11 · 🆕 pay-from-wallet double-debit race (เดฟ → ภูม, from T-D1 re-audit 2026-05-17)
+**Symptom:** `payServiceOrderFromWallet` (`actions/service-order.ts`) + its mirror `adminMarkServiceOrderPaid` (`actions/admin/service-orders.ts`) use a **check-then-act** idempotency: `SELECT` for an existing completed `order_payment` tx → if none, `INSERT` the `-total_thb` debit. No DB-level guard between the SELECT and the INSERT — two near-simultaneous submits (2 tabs / back-button / API-replay) can both pass the check and both debit.
+
+**Severity:** low-med. The pay button is `disabled={pending}` client-side (`pay-from-wallet-button.tsx`) so the common impatient double-click is already blocked; residual race is edge-case + recoverable via refund. **NOT a launch blocker** — soft-launch (5 hand-held customers) is safe. Fix in week-1 post-launch before ad-driven concurrency ramps.
+
+**Fix (เดฟ recommends — ภูม owns since it's a migration + action edit):**
+
+1. Migration `0045_wallet_order_payment_unique.sql` (or fold into your next migration batch — renumber as needed; the `0044` WHT slot is yours per D-2):
+```sql
+-- One completed order_payment per service-order — DB-enforced idempotency.
+create unique index if not exists wallet_tx_order_payment_uniq
+  on public.wallet_transactions (reference_id)
+  where kind = 'order_payment'
+    and reference_type = 'order_header'
+    and status = 'completed';
+```
+2. In BOTH `payServiceOrderFromWallet` + `adminMarkServiceOrderPaid` — wrap the debit `INSERT` so a unique-violation (`error.code === '23505'`) is caught → re-SELECT the existing tx → return `{ ok: true, data: { tx_id, already_paid: true } }`. The existing check-then-act SELECT stays as the fast path; the catch is the atomic backstop.
+3. Note — `wallet_transactions` may have `order_payment` rows from yuan-payments or other flows keyed differently; verify the partial-index predicate (`reference_type='order_header'`) doesn't collide with those before applying. (forwarder payments use `reference_type='forwarder'` — separate, safe.)
+
+**Effort:** ~30-45 min. Full context: [`cargo-smoke-test-T-D1.md`](cargo-smoke-test-T-D1.md) §"Re-audit 2026-05-17" G9 + [`docs/learnings/supabase-rls-patterns.md`](../learnings/supabase-rls-patterns.md) (check-then-act money-race entry).
+
 ---
 
 ## 🎯 Sequence ภูม จะลุยต่อ (pre/post-launch)

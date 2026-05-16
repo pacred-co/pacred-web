@@ -34,6 +34,23 @@ dev Supabase to confirm the G5 + G7 fixes behave end-to-end. Juristic accounts c
 
 ---
 
+## 🔁 Re-audit — 2026-05-17 (เดฟ via Claude, T-D1 production smoke gate)
+
+`pnpm build && pnpm start` + `curl` every route — **🟢 zero 500s, zero DYNAMIC_SERVER_USAGE** on every customer route (public · auth · 7 customs `[port]` dynamic · knowledge `[slug]` · en-locale · protected-guest-307 · admin-guest-307). Re-traced the launch-critical register path against current `dave` HEAD (~40 commits since the 2026-05-15 audit):
+
+- ✅ **Register + OTP** — `registerPersonal` + `registerJuristicStep1` both call `verifyOtp` correctly; no B1 `"bypass"`-hardcode regression after the register restyle. `actions/otp.ts` dual-pepper rotation intact.
+- ✅ **G7 (juristic corporate row)** — fix held: `saveJuristicStep2` still upserts `corporate`.
+- ✅ **wallet deposit / withdraw** — `createDeposit` + `createWithdraw` clean; server-side slip validation present.
+- ✅ **DBD lookup** — fixed the misleading degradation message (separate commit + `learnings/partner-apis-quirks.md`).
+
+| # | Severity | Gap | Status |
+|---|---|---|---|
+| **G9** | **low-med** | **`payServiceOrderFromWallet` (+ mirror `adminMarkServiceOrderPaid`) idempotency is check-then-act** — it `SELECT`s for an existing completed `order_payment` tx, then `INSERT`s the debit. No DB-level guard between the two. A customer submitting from 2 tabs / back-button / API-replay could double-debit. The pay button IS `disabled={pending}` client-side (blocks the common impatient double-click), so the residual race is edge-case + recoverable (refund). **Not a launch blocker.** | → ภูม follow-up F-11 (week-1) |
+
+**G9 fix (handed to ภูม — exact spec in [`poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md) F-11):** add a partial unique index so the DB rejects a 2nd completed `order_payment` atomically, then catch the unique-violation in both actions → return `already_paid: true`.
+
+---
+
 ## Pre-flight checklist (do once before first run)
 
 - [ ] **Migrations applied** on the target Supabase project (dev or prod):

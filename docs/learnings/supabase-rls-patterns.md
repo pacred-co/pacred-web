@@ -162,3 +162,42 @@ export async function payServiceOrderFromWallet(hNo: string) {
 - `docs/decisions/0002-admin-architecture.md`
 
 ---
+
+## [2026-05-17] Check-then-act idempotency on a money path needs a DB unique index, not a SELECT
+
+**Context:** T-D1 production smoke-gate re-audit of the cargo revenue path (เดฟ via Claude).
+
+**Symptom (anti-pattern):** `payServiceOrderFromWallet` guarded against double-charging like this:
+
+```ts
+// 1. look for an existing completed payment
+const { data: existingTx } = await supabase.from("wallet_transactions")
+  .select("id").eq("reference_id", hNo).eq("kind", "order_payment")
+  .eq("status", "completed").maybeSingle();
+if (existingTx) return { ok: true, data: { already_paid: true } };
+// 2. ... balance check ...
+// 3. INSERT the -total_thb debit
+```
+
+Steps 1 and 3 are **not atomic**. Two requests racing through the gap (customer submits from 2 tabs, hits back-then-resubmit, or an API replay) both see "no existing tx" → both INSERT → **double debit**. A `disabled={pending}` button only blocks the *same* button instance, not a second tab / replay.
+
+**The fix — let the DB enforce it.** A *partial unique index* makes the 2nd INSERT fail atomically:
+
+```sql
+create unique index if not exists wallet_tx_order_payment_uniq
+  on public.wallet_transactions (reference_id)
+  where kind = 'order_payment'
+    and reference_type = 'order_header'
+    and status = 'completed';
+```
+
+Then in the action, keep the cheap SELECT as a fast path but catch the unique-violation (`error.code === '23505'`) as the real backstop → re-SELECT → return `already_paid: true`.
+
+**Rule:** any "insert exactly one of X" on a money / status path — the uniqueness must live in the DB (unique index / constraint), never only in an application `SELECT`-then-`INSERT`. The app check is a UX nicety; the DB constraint is the correctness guarantee.
+
+**Cross-links:**
+- Finding G9 → [`docs/runbook/cargo-smoke-test-T-D1.md`](../runbook/cargo-smoke-test-T-D1.md) §"Re-audit 2026-05-17"
+- ภูม fix F-11 → [`docs/runbook/poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md)
+- Same pattern to fix: `actions/admin/service-orders.ts::adminMarkServiceOrderPaid`
+
+---
