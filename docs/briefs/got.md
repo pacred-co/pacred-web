@@ -1,6 +1,6 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off)
+Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
 ---
@@ -99,8 +99,8 @@ Two DRAFT ADRs from the cargo-ops forensics need your review + lock. **ADR-0015 
 
 | # | Task | Effort | Source |
 |---|---|---|---|
-| **ADR-0015 lock** | Review [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — answer the **4 open questions**, flip Status → Accepted. Unblocks 🔴 **V-A6** (withholding tax — the #1 accounting pain in the ไอแต้ม chat). | ~45m | PORT_PLAN Part V |
-| **ADR-0016 lock** | Review [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — answer the **5 open questions** (incl. who issues Form E), flip Status → Accepted. Unblocks **V-E2** (freight value model). | ~45m | PORT_PLAN Part V |
+| **ADR-0015 lock** | Review [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — answer the **4 open questions**, flip Status → Accepted. Unblocks 🔴 **V-A6** (withholding tax — the #1 accounting pain in the ไอแต้ม chat). **🎯 fastlane below** = pre-answered. | ~5m w/ fastlane | PORT_PLAN Part V |
+| **ADR-0016 lock** | Review [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — answer the **5 open questions** (incl. who issues Form E), flip Status → Accepted. Unblocks **V-E2** (freight value model). **🎯 fastlane below** = pre-answered. | ~5m w/ fastlane | PORT_PLAN Part V |
 | **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ~30m | PORT_PLAN Part V |
 
 #### 📋 docs-dedup decision (NEW 2026-05-16 — เดฟ hand-off · DECIDE tonight)
@@ -126,6 +126,64 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 **Risk to weigh:** docs are NOT deployed → **zero production risk**. Real risks are only (1) broken cross-links — `pnpm audit:md` (793 links) catches all of them; (2) judgment — some restatement is *intentional* (`CLAUDE.md` is a load-bearing always-loaded primer · `STRATEGY.md` is a deliberate consolidation · briefs are per-role digests). A dedup must KEEP those and cut only genuine rot. That judgment is why เดฟ routed it to you rather than letting an agent decide unsupervised.
 
 **Recommended: A** — safe (pointers + audit gate), `CLAUDE.md` is the clear 80% win, and you're online tonight to review. Say go and an agent executes it; you just review the diff + FF to `main`.
+
+#### 🎯 P0.7-fastlane — ADR-0015/0016 pre-answered for tonight (เดฟ hand-off · ลด ก๊อต 45m → 5m)
+
+เดฟ pre-answered all 9 open questions ในสอง DRAFT ADR ด้วย recommendation + หลักฐานจาก forensics — ปลดล็อค **V-A6 (WHT, 🔴 #1 chat complaint)** + V-E2 ได้เลย. **อ่าน 5 นาที · 👍 / 👎 / ✏️ ทีละข้อ · เซ็น Status → Accepted**
+
+---
+
+##### ADR-0015 (WHT) — 4 open questions ([file](../decisions/0015-withholding-tax-model.md))
+
+**Q1 — Allowed rate set: `{1, 1.5, 2, 3, 5}` or just `{1, 3}`?**
+- **เดฟ recommends: KEEP `{1, 1.5, 2, 3, 5}` in DB check; UI default = 1 (cargo/forwarder) · 3 (pure service).**
+- **Why:** `1.5` (transport-specific) · `2` (advertising) · `5` (rent) are unlikely for Pacred today but **adding them costs zero, removing later = migration**. Conservative DB + opinionated UI = cheap insurance.
+
+**Q2 — Customer self-upload of 50 ทวิ in V1?**
+- **เดฟ recommends: ADMIN-ONLY V1.** Customer self-upload deferred to V1.1.
+- **Why:** Customer-side upload = new UI + RLS + bucket policy + customer instructions = ~4-6h extra. Admin-only V1 ships the gate (the revenue-unblocking thing) in ~2h. V1.1 adds self-upload once staff workflow is validated.
+
+**Q3 — Does `waived` need a second approver?**
+- **เดฟ recommends: SINGLE approver + logged reason, role = `super` OR `accounting` (not `ops`).**
+- **Why:** Audit row + `waived_reason` already provides accountability (ADR-0014 pattern). Dual-approval = friction during launch when ops just need to unblock a customer. Tighten via follow-up ADR if waivers become frequent (>5/wk).
+
+**Q4 — Bucket: dedicated `wht-certs` or reuse `slips`?**
+- **เดฟ recommends: DEDICATED `wht-certs`.**
+- **Why:** Different retention class (tax doc → longer legal retention) · different access (admin read vs customer upload) · the precedent `tax-invoices` got its own bucket (migration `0035`). Avoids RLS policy entanglement; trivial to create.
+
+---
+
+##### ADR-0016 (freight value) — 5 open questions ([file](../decisions/0016-freight-value-model.md))
+
+**Q1 — Exchange-rate source: staff-entered · BOT reference · FX API?**
+- **เดฟ recommends: STAFF-ENTERED V1, range-guarded.** `rate_source` enum = `{'staff_entered'}` only for V1.
+- **Why:** Legacy spreadsheets already do this (frozen rates observed: 31.4109 / 32.8526 / 33.162). FX API = vendor selection + cost + external dep before freight volume justifies. Add `bot_reference` / `fx_api` as enum values later when volume warrants.
+
+**Q2 — VAT plans: Option A (calculator UI · store committed only) or B (stored what-if history)?**
+- **เดฟ recommends: OPTION A V1** (matches ADR's own recommendation).
+- **Why:** Legacy "แผน2 VAT" naming = humans choose, then file = chosen plan. Calculator can hold inputs in URL params (zero loss). Option B migrates cleanly from A later when audit-history demand is real.
+
+**Q3 — Declared-value authority: super + accounting both, or accounting alone? Second approver?**
+- **เดฟ recommends: super + accounting both can edit · ops cannot · single editor.**
+- **Why:** Audit row + required `declared_value_basis` IS the accountability (per ADR-0014). Gating both ways pre-launch = revenue drag. Compliance line in ADR §Context already covers misdeclaration-prevention intent.
+
+**Q4 — HS-code → duty rate: live + snapshot or fully manual?**
+- **เดฟ recommends: SNAPSHOT from `hs_codes` at issuance · overridable + logged** (matches ADR's own recommendation).
+- **Why:** Keeps duty honest at issuance (rate changes later don't retro-modify invoice) · override allows edge cases (Form E preference, special declarations) · override writes same audit-row pattern as declared-value.
+
+**Q5 — Does V-E3 (Form E) / V-E4 (D/O letter) need its own ADR?**
+- **เดฟ recommends: NO new ADR for V-E3/E4.** Pure templating + data-flow.
+- **Why:** Decisions in ADR-0016 + ADR-0006 cover value/invoice. Form E + D/O = PDF generators over existing fields. Content choices (HS-code list embed · port codes pre-populated) → capture in [`docs/port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) instead of escalating.
+
+---
+
+**Tonight action (ทำขนานกับ docs-dedup):**
+1. Read 4 Q + 5 Q + reactions (5 min)
+2. If you agree → edit each ADR: flip Status `🟡 DRAFT` → `✅ Accepted` + paste/edit the answers into a new "Resolved questions" section at the bottom of each ADR + bump date
+3. Commit `docs(adr): lock 0015/0016 — pre-answers per เดฟ hand-off`
+4. ภูม unblocks V-A6 (🔴) + V-E2 immediately tomorrow morning
+
+**If you disagree on any answer:** ✏️ note + push back to เดฟ; the ADR stays DRAFT until consensus. (We've got time on V-E2 — it's Phase I2; V-A6 is the urgent one.)
 
 #### P1 (production hardening — pre-public-beta)
 
