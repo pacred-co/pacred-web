@@ -15,11 +15,11 @@
 |---|---|
 | ✅ DV-2 LIFF DONE | LINE channel + LIFF ID set ใน Vercel (ลูกพี่ ทำคืน 2026-05-16) |
 | ✅ OTP_PEPPER rotated | Default placeholder → cryptographic value |
-| ⏳ T-G3 #1 PromptPay | **THIS CALL — unblocks wallet deposit live** |
-| ⏳ T-G3 #2 Bank account | **THIS CALL — printed ใน receipt PDFs** |
-| ⏳ T-G3 #3 Pacred legal info | **THIS CALL — tax invoice + footer + DBA + tax-ID** |
-| ⏳ T-G3 #4 Omise approval | **THIS CALL — cash sign-off สำหรับ Omise payment gateway (P2 post-launch wire)** |
-| ⏳ T-G3 #5 PDPA reg status | **THIS CALL — required ก่อน K-sec-4 pen test ที่ใช้ staging data** |
+| ⏳ T-G3 #1 PromptPay | **STILL NEEDS** — `PROMPTPAY_ID` env (tax-ID 13 หลัก หรือ เบอร์ 10 หลัก ที่ผูกบัญชี) |
+| ✅ T-G3 #2 Bank account | DONE 2026-05-17 — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) → wired ใน `BANK` constant + pacred-info.md |
+| 🟡 T-G3 #3 Pacred legal info | PARTIAL — tax-ID `0105564077716` confirmed ✅; remaining 6 fields existing in pacred-info.md (need confirm with พี่ป๊อป they're correct) |
+| ⏳ T-G3 #4 Omise approval | **STILL NEEDS** — owner cash sign-off |
+| ⏳ T-G3 #5 PDPA reg status | **STILL NEEDS** — required ก่อน K-sec-4 pen test |
 
 ---
 
@@ -47,7 +47,13 @@
 
 ---
 
-### Ask #2 — Bank account info (~5 นาที)
+### Ask #2 — Bank account info — ✅ DONE 2026-05-17
+
+**ที่ได้:** กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) → wired ใน [`components/seo/site.ts`](../../components/seo/site.ts) `BANK` constant + [`docs/pacred-info.md`](../pacred-info.md) §"💳 Bank account" + ภูม wire ลง receipt/invoice PDFs in same refactor batch as CONTACT.* migration tracker.
+
+> ⚠️ **ขอ confirm:** "ออมทรัพย์" หรือ "กระแสรายวัน"? (เรา default = ออมทรัพย์ ใน `BANK.accountType`; ถ้าผิด แจ้ง ลูกพี่ → เดฟ flip)
+
+**Original ask (preserved for ref):**
 
 **ขอ:** 3 อย่าง
 1. **ชื่อธนาคาร** (เช่น "ธนาคารกสิกรไทย")

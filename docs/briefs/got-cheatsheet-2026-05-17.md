@@ -89,18 +89,24 @@
 - หลังคุยเสร็จ → ลูกพี่ ส่ง audio + notes ให้ เดฟ → เดฟ กรอก [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md)
 - **Unblocks:** CT-5 (MOMO sync cron) + CT-6 (webhook receiver) ภูม จะ implement ทันที post-call
 
-### 2.2 T-G3 — call พี่ป๊อป Bundle 1 (~30m + รอ)
-4 อย่างที่ต้องขอ:
-1. **PromptPay number** (เบอร์โทร 10 หลัก หรือ tax-ID 13 หลัก) → unlocks wallet deposit live
-2. **Bank account** number + ชื่อธนาคาร + ชื่อบัญชี → printed ใน receipt PDFs
-3. **Pacred legal info** — legal name TH/EN + tax ID 13 หลัก + ที่อยู่จดทะเบียน + เบอร์กลาง + email → tax invoice + footer
-4. **LIFF ID** จาก LINE Console (ถ้า เดฟ ยังไม่ได้ทำ DV-2 — ขอ confirm พี่ป๊อปเข้า LINE Premium account ของ Pacred)
+### 2.2 T-G3 — call พี่ป๊อป Bundle 1 — ⏳ **PARTIAL DONE 2026-05-17 (ลูกพี่ takes)**
+
+| # | Item | Status |
+|---|---|---|
+| 1 | PromptPay number | ⏳ STILL NEEDS (tax-ID 13 หลัก or เบอร์ 10 หลัก ผูกบัญชี?) |
+| 2 | Bank account | ✅ DONE — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) → `BANK` constant + pacred-info.md |
+| 3 | Pacred legal info | 🟡 PARTIAL — tax-ID `0105564077716` confirmed; remaining 6 fields ใน pacred-info.md ตรงอยู่แล้ว (ลูกพี่ confirm กับ พี่ป๊อป) |
+| 4 | Omise approval | ⏳ STILL NEEDS (cash sign-off · onboarding docs) |
+| 5 | PDPA registration | ⏳ STILL NEEDS (required ก่อน K-sec-4 pen test) |
+| (LIFF) | LINE Login channel + LIFF ID | ✅ DV-2 DONE 2026-05-16 night (ไม่ต้องถามแล้ว) |
+
+Full script: [`docs/runbook/t-g3-popop-call-script.md`](../runbook/t-g3-popop-call-script.md)
 
 หลังได้ → Vercel env:
 - `PROMPTPAY_ID` = `<10-digit phone หรือ 13-digit tax-id, no dash>`
-- (legal info → update `components/seo/site.ts` constants — ภูม or เดฟ ทำ)
+- (legal info → update `components/seo/site.ts` constants — เดฟ ทำหลัง confirm)
 
-**Unblocks:** entire payment path live + tax invoice complete
+**Unblocks (after all 5):** entire payment path live + tax invoice complete
 
 ---
 

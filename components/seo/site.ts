@@ -91,6 +91,29 @@ export const SOCIAL = {
 } as const;
 
 /**
+ * Pacred company bank account — printed on receipt + tax-invoice PDFs as an
+ * alternative payment channel (paired with PromptPay QR).
+ *
+ * Authoritative info from พี่ป๊อป via ลูกพี่ 2026-05-17.
+ * PROMPTPAY_ID env var (10-digit phone or 13-digit tax-ID) is set separately
+ * in Vercel — see lib/promptpay.ts for QR generation.
+ */
+export const BANK = {
+  /** Bank name (TH). */
+  name:           "ธนาคารกสิกรไทย",
+  /** Bank name (EN) — for English receipt PDFs. */
+  nameEn:         "Kasikornbank",
+  /** Account number (display format with dashes). */
+  accountNumber:  "225-2-91144-0",
+  /** Account holder name (matches DBD registration). */
+  accountName:    "บจก. แพคเรด (ประเทศไทย)",
+  /** Account holder name (EN). */
+  accountNameEn:  "Pacred (Thailand) Co., Ltd.",
+  /** Account type — almost always "ออมทรัพย์" / Savings for biz current accounts. Update if checking/current. */
+  accountType:    "ออมทรัพย์",
+} as const;
+
+/**
  * Pacred LINE OA — public IDs + add-friend URL forms.
  *
  * Two displayable handles exist (LINE OA tier):
