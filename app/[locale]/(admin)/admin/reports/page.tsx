@@ -89,6 +89,15 @@ const TABS = [
   { key: "payment",   label: "การชำระเงิน" },
 ];
 
+// Module-scope helpers — keep React Compiler happy + avoid unbound names
+function nDaysAgoIso(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+function monthStartIso(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+}
+
 type SP = { tab?: string; date_from?: string; date_to?: string };
 
 export default async function AdminReportsPage({
@@ -306,10 +315,41 @@ export default async function AdminReportsPage({
 
   const csvFilename = `report_${tab}_${dateFrom ?? "all"}_${dateTo ?? "all"}.csv`;
 
+  // V-B1 self-serve report counts — surfaced as quick-link cards below
+  const [
+    pendingPaymentsCnt, creditPendingCnt, containersAwaitingThCnt, debtorsCnt,
+    refundsLast30Cnt,   monthlyOrdersCnt,
+  ] = await Promise.all([
+    admin.from("forwarders").select("*", { count: "exact", head: true }).eq("status", "pending_payment"),
+    admin.from("forwarders").select("*", { count: "exact", head: true }).in("status", ["shipped_china", "in_transit", "arrived_thailand", "out_for_delivery", "delivered"]),
+    admin.from("cargo_containers").select("*", { count: "exact", head: true }).in("status", ["packing", "sealed", "in_transit", "arrived", "unloading"]),
+    admin.from("wallet").select("*", { count: "exact", head: true }).or("balance.lt.0,credit_balance.lt.0"),
+    admin.from("wallet_transactions").select("*", { count: "exact", head: true }).eq("kind", "refund").eq("status", "completed").gte("created_at", nDaysAgoIso(30)),
+    admin.from("forwarders").select("*", { count: "exact", head: true }).gte("created_at", monthStartIso()),
+  ]);
+  // Note: creditPendingCnt is a coarse upper-bound (shipped+ count); the
+  // /admin/reports/credit-pending page does the precise no-payment filter.
+
   // ── render ──────────────────────────────────────────────────────────────────
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
+      {/* V-B1 quick-link cards — at-a-glance operational health */}
+      <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-bold text-sm">📋 รีพอร์ตเฉพาะกิจ</h2>
+          <span className="text-[10px] text-muted">เปิดดูรายชื่อ + ดาวน์โหลด CSV</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <QuickCard href="/admin/reports/pending-payments"        label="รอชำระเงิน"         count={pendingPaymentsCnt.count ?? 0} />
+          <QuickCard href="/admin/reports/credit-pending"          label="เครดิตค้างนำเข้า*" count={creditPendingCnt.count ?? 0}    note="≈ shipped+" />
+          <QuickCard href="/admin/reports/containers-awaiting-th"  label="ตู้รอเข้าไทย"        count={containersAwaitingThCnt.count ?? 0} />
+          <QuickCard href="/admin/reports/debtors"                 label="ลูกค้าติดหนี้"      count={debtorsCnt.count ?? 0}          highlight />
+          <QuickCard href="/admin/reports/refunds"                 label="คืนเงิน 30 วัน"      count={refundsLast30Cnt.count ?? 0} />
+          <QuickCard href="/admin/reports/monthly-orders"          label="ออเดอร์เดือนนี้"     count={monthlyOrdersCnt.count ?? 0} />
+        </div>
+      </section>
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -554,6 +594,24 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
       <p className="text-xs text-muted">{label}</p>
       <p className={`mt-1 text-xl font-bold font-mono ${color}`}>{value}</p>
     </div>
+  );
+}
+
+// V-B1 quick-link card (mini stat card with link to the focused report)
+function QuickCard({ href, label, count, note, highlight }: { href: string; label: string; count: number; note?: string; highlight?: boolean }) {
+  const isHot = highlight && count > 0;
+  return (
+    <Link
+      href={href}
+      className={`block rounded-xl border p-3 transition hover:shadow-sm ${
+        isHot ? "border-red-200 bg-red-50 hover:bg-red-100"
+              : "border-border bg-white dark:bg-surface hover:bg-surface-alt"
+      }`}
+    >
+      <p className={`text-2xl font-bold font-mono ${isHot ? "text-red-700" : "text-foreground"}`}>{count}</p>
+      <p className="text-[11px] font-medium text-muted mt-0.5">{label}</p>
+      {note && <p className="text-[9px] text-muted mt-0.5">{note}</p>}
+    </Link>
   );
 }
 

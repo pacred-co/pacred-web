@@ -147,6 +147,9 @@ export type ShopOrderReceiptData = {
   warehouse_china:       "guangzhou" | "yiwu" | null;
   transport_type:        string;
 
+  // V-C2: optional staff-set override for the bill-header name
+  bill_to_name_override: string | null;
+
   // shipping address snapshot
   ship_first_name:       string | null;
   ship_last_name:        string | null;
@@ -201,6 +204,7 @@ export async function getServiceOrderForReceipt(
       `id, h_no, status, created_at, date_awaiting_payment, payment_due_at, date_completed,
        yuan_rate_locked, subtotal_cny, domestic_china_cny, service_fee, total_thb,
        free_shipping, crate, warehouse_china, transport_type,
+       bill_to_name_override,
        ship_first_name, ship_last_name, ship_phone, ship_phone2,
        ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
        profile_id`,
@@ -284,6 +288,7 @@ export async function getServiceOrderForReceipt(
       crate:                 o.crate,
       warehouse_china:       o.warehouse_china,
       transport_type:        o.transport_type,
+      bill_to_name_override: o.bill_to_name_override,        // V-C2
       ship_first_name:       o.ship_first_name,
       ship_last_name:        o.ship_last_name,
       ship_phone:            o.ship_phone,

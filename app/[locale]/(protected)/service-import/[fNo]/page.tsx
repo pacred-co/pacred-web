@@ -45,6 +45,24 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
     }
   }
 
+  // Cargo spine visibility: surface linked cargo_shipments + their containers
+  // (RLS scopes to own rows via cargo_shipments_customer_read).
+  const sb = await createClient();
+  const { data: shipmentsRaw } = await sb
+    .from("cargo_shipments")
+    .select(`
+      id, shipment_code, status, box_count, received_box_count,
+      container:cargo_containers!cargo_container_id ( code, transport_mode, status, eta, close_at, carrier_container_no )
+    `)
+    .eq("forwarder_f_no", fNo)
+    .order("created_at", { ascending: false });
+  type ContainerEmbed = { code: string | null; transport_mode: string | null; status: string; eta: string | null; close_at: string | null; carrier_container_no: string | null };
+  type CargoShipmentRow = { id: string; shipment_code: string; status: string; box_count: number; received_box_count: number; container: ContainerEmbed | ContainerEmbed[] | null };
+  const cargoShipments = ((shipmentsRaw ?? []) as CargoShipmentRow[]).map((s) => ({
+    ...s,
+    container: Array.isArray(s.container) ? (s.container[0] ?? null) : s.container,
+  }));
+
   return (
     <>
       <main className="mx-auto w-full max-w-[1100px] px-4 py-8 space-y-6">
@@ -199,6 +217,48 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
                 <p className="text-xs text-muted">{t("noTrackingYet")}</p>
               )}
             </div>
+
+            {/* Cargo spine: customer sees the container their shipment(s) are loaded in */}
+            {cargoShipments.length > 0 && (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+                <h3 className="font-bold text-sm">📦 ตู้คอนเทนเนอร์ที่บรรจุ</h3>
+                <ul className="space-y-2">
+                  {cargoShipments.map((s) => (
+                    <li key={s.id} className="rounded-lg border border-border p-3 space-y-1">
+                      <div className="flex items-start justify-between flex-wrap gap-2">
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs">{s.shipment_code}</p>
+                          {s.container?.code && (
+                            <p className="text-xs">
+                              ตู้: <span className="font-mono font-medium">{s.container.code}</span>
+                              {s.container.transport_mode && (
+                                <span className="ml-1">{TRANSPORT_ICON[s.container.transport_mode] ?? ""}</span>
+                              )}
+                            </p>
+                          )}
+                          {s.container?.carrier_container_no && (
+                            <p className="text-[10px] text-muted">B/L: <span className="font-mono">{s.container.carrier_container_no}</span></p>
+                          )}
+                        </div>
+                        <Link
+                          href={`/shipments/${s.shipment_code}`}
+                          className="rounded-lg border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100 shrink-0"
+                        >
+                          ดูไทม์ไลน์ →
+                        </Link>
+                      </div>
+                      <p className="text-[10px] text-muted">
+                        ได้รับแล้ว <span className={s.received_box_count >= s.box_count ? "text-green-700 font-medium" : ""}>{s.received_box_count}/{s.box_count}</span> กล่อง
+                        {s.container?.eta && <> · ETA {new Date(s.container.eta).toLocaleDateString("th-TH")}</>}
+                        {s.container?.close_at && new Date(s.container.close_at).getTime() > Date.now() && (
+                          <> · ตัดตู้ {new Date(s.container.close_at).toLocaleDateString("th-TH")}</>
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-2">
               <h3 className="font-bold text-sm">{t("sectionAddress")}</h3>

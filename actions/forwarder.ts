@@ -222,6 +222,7 @@ export type ForwarderDetail = ForwarderSummary & {
   tracking_chn2: string | null;
   detail: string | null;
   note_user: string | null;
+  bill_to_name_override: string | null;        // V-C2
   items: Array<{
     id: string;
     product_name: string;
@@ -252,7 +253,7 @@ export async function getForwarderByNo(fNo: string): Promise<ActionResult<Forwar
        domestic_china_thb, thailand_delivery_thb, other_price, service_fee, transport_price,
        ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
        ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
-       cabinet_number, tracking_chn2, detail, note_user`,
+       cabinet_number, tracking_chn2, detail, note_user, bill_to_name_override`,
     )
     .eq("f_no", fNo)
     .maybeSingle();

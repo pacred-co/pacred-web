@@ -71,9 +71,11 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
 
   const c = data.customer;
   const isJuristic   = c.account_type === "juristic";
-  const customerName = isJuristic
+  const defaultName  = isJuristic
     ? (c.company_name ?? "—")
     : `คุณ${[c.first_name, c.last_name].filter(Boolean).join(" ") || "—"}`;
+  // V-C2: staff-set override wins (raw text — staff handles prefix themselves)
+  const customerName = data.bill_to_name_override?.trim() || defaultName;
 
   // Address (use corporate address for juristic, else fall back to ship-to)
   const billingAddr = isJuristic

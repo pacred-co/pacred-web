@@ -41,7 +41,7 @@ export default function LoginPage() {
             ? "member_code"
             : "phone";
         trackLogin(method);
-        router.replace(res.data?.isAdmin ? "/admin/dashboard" : "/");
+        router.replace(res.data?.isAdmin ? "/admin" : "/");
         router.refresh();
       } else {
         setError(ERROR_MESSAGES[res.error] ?? res.error);

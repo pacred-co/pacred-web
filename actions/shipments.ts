@@ -38,20 +38,23 @@ export type ShipmentSummary = {
   received_at_partial: string | null;       // U1-5 last partial-receive timestamp
   weight_kg:        number | null;
   volume_cbm:       number | null;
+  cargo_type:       string | null;          // V-D2 canonical
   received_at_cn:   string | null;
   delivered_at_th:  string | null;
   forwarder_f_no:   string | null;
   service_order_h_no: string | null;
   created_at:       string;
   container: {
-    id:             string;
-    code:           string;
-    transport_mode: string;
-    origin:         string;
-    destination:    string;
-    status:         string;
-    eta:            string | null;
-    actual_arrival: string | null;
+    id:                   string;
+    code:                 string;
+    transport_mode:       string;
+    origin:               string;
+    destination:          string;
+    status:               string;
+    eta:                  string | null;
+    actual_arrival:       string | null;
+    carrier_container_no: string | null;    // V-D3
+    close_at:             string | null;    // V-C3
   } | null;
   // Most recent tracking event (for "last seen" hint on the list page)
   latest_event:     { event: string; location: string | null; scanned_at: string } | null;
@@ -85,10 +88,11 @@ export async function listMyShipments(
     .from("cargo_shipments")
     .select(`
       id, shipment_code, status, box_count, received_box_count, received_at_partial,
-      weight_kg, volume_cbm,
+      weight_kg, volume_cbm, cargo_type,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
       container:cargo_containers!cargo_container_id (
-        id, code, transport_mode, origin, destination, status, eta, actual_arrival
+        id, code, transport_mode, origin, destination, status, eta, actual_arrival,
+        carrier_container_no, close_at
       )
     `)
     .order("created_at", { ascending: false })
@@ -157,10 +161,11 @@ export async function getMyShipment(
     .from("cargo_shipments")
     .select(`
       id, shipment_code, status, box_count, received_box_count, received_at_partial,
-      weight_kg, volume_cbm,
+      weight_kg, volume_cbm, cargo_type,
       received_at_cn, delivered_at_th, forwarder_f_no, service_order_h_no, created_at,
       container:cargo_containers!cargo_container_id (
-        id, code, transport_mode, origin, destination, status, eta, actual_arrival
+        id, code, transport_mode, origin, destination, status, eta, actual_arrival,
+        carrier_container_no, close_at
       )
     `)
     .eq("shipment_code", shipmentCode)

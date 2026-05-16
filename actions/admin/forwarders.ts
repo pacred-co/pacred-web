@@ -363,3 +363,55 @@ export async function adminMarkForwarderPaid(
     return { ok: true, data: { tx_id: tx.id, already_paid: false } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// V-C2: set bill_to_name_override on a forwarder
+// ────────────────────────────────────────────────────────────
+// Per cargo-ops-forensics ("ใส่ชื่อบริษัทผู้ซื้อจริงไม่ใช่ผู้ส่งของ"):
+// real-world cases where the paying party differs from the shipping
+// recipient. Empty string clears the override (NULL in DB). Audited.
+
+const setForwarderBillToOverrideSchema = z.object({
+  f_no:     z.string().trim().min(1),
+  override: z.string().trim().max(200),     // "" allowed → clear
+});
+export type SetForwarderBillToOverrideInput = z.infer<typeof setForwarderBillToOverrideSchema>;
+
+export async function adminSetForwarderBillToOverride(
+  input: SetForwarderBillToOverrideInput,
+): Promise<AdminActionResult<{ f_no: string; bill_to_name_override: string | null }>> {
+  const parsed = setForwarderBillToOverrideSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const next = d.override.length > 0 ? d.override : null;
+
+  return withAdmin<{ f_no: string; bill_to_name_override: string | null }>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const { data: before, error: readErr } = await admin
+        .from("forwarders")
+        .select("id, bill_to_name_override")
+        .eq("f_no", d.f_no)
+        .maybeSingle<{ id: string; bill_to_name_override: string | null }>();
+      if (readErr) return { ok: false, error: readErr.message };
+      if (!before) return { ok: false, error: "not_found" };
+
+      const { error: updErr } = await admin
+        .from("forwarders")
+        .update({ bill_to_name_override: next })
+        .eq("id", before.id);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "forwarder.set_bill_to_override", "forwarder", before.id, {
+        f_no:   d.f_no,
+        before: before.bill_to_name_override,
+        after:  next,
+      });
+
+      revalidatePath(`/admin/forwarders/${d.f_no}`);
+      revalidatePath(`/service-import/${d.f_no}/receipt`);
+      return { ok: true, data: { f_no: d.f_no, bill_to_name_override: next } };
+    },
+  );
+}

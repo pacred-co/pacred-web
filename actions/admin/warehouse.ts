@@ -7,14 +7,17 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   createContainer as dbCreateContainer,
   setContainerStatus as dbSetContainerStatus,
+  setContainerCloseAt as dbSetContainerCloseAt,
   refreshContainerTotals,
   attachShipmentToContainer as dbAttachShipment,
   setShipmentStatus as dbSetShipmentStatus,
   setShipmentReceivedQty as dbSetReceivedQty,
+  setShipmentCargoType as dbSetShipmentCargoType,
   createShipment as dbCreateShipment,
   appendTrackingEvent as dbAppendEvent,
   CONTAINER_STATUS_VALUES_SPINE,
   SHIPMENT_STATUS_VALUES,
+  toCanonicalCargoType,
   type ContainerStatusSpine,
   type ShipmentStatus,
   type Container,
@@ -42,13 +45,15 @@ import {
 
 const createContainerSchema = z.object({
   // Optional — server auto-generates if omitted (origin-prefix + date + seq)
-  code:           z.string().trim().min(1).max(50).optional(),
-  transport_mode: z.enum(["truck", "sea", "air"]),
-  origin:         z.string().trim().min(1).max(100),
-  destination:    z.string().trim().min(1).max(100),
-  source:         z.enum(["pacred", "momo", "self"]).default("pacred"),
-  eta:            z.string().date().optional(),
-  status:         z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
+  code:                 z.string().trim().min(1).max(50).optional(),
+  transport_mode:       z.enum(["truck", "sea", "air"]),
+  origin:               z.string().trim().min(1).max(100),
+  destination:          z.string().trim().min(1).max(100),
+  source:               z.enum(["pacred", "momo", "self"]).default("pacred"),
+  eta:                  z.string().date().optional(),
+  status:               z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
+  carrier_container_no: z.string().trim().min(1).max(50).optional(),
+  close_at:             z.string().datetime({ offset: true }).optional(),   // V-C3
 });
 export type CreateContainerInput = z.infer<typeof createContainerSchema>;
 
@@ -94,22 +99,26 @@ export async function adminCreateContainer(
   return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
     const res = await dbCreateContainer(admin, {
-      code:           d.code,
-      transport_mode: d.transport_mode,
-      origin:         d.origin,
-      destination:    d.destination,
-      source:         d.source,
-      status:         d.status,
-      eta:            d.eta ?? null,
+      code:                 d.code,
+      transport_mode:       d.transport_mode,
+      origin:               d.origin,
+      destination:          d.destination,
+      source:               d.source,
+      status:               d.status,
+      eta:                  d.eta ?? null,
+      carrier_container_no: d.carrier_container_no ?? null,
+      close_at:             d.close_at ?? null,
     });
     if (!res.ok) return { ok: false, error: res.error };
 
     await logAdminAction(adminId, "container.create", "container", res.data.id, {
-      code:           res.data.code,
-      transport_mode: res.data.transport_mode,
-      origin:         res.data.origin,
-      destination:    res.data.destination,
-      source:         res.data.source,
+      code:                 res.data.code,
+      transport_mode:       res.data.transport_mode,
+      origin:               res.data.origin,
+      destination:          res.data.destination,
+      source:               res.data.source,
+      carrier_container_no: res.data.carrier_container_no,
+      close_at:             res.data.close_at,
     });
 
     revalidatePath("/admin/warehouse/containers");
@@ -166,6 +175,17 @@ export async function adminAttachShipmentToContainer(
 
   return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
+
+    // V-C3: reject attach when container already past its ตัดตู้ deadline
+    const { data: target } = await admin
+      .from("cargo_containers")
+      .select("close_at, code")
+      .eq("id", d.container_id)
+      .maybeSingle<{ close_at: string | null; code: string | null }>();
+    if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
+      return { ok: false, error: `ตู้ ${target.code ?? d.container_id.slice(0,8)} ปิดรับ shipment ใหม่แล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไป` };
+    }
+
     const res = await dbAttachShipment(admin, d.shipment_id, d.container_id);
     if (!res.ok) return { ok: false, error: res.error };
 
@@ -231,6 +251,10 @@ const createShipmentManualSchema = z.object({
   box_count:            z.number().int().min(1).max(100_000).default(1),
   weight_kg:            z.number().min(0).max(100_000).optional(),
   volume_cbm:           z.number().min(0).max(10_000).optional(),
+  /** V-D2: canonical category. Accepts a legacy A/M/X/O/Z or G/T/F too — server
+   *  normalises via `toCanonicalCargoType()`. Empty/unknown → null (staff
+   *  reviews later). */
+  cargo_type:           z.string().trim().max(40).optional(),
   initial_scan:         z.boolean().default(true),
   initial_scan_location: z.string().trim().max(100).optional(),
 });
@@ -290,7 +314,20 @@ export async function adminCreateShipmentManual(
       if (o.profile_id !== profile.id) return { ok: false, error: "service_order ไม่ใช่ของลูกค้านี้" };
     }
 
+    // V-C3: reject when target container already past its ตัดตู้ deadline
+    if (d.cargo_container_id) {
+      const { data: target } = await admin
+        .from("cargo_containers")
+        .select("close_at, code")
+        .eq("id", d.cargo_container_id)
+        .maybeSingle<{ close_at: string | null; code: string | null }>();
+      if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
+        return { ok: false, error: `ตู้ ${target.code ?? d.cargo_container_id.slice(0,8)} ปิดรับแล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไปก่อนค่อยสร้าง shipment` };
+      }
+    }
+
     // ── 3. Create shipment ──
+    const cargoType = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
     const created = await dbCreateShipment(admin, {
       shipment_code:      d.shipment_code,
       profile_id:         profile.id,
@@ -300,6 +337,7 @@ export async function adminCreateShipmentManual(
       box_count:          d.box_count,
       weight_kg:          d.weight_kg ?? null,
       volume_cbm:         d.volume_cbm ?? null,
+      cargo_type:         cargoType,
       status:             "received_cn",       // newly registered = "received in CN"
     });
     if (!created.ok) {
@@ -334,6 +372,8 @@ export async function adminCreateShipmentManual(
       service_order_h_no: d.service_order_h_no ?? null,
       cargo_container_id: d.cargo_container_id ?? null,
       box_count:          d.box_count,
+      cargo_type:         cargoType,
+      cargo_type_raw:     d.cargo_type ?? null,
     });
 
     revalidatePath("/admin/warehouse/containers");
@@ -382,6 +422,88 @@ export async function adminSetShipmentReceivedQty(
     });
 
     revalidatePath("/admin/warehouse/containers");
+    return { ok: true, data: res.data };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// V-D2: SET shipment cargo_type (admin correction)
+// ────────────────────────────────────────────────────────────
+//
+// Accepts a canonical value OR a legacy A/M/X/O/Z / G/T/F code — both
+// normalise via `toCanonicalCargoType()` server-side. Empty string
+// clears (sets to null) so staff can flag a row for re-review.
+
+const setCargoTypeSchema = z.object({
+  shipment_id: z.string().uuid(),
+  cargo_type:  z.string().trim().max(40),    // "" allowed → clears
+});
+export type SetShipmentCargoTypeInput = z.infer<typeof setCargoTypeSchema>;
+
+export async function adminSetShipmentCargoType(
+  input: SetShipmentCargoTypeInput,
+): Promise<AdminActionResult<Shipment>> {
+  const parsed = setCargoTypeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  const canonical = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
+  if (d.cargo_type && !canonical) {
+    return { ok: false, error: `cargo_type "${d.cargo_type}" ไม่อยู่ใน enum (general/electrical/food_drug/brand/controlled หรือ legacy A/M/X/O/Z/G/T/F)` };
+  }
+
+  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await dbSetShipmentCargoType(admin, d.shipment_id, canonical);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "shipment.set_cargo_type", "shipment", d.shipment_id, {
+      cargo_type:     canonical,
+      cargo_type_raw: d.cargo_type || null,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    return { ok: true, data: res.data };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// V-C3: set / clear cargo_containers.close_at (ตัดตู้ deadline)
+// ────────────────────────────────────────────────────────────
+// Empty string clears (NULL in DB). Datetime is parsed as ISO8601;
+// the UI's <input type="datetime-local"> value gets stamped with the
+// browser's UTC offset before send (caller's job).
+
+const setContainerCloseAtSchema = z.object({
+  container_id: z.string().uuid(),
+  close_at:     z.string().trim().max(40),    // "" → clear; else ISO datetime
+});
+export type SetContainerCloseAtInput = z.infer<typeof setContainerCloseAtSchema>;
+
+export async function adminSetContainerCloseAt(
+  input: SetContainerCloseAtInput,
+): Promise<AdminActionResult<Container>> {
+  const parsed = setContainerCloseAtSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  let next: string | null = null;
+  if (d.close_at.length > 0) {
+    const dt = new Date(d.close_at);
+    if (Number.isNaN(dt.getTime())) return { ok: false, error: "close_at รูปแบบไม่ถูกต้อง" };
+    next = dt.toISOString();
+  }
+
+  return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const res = await dbSetContainerCloseAt(admin, d.container_id, next);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "container.set_close_at", "container", d.container_id, {
+      close_at: next,
+    });
+
+    revalidatePath("/admin/warehouse/containers");
+    if (res.data.code) revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
     return { ok: true, data: res.data };
   });
 }

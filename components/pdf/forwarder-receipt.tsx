@@ -17,6 +17,9 @@ export type ForwarderReceiptData = {
   f_no:        string | null;
   created_at:  string;
 
+  /** V-C2: staff-set buyer-name override printed on the bill header. NULL = use default. */
+  bill_to_name_override?: string | null;
+
   ship_first_name:    string | null;
   ship_last_name:     string | null;
   ship_phone:         string | null;
@@ -66,7 +69,8 @@ function formatDateThai(iso: string): string {
 }
 
 export function ForwarderReceipt({ data }: { data: ForwarderReceiptData }) {
-  const customerName = [data.ship_first_name, data.ship_last_name].filter(Boolean).join(" ") || "—";
+  const defaultName  = [data.ship_first_name, data.ship_last_name].filter(Boolean).join(" ") || "—";
+  const customerName = (data.bill_to_name_override?.trim() || defaultName);
   const phones = [data.ship_phone, data.ship_phone2].filter(Boolean).join(" / ");
   const addressLine = [
     data.ship_address_line,

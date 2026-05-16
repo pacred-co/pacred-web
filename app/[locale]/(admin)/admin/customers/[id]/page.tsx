@@ -8,7 +8,10 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [{ data: profile }, { data: corporate }, { data: addresses }, { data: wallet }, { data: repProfiles }] = await Promise.all([
+  const [
+    { data: profile }, { data: corporate }, { data: addresses }, { data: wallet }, { data: repProfiles },
+    { data: customRatesUser }, { data: customRatesHs },
+  ] = await Promise.all([
     admin.from("profiles").select("*").eq("id", id).maybeSingle(),
     admin.from("corporate").select("*").eq("profile_id", id).maybeSingle(),
     admin.from("addresses").select("*").eq("profile_id", id).is("deleted_at", null),
@@ -18,6 +21,17 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
       .select(`profile_id, role, profile:profiles!profile_id ( member_code, first_name, last_name, phone ), contact:admin_contact_extras!profile_id ( display_name, direct_phone )`)
       .in("role", ["sales_admin", "super"])
       .eq("is_active", true),
+    // LP-1c surface: custom rate overrides on this customer
+    admin.from("rate_custom_user")
+      .select("id, source_warehouse, transport_type, product_type, basis, rate, updated_at")
+      .eq("profile_id", id)
+      .order("updated_at", { ascending: false })
+      .limit(10),
+    admin.from("rate_custom_hs")
+      .select("id, hs_code, source_warehouse, transport_type, product_type, basis, rate, rate_before, updated_at")
+      .eq("profile_id", id)
+      .order("updated_at", { ascending: false })
+      .limit(10),
   ]);
 
   if (!profile) notFound();
@@ -62,10 +76,15 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   };
   type Wallet = { balance: number; cashback_balance: number; credit_balance: number };
 
+  type CustomUserRate = { id: string; source_warehouse: string; transport_type: string; product_type: string; basis: string; rate: number; updated_at: string };
+  type CustomHsRate   = { id: string; hs_code: string; source_warehouse: string; transport_type: string; product_type: string; basis: string; rate: number; rate_before: number | null; updated_at: string };
+
   const p   = profile as Profile;
   const c   = (corporate as Corporate | null) ?? null;
   const a   = (addresses as Address[] | null) ?? [];
   const w   = (wallet as Wallet | null) ?? { balance: 0, cashback_balance: 0, credit_balance: 0 };
+  const cu  = ((customRatesUser ?? []) as CustomUserRate[]);
+  const ch  = ((customRatesHs   ?? []) as CustomHsRate[]);
   const displayName = p.account_type === "juristic" && p.company_name
     ? p.company_name
     : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
@@ -214,6 +233,54 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
           </ul>
         )}
       </Section>
+
+      {/* LP-1c: custom rate overrides on this customer */}
+      {(cu.length > 0 || ch.length > 0) && (
+        <Section title={`🏷️ Custom rates (${cu.length + ch.length})`}>
+          {cu.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted">Per-customer flat ({cu.length})</p>
+                {p.member_code && (
+                  <Link href={`/admin/rates/custom-user?member=${encodeURIComponent(p.member_code)}`} className="text-xs text-primary-600 hover:underline">
+                    จัดการทั้งหมด →
+                  </Link>
+                )}
+              </div>
+              <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                {cu.slice(0, 5).map((r) => (
+                  <li key={r.id} className="font-mono flex justify-between border-b border-border/50 py-1">
+                    <span>{r.source_warehouse}/{r.transport_type}/{r.product_type}/{r.basis}</span>
+                    <span className="font-bold">฿{Number(r.rate).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                  </li>
+                ))}
+              </ul>
+              {cu.length > 5 && <p className="text-[10px] text-muted">…และอีก {cu.length - 5} แถว</p>}
+            </div>
+          )}
+          {ch.length > 0 && (
+            <div className="space-y-1 mt-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted">Per-customer + HS ({ch.length})</p>
+                {p.member_code && (
+                  <Link href={`/admin/rates/custom-hs?member=${encodeURIComponent(p.member_code)}`} className="text-xs text-primary-600 hover:underline">
+                    จัดการทั้งหมด →
+                  </Link>
+                )}
+              </div>
+              <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                {ch.slice(0, 5).map((r) => (
+                  <li key={r.id} className="font-mono flex justify-between border-b border-border/50 py-1">
+                    <span>HS {r.hs_code} · {r.source_warehouse}/{r.transport_type}/{r.product_type}/{r.basis}</span>
+                    <span className="font-bold">฿{Number(r.rate).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span>
+                  </li>
+                ))}
+              </ul>
+              {ch.length > 5 && <p className="text-[10px] text-muted">…และอีก {ch.length - 5} แถว</p>}
+            </div>
+          )}
+        </Section>
+      )}
     </main>
   );
 }

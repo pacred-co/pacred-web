@@ -275,3 +275,53 @@ export async function adminMarkServiceOrderPaid(
     return { ok: true, data: { tx_id: tx.id, already_paid: false } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// V-C2: set bill_to_name_override on a service_order
+// ────────────────────────────────────────────────────────────
+// Mirror of adminSetForwarderBillToOverride. Empty string clears.
+
+const setOrderBillToOverrideSchema = z.object({
+  h_no:     z.string().trim().min(1),
+  override: z.string().trim().max(200),     // "" allowed → clear
+});
+export type SetOrderBillToOverrideInput = z.infer<typeof setOrderBillToOverrideSchema>;
+
+export async function adminSetOrderBillToOverride(
+  input: SetOrderBillToOverrideInput,
+): Promise<AdminActionResult<{ h_no: string; bill_to_name_override: string | null }>> {
+  const parsed = setOrderBillToOverrideSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const next = d.override.length > 0 ? d.override : null;
+
+  return withAdmin<{ h_no: string; bill_to_name_override: string | null }>(
+    ["super", "ops", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const { data: before, error: readErr } = await admin
+        .from("service_orders")
+        .select("id, bill_to_name_override")
+        .eq("h_no", d.h_no)
+        .maybeSingle<{ id: string; bill_to_name_override: string | null }>();
+      if (readErr) return { ok: false, error: readErr.message };
+      if (!before) return { ok: false, error: "not_found" };
+
+      const { error: updErr } = await admin
+        .from("service_orders")
+        .update({ bill_to_name_override: next })
+        .eq("id", before.id);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "service_order.set_bill_to_override", "service_order", before.id, {
+        h_no:   d.h_no,
+        before: before.bill_to_name_override,
+        after:  next,
+      });
+
+      revalidatePath(`/admin/service-orders/${d.h_no}`);
+      revalidatePath(`/service-order/${d.h_no}/receipt`);
+      return { ok: true, data: { h_no: d.h_no, bill_to_name_override: next } };
+    },
+  );
+}

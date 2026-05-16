@@ -2,6 +2,13 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getMyShipment } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
+import { CARGO_TYPE_LABEL_TH, isCargoType } from "@/lib/warehouse/cargo-type";
+
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function daysUntilIso(iso: string | null): number | null {
+  if (!iso) return null;
+  return Math.floor((new Date(iso).getTime() - Date.now()) / 86_400_000);
+}
 
 /** U1-7: same freshness palette as the list page. */
 const FRESHNESS_PILL: Record<ReturnType<typeof freshnessClass>, string> = {
@@ -134,23 +141,47 @@ export default async function ShipmentDetailPage({
           </div>
         )}
 
-        {s.container && (
-          <div className="border-t border-border pt-3 grid grid-cols-2 gap-y-2 text-sm">
-            <Cell label="ตู้คอนเทนเนอร์" value={s.container.code} mono />
-            <Cell label="ประเภทขนส่ง"   value={transport ?? s.container.transport_mode} />
-            <Cell label="ต้นทาง" value={s.container.origin} />
-            <Cell label="ปลายทาง" value={s.container.destination} />
-            {s.container.eta && (
-              <Cell label="ETA" value={new Date(s.container.eta).toLocaleDateString("th-TH")} />
-            )}
-            {s.container.actual_arrival && (
-              <Cell
-                label="ถึงจริง"
-                value={new Date(s.container.actual_arrival).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-              />
-            )}
-          </div>
-        )}
+        {s.container && (() => {
+          const daysToClose = daysUntilIso(s.container.close_at);
+          return (
+            <>
+              <div className="border-t border-border pt-3 grid grid-cols-2 gap-y-2 text-sm">
+                <Cell label="ตู้คอนเทนเนอร์" value={s.container.code} mono />
+                <Cell label="ประเภทขนส่ง"   value={transport ?? s.container.transport_mode} />
+                <Cell label="ต้นทาง" value={s.container.origin} />
+                <Cell label="ปลายทาง" value={s.container.destination} />
+                {s.container.eta && (
+                  <Cell label="ETA" value={new Date(s.container.eta).toLocaleDateString("th-TH")} />
+                )}
+                {s.container.actual_arrival && (
+                  <Cell
+                    label="ถึงจริง"
+                    value={new Date(s.container.actual_arrival).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  />
+                )}
+                {s.container.carrier_container_no && (
+                  <Cell label="เลขตู้สายเรือ (B/L)" value={s.container.carrier_container_no} mono />
+                )}
+                {s.cargo_type && isCargoType(s.cargo_type) && (
+                  <Cell label="ประเภทสินค้า" value={CARGO_TYPE_LABEL_TH[s.cargo_type]} />
+                )}
+              </div>
+              {/* V-C3: ตัดตู้ visibility for the customer — only show if not yet sealed/closed */}
+              {daysToClose != null && daysToClose >= 0 && (
+                <div className={`mt-3 rounded-lg border p-3 text-xs ${
+                  daysToClose <= 1 ? "border-amber-300 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-800"
+                }`}>
+                  ⏰ ตู้จะปิดรับสินค้า (ตัดตู้) วันที่{" "}
+                  <span className="font-medium">
+                    {new Date(s.container.close_at!).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
+                  {daysToClose === 0 ? <span className="ml-1 font-semibold">— วันนี้</span>
+                    : <span className="ml-1 font-semibold">(อีก {daysToClose} วัน)</span>}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Order references */}

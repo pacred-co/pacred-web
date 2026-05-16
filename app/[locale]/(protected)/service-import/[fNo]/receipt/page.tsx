@@ -135,10 +135,12 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
           </div>
         </div>
 
-        {/* Customer */}
+        {/* Customer — V-C2: bill_to_name_override wins over default ship-to name */}
         <section>
           <h3 className="font-bold mb-2 text-sm">ผู้รับ:</h3>
-          <p className="text-sm">{f.ship_first_name} {f.ship_last_name}</p>
+          <p className="text-sm">
+            {f.bill_to_name_override?.trim() || `${f.ship_first_name ?? ""} ${f.ship_last_name ?? ""}`.trim() || "—"}
+          </p>
           <p className="text-xs">📞 {f.ship_phone}{f.ship_phone2 ? ` / ${f.ship_phone2}` : ""}</p>
           <p className="text-xs">
             {f.ship_address_line} ต.{f.ship_sub_district} อ.{f.ship_district} จ.{f.ship_province} {f.ship_postal_code}

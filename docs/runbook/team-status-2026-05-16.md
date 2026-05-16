@@ -1,6 +1,15 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
+> **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
+> - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
+> - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)
+> - `66fcd1d` /admin/reports header — 6 quick-link cards with live counts for V-B1 reports
+> - `4c45bf5` /admin/audit viewer (super only) — filter admin_audit_log by admin/action/target with payload expand + cross-link to target history
+>
+> Push cadence: **real-time after verify-green** per ภูม instruction (overrides master-rule-6 for `Poom` branch in home-machine context). เดฟ pull `Poom` when ready to merge into `dave`.
+>
+> **Previous night-3:** 14 commits `171080d..0d35f1f` covering V-D2/D3 wiring · V-B1 self-serve reports · V-C2 bill-header · V-C3 ตัดตู้ · V-A1 slip-time · V-A7 N/A docs · React-purity fix · polish · LP-1a/b/c1/c2 rates UI · BillToOverridePanel juristic default fix (F-1). Plus hand-off + test-playbook docs.
 > **Last updated:** 2026-05-16 evening-16 (เดฟ via Claude) — **🔀 BIG INTEGRATION MERGE.** Pulled `origin/Poom` (ภูม — T-P4 G2 complete + Phase A-D Part U items + 4 migrations) + `origin/podeng` (ปอน — 5 L-5 landing pages + customs polish + port pricing carousel) into `dave`. Resolved 4 conflicts (tax-invoices page → ภูม's · templates → merged · package.json test chains → merged · _index.md → ภูม's). `pnpm verify` ✅ all gates pass. ก๊อต `main` unchanged (no new push).
 > **dave HEAD:** post-merge — both น้องๆ branches integrated + เดฟ 8-commit hold-batch (validator tests +438 · ADR-0014 · STRATEGY refresh). Cargo loop V1 closes end-to-end incl. juristic tax invoice. Everyone → `git fetch && git merge origin/dave` before next batch.
 > **Cadence:** ใครเปลี่ยน blocker / ปลดล็อค / ship ของใหญ่ → อัพไฟล์นี้ + commit `docs(team): status checkpoint <date> — <what>`.
@@ -53,6 +62,40 @@ Use this to prioritise the items that unblock the most downstream work.
 | **ปอน** | [`podeng.md`](../briefs/podeng.md) | T-N1 SEO audit (why is pacred.co invisible?) → T-N2/T-N3 ad landing quality | Competitor analysis OR keyword research OR i18n polish (L-9b/c) |
 | **ภูม** | [`poom.md`](../briefs/poom.md) | T-P5 `/admin/accounting` stub (acc-* PHP port) → T-P2 containers → T-P4 tax invoice G2b-G2f | T-P3 polish if any UX bug surfaces; else queue continues |
 | **เดฟ** | [`dave.md`](../briefs/dave.md) | **stepping out** — returns to: T-D1 smoke test · migration apply prod · DV-1..DV-4 signups · DV-2 LIFF · DV-4 พี่ป๊อป Bundle 1 | n/a (reviewer/integrator) |
+
+---
+
+## 🟢 ภูม night-3 batch — `origin/Poom` `171080d..0d35f1f` (14 commits)
+
+Run-long autonomous shipped (in chronological order):
+
+| Commit | What | Migration |
+|---|---|---|
+| `171080d` | **V-D2/D3** wire cargo_type + B/L into UI + import normalise: types/index/clients + actions/admin/warehouse pass-through + new-container-form B/L input + manual-shipment cargo_type select + shipment-row 🏷️ inline editor + admin list/detail surfaces + MOMO sync JSDoc note | — |
+| `01592e7` | **V-B1** 6 self-serve admin reports under new sidebar group "รีพอร์ตเฉพาะกิจ": pending-payments · credit-pending · containers-awaiting-th · debtors · refunds (default 30-day) · monthly-orders (13-month picker, 2-pane) — all with CSV + date filters + role gating | — |
+| `ae25c4f` | **V-C2** bill-header buyer-name override on forwarders + service_orders: migration + admin actions + shared BillToOverridePanel + PDF + receipt consume | `0041_bill_to_name_override.sql` |
+| `9980953` | **V-C3** ตัดตู้ UX: cargo_containers.close_at + admin actions + inline editor + UI countdown chip + manual-shipment guard + attach-server reject past deadline | `0042_cargo_containers_close_at.sql` |
+| `0d76943` | **V-A1** slip_transferred_at editable + audited on wallet_tx + yuan_payment: migration + admin actions + reusable SlipTransferredAtCell on /admin/wallet + /admin/yuan-payments | `0043_slip_transferred_at.sql` |
+| `aaadddb` | **V-A7** N/A docs: Pacred designed clean from day-1 (no -N suffix codepath); learning entry in php-port-patterns | — |
+| `a26434d` | **fix** React Compiler purity: extract Date.now to module-scope helpers in 4 files; drop unused totalOwed in debtors page | — |
+| `8874d83` | **polish** customer ตัดตู้/B/L/cargo_type visibility on /shipments/[code] + refunds report shows slip_transferred_at column + CSV adds "วันที่โอนจริง" | — |
+| `13a169d` | **LP-1a** admin CRUD for rate_general (tier1/2/3 inline edit + add/delete + audit, customer-group tabs) at /admin/rates/general | — |
+| `fabcf06` | **LP-1b** admin CRUD for rate_vip (flat rate, same composite key) at /admin/rates/vip | — |
+| `00232fb` | **LP-1c1** admin CRUD for rate_custom_user (per-customer flat override; member_code or UUID picker; grouped table) at /admin/rates/custom-user | — |
+| `f6ba952` | **docs** poom-handoff + poom-test-playbook (2 new runbook docs) | — |
+| `0d35f1f` | **LP-1c2** admin CRUD for rate_custom_hs (per-customer + HS code override; SELECT-then-write per handoff D-1; rate + rate_before inputs) + **F-1** BillToOverridePanel juristic default-name = corporate.company_name | — |
+
+**Tests:** 345 unit-test assertions still green. `pnpm verify` ✅ clean before each push (lint 0 errors, tsc, tests, md+env+i18n audits).
+
+**Migrations to apply on prod Supabase (เดฟ on return):** `0041_bill_to_name_override` · `0042_cargo_containers_close_at` · `0043_slip_transferred_at`.
+
+**WHT migration numbering heads-up:** ภูม used 0041-0043. เดฟ WHT migration (ADR-0015 / V-A6) now lands at `0044+` (not `0041+` as earlier noted).
+
+**Open decisions for เดฟ:** see [`poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md) — D-1 (rate_custom_hs UNIQUE constraint: ภูม proceed with option-b SELECT-then-write; เดฟ can refactor to option-a later) + D-2 (migration numbering heads-up).
+
+**Browser-test playbook for ภูม:** [`poom-test-playbook-2026-05-16.md`](poom-test-playbook-2026-05-16.md) — full customer + admin walkthrough.
+
+**Push cadence note:** ภูม pushes real-time after verify-green per his explicit instruction 2026-05-16 night ("local กับ branch Poom ต้องเรียลทาร์มกัน ไม่ต้องรอเทส"). This relaxes master-rule-6 for `Poom` branch in his home-machine context. `dave` + `main` push discipline unchanged.
 
 ---
 

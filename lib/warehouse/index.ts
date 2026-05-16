@@ -17,4 +17,5 @@ export * from "./types";
 export * from "./containers";
 export * from "./shipments";
 export * from "./tracking";
+export * from "./cargo-type";
 export { buildContainerCode, originPrefix, dateSlug } from "./code-gen";

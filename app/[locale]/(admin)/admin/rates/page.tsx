@@ -112,18 +112,39 @@ export default async function AdminRatesPage() {
         </div>
       </RateSection>
 
-      {/* Shipping rate table — Phase D placeholder */}
+      {/* Shipping rate table — LP-1 phase 1 (general live) */}
       <RateSection title="ตารางอัตราขนส่ง (Shipping rates)">
-        <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-8 text-center">
-          <p className="text-sm font-semibold text-foreground">ตารางราคา KG / CBM ตาม route</p>
-          <p className="text-xs text-muted mt-1">
-            จะเพิ่มในเฟส D (port จาก tb_rate_g_* + tb_rate_vip_* จากระบบเก่า)
-          </p>
-          <div className="mt-3 flex justify-center gap-2 text-xs text-muted">
-            <span className="rounded-full border border-border px-3 py-1">General rate</span>
-            <span className="rounded-full border border-border px-3 py-1">VIP rate</span>
-            <span className="rounded-full border border-border px-3 py-1">Custom rate</span>
-          </div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Link
+            href="/admin/rates/general"
+            className="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">General rate</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
+          </Link>
+          <Link
+            href="/admin/rates/vip"
+            className="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">VIP rate</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
+          </Link>
+          <Link
+            href="/admin/rates/custom-user"
+            className="rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">Custom rate (รายลูกค้า)</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ →</p>
+          </Link>
+        </div>
+        <div className="mt-2">
+          <Link
+            href="/admin/rates/custom-hs"
+            className="block w-full rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center hover:bg-primary-100 transition"
+          >
+            <p className="text-sm font-semibold text-primary-700">Custom-HS rate (ลูกค้า + HS code)</p>
+            <p className="text-[11px] text-primary-600 mt-1">แก้ได้ → (wins ทุกอย่างใน waterfall)</p>
+          </Link>
         </div>
       </RateSection>
 

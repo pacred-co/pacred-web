@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { WalletTxActions } from "./actions-cell";
 import { WalletBulkApproveBar, WalletRowCheckbox } from "./bulk-approve-bar";
+import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -24,7 +25,7 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
   let q = admin.from("wallet_transactions")
     .select(`
       id, profile_id, bucket, amount, kind, status, slip_url, bank_name,
-      account_name, account_number, note, created_at,
+      account_name, account_number, note, created_at, slip_transferred_at,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone )
     `)
     .order("created_at", { ascending: false })
@@ -65,7 +66,7 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-3 w-8"></th>
-                  <th className="px-4 py-3">วันที่</th>
+                  <th className="px-4 py-3">วันที่ระบบ / โอนจริง</th>
                   <th className="px-4 py-3">ลูกค้า</th>
                   <th className="px-4 py-3">ประเภท</th>
                   <th className="px-4 py-3 text-right">จำนวน</th>
@@ -84,7 +85,15 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
                         <WalletRowCheckbox id={r.id} />
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleString("th-TH")}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      <div className="text-muted">{new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</div>
+                      <div className="mt-1 text-[10px] text-muted">⏱ โอน:</div>
+                      <SlipTransferredAtCell
+                        kind="wallet_tx"
+                        id={r.id}
+                        currentValue={(r as { slip_transferred_at: string | null }).slip_transferred_at ?? null}
+                      />
+                    </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
                       <div>{r.profile?.first_name} {r.profile?.last_name}</div>

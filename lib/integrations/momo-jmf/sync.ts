@@ -78,7 +78,11 @@ export type SyncResult = {
  *          }, { onConflict: 'code' })
  *          result.upserted++
  *   3. Sub-fetch manifest per container → upsert cargo_shipments keyed on
- *      shipment_code; resolve customer_ref → profile_id via member_code lookup
+ *      shipment_code; resolve customer_ref → profile_id via member_code lookup.
+ *      **V-D2:** normalise the raw MomoShipmentSummary.cargo_type (legacy
+ *      A/M/X/O/Z or G/T/F or label form) via `toCanonicalCargoType()` from
+ *      `@/lib/warehouse/cargo-type` BEFORE writing to
+ *      `cargo_shipments.cargo_type` (DB CHECK rejects non-canonical values).
  *   4. Sub-fetch tracking per shipment → upsert cargo_shipment_tracking;
  *      skip events that already exist (same shipment_id + scanned_at + event)
  *   5. Persist last-sync timestamp — recommend a row in `public.settings`

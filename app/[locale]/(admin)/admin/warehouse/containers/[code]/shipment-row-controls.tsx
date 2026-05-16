@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   adminSetShipmentReceivedQty,
   adminAttachShipmentToContainer,
+  adminSetShipmentCargoType,
 } from "@/actions/admin/warehouse";
+import {
+  CARGO_TYPE_VALUES,
+  CARGO_TYPE_LABEL_TH,
+  type CargoType,
+} from "@/lib/warehouse/cargo-type";
 
 const inputCls =
   "w-full rounded border border-border bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -27,6 +33,7 @@ type Props = {
   currentBoxCount:    number;
   currentReceived:    number;
   currentContainerId: string;
+  currentCargoType:   CargoType | null;
 };
 
 export function ShipmentRowControls({
@@ -35,10 +42,11 @@ export function ShipmentRowControls({
   currentBoxCount,
   currentReceived,
   currentContainerId,
+  currentCargoType,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState<"received" | "rebind" | null>(null);
+  const [open, setOpen] = useState<"received" | "rebind" | "cargo" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -50,6 +58,9 @@ export function ShipmentRowControls({
   // staff already has the container UUID open in another tab when doing
   // a rebind (most common reason: typo on initial attach).
   const [targetContainerId, setTargetContainerId] = useState("");
+
+  // V-D2 cargo_type correction state
+  const [cargoTypeDraft, setCargoTypeDraft] = useState<CargoType | "">(currentCargoType ?? "");
 
   function flashSuccess(text: string) {
     setMsg(text);
@@ -70,6 +81,29 @@ export function ShipmentRowControls({
           received >= currentBoxCount
             ? `✓ ครบ (${received}/${currentBoxCount}) — ลูกค้าจะเห็น progress 100%`
             : `บันทึกแล้ว (${received}/${currentBoxCount} กล่อง)`,
+        );
+        setOpen(null);
+        router.refresh();
+      } else {
+        setErr(res.error);
+      }
+    });
+  }
+
+  function submitCargoType(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    startTransition(async () => {
+      const res = await adminSetShipmentCargoType({
+        shipment_id: shipmentId,
+        cargo_type:  cargoTypeDraft,
+      });
+      if (res.ok) {
+        flashSuccess(
+          cargoTypeDraft
+            ? `✓ ตั้งเป็น "${CARGO_TYPE_LABEL_TH[cargoTypeDraft as CargoType]}" แล้ว`
+            : "✓ ล้างค่าแล้ว",
         );
         setOpen(null);
         router.refresh();
@@ -131,6 +165,16 @@ export function ShipmentRowControls({
         >
           🔄 ย้ายตู้
         </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(open === "cargo" ? null : "cargo"); setErr(null); setMsg(null); }}
+          disabled={pending}
+          className={`rounded border px-2 py-1 hover:bg-surface-alt ${
+            open === "cargo" ? "bg-primary-500 text-white border-primary-500" : "border-border bg-white"
+          }`}
+        >
+          🏷️ ประเภท: {currentCargoType ? CARGO_TYPE_LABEL_TH[currentCargoType] : "ไม่ระบุ"}
+        </button>
       </div>
 
       {msg && (
@@ -171,6 +215,44 @@ export function ShipmentRowControls({
               className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
             >
               = ครบ
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(null)}
+              disabled={pending}
+              className="rounded border border-border bg-white px-2 py-1 text-[10px] hover:bg-surface-alt"
+            >
+              ปิด
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* V-D2 cargo_type correction form */}
+      {open === "cargo" && (
+        <form onSubmit={submitCargoType} className="rounded border border-border bg-surface-alt/40 p-2 space-y-1.5">
+          <label className="block space-y-0.5">
+            <span className="text-[10px] text-muted">ประเภทสินค้า (canonical)</span>
+            <select
+              value={cargoTypeDraft}
+              onChange={(e) => setCargoTypeDraft(e.target.value as CargoType | "")}
+              className={inputCls}
+              autoFocus
+              disabled={pending}
+            >
+              <option value="">— ไม่ระบุ —</option>
+              {CARGO_TYPE_VALUES.map((c) => (
+                <option key={c} value={c}>{CARGO_TYPE_LABEL_TH[c]}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-1">
+            <button
+              type="submit"
+              disabled={pending || cargoTypeDraft === (currentCargoType ?? "")}
+              className="rounded bg-primary-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {pending ? "กำลังบันทึก..." : "บันทึก"}
             </button>
             <button
               type="button"

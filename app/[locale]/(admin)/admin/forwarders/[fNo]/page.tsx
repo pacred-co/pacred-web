@@ -4,6 +4,18 @@ import { Link } from "@/i18n/navigation";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
+import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+
+const SHIPMENT_STATUS_LABEL: Record<string, string> = {
+  received_cn:         "รับเข้าโกดังจีน",
+  packed_cn:           "บรรจุแล้ว (จีน)",
+  sealed_in_container: "ปิดตู้แล้ว (จีน)",
+  in_transit:          "กำลังเดินทาง",
+  arrived_th:          "ถึงไทยแล้ว",
+  unloaded:            "ลงจากตู้ (ไทย)",
+  out_for_delivery:    "กำลังจัดส่ง",
+  delivered:           "ส่งสำเร็จ",
+};
 
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
   const { fNo } = await params;
@@ -18,6 +30,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
       domestic_china_thb, thailand_delivery_thb, other_price,
       tracking_chn, tracking_th, cabinet_number, partner_warehouse, note_admin, note_user, detail,
       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
+      bill_to_name_override,
       created_at, date_arrived_thailand, date_delivered,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
     `)
@@ -42,6 +55,31 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .order("created_at", { ascending: false })
     .returns<CostAdjustmentRow[]>();
   const costAdjustments = costAdjRaw ?? [];
+
+  // Surface cargo_shipments linked to this forwarder (V-D2/D3 + V-C3 visibility)
+  const { data: shipmentsRaw } = await admin
+    .from("cargo_shipments")
+    .select(`
+      id, shipment_code, status, box_count, received_box_count, cargo_type, weight_kg, volume_cbm, created_at,
+      container:cargo_containers!cargo_container_id ( code, transport_mode, status, eta, close_at, carrier_container_no )
+    `)
+    .eq("forwarder_f_no", f.f_no)
+    .order("created_at", { ascending: false });
+  type ContainerEmbed = {
+    code: string | null; transport_mode: string | null; status: string;
+    eta: string | null; close_at: string | null; carrier_container_no: string | null;
+  };
+  type RawShipment = {
+    id: string; shipment_code: string; status: string;
+    box_count: number; received_box_count: number;
+    cargo_type: string | null;
+    weight_kg: number | null; volume_cbm: number | null; created_at: string;
+    container: ContainerEmbed | ContainerEmbed[] | null;
+  };
+  const shipments = ((shipmentsRaw ?? []) as RawShipment[]).map((s) => ({
+    ...s,
+    container: Array.isArray(s.container) ? (s.container[0] ?? null) : s.container,
+  }));
 
   // T-P1: load all driver assignments (history + active) for this forwarder
   const { data: assignmentsRaw } = await admin
@@ -130,6 +168,53 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
             </div>
           </Section>
 
+          {/* Cargo shipments — links to spine container view */}
+          {shipments.length > 0 && (
+            <Section title={`📦 Cargo shipments (${shipments.length})`}>
+              <ul className="text-sm space-y-2">
+                {shipments.map((s) => (
+                  <li key={s.id} className="rounded-lg border border-border p-3 space-y-1">
+                    <div className="flex items-start justify-between flex-wrap gap-2">
+                      <div>
+                        <p className="font-mono text-xs font-medium">{s.shipment_code}</p>
+                        <p className="text-[10px] text-muted">
+                          {SHIPMENT_STATUS_LABEL[s.status] ?? s.status}
+                          {" · "}
+                          <span className={s.received_box_count >= s.box_count ? "text-green-700" : ""}>
+                            {s.received_box_count}/{s.box_count} กล่อง
+                          </span>
+                          {s.weight_kg != null && <> · {Number(s.weight_kg).toFixed(1)} kg</>}
+                        </p>
+                        {s.cargo_type && (
+                          <p className="text-[10px] text-blue-700">🏷️ {s.cargo_type}</p>
+                        )}
+                      </div>
+                      {s.container?.code ? (
+                        <Link
+                          href={`/admin/warehouse/containers/${s.container.code}`}
+                          className="rounded-lg border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
+                        >
+                          ↗ ตู้ <span className="font-mono">{s.container.code}</span>
+                        </Link>
+                      ) : (
+                        <span className="text-[10px] text-muted">ยังไม่ assign ตู้</span>
+                      )}
+                    </div>
+                    {s.container?.carrier_container_no && (
+                      <p className="text-[10px] text-muted">B/L: <span className="font-mono">{s.container.carrier_container_no}</span></p>
+                    )}
+                    {s.container?.eta && (
+                      <p className="text-[10px] text-muted">
+                        ETA {new Date(s.container.eta).toLocaleDateString("th-TH")}
+                        {s.container.close_at && <> · ตัดตู้ {new Date(s.container.close_at).toLocaleDateString("th-TH")}</>}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
           {f.note_user && (
             <Section title="หมายเหตุจากลูกค้า">
               <p className="text-sm whitespace-pre-wrap">{f.note_user}</p>
@@ -161,6 +246,12 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
             forwarderId={f.id}
             fNo={f.f_no}
             existing={costAdjustments}
+          />
+          <BillToOverridePanel
+            kind="forwarder"
+            fNo={f.f_no}
+            defaultName={[f.ship_first_name, f.ship_last_name].filter(Boolean).join(" ") || ""}
+            current={f.bill_to_name_override ?? null}
           />
         </aside>
       </div>

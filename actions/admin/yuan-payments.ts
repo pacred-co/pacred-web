@@ -194,3 +194,55 @@ export async function adminBulkApproveYuanPayments(
     return { ok: true, data: result };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// V-A1: set yuan_payments.slip_transferred_at (admin edit)
+// ────────────────────────────────────────────────────────────
+
+const setYuanSlipTransferredAtSchema = z.object({
+  id:                  z.string().uuid(),
+  slip_transferred_at: z.string().trim().max(40),    // "" → clear
+});
+export type SetYuanSlipTransferredAtInput = z.infer<typeof setYuanSlipTransferredAtSchema>;
+
+export async function adminSetYuanSlipTransferredAt(
+  input: SetYuanSlipTransferredAtInput,
+): Promise<AdminActionResult<{ id: string; slip_transferred_at: string | null }>> {
+  const parsed = setYuanSlipTransferredAtSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  let next: string | null = null;
+  if (d.slip_transferred_at.length > 0) {
+    const dt = new Date(d.slip_transferred_at);
+    if (Number.isNaN(dt.getTime())) return { ok: false, error: "slip_transferred_at รูปแบบไม่ถูกต้อง" };
+    next = dt.toISOString();
+  }
+
+  return withAdmin<{ id: string; slip_transferred_at: string | null }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const { data: before, error: readErr } = await admin
+        .from("yuan_payments")
+        .select("id, slip_transferred_at")
+        .eq("id", d.id)
+        .maybeSingle<{ id: string; slip_transferred_at: string | null }>();
+      if (readErr) return { ok: false, error: readErr.message };
+      if (!before) return { ok: false, error: "not_found" };
+
+      const { error: updErr } = await admin
+        .from("yuan_payments")
+        .update({ slip_transferred_at: next })
+        .eq("id", d.id);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "yuan_payment.set_slip_transferred_at", "yuan_payment", d.id, {
+        before: before.slip_transferred_at,
+        after:  next,
+      });
+
+      revalidatePath("/admin/yuan-payments");
+      return { ok: true, data: { id: d.id, slip_transferred_at: next } };
+    },
+  );
+}

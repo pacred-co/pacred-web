@@ -7,10 +7,12 @@ import {
   listShipmentsByContainer,
   latestEventsByShipments,
 } from "@/lib/warehouse";
+import { CARGO_TYPE_LABEL_TH, CARGO_TYPE_CLEARANCE_NOTE } from "@/lib/warehouse/cargo-type";
 import { ContainerStatusForm } from "./status-form";
 import { ScanEventForm } from "./scan-form";
 import { ShipmentRowControls } from "./shipment-row-controls";
 import { ManualShipmentForm } from "./manual-shipment-form";
+import { CloseAtForm } from "./close-at-form";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -65,6 +67,11 @@ const TRANSPORT_LABEL: Record<string, string> = {
   sea:   "🚢 เรือ",
   air:   "✈️ เครื่องบิน",
 };
+
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function hoursFromNowToIso(iso: string): number {
+  return Math.floor((new Date(iso).getTime() - Date.now()) / 3_600_000);
+}
 
 export default async function AdminContainerDetailPage({
   params,
@@ -132,6 +139,35 @@ export default async function AdminContainerDetailPage({
           <p className="mt-1 text-sm text-muted">
             {container.origin ?? "—"} → {container.destination ?? "—"} · {transport}
           </p>
+          {container.carrier_container_no && (
+            <p className="mt-0.5 text-xs text-muted">
+              เลขตู้สายเรือ / B/L:{" "}
+              <span className="font-mono font-medium text-foreground">
+                {container.carrier_container_no}
+              </span>
+            </p>
+          )}
+          {container.close_at && (() => {
+            const diffH  = hoursFromNowToIso(container.close_at);
+            const closed = diffH < 0;
+            const cls = closed
+              ? "bg-red-50 text-red-700 border-red-200"
+              : diffH < 24
+              ? "bg-amber-50 text-amber-700 border-amber-200"
+              : "bg-blue-50 text-blue-700 border-blue-200";
+            return (
+              <p className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-[11px] ${cls}`}>
+                ⏰ ตัดตู้: {new Date(container.close_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                <span className="ml-1 font-semibold">
+                  {closed
+                    ? ` (ปิดรับแล้ว ${Math.abs(diffH)} ชม.)`
+                    : diffH < 24
+                    ? ` (อีก ${diffH} ชม.)`
+                    : ` (อีก ${Math.floor(diffH / 24)} วัน)`}
+                </span>
+              </p>
+            );
+          })()}
         </div>
         <Link
           href="/admin/warehouse/containers"
@@ -228,6 +264,16 @@ export default async function AdminContainerDetailPage({
                           </p>
                         </div>
                       </div>
+                      {/* V-D2: cargo_type badge — drives staff clearance prompt */}
+                      {s.cargo_type && (
+                        <div className="text-[11px] rounded px-2 py-1 bg-blue-50 border border-blue-200 text-blue-900">
+                          <span className="font-medium">🏷️ ประเภท:</span>{" "}
+                          {CARGO_TYPE_LABEL_TH[s.cargo_type]}
+                          {CARGO_TYPE_CLEARANCE_NOTE[s.cargo_type] && (
+                            <span className="ml-2 text-amber-700">⚠ {CARGO_TYPE_CLEARANCE_NOTE[s.cargo_type]}</span>
+                          )}
+                        </div>
+                      )}
                       {/* V-D1: CBM per source — surface diff before billing */}
                       <CbmDiffBadge
                         receivedCbm={s.received_cbm}
@@ -242,13 +288,14 @@ export default async function AdminContainerDetailPage({
                           <> · {new Date(latest.scanned_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
                         </p>
                       )}
-                      {/* U1-5 + U1-3: shipment-row controls (received qty + rebind to other container) */}
+                      {/* U1-5 + U1-3 + V-D2: shipment-row controls (received qty + rebind + cargo_type edit) */}
                       <ShipmentRowControls
                         shipmentId={s.id}
                         shipmentCode={s.shipment_code}
                         currentBoxCount={s.box_count}
                         currentReceived={s.received_box_count}
                         currentContainerId={container.id}
+                        currentCargoType={s.cargo_type}
                       />
                       <ScanEventForm shipmentId={s.id} shipmentCode={s.shipment_code} />
                     </li>
@@ -286,7 +333,12 @@ export default async function AdminContainerDetailPage({
 
         <aside className="space-y-4">
           <ContainerStatusForm containerId={container.id} currentStatus={container.status} />
-          <ManualShipmentForm containerId={container.id} containerCode={container.code ?? ""} />
+          <CloseAtForm containerId={container.id} currentCloseAt={container.close_at} />
+          <ManualShipmentForm
+            containerId={container.id}
+            containerCode={container.code ?? ""}
+            closeAt={container.close_at}
+          />
         </aside>
       </div>
     </main>

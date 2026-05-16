@@ -124,6 +124,7 @@ export default async function AdminWarehouseContainersPage({
                   <th className="px-4 py-3 text-right">Shipments</th>
                   <th className="px-4 py-3 text-right">น้ำหนัก / CBM</th>
                   <th className="px-4 py-3">ETA</th>
+                  <th className="px-4 py-3">ตัดตู้</th>
                   <th className="px-4 py-3">แหล่ง</th>
                 </tr>
               </thead>
@@ -143,6 +144,9 @@ export default async function AdminWarehouseContainersPage({
                           </Link>
                         ) : (
                           <span className="text-muted">— (no code)</span>
+                        )}
+                        {c.carrier_container_no && (
+                          <p className="text-[10px] text-muted mt-0.5">B/L: {c.carrier_container_no}</p>
                         )}
                         <p className="text-[10px] text-muted mt-0.5">{c.id.slice(0, 8)}</p>
                       </td>
@@ -164,6 +168,18 @@ export default async function AdminWarehouseContainersPage({
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {c.eta ? new Date(c.eta).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {c.close_at ? (() => {
+                          const ms = new Date(c.close_at).getTime();
+                          const closed = ms < Date.now();
+                          return (
+                            <span className={closed ? "text-red-700 font-medium" : "text-foreground"}>
+                              {new Date(c.close_at).toLocaleDateString("th-TH")}
+                              {closed && <span className="block text-[10px]">ปิดแล้ว</span>}
+                            </span>
+                          );
+                        })() : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-[10px] uppercase text-muted">{c.source}</td>
                     </tr>

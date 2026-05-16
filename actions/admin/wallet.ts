@@ -174,3 +174,57 @@ export async function adminBulkApproveDeposits(
     return { ok: true, data: result };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// V-A1: set wallet_transactions.slip_transferred_at (admin edit)
+// ────────────────────────────────────────────────────────────
+// Empty string clears. ISO datetime parsed; UI sends ISO from a
+// datetime-local input via new Date().toISOString().
+
+const setWalletTxSlipTransferredAtSchema = z.object({
+  id:                  z.string().uuid(),
+  slip_transferred_at: z.string().trim().max(40),    // "" → clear
+});
+export type SetWalletTxSlipTransferredAtInput = z.infer<typeof setWalletTxSlipTransferredAtSchema>;
+
+export async function adminSetWalletTxSlipTransferredAt(
+  input: SetWalletTxSlipTransferredAtInput,
+): Promise<AdminActionResult<{ id: string; slip_transferred_at: string | null }>> {
+  const parsed = setWalletTxSlipTransferredAtSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  let next: string | null = null;
+  if (d.slip_transferred_at.length > 0) {
+    const dt = new Date(d.slip_transferred_at);
+    if (Number.isNaN(dt.getTime())) return { ok: false, error: "slip_transferred_at รูปแบบไม่ถูกต้อง" };
+    next = dt.toISOString();
+  }
+
+  return withAdmin<{ id: string; slip_transferred_at: string | null }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const { data: before, error: readErr } = await admin
+        .from("wallet_transactions")
+        .select("id, slip_transferred_at")
+        .eq("id", d.id)
+        .maybeSingle<{ id: string; slip_transferred_at: string | null }>();
+      if (readErr) return { ok: false, error: readErr.message };
+      if (!before) return { ok: false, error: "not_found" };
+
+      const { error: updErr } = await admin
+        .from("wallet_transactions")
+        .update({ slip_transferred_at: next })
+        .eq("id", d.id);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "wallet_tx.set_slip_transferred_at", "wallet_tx", d.id, {
+        before: before.slip_transferred_at,
+        after:  next,
+      });
+
+      revalidatePath("/admin/wallet");
+      return { ok: true, data: { id: d.id, slip_transferred_at: next } };
+    },
+  );
+}
