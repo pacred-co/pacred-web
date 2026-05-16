@@ -1,9 +1,9 @@
 # ADR-0012 — ERP frontend shell: same Next.js app vs `erp.pacred.co` (V3 prep)
 
-**Status:** 🟡 **DRAFT** — เดฟ scaffold 2026-05-16 night. ก๊อต to review + lock.
-**Date:** 2026-05-16 night
+**Status:** 🟡 **DRAFT — DEFERRED to T+30d post-launch** (decided 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่). Same-app vs `erp.pacred.co` decision depends on V2-stable-state signals (admin chrome conflicts · admin perf · staff complaints) — better to decide after a month of real V2 usage. **ภูม does NOT implement** until ก๊อต flips Status → Accepted.
+**Date:** 2026-05-16 night (drafted + deferred)
 **Phase:** V3 prep · Sprint 7+ Track D
-**Owner:** เดฟ (scaffold) · ก๊อต (review + lock) · ภูม (implements when V3 starts)
+**Owner:** เดฟ (scaffold) · ก๊อต (locks at T+30d) · ภูม (implements when V3 starts)
 
 > **Reservation slot:** ADR-0012 follows ADR-0011 (RBAC granular). Pairs with ADR-0013 (V2→V3 migration).
 

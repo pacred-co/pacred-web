@@ -1,7 +1,8 @@
 # K-sec-4 — External pen test plan
 
-> **Status:** 📋 plan only by เดฟ (ก๊อต P1 task). Execution = post-launch. ก๊อต confirms vendor pick + scope + timeline.
-> **Date:** 2026-05-16 night · **Source:** PORT_PLAN Part S2 ก๊อต queue K-sec-4 + [OWASP audit](owasp-2026-05.md).
+> **Status:** ✅ **DECIDED 2026-05-16 night — Aiwen Tech (Tier-1 Thai mid-tier, ฿150-200k) + T+8-13wk active window** picked by ก๊อต + เดฟ + ลูกพี่. RFP fan-out at T+5wk to 3 vendors (Aiwen + Stelia + MFEC) with Aiwen as default pick unless RFP reveals a clearer winner. Execution per §4.1 timeline.
+> **Date:** 2026-05-16 night (plan + decision)
+> **Source:** PORT_PLAN Part S2 ก๊อต queue K-sec-4 + [OWASP audit](owasp-2026-05.md).
 >
 > **Read with:**
 > [`docs/audit/owasp-2026-05.md`](owasp-2026-05.md) (Top 10 self-audit) ·
@@ -197,13 +198,15 @@ Identify vulnerabilities pre-public-beta-expansion. Specifically:
 
 ---
 
-## 7. Open questions for ก๊อต (lock these)
+## 7. Resolved decisions (locked 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่)
 
-1. **Budget tier:** confirm ฿150-250k range is acceptable for first engagement, or upgrade to Tier-2 (฿800k+)?
-2. **Vendor pick:** Aiwen / Stelia / MFEC / other? Recommend Aiwen (smaller, faster, mid-tier price).
-3. **Timing:** confirm T+8 to T+13 active testing window. Or wait until 6 months post-launch (more data, more attack surface stable)?
-4. **Bug bounty:** approve setup of HackerOne triage program post-pen-test (month-9 timeframe)?
-5. **Compliance angle:** Pacred PDPA (Thailand) registration status — required to confirm before any external party sees customer data, even on staging. Verify with Pacred legal / owner.
+1. **Budget tier:** ✅ **Tier-1 ฿150-250k accepted** for first engagement. Tier-2 (NCC/Doyensec ฿800k+) deferred to Year-2 when enterprise B2B customers require big-name reports.
+2. **Vendor pick:** ✅ **Aiwen Tech as default** (smaller, faster, mid-tier price). RFP also goes to **Stelia + MFEC** at T+5wk — switch only if RFP reveals a clearer Pacred-fit (Next.js + Supabase + Thai logistics).
+3. **Timing:** ✅ **T+8 to T+13 active testing window** (per §4.1). 6-month delay rejected — earlier pen-test catches issues before customer-base scales + remediation cheaper at low scale.
+4. **Bug bounty:** ✅ **Approved HackerOne post-pen-test (month-9 timeframe).** Continuous discovery layered on top of formal engagement. Cap monthly bounty pool at ฿50k initially.
+5. **Compliance angle:** ⏳ **Pacred PDPA registration** — T-G3 พี่ป๊อป Bundle 1 call should also confirm PDPA registration status (or kick off registration if not yet done). Required BEFORE any external party touches customer data, even on staging.
+
+**Next action:** เดฟ tickles calendar for T+5wk (≈2026-06-22) to send RFP. T-G3 Bundle 1 needs PDPA-registration confirmation added.
 
 ---
 

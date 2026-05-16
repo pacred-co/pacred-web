@@ -1,7 +1,8 @@
 # R1-pick — China-search replacement options matrix
 
-> **Status:** 📋 matrix only by เดฟ (ก๊อต P3 task). ADR-0003 locked Option E (demo-mode interim); this matrix preps the eventual real pick. Owner-call optional — ก๊อต can decide solo if budget + vendor risk acceptable.
-> **Date:** 2026-05-16 night · **Source:** [ADR-0003 china-search-vendor-cutoff](0003-china-search-vendor-cutoff.md) + [checklist](0003-china-search-vendor-cutoff-checklist.md).
+> **Status:** ✅ **DECIDED 2026-05-16 night — DEFER T+30d post-launch + SaaS RFP** picked by ก๊อต + เดฟ + ลูกพี่ (Option F now, Option C at T+30d eval gate). ADR-0003 Option E demo-mode continues. ก๊อต re-opens this matrix at T+30d (≈ 2026-06-17) for vendor RFP decision per §6.
+> **Date:** 2026-05-16 night (matrix + decision)
+> **Source:** [ADR-0003 china-search-vendor-cutoff](0003-china-search-vendor-cutoff.md) + [checklist](0003-china-search-vendor-cutoff-checklist.md).
 >
 > **Read with:**
 > [ADR-0003](0003-china-search-vendor-cutoff.md) (locked: Option E hybrid — TAMIT code in repo, prod = demo mode) ·
@@ -201,13 +202,15 @@ Pacred can short-list these:
 
 ---
 
-## 7. Open questions for ก๊อต
+## 7. Resolved decisions (locked 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่)
 
-1. **Defer-vs-act trigger:** confirm T+30-day evaluation (count "can't add URL" tickets) is the right trigger? Or set a different metric (e.g. customer-onboarding-conversion-rate)?
-2. **Budget for Option C** when triggered — confirm ~฿5-30k/mo is acceptable, or push for cheaper (Option A scraper) despite engineering cost?
-3. **Anti-RCGroup risk** — if RCGroup-TH still operates, do we KEEP avoiding them (they came up in legacy as dead code; trust unclear) OR include in RFP?
-4. **Image search priority** — is image search (Laonet's niche) high-value for Pacred customers, or defer?
-5. **Compliance / legality** — scraping 1688 / Taobao violates their ToS. Pacred legal risk = low but non-zero. Confirm comfort.
+1. **Defer-vs-act trigger:** ✅ **T+30-day evaluation gate** (count "can't add URL" tickets via Sentry + support inbox + sales-rep workload self-report). If >10 tickets/wk → trigger Option C SaaS RFP. If <10/wk → continue Option E demo mode.
+2. **Budget for Option C** when triggered — ✅ **~฿5-30k/mo acceptable** for SaaS aggregator (avoids 80-120h Option A engineering cost; cash spend << engineering opportunity cost at Pacred's launch volume).
+3. **Anti-RCGroup risk** — ✅ **INCLUDE RCGroup-TH in RFP** (they're in scope — historical "never reached prod" status doesn't mean untrusted; let RFP responses decide). EXCLUDE TAMIT/AkuCargo/Laonet (ไอแต้ม-controlled, defeats V-F1).
+4. **Image search priority** — ✅ **Defer to V2.1.** Customer URL-paste covers 95% of use cases; image search is a niche delight feature. Revisit if Sentry shows "image search" demand emerging.
+5. **Compliance / legality** — ✅ **Acknowledged low-but-nonzero risk.** Pacred uses SaaS vendor (transfers ToS-violation risk to vendor) when picked. No direct scraping by Pacred infra in V2.
+
+**Next action:** ก๊อต re-opens this matrix at T+30d eval gate (~2026-06-17). Until then, Option E demo mode continues per ADR-0003 lock.
 
 ---
 

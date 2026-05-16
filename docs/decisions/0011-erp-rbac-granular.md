@@ -1,9 +1,9 @@
 # ADR-0011 — ERP RBAC granular roles per module (V3 prep)
 
-**Status:** 🟡 **DRAFT** — เดฟ scaffold 2026-05-16 night. ก๊อต to review + lock. Target = V3 (`pacred-dpx` repo); inform V2's incremental moves but do not refactor V2 mid-flight (per [ADR-0010](0010-v2-v3-version-strategy.md)).
-**Date:** 2026-05-16 night
+**Status:** 🟡 **DRAFT — DEFERRED to T+30d post-launch** (decided 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่). V2 launch focus overrides V3 prep; revisit when V2 stable + V3 scope sharpens with real ops-staff feedback (the 14 staff role workspaces per [`briefs/ops-roles.md`](../briefs/ops-roles.md) provide better signal than a-priori design). **ภูม does NOT implement** until ก๊อต flips Status → Accepted. Target = V3 (`pacred-dpx` repo); informs V2 incremental moves but no refactor V2 mid-flight (per [ADR-0010](0010-v2-v3-version-strategy.md)).
+**Date:** 2026-05-16 night (drafted + deferred)
 **Phase:** V3 prep · Sprint 7+ Track D (per [ADR-0014](0014-customer-self-service-state-transitions.md) reservation note)
-**Owner:** เดฟ (scaffold) · ก๊อต (review + lock) · ภูม (implements when V3 starts)
+**Owner:** เดฟ (scaffold) · ก๊อต (locks at T+30d) · ภูม (implements when V3 starts)
 
 > **Reservation slot:** ADR-0011 was reserved (per [ADR-0014](0014-customer-self-service-state-transitions.md) note); this lands here. ADR-0012 (ERP shell) + ADR-0013 (V2→V3 migration) follow.
 

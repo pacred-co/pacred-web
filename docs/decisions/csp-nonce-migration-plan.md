@@ -1,7 +1,8 @@
 # CSP nonce migration — plan (CSP-1)
 
-> **Status:** 🟡 plan only by เดฟ (ก๊อต P1 task). **Not yet implemented** — risk of breakage in production without careful per-route smoke. ภูม or เดฟ executes after Monday launch + after Sentry (DV-1a) lands (so we can catch any regression in real time).
-> **Date:** 2026-05-16 night · **Source:** PORT_PLAN Part S2 ก๊อต queue CSP-1 + [OWASP audit](../audit/owasp-2026-05.md).
+> **Status:** ✅ **DECIDED 2026-05-16 night — Ship week-2 post-launch (≈ Mon 2026-06-01) + Report-Only soft-launch 48h + Sentry CSP Reports endpoint** picked by ก๊อต + เดฟ + ลูกพี่. **Not yet implemented** — execution gate = (1) Monday launch stable, (2) Sentry DV-1a live for CSP Reports endpoint, (3) 1-week hotfix buffer. ภูม or เดฟ executes per Phase 1-4.
+> **Date:** 2026-05-16 night (plan + decision)
+> **Source:** PORT_PLAN Part S2 ก๊อต queue CSP-1 + [OWASP audit](../audit/owasp-2026-05.md).
 >
 > **Read with:**
 > [`next.config.ts`](../../next.config.ts) lines 14-50 (current CSP header) ·
@@ -183,12 +184,14 @@ After 48h of clean reports → flip to `Content-Security-Policy` enforce mode.
 
 ---
 
-## 6. Open questions for ก๊อต
+## 6. Resolved decisions (locked 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่)
 
-1. **Timing:** ship CSP migration this week (post-Monday launch) or defer to V2.1? Recommend: ship in week 2 post-launch (give 1 week buffer for hot-fixes if any).
-2. **Report-uri endpoint:** Sentry has a [CSP Reports](https://docs.sentry.io/product/security-policy-reporting/) feature — use it? Or self-host a collector?
-3. **`unsafe-eval` removal:** check if any Pacred dep needs it (legacy Bootstrap? PHP-style scripts? specific Vercel/Next 16 build artifact?). Run `pnpm build` with strict CSP first to surface any blocker.
-4. **Strict vs Report-only switch criteria:** what threshold of "clean reports" (zero? <5/day? <1/week?) triggers the enforce flip?
+1. **Timing:** ✅ **Week 2 post-launch (≈ Mon 2026-06-01).** Gives 1-week buffer for Monday-launch hot-fixes before adding CSP complexity.
+2. **Report-uri endpoint:** ✅ **Sentry CSP Reports** (https://docs.sentry.io/product/security-policy-reporting/). Gate: DV-1a Sentry must be live (ก๊อต signup in progress). Once endpoint URL known, paste into `proxy.ts` `report-uri` directive. Self-host rejected (avoid maintenance burden).
+3. **`unsafe-eval` removal:** ✅ **Remove + verify via `pnpm build` smoke** in Phase 1. If any blocker found (legacy Bootstrap / specific build artifact), surface in `docs/learnings/` + revisit. Bias toward removal.
+4. **Strict vs Report-only switch criteria:** ✅ **Zero violations from real-user traffic across 48h Report-Only window** triggers enforce flip. If non-zero, fix → repeat 48h Report-Only cycle. Single threshold simpler than tiered.
+
+**Next action:** ภูม or เดฟ executes Phase 1-4 starting ~2026-06-01 (week 2 post-launch). Pre-req: DV-1a Sentry live + CSP Reports endpoint URL captured in env. Estimated: ~5-6h work (most spent on smoke testing).
 
 ---
 

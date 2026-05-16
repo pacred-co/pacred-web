@@ -1,7 +1,8 @@
 # D-7 — Payment gateway decision matrix (Thailand)
 
-> **Status:** 📋 matrix only by เดฟ (ก๊อต P3 task). Owner-call required to lock the choice — ก๊อต prep with พี่ป๊อป using this matrix.
-> **Date:** 2026-05-16 night · **Source:** [ADR-0004 payment-gateway](0004-payment-gateway.md) post-beta decision.
+> **Status:** ✅ **DECIDED 2026-05-16 night — Omise (Opn Payments)** picked by ก๊อต + เดฟ + ลูกพี่. **Owner approval call** with พี่ป๊อป still required for cash-commitment sign-off (§6 Q1) — but technical decision locked. Wire-up = ภูม at T+30d post-launch per §5.3.
+> **Date:** 2026-05-16 night (matrix + decision)
+> **Source:** [ADR-0004 payment-gateway](0004-payment-gateway.md) post-beta decision.
 >
 > **Read with:**
 > [ADR-0004](0004-payment-gateway.md) (locked: PromptPay-only pre-beta) ·
@@ -237,13 +238,15 @@ Direct integrations with individual e-wallets. Pacred can add ONE OR MORE on top
 
 ---
 
-## 6. Open questions for ก๊อต (lock these — needs พี่ป๊อป owner call)
+## 6. Resolved decisions (locked 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่)
 
-1. **Approve Omise pick** — confirm with พี่ป๊อป + ask if any banking relationship preference (e.g. "must use KBank gateway for tax reasons")?
-2. **Pacred company info** — DV-4 owner Bundle 1 (legal name + tax ID + bank acct) is gateway-onboarding prerequisite. Confirm captured.
-3. **Cards-only or wallet-first?** Recommend wallet-first UX (top up wallet via Omise → pay from wallet on each order). Reduces per-transaction friction + commission to Omise.
-4. **Refund policy** — does Pacred offer customer-side self-refund or admin-only? Recommend admin-only initially (per ADR-0014 self-service state-transitions pattern).
-5. **Cross-border** — when Chinese customers pay (Alipay / WeChat), what currency? Recommend THB charge with auto-FX (Omise handles); Pacred displays THB in customer-facing UI.
+1. **Approve Omise pick** — ✅ **DECIDED Omise (Opn Payments).** Operational gate: T-G3 พี่ป๊อป Bundle 1 call still needed (ask if any KBank-tax-relationship reason to switch — recommend Omise unless พี่ป๊อป has hard requirement).
+2. **Pacred company info** — ⏳ T-G3 Bundle 1 still gathers (legal name + tax ID + bank acct) — gateway onboarding can't start without this. Same call.
+3. **Cards-only or wallet-first?** ✅ **Wallet-first UX confirmed.** Top up wallet via Omise → pay from wallet on each order. Reduces per-transaction friction + Omise commission spread across larger top-ups.
+4. **Refund policy** — ✅ **Admin-only V1** per ADR-0014 self-service state-transitions pattern. Customer self-refund deferred to V1.1 if demand emerges.
+5. **Cross-border** — ✅ **THB charge with Omise auto-FX.** Customer-facing UI always shows THB; Chinese-cardholder pays via Alipay/WeChat at THB amount, Omise handles FX silently.
+
+**Next action:** ภูม implements per §5.3 (~12-16h) starting T+30d post-launch. ก๊อต queues พี่ป๊อป owner-approval call as part of T-G3 Bundle 1.
 
 ---
 

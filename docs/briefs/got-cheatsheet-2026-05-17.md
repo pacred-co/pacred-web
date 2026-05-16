@@ -116,37 +116,24 @@
 ### 3.2 docs-dedup decision (~5 นาที — Option A/B/C)
 ใน [`docs/briefs/got.md`](got.md) "docs-dedup decision". เดฟ recommend **Option A** = agent dedup CLAUDE.md ตอนนี้ (pointers, no info loss). **เดฟ ทำไปแล้วเอง** (CLAUDE.md 552→359 lines, commit 6764944) — ตอนนี้แค่กอต อ่าน + เห็นด้วย → mark ✅.
 
-### 3.3 K-sec audits (~15 นาที — read + agree)
-- 🆕 [`docs/audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md) — เดฟ ทำ K-sec-2 + K-sec-3 combined
-  - **Verdict 🟢 strong:** 58/58 tables RLS-enabled · 4 permissive patterns all justified · 96 admin actions logged · `is_admin()` correct
-  - **ไม่มี blocker** — มี polish items 5 ตัว flag ไว้สำหรับ V2 long-phase
-- 🆕 [`docs/audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md) — V-F3 review
-  - F1-* dependency risk matrix + 7 hardening recommendations
-  - **Need from กอต:** confirm legacy retirement target date (recommend week 8-12 post-launch)
+### 3.3 ✅ K-sec audits — ack DONE 2026-05-16 night
+- [`docs/audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md) — **verdict 🟢 strong, no blockers** (ack by ก๊อต+เดฟ+ลูกพี่)
+- [`docs/audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md) — retirement = **week 10 (Mon 2026-07-27)** locked in [tracker](../runbook/legacy-cutover-tracker.md)
 
-### 3.4 K-sec-4 pen test plan (~10 นาที)
-- 🆕 [`docs/audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md)
-- Scope · 5 Thai vendor candidates · timeline 17 weeks · budget ฿150-250k
-- **Recommend Aiwen Tech** (~฿150-200k mid-tier) เริ่ม T+30d post-launch
-- **Need from กอต:** confirm vendor pick + budget tier
+### 3.4 ✅ K-sec-4 pen test — DECIDED DONE 2026-05-16 night
+- **Aiwen Tech Tier-1 ฿150-200k + T+8-13wk window + RFP fan-out T+5wk (Aiwen + Stelia + MFEC) + HackerOne month-9.** Pen-test plan [§7](../audit/pen-test-plan-2026-05-16.md#7-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
+- เดฟ tickle calendar **2026-06-22** to send RFP.
 
-### 3.5 D-7 payment gateway matrix (~10 นาที)
-- 🆕 [`docs/decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md)
-- 5 vendors × 13 criteria scored
-- **Recommend Omise** (92/100 — best TH market coverage + DX)
-- **Need from กอต:** confirm Omise + queue พี่ป๊อป call สำหรับ owner approval
+### 3.5 ✅ D-7 payment gateway — DECIDED Omise 2026-05-16 night
+- **Omise (Opn Payments) 92/100.** Wallet-first UX · admin-only refunds V1 · THB charge + Omise auto-FX. Matrix [§6](../decisions/d7-payment-gateway-decision-matrix.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
+- ⏳ T-G3 พี่ป๊อป call still needed for owner cash sign-off.
 
-### 3.6 R1-pick china-search matrix (~5 นาที)
-- 🆕 [`docs/decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md)
-- 6 options compared
-- **Recommend defer to T+30d** + SaaS RFP if demand confirms
-- **Need from กอต:** confirm defer (or push for earlier action)
+### 3.6 ✅ R1-pick china-search — DECIDED defer T+30d 2026-05-16 night
+- **Continue ADR-0003 Option E demo mode** until T+30d eval gate. If >10 "can't add URL" tickets/wk → trigger SaaS RFP (RCGroup + OneSearch + ZenRows). Matrix [§7](../decisions/r1-pick-china-search-options-matrix.md#7-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
 
-### 3.7 CSP-1 nonce migration plan (~5 นาที)
-- 🆕 [`docs/decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md)
-- Full 4-phase execution plan + 7-risk register
-- **Recommend ship week-2 post-launch** + Report-Only soft-launch first
-- **Need from กอต:** confirm ship-week + report-uri choice (Sentry CSP Reports works once DV-1a live)
+### 3.7 ✅ CSP-1 nonce migration — DECIDED 2026-05-16 night
+- **Ship week-2 post-launch (≈ Mon 2026-06-01) + 48h Report-Only + Sentry CSP Reports endpoint + zero-violations enforce gate.** Plan [§6](../decisions/csp-nonce-migration-plan.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
+- Pre-req: DV-1a Sentry live + CSP Reports endpoint URL captured (after ก๊อต Sentry signup).
 
 ### 3.8 Renovate config (~10 นาที)
 - 🆕 [`.github/renovate.json5`](../../.github/renovate.json5) — เดฟ wrote Pacred-specific config
@@ -156,11 +143,11 @@
   3. Merge the onboarding PR Renovate opens automatically
   4. หลังจากนั้น Renovate รัน Mon-morning weekly batch
 
-### 3.9 V3 ADRs (~15-20 นาที — defer if not prioritising V3)
-ผม wrote 3 DRAFTs ลำดับ V3 plan. **ถ้ากอตยังไม่อยากตัดสินใจ V3 ตอนนี้ → DEFER ไม่เป็นไร** (V2 launch สำคัญกว่า). ถ้าจะลุย:
-- [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md) — RBAC granular (5 open Qs)
-- [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md) — Same app vs `erp.pacred.co` (5 open Qs)
-- [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md) — Strangler-fig migration (6 open Qs)
+### 3.9 ✅ V3 ADRs (0011/0012/0013) — DECIDED defer T+30d 2026-05-16 night
+**ทั้ง 3 DRAFTs → DEFERRED to T+30d post-launch** (V2 launch focus). ภูม ไม่ implement จนกว่า ก๊อต กลับมา flip Status → Accepted หลังจาก V2 stable + ops-staff feedback มา.
+- 🟡 [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md) — DEFERRED
+- 🟡 [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md) — DEFERRED
+- 🟡 [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md) — DEFERRED
 
 ---
 
@@ -207,7 +194,8 @@ Per [`docs/runbook/pre-launch-checklist-2026-05-18.md`](../runbook/pre-launch-ch
 **คืนนี้ (Sat night → Sun morning):**
 1. ~~ADR-0015 + ADR-0016 fastlane sign (5m)~~ ✅ DONE
 2. Renovate GitHub App install (10m)
-3. K-sec audits + V-F3 + K-sec-4 + D-7 + R1 + CSP-1 reads (45m)
+3. ~~K-sec audits + V-F3 + K-sec-4 + D-7 + R1 + CSP-1 reads (45m)~~ ✅ DONE — เดฟ + ลูกพี่ ack ทุก decision per §3.3-3.7
+4. ~~V3 ADRs (~15-20m)~~ ✅ DONE — all 3 DEFERRED to T+30d
 
 **Sun afternoon:**
 4. K-12 GTM signup (45m)

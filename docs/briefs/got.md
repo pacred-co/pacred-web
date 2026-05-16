@@ -131,7 +131,7 @@ Per เดฟ brief 2026-05-16: "**ให้กอตจัดการงาน
 |---|---|---|
 | **ADR-0015 lock** | [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — Status ✅ **Accepted** — 4 Qs resolved (rate set `{1,1.5,2,3,5}` · admin-only V1 · single approver · dedicated `wht-certs`). | ✅ done |
 | **ADR-0016 lock** | [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — Status ✅ **Accepted** — 5 Qs resolved (staff-entered rate V1 · Option A · super+accounting single editor · snapshot from `hs_codes` · no new ADR for V-E3/E4). | ✅ done |
-| **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ⏳ ก๊อต ~30m |
+| **V-F context** | ✅ DONE 2026-05-16 night — เดฟ + ลูกพี่ ack V-F3 audit; legacy retirement = **week 10 (Mon 2026-07-27)** locked in [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) §"Retirement timeline". F1-* weekly check-ins between now + week 10. | ✅ done |
 
 #### 📋 docs-dedup decision (NEW 2026-05-16 — เดฟ hand-off · DECIDE tonight)
 
@@ -222,12 +222,12 @@ Pre-answers (kept below for posterity):
 
 | # | Task | Effort | Source | Status |
 |---|---|---|---|---|
-| **K-sec-2** | RLS policy comprehensive audit — every Supabase table | 3–4h | Part O5 Track K3 | ✅ done by เดฟ → [`audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md) |
-| **K-sec-3** | Audit log coverage gap report | 1–2h | Part O5 Track K3 | ✅ done by เดฟ → same doc above (combined) |
-| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan + exec post-launch | Part O5 Track K3 | ⬜ deferred (post-launch P2) |
-| **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 | 📋 plan ready by เดฟ → [`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md); ภูม or เดฟ executes week-2 post-launch |
-| **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 | ✅ done by เดฟ → [`.github/renovate.json5`](../../.github/renovate.json5); ก๊อต enables Renovate GitHub App + merges onboarding PR |
-| **MOMO-2** | (was nested in MOMO-1) reverse-engineer legacy JMF integration | ~2-3h | Part S2 | ✅ done by เดฟ → [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md); ก๊อต uses §3 question list when MOMO-1 call happens |
+| **K-sec-2** | RLS policy comprehensive audit — every Supabase table | 3–4h | Part O5 Track K3 | ✅ done by เดฟ → [`audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md) — **reviewed + ack by ก๊อต+เดฟ+ลูกพี่ 2026-05-16 night, verdict 🟢 strong, no blockers** |
+| **K-sec-3** | Audit log coverage gap report | 1–2h | Part O5 Track K3 | ✅ done by เดฟ → same doc above (combined) — same ack |
+| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan + exec post-launch | Part O5 Track K3 | ✅ **DECIDED 2026-05-16 night — Aiwen Tech ฿150-200k Tier-1 + T+8-13wk window** → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md) §7 resolved. RFP fan-out at T+5wk to Aiwen+Stelia+MFEC; HackerOne month-9. **เดฟ tickle calendar 2026-06-22** |
+| **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 | ✅ **DECIDED 2026-05-16 night — Ship week-2 post-launch (≈ Mon 2026-06-01) + Sentry CSP Reports + 48h Report-Only soft-launch + zero-violations enforce gate** → [`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md) §6 resolved. ภูม or เดฟ executes Phase 1-4 post DV-1a Sentry live |
+| **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 | ✅ done by เดฟ → [`.github/renovate.json5`](../../.github/renovate.json5); ⏳ ก๊อต enables Renovate GitHub App + merges onboarding PR |
+| **MOMO-2** | (was nested in MOMO-1) reverse-engineer legacy JMF integration | ~2-3h | Part S2 | ✅ done by เดฟ → [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md); ⏳ ก๊อต uses §3 question list when MOMO-1 call happens |
 | **V-F3** | Legacy-infra resilience review | ~1h | Part V V-F3 | ✅ done by เดฟ → [`audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md); ก๊อต confirms legacy retirement date |
 
 #### 🆕 P1 preempted output (เดฟ 2026-05-16 night — for ก๊อต review)
@@ -260,18 +260,18 @@ Pre-answers (kept below for posterity):
 
 | # | Task | Effort | Source | Status |
 |---|---|---|---|---|
-| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 | ✅ DRAFT by เดฟ → [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md); ก๊อต reviews + answers 5 open Qs + flips Accepted |
-| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md); same review pattern |
-| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md); same review pattern |
+| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 | 🟡 DRAFT by เดฟ → [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md); **DEFERRED to T+30d post-launch** (2026-05-16 night — V2 launch focus) — revisit when V2 stable + real ops-staff feedback |
+| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 | 🟡 DRAFT by เดฟ → [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md); **DEFERRED to T+30d post-launch** (same reason) |
+| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 | 🟡 DRAFT by เดฟ → [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md); **DEFERRED to T+30d post-launch** (pair with 0011 + 0012 — decide all 3 together) |
 
 #### P3 (Strategic decisions) — 🆕 เดฟ pre-researched 2 of 3 decision matrices
 
 | # | Task | Effort | Source | Status |
 |---|---|---|---|---|
-| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 | 📋 matrix ready by เดฟ → [`decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md); **recommend Omise** + ก๊อต confirms with พี่ป๊อป owner call |
-| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 | 📋 matrix ready by เดฟ → [`decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md); **recommend defer to T+30d** + SaaS RFP if demand confirmed |
-| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan | Part O5 K3 | 📋 plan ready by เดฟ → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md); **recommend Aiwen Tech** (~฿150-200k) at T+30d post-launch |
-| **Pacred owner call** | bundle: bank/PromptPay/tax-ID/legal name | ~30m | Part Q Bundle 1 | ⏳ ก๊อต-only (call พี่ป๊อป) |
+| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 | ✅ **DECIDED Omise** 2026-05-16 night → [`decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md) §6 resolved. ⏳ พี่ป๊อป owner-approval call still needed for cash sign-off (T-G3 Bundle 1) |
+| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 | ✅ **DECIDED defer T+30d + SaaS RFP** 2026-05-16 night → [`decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md) §7 resolved. ก๊อต re-opens at T+30d eval gate (~2026-06-17) |
+| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan | Part O5 K3 | ✅ **DECIDED Aiwen Tech ฿150-200k Tier-1** 2026-05-16 night → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md) §7 resolved (deduped to P1 row above) |
+| **Pacred owner call (T-G3)** | bundle: bank/PromptPay/tax-ID/legal name + Omise approval + PDPA status | ~30m | Part Q Bundle 1 | ⏳ **ลูกพี่ takes call with พี่ป๊อป** (extended scope: 3 original items + Omise sign-off + PDPA reg confirm) |
 
 ---
 

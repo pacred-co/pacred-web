@@ -1,9 +1,9 @@
 # ADR-0013 — V2→V3 ERP migration strategy
 
-**Status:** 🟡 **DRAFT** — เดฟ scaffold 2026-05-16 night. ก๊อต to review + lock.
-**Date:** 2026-05-16 night
+**Status:** 🟡 **DRAFT — DEFERRED to T+30d post-launch** (decided 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่). Strangler-fig migration strategy needs to pair with the same-time decisions on ADR-0011 (RBAC) + ADR-0012 (shell) — defer all 3 together. **ภูม + ทีม do NOT execute** until ก๊อต flips Status → Accepted.
+**Date:** 2026-05-16 night (drafted + deferred)
 **Phase:** V3 prep · Sprint 7+ Track D
-**Owner:** เดฟ (scaffold) · ก๊อต (review + lock) · ภูม + ทีม (executes when V3 starts)
+**Owner:** เดฟ (scaffold) · ก๊อต (locks at T+30d) · ภูม + ทีม (executes when V3 starts)
 
 > **Reservation slot:** ADR-0013 follows ADR-0011 (RBAC) + ADR-0012 (frontend shell). Together this triad covers the "how do we get from V2 to V3" question.
 
