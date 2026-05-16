@@ -172,6 +172,46 @@
 - [ ] เปิด `/admin/learning` → card "การอบรม → HR" → กดแล้วไป /admin/hr/training (blue accent + "→ เปิดในโมดูล HR" hint)
 - [ ] อีก 3 cards (rules/news/customer-terms) → ยังไปยัง /admin/learning/* (Phase H placeholders)
 
+### AA. **NEW (T-G3 follow-up)** — BANK constants wired into PDFs
+- [ ] เปิด `/api/pdf/forwarder/<f_no>` → ดู bank block ใต้ totals (ก่อน signature) → ตัวเลข `225-2-91144-0` ใหญ่/หนา
+- [ ] `/api/pdf/shop-order/<h_no>` (status ≠ completed = invoice) → bank block ปรากฏ
+- [ ] เดียวกัน แต่ status=completed (paid receipt) → **bank block ไม่ปรากฏ** (พิมพ์ "ชำระจาก wallet")
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ status=issued → bank block bilingual TH/EN ทุก field
+
+### BB. **NEW (V-A6) — Withholding tax (ADR-0015)** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0044 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0044_withholding_tax.sql` ใน Supabase Studio (หรือ `supabase db push`) → ดู table `withholding_tax_entries` + bucket `wht-certs` ใน Storage
+- [ ] ทดสอบ partial-unique indexes: insert WHT row ซ้ำกับ order_h_no เดียว → ควร error 23505
+
+**Admin flow (super หรือ accounting):**
+- [ ] เปิด `/admin/tax-invoices/[id]` ของใบ pending → เห็นแผง "🧾 ภาษีหัก ณ ที่จ่าย (WHT)" สีอำพัน
+- [ ] กรอก gross/base/rate → ดู Net คำนวณ live → กด "📝 บันทึก WHT + เริ่ม gate"
+- [ ] แผงเปลี่ยนเป็น status `รอใบหัก (gate ON)` พร้อม 4 stats (Gross/Base/Amount/Net)
+- [ ] กด "ออกใบกำกับภาษี" → fail ด้วย error "กรุณาแนบหรือยกเว้นใบ 50 ทวิ ในแผง WHT ก่อน"
+- [ ] อัพโหลด PDF/JPG cert + เลขที่ 50 ทวิ → status flip เป็น `ได้รับใบหัก` (เขียว)
+- [ ] กด "ออกใบกำกับภาษี" อีกครั้ง → ✅ ออกสำเร็จ + PDF มี WHT line + Net total + bank block
+- [ ] เปิด WHT entry ใหม่อีก order → ลองกด "ยกเว้นใบหัก" → กรอกเหตุผล ≥5 ตัวอักษร → status `ยกเว้น`
+- [ ] เปิด WHT entry ใหม่อีก order → ลอง "ลบ WHT" ขณะ pending → ลบสำเร็จ; ลองอีกที (ไม่มี row) → form กลับมา
+
+**Customer flow (open as the customer who owns the order):**
+- [ ] เปิด `/service-import/<f_no>/receipt` ของออเดอร์ที่มี WHT row → เห็น banner สีอำพัน "📋 สำหรับลูกค้านิติบุคคล" + ตาราง totals แสดง −WHT + Net
+- [ ] เดียวกัน `/service-order/<h_no>/receipt`
+- [ ] cert_status='pending' → banner เตือน "กรุณาส่ง 50 ทวิ"
+- [ ] cert_status='received' → banner เขียว "ได้รับใบ 50 ทวิ ครบแล้ว"
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`withholding_tax_entry` → เห็น actions: wht.create / wht.cert_upload / wht.cert_received / wht.cert_waive / wht.cancel + payload ครบ
+
+**PDF rendering:**
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ issued + มี WHT received → ดู PDF: "หัก ภาษี ณ ที่จ่าย N%" + "คงเหลือชำระสุทธิ (Net)" + Thai-baht spell-out ของ Net
+- [ ] Grand total (gross) **ต้องไม่เปลี่ยน** — RD Code 86
+
+**Negative cases / edge:**
+- [ ] ลูกค้า personal (ไม่มี WHT row) → ออกใบกำกับภาษีได้ปกติ ไม่มี gate, ไม่มี banner
+- [ ] WHT row exist + status=waived → ออกใบกำกับภาษีได้, PDF มี WHT block แต่ไม่มีหมายเลขใบ 50 ทวิ
+- [ ] ลบ WHT entry หลัง cert_status=received → fail "ลบไม่ได้ — สถานะไม่ใช่ pending" (preserved for audit)
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร

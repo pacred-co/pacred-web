@@ -42,20 +42,21 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 
 ## ✅ Per-item readiness checklist
 
-### V-A6 — WHT (ภาษีหัก ณ ที่จ่าย)
+### V-A6 — WHT (ภาษีหัก ณ ที่จ่าย) ✅ SHIPPED 2026-05-17 (commit e95c0bc)
 **Blocker:** ✅ ALL CLEAR (ADR-0015 locked 2026-05-16 night, 4 Qs resolved)
 **Spec:** [`decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — see "Resolved questions" section at the bottom for the locked answers
-**Migration:** `0044_withholding_tax.sql` — **ภูม owns** (เดฟ confirmed 2026-05-16 night via D-2 resolution). Spec has full schema sketch in ADR §"Schema sketch" — rename file from spec's `0039_withholding_tax.sql` → `0044_withholding_tax.sql` + apply.
-**Code touch:**
-- `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT branch + receipt-gate check
-- `tax_invoices` table — relates via `withholding_tax_entries.tax_invoice_id` (per ADR-0015 schema)
-- 50-ทวิ document upload — Supabase Storage bucket `wht-certs` (DEDICATED, per Q4 resolved)
-- `lib/validators/withholding-tax.ts` — Zod schema enforcing rate set `{1, 1.5, 2, 3, 5}` (per Q1 resolved)
-- Receipt + tax-invoice issuance gate active per ADR §"Rules" #4
-**Pre-implementation check:**
-- [x] ADR-0015 Status ✅ Accepted (2026-05-16 night)
-- [x] 4 open Qs resolved (in ADR "Resolved questions" section)
-- [x] ภูม writes migration (D-2 resolved)
+**Migration:** ✅ `0044_withholding_tax.sql` shipped — needs `supabase db push` on dev/prod
+**Code touch (all done):**
+- ✅ `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT cert gate + tax_invoice_id backfill + pipe wht to PDF
+- ✅ `actions/admin/wht.ts` — 5 actions: createWhtEntry / uploadWhtCert / markWhtCertReceived / waiveWhtCert / cancelWhtEntry
+- ✅ `lib/validators/withholding-tax.ts` — Zod schemas + WHT_RATES const + computeWhtNumbers helper
+- ✅ `app/(admin)/admin/tax-invoices/[id]/wht-panel.tsx` — admin panel (create / pending / received / waived states)
+- ✅ `components/pdf/tax-invoice.tsx` — optional `wht` field renders WHT block under totals
+- ✅ `app/api/tax-invoice/[id]/route.tsx` — cancelled re-render pulls WHT too
+- ✅ `app/(protected)/service-(import|order)/[id]/receipt/page.tsx` — WHT info banner + Net total rows
+- ✅ Storage bucket `wht-certs` (DEDICATED) + RLS policies in migration 0044
+**Test list:** see `poom-test-playbook-2026-05-16.md` section **BB**
+**Follow-ups (deferred to V1.1):** customer self-upload of cert · 50 ทวิ OCR · line-level WHT base · auto-generate Pacred's ภ.ง.ด.53 summary
 
 ### V-E10 — QA/QC intake inspection
 **Blocker:** none (purely additive)
