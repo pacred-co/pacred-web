@@ -147,23 +147,30 @@ Order recommendation:
 
 From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md)) — 17 new tables · 12 freight subdirs · 24 admin polish items. **All POST-Monday — do NOT touch before launch.**
 
-**Freight expansion (V-E6..V-E12 in PORT_PLAN Part V — ~150-200h):**
-- V-E6 Quotation workflow — 📐 spec [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md) — admin → approve → customer accept → forwarder order
-- V-E7 Receipt & payment tracking — 📐 spec [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md) — RD Code 86 + WHT integration
-- V-E8 Commission withdrawal — 📐 spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — interpreter (ล่าม) + sales rep + WHT 15%
-- V-E9 Monthly closing ritual (freeze past periods) — spec TBD เดฟ
-- V-E10 QA/QC intake inspection (pre-billing gate) — spec TBD เดฟ
-- V-E11 Customs declaration UI (ใบขนสินค้า) — spec TBD เดฟ
-- V-E12 CargoAndFreight role dashboards (6 sub-dashboards) — spec TBD เดฟ
+**Freight expansion (V-E6..V-E12 in PORT_PLAN Part V — ~150-200h) — ALL specs shipped:**
+- V-E6 Quotation workflow — 📐 [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
+- V-E7 Receipt & payment tracking — 📐 [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md) (RD Code 86 + WHT)
+- V-E8/H1/H2 Commission withdrawal — 📐 [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) (interpreter + sales + WHT 15%)
+- V-E9 Monthly closing ritual — 📐 [`port-specs/freight-monthly-closing.md`](../port-specs/freight-monthly-closing.md) (freeze past periods via trigger)
+- V-E10 QA/QC intake inspection — 📐 [`port-specs/freight-qa-qc-inspection.md`](../port-specs/freight-qa-qc-inspection.md) (pre-billing gate)
+- V-E11 Customs declaration UI — 📐 [`port-specs/freight-customs-declaration.md`](../port-specs/freight-customs-declaration.md) (ใบขนสินค้า)
+- V-E12 Role dashboards — 📐 [`port-specs/cargo-and-freight-dashboards.md`](../port-specs/cargo-and-freight-dashboards.md) (per-role landings)
 
-**Admin bulk-ops + polish (V-G1..V-G7 in PORT_PLAN — ~80-120h):**
-- V-G1 Bulk forwarder actions · V-G2 Bulk transfer customers · V-G3 Admin push broadcast (popup) · V-G4 Cargo TOS version mgmt · V-G5 Org 5 contact CRUDs · V-G6 New admin reports · V-G7 Audit feature-parity verifications
+**Admin bulk-ops + polish (V-G1..V-G7 in PORT_PLAN — ~32-40h, all in one combined doc):**
+- 📐 [`port-specs/admin-polish-bundle.md`](../port-specs/admin-polish-bundle.md) — V-G1 bulk forwarder · V-G2 bulk transfer customers · V-G3 admin broadcast · V-G4 TOS version mgmt · V-G5 org contacts CRUD · V-G6 4 new reports · V-G7 6 feature-parity audits
 
-**Commission role models (V-H1/H2 — ~16-20h):**
-- V-H1 Interpreter (ล่าม) role + WHT calc
-- V-H2 Sales rep commission finalize (approval workflow + slip upload)
+**Implementation order (recommended after Monday launch):**
+1. V-A6 WHT (after ก๊อต locks ADR-0015) — unblocks juristic customers
+2. V-E10 QA/QC inspection — needed before V-E7 billing gate
+3. V-E6 quotation — unlock freight sales funnel
+4. V-E1 commercial invoice + V-E7 receipt/payment — full freight billing loop
+5. V-E3/E4 Form E + D/O — when first freight customer needs them
+6. V-E8/H1/H2 commission — when first commission accruals accumulate
+7. V-E9 monthly closing — when accounting first asks
+8. V-E11 customs declaration + V-E12 dashboards — later polish
+9. V-G items à la carte as needed
 
-Wait for เดฟ-written port-specs per V-E6..V-E12 before implementing — backend prep is เดฟ's structural lane.
+Each spec leaves open Qs flagged for ก๊อต — wait for ก๊อต lock before implementing those items.
 
 ### V-ADM1 — Admin UI polish (เดฟ instruction 2026-05-16 evening — do before the next big batch)
 

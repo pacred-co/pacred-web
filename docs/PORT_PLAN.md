@@ -1706,22 +1706,22 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-E6 | **Quotation workflow** — admin creates quote → role-based approval (CEO/Mgr; sales rep cannot) → customer accepts → converts to forwarder order. Schema `freight_quotes` + `freight_quote_items` (was `tb_farwarder_quotation*`). 📐 spec → [`port-specs/freight-quotation.md`](port-specs/freight-quotation.md). PHP ref `pages/forwarder-quotation/` | ภูม | 🟠 | ⬜ |
 | V-E7 | **Receipt & payment tracking** — payment ledger w/ withholding-tax + RD Code 86. Schema `freight_invoices` + `freight_invoice_lines` + `freight_invoice_payments` (was `tb_receipt*`). 📐 spec → [`port-specs/freight-receipt-and-payment.md`](port-specs/freight-receipt-and-payment.md). PHP ref `closingAccReportForwarder/` + receipt PDF | ภูม | 🟠 | ⬜ |
 | V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law (Revenue Code §50). 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (covers V-E8 + V-H1 + V-H2 combined). PHP ref `pages/withdraw-commission-{interpreter,sale}/` | ภูม | 🟠 | ⬜ |
-| V-E9 | **Monthly closing ritual for forwarder accounting** — `freight_accounting_periods` with status=open|closed + frozen_at; read-only past periods. PHP ref `closingAccReportForwarder.php` (32KB) | ภูม | 🟠 | ⬜ |
-| V-E10 | **QA/QC intake inspection** — pre-billing gate; checklist (damage / missing / quality); pass→release, fail→rework. Schema `freight_qa_inspections` (was `tb_check_forwarder`). PHP ref `pages/forwarder-check/` | ภูม | 🟡 | ⬜ |
-| V-E11 | **Customs declaration UI (ใบขนสินค้า)** — internal-only V2 (no Thai Customs API integration yet — Phase III). Schema `freight_customs_declarations` | ภูม | 🟡 | ⬜ |
-| V-E12 | **CargoAndFreight role dashboards** — 6 sub-dashboards (Accounting · QAAndQC · CEO · HR · Marketing · ITDT) + Freight Import/Export/CEO/SaleFreight per-role landings. PHP ref `pages/home/{CargoAndFreight,Freight}/` (mostly placeholder in PHP — Pacred build is largely net-new) | ภูม + ก๊อต | 🟡 | ⬜ |
+| V-E9 | **Monthly closing ritual for forwarder accounting** — `accounting_periods` with status=open|pending_close|closed + frozen-via-trigger; read-only past periods. 📐 spec → [`port-specs/freight-monthly-closing.md`](port-specs/freight-monthly-closing.md). PHP ref `closingAccReportForwarder.php` (32KB) | ภูม | 🟠 | ⬜ |
+| V-E10 | **QA/QC intake inspection** — pre-billing gate; checklist (damage / missing / quality); pass→release, fail→rework. Schema `freight_qa_inspections` (was `tb_check_forwarder`). 📐 spec → [`port-specs/freight-qa-qc-inspection.md`](port-specs/freight-qa-qc-inspection.md). PHP ref `pages/forwarder-check/` | ภูม | 🟡 | ⬜ |
+| V-E11 | **Customs declaration UI (ใบขนสินค้า)** — internal-only V2 (no Thai Customs API integration yet — Phase III). Schema `freight_customs_declarations` + lines. 📐 spec → [`port-specs/freight-customs-declaration.md`](port-specs/freight-customs-declaration.md) | ภูม | 🟡 | ⬜ |
+| V-E12 | **CargoAndFreight role dashboards** — 7 per-role dashboards (Super · Accounting · Warehouse · SalesAdmin · Driver · Interpreter · Ops fallback) via single-route dispatch. 📐 spec → [`port-specs/cargo-and-freight-dashboards.md`](port-specs/cargo-and-freight-dashboards.md). PHP ref `pages/home/{CargoAndFreight,Freight}/` (mostly placeholder; Pacred build largely net-new) | ภูม + ก๊อต | 🟡 | ⬜ |
 
 ## V-G — Admin bulk ops + workflow polish (NEW from deep-sweep)
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-G1 | **Bulk forwarder actions** — multi-shipment status update / driver assignment / cancel. PHP ref `forwarder-action.php` + subdir | ภูม | 🟡 | ⬜ |
-| V-G2 | **Bulk transfer customers to sales rep** — currently per-customer only at `/admin/customers/[id]/transfer-rep`. PHP ref `transferSalesCustomers.php` | ภูม | 🟡 | ⬜ |
-| V-G3 | **Admin push broadcast (popup)** — admin send notifications TO users via ad-hoc UI; currently only via custom server actions. PHP ref `popup.php` | ภูม | 🟡 | ⬜ |
-| V-G4 | **Cargo TOS version management UI** — admin manage T&C versions (gate already exists in `actions/tos.ts`). PHP ref `termsOfServiceCargo.php` | ภูม | 🟡 | ⬜ |
-| V-G5 | **Organization 5 contact CRUDs** — domain/email/line/tel/wechat as owner-self-serve (currently constants in `components/seo/site.ts`). PHP ref `organization-*` 5 subdirs | ภูม | 🟢 | ⬜ |
-| V-G6 | **New admin reports** — forwarder-volume / sales-by-user / user-sales-detail / HS-code salary analysis. PHP ref `report-forwarder-volume.php`, `report-sales-group-by-user.php`, `report-user-sales.php`, `salary-hs.php` | ภูม | 🟡 | ⬜ |
-| V-G7 | **Audit verifications** — verify forwarder driver, time attendance, HS custom rate, VIP settings, admin profile, admin RBAC match PHP feature parity. PHP ref `forwarder-driver.php`, `time-attendance-system.php`, `hs-customrate.php`, `settings-vip.php`, `admin-profile.php`, `admin-table.php` | ภูม | 🟢 | ⬜ |
+| V-G1 | **Bulk forwarder actions** — multi-shipment status update / driver assignment / cancel. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G1. PHP ref `forwarder-action.php` | ภูม | 🟡 | ⬜ |
+| V-G2 | **Bulk transfer customers to sales rep** — currently per-customer only at `/admin/customers/[id]/transfer-rep`. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G2. PHP ref `transferSalesCustomers.php` | ภูม | 🟡 | ⬜ |
+| V-G3 | **Admin push broadcast (popup)** — admin send notifications TO users via ad-hoc UI; currently only via custom server actions. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G3. PHP ref `popup.php` | ภูม | 🟡 | ⬜ |
+| V-G4 | **Cargo TOS version management UI** — admin manage T&C versions (gate already exists in `actions/tos.ts`). 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G4. PHP ref `termsOfServiceCargo.php` | ภูม | 🟡 | ⬜ |
+| V-G5 | **Organization 5 contact CRUDs** — domain/email/line/tel/wechat as owner-self-serve (currently constants in `components/seo/site.ts`). 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G5. PHP ref `organization-*` 5 subdirs | ภูม | 🟢 | ⬜ |
+| V-G6 | **New admin reports** — forwarder-volume / sales-by-rep / user-sales-history / HS-code revenue. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G6. PHP ref `report-forwarder-volume.php`, `report-sales-group-by-user.php`, `report-user-sales.php`, `salary-hs.php` | ภูม | 🟡 | ⬜ |
+| V-G7 | **Audit feature-parity verifications** — verify forwarder driver, time attendance, HS custom rate, VIP settings, admin profile, admin RBAC match PHP feature parity. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G7 (6 audit docs, ~1h each). PHP ref `forwarder-driver.php`, `time-attendance-system.php`, `hs-customrate.php`, `settings-vip.php`, `admin-profile.php`, `admin-table.php` | ภูม | 🟢 | ⬜ |
 
 ## V-H — Role models for commission (NEW from deep-sweep)
 
@@ -1730,7 +1730,12 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 | V-H1 | **Interpreter (ล่าม) role** — extend `admins.role` enum + commission accrual per-job + withdrawal workflow + WHT calc. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (combined w/ V-E8 + V-H2). PHP ref `withdraw-commission-interpreter/` + `tb_set_comm_interpreter` lookup | ก๊อต confirms RBAC → ภูม | 🟠 | ⬜ |
 | V-H2 | **Sales rep commission finalize** — currently partial via `team_leaders` + `/admin/sales-payouts`. Add: approval workflow detail, rejection_reason, slip upload, WHT math. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md). PHP ref `withdraw-commission-sale/` | ภูม | 🟠 | ⬜ |
 
-> 📐 **Spec docs shipped (เดฟ night-5):** V-E6 quotation · V-E7 freight receipt/payment · V-E8/V-H1/V-H2 commission withdrawal — all 3 in [`docs/port-specs/`](port-specs/) ready for ภูม Monday pickup. **Still TODO:** V-E9 monthly closing · V-E10 QA/QC inspection · V-E11 customs declaration · V-E12 CargoAndFreight dashboards · V-G admin polish (เดฟ writes when picked up). Estimated total V2 long-phase: ~150-200h freight stack (V-E6+) + ~80-120h admin polish (V-G + audits).
+> 📐 **Spec docs shipped (เดฟ night-5):**
+> - **Freight stack (V-E):** V-E6 quotation · V-E7 receipt+payment · V-E8/H1/H2 commission · V-E9 monthly closing · V-E10 QA/QC · V-E11 customs declaration · V-E12 role dashboards
+> - **Admin polish (V-G):** V-G1..V-G7 combined in [`admin-polish-bundle.md`](port-specs/admin-polish-bundle.md)
+> - **Tooling/setup:** [`docs/setup/line-liff-create-guide.md`](setup/line-liff-create-guide.md) — DV-2 LIFF Console step-by-step
+>
+> All 8 specs in [`docs/port-specs/`](port-specs/) + [`docs/setup/line-liff-create-guide.md`](setup/line-liff-create-guide.md) ready for ภูม Monday pickup. Estimated total V2 long-phase: ~150-200h freight stack (V-E6+) + ~32-40h admin polish (V-G).
 > 📋 **Full inventory + 17 new tables + false-alarm filter** → [`docs/audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md).
 
 ## V-F — Strategic / dependency
