@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, Fragment } from "react";
+import { useState, useTransition, useRef, useEffect, Fragment } from "react";
 import Image from "next/image";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
@@ -13,6 +13,8 @@ import {
   uploadJuristicDoc,
   completeJuristicRegistration,
 } from "@/actions/auth";
+import { requestOtp } from "@/actions/otp";
+import { OtpInput } from "@/components/auth/otp-input";
 import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
 import { trackSignUp } from "@/lib/analytics";
 
@@ -226,35 +228,104 @@ function PersonalForm() {
   const [pending, startTransition] = useTransition();
   const captchaRef = useRef<HCaptchaHandle>(null);
 
+  // OTP phase state (B1 — Sunday-night blocker per deep-sweep audit)
+  const [phase, setPhase] = useState<"form" | "otp">("form");
+  const [otpCode, setOtpCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
+  const cachedCaptcha = useRef<string | null>(null);
+
   function toggleService(id: ServiceId) {
     setServices((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  // Resend countdown
+  useEffect(() => {
+    if (phase !== "otp" || resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, resendIn]);
+
+  async function submitRegister(otp: string, captchaToken: string | null) {
+    const res = await registerPersonal({
+      firstName, lastName, phone, password,
+      services,
+      howKnow: source ?? null,
+      email: email || "",
+      otp,
+      agreed,
+      captchaToken,
+    });
+    if (res.ok) {
+      trackSignUp("personal");
+      router.replace("/");
+      router.refresh();
+    } else {
+      setError(ERR[res.error] ?? res.error);
+      captchaRef.current?.reset();
+    }
+  }
+
+  function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
-      const captchaToken = await captchaRef.current?.execute();
-      const res = await registerPersonal({
-        firstName, lastName, phone, password,
-        services,
-        howKnow: source ?? null,
-        email: email || "",
-        otp: "bypass",
-        agreed,
-        captchaToken: captchaToken ?? null,
-      });
-      if (res.ok) {
-        trackSignUp("personal");
-        router.replace("/");
-        router.refresh();
-      } else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
+      const captchaToken = (await captchaRef.current?.execute()) ?? null;
+      cachedCaptcha.current = captchaToken;
+
+      const req = await requestOtp(phone, "register");
+      if (!req.ok) {
+        setError(ERR[req.error] ?? req.error);
+        captchaRef.current?.reset();
+        return;
+      }
+      if (req.bypass) {
+        await submitRegister("bypass", captchaToken);
+        return;
+      }
+      setPhase("otp");
+      setOtpCode("");
+      setResendIn(60);
     });
   }
 
+  function handleVerifyOtp() {
+    if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
+    setError(null);
+    startTransition(async () => {
+      await submitRegister(otpCode, cachedCaptcha.current);
+    });
+  }
+
+  function handleResendOtp() {
+    if (resendIn > 0) return;
+    setError(null);
+    startTransition(async () => {
+      const req = await requestOtp(phone, "register");
+      if (!req.ok) { setError(ERR[req.error] ?? req.error); return; }
+      setOtpCode("");
+      setResendIn(60);
+    });
+  }
+
+  if (phase === "otp") {
+    return (
+      <OtpStep
+        phone={phone}
+        code={otpCode}
+        onCodeChange={setOtpCode}
+        onVerify={handleVerifyOtp}
+        onResend={handleResendOtp}
+        onBack={() => { setPhase("form"); setError(null); setOtpCode(""); }}
+        resendIn={resendIn}
+        pending={pending}
+        error={error}
+      />
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleRequestOtp}>
       {/* Name row */}
       <div className="mb-3.5 flex gap-3">
         <FieldWrap label="ชื่อจริง">
@@ -326,6 +397,12 @@ function JuristicForm() {
   const [showPwd, setShowPwd]   = useState(false);
   const [services, setServices] = useState<ServiceId[]>([]);
   const [source, setSource]     = useState<SourceId | null>(null);
+
+  /* step 1 OTP phase (B1 — Sunday-night blocker) */
+  const [step1Phase, setStep1Phase] = useState<"form" | "otp">("form");
+  const [otpCode, setOtpCode] = useState("");
+  const [resendIn, setResendIn] = useState(0);
+  const cachedCaptcha = useRef<string | null>(null);
 
   /* step 2 */
   const [taxId, setTaxId]               = useState("");
@@ -403,20 +480,70 @@ function JuristicForm() {
     }
   }
 
+  /* step 1 OTP countdown */
+  useEffect(() => {
+    if (step1Phase !== "otp" || resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [step1Phase, resendIn]);
+
+  async function submitStep1(otp: string, captchaToken: string | null) {
+    const res = await registerJuristicStep1({
+      phone, password,
+      services,
+      howKnow: source ?? null,
+      otp,
+      captchaToken,
+    });
+    if (res.ok) {
+      setStep(2);
+      setStep1Phase("form");
+      setOtpCode("");
+    } else {
+      setError(ERR[res.error] ?? res.error);
+      captchaRef.current?.reset();
+    }
+  }
+
   /* step navigation */
   function nextStep1() {
     setError(null);
     startTransition(async () => {
-      const captchaToken = await captchaRef.current?.execute();
-      const res = await registerJuristicStep1({
-        phone, password,
-        services,
-        howKnow: source ?? null,
-        otp: "bypass",
-        captchaToken: captchaToken ?? null,
-      });
-      if (res.ok) setStep(2);
-      else { setError(ERR[res.error] ?? res.error); captchaRef.current?.reset(); }
+      const captchaToken = (await captchaRef.current?.execute()) ?? null;
+      cachedCaptcha.current = captchaToken;
+
+      const req = await requestOtp(phone, "register");
+      if (!req.ok) {
+        setError(ERR[req.error] ?? req.error);
+        captchaRef.current?.reset();
+        return;
+      }
+      if (req.bypass) {
+        await submitStep1("bypass", captchaToken);
+        return;
+      }
+      setStep1Phase("otp");
+      setOtpCode("");
+      setResendIn(60);
+    });
+  }
+
+  function verifyStep1Otp() {
+    if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
+    setError(null);
+    startTransition(async () => {
+      await submitStep1(otpCode, cachedCaptcha.current);
+    });
+  }
+
+  function resendStep1Otp() {
+    if (resendIn > 0) return;
+    setError(null);
+    startTransition(async () => {
+      const req = await requestOtp(phone, "register");
+      if (!req.ok) { setError(ERR[req.error] ?? req.error); return; }
+      setOtpCode("");
+      setResendIn(60);
     });
   }
 
@@ -470,8 +597,8 @@ function JuristicForm() {
       {/* Step indicator */}
       <StepIndicator step={step} />
 
-      {/* ── STEP 1 ── */}
-      {step === 1 && (
+      {/* ── STEP 1 — FORM PHASE ── */}
+      {step === 1 && step1Phase === "form" && (
         <>
           <div className="mb-3.5 text-right text-[11.5px] text-[#8A8F9B]">ขั้นตอน 1 / 3</div>
 
@@ -502,6 +629,21 @@ function JuristicForm() {
             <NextBtn onClick={nextStep1} pending={pending}>ถัดไป →</NextBtn>
           </div>
         </>
+      )}
+
+      {/* ── STEP 1 — OTP PHASE ── */}
+      {step === 1 && step1Phase === "otp" && (
+        <OtpStep
+          phone={phone}
+          code={otpCode}
+          onCodeChange={setOtpCode}
+          onVerify={verifyStep1Otp}
+          onResend={resendStep1Otp}
+          onBack={() => { setStep1Phase("form"); setError(null); setOtpCode(""); }}
+          resendIn={resendIn}
+          pending={pending}
+          error={error}
+        />
       )}
 
       {/* ── STEP 2 ── */}
@@ -941,5 +1083,91 @@ function BackBtn({ onClick, children }: { onClick: () => void; children: React.R
       style={{ height: 46, width: 96, flexShrink: 0, borderRadius: 14, border: "1.5px solid #ECEEF2", background: "#FAFBFC", fontSize: 14, fontWeight: 600, color: "#9198A8", cursor: "pointer", transition: "all .2s", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
       {children}
     </button>
+  );
+}
+
+/* ─────────────────────────── OTP STEP (B1 prod blocker) ─────────────────────────── */
+function OtpStep({
+  phone, code, onCodeChange, onVerify, onResend, onBack,
+  resendIn, pending, error,
+}: {
+  phone: string;
+  code: string;
+  onCodeChange: (v: string) => void;
+  onVerify: () => void;
+  onResend: () => void;
+  onBack: () => void;
+  resendIn: number;
+  pending: boolean;
+  error: string | null;
+}) {
+  function formatPhone(p: string): string {
+    const clean = p.replace(/\D/g, "");
+    if (clean.length !== 10) return p;
+    return `${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6)}`;
+  }
+
+  return (
+    <div>
+      <div className="mb-2 text-center">
+        <div className="mb-1 text-3xl">📱</div>
+        <div className="text-[15px] font-semibold text-[#1A1D23]">ยืนยันเบอร์โทรศัพท์</div>
+        <div className="mt-1 text-[12.5px] text-[#8A8F9B]">
+          ส่งรหัส OTP 6 หลักไปยัง
+        </div>
+        <div className="mt-0.5 text-[13.5px] font-semibold text-[#D42B2B]">
+          {formatPhone(phone)}
+        </div>
+      </div>
+
+      <div className="my-5">
+        <OtpInput
+          value={code}
+          onChange={onCodeChange}
+          onComplete={onVerify}
+          disabled={pending}
+        />
+      </div>
+
+      <div className="mb-3 text-center text-[12px] text-[#8A8F9B]">
+        ไม่ได้รับรหัส?{" "}
+        {resendIn > 0 ? (
+          <span className="text-[#9198A8]">ขอใหม่ได้ใน {resendIn} วินาที</span>
+        ) : (
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={pending}
+            className="font-semibold text-[#D42B2B] hover:underline disabled:opacity-50"
+          >
+            ส่งรหัสใหม่
+          </button>
+        )}
+      </div>
+
+      {error && <ErrorBox msg={error} />}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <BackBtn onClick={onBack}>← ย้อนกลับ</BackBtn>
+        <button
+          type="button"
+          onClick={onVerify}
+          disabled={pending || code.length !== 6}
+          style={{
+            display: "flex", flex: 1, height: 46, alignItems: "center",
+            justifyContent: "center", gap: 6, borderRadius: 14,
+            background: "linear-gradient(90deg,#D42B2B,#B01E1E)",
+            fontSize: 15, fontWeight: 700, color: "#fff", border: "none",
+            cursor: (pending || code.length !== 6) ? "not-allowed" : "pointer",
+            opacity: (pending || code.length !== 6) ? 0.6 : 1,
+            transition: "opacity .2s",
+            boxShadow: "0 4px 14px rgba(212,43,43,0.25)",
+          }}
+        >
+          {pending ? <span>⏳</span> : null}
+          ✓ ยืนยันรหัส
+        </button>
+      </div>
+    </div>
   );
 }
