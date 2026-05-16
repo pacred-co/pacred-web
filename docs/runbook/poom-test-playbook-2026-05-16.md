@@ -282,6 +282,44 @@
 
 **Performance check:** แต่ละ report ควร load < 2s บน data 1 ปี
 
+### FF. **NEW (V-E6) — Freight quotation workflow V1** ⚠️ **PRE-FLIGHT: รัน migration 0048 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0048_freight_quotes.sql` ใน Supabase Studio → ดู tables `freight_quotes` + `freight_quote_items` + sequence `freight_quote_seq` + function `next_freight_quote_no` + RLS policies
+- [ ] ทดสอบ CHECK constraints: insert rejected พร้อม rejected_reason='ab' → error (≥3 ตัวอักษร); insert approved พร้อม approved_by=null → error
+
+**Admin full lifecycle (super):**
+- [ ] เปิด `/admin/freight/quotes` → ปุ่ม "➕ สร้างใบใหม่"
+- [ ] กรอก buyer + logistics + financial → "✓ บันทึก + ไปเพิ่ม line items" → redirect ไป detail พร้อม `FQYYMMDD-NNNN` quote_no
+- [ ] ในหน้า detail สถานะ `ร่าง` → "➕ เพิ่ม line item" → กรอก desc/qty/unit/ราคา → บันทึก → row ปรากฏ + ยอดอัพเดต auto
+- [ ] แก้ line item inline → "✓" → ยอดอัพเดต
+- [ ] ลอง "📤 ส่งให้ super อนุมัติ" โดยไม่มี item → error "ต้องมี line item อย่างน้อย 1 รายการ"
+- [ ] เพิ่ม item อย่างน้อย 1 → "📤 ส่งให้ super อนุมัติ" → สถานะ `รออนุมัติ` (items lock, ปุ่ม inline-edit หายไป)
+- [ ] กด "✓ อนุมัติ" → สถานะ `อนุมัติแล้ว` + approved_at/approved_by_admin_id ปรากฏใน audit timeline
+- [ ] กด "📨 ส่งให้ลูกค้า" → สถานะ `ส่งให้ลูกค้า`
+- [ ] กด "✓ ลูกค้าตอบรับ" → สถานะ `ลูกค้ายืนยัน`
+- [ ] กด "🚚 แปลงเป็น freight shipment (V-E1)" → ได้ error `freight_shipments_table_not_ready` (รอ V-E1 ship migration 0049)
+
+**Reject flow:**
+- [ ] สร้างใบใหม่ → ส่งอนุมัติ → "✗ ปฏิเสธ" → ลองกรอกเหตุผล < 3 ตัวอักษร → ปุ่มยืนยัน disabled → กรอกครบ → "✓ ยืนยันปฏิเสธ" → สถานะ `ปฏิเสธ` + banner สีแดงแสดงเหตุผล + audit log มี action `freight_quote.reject`
+
+**RBAC negative cases:**
+- [ ] role=ops → เข้า list + create + edit draft ได้; กด "✓ อนุมัติ" → ปุ่มไม่ปรากฏ; แทนที่เห็นข้อความ "รอ super อนุมัติ (คุณไม่มี permission)"
+- [ ] role=sales_admin → เข้า + create + ส่งอนุมัติ + send + mark accepted ได้; approve/reject ปุ่มไม่ปรากฏ
+- [ ] role=warehouse → 404 (ไม่ allowed)
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`freight_quote` → เห็น action สำหรับทุก mutation: freight_quote.create / item_add / item_update / item_delete / submit_for_approval / approve / reject / send / mark_accepted / mark_expired
+
+**List + search:**
+- [ ] ทดสอบ filter chips ที่ /admin/freight/quotes → กรอง draft/pending_approval/approved/sent/accepted/rejected/expired
+- [ ] search box → กรอก quote_no บางส่วน หรือ buyer_name → filter ทำงาน
+
+**Customer-side (V-E6.1 not shipped yet):**
+- [ ] /(protected)/freight/quotes ยังไม่มี — V-E6.1 follow-up
+- [ ] PDF endpoint /api/freight-quote/[id] ยังไม่มี — V-E6.1
+- [ ] LINE notification on send — V-E6.1
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร

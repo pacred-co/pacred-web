@@ -75,28 +75,29 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see playbook section **CC**
 **V-E7 gate integration:** call `isCargoShipmentQaPassed(cargo_shipment_id)` from V-E7 `adminCreateFreightInvoice` → reject `qa_not_passed` if false
 
-### V-E6 — Freight quotation workflow
+### V-E6 — Freight quotation workflow ✅ V1 SHIPPED 2026-05-17 (commit a0c9c78)
 **Blocker:** none
 **Spec:** [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
-**Migration:** ~`0049_freight_quotes.sql` (mine)
-**New entities:**
-- `freight_quotes` (28 cols including approval workflow fields)
-- `freight_quote_items` (per-line)
-**Code touch:**
-- `actions/admin/freight-quotes.ts` (new) — draft / submit / approve / reject / convert-to-shipment
-- `/admin/freight/quotes/page.tsx` (list with status chips)
-- `/admin/freight/quotes/[id]/page.tsx` (detail + 3-step approval UI)
-- `/admin/freight/quotes/new/page.tsx` (create form)
-- Optional customer-side accept: `/quotes/[token]/page.tsx` (public/protected)
-**Effort:** ~15-20h
-**Pre-implementation check:**
-- [x] ✅ Approval RBAC = **use existing `super` role for V1** (เดฟ + ลูกพี่ ack 2026-05-17). DO NOT add new `manager` role pre-launch — V2 doesn't have distinct "manager-but-not-super" tier in ops org. Revisit only if ops actually requests it post-launch (=fragmented authority signal).
-- [ ] Confirm `freight_shipments` table to convert TO exists (otherwise impl just keeps `converted_to_shipment_id` nullable until V-E1 ships) — checks via ADR-0016 `freight_shipments` migration timing
+**Migration:** ✅ `0048_freight_quotes.sql` shipped — needs `supabase db push` on dev/prod
+**V1 shipped:**
+- ✅ `0048_freight_quotes.sql` — freight_quotes + freight_quote_items + freight_quote_seq + next_freight_quote_no() + RLS
+- ✅ `lib/validators/freight-quote.ts` — 7-status enum + 4 transport modes + 11 incoterms + 9 units + computeQuoteTotals
+- ✅ `actions/admin/freight-quotes.ts` — 11 actions (create/update header + 3 item CRUD + 6 status flips + convert stub)
+- ✅ `/admin/freight/quotes` — list + new + detail (inline-edit items + status action buttons + audit timeline)
+- ✅ Sidebar group "Freight" with V-E6 link
+**V1 deferred (= V-E6.1):**
+- Customer portal at /(protected)/freight/quotes
+- PDF rendering (components/pdf/freight-quote.tsx + /api/freight-quote/[id]/route.ts)
+- LINE notification on send
+- Header-edit UI (V1 = delete-and-recreate)
+- adminConvertQuoteToShipment body (V-E1 dep — replaces the stub once `0049_freight_shipments` ships)
+**Test list:** see playbook section **FF**
+**Approval RBAC:** ✅ use existing `super` role for V1 (เดฟ + ลูกพี่ ack 2026-05-17) — no new `manager` role pre-launch.
 
 ### V-E1 — Commercial invoice + packing list
 **Blocker:** ✅ ALL CLEAR (ADR-0016 locked 2026-05-16 night, 5 Qs resolved)
 **Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md#field-model-sketch--final-table-layout-part-of-the-v-e1-freight-schema-migration) for shipment-level fields
-**Migration:** `0050_freight_shipments.sql` + `0051_freight_invoices.sql` — **ภูม owns both** (ADR-0016 has the schema sketch ภูม wrote — single-owner per migration)
+**Migration:** `0049_freight_shipments.sql` + `0050_freight_invoices.sql` — **ภูม owns both** (ADR-0016 has the schema sketch ภูม wrote — single-owner per migration)
 **New entities:** `freight_shipments` (cargo spine for freight, w/ `commercial_value_*` + `declared_customs_value_thb` + `exchange_rate` + `vat_plan_label` per ADR §"Field model") + `freight_invoices` + `freight_invoice_lines`
 **Rules per ADR-0016 locked:** `rate_source` enum = `{'staff_entered'}` V1 · Option A (committed plan only, what-if = calculator UI) · declared-value edit = super+accounting + `declared_value_basis` + audit log · duty rate = snapshot from `hs_codes` at issuance, overridable + logged
 **Effort:** ~10-15h (spine alone; receipt/payment is V-E7 separate)
@@ -104,7 +105,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ### V-E7 — Receipt + payment tracking
 **Blocker:** V-E1 (freight_invoices) + V-A6 WHT (ADR-0015) + V-E10 (QA gate)
 **Spec:** [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md)
-**Migration:** ~`0052_freight_invoice_payments.sql` + `next_freight_invoice_serial()` SECURITY DEFINER fn
+**Migration:** ~`0051_freight_invoice_payments.sql` + `next_freight_invoice_serial()` SECURITY DEFINER fn
 **New entities:** `freight_invoice_payments` (partial-pay ledger)
 **Code touch:**
 - `actions/admin/freight-invoices.ts` (new) — create invoice (with QA-pass gate) · record payment · issue receipt PDF
@@ -134,13 +135,13 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Effort:** ~20-30h
 **Pre-implementation check:**
 - [x] ADR-0015 locked (WHT 15% rate applied here — locked 2026-05-16 night)
-- [x] `interpreter` role ack-approved (E-5 resolved 2026-05-17 — bundle inline in 0053)
+- [x] `interpreter` role ack-approved (E-5 resolved 2026-05-17 — bundle inline in `0052_commissions.sql`)
 - [ ] Existing `team_leaders` table mapped → new `commission_tiers` (per-existing-row migration) — ภูม design call per spec
 
 ### V-E9 — Monthly closing ritual
 **Blocker:** none (additive)
 **Spec:** [`port-specs/freight-monthly-closing.md`](../port-specs/freight-monthly-closing.md)
-**Migration:** ~`0054_accounting_periods.sql` + read-only trigger
+**Migration:** ~`0053_accounting_periods.sql` + read-only trigger
 **Effort:** ~10-15h
 **Pre-implementation check:**
 - [ ] At least 1 closed accounting month of freight data (otherwise feature has nothing to freeze)
@@ -198,7 +199,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0052` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
 | `0053` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
 | `0054` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
-| `0049`-`0059` | *(reserved for ภูม's freight block — fill sequentially)* | ภูม | — |
+| `0055`-`0059` | *(reserved headroom for ภูม's freight block — fill sequentially)* | ภูม | — |
 | `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 
 > ⚠️ **6 migrations (`0044`-`0048` + `0060`) shipped to git but NOT yet applied
