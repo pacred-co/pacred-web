@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Phone, Sparkles, Headset, Award, MessageCircle } from "lucide-react";
 import { trackCtaClick } from "@/lib/analytics";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
@@ -231,11 +232,11 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                       <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
                       {s.phone}
                     </a>
-                    <a
+                    <TrackedExternalLink
                       href={LINE_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => trackCtaClick("sales_line", `home_sales_${s.name}`, { rep: s.name, role: s.role })}
+                      cta="line_consult"
+                      surface="contact_sales"
+                      ctaProps={{ rep: s.name, role: s.role }}
                       className={[
                         "relative inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[12px] md:text-[12.5px] font-black transition-all duration-300 overflow-hidden",
                         featured
@@ -245,7 +246,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
                     >
                       <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} fill="currentColor" />
                       ทักไลน์
-                    </a>
+                    </TrackedExternalLink>
                   </div>
                 </div>
               </div>

@@ -43,7 +43,7 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "services_import_china_lcl";
+const SURFACE = "lcl_landing";
 
 const PATH = "/services/import-china-lcl";
 const NS = "seo.services.importChinaLcl";
@@ -213,7 +213,7 @@ export default async function ImportChinaLclPage({
               <span className="hidden md:inline"> เริ่มต้นไม่กี่กล่อง</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              จ่ายตาม CBM/KG ที่ใช้จริง · ไม่ต้องเหมาตู้ · เหมาะกับ order เริ่มต้น 1-15 CBM · ขนส่ง 15-20 วัน · เคลียร์ภาษีครบ · <span className="text-primary-600/80 font-bold">Door-to-Door ทั่วประเทศ</span>
+              จ่ายตาม CBM/KG ที่ใช้จริง · ไม่ต้องเหมาตู้ · เหมาะกับ order เริ่มต้น 1-15 CBM · ขนส่ง 15-20 วัน · เคลียร์ภาษีครบ — <span className="text-primary-600/80 font-bold">LCL เริ่ม $150/CBM · Door-to-Door ทั่วประเทศ</span>
             </h2>
 
             <TrackedExternalLink

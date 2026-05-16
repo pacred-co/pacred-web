@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Check, Phone, MessageCircle, MapPin, Copy } from "lucide-react";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 export type ShippingMarkLine = { label: string; value: string };
 
@@ -188,15 +189,16 @@ export function WarehouseDetail({
                   <Phone className="h-4 w-4" strokeWidth={2.6} />
                   โทร 066-131-0253
                 </a>
-                <a
+                <TrackedExternalLink
                   href="/line"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  cta="line_consult"
+                  surface="warehouse_detail"
+                  ctaProps={{ city }}
                   className="inline-flex items-center justify-center gap-2 h-10 rounded-xl border border-[#06C755] text-[#06C755] text-[13px] md:text-[13.5px] font-extrabold bg-white dark:bg-transparent hover:bg-[#06C755] hover:text-white transition-all"
                 >
                   <MessageCircle className="h-4 w-4" strokeWidth={2.6} />
                   ทักไลน์ติดต่อด่วน
-                </a>
+                </TrackedExternalLink>
                 <Link
                   href="/register"
                   className="inline-flex items-center justify-center gap-2 h-10 rounded-xl bg-[#111827] text-white text-[13px] md:text-[13.5px] font-extrabold hover:bg-black transition-all"

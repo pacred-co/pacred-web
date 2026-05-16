@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { X, Phone, Check } from "lucide-react";
 import { trackCtaClick } from "@/lib/analytics";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
@@ -57,12 +58,12 @@ export function ImportExportBanner() {
           <div className="relative w-full min-h-[90px] md:min-h-[220px] rounded-[18px] md:rounded-[28px] overflow-hidden bg-[#d60000] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
 
             {/* Background — responsive */}
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="import_export_banner"
+              ctaProps={{ position: "banner_image" }}
               aria-label="ติดต่อ Pacred ทาง LINE"
-              onClick={() => trackCtaClick("banner_line", "home_importexport_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -72,7 +73,7 @@ export function ImportExportBanner() {
                 className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.035]"
                 priority
               />
-            </a>
+            </TrackedExternalLink>
 
             {/* Dark gradient overlay — left side for text readability */}
             <div
@@ -186,11 +187,11 @@ export function ImportExportBanner() {
                     เลือกเซลล์
                   </button>
 
-                  <a
+                  <TrackedExternalLink
                     href={LINE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => trackCtaClick("banner_line", "home_importexport_banner", { surface: "secondary_cta" })}
+                    cta="line_consult"
+                    surface="import_export_banner"
+                    ctaProps={{ position: "secondary_cta" }}
                     className="inline-flex items-center justify-center gap-[7px] h-[30px] md:h-[42px] px-2 md:px-5 rounded-[9px] md:rounded-[11px] text-[10px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
                     style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
                   >
@@ -198,7 +199,7 @@ export function ImportExportBanner() {
                       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                     </svg>
                     ทักไลน์เลย
-                  </a>
+                  </TrackedExternalLink>
                 </div>
               </div>
 
@@ -258,17 +259,18 @@ export function ImportExportBanner() {
                     {card.phone}
                   </a>
 
-                  <a
+                  <TrackedExternalLink
                     href={LINE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    cta="line_consult"
+                    surface="import_export_banner"
+                    ctaProps={{ position: "sales_modal", rep: card.name }}
                     className="w-full flex items-center justify-center gap-1.5 min-h-[38px] rounded-[10px] bg-gray-100 text-[#111827] text-[13px] font-bold mt-auto hover:bg-red-600 hover:text-white transition-colors"
                   >
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
                     </svg>
                     {card.button}
-                  </a>
+                  </TrackedExternalLink>
                 </div>
               ))}
             </div>

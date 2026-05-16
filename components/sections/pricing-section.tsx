@@ -19,6 +19,7 @@ import {
   BadgePercent,
   ShieldCheck,
 } from "lucide-react";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 const HOTLINE = "066-125-3007";
@@ -734,10 +735,11 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
               </button>
             ) : (
               <>
-                <a
+                <TrackedExternalLink
                   href={LINE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  cta="line_consult"
+                  surface="pricing_cargo"
+                  ctaProps={{ card: card.id }}
                   className={[
                     "relative w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black transition-all duration-300 overflow-hidden group/cta",
                     popular
@@ -751,7 +753,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
                   </svg>
                   <span className="relative">{t("ctaQuote")}</span>
                   <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
-                </a>
+                </TrackedExternalLink>
 
                 <a
                   href={`tel:${HOTLINE.replace(/-/g, "")}`}
@@ -942,10 +944,11 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
           </div>
 
           <div className="mt-auto flex flex-col gap-2">
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="pricing_freight"
+              ctaProps={{ card: card.id, term }}
               className={[
                 "relative w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black transition-all duration-300 overflow-hidden group/cta",
                 popular
@@ -959,7 +962,7 @@ function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t:
               </svg>
               <span className="relative">{t("ctaQuote")}</span>
               <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
-            </a>
+            </TrackedExternalLink>
 
             <a
               href={`tel:${HOTLINE.replace(/-/g, "")}`}

@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { MessageCircle, Phone, ArrowRight, Quote } from "lucide-react";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 const HOTLINE = "066-125-3007";
@@ -394,16 +395,16 @@ export function ArticleContent({ text, title }: { text: string; title?: string }
               </p>
             </div>
             <div className="flex flex-col sm:flex-row md:flex-row gap-2 md:gap-2.5 shrink-0">
-              <a
+              <TrackedExternalLink
                 href={LINE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                cta="line_consult"
+                surface="article_content"
                 className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 px-4 rounded-xl bg-white text-primary-700 text-[12.5px] md:text-[13.5px] font-black hover:bg-yellow-50 transition-colors shadow-[0_8px_18px_rgba(255,255,255,0.15)]"
               >
                 <MessageCircle className="w-4 h-4" strokeWidth={2.6} fill="currentColor" />
                 ทักไลน์
                 <ArrowRight className="w-3.5 h-3.5" strokeWidth={3} />
-              </a>
+              </TrackedExternalLink>
               <a
                 href={`tel:${HOTLINE.replace(/-/g, "")}`}
                 className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 px-4 rounded-xl bg-white/10 text-white text-[12.5px] md:text-[13.5px] font-black border border-white/25 hover:bg-white/20 hover:border-white/45 transition-colors backdrop-blur-sm"

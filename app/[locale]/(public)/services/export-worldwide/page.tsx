@@ -46,7 +46,7 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "services_export_worldwide";
+const SURFACE = "export_worldwide_landing";
 
 const PATH = "/services/export-worldwide";
 const NS = "seo.services.exportWorldwide";
@@ -248,7 +248,7 @@ export default async function ExportWorldwidePage({
               <span className="hidden md:inline"> ครบทุก Incoterm</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการส่งออกจากไทยไปทั่วโลก — Air Freight · Sea Freight · Express courier · เอกสารส่งออกครบ (Form A/D/E · CO · Phytosanitary · Fumigation) · เคลียร์พิธีการศุลกากรขาออก · <span className="text-primary-600/80 font-bold">DDP ถึงประตูปลายทาง</span>
+              บริการส่งออกจากไทยไปทั่วโลก — Air Freight · Sea Freight · Express courier · เอกสารส่งออกครบ (Form A/D/E · CO · Phytosanitary · Fumigation) · เคลียร์พิธีการศุลกากรขาออก — <span className="text-primary-600/80 font-bold">Express เริ่ม 300฿/kg · DDP ถึงประตูปลายทาง</span>
             </h2>
 
             <TrackedExternalLink

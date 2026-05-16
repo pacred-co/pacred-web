@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Check, Phone, MessageCircle, Sparkles, ArrowRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 type Feature = { tag: string; lead: string; text: string };
 
@@ -117,15 +118,15 @@ function ContactCard({ className = "" }: { className?: string }) {
             <Phone className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
             โทร 066-131-0253
           </a>
-          <a
+          <TrackedExternalLink
             href="/line"
-            target="_blank"
-            rel="noopener noreferrer"
+            cta="line_consult"
+            surface="clearance_promo"
             className="inline-flex items-center justify-center gap-1.5 md:gap-2 h-10 md:h-10 rounded-lg md:rounded-xl border border-[#06C755] text-[#06C755] dark:text-[#06C755] text-[13px] md:text-[13.5px] font-extrabold bg-white dark:bg-transparent hover:bg-[#06C755] hover:text-white transition-all"
           >
             <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.6} />
             ทักไลน์ติดต่อด่วน
-          </a>
+          </TrackedExternalLink>
         </div>
 
         <div className="relative z-[2] mt-3 flex items-center justify-end gap-1 text-[11px] font-black text-primary-600 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">

@@ -8,6 +8,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const PATH = "/customs-clearance-shipping-suvarnabhumi";
 const LINE_URL = "/line";
@@ -229,15 +230,16 @@ export function CustomsModeCards() {
                   ดูค่าใช้จ่ายเต็ม + รายละเอียด
                   <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                 </Link>
-                <a
+                <TrackedExternalLink
                   href={LINE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  cta="line_consult"
+                  surface="customs_mode_cards"
+                  ctaProps={{ mode: c.slug }}
                   className="inline-flex w-full items-center justify-center gap-1.5 h-10 rounded-lg border border-primary-200 bg-white text-primary-700 font-bold text-[12.5px] md:text-[13px] hover:bg-primary-50 hover:border-primary-300 transition-colors dark:bg-surface dark:border-primary-800 dark:text-primary-200"
                 >
                   <MessageCircle className="w-3.5 h-3.5" strokeWidth={2.6} />
                   ปรึกษาทาง LINE
-                </a>
+                </TrackedExternalLink>
               </div>
             </article>
           );
