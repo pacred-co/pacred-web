@@ -92,15 +92,17 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 
 ---
 
-## 6. PromptPay 🟡
+## 6. PromptPay 🟢 (set 2026-05-17)
 
 | Var | Value | Powers |
 |---|---|---|
-| `PROMPTPAY_ID` | Pacred company phone (10 digit) OR tax-ID (13 digit), no dashes | `/wallet/deposit` QR generation |
+| `PROMPTPAY_ID` | `0105564077716` — Pacred tax-ID 13 digit (ผูกบัญชี กสิกร `225-2-91144-0`) | `/wallet/deposit` QR generation |
 
-⚠️ ไม่ตั้ง = wallet deposit form throw error ตอน generate QR (hard fail, not silent)
+✅ Set by ลูกพี่ in Vercel dashboard 2026-05-17. Tax-ID is the canonical PromptPay binding for Pacred biz account.
 
-**Code:** `lib/promptpay.ts` line 21-25.
+⚠️ ถ้าไม่ตั้ง = wallet deposit form throw error ตอน generate QR (hard fail, not silent).
+
+**Code:** [`lib/promptpay.ts`](../lib/promptpay.ts) line 21-25.
 
 ---
 

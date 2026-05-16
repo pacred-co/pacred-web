@@ -1,8 +1,8 @@
 # D-7 — Payment gateway decision matrix (Thailand)
 
-> **Status:** ✅ **DECIDED 2026-05-16 night — Omise (Opn Payments)** picked by ก๊อต + เดฟ + ลูกพี่. **Owner approval call** with พี่ป๊อป still required for cash-commitment sign-off (§6 Q1) — but technical decision locked. Wire-up = ภูม at T+30d post-launch per §5.3.
-> **Date:** 2026-05-16 night (matrix + decision)
-> **Source:** [ADR-0004 payment-gateway](0004-payment-gateway.md) post-beta decision.
+> **Status:** ⚠️ **OVERRIDDEN 2026-05-17 — Xendit + K-Biz + K-Shop (Kasikorn-centric stack)** picked by พี่ป๊อป via ลูกพี่ during T-G3 Bundle 1 call. Previous Omise decision (2026-05-16 night) SUPERSEDED — see §9 "Decision change log" below for trace. Wire-up = ภูม at T+30d post-launch per updated §5.3.
+> **Date:** 2026-05-17 (Xendit decision) · 2026-05-16 night (original matrix + Omise pre-decision)
+> **Source:** [ADR-0004 payment-gateway](0004-payment-gateway.md) post-beta decision + T-G3 Ask #4.
 >
 > **Read with:**
 > [ADR-0004](0004-payment-gateway.md) (locked: PromptPay-only pre-beta) ·
@@ -197,11 +197,32 @@ Direct integrations with individual e-wallets. Pacred can add ONE OR MORE on top
 
 ---
 
-## 5. Recommendation
+## 5. Recommendation (current — Xendit + K-Biz + K-Shop)
 
-### 5.1 Primary recommendation: **Omise (Opn Payments)** as Pacred's first real gateway
+### 5.1 Primary recommendation: **Xendit + K-Biz + K-Shop** (Kasikorn-centric stack) — pick by พี่ป๊อป 2026-05-17
 
 **Why:**
+1. **Pacred banks with Kasikorn** (current account `225-2-91144-0`) — same-bank settlement = T+0 for K-Biz/K-Shop transfers (vs T+2 for any cross-bank gateway)
+2. **K-Shop** = KBank merchant QR — Pacred customer scans → instant transfer to KBank biz account (same-bank flow)
+3. **K-Biz** = KBank corporate internet banking — for B2B juristic customers transferring large amounts (FCL/cargo invoices); admin can verify via K-Biz statement
+4. **Xendit** = orchestration layer over K-Shop / K-Biz / card / PromptPay / cross-border e-wallets — single integration for Pacred
+5. Xendit Thailand has good DX (REST API + webhook + Next.js examples) and PCI Level 1
+6. **Cross-border kept** via Xendit's e-wallet partners (Alipay / WeChat / TrueMoney) — important for Chinese cargo customers
+
+**Trade-off accepted (vs prior Omise pick):**
+- Xendit Thailand is newer to market vs Omise — slightly smaller TH merchant base, but K-Shop + K-Biz native integration outweighs
+- More moving parts (Xendit + 2 KBank products) vs Omise's single integration — but each part is shallow + KBank-managed
+- Per-transaction fee comparable to Omise (~2.85-3.5% card; lower for K-Shop QR + K-Biz transfer)
+
+### 5.0 (Historical — superseded) Why Omise was picked first then changed
+
+The 2026-05-16 night picks (eng team led by ก๊อต + เดฟ + ลูกพี่) optimized for Pacred-side DX + market coverage. The 2026-05-17 owner call with พี่ป๊อป revealed Pacred's **same-bank settlement preference** (T+0 cash flow critical for cargo operations) + **existing K-Biz/K-Shop owner familiarity** that the eng-only matrix did not capture. Decision delegated to owner per ADR-0010 V2 owner-pleaser principle. Original Omise reasoning preserved in §3.1 + §5.5 for reference if Xendit fails to deliver.
+
+### 5.5 (Historical — superseded) Omise recommendation
+
+[Preserved per AGENTS.md §3 anti-preempt principle — re-open if Xendit T+30d eval fails.]
+
+**Why Omise was picked:**
 1. Comprehensive Thai market coverage (cards + PromptPay + TH e-wallets + Alipay/WeChat)
 2. Best DX for Next.js (closest to native TypeScript)
 3. Fast onboarding (1-2 weeks; Pacred timeline fits)
@@ -209,44 +230,57 @@ Direct integrations with individual e-wallets. Pacred can add ONE OR MORE on top
 5. Strong TH local + cross-border (helps Chinese cargo customers paying)
 6. No monthly minimum on standard tier (low risk for Pacred's launch volume)
 
-**Trade-off accepted:**
+**Trade-off (Omise):**
 - 3.65% card fee is ~฿700 more per ฿100k vs 2C2P's 2.95% negotiated. At Pacred's launch volume (~฿5M/mo target), that's ~฿35k/mo additional fee. **Acceptable for the DX + onboarding speed win.**
 
-### 5.2 Migration plan
+### 5.2 Migration plan (Xendit + K-Biz + K-Shop)
 
 | Phase | Activity |
 |---|---|
-| **Now (pre-beta)** | PromptPay-only via Pacred's own QR (per ADR-0004) |
-| **T+30 days post-launch** | Sign up Omise sandbox; test integration |
-| **T+45 days** | Production Omise account approved + activated; soft-launch (open for select customers) |
-| **T+60 days** | Full Omise integration live for all customers; PromptPay remains as alternative method |
-| **T+90 days** | Evaluate: any need to add 2C2P for enterprise customers? Add GBPrimePay for high-volume bank-direct customers? |
-| **Year 2** | Renegotiate Omise fee if monthly volume > ฿10M (Pro tier discount tier kicks in) |
+| **Now (pre-beta)** | PromptPay-only via Pacred's own QR (per ADR-0004) — `PROMPTPAY_ID = TAX_ID 0105564077716` ผูกบัญชี Kasikorn 225-2-91144-0 |
+| **T+30 days post-launch** | Sign up Xendit Thailand sandbox + set up K-Biz API access (KBank biz internet banking developer portal) + K-Shop merchant QR via KBank app/branch |
+| **T+45 days** | Production Xendit account approved + activated + K-Biz API integrated + K-Shop merchant QR linked to biz account; soft-launch (open for select customers) |
+| **T+60 days** | Full Xendit + K-Biz + K-Shop integration live for all customers; PromptPay remains as alternative method |
+| **T+90 days** | Evaluate: K-Shop QR vs Xendit-orchestrated PromptPay (any reason to keep both?); monitor K-Biz transfer reconciliation lag for B2B juristic customers |
+| **Year 2** | Renegotiate Xendit fee if monthly volume > ฿10M; evaluate adding international Stripe for non-TH/CN customers if expansion happens |
 
-### 5.3 Pacred-side wiring estimate
+### 5.3 Pacred-side wiring estimate (Xendit + K-Biz + K-Shop)
 
-ภูม implements (~12-16h):
+ภูม implements (~16-22h — slightly more than single-gateway Omise estimate because 3 channels):
 
-1. Migration `0NNN_payment_intents.sql` — `payment_intents` table (mirror Stripe/Omise pattern) + status state machine (`pending → succeeded / failed / refunded`) + idempotency key
-2. `lib/payments/omise/client.ts` — typed wrapper around Omise Node SDK
-3. `actions/payments/initiateCheckout.ts` — create payment intent, return checkout URL
-4. `app/api/webhooks/omise/route.ts` — webhook receiver with signature verification
-5. Customer-side: replace PromptPay-only `/wallet/deposit` with multi-method picker (PromptPay / card / e-wallet)
-6. Admin-side: payment status panel on `/admin/wallet/[id]`
-7. Tests: end-to-end checkout flow in sandbox
-8. Sentry alert on webhook signature mismatch
+1. Migration `0NNN_payment_intents.sql` — `payment_intents` table (universal pattern across Xendit/K-Biz/K-Shop) + status state machine (`pending → succeeded / failed / refunded`) + `provider` enum (`xendit / kbiz / kshop / promptpay`) + idempotency key
+2. `lib/payments/xendit/client.ts` — typed wrapper around Xendit Node SDK
+3. `lib/payments/kbiz/client.ts` — typed wrapper for K-Biz API (Kasikorn biz internet banking — confirm API surface during T+30d sandbox phase)
+4. `lib/payments/kshop/qr.ts` — K-Shop merchant QR generation (similar pattern to PromptPay QR helper)
+5. `actions/payments/initiateCheckout.ts` — create payment intent for chosen provider, return checkout URL or QR data
+6. `app/api/webhooks/xendit/route.ts` — Xendit webhook receiver with signature verification
+7. `app/api/webhooks/kbiz/route.ts` — K-Biz transfer notification webhook (if API supports; else fall back to manual reconcile via K-Biz statement export)
+8. Customer-side: replace PromptPay-only `/wallet/deposit` with multi-method picker (PromptPay / K-Shop QR / K-Biz transfer / card via Xendit / cross-border e-wallet via Xendit)
+9. Admin-side: payment status panel on `/admin/wallet/[id]` showing provider + status + reconcile-state
+10. Tests: end-to-end checkout flow in Xendit sandbox + K-Biz sandbox if available
+11. Sentry alert on webhook signature mismatch (Xendit) + K-Biz reconcile drift > 1h
 
 ---
 
-## 6. Resolved decisions (locked 2026-05-16 night by ก๊อต + เดฟ + ลูกพี่)
+## 6. Resolved decisions (overridden 2026-05-17 by พี่ป๊อป via ลูกพี่)
 
-1. **Approve Omise pick** — ✅ **DECIDED Omise (Opn Payments).** Operational gate: T-G3 พี่ป๊อป Bundle 1 call still needed (ask if any KBank-tax-relationship reason to switch — recommend Omise unless พี่ป๊อป has hard requirement).
-2. **Pacred company info** — ⏳ T-G3 Bundle 1 still gathers (legal name + tax ID + bank acct) — gateway onboarding can't start without this. Same call.
-3. **Cards-only or wallet-first?** ✅ **Wallet-first UX confirmed.** Top up wallet via Omise → pay from wallet on each order. Reduces per-transaction friction + Omise commission spread across larger top-ups.
-4. **Refund policy** — ✅ **Admin-only V1** per ADR-0014 self-service state-transitions pattern. Customer self-refund deferred to V1.1 if demand emerges.
-5. **Cross-border** — ✅ **THB charge with Omise auto-FX.** Customer-facing UI always shows THB; Chinese-cardholder pays via Alipay/WeChat at THB amount, Omise handles FX silently.
+1. **Gateway pick** — ⚠️ **OVERRIDDEN to Xendit + K-Biz + K-Shop** (was Omise). Reason: Pacred banks with Kasikorn (acct `225-2-91144-0`) — same-bank T+0 settlement preference, plus owner familiarity with K-Biz/K-Shop. Xendit acts as orchestration layer for card + cross-border e-wallet.
+2. **Pacred company info** — ✅ partially gathered T-G3 2026-05-17: bank acct ✅, tax-ID ✅ confirmed; remaining legal-info fields existing pacred-info.md to confirm with พี่ป๊อป.
+3. **Cards-only or wallet-first?** ✅ **Wallet-first UX confirmed** (unchanged from Omise pick). Top up wallet via chosen provider → pay from wallet on each order. Reduces per-transaction friction + provider commission spread across larger top-ups.
+4. **Refund policy** — ✅ **Admin-only V1** (unchanged) per ADR-0014 self-service state-transitions pattern.
+5. **Cross-border** — ✅ **THB charge with Xendit auto-FX** (Xendit replaces Omise as FX handler). Customer-facing UI always shows THB; Chinese-cardholder pays via Xendit's Alipay/WeChat at THB amount.
 
-**Next action:** ภูม implements per §5.3 (~12-16h) starting T+30d post-launch. ก๊อต queues พี่ป๊อป owner-approval call as part of T-G3 Bundle 1.
+**Next action:** ภูม implements per updated §5.3 (~16-22h, slightly more than Omise estimate due to 3 channels) starting T+30d post-launch. ลูกพี่ + พี่ป๊อป handle Xendit Thailand signup + K-Biz API access (KBank biz internet banking dev portal) + K-Shop merchant QR via KBank app/branch in parallel during T+30d sandbox phase.
+
+---
+
+## 9. Decision change log
+
+| Date | Decision | Picker | Reason |
+|---|---|---|---|
+| 2026-05-16 night | Omise (Opn Payments) — DRAFT | เดฟ matrix | Best DX + market coverage from eng-only view |
+| 2026-05-16 night | Omise — ACCEPTED | ก๊อต + เดฟ + ลูกพี่ | Locked pending พี่ป๊อป owner approval |
+| 2026-05-17 | **Xendit + K-Biz + K-Shop** — **OVERRIDE** | พี่ป๊อป (via ลูกพี่ T-G3 call) | Kasikorn-bank-centric: T+0 settlement + owner familiarity. Owner-level decision per ADR-0010 V2 owner-pleaser principle. |
 
 ---
 
@@ -258,4 +292,4 @@ Direct integrations with individual e-wallets. Pacred can add ONE OR MORE on top
 - Customer wallet flow — `actions/wallet.ts` (current) + ADR-0014 pattern
 - Webhook receiver pattern — `app/api/webhooks/` (currently empty; first webhook will be MOMO or Omise depending on priority)
 
-**End of D-7 decision matrix.** ก๊อต: walk through with พี่ป๊อป using §6 questions; approve Omise or push back with rationale. ภูม implements per §5.3 once approved (~12-16h work, post-T+30 days launch).
+**End of D-7 decision matrix.** Decision = **Xendit + K-Biz + K-Shop** (2026-05-17 owner override). ภูม implements per §5.3 starting T+30d post-launch (~16-22h work). ลูกพี่ + พี่ป๊อป handle Xendit Thailand signup + K-Biz API dev portal access + K-Shop merchant QR setup in parallel during T+30d sandbox phase.

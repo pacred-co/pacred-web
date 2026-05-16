@@ -89,24 +89,26 @@
 - หลังคุยเสร็จ → ลูกพี่ ส่ง audio + notes ให้ เดฟ → เดฟ กรอก [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md)
 - **Unblocks:** CT-5 (MOMO sync cron) + CT-6 (webhook receiver) ภูม จะ implement ทันที post-call
 
-### 2.2 T-G3 — call พี่ป๊อป Bundle 1 — ⏳ **PARTIAL DONE 2026-05-17 (ลูกพี่ takes)**
+### 2.2 T-G3 — call พี่ป๊อป Bundle 1 — 🟡 **3/5 DONE 2026-05-17 (ลูกพี่ + พี่ป๊อป)**
 
 | # | Item | Status |
 |---|---|---|
-| 1 | PromptPay number | ⏳ STILL NEEDS (tax-ID 13 หลัก or เบอร์ 10 หลัก ผูกบัญชี?) |
-| 2 | Bank account | ✅ DONE — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) → `BANK` constant + pacred-info.md |
-| 3 | Pacred legal info | 🟡 PARTIAL — tax-ID `0105564077716` confirmed; remaining 6 fields ใน pacred-info.md ตรงอยู่แล้ว (ลูกพี่ confirm กับ พี่ป๊อป) |
-| 4 | Omise approval | ⏳ STILL NEEDS (cash sign-off · onboarding docs) |
-| 5 | PDPA registration | ⏳ STILL NEEDS (required ก่อน K-sec-4 pen test) |
-| (LIFF) | LINE Login channel + LIFF ID | ✅ DV-2 DONE 2026-05-16 night (ไม่ต้องถามแล้ว) |
+| 1 | PromptPay ID | ✅ DONE — ใช้ tax-ID `0105564077716` ผูกบัญชี กสิกร 225-2-91144-0. **ลูกพี่ set `PROMPTPAY_ID=0105564077716` ใน Vercel** → unlocks wallet deposit live |
+| 2 | Bank account | ✅ DONE — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) **กระแสรายวัน** → `BANK` constant + pacred-info.md. ⏳ ออมทรัพย์ พี่ป๊อป จะส่งให้ทีหลัง |
+| 3 | Pacred legal info | 🟡 PARTIAL — tax-ID `0105564077716` ✅; remaining 6 fields ใน pacred-info.md ตรงอยู่แล้ว (ลูกพี่ confirm กับ พี่ป๊อป) |
+| 4 | Payment gateway | ✅ DONE — **DECISION CHANGED Omise → Xendit + K-Biz + K-Shop** (Kasikorn-centric, owner pick). D-7 matrix updated — see [§9 change log](../decisions/d7-payment-gateway-decision-matrix.md#9-decision-change-log) |
+| 5 | PDPA registration | ⏳ STILL NEEDS (required ก่อน K-sec-4 pen test T+8wk — defer-able) |
+| (LIFF) | LINE Login channel + LIFF ID | ✅ DV-2 DONE 2026-05-16 night |
 
 Full script: [`docs/runbook/t-g3-popop-call-script.md`](../runbook/t-g3-popop-call-script.md)
 
 หลังได้ → Vercel env:
-- `PROMPTPAY_ID` = `<10-digit phone หรือ 13-digit tax-id, no dash>`
-- (legal info → update `components/seo/site.ts` constants — เดฟ ทำหลัง confirm)
+- ✅ `PROMPTPAY_ID=0105564077716` — **ลูกพี่ ตั้งเดี๋ยวนี้ใน Vercel dashboard** (Production + Preview + Development → Save → Redeploy)
+- (legal info → update `components/seo/site.ts` constants — เดฟ ทำหลัง พี่ป๊อป confirm)
 
-**Unblocks (after all 5):** entire payment path live + tax invoice complete
+**Already unlocked (3/5 done):** PromptPay QR live · receipt/invoice PDFs ready for ภูม wire `BANK.*` · D-7 gateway decision locked
+
+**Still pending:** legal info confirm (low-stakes) · PDPA reg cert (defer to T+30d, before pen-test starts T+8wk)
 
 ---
 
@@ -131,9 +133,11 @@ Full script: [`docs/runbook/t-g3-popop-call-script.md`](../runbook/t-g3-popop-ca
 - **Aiwen Tech Tier-1 ฿150-200k + T+8-13wk window + RFP fan-out T+5wk (Aiwen + Stelia + MFEC) + HackerOne month-9.** Pen-test plan [§7](../audit/pen-test-plan-2026-05-16.md#7-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
 - เดฟ tickle calendar **2026-06-22** to send RFP.
 
-### 3.5 ✅ D-7 payment gateway — DECIDED Omise 2026-05-16 night
-- **Omise (Opn Payments) 92/100.** Wallet-first UX · admin-only refunds V1 · THB charge + Omise auto-FX. Matrix [§6](../decisions/d7-payment-gateway-decision-matrix.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
-- ⏳ T-G3 พี่ป๊อป call still needed for owner cash sign-off.
+### 3.5 ⚠️ D-7 payment gateway — DECISION CHANGED 2026-05-17
+- ~~Omise (Opn Payments)~~ → **Xendit + K-Biz + K-Shop** (Kasikorn-centric stack) per พี่ป๊อป during T-G3 call. Reason: Pacred banks with Kasikorn → same-bank T+0 settlement + owner familiarity with K-Biz/K-Shop.
+- Wallet-first UX · admin-only refunds V1 · THB charge + Xendit auto-FX (unchanged from Omise pick — only orchestrator vendor swapped).
+- Updated D-7 matrix: [§5.1 + §5.3 wiring + §9 change log](../decisions/d7-payment-gateway-decision-matrix.md#9-decision-change-log).
+- Implementation T+30d post-launch (~16-22h ภูม). ลูกพี่ + พี่ป๊อป handle Xendit Thailand signup + K-Biz dev portal + K-Shop merchant QR in parallel during sandbox phase.
 
 ### 3.6 ✅ R1-pick china-search — DECIDED defer T+30d 2026-05-16 night
 - **Continue ADR-0003 Option E demo mode** until T+30d eval gate. If >10 "can't add URL" tickets/wk → trigger SaaS RFP (RCGroup + OneSearch + ZenRows). Matrix [§7](../decisions/r1-pick-china-search-options-matrix.md#7-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.

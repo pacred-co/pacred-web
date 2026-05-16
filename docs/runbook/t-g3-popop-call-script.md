@@ -15,10 +15,10 @@
 |---|---|
 | ✅ DV-2 LIFF DONE | LINE channel + LIFF ID set ใน Vercel (ลูกพี่ ทำคืน 2026-05-16) |
 | ✅ OTP_PEPPER rotated | Default placeholder → cryptographic value |
-| ⏳ T-G3 #1 PromptPay | **STILL NEEDS** — `PROMPTPAY_ID` env (tax-ID 13 หลัก หรือ เบอร์ 10 หลัก ที่ผูกบัญชี) |
-| ✅ T-G3 #2 Bank account | DONE 2026-05-17 — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) → wired ใน `BANK` constant + pacred-info.md |
+| ✅ T-G3 #1 PromptPay | DONE 2026-05-17 — ใช้ tax-ID `0105564077716` ผูกบัญชี กสิกร `225-2-91144-0` → ลูกพี่ set Vercel env `PROMPTPAY_ID=0105564077716` |
+| ✅ T-G3 #2 Bank account | DONE 2026-05-17 — กสิกรไทย `225-2-91144-0` บจก. แพคเรด (ประเทศไทย) **กระแสรายวัน** → wired ใน `BANK` constant + pacred-info.md. ⏳ บัญชี **ออมทรัพย์** พี่ป๊อป จะส่งให้ทีหลัง (add as `BANK.savings` เมื่อมี) |
 | 🟡 T-G3 #3 Pacred legal info | PARTIAL — tax-ID `0105564077716` confirmed ✅; remaining 6 fields existing in pacred-info.md (need confirm with พี่ป๊อป they're correct) |
-| ⏳ T-G3 #4 Omise approval | **STILL NEEDS** — owner cash sign-off |
+| ⚠️ T-G3 #4 Payment gateway | **DECISION CHANGED 2026-05-17** — Omise → **Xendit + K-Biz + K-Shop** (Kasikorn-centric stack per พี่ป๊อป). See [D-7 §9 change log](../decisions/d7-payment-gateway-decision-matrix.md#9-decision-change-log) |
 | ⏳ T-G3 #5 PDPA reg status | **STILL NEEDS** — required ก่อน K-sec-4 pen test |
 
 ---
@@ -87,19 +87,24 @@
 
 ---
 
-### Ask #4 — Omise payment gateway approval (~5 นาที)
+### Ask #4 — Payment gateway approval — ✅ DONE 2026-05-17 (DECISION CHANGED)
 
-**ขอ:** owner sign-off สำหรับ subscribe Omise (post-launch P2, ~T+30d)
+**ผลลัพธ์:** พี่ป๊อป overrode the Omise pre-decision → **Xendit + K-Biz + K-Shop** (Kasikorn-centric stack).
 
-**ข้อความที่ใช้คุย:**
-> "พี่ พวกเราเลือก payment gateway ชื่อ **Omise (Opn Payments)** แล้ว — เป็นเจ้าที่ใช้กันเยอะในไทย, fee 3.65% บัตรเครดิต + 0.55% PromptPay, ครอบคลุมทั้งบัตรไทย + TrueMoney + AliPay + WeChat Pay. เริ่ม sandbox testing ที่ T+30 วันหลังเปิดระบบ. ขอ approval สมัครได้ไหมครับ?"
+**Rationale captured (per ลูกพี่):**
+- Pacred banks with Kasikorn (acct `225-2-91144-0`) → same-bank T+0 settlement preference
+- พี่ป๊อป familiar with K-Biz (KBank biz internet banking) + K-Shop (merchant QR) — both Kasikorn-native
+- Xendit acts as orchestration layer for card payments + cross-border e-wallets (Alipay/WeChat for Chinese cargo customers)
+- D-7 matrix updated → [§5.1 + §6 + §9 change log](../decisions/d7-payment-gateway-decision-matrix.md)
 
-**คำถาม follow-up:**
-- มีเหตุผลทางภาษี/บัญชีที่ต้องใช้ KBank gateway แทน Omise ไหม?
-- ถ้าตกลง — ใครเป็นคนเซ็นใบสมัคร? (พี่ป๊อป signing authority ของบริษัท)
-- onboarding documents (สำเนาบัตรประชาชน + สำเนาทะเบียนพาณิชย์ + ใบ ภ.พ.20) — ขอเตรียมไว้ ตอน T+30d เริ่มกรอก
+**Next action (post-launch T+30d):**
+- ลูกพี่ + พี่ป๊อป: sign up Xendit Thailand sandbox + activate K-Biz API access via KBank dev portal + set up K-Shop merchant QR via KBank app/branch
+- ภูม implements per [updated D-7 §5.3](../decisions/d7-payment-gateway-decision-matrix.md#53-pacred-side-wiring-estimate-xendit--k-biz--k-shop) (~16-22h)
+- onboarding documents (สำเนาบัตรประชาชนกรรมการ + ทะเบียนพาณิชย์ + ใบ ภ.พ.20) — ขอเตรียมไว้ตอน T+30d เริ่มกรอก
 
-**Next action ถ้า ตกลง:** ภูม implement ที่ T+30d ตาม [D-7 matrix §5.3](../decisions/d7-payment-gateway-decision-matrix.md#53-pacred-side-wiring-estimate)
+**Original Omise call script preserved below for trace:**
+
+~~"พี่ พวกเราเลือก payment gateway ชื่อ **Omise (Opn Payments)** แล้ว — เป็นเจ้าที่ใช้กันเยอะในไทย, fee 3.65% บัตรเครดิต + 0.55% PromptPay, ครอบคลุมทั้งบัตรไทย + TrueMoney + AliPay + WeChat Pay. เริ่ม sandbox testing ที่ T+30 วันหลังเปิดระบบ. ขอ approval สมัครได้ไหมครับ?"~~ → owner picked Xendit instead.
 
 ---
 

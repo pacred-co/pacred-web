@@ -268,7 +268,7 @@ Pre-answers (kept below for posterity):
 
 | # | Task | Effort | Source | Status |
 |---|---|---|---|---|
-| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 | ✅ **DECIDED Omise** 2026-05-16 night → [`decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md) §6 resolved. ⏳ พี่ป๊อป owner-approval call still needed for cash sign-off (T-G3 Bundle 1) |
+| **D-7** | Payment Gateway provider choice for post-beta | Owner-call ~30m + decision | ADR-0004 | ⚠️ **CHANGED 2026-05-17: Omise → Xendit + K-Biz + K-Shop** (Kasikorn-centric per พี่ป๊อป during T-G3 call). [§9 change log](../decisions/d7-payment-gateway-decision-matrix.md#9-decision-change-log). Wire-up T+30d ภูม (~16-22h). ลูกพี่ + พี่ป๊อป handle Xendit/K-Biz/K-Shop signups in parallel |
 | **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 | ✅ **DECIDED defer T+30d + SaaS RFP** 2026-05-16 night → [`decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md) §7 resolved. ก๊อต re-opens at T+30d eval gate (~2026-06-17) |
 | **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan | Part O5 K3 | ✅ **DECIDED Aiwen Tech ฿150-200k Tier-1** 2026-05-16 night → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md) §7 resolved (deduped to P1 row above) |
 | **Pacred owner call (T-G3)** | bundle: bank/PromptPay/tax-ID/legal name + Omise approval + PDPA status | ~30m | Part Q Bundle 1 | ⏳ **ลูกพี่ takes call with พี่ป๊อป** (extended scope: 3 original items + Omise sign-off + PDPA reg confirm) |
