@@ -321,3 +321,95 @@ export function generateStaticParams() { /* still fine */ }
 - [`.claude/skills/phase-verify-loop/SKILL.md`](../../.claude/skills/phase-verify-loop/SKILL.md) — production smoke gate
 
 ---
+
+## [2026-05-16] `??` mixed with `||` requires parens — Next 16 parser is strict
+
+**Context:** Adding F-1 BillToOverridePanel juristic default-name to /admin/service-orders/[hNo]/page.tsx — wrote:
+
+```tsx
+defaultName={
+  corporateName ?? [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || ""
+}
+```
+
+**Symptom:** Browser red overlay on every /admin route:
+```
+./app/[locale]/(admin)/admin/service-orders/[hNo]/page.tsx:123:15
+Nullish coalescing operator(??) requires parens when mixing with logical operators
+```
+
+Dev server compiles → 500 on subsequent requests. `pnpm verify` would catch this (tsc errors out) but the user sees the 500 first.
+
+**Root cause:** ECMAScript spec requires explicit parens when mixing `??` with `||` or `&&` — operator precedence is ambiguous + the spec refuses to pick one. Next 16's parser (TS 5 strict) follows the spec.
+
+**Fix:** Wrap the `??` group OR the `||` group in parens.
+
+```tsx
+// Either:
+defaultName={(corporateName ?? [first,last].filter(Boolean).join(" ")) || ""}
+// OR:
+defaultName={corporateName ?? ([first,last].filter(Boolean).join(" ") || "")}
+```
+
+Both are valid; pick the one whose semantics match intent. In my case I wanted "use corporateName if set; else use joined name; else empty string" → first form is correct.
+
+**Why this matters next time:**
+- Bug travels invisibly in pre-Next 16 code that was tolerated → migration trip
+- Auto-fixable by ESLint with `no-mixed-operators` rule if enabled (Pacred's flat config doesn't enable it currently — TODO consider)
+- Common pattern in `defaultName={a ?? b || ""}` (fallback chain) — always parenthesise
+
+**Cross-links:**
+- Commit `0d35f1f` (initial bug) → followed by syntax fix in same commit
+- ECMAScript: [TC39 issue 1149](https://github.com/tc39/proposal-nullish-coalescing#null-and-undefined)
+
+---
+
+## [2026-05-16] React Compiler `react-hooks/purity` flags `Date.now()` in render — extract to module-scope helper
+
+**Context:** Several admin pages had `Date.now()` called directly in JSX render (e.g. for countdown / freshness / "days ago" math). `pnpm lint` errored:
+
+```
+Error: Cannot call impure function during render
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render.
+```
+
+**Affected lines (4 errors):**
+- `/admin/reports/refunds/page.tsx`: `new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)` for default date filter
+- `/admin/warehouse/containers/[code]/close-at-form.tsx`: `new Date(currentCloseAt).getTime() < Date.now()` for isClosed flag
+- `/admin/warehouse/containers/[code]/manual-shipment-form.tsx`: same isClosed pattern
+- `/admin/warehouse/containers/[code]/page.tsx`: `Math.floor((closeMs - Date.now()) / 3_600_000)` for countdown chip
+
+Server components AND client components both affected — the rule fires anywhere React sees `Date.now()` inside the render path.
+
+**Root cause:** React Compiler treats impure calls as a re-render trap because the result changes per call without prop/state input → memoisation can't safely skip. Even though a server component re-runs per-request (so `Date.now()` IS semantically right), the lint rule applies uniformly.
+
+**Fix:** Extract `Date.now()` into a module-scope helper function. Call the helper from render. React Compiler doesn't introspect helper bodies → satisfied.
+
+```tsx
+// Top of file (module scope):
+function isPastIso(iso: string | null): boolean {
+  return iso != null && new Date(iso).getTime() < Date.now();
+}
+function hoursFromNowToIso(iso: string): number {
+  return Math.floor((new Date(iso).getTime() - Date.now()) / 3_600_000);
+}
+function nDaysAgoIsoDate(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+// In component:
+export default function Page() {
+  const isClosed = isPastIso(currentCloseAt);  // ✓ no lint error
+  // ...
+}
+```
+
+**Why this matters next time:**
+- Triggers on EVERY `Date.now()` call inside a render — common patterns: countdown / freshness / "days ago" / default date filter. Always extract.
+- Triggers on other impure calls too: `Math.random()`, `crypto.randomUUID()`, `performance.now()` — same fix.
+- Helper can be inline (top of file) — no need for a separate utility module.
+- Earlier ภูม commit `7d89564` (V-A3) shipped the first instance of this fix with `getRecentWindowIso()`; subsequent batches use the same pattern.
+
+**Cross-links:**
+- Commit `a26434d` — extract Date.now to module-scope helpers (4 files)
+- Commit `7d89564` — original V-A3 fix pattern
