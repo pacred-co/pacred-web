@@ -46,7 +46,7 @@ CREATE TABLE statements ที่ extract มาจาก `pcsc_main.sql` (MySQL
 | `coID DEFAULT 'PCS'` | tb_users, tb_register | `coID DEFAULT 'PR'` หรือ rename column → `customer_group_id` ที่ FK ไปยัง `customer_groups` table |
 | `rID` format `PCS221002-1` | tb_receipt (rID) | `PR{YYMMDD}-{seq}` หรือ keep แต่ generate ใหม่ |
 | `userRegisterWith` enum `PCS/F/L` | tb_users | คงค่า enum ไว้ ('PCS' = email, 'F' = facebook, 'L' = line) ตามที่ port code ใช้ — หรือ rename enum value 'PCS' → 'EMAIL' |
-| `member_code` (legacy `PCS<int>`) | tb_users.userID | **ทิ้ง** — Pacred ใช้ `PR00001` running (locked decision A1) |
+| `member_code` (legacy `PCS<int>`) | tb_users.userID | **ทิ้ง** — Pacred ใช้ `PR001` running (PR + ขั้นต่ำ 3 หลัก · locked decision A1) |
 | `smPCS` column | tb_user_sales | rename หรือ keep (internal sales linkage field) |
 
 ### 4. Type translations (MySQL → Postgres)
@@ -76,7 +76,7 @@ CREATE TABLE statements ที่ extract มาจาก `pcsc_main.sql` (MySQL
 | # | Issue | กระทบ legacy-schema |
 |---|---|---|
 | 1 | `pass_tam()` symmetric hash | `tb_users.userPass` ไม่ port — force reset |
-| 4 | member_code `PCS<int>` | **ทิ้ง** — Pacred ใช้ PR00001 ใหม่ |
+| 4 | member_code `PCS<int>` | **ทิ้ง** — Pacred ใช้ PR001 ใหม่ (PR + ขั้นต่ำ 3 หลัก) |
 | 5 | ไม่มี FK constraints | ทุกๆ migration ต้องเพิ่ม FK ใหม่ |
 | 6 | `pcs_logged` 10ปี cookie | ทิ้ง — Supabase JWT |
 | 7 | shared admin tables (settings/rate/co/admin) | coordinate กับ admin-side port |

@@ -1,7 +1,7 @@
 # ADR-0009 — DPX ERP schema sketch (Phase 2)
 
-**Status:** Draft (P-37 — discussion fodder, not implementation contract)
-**Date:** 2026-05-16
+**Status:** Draft (P-37 — discussion fodder, not implementation contract; **partially consumed by [ADR-0011 RBAC](0011-erp-rbac-granular.md) + [port-specs/](../port-specs/) per-module specs that landed 2026-05-16 night**)
+**Date:** 2026-05-16 (revised 2026-05-16 night with cross-refs to V-E* spec library)
 **Phase:** Sprint 7+ Track D
 **Owner:** เดฟ + ภูม + ก๊อต
 
@@ -10,6 +10,19 @@
 > Sketch FK relationships. Discussion fodder, not implementation."
 > Each section deliberately stops at "skeleton + open questions" — no
 > migrations land from this ADR.
+>
+> **2026-05-16 night update:** Several modules in this sketch now have
+> dedicated **port-spec docs** with full schema + RLS + UI + actions
+> outline:
+> - **M1 HR Payroll** → still sketch only (Phase 2 long-phase)
+> - **M2 Sales/CRM** → covered by V2 `team_leaders` table + V-H2 sales rep commission per [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md)
+> - **M3 Accounting** → V-E7 freight receipt+payment + V-E9 monthly closing per [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md) + [`port-specs/freight-monthly-closing.md`](../port-specs/freight-monthly-closing.md)
+> - **M12 AP + M13 Vendor + M14 Inventory beyond cargo** → still sketch only (V3 phase 1-3 per [ADR-0013](0013-erp-v2-v3-migration-strategy.md))
+> - **Quotation flow** (cross-module) → covered by V-E6 per [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
+> - **RBAC granular** → covered by [ADR-0011](0011-erp-rbac-granular.md)
+>
+> Read this sketch for **Phase 2 module breakdown vision**. For
+> implementation, defer to the port-specs + ADR-0011/12/13 listed above.
 
 ---
 
@@ -475,5 +488,7 @@ If Pacred ships modules in this order, each Phase-2 sprint compounds value:
 - ADR-0005 K-5 — Payroll extends HR (M1 housing decision)
 - ADR-0002 — Admin architecture (frontend shell pattern for Phase 2)
 - `/CLAUDE.md` § Pacred Ecosystem — service catalogue source
-- Sprint 7+ Track D follow-ups: P-38 (ADR-0010 RBAC), P-39 (ADR-0011
-  frontend shell), P-40 (ADR-0012 migration strategy)
+- Sprint 7+ Track D follow-ups (actual landings 2026-05-16 night):
+  - P-38 → [ADR-0011 ERP RBAC granular](0011-erp-rbac-granular.md) DRAFT
+  - P-39 → [ADR-0012 ERP frontend shell](0012-erp-frontend-shell.md) DRAFT
+  - P-40 → [ADR-0013 V2→V3 migration strategy](0013-erp-v2-v3-migration-strategy.md) DRAFT

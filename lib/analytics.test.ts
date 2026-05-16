@@ -69,9 +69,9 @@ eq("works with no params", dataLayerSink, [{ event: "just_event" }]);
 // ── (b) trackSignUp / trackLogin / trackGenerateLead ────────────
 console.log("\n(b) sign_up / login / generate_lead");
 reset();
-a.trackSignUp("personal", "PR00123");
+a.trackSignUp("personal", "PR123");
 eq("sign_up with member_code", dataLayerSink, [
-  { event: "sign_up", method: "personal", member_code: "PR00123" },
+  { event: "sign_up", method: "personal", member_code: "PR123" },
 ]);
 
 reset();

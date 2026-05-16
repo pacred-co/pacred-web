@@ -108,7 +108,7 @@ export interface MomoContainerDetail extends MomoContainerSummary {
 
 export interface MomoShipmentSummary {
   shipment_code: string;
-  // Customer reference — MOMO might key on member_code (PR00###) or a
+  // Customer reference — MOMO might key on member_code (PR001, PR1234…) or a
   // Pacred-side customer ID. ก๊อต confirms during MOMO-1; ภูม resolves
   // to profile_id via lookup at upsert time.
   customer_ref:  string;

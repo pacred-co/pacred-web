@@ -2,11 +2,13 @@
 
 **Date:** 2026-05-16
 **Auditor:** Claude sub-agent (PHP cleanup auditor)
-**Path:** `C:\xampp\htdocs\pcscargo` (เดฟ's local XAMPP — bulk-copied from production 2026-03-19)
+**Path:** `C:\xampp\htdocs\pcscargo` (เดฟ's local XAMPP — bulk-copied from production 2026-03-19) · ALSO at `/Users/dev/Desktop/pcscargo` on Mac (used by deep-sweep)
 **Purpose:** identify dead code to delete · remaining port gaps · NEW security cleanup items not in existing audits
 **Cross-ref:** existing `php-pcscargo-integrations.md` covers integrations + env; this audit covers **cleanup + gap-finding**
 
-> **Cross-link:** [`chat-analysis-2026-05-16.md`](chat-analysis-2026-05-16.md) (parallel LINE chat audit) · [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part U** (action items) · [`docs/runbook/pcs-scrub-plan.md`](../runbook/pcs-scrub-plan.md) (existing PCS scrub plan)
+> ⚠️ **§6 "Active files NOT yet ported" is SUPERSEDED by [`php-deep-sweep-2026-05-16.md`](php-deep-sweep-2026-05-16.md)** (2026-05-16 night, เดฟ-led 4-agent deep-sweep + verification pass). §6 only listed 5 "should-port" items; deep-sweep found ~36 (12 freight + 24 admin polish) plus 17 new DB tables. **§1-5 of this audit remain authoritative** (file inventory + tier 1-3 dead code + S-1..S-6 security findings).
+
+> **Cross-link:** [`chat-analysis-2026-05-16.md`](chat-analysis-2026-05-16.md) (parallel LINE chat audit) · [`php-deep-sweep-2026-05-16.md`](php-deep-sweep-2026-05-16.md) (master gap doc, supersedes §6) · [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** (action items — V-E6..V-E12 + V-G + V-H from deep-sweep) · [`docs/runbook/pcs-scrub-plan.md`](../runbook/pcs-scrub-plan.md) (existing PCS scrub plan)
 
 ---
 

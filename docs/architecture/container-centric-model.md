@@ -74,9 +74,9 @@ Open containers (warehouse: bangkok-1):
   ┌──────────────────────────────────────┐
   │ 🚚 GZE260516-1  (truck, packing)    │
   │    Customers in this container:      │
-  │      • PR00005 (3 shipments)         │
-  │      • PR00009 (1 shipment)          │
-  │      • PR00012 (2 shipments)         │
+  │      • PR005 (3 shipments)           │
+  │      • PR009 (1 shipment)            │
+  │      • PR012 (2 shipments)           │
   │      Capacity: 78% · 24 boxes        │
   └──────────────────────────────────────┘
 ```
@@ -117,7 +117,7 @@ create index on containers (source, updated_at);
 -- or `service_order` (existing) gets a 1-N relationship to shipments.
 create table public.shipments (
   id              uuid primary key default gen_random_uuid(),
-  shipment_code   text unique not null,           -- e.g., "SH-GZE260516-PR00005-01"
+  shipment_code   text unique not null,           -- e.g., "SH-GZE260516-PR005-01"
   container_id    uuid references containers(id) on delete restrict,
   profile_id      uuid not null references profiles(id) on delete restrict,
   forwarder_f_no  text references forwarders(f_no),         -- if cargo-import (existing flow)

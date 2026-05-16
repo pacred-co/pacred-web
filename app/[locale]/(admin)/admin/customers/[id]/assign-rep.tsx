@@ -8,7 +8,7 @@ import { adminAssignSalesRep } from "@/actions/admin/admins";
 
 type Rep = {
   profile_id: string;
-  display:    string;     // pretty name e.g. "เซลล์ มิว (PR00012, 066-...)"
+  display:    string;     // pretty name e.g. "เซลล์ มิว (PR012, 066-...)"
 };
 
 export function AssignRepForm({ customerId, currentRepId, reps }: {

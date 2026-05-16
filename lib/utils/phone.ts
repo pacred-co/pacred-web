@@ -18,6 +18,8 @@ export type IdentifierKind = "email" | "memberCode" | "phone";
 
 export function detectIdentifier(input: string): IdentifierKind {
   if (input.includes("@")) return "email";
-  if (/^PR\d{5}$/i.test(input.trim())) return "memberCode";
+  // member_code = PR + min 3 digits (PR001 … PR999, PR1000+). Matches the
+  // new 3-digit-minimum pattern AND any legacy 5-digit codes (PR00001).
+  if (/^PR\d{3,}$/i.test(input.trim())) return "memberCode";
   return "phone";
 }

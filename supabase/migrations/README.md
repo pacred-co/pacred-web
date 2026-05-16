@@ -51,12 +51,23 @@
 | 36 | [0036_carriers.sql](0036_carriers.sql) | carriers + seed (SPX/J&T/Flash/EMS/Lalamove) | **U2-3** |
 | 37 | [0037_cargo_shipments_received_qty.sql](0037_cargo_shipments_received_qty.sql) | cargo_shipments.received_box_count (split-receipt) | **U1-5** |
 | 38 | [0038_forwarder_cost_adjustments.sql](0038_forwarder_cost_adjustments.sql) | forwarder_cost_adjustments — post-delivery rebill | **U2-4** |
+| 39 | [0039_cargo_shipments_cbm_per_source.sql](0039_cargo_shipments_cbm_per_source.sql) | cargo_shipments + cbm per source (V-D1) | **V-D1** |
+| 40 | [0040_cargo_type_and_carrier_container.sql](0040_cargo_type_and_carrier_container.sql) | cargo_type canonical enum + carrier_container_no (V-D2/D3) | **V-D2/D3** |
+| 41 | [0041_bill_to_name_override.sql](0041_bill_to_name_override.sql) | forwarders + service_orders bill_to_name_override (V-C2) | **V-C2** |
+| 42 | [0042_cargo_containers_close_at.sql](0042_cargo_containers_close_at.sql) | cargo_containers close_at ตัดตู้ deadline (V-C3) | **V-C3** |
+| 43 | [0043_slip_transferred_at.sql](0043_slip_transferred_at.sql) | wallet_transactions + yuan_payments slip_transferred_at (V-A1) | **V-A1** |
 
 > ⚡ **Shortcut for 0023–0038:** instead of pasting 16 files one by one,
 > open [`../../docs/setup/migrations-0023-0038.sql`](../../docs/setup/migrations-0023-0038.sql)
 > — a single combined, idempotent file — paste the whole thing into the
 > SQL Editor and **Run** once. (0022 is standalone; run it first if the
 > `contact_messages` table doesn't exist yet.)
+>
+> ⚡ **Shortcut for 0039–0043 (ภูม night-3 batch):** open
+> [`../../docs/setup/migrations-0039-0043.sql`](../../docs/setup/migrations-0039-0043.sql)
+> — combined, idempotent, includes a verify query at the bottom.
+> Paste → **Run** once. PREREQUISITES: 0033 (cargo_containers /
+> cargo_shipments) + 0034 (tax_invoices) must already be applied.
 
 ## 🛠 ตรวจว่ารันสำเร็จมั้ย
 

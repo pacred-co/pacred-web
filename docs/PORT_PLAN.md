@@ -1697,13 +1697,54 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 > 📐 **Schema + generation spec for V-E1/E3/E4** → [`docs/port-specs/freight-document-suite.md`](port-specs/freight-document-suite.md) — เดฟ prep (the `freight_*` tables + Invoice/PL · Form E · D/O generators); value/VAT math in [ADR-0016](decisions/0016-freight-value-model.md).
 
+## V-E6..V-E12 — Freight expansion (NEW from deep-sweep 2026-05-16)
+
+> Discovered in deep-sweep of PHP `pcs-admin/include/pages/{home/Freight, home/CargoAndFreight, hs-forwarder-invoice, forwarder-quotation, closingAccReportForwarder, withdraw-commission-*}` — 12 subdirs the prior audits never explored. Full inventory + new tables → [`docs/audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md) §5. All Phase I2 — post-Monday-launch.
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-E6 | **Quotation workflow** — ✅ V1 SHIPPED 2026-05-17 (commit a0c9c78). freight_quotes + items + 7-state workflow + 11 admin actions + admin list/new/detail UI + audit timeline. Convert-to-shipment stub (V-E1 dep). Customer portal + PDF deferred to V-E6.1. 📐 spec [`port-specs/freight-quotation.md`](port-specs/freight-quotation.md). | ภูม | 🟠 | ✅ V1 |
+| V-E7 | **Receipt & payment tracking** — payment ledger w/ withholding-tax + RD Code 86. Schema `freight_invoices` + `freight_invoice_lines` + `freight_invoice_payments` (was `tb_receipt*`). 📐 spec → [`port-specs/freight-receipt-and-payment.md`](port-specs/freight-receipt-and-payment.md). PHP ref `closingAccReportForwarder/` + receipt PDF | ภูม | 🟠 | ⬜ |
+| V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law (Revenue Code §50). 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (covers V-E8 + V-H1 + V-H2 combined). PHP ref `pages/withdraw-commission-{interpreter,sale}/` | ภูม | 🟠 | ⬜ |
+| V-E9 | **Monthly closing ritual for forwarder accounting** — `accounting_periods` with status=open|pending_close|closed + frozen-via-trigger; read-only past periods. 📐 spec → [`port-specs/freight-monthly-closing.md`](port-specs/freight-monthly-closing.md). PHP ref `closingAccReportForwarder.php` (32KB) | ภูม | 🟠 | ⬜ |
+| V-E10 | **QA/QC intake inspection** — pre-billing gate; checklist (damage / missing / quality); pass→release, fail→rework. Schema `freight_qa_inspections` (was `tb_check_forwarder`). 📐 spec → [`port-specs/freight-qa-qc-inspection.md`](port-specs/freight-qa-qc-inspection.md). PHP ref `pages/forwarder-check/` | ภูม | 🟡 | ⬜ |
+| V-E11 | **Customs declaration UI (ใบขนสินค้า)** — internal-only V2 (no Thai Customs API integration yet — Phase III). Schema `freight_customs_declarations` + lines. 📐 spec → [`port-specs/freight-customs-declaration.md`](port-specs/freight-customs-declaration.md) | ภูม | 🟡 | ⬜ |
+| V-E12 | **CargoAndFreight role dashboards** — 7 per-role dashboards (Super · Accounting · Warehouse · SalesAdmin · Driver · Interpreter · Ops fallback) via single-route dispatch. 📐 spec → [`port-specs/cargo-and-freight-dashboards.md`](port-specs/cargo-and-freight-dashboards.md). PHP ref `pages/home/{CargoAndFreight,Freight}/` (mostly placeholder; Pacred build largely net-new) | ภูม + ก๊อต | 🟡 | ⬜ |
+
+## V-G — Admin bulk ops + workflow polish (NEW from deep-sweep)
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-G1 | **Bulk forwarder actions** — multi-shipment status update / driver assignment / cancel. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G1. PHP ref `forwarder-action.php` | ภูม | 🟡 | ⬜ |
+| V-G2 | **Bulk transfer customers to sales rep** — currently per-customer only at `/admin/customers/[id]/transfer-rep`. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G2. PHP ref `transferSalesCustomers.php` | ภูม | 🟡 | ⬜ |
+| V-G3 | **Admin push broadcast (popup)** — admin send notifications TO users via ad-hoc UI; currently only via custom server actions. 📐 spec → [`port-specs/admin-polish-bundle.md`](port-specs/admin-polish-bundle.md) §V-G3. PHP ref `popup.php` | ภูม | 🟡 | ⬜ |
+| V-G4 | **Cargo TOS version management UI** — ✅ V1 SHIPPED 2026-05-17 (commit c0af160). tos_versions + tos_acceptances tables + /admin/settings/tos-versions admin UI (create/edit/activate/per-version acceptance count). V1 = backend management only; customer gate still reads CURRENT_TOS_VERSION from lib/tos.ts (V-G4.1 wires DB read). | ภูม | 🟡 | ✅ V1 |
+| V-G5 | **Organization 5 contact CRUDs** — ✅ V1 SHIPPED 2026-05-17 (commit 8befff5). org_contacts table + /admin/settings/contacts (tabs per kind). V1 = backend management only; customer-side wire to footer + JSON-LD = V-G5.1 follow-up. | ภูม | 🟢 | ✅ V1 |
+| V-G6 | **New admin reports** — ✅ SHIPPED 2026-05-17 (commit fe6d013). 4 routes: /admin/reports/{forwarder-volume, sales-by-rep, hs-code-revenue, user-sales-history[/[customer_id]]}. All pure SELECT, period filter, CSV export. Zero schema changes. | ภูม | 🟡 | ✅ |
+| V-G7 | **Audit feature-parity verifications** — ✅ ALL 6 SHIPPED 2026-05-17. Bundle: [`parity-hs-customrate`](audit/parity-hs-customrate.md) · [`parity-forwarder-driver`](audit/parity-forwarder-driver.md) · [`parity-settings-vip`](audit/parity-settings-vip.md) · [`parity-admin-table`](audit/parity-admin-table.md) · [`parity-time-attendance`](audit/parity-time-attendance.md) · [`parity-admin-profile`](audit/parity-admin-profile.md). 5/6 = 🟢 covered, 1/6 = 🟡 partial (admin-profile self-service gap → V-G9 follow-up). | ภูม | 🟢 | ✅ |
+
+## V-H — Role models for commission (NEW from deep-sweep)
+
+| # | Task | Owner | Rev | Status |
+|---|---|---|---|---|
+| V-H1 | **Interpreter (ล่าม) role** — extend `admins.role` enum + commission accrual per-job + withdrawal workflow + WHT calc. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (combined w/ V-E8 + V-H2). PHP ref `withdraw-commission-interpreter/` + `tb_set_comm_interpreter` lookup | ก๊อต confirms RBAC → ภูม | 🟠 | ⬜ |
+| V-H2 | **Sales rep commission finalize** — currently partial via `team_leaders` + `/admin/sales-payouts`. Add: approval workflow detail, rejection_reason, slip upload, WHT math. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md). PHP ref `withdraw-commission-sale/` | ภูม | 🟠 | ⬜ |
+
+> 📐 **Spec docs shipped (เดฟ night-5):**
+> - **Freight stack (V-E):** V-E6 quotation · V-E7 receipt+payment · V-E8/H1/H2 commission · V-E9 monthly closing · V-E10 QA/QC · V-E11 customs declaration · V-E12 role dashboards
+> - **Admin polish (V-G):** V-G1..V-G7 combined in [`admin-polish-bundle.md`](port-specs/admin-polish-bundle.md)
+> - **Tooling/setup:** [`docs/setup/line-liff-create-guide.md`](setup/line-liff-create-guide.md) — DV-2 LIFF Console step-by-step
+>
+> All 8 specs in [`docs/port-specs/`](port-specs/) + [`docs/setup/line-liff-create-guide.md`](setup/line-liff-create-guide.md) ready for ภูม Monday pickup. Estimated total V2 long-phase: ~150-200h freight stack (V-E6+) + ~32-40h admin polish (V-G).
+> 📋 **Full inventory + 17 new tables + false-alarm filter** → [`docs/audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md).
+
 ## V-F — Strategic / dependency
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
 | V-F1 | Migration burn-down to remove the **ไอแต้ม single-point-of-failure** (China product API + server + SMS all bill through one freelancer) — tracked in [`runbook/legacy-cutover-tracker.md`](runbook/legacy-cutover-tracker.md) (8 dependencies, F1-1…F1-8) | เดฟ + ก๊อต | 🔴 | 🏗 |
 | V-F2 | PEAK / ERP accounting-export API (follows V-A8) | เดฟ | 🟡 | ⬜ |
-| V-F3 | Legacy-infra resilience — fragile 3rd-party server, pay-or-die; cut over before any contract lapse | ก๊อต | 🟡 | ⬜ |
+| V-F3 | Legacy-infra resilience — fragile 3rd-party server, pay-or-die; cut over before any contract lapse | ก๊อต | 🟡 | ✅ review [`audit/v-f3-legacy-infra-resilience-2026-05-16.md`](audit/v-f3-legacy-infra-resilience-2026-05-16.md) by เดฟ; ก๊อต confirms legacy retirement date |
 
 ## V-ADM1 — Admin UI polish (เดฟ instruction, 2026-05-16)
 

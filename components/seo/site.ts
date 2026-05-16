@@ -91,6 +91,36 @@ export const SOCIAL = {
 } as const;
 
 /**
+ * Pacred company bank account — primary current account (`current`) for
+ * day-to-day biz transactions. Printed on receipt + tax-invoice PDFs as an
+ * alternative payment channel (paired with PromptPay QR).
+ *
+ * Authoritative info from พี่ป๊อป via ลูกพี่ 2026-05-17.
+ * PROMPTPAY_ID env var (= TAX_ID `0105564077716`, linked to this account) is
+ * set separately in Vercel — see lib/promptpay.ts for QR generation.
+ *
+ * **Note (2026-05-17):** Pacred ยังมี **บัญชีออมทรัพย์** (savings) อีกบัญชี ที่
+ * พี่ป๊อป จะส่งให้ทีหลัง — เพิ่ม `BANK.savings` constant + wire ใน receipt PDFs
+ * เมื่อข้อมูลครบ.
+ */
+export const BANK = {
+  /** Bank name (TH). */
+  name:           "ธนาคารกสิกรไทย",
+  /** Bank name (EN) — for English receipt PDFs. */
+  nameEn:         "Kasikornbank",
+  /** Account number (display format with dashes). */
+  accountNumber:  "225-2-91144-0",
+  /** Account holder name (matches DBD registration). */
+  accountName:    "บจก. แพคเรด (ประเทศไทย)",
+  /** Account holder name (EN). */
+  accountNameEn:  "Pacred (Thailand) Co., Ltd.",
+  /** Account type — Pacred's primary biz account is "กระแสรายวัน" (current). */
+  accountType:    "กระแสรายวัน",
+  /** Account type (EN). */
+  accountTypeEn:  "Current Account",
+} as const;
+
+/**
  * Pacred LINE OA — public IDs + add-friend URL forms.
  *
  * Two displayable handles exist (LINE OA tier):

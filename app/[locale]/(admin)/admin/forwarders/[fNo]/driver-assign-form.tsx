@@ -137,12 +137,12 @@ export function DriverAssignForm({
               value={memberCode}
               onChange={(e) => setMemberCode(e.target.value)}
               className={inputCls}
-              placeholder="เช่น PR00042"
-              pattern="^[Pp][Rr]\d{5}$"
+              placeholder="เช่น PR001"
+              pattern="^[Pp][Rr]\d{3,}$"
               required
               disabled={pending}
             />
-            <span className="text-[11px] text-muted">รูปแบบ PR + 5 หลัก (เช่น PR00042) — ดู member_code จากหน้า /admin/customers</span>
+            <span className="text-[11px] text-muted">รูปแบบ PR + อย่างน้อย 3 หลัก (เช่น PR001) — ดู member_code จากหน้า /admin/customers</span>
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium">หมายเหตุ (optional)</span>

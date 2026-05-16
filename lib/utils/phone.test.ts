@@ -68,19 +68,22 @@ assertEq("plus-tag user+tag@x.co",  detectIdentifier("user+tag@example.com"),   
 assertEq("trailing space (still has @)", detectIdentifier(" me@pacred.co "),    "email");
 
 // ────────────────────────────────────────────────────────────
-section("detectIdentifier — memberCode (PR<5 digits>)");
+section("detectIdentifier — memberCode (PR + min 3 digits)");
 // ────────────────────────────────────────────────────────────
 
-assertEq("PR00001 → memberCode",          detectIdentifier("PR00001"),       "memberCode");
-assertEq("PR99999 → memberCode",          detectIdentifier("PR99999"),       "memberCode");
-assertEq("lowercase pr12345 → memberCode (case-insensitive)", detectIdentifier("pr12345"), "memberCode");
-assertEq("mixed-case Pr12345 → memberCode", detectIdentifier("Pr12345"),     "memberCode");
-assertEq("trimmed ' PR12345 ' → memberCode", detectIdentifier(" PR12345 "), "memberCode");
+assertEq("PR001 → memberCode (new 3-digit pattern)", detectIdentifier("PR001"),    "memberCode");
+assertEq("PR042 → memberCode",            detectIdentifier("PR042"),         "memberCode");
+assertEq("PR999 → memberCode",            detectIdentifier("PR999"),         "memberCode");
+assertEq("PR1000 → memberCode (past 999)", detectIdentifier("PR1000"),       "memberCode");
+assertEq("PR12345 → memberCode (5-digit still ok)", detectIdentifier("PR12345"), "memberCode");
+assertEq("PR00001 → memberCode (legacy 5-digit compat)", detectIdentifier("PR00001"), "memberCode");
+assertEq("lowercase pr001 → memberCode (case-insensitive)", detectIdentifier("pr001"), "memberCode");
+assertEq("mixed-case Pr042 → memberCode", detectIdentifier("Pr042"),         "memberCode");
+assertEq("trimmed ' PR001 ' → memberCode", detectIdentifier(" PR001 "),      "memberCode");
 
-assertEq("PR123 (too few digits) → phone (fallback)",  detectIdentifier("PR123"),       "phone");
-assertEq("PR123456 (too many) → phone (fallback)",     detectIdentifier("PR123456"),    "phone");
+assertEq("PR12 (only 2 digits) → phone (fallback)",    detectIdentifier("PR12"),        "phone");
 assertEq("PCS12345 (legacy prefix) → phone (fallback)", detectIdentifier("PCS12345"),  "phone");
-assertEq("RP12345 (wrong order) → phone",              detectIdentifier("RP12345"),    "phone");
+assertEq("RP001 (wrong order) → phone",                detectIdentifier("RP001"),      "phone");
 
 // ────────────────────────────────────────────────────────────
 section("detectIdentifier — phone (fallback)");

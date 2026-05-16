@@ -1,7 +1,21 @@
 # ปอน — Frontend / Landing / SEO / Marketing
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
 Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
+
+## 🎯 Current state (snapshot 2026-05-17)
+
+🟢 Last shipped: `/customs-clearance-shipping-suvarnabhumi` redesign (56d16b0). Branch in sync with `dave` (no commits ahead).
+
+**Mon morning standby:** landing tweaks if T-D4 customer feedback flags any visible bug.
+
+**Day-1 post-launch pickup (in priority order):**
+1. **T-N1 SEO audit** per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md) — Google Ads waste cut (~3h)
+2. **T-N2 ad landings** — paid landings for the 4 high-intent service types (~6-10h)
+3. **Theme-token migration** — remaining hardcoded surfaces per [`pacred-info.md`](../pacred-info.md) §"Migration tracker" (includes `BANK.*` integration after ภูม wires receipt/invoice PDFs)
+4. **L-5 deep polish** order: home → import-china → china-shopping → customs-clearance (เดฟ confirmed priority — register page restyle done by เดฟ on dave a2dfe99 already)
+
+**Helpful new doc since last review:** [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) — covers everything else in the team.
 
 ---
 

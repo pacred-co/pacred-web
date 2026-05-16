@@ -331,4 +331,26 @@ export const notify = {
         : `/service-import/${opts.orderRef}/receipt`,
     };
   },
+
+  // ── QA/QC inspection (V-E10 — ภูม) ──
+  // Category 'forwarder' covers cargo_shipments since both forwarder + service-
+  // order flows land in cargo_shipments. (A dedicated 'qa' category would
+  // require migrating the notify-category enum — not worth it for V1.)
+  qaFailed(opts: {
+    shipmentCode: string;
+    inspectionNo: string;
+    outcome:      "fail_minor" | "fail_major";
+    notes:        string;
+  }): NotifyPayload {
+    const severityWord = opts.outcome === "fail_major" ? "ตรวจพบปัญหาสำคัญ" : "ตรวจพบปัญหาเล็กน้อย";
+    return {
+      category:  "forwarder",
+      severity:  opts.outcome === "fail_major" ? "error" : "warning",
+      title:     `${severityWord} กับสินค้า ${opts.shipmentCode}`,
+      body:      opts.notes
+        ? `${opts.notes} (ใบตรวจ ${opts.inspectionNo}) — กรุณาติดต่อทีมงานหากต้องการสอบถาม`
+        : `ใบตรวจ ${opts.inspectionNo} — กรุณาติดต่อทีมงานหากต้องการสอบถาม`,
+      link_href: `/shipments/${opts.shipmentCode}`,
+    };
+  },
 };

@@ -363,7 +363,7 @@
   "login": {
     "title": "Sign In",
     "emailLabel": "Email, Member ID, or Phone",
-    "emailPlaceholder": "example@email.com or PC001",
+    "emailPlaceholder": "example@email.com or PR001",
     "passwordLabel": "Password",
     "passwordPlaceholder": "••••••••",
     "forgotPassword": "Forgot password?",

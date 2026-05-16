@@ -92,15 +92,17 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 
 ---
 
-## 6. PromptPay 🟡
+## 6. PromptPay 🟢 (set 2026-05-17)
 
 | Var | Value | Powers |
 |---|---|---|
-| `PROMPTPAY_ID` | Pacred company phone (10 digit) OR tax-ID (13 digit), no dashes | `/wallet/deposit` QR generation |
+| `PROMPTPAY_ID` | `0105564077716` — Pacred tax-ID 13 digit (ผูกบัญชี กสิกร `225-2-91144-0`) | `/wallet/deposit` QR generation |
 
-⚠️ ไม่ตั้ง = wallet deposit form throw error ตอน generate QR (hard fail, not silent)
+✅ Set by ลูกพี่ in Vercel dashboard 2026-05-17. Tax-ID is the canonical PromptPay binding for Pacred biz account.
 
-**Code:** `lib/promptpay.ts` line 21-25.
+⚠️ ถ้าไม่ตั้ง = wallet deposit form throw error ตอน generate QR (hard fail, not silent).
+
+**Code:** [`lib/promptpay.ts`](../lib/promptpay.ts) line 21-25.
 
 ---
 
@@ -112,7 +114,7 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 | `LINE_CHANNEL_ID` | `2009931373` (Pacred OA) | Used for webhook signature verification (future LINE OA bot) |
 | `LINE_CHANNEL_SECRET` | (set in `.env.local` 2026-05-14) | Same — webhook signature |
 | `LINE_CHANNEL_ACCESS_TOKEN` | (long-lived token set in `.env.local` 2026-05-14) | Push to LINE users who linked account via `api.line.me/v2/bot/message/push` |
-| `NEXT_PUBLIC_LIFF_ID` | (TBD — LINE Console → Messaging API → LIFF tab → Add LIFF) | LIFF link page at `/liff/link` populates `profiles.line_user_id`. Public — inlined into client bundle |
+| `NEXT_PUBLIC_LIFF_ID` | ✅ `2010105778-SaSkkGza` (set 2026-05-16 night) | LIFF link page at `/liff/link` populates `profiles.line_user_id`. Public — inlined into client bundle. **LIFF lives on the NEW "Pacred Login" LINE Login channel** (not the Messaging API channel `2009931373`) per LINE policy change 2024-2025: LIFF apps can only be created on LINE Login channels. The two channels coexist; bot_link feature links LIFF auto-friend to the Messaging API OA. |
 
 **🚨 CRITICAL CHAIN — without LIFF, customers get NO push:**
 1. Pacred LINE creds set ✅
@@ -120,12 +122,12 @@ See `docs/audit/php-pcscargo-integrations.md` §17 for the 6-step fix path.
 3. `profiles.line_user_id` IS NULL for every customer until they link
 4. LIFF flow at `/liff/link` (D-1-LIFF, scaffolded) is the ONLY populator → without `NEXT_PUBLIC_LIFF_ID` set, page errors out
 
-**LIFF activation order:**
-1. LINE Console → Pacred Messaging API channel → LIFF tab → "Add" — set Endpoint URL = `https://pacred.co/liff/link`, Size = Compact, BOT link = ON (auto-add Pacred OA when user opens LIFF)
-2. Copy LIFF ID → set `NEXT_PUBLIC_LIFF_ID` in Vercel env
-3. ปอน wires "เพิ่ม LINE OA + เชื่อมบัญชี" CTAs at `/profile` + landing pages (uses `https://liff.line.me/<liff_id>` URL)
-4. Customer opens link → LINE auth → LIFF mounts at our page → posts `lineUserId` to `linkLineAccount` server action → saved
-5. Notification system starts pushing to that customer
+**LIFF activation order (✅ steps 1-2 done 2026-05-16 night):**
+1. ✅ LINE Console → **NEW "Pacred Login" LINE Login channel** (Channel ID `2010105778`) → LIFF tab → "Add" — Endpoint URL = `https://pacred.co.th/liff/link`, Size = Compact, Scopes = openid + profile, BOT link = On (Aggressive) (auto-add Pacred OA when user opens LIFF). **NOTE policy change:** LIFF moved from Messaging API channel to LINE Login channel per LINE 2024-2025 rule.
+2. ✅ Copy LIFF ID `2010105778-SaSkkGza` → set `NEXT_PUBLIC_LIFF_ID` in Vercel env (Production + Preview + Dev)
+3. ⏳ ปอน wires "เพิ่ม LINE OA + เชื่อมบัญชี" CTAs at `/profile` + landing pages (uses `https://liff.line.me/<liff_id>` URL)
+4. ⏳ Customer opens link → LINE auth → LIFF mounts at our page → posts `lineUserId` to `linkLineAccount` server action → saved
+5. ⏳ Notification system starts pushing to that customer
 
 ⚠️ **Default in dev is bypass=true** (safe — no spam to test users). To activate dev push: edit `.env.local` set `LINE_PUSH_BYPASS=false` then restart `pnpm dev`.
 
@@ -192,8 +194,8 @@ Hardcoded fallback if `settings.yuan_rate` row missing in DB. Production should 
 
 | Var | Value |
 |---|---|
-| `LINE_LOGIN_CLIENT_ID` | TBD (LINE Developer Console) |
-| `LINE_LOGIN_CLIENT_SECRET` | TBD |
+| `LINE_LOGIN_CLIENT_ID` | ✅ `2010105778` (set 2026-05-16 night) — same Channel ID as the "Pacred Login" LINE Login channel that hosts LIFF |
+| `LINE_LOGIN_CLIENT_SECRET` | ✅ set 2026-05-16 night — Production env ONLY (Sensitive flag on Vercel). Channel secret leaked via chat during setup → ก๊อต should rotate within 30d via LINE Console |
 
 Currently the LINE login button is a stub ("coming soon"). Either remove or wire up via Supabase custom OIDC.
 

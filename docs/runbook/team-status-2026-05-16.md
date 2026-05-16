@@ -2,6 +2,116 @@
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
 >
+> ## 🌙 2026-05-16 LATE-NIGHT SESSION SUMMARY (เดฟ via Claude · 26 commits dave→main shipped)
+>
+> เดฟ + ลูกพี่ ทำ session ยาวคืนนี้ + integrate ภูม night-5/6/7 + ปอน landing redesign. **dave = 26 commits ahead of `main` → merging to `main` for production deploy now.**
+>
+> ### 🎯 Sunday-night blocker status (5/5 progress)
+> | # | Blocker | Status | Notes |
+> |---|---|---|---|
+> | B1 | OTP UI for prod | ✅ **shipped** (73cbf0d) | `components/auth/otp-input.tsx` + 2-step register flow; bypass-aware |
+> | B2 | Migrations apply prod Supabase | ✅ **done by ลูกพี่ this session** | 0023-0043 applied via Dashboard SQL Editor; verify query returned 10/10 rows |
+> | B3 | ก๊อต lock ADR-0015/0016 | ⏳ **fastlane prepped** | Pre-answered Qs in `briefs/got.md` "P0.7-fastlane" — ก๊อต 5-min sign |
+> | B4 | DV-3 ThaiBulkSMS + `OTP_BYPASS=false` | 🟡 **keys ALREADY SET by ก๊อต** | env shows `THAIBULKSMS_API_KEY/SECRET/SENDER` configured; just needs flip `OTP_BYPASS=true → false` after smoke |
+> | B5 | ก๊อต K-12/K-13 + DV-1a/b/c | ⏳ **cheat-sheet prepped** | `briefs/got-cheatsheet-2026-05-17.md` — forwardable to ก๊อต |
+> | DV-2 | LIFF setup | ✅ **shipped this session by ลูกพี่ + เดฟ pair** | LIFF on NEW "Pacred Login" channel `2010105778`; LIFF ID `2010105778-SaSkkGza`; Endpoint `https://pacred.co.th/liff/link` (canonical = `.co.th` per `NEXT_PUBLIC_SITE_URL`); `NEXT_PUBLIC_LIFF_ID` + `LINE_LOGIN_CLIENT_ID` + `LINE_LOGIN_CLIENT_SECRET` set in Vercel |
+> | Bonus | `OTP_PEPPER` rotation | ✅ **done this session** | Was `change-this-random-string-in-prod` (default placeholder, security hole) → rotated to openssl hex32. Safe because `OTP_BYPASS=true` means no real OTP rows existed |
+>
+> **Verify gates green pre-main merge:**
+> - `pnpm verify` ✓ (lint 0 errors + tsc clean + 50+ tests pass + 1181 md links + i18n parity 1842/1842)
+> - `pnpm build` ✓ (Compiled successfully in 11.1s · 18/18 static pages generated)
+>
+> ### 📦 Session commits (26 total going to main)
+>
+> **เดฟ batch (15 commits):**
+> 1. b326e49 ADR-0015/0016 fastlane pre-answers
+> 2. cfdf7d2 PHP deep-sweep audit + V2-completeness gap reckoning
+> 3. 72d5916 V-E6/E7/E8 freight stack specs
+> 4. d69e993 LIFF guide + V-E9/E10/E11/E12 + V-G admin polish + pre-launch checklist
+> 5. 73cbf0d B1 OTP UI for prod (component + 2-step register)
+> 6. e08b09d ก๊อต P1 preempt (K-sec-2/3 audits + MOMO-2 + Renovate + CSP-1 + V-F3)
+> 7. 703ebf8 ก๊อต P2+P3 preempt (3 V3 ADRs + K-sec-4 + D-7 + R1 + launch checklist)
+> 8. 58422ea ภูม night-5 merge + status update
+> 9. 6764944 CLAUDE.md dedup + ADR-0008/0009 consolidate + ปอน playbook
+> 10. 9496942 Combined migrations 0039-0043 paste-and-run
+> 11. 33f0324 ก๊อต cheat-sheet (forwardable Sunday-night)
+> 12. 4ae7850 DV-2 LIFF setup + OTP_PEPPER rotation docs
+> 13-15. (this commit) team-status + dave→main merge prep
+>
+> **ภูม batch (7 commits via merges):**
+> - 92fdb29 LP-6 ShopOrderReceipt PDF coverage tests
+> - b115b95 /admin/learning org-docs vs HR training (no duplicate)
+> - 6c5293b night-5 ภูม-lane cleared (CT-7 + CT-8 + LP-6)
+> - fe05c3a CT-7 driver "งานของฉัน" home
+> - 58509f4 CT-8 cargo container lifecycle integration test (23 asserts DB-backed)
+> - 33b31ef Phase I2 readiness notes
+> - f273ecf 2 Next 16 gotchas learnings
+> - 2048c52 V-G7 hs-customrate parity audit
+> - 6965663 V-G7#2 forwarder-driver parity audit
+>
+> **ปอน batch (1 commit via merge):**
+> - 56d16b0 `/customs-clearance-shipping-suvarnabhumi` landing redesign
+>
+> ### 📚 New docs landing in main (~6,700+ lines)
+>
+> **Audits (4 new):**
+> - `audit/php-deep-sweep-2026-05-16.md` (master gap, 440 lines) — 4-agent sweep of 20k .php files
+> - `audit/rls-and-audit-log-2026-05-16.md` — K-sec-2 + K-sec-3 combined (🟢 strong)
+> - `audit/v-f3-legacy-infra-resilience-2026-05-16.md` — F1-* risk + 7 hardening recs
+> - `audit/pen-test-plan-2026-05-16.md` — K-sec-4 vendor matrix + Aiwen recommend
+> - `audit/parity-forwarder-driver.md` + `audit/parity-hs-customrate.md` (ภูม V-G7)
+>
+> **Port-specs (8 new):**
+> - V-E6 freight quotation · V-E7 receipt+payment · V-E8/H1/H2 commission · V-E9 monthly closing · V-E10 QA/QC · V-E11 customs declaration · V-E12 role dashboards · V-G admin polish bundle (V-G1..V-G7)
+>
+> **Decision docs (5 new):**
+> - ADR-0011 ERP RBAC granular DRAFT · ADR-0012 ERP frontend shell DRAFT · ADR-0013 V2→V3 migration DRAFT
+> - CSP-1 nonce migration plan · D-7 payment gateway decision matrix · R1 china-search options matrix
+>
+> **Runbooks (2 new):**
+> - `runbook/pre-launch-checklist-2026-05-18.md` — Sat-Sun-Mon single source of truth
+> - `runbook/poom-phase-i2-prep.md` (ภูม Phase I2 quick-start)
+>
+> **Integration docs:**
+> - `integrations/momo-1-call-prep.md` — MOMO-2 reverse-engineered + 24-Q list for ก๊อต call
+>
+> **Briefs:**
+> - `briefs/got-cheatsheet-2026-05-17.md` — forwardable Sunday cleanup list
+> - `briefs/podeng-seo-and-ad-landing-playbook.md` — T-N1/T-N2 playbook
+>
+> **Setup guides:**
+> - `setup/line-liff-create-guide.md` — DV-2 step-by-step
+> - `setup/migrations-0039-0043.sql` — combined paste-and-run
+>
+> **Components / pages (3 code changes):**
+> - 🆕 `components/auth/otp-input.tsx` (6-digit OTP input, auto-advance, paste-fan-out)
+> - 🆕 `app/[locale]/(admin)/admin/driver-runs/{page,action-buttons}.tsx` (CT-7 by ภูม)
+> - 🆕 `lib/warehouse/lifecycle.test.ts` (CT-8 by ภูม — 23-asserts integration test)
+> - ✏️ `app/[locale]/(auth)/register/page.tsx` — 2-step OTP register
+> - ✏️ `app/[locale]/(public)/customs-clearance-shipping-suvarnabhumi/page.tsx` — ปอน redesign
+> - ✏️ Migrations README (with 0039-0043 paste-and-run shortcut)
+>
+> ### 🛡 Verify gates pre-main merge
+> - `pnpm lint` ✓ 0 errors / 15 warnings (unused imports — non-blocking)
+> - `pnpm exec tsc --noEmit` ✓ clean
+> - `pnpm test:unit` ✓ 50+ tests · 0 failures · cargo-type 33/33 · validators all pass
+> - `pnpm audit:md` ✓ 1181 local links · 94 md files all resolve
+> - `pnpm audit:env` ⚠️ 12 declared-but-unused (per existing learning — acceptable; future LP-3 + carrier APIs not yet wired)
+> - `pnpm audit:i18n` ✓ 1842 keys / 1842 keys parity
+> - `pnpm build` ✓ Compiled in 11.1s · 18/18 SSG pages
+>
+> ### 🚀 Post-main next moves
+> 1. **Vercel auto-deploys** prod (Vercel watches `main` branch)
+> 2. **ลูกพี่** apply same `pnpm build` smoke on Vercel preview before flipping `OTP_BYPASS=false` (B4)
+> 3. **ก๊อต** open cheat-sheet `briefs/got-cheatsheet-2026-05-17.md` → start signups (B5) + ADR locks (B3)
+> 4. **ภูม** pull `origin/dave` (after this merge) → start V-A6 WHT (after ADR-0015 lock) or LP-1 shipping rates table
+> 5. **ปอน** continue T-N1 SEO audit per `briefs/podeng-seo-and-ad-landing-playbook.md`
+>
+> ### ⏳ Remaining for Monday 2026-05-18 launch
+> - B3 (ก๊อต ADR lock 5m) · B5 (ก๊อต ~2.5h browser signups) · ก๊อต MOMO-1 call · T-G3 พี่ป๊อป Bundle 1 call · T-D1 prod smoke · T-D4 soft-launch 5 customers
+>
+> ---
+>
 > ## 🟢 2026-05-16 — PRODUCTION IS LIVE + prevention plan (เดฟ via Claude)
 >
 > **`main` = `dave` = `fdd3a8d`, deployed on Vercel.** ทุกคน: **`git fetch && git merge origin/dave` ก่อนเริ่ม batch ถัดไป** — main+dave ขยับเยอะวันนี้.
@@ -17,6 +127,15 @@
 >
 > **⏳ รอ ก๊อต คืนนี้:** apply migration 0033–0043 บน prod Supabase · ใส่ SMS OTP key · `NEXT_PUBLIC_SITE_URL` + Supabase Google/FB provider (OAuth ยังไม่ทำงานจนกว่าจะตั้ง). ดู `env.md` §15.
 > **🧹 docs-dedup:** decision handed to **ก๊อต for tonight** — see [`docs/briefs/got.md`](../briefs/got.md) "docs-dedup decision" section (A: do now / B: defer / C: rescope). CLAUDE.md ~200–300/550 lines restate canonical docs.
+> **Last updated:** 2026-05-16 night-5 (ภูม via Claude) — **ภูม-lane "เก็บงานครบ" pass complete.** Synced merge from `origin/dave` (เดฟ pushed 17 commits with 8 new port-specs for Phase I2) + cleared remaining unblocked ภูม-lane items. 5 new commits `fe05c3a..b115b95`:
+> - `fe05c3a` **CT-7** Driver "งานของฉัน" home — driver-self serve assignment view + accept/complete actions + sidebar entry
+> - `58509f4` **CT-8** Container lifecycle integration test (DB-backed, 23 asserts, mirrors P-29 wallet ledger pattern)
+> - `92fdb29` **LP-6** PDF spot-check — extended render.test.tsx with 3 ShopOrderReceipt cases (paid/awaiting/juristic+V-C2 override+edge Thai)
+> - `b115b95` **/admin/learning** decision — keep as org-docs hub, redirect "training" card → /admin/hr/training (no duplicate)
+> - Plus dave→Poom merge ee80b97..d69e993 (เดฟ structural + B1 OTP UI + 8 new port-specs available for Phase I2 reference)
+>
+> **All ภูม-lane unblocked items now ✅ — Phase I2 freight stack (V-E6..V-G7 ~150-200h + V-G1..V-G7 ~32-40h) waiting for post-launch signal.**
+>
 > **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
 > - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
 > - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)
@@ -697,6 +816,94 @@ Long autonomous session. **7 commits on `dave`** — 4 pushed, 3 held local (hol
 | V-B1 reports · V-C2 bill-header · V-C3 ตัดตู้ UX · V-A1 | ภูม | admin UI/UX lane |
 
 เดฟ next structural pickup = **V-C1 post-lock refund**.
+
+---
+
+---
+
+## 🟢 ภูม night-5 update — CT-7 + CT-8 ✅ (2026-05-16 19:22 BKK)
+
+**Pulled `origin/Poom` `ee80b97..58509f4`** (2 commits) → merged into `dave` cleanly (no conflicts).
+
+### What ภูม shipped (~676 LOC)
+
+1. **CT-7 driver "งานของฉัน" home** (commit `fe05c3a`):
+   - 📄 `/admin/driver-runs/page.tsx` (+223 lines) — driver lands here, sees own forwarder_driver assignments (status 1=waiting / 2=accepted-in-progress + completed-today status 4) with full delivery context: customer name / phone / address / TH tracking / cargo_shipment.shipment_code / container.code (cargo spine link)
+   - 🎛 `/admin/driver-runs/action-buttons.tsx` (+77 lines) — "✓ รับงาน" (1→2) + "📦 สแกนส่ง" (jump to `/admin/barcode/driver`) + "✅ กดเสร็จ" (2→4) buttons with `useTransition` + confirm prompts
+   - ⚙️ `actions/admin/forwarder-drivers.ts::driverUpdateOwnAssignmentStatus` (+77 lines) — defense-in-depth: `withAdmin(['driver','ops','super'])` gate + self-row check (`profile_id===adminId`) + ops/super DB-verify cross-row override + status guard (only 1→2 or 2→4 allowed) + timestamps stamped + `logAdminAction("forwarder_driver.driver_{accept|complete}")` with `by_self` flag
+   - 🧭 Sidebar nav entry added (+1 line)
+
+2. **CT-8 cargo container lifecycle integration test** (commit `58509f4`):
+   - 🧪 `lib/warehouse/lifecycle.test.ts` (+298 lines, **23 assertions**) — DB-backed end-to-end:
+     - A. setup (profile + forwarder for FK)
+     - B. createContainer w/ code + carrier_container_no (V-D3) + close_at future (V-C3)
+     - C. createShipment + attach + cargo_type canonical (V-D2)
+     - D. setContainerStatus chain `packing → sealed → in_transit → arrived → unloading → closed` + `cargo_container_status_history` rows per transition
+     - E. tracking events newest-first ordering (4 events)
+     - F. V-C3 guard — past close_at rejects new attach
+   - ⚙️ `package.json` — added test to `pnpm test` chain (NOT `test:unit` — skips gracefully when SUPABASE env missing → safe in CI w/o secrets)
+
+### Review verdict — ✅ production-quality, no bugs found
+
+- Self-row check pattern is correct (RLS-respecting first, admin-client switch second per [ADR-0014](../decisions/0014-customer-self-service-state-transitions.md))
+- Defense-in-depth (3-layer check) is slight perf hit (~5ms extra DB read) but security-correct
+- CT-8 test runs against real Supabase (matches P-29 wallet ledger pattern), 23 asserts, env-skip-graceful
+- Code matches existing patterns; lints + types clean; `pnpm verify` ✓ green post-merge
+
+**Minor design note (not bug):** `cargoByForwarderId` map in driver-runs/page.tsx builds via `byFno` intermediate Map — slight redundancy that could be a direct `forwarder_id → cargo` join. **Defer cleanup**; not worth a refactor pass.
+
+### CT-* spine status post-ภูม-night-5
+
+| # | CT task | Status |
+|---|---|---|
+| CT-1 | Migration `0033_containers.sql` | ✅ shipped earlier (ภูม) |
+| CT-2 | `lib/warehouse/*.ts` typed clients | ✅ shipped earlier |
+| CT-3 | Customer container view (`/shipments` + `/shipments/[code]`) | ✅ shipped earlier |
+| CT-4 | Admin warehouse view (`/admin/warehouse/containers`) | ✅ shipped earlier |
+| CT-5 | MOMO sync cron | ⏳ blocked on ก๊อต MOMO-1 (prep: [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md)) |
+| CT-6 | MOMO webhook receiver | ⏳ blocked on ก๊อต MOMO-1 |
+| **CT-7** | **Driver UI integration** | ✅ **shipped night-5 (`fe05c3a`)** |
+| **CT-8** | **Lifecycle integration test** | ✅ **shipped night-5 (`58509f4`)** |
+
+CT-1..CT-4 + CT-7..CT-8 all green. Only CT-5/CT-6 remain → wait on ก๊อต MOMO call.
+
+### Note back to ภูม (for next session)
+
+- ขอบคุณ ภูม สำหรับ CT-7 + CT-8 — production-quality batch, defense-in-depth สวยมาก
+- ผม merge เข้า `dave` แล้ว `pnpm verify` ✅ green (50+ unit tests; CT-8 integration test skipped per design — env-graceful)
+- เดฟ ใส่ของอื่นเข้ามาเยอะใน `dave` (deep-sweep audit · 8 freight specs · 3 V3 ADRs · 5 ก๊อต-preempt docs · pre-launch checklist) — ภูม `git fetch && git merge origin/dave` ก่อน batch ถัดไป
+- พร้อม V-A6 WHT (รอ ก๊อต lock ADR-0015 fastlane — pre-answered ใน `briefs/got.md`)
+
+---
+
+## 🔬 PHP deep-sweep checkpoint — 2026-05-16 night (เดฟ via Claude)
+
+เดฟ ผ่าน 4-agent deep-sweep against `/Users/dev/Desktop/pcscargo` (20,331 .php files / 2.2 GB) + verification pass. Master gap doc → [`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md).
+
+**Big-picture verdict:**
+- Cargo loop V1 (Monday launch) **~95% complete** — only 5 true Sunday-night blockers (B1-B5 in deep-sweep §3)
+- Most "🔴 MISSING" calls in legacy-cleanup audit §6 were false alarms (agents reading stale docs) — verified-real list = 24 admin polish items + 17 NEW DB tables
+- Freight side (V2 long-phase) **largely net-new build** — 12 subdirs in PHP that prior audits never explored; folded into PORT_PLAN Part V as V-E6..V-E12 + V-G + V-H sections
+
+**Sunday-night blockers (B1-B5):**
+1. **B1 (เดฟ)** Build OTP UI for prod — register page hardcodes `otp: "bypass"` (~2-3h)
+2. **B2 (เดฟ)** Apply migrations 0023..0043 on prod Supabase (~30m)
+3. **B3 (ก๊อต)** Lock ADR-0015 + ADR-0016 via fastlane in [`briefs/got.md`](../briefs/got.md) (~5m)
+4. **B4 (เดฟ)** DV-3 ThaiBulkSMS signup + `OTP_BYPASS=false` (~30m)
+5. **B5 (ก๊อต)** Sign up K-12 GTM + K-13 Clarity + DV-1a/b/c Sentry/Upstash/hCaptcha (~2.5h browser)
+
+**Soft blockers (degrade safely):** LIFF ID · PromptPay number · Resend API key — owner Bundle 1 + DV-2.
+
+**Phase I2 (V2 long-phase post-Monday):** V-E6..V-E12 freight stack (~150-200h) + V-G admin polish (~80-120h) — สเปก per task: เดฟ writes port-specs after launch, ภูม implements.
+
+**Docs updated this session:**
+- 🆕 [`audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md) (master gap, 440 lines)
+- [`PORT_PLAN.md`](../PORT_PLAN.md) Part V — added V-E6..V-E12 + V-G1..V-G7 + V-H1/H2 sections
+- [`STRATEGY.md`](../STRATEGY.md) §9 — verified state (tax invoice + container view checkmarks corrected)
+- [`audit/legacy-cleanup-2026-05-16.md`](../audit/legacy-cleanup-2026-05-16.md) — §6 marked SUPERSEDED
+- [`CLAUDE.md`](../../CLAUDE.md) — Legacy PHP Port Plan section + freight scope expanded
+- [`briefs/dave.md`](../briefs/dave.md) — added B1 OTP UI to P0 list
+- [`briefs/poom.md`](../briefs/poom.md) — added Phase I2 backlog (V-E6.. / V-G.. / V-H..)
 
 ---
 

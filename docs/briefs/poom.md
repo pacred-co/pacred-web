@@ -1,7 +1,40 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
+
+## 🎯 Current state — Mon morning launch sequence ready (snapshot 2026-05-17)
+
+🟢 All ภูม-lane Sunday blockers cleared. Last night-6 batch (V-G7 audits + handoff refresh) merged into dave ✅. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full team status.**
+
+**All open Qs in [`poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md) RESOLVED:**
+- D-1 LP-1c2 UNIQUE → ภูม shipped option (b); refactor optional (Not required for launch)
+- D-2 migration numbering → on disk 2026-05-17: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes (ภูม shipped) · `0060` member_code (เดฟ — numbered clear of ภูม's `0044`-`005x` freight block). ภูม next free = **`0049`**
+- D-3 /admin/learning → ภูม decided KEEP as org-docs hub + redirect "training" card to HR
+- **E-1 ADR-0015 WHT** → ✅ ก๊อต locked 2026-05-16 night, 4 Qs resolved → **V-A6 UNBLOCKED Monday morning**
+- **E-2 ADR-0016 freight value** → ✅ ก๊อต locked 2026-05-16 night, 5 Qs resolved → V-E2 unblocked for Phase I2
+- **E-3 MOMO-1** → in-flight (ลูกพี่ takes call → เดฟ parses → pings you)
+- **E-4 Pacred owner Bundle 1** → 3/5 resolved: PromptPay ✅ + Bank ✅ + LIFF ✅ + Gateway DECISION CHANGED to Xendit+K-Biz+K-Shop. Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor CONTACT.*
+- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0052_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
+
+### V-E6 approval RBAC — ✅ resolved 2026-05-17
+Use existing `super` role for V1 approval. DO NOT add new `manager` role pre-launch. Revisit only if ops actually requests distinct manager-but-not-super tier post-launch.
+
+### Migration ownership (reconciled 2026-05-17)
+On disk: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes (ภูม shipped) · `0060` member_code (เดฟ). **ภูม: start your next Phase-I2 migration at `0049`** — the `0049`-`0059` range is reserved for your freight block; เดฟ's member_code sits at `0060` so the two devs never collide on a number again. Schema sketches in ADR-0015 + ADR-0016 match ภูม's design — single-owner per migration. Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
+
+**Mon morning:**
+1. Standby for backend hotfix (Sentry watch + admin_audit_log)
+2. After ลูกพี่+team confirm T-D4 soft launch green at 10am → start **V-A6 WHT impl** per [ADR-0015 §"Schema sketch"](../decisions/0015-withholding-tax-model.md) (~8-12h):
+   - Migration `0044_withholding_tax.sql`
+   - Bucket `wht-certs` (RLS mirror `tax-invoices`)
+   - Admin UI to record + waive
+   - Receipt + tax-invoice issuance gate
+   - V-A3 reconciliation read
+
+**Day-1 next (Tue):** V-E10 QA/QC intake inspection (no blocker, prereq for V-E7) → V-E6 quotation workflow
+
+**T+30d:** Xendit + K-Biz + K-Shop wire-up per [updated D-7 §5.3](../decisions/d7-payment-gateway-decision-matrix.md#53-pacred-side-wiring-estimate-xendit--k-biz--k-shop) (~16-22h, 3 channels). ลูกพี่ + พี่ป๊อป handle vendor signups in parallel.
 
 ---
 
@@ -109,8 +142,8 @@ The biggest backend addition. Read [`docs/architecture/container-centric-model.m
 | **CT-2** | `lib/warehouse/*.ts` — typed clients for upsert + tracking-event-append | ~2h |
 | **CT-3** | Customer view `/(protected)/service-import/[fNo]/container` — container card + tracking timeline | ~3h |
 | **CT-4** | Admin view `/(admin)/admin/warehouse/containers` — list + filter + detail with customer list inside | ~4h |
-| **CT-5** | Block on ก๊อต MOMO endpoint inventory → wire sync cron `app/api/cron/momo-jmf-sync/route.ts` | ~3h |
-| **CT-6** | Block on ก๊อต webhook decision → wire `app/api/webhooks/momo-jmf/route.ts` | ~2h |
+| **CT-5** | Block on MOMO endpoint inventory (call in-flight — **ลูกพี่ takes call**, เดฟ parses) → wire sync cron `app/api/cron/momo-jmf-sync/route.ts` | ~3h |
+| **CT-6** | Block on webhook decision (same call as CT-5) → wire `app/api/webhooks/momo-jmf/route.ts` | ~2h |
 | **CT-7** | Driver UI integration — driver sees their container's shipments | ~2h |
 | **CT-8** | Integration test for container lifecycle (create → pack → seal → in-transit → arrived → unload → deliver) | ~2h |
 
@@ -143,6 +176,35 @@ Order recommendation:
 - P-23 Meeting room booking (~2–3h)
 - P-27 DPX ERP phase 2 ADR co-authoring (with เดฟ + ก๊อต)
 
+### 🆕 Phase I2 — Freight stack + admin polish (post-Monday launch, V2 long-phase)
+
+From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md)) — 17 new tables · 12 freight subdirs · 24 admin polish items. **All POST-Monday — do NOT touch before launch.**
+
+**Freight expansion (V-E6..V-E12 in PORT_PLAN Part V — ~150-200h) — ALL specs shipped:**
+- V-E6 Quotation workflow — 📐 [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
+- V-E7 Receipt & payment tracking — 📐 [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md) (RD Code 86 + WHT)
+- V-E8/H1/H2 Commission withdrawal — 📐 [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) (interpreter + sales + WHT 15%)
+- V-E9 Monthly closing ritual — 📐 [`port-specs/freight-monthly-closing.md`](../port-specs/freight-monthly-closing.md) (freeze past periods via trigger)
+- V-E10 QA/QC intake inspection — 📐 [`port-specs/freight-qa-qc-inspection.md`](../port-specs/freight-qa-qc-inspection.md) (pre-billing gate)
+- V-E11 Customs declaration UI — 📐 [`port-specs/freight-customs-declaration.md`](../port-specs/freight-customs-declaration.md) (ใบขนสินค้า)
+- V-E12 Role dashboards — 📐 [`port-specs/cargo-and-freight-dashboards.md`](../port-specs/cargo-and-freight-dashboards.md) (per-role landings)
+
+**Admin bulk-ops + polish (V-G1..V-G7 in PORT_PLAN — ~32-40h, all in one combined doc):**
+- 📐 [`port-specs/admin-polish-bundle.md`](../port-specs/admin-polish-bundle.md) — V-G1 bulk forwarder · V-G2 bulk transfer customers · V-G3 admin broadcast · V-G4 TOS version mgmt · V-G5 org contacts CRUD · V-G6 4 new reports · V-G7 6 feature-parity audits
+
+**Implementation order (recommended after Monday launch):**
+1. V-A6 WHT — ✅ ก๊อต locked ADR-0015 2026-05-16 night → unblocked. Use migration `0044_withholding_tax.sql` + bucket `wht-certs`. Schema spec in [ADR-0015](../decisions/0015-withholding-tax-model.md) §"Schema sketch". Resolved-questions section ใน ADR ตอบ rate set / admin-only / single-approver / dedicated-bucket แล้ว — unblocks juristic customers
+2. V-E10 QA/QC inspection — needed before V-E7 billing gate
+3. V-E6 quotation — unlock freight sales funnel
+4. V-E1 commercial invoice + V-E7 receipt/payment — full freight billing loop
+5. V-E3/E4 Form E + D/O — when first freight customer needs them
+6. V-E8/H1/H2 commission — when first commission accruals accumulate
+7. V-E9 monthly closing — when accounting first asks
+8. V-E11 customs declaration + V-E12 dashboards — later polish
+9. V-G items à la carte as needed
+
+Each spec leaves open Qs flagged for ก๊อต — wait for ก๊อต lock before implementing those items.
+
 ### V-ADM1 — Admin UI polish (เดฟ instruction 2026-05-16 evening — do before the next big batch)
 
 Small, fast cleanup so `/admin` stops looking like a separate app. Tracked as **V-ADM1** in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V.
@@ -164,7 +226,7 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| ก๊อต MOMO endpoint inventory | Migration CT-1 (no MOMO dependency) + customer-side view CT-3 (works with manual entry) |
+| MOMO endpoint inventory (ลูกพี่ + เดฟ in-flight) | Migration CT-1 (no MOMO dependency) + customer-side view CT-3 (works with manual entry) |
 | ก๊อต K-1 ADR-0003 (already locked) | All Track G is your follow-up label work; pickup at any time |
 | ปอน hasn't shipped theme tokens | Use existing `app/globals.css` tokens as-is; flag any new tokens you need to ปอน + เดฟ |
 | Phase G2 tax invoice (waiting on Pacred tax-ID) | CT-1..CT-8 don't need it; do those first |

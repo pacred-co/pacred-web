@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
 import {
   Ship,
   Container,
   Boxes,
-  Plane,
   ShoppingBag,
   HandCoins,
   Stamp,
@@ -248,7 +246,6 @@ export default async function ServicesIndexPage({
 }) {
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
-  const t = await getTranslations({ locale, namespace: NS });
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const here = typedLocale === "th" ? "บริการ" : "Services";
 

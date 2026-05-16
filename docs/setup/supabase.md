@@ -36,7 +36,7 @@ Copy เนื้อหาจาก [`supabase/schema.sql`](../../supabase/schem
 
 จะสร้าง:
 - 3 tables: `profiles`, `documents`, `otp_codes`
-- Sequence + trigger สำหรับ `member_code` (PR00001)
+- Sequence + trigger สำหรับ `member_code` (PR001 — PR + ขั้นต่ำ 3 หลัก)
 - Trigger `set_updated_at`
 - RLS policies (own-rows สำหรับ profiles, documents)
 - Storage bucket `member-docs` (private) + storage policies
@@ -84,7 +84,7 @@ Copy [`supabase/migrations/0002_orders.sql`](../../supabase/migrations/0002_orde
 2. `pnpm dev`
 3. ไป `/register` → กรอกฟอร์ม Personal → submit
 4. กลับ Supabase Dashboard → **Authentication → Users** เห็น user ใหม่
-5. **Table Editor → profiles** เห็น row พร้อม `member_code = PR00001`
+5. **Table Editor → profiles** เห็น row พร้อม `member_code = PR001`
 
 ## ⚙️ Common operations
 
@@ -96,7 +96,7 @@ Copy [`supabase/migrations/0002_orders.sql`](../../supabase/migrations/0002_orde
 delete from auth.users where email like '%test%';
 ```
 
-### Reset member_code sequence (เริ่ม PR00001 ใหม่)
+### Reset member_code sequence (เริ่ม PR001 ใหม่)
 ```sql
 alter sequence public.member_code_seq restart with 1;
 ```

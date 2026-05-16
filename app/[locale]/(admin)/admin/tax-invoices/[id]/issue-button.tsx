@@ -91,12 +91,14 @@ function translateError(code: string): string {
   if (code.startsWith("pdf_render_failed"))     return `สร้าง PDF ไม่สำเร็จ: ${code}`;
   if (code.startsWith("pdf_upload_failed"))     return `อัพโหลด PDF ไม่สำเร็จ: ${code}`;
   if (code.startsWith("update_failed"))         return `อัพเดทสถานะไม่สำเร็จ: ${code}`;
+  if (code.startsWith("wht_lookup_failed"))     return `อ่านข้อมูล WHT ล้มเหลว: ${code}`;
   switch (code) {
-    case "not_found":      return "ไม่พบใบกำกับภาษี";
-    case "already_issued": return "ใบนี้ออกแล้ว";
-    case "cancelled":      return "ใบนี้ถูกยกเลิกแล้ว";
-    case "zero_total":     return "ยอดเงินเป็น 0 — ออกใบกำกับภาษีไม่ได้";
-    case "no_lines":       return "ไม่มีรายการในใบ — กรุณาเพิ่มรายการก่อน";
-    default:               return code;
+    case "not_found":        return "ไม่พบใบกำกับภาษี";
+    case "already_issued":   return "ใบนี้ออกแล้ว";
+    case "cancelled":        return "ใบนี้ถูกยกเลิกแล้ว";
+    case "zero_total":       return "ยอดเงินเป็น 0 — ออกใบกำกับภาษีไม่ได้";
+    case "no_lines":         return "ไม่มีรายการในใบ — กรุณาเพิ่มรายการก่อน";
+    case "wht_cert_pending": return "ออกใบกำกับภาษีไม่ได้ — กรุณาแนบหรือยกเว้นใบ 50 ทวิ ในแผง WHT ก่อน";
+    default:                 return code;
   }
 }

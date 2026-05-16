@@ -171,7 +171,7 @@ export function ManualShipmentForm({ containerId, containerCode, closeAt }: Prop
           value={customerRef}
           onChange={(e) => setCustomerRef(e.target.value)}
           className={inputCls + " font-mono"}
-          placeholder="PR00001 หรือ UUID"
+          placeholder="PR001 หรือ UUID"
           required
           disabled={pending}
         />

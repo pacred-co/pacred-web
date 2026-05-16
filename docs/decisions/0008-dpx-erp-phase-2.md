@@ -1,13 +1,20 @@
 # ADR-0008 — DPX ERP Phase 2 — initial design draft
 
-**Status:** Draft (P-27 — initial ADR for stakeholder iteration)
-**Date:** 2026-05-16
+**Status:** Draft → **partially superseded by ADR-0010/0011/0012/0013** (V3 strategy + RBAC granular + frontend shell + V2→V3 migration). See [§ Future ADRs (updated)](#future-adrs-updated-2026-05-16-night) at the bottom.
+**Date:** 2026-05-16 (revised 2026-05-16 night with sibling ADR cross-refs)
 **Phase:** Sprint 7+ Track D
 **Owner:** เดฟ + ก๊อต + ภูม + Pacred owner (Phase 2 scope = Pacred-owner-level decision)
 
-> **This is a draft.** Per PORT_PLAN P-27 acceptance: "ADR file exists with
-> sections + at least 2 open questions for stakeholders." Iterate after
-> Pacred owner aligns on scope.
+> **2026-05-16 night update:** This DRAFT framed Phase 2 as "DPX ERP" with sub-ADRs P-37/P-38/P-39/P-40 → ADR-0009/0010/0011/0012. **In practice, ADR slots shifted** because of [ADR-0010 V2/V3 version strategy](0010-v2-v3-version-strategy.md) and [ADR-0014 customer self-service state transitions](0014-customer-self-service-state-transitions.md) reservation. The actual final numbering is:
+>
+> | Was planned | Actual ADR shipped (2026-05-16 night) |
+> |---|---|
+> | P-37 → ADR-0009 schema sketch | [ADR-0009](0009-erp-schema-sketch.md) ✓ (unchanged) |
+> | P-38 → ADR-0010 RBAC | [ADR-0011 ERP RBAC granular](0011-erp-rbac-granular.md) (DRAFT) |
+> | P-39 → ADR-0011 frontend shell | [ADR-0012 ERP frontend shell](0012-erp-frontend-shell.md) (DRAFT) |
+> | P-40 → ADR-0012 migration strategy | [ADR-0013 V2→V3 migration strategy](0013-erp-v2-v3-migration-strategy.md) (DRAFT) |
+>
+> Read this ADR for **Phase 2 vision + scope rationale**. Read ADR-0011/12/13 for **concrete RBAC + shell + migration decisions** (each has open questions for ก๊อต to lock). [ADR-0010 V2/V3 strategy](0010-v2-v3-version-strategy.md) was the over-arching frame that wasn't on the original P-37..P-40 roadmap.
 
 ---
 
@@ -180,17 +187,30 @@ Re-evaluate if `/admin/*` bundle exceeds ~2 MB after Phase 2 ships.
    transition — big-bang flip, feature-flag rollout, or service-by-service
    parallel? Affects schema migration approach + customer messaging.
 
-## Future ADRs (Track D roadmap)
+## Future ADRs (updated 2026-05-16 night)
 
-This ADR is intentionally high-level. Sub-ADRs already on the runway:
+Track D ADR slots evolved between draft (mid-day) and night session. Actual landings:
 
-- **P-37 → ADR-0009**: ERP schema sketch — candidate tables + which
-  reuse Phase 1 tables + FK relationships
-- **P-38 → ADR-0010**: ERP auth + RBAC reuse — answers Q3 above
-- **P-39 → ADR-0011**: ERP frontend shell decision — answers Option A vs B above
-- **P-40 → ADR-0012**: ERP migration strategy — answers Q5 above
+| Planned slot | Actual ADR | Status (2026-05-16 night) |
+|---|---|---|
+| P-37 ERP schema | [ADR-0009 ERP schema sketch](0009-erp-schema-sketch.md) | Draft (this remains the schema catalog for Phase 2; M1..M14 modules) |
+| P-38 RBAC | [ADR-0011 ERP RBAC granular](0011-erp-rbac-granular.md) | DRAFT — answers Q3 (hybrid role-bundle + per-role permission grants + attribute scopes) |
+| P-39 Frontend shell | [ADR-0012 ERP frontend shell](0012-erp-frontend-shell.md) | DRAFT — answers Option A vs B (same app phase 1-2; split to `erp.pacred.co` phase 3+ IF triggers fire) |
+| P-40 Migration strategy | [ADR-0013 V2→V3 migration strategy](0013-erp-v2-v3-migration-strategy.md) | DRAFT — answers Q5 (module-by-module strangler-fig, NOT big-bang) |
 
-Schedule these for Sprint 7+. Each is ~2-4h.
+Plus the V2/V3 strategy frame that emerged:
+- [ADR-0010 V2/V3 version strategy](0010-v2-v3-version-strategy.md) — Accepted — frames V2 (owner-pleaser) vs V3 (employee masterpiece, `pacred-dpx` repo). This wasn't on the original Phase 2 roadmap but is now the over-arching context for ADR-0011/12/13.
+
+ก๊อต P2 task: review + lock the 3 DRAFTs (ADR-0011/12/13). Each has 5-6 open Qs.
+
+**Open questions Q1-Q5 in this ADR (DPX scope-level)** still apply:
+- Q1 product naming (Pacred owner)
+- Q2 module priority sequencing (Pacred owner + ก๊อต) — partially answered by [ADR-0013 §"Migration order"](0013-erp-v2-v3-migration-strategy.md)
+- Q3 RBAC pattern — answered by [ADR-0011](0011-erp-rbac-granular.md)
+- Q4 external accounting integration (Pacred owner + เดฟ)
+- Q5 migration strategy — answered by [ADR-0013](0013-erp-v2-v3-migration-strategy.md)
+
+Q1 + Q4 remain Pacred-owner-level decisions — defer to scheduled owner call.
 
 ## References
 

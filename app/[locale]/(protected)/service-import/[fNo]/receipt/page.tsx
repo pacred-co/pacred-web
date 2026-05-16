@@ -85,6 +85,20 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     .neq("status", "cancelled")
     .order("created_at", { ascending: false })
     .returns<CostAdjRow[]>();
+
+  // V-A6: WHT info banner (juristic customer who withholds tax — see ADR-0015).
+  // RLS allows the customer to read OWN withholding_tax_entries row.
+  const { data: whtRow } = await supabase
+    .from("withholding_tax_entries")
+    .select("cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
+    .eq("forwarder_f_no", f.f_no ?? fNo)
+    .maybeSingle<{
+      cert_status:        "pending" | "received" | "waived";
+      wht_rate_pct:       number;
+      wht_amount_thb:     number;
+      net_expected_thb:   number;
+      gross_invoice_thb:  number;
+    }>();
   const costAdjustments = costAdjRaw ?? [];
   const totalUnpaidExtra = costAdjustments
     .filter((r) => r.status === "unpaid")
@@ -193,9 +207,53 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
                 <td className="py-2">ยอดรวมทั้งสิ้น</td>
                 <td className="text-right font-mono">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
               </tr>
+              {whtRow && (
+                <>
+                  <tr className="text-sm">
+                    <td className="py-1 text-amber-700">
+                      หัก ภาษี ณ ที่จ่าย {Number(whtRow.wht_rate_pct)}%
+                    </td>
+                    <td className="text-right font-mono text-amber-700">
+                      −฿{Number(whtRow.wht_amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-black font-bold text-base">
+                    <td className="py-1">ลูกค้าโอนสุทธิ (Net)</td>
+                    <td className="text-right font-mono text-primary-700">
+                      ฿{Number(whtRow.net_expected_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </section>
+
+        {/* V-A6: WHT info banner — juristic customer who withholds tax.
+            Visible on screen + print. Tells the customer THIS is the amount to
+            transfer, and reminds them to send the 50 ทวิ cert. */}
+        {whtRow && (
+          <section className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 space-y-2 text-sm">
+            <h3 className="font-bold text-amber-900">📋 สำหรับลูกค้านิติบุคคล (มีหัก ณ ที่จ่าย)</h3>
+            <p className="text-amber-900">
+              ยอดในใบเสร็จ (Gross) ฿{Number(whtRow.gross_invoice_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              {" — "}
+              หัก ณ ที่จ่าย {Number(whtRow.wht_rate_pct)}% (฿{Number(whtRow.wht_amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}){" — "}
+              <strong>โอนสุทธิ ฿{Number(whtRow.net_expected_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
+            </p>
+            {whtRow.cert_status === "pending" && (
+              <p className="text-xs text-amber-800">
+                ⚠️ กรุณาส่งหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) ให้ Pacred — มิเช่นนั้นจะออกใบกำกับภาษีให้ไม่ได้
+              </p>
+            )}
+            {whtRow.cert_status === "received" && (
+              <p className="text-xs text-green-700">✅ ได้รับใบ 50 ทวิ ครบแล้ว — สามารถออกใบกำกับภาษีได้</p>
+            )}
+            {whtRow.cert_status === "waived" && (
+              <p className="text-xs text-gray-700">ℹ️ ใบ 50 ทวิ ได้รับการยกเว้น (Pacred รับเป็นค่าใช้จ่าย)</p>
+            )}
+          </section>
+        )}
 
         {/* U2-4: post-delivery cost adjustments (hidden on print — admin-issued) */}
         {costAdjustments.length > 0 && (

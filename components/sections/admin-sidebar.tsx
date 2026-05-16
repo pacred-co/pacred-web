@@ -34,6 +34,15 @@ const items: NavItem[] = [
   { href: "/admin/reports/refunds",               label: "คืนเงิน",            icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
   { href: "/admin/reports/monthly-orders",        label: "ออเดอร์รายเดือน",   icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
 
+  // V-G6 analytical reports
+  { href: "/admin/reports/forwarder-volume",      label: "ปริมาณฝากนำเข้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/sales-by-rep",          label: "ยอด/Sales rep (V-G6)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/hs-code-revenue",       label: "HS-code revenue (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/user-sales-history",    label: "ประวัติยอด/ลูกค้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
+
+  // Freight stack (V-E6+)
+  { href: "/admin/freight/quotes",   label: "ใบเสนอราคา (V-E6)",   icon: <Receipt className="w-5 h-5" />, roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
+
   // Operations
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
@@ -43,6 +52,7 @@ const items: NavItem[] = [
   { href: "/admin/containers",       label: "รายการตู้ (legacy)", icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/drivers",          label: "คนขับส่งของ",       icon: <Truck className="w-5 h-5" />,           roles: ["ops"], group: "ปฏิบัติการ" },
+  { href: "/admin/driver-runs",      label: "งานของฉัน (driver)", icon: <Truck className="w-5 h-5" />,          roles: ["driver","super","ops"], group: "ปฏิบัติการ" },
   { href: "/admin/carriers",         label: "ขนส่ง (SPX/J&T/...)", icon: <Truck className="w-5 h-5" />,         roles: ["super","ops"], group: "ปฏิบัติการ" },
 
   // Finance
@@ -75,6 +85,8 @@ const items: NavItem[] = [
   { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
   { href: "/admin/audit",            label: "Audit log",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
+  { href: "/admin/settings/contacts",label: "ข้อมูลติดต่อ (V-G5)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super","accounting","sales_admin"], group: "ระบบ" },
+  { href: "/admin/settings/tos-versions", label: "TOS versions (V-G4)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super"], group: "ระบบ" },
 ];
 
 export function AdminSidebar({ roles }: { roles: AdminRole[] }) {

@@ -13,7 +13,7 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { styles, fmtBaht, COLORS } from "./styles";
 import { readThaiBaht } from "@/lib/utils/thai-number";
-import { CONTACT, ADDRESSES } from "@/components/seo/site";
+import { CONTACT, ADDRESSES, BANK } from "@/components/seo/site";
 import type { ShopOrderReceiptData } from "@/actions/service-order";
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -261,6 +261,32 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
             ({readThaiBaht(data.total_thb)})
           </Text>
         </View>
+
+        {/* Bank-transfer payment info (BANK constant — wired from site.ts after T-G3 Bundle 1) */}
+        {!isPaid && (
+          <View style={styles.bankBlock}>
+            <Text style={styles.bankTitle}>ช่องทางการชำระเงิน · โอนผ่านธนาคาร</Text>
+            <View style={styles.bankRow}>
+              <Text style={styles.bankLabel}>ธนาคาร</Text>
+              <Text style={styles.bankValue}>{BANK.name}</Text>
+            </View>
+            <View style={styles.bankRow}>
+              <Text style={styles.bankLabel}>ชื่อบัญชี</Text>
+              <Text style={styles.bankValue}>{BANK.accountName}</Text>
+            </View>
+            <View style={styles.bankRow}>
+              <Text style={styles.bankLabel}>เลขที่บัญชี</Text>
+              <Text style={[styles.bankValue, styles.bankAccountNumber]}>{BANK.accountNumber}</Text>
+            </View>
+            <View style={styles.bankRow}>
+              <Text style={styles.bankLabel}>ประเภท</Text>
+              <Text style={styles.bankValue}>{BANK.accountType}</Text>
+            </View>
+            <Text style={styles.bankNote}>
+              โอนแล้วโปรดอัปโหลดสลิปที่หน้าออเดอร์ · หรือชำระผ่าน PromptPay (ดู QR ในระบบ) · หรือชำระจาก wallet
+            </Text>
+          </View>
+        )}
 
         {/* Signature lines */}
         <View style={styles.signature}>

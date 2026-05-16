@@ -33,7 +33,6 @@ for (const line of envExample.split(/\r?\n/)) {
 const used = new Set();
 const re = /process\.env\.([A-Z_][A-Z0-9_]*)/g;
 const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".claude"]);
-const SKIP_EXT = new Set([".js.map", ".d.ts", ".test.ts"]);
 
 function shouldScan(name) {
   return /\.(ts|tsx|mjs|cjs|js)$/.test(name) && !name.endsWith(".d.ts");

@@ -3,7 +3,7 @@
 > **Authoritative copy** of company identity — legal name, tax ID, slogan, addresses, phones, emails, brand handles.
 > Code consumers (footer, invoice/receipt PDFs, JSON-LD, email signatures, FAQ) **MUST** import from [`components/seo/site.ts`](../components/seo/site.ts) — never hardcode.
 
-Last updated: 2026-05-15 (full DNA refresh per เดฟ + พี่ป๊อป brief)
+Last updated: 2026-05-17 evening (T-G3 3/5 DONE: bank ✅ · PromptPay ✅ · gateway ⚠️ Omise→Xendit+K-Biz+K-Shop change)
 
 ---
 
@@ -144,15 +144,44 @@ Last updated: 2026-05-15 (full DNA refresh per เดฟ + พี่ป๊อป
 
 ---
 
-## ⏳ Pending — owner to provide (Pacred owner call bundle)
+## 💳 Bank accounts (from พี่ป๊อป via ลูกพี่ 2026-05-17)
 
-- [ ] **Bank account + PromptPay number** (Pacred new — owner opening accounts under new entity. PCS Cargo legacy `064-174-3836` Kasikorn CANNOT be used). 🚨 Blocks: receipt PDF · wallet/deposit · tax invoice
-- [ ] **LIFF ID** — Pacred owner to create LIFF app on LINE Developer Console
-- [ ] **LINE Premium ID @pacred subscription** — confirm payment is active (else basic ID `@683wolja` fallback)
+### Primary — กระแสรายวัน (current account, biz day-to-day)
+
+| Field | Value | Code constant |
+|---|---|---|
+| **Bank name (TH)** | ธนาคารกสิกรไทย | `BANK.name` |
+| **Bank name (EN)** | Kasikornbank | `BANK.nameEn` |
+| **Account number** | `225-2-91144-0` | `BANK.accountNumber` |
+| **Account holder (TH)** | บจก. แพคเรด (ประเทศไทย) | `BANK.accountName` |
+| **Account holder (EN)** | Pacred (Thailand) Co., Ltd. | `BANK.accountNameEn` |
+| **Account type** | กระแสรายวัน (Current Account) | `BANK.accountType` / `BANK.accountTypeEn` |
+| **PromptPay linked** | tax-ID `0105564077716` (13 หลัก) → `PROMPTPAY_ID` Vercel env | n/a (env var) |
+
+### Secondary — ออมทรัพย์ (savings) — ⏳ พี่ป๊อป จะส่งให้ทีหลัง
+
+เมื่อข้อมูลครบ เพิ่ม `BANK.savings` constant ใน [`components/seo/site.ts`](../components/seo/site.ts) + section here.
+
+**Printed on:** receipt PDFs · tax-invoice PDFs · `/wallet/deposit` page (alternative to PromptPay QR).
+
+**Migration tracker:** receipts/invoices currently render w/o bank — ภูม wire `BANK.*` into [`components/pdf/forwarder-receipt.tsx`](../components/pdf/forwarder-receipt.tsx) + [`components/pdf/shop-order-receipt.tsx`](../components/pdf/shop-order-receipt.tsx) in same refactor batch as `CONTACT.*` row in §"Migration tracker" below.
+
+---
+
+## ⏳ Pending — owner to provide (T-G3 Bundle 1 — ลูกพี่ takes call · 3/5 DONE 2026-05-17)
+
+- [x] **Bank account (current)** — ✅ DONE 2026-05-17 (กสิกรไทย 225-2-91144-0 บจก.แพคเรด (ประเทศไทย) กระแสรายวัน)
+- [ ] **Bank account (savings)** — ⏳ พี่ป๊อป จะส่งให้ทีหลัง
+- [x] **PromptPay ID** — ✅ DONE 2026-05-17 (tax-ID `0105564077716` ผูกบัญชีกสิกร 225-2-91144-0) → set Vercel env `PROMPTPAY_ID=0105564077716`
+- [x] **Payment gateway pick** — ✅ DECIDED 2026-05-17: **Xendit + K-Biz + K-Shop** (Kasikorn-centric stack, owner override of Omise pre-decision). T+30d wire by ภูม per [updated D-7 matrix](decisions/d7-payment-gateway-decision-matrix.md)
+- [ ] **PDPA registration status** — required ก่อน K-sec-4 pen test (per [pen-test plan §7 Q5](audit/pen-test-plan-2026-05-16.md#7-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่))
+- [ ] **Resend API key** (`RESEND_API_KEY`) — email notification fallback (soft-degrade OK if not set)
 - [ ] **แนท sales rep own mobile** — currently shows company line
 - [ ] **Email forwarding rules** — Gmail/Workspace: forward `sales@` + `docs@` to ทีม inbox of vacation backup; `acc@` mirror to bookkeeper
+- [x] **LIFF ID** — ✅ DONE 2026-05-16 night (DV-2 — channel `2010105778` + LIFF `2010105778-SaSkkGza`)
+- [x] **LINE Premium ID @pacred subscription** — ✅ Confirmed active (set up DV-2 walkthrough)
 
-> Tracked also in [`PORT_PLAN.md`](PORT_PLAN.md) Part Q "Pacred owner call bundle".
+> Tracked also in [`PORT_PLAN.md`](PORT_PLAN.md) Part Q "Pacred owner call bundle" + [`runbook/t-g3-popop-call-script.md`](runbook/t-g3-popop-call-script.md).
 
 ---
 

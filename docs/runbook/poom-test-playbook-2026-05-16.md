@@ -124,7 +124,7 @@
 - [ ] `/admin/rates` → 3 cards ทุกใบ live
 - [ ] `/admin/rates/general?group=PR` → tab ลูกค้ากลุ่ม → แก้ tier1/2/3 inline → save dirty-only → delete confirm; add new row form
 - [ ] `/admin/rates/vip?group=PR` → flat rate; เพิ่มใหม่ลอง upsert (ใส่คีย์เดิม ค่าใหม่ → ทับ)
-- [ ] `/admin/rates/custom-user` → add ด้วย member_code (PR00001) → ดูจัดกลุ่มตามลูกค้า; กรอง `?member=PR00001`
+- [ ] `/admin/rates/custom-user` → add ด้วย member_code (PR001) → ดูจัดกลุ่มตามลูกค้า; กรอง `?member=PR001`
 
 ### Q. Daily container bulletin (U2-1)
 - [ ] `/admin/warehouse/bulletin` → ปุ่ม 📋 copy-to-clipboard → paste ไหนก็ได้ดูฟอร์แมท
@@ -155,6 +155,170 @@
 ### W. **NEW** — /admin/dashboard redirect
 - [ ] เปิด `/admin/dashboard` → ควร redirect → `/admin` ทันที (ไม่เห็นหน้า stub เดิม)
 - [ ] login เป็น admin → ควรไป `/admin` ตรง ๆ ไม่ผ่าน /admin/dashboard
+
+### X. **NEW (CT-7)** — Driver "งานของฉัน" home
+- [ ] login เป็น admin role=driver → sidebar เห็น "งานของฉัน (driver)" ใน group ปฏิบัติการ
+- [ ] เปิด `/admin/driver-runs` → 2 section: 🛻 งานที่ต้องทำ (status 1+2) · ✅ ส่งสำเร็จวันนี้ (status 4)
+- [ ] Status 1 ("รอรับงาน") → ปุ่ม "✓ รับงาน" → กด → status flip 1→2 + accepted_at stamp
+- [ ] Status 2 ("รับงานแล้ว") → 2 ปุ่ม: 📦 สแกนส่ง (→/admin/barcode/driver) · ✅ ยืนยันส่งสำเร็จ (confirm → status flip 2→4)
+- [ ] ลูกค้าทุก row: tap เบอร์โทร → tel: link · ถ้ามี cargo_shipment ผูก → 🚚 ดู timeline (→/shipments/[code])
+- [ ] login เป็น admin role=ops หรือ super → เปิด /admin/driver-runs เห็นของตัวเอง (ของ ops/super); สามารถ accept/complete แทน driver ได้ (oversight)
+
+### Y. **NEW (LP-6)** — ShopOrderReceipt PDF coverage
+- [ ] `pnpm test` → ดูบรรทัด "ShopOrderReceipt (LP-6)" — 9 asserts (3 cases × 3 assertions each) ผ่านครบ
+- [ ] ลองเปิด `/api/pdf/shop-order/<h_no>` ใน browser ของลูกค้าที่เป็นนิติบุคคล (ที่ตั้ง bill_to_name_override) → PDF render ชื่อใน override (ไม่ใช่ company_name)
+
+### Z. **NEW** — /admin/learning training card redirects
+- [ ] เปิด `/admin/learning` → card "การอบรม → HR" → กดแล้วไป /admin/hr/training (blue accent + "→ เปิดในโมดูล HR" hint)
+- [ ] อีก 3 cards (rules/news/customer-terms) → ยังไปยัง /admin/learning/* (Phase H placeholders)
+
+### AA. **NEW (T-G3 follow-up)** — BANK constants wired into PDFs
+- [ ] เปิด `/api/pdf/forwarder/<f_no>` → ดู bank block ใต้ totals (ก่อน signature) → ตัวเลข `225-2-91144-0` ใหญ่/หนา
+- [ ] `/api/pdf/shop-order/<h_no>` (status ≠ completed = invoice) → bank block ปรากฏ
+- [ ] เดียวกัน แต่ status=completed (paid receipt) → **bank block ไม่ปรากฏ** (พิมพ์ "ชำระจาก wallet")
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ status=issued → bank block bilingual TH/EN ทุก field
+
+### BB. **NEW (V-A6) — Withholding tax (ADR-0015)** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0044 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0044_withholding_tax.sql` ใน Supabase Studio (หรือ `supabase db push`) → ดู table `withholding_tax_entries` + bucket `wht-certs` ใน Storage
+- [ ] ทดสอบ partial-unique indexes: insert WHT row ซ้ำกับ order_h_no เดียว → ควร error 23505
+
+**Admin flow (super หรือ accounting):**
+- [ ] เปิด `/admin/tax-invoices/[id]` ของใบ pending → เห็นแผง "🧾 ภาษีหัก ณ ที่จ่าย (WHT)" สีอำพัน
+- [ ] กรอก gross/base/rate → ดู Net คำนวณ live → กด "📝 บันทึก WHT + เริ่ม gate"
+- [ ] แผงเปลี่ยนเป็น status `รอใบหัก (gate ON)` พร้อม 4 stats (Gross/Base/Amount/Net)
+- [ ] กด "ออกใบกำกับภาษี" → fail ด้วย error "กรุณาแนบหรือยกเว้นใบ 50 ทวิ ในแผง WHT ก่อน"
+- [ ] อัพโหลด PDF/JPG cert + เลขที่ 50 ทวิ → status flip เป็น `ได้รับใบหัก` (เขียว)
+- [ ] กด "ออกใบกำกับภาษี" อีกครั้ง → ✅ ออกสำเร็จ + PDF มี WHT line + Net total + bank block
+- [ ] เปิด WHT entry ใหม่อีก order → ลองกด "ยกเว้นใบหัก" → กรอกเหตุผล ≥5 ตัวอักษร → status `ยกเว้น`
+- [ ] เปิด WHT entry ใหม่อีก order → ลอง "ลบ WHT" ขณะ pending → ลบสำเร็จ; ลองอีกที (ไม่มี row) → form กลับมา
+
+**Customer flow (open as the customer who owns the order):**
+- [ ] เปิด `/service-import/<f_no>/receipt` ของออเดอร์ที่มี WHT row → เห็น banner สีอำพัน "📋 สำหรับลูกค้านิติบุคคล" + ตาราง totals แสดง −WHT + Net
+- [ ] เดียวกัน `/service-order/<h_no>/receipt`
+- [ ] cert_status='pending' → banner เตือน "กรุณาส่ง 50 ทวิ"
+- [ ] cert_status='received' → banner เขียว "ได้รับใบ 50 ทวิ ครบแล้ว"
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`withholding_tax_entry` → เห็น actions: wht.create / wht.cert_upload / wht.cert_received / wht.cert_waive / wht.cancel + payload ครบ
+
+**PDF rendering:**
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ issued + มี WHT received → ดู PDF: "หัก ภาษี ณ ที่จ่าย N%" + "คงเหลือชำระสุทธิ (Net)" + Thai-baht spell-out ของ Net
+- [ ] Grand total (gross) **ต้องไม่เปลี่ยน** — RD Code 86
+
+**Negative cases / edge:**
+- [ ] ลูกค้า personal (ไม่มี WHT row) → ออกใบกำกับภาษีได้ปกติ ไม่มี gate, ไม่มี banner
+- [ ] WHT row exist + status=waived → ออกใบกำกับภาษีได้, PDF มี WHT block แต่ไม่มีหมายเลขใบ 50 ทวิ
+- [ ] ลบ WHT entry หลัง cert_status=received → fail "ลบไม่ได้ — สถานะไม่ใช่ pending" (preserved for audit)
+
+### CC. **NEW (V-E10) — QA/QC inspection** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0045 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0045_freight_qa_inspections.sql` ใน Supabase Studio → ดู table `freight_qa_inspections` + sequence `qa_inspection_seq` + function `next_qa_inspection_no` + bucket `qa-inspection-photos`
+- [ ] ทดสอบ CHECK constraints: insert fail_major พร้อม damage_level=null → error; insert waived พร้อม waived_reason=null → error
+
+**Admin pending queue (warehouse + super + accounting):**
+- [ ] เปิด `/admin/warehouse/qa-inspections` → เห็น "🕓 คิวรอตรวจ" แสดง cargo_shipments ที่ status=`arrived_th` แต่ไม่มี inspection
+- [ ] กด "บันทึกการตรวจ" → ไปหน้า `/admin/warehouse/qa-inspections/new?shipment=...`
+
+**Create inspection (4 outcome paths):**
+- [ ] **pass** → กรอก outcome=pass, missing_items=0, upload 1-2 รูป → redirect ไป detail; QA-YYMMDD-NNNN ขึ้น; รูปแสดงในแกลเลอรี
+- [ ] **fail_minor** → กรอก outcome=fail_minor, damage_level=cosmetic, missing_items=2, notes="กล่องบุบ" → บันทึก + ลูกค้าได้ notification "ตรวจพบปัญหาเล็กน้อย" + customer_notified_at ถูกตั้งค่า
+- [ ] **fail_major** → กรอก outcome=fail_major, damage_level=partial → notification severity=error ("ตรวจพบปัญหาสำคัญ")
+- [ ] **waived** (super only) → ลอง role=accounting → fail; ลอง role=super → กรอก waived_reason ≥5 → บันทึก; ดู detail page เห็น banner สีแดง "⚠️ ยกเว้น (waived)" + เหตุผล
+
+**Customer view:**
+- [ ] เปิด `/shipments/[code]` ของลูกค้าที่ shipment ถูกตรวจ → เห็น QA status panel สีตาม outcome (เขียว/เหลือง/แดง/เทา)
+- [ ] fail_major → ดู "📞 กรุณาติดต่อทีมงาน" CTA
+- [ ] รูปไม่อยู่ใน customer view (V1 — admin-only). Path มี cargo_shipment_id แต่ signed URL render บน admin detail page เท่านั้น
+
+**Audit + photo:**
+- [ ] `/admin/audit` → กรอง target_type=`qa_inspection` → เห็น actions: qa_inspection.create / qa_inspection.photo_upload / qa_inspection.notify_failed (ถ้ามี)
+- [ ] เปิด detail page → คลิกรูป → signed URL เปิดในแท็บใหม่; ลอง paste URL ใน private window → ใช้งานได้ภายใน 60 วินาที
+
+**Gate readiness (sanity, no UI yet):**
+- [ ] เปิด server console → `await isCargoShipmentQaPassed("<uuid-with-pass>")` → true
+- [ ] เดียวกัน with "<uuid-with-fail_major>" → false
+- [ ] เดียวกัน with "<uuid-no-inspection>" → false
+- [ ] เมื่อ V-E7 ships, billing flow จะใช้ helper นี้ block invoice issuance
+
+### DD. **NEW (V-G5) — Org contacts management** ⚠️ **PRE-FLIGHT: รัน migration 0046 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0046_org_contacts.sql` ใน Supabase Studio → ดู table `org_contacts` + RLS policies (public read active-only, admin write super/accounting/sales_admin)
+
+**Admin CRUD (super):**
+- [ ] เปิด `/admin/settings/contacts` → tab "อีเมล" active by default; เห็น tabs ครบ 7 (โดเมน/อีเมล/LINE OA/โทรศัพท์/WeChat/Social/ที่อยู่) + count badges
+- [ ] กด "+ เพิ่มข้อมูลติดต่อ" → form ปรากฏ → กรอก label="ฝ่ายขาย", value="sales@pacred.co", department="ขาย", order=0 → ✓ เพิ่ม
+- [ ] Row ใหม่ปรากฏในตาราง + count tab "อีเมล" เพิ่ม 1
+- [ ] กดปุ่ม "✓ เปิด" → flip เป็น "○ ปิด" (rgb opacity ลด); กดอีกครั้ง → กลับ
+- [ ] กด "แก้ไข" → inline form → เปลี่ยน value → ✓ บันทึก → ค่าใหม่ปรากฏ + audit log
+- [ ] กด "ลบ" → ปุ่ม "✓ ยืนยันลบ" + "ยกเลิก" → ยกเลิก → ไม่เกิดอะไร; ยืนยัน → row หายไป
+
+**Role gating:**
+- [ ] role=accounting → เข้า `/admin/settings/contacts` ได้ + แก้ไขได้
+- [ ] role=sales_admin → เข้าได้ + แก้ไขได้
+- [ ] role=ops → 404 (ไม่ allowed)
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`org_contact` → เห็น actions org_contact.create / org_contact.update (มี before+patch) / org_contact.delete (มี before snapshot)
+
+**Customer-side (V-G5.1 not shipped yet):**
+- [ ] Footer + contact-us page ยังใช้ constants ใน `components/seo/site.ts` — ไม่เปลี่ยนพฤติกรรม
+- [ ] DB rows ที่เพิ่ม **ไม่กระทบ** หน้า public ใดๆ ใน V1 — สามารถ test ได้ปลอดภัยบน prod
+
+### EE. **NEW (V-G6) — 4 analytical admin reports** (no migration, additive)
+
+**Roles eligible:** super, ops, accounting (+ sales_admin for sales-by-rep + user-sales-history).
+
+- [ ] `/admin/reports` → ดู section ใหม่ "📊 รีพอร์ตวิเคราะห์ (V-G6)" มี 4 quick-cards
+- [ ] **forwarder-volume**: เปิด → เห็น aggregations (warehouse × transport_type) + summary cards + table + CSV button; เปลี่ยน 7d/30d/90d/365d filter; ลอง CSV download
+- [ ] **sales-by-rep**: เปิด → เห็น list ทุก rep (ที่มี profile.sales_admin_id) + ยอด fw/so/yp + รวม lifetime + เฉลี่ยต่อ rep; ลูกค้าไม่มี rep จัดกลุ่ม "(ไม่มี sales rep)"
+- [ ] **hs-code-revenue**: เปิด → เห็น HS codes sorted by value desc; แต่ละแถวคลิก hs_code → ไป containers-hs ที่ filter HS นั้น; ถ้ายังไม่มี container_hs_lines เลย → empty state link ไป /admin/containers
+- [ ] **user-sales-history** (entry): เปิด → เห็น top 50 ลูกค้า 90 วันล่าสุด sorted by revenue; search box → กรอก PR-code หรือ email บางส่วน → redirect ไป detail
+- [ ] **user-sales-history/[customer_id]**: หลัง search → เห็น customer info card + summary cards (fw/so/yp/lifetime) + chronological timeline + คลิก ref → ไปหน้า detail ของ transaction นั้น
+- [ ] Sidebar group "รีพอร์ตวิเคราะห์" มี 4 entries ใหม่
+
+**Performance check:** แต่ละ report ควร load < 2s บน data 1 ปี
+
+### FF. **NEW (V-E6) — Freight quotation workflow V1** ⚠️ **PRE-FLIGHT: รัน migration 0048 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0048_freight_quotes.sql` ใน Supabase Studio → ดู tables `freight_quotes` + `freight_quote_items` + sequence `freight_quote_seq` + function `next_freight_quote_no` + RLS policies
+- [ ] ทดสอบ CHECK constraints: insert rejected พร้อม rejected_reason='ab' → error (≥3 ตัวอักษร); insert approved พร้อม approved_by=null → error
+
+**Admin full lifecycle (super):**
+- [ ] เปิด `/admin/freight/quotes` → ปุ่ม "➕ สร้างใบใหม่"
+- [ ] กรอก buyer + logistics + financial → "✓ บันทึก + ไปเพิ่ม line items" → redirect ไป detail พร้อม `FQYYMMDD-NNNN` quote_no
+- [ ] ในหน้า detail สถานะ `ร่าง` → "➕ เพิ่ม line item" → กรอก desc/qty/unit/ราคา → บันทึก → row ปรากฏ + ยอดอัพเดต auto
+- [ ] แก้ line item inline → "✓" → ยอดอัพเดต
+- [ ] ลอง "📤 ส่งให้ super อนุมัติ" โดยไม่มี item → error "ต้องมี line item อย่างน้อย 1 รายการ"
+- [ ] เพิ่ม item อย่างน้อย 1 → "📤 ส่งให้ super อนุมัติ" → สถานะ `รออนุมัติ` (items lock, ปุ่ม inline-edit หายไป)
+- [ ] กด "✓ อนุมัติ" → สถานะ `อนุมัติแล้ว` + approved_at/approved_by_admin_id ปรากฏใน audit timeline
+- [ ] กด "📨 ส่งให้ลูกค้า" → สถานะ `ส่งให้ลูกค้า`
+- [ ] กด "✓ ลูกค้าตอบรับ" → สถานะ `ลูกค้ายืนยัน`
+- [ ] กด "🚚 แปลงเป็น freight shipment (V-E1)" → ได้ error `freight_shipments_table_not_ready` (รอ V-E1 ship migration 0049)
+
+**Reject flow:**
+- [ ] สร้างใบใหม่ → ส่งอนุมัติ → "✗ ปฏิเสธ" → ลองกรอกเหตุผล < 3 ตัวอักษร → ปุ่มยืนยัน disabled → กรอกครบ → "✓ ยืนยันปฏิเสธ" → สถานะ `ปฏิเสธ` + banner สีแดงแสดงเหตุผล + audit log มี action `freight_quote.reject`
+
+**RBAC negative cases:**
+- [ ] role=ops → เข้า list + create + edit draft ได้; กด "✓ อนุมัติ" → ปุ่มไม่ปรากฏ; แทนที่เห็นข้อความ "รอ super อนุมัติ (คุณไม่มี permission)"
+- [ ] role=sales_admin → เข้า + create + ส่งอนุมัติ + send + mark accepted ได้; approve/reject ปุ่มไม่ปรากฏ
+- [ ] role=warehouse → 404 (ไม่ allowed)
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`freight_quote` → เห็น action สำหรับทุก mutation: freight_quote.create / item_add / item_update / item_delete / submit_for_approval / approve / reject / send / mark_accepted / mark_expired
+
+**List + search:**
+- [ ] ทดสอบ filter chips ที่ /admin/freight/quotes → กรอง draft/pending_approval/approved/sent/accepted/rejected/expired
+- [ ] search box → กรอก quote_no บางส่วน หรือ buyer_name → filter ทำงาน
+
+**Customer-side (V-E6.1 not shipped yet):**
+- [ ] /(protected)/freight/quotes ยังไม่มี — V-E6.1 follow-up
+- [ ] PDF endpoint /api/freight-quote/[id] ยังไม่มี — V-E6.1
+- [ ] LINE notification on send — V-E6.1
 
 ---
 

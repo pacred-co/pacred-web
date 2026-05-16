@@ -337,7 +337,7 @@ export default async function AdminReportsPage({
       {/* V-B1 quick-link cards — at-a-glance operational health */}
       <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h2 className="font-bold text-sm">📋 รีพอร์ตเฉพาะกิจ</h2>
+          <h2 className="font-bold text-sm">📋 รีพอร์ตเฉพาะกิจ (V-B1)</h2>
           <span className="text-[10px] text-muted">เปิดดูรายชื่อ + ดาวน์โหลด CSV</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
@@ -347,6 +347,20 @@ export default async function AdminReportsPage({
           <QuickCard href="/admin/reports/debtors"                 label="ลูกค้าติดหนี้"      count={debtorsCnt.count ?? 0}          highlight />
           <QuickCard href="/admin/reports/refunds"                 label="คืนเงิน 30 วัน"      count={refundsLast30Cnt.count ?? 0} />
           <QuickCard href="/admin/reports/monthly-orders"          label="ออเดอร์เดือนนี้"     count={monthlyOrdersCnt.count ?? 0} />
+        </div>
+      </section>
+
+      {/* V-G6 analytical reports (additive — for accounting + sales planning) */}
+      <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-bold text-sm">📊 รีพอร์ตวิเคราะห์ (V-G6)</h2>
+          <span className="text-[10px] text-muted">aggregations + drill-down</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <QuickCard href="/admin/reports/forwarder-volume"        label="ปริมาณฝากนำเข้า"     count={0} note="ต้นทาง × ขนส่ง" />
+          <QuickCard href="/admin/reports/sales-by-rep"            label="ยอดต่อ sales rep"     count={0} note="30 วัน default" />
+          <QuickCard href="/admin/reports/hs-code-revenue"         label="HS-code revenue"      count={0} note="90 วัน default" />
+          <QuickCard href="/admin/reports/user-sales-history"      label="ประวัติยอด/ลูกค้า"   count={0} note="drill-down" />
         </div>
       </section>
 

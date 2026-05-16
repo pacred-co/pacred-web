@@ -27,6 +27,8 @@ import { Font, renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 import type { ReactElement } from "react";
 import { ForwarderReceipt, type ForwarderReceiptData } from "@/components/pdf/forwarder-receipt";
 import { TaxInvoice, type TaxInvoiceData } from "@/components/pdf/tax-invoice";
+import { ShopOrderReceipt } from "@/components/pdf/shop-order-receipt";
+import type { ShopOrderReceiptData } from "@/actions/service-order";
 
 // Inline font registration mirroring lib/pdf/register-fonts.ts (avoid
 // importing it because it depends on `server-only` which is a Next.js
@@ -154,6 +156,87 @@ function cancelledTaxInvoice(): TaxInvoiceData {
   return t;
 }
 
+// ── ShopOrderReceipt fixtures (LP-6 coverage) ──
+function baseShopOrder(): ShopOrderReceiptData {
+  return {
+    h_no:                  "ONS260516-001",
+    status:                "completed",
+    created_at:            "2026-05-16T09:00:00Z",
+    date_awaiting_payment: "2026-05-16T09:30:00Z",
+    payment_due_at:        "2026-05-23T09:30:00Z",
+    date_completed:        "2026-05-16T11:00:00Z",
+    yuan_rate_locked:      5.1234,
+    subtotal_cny:          200,
+    domestic_china_cny:    50,
+    service_fee:           50,
+    total_thb:             1330,
+    free_shipping:         false,
+    crate:                 false,
+    warehouse_china:       "guangzhou",
+    transport_type:        "truck",
+    bill_to_name_override: null,
+    ship_first_name:       "สมหญิง",
+    ship_last_name:        "พร้อมส่ง",
+    ship_phone:            "0823456789",
+    ship_phone2:           null,
+    ship_address_line:     "456 ถนนพหลโยธิน",
+    ship_sub_district:     "จตุจักร",
+    ship_district:         "จตุจักร",
+    ship_province:         "กรุงเทพฯ",
+    ship_postal_code:      "10900",
+    customer: {
+      member_code:     "PR042",
+      first_name:      "สมหญิง",
+      last_name:       "พร้อมส่ง",
+      email:           "test@pacred.test",
+      phone:           "0823456789",
+      account_type:    "personal",
+      company_name:    null,
+      tax_id:          null,
+      company_address: null,
+    },
+    items: [
+      {
+        id:                  "i1",
+        provider:            "1688",
+        shop_name:           "Test Shop 测试",
+        title:               "เสื้อยืดสีดำ ขนาด L",
+        color:               "ดำ",
+        size:                "L",
+        price_cny:           50,
+        amount:              4,
+        domestic_china_cny:  50,
+        shipping_number:     "1688-ORDER-12345",
+        tracking_number:     "SF1234567890",
+      },
+    ],
+  };
+}
+
+function juristicShopOrderWithOverride(): ShopOrderReceiptData {
+  const o = baseShopOrder();
+  o.bill_to_name_override = "บริษัท ผู้ซื้อจริง จำกัด ฯ";  // V-C2 override
+  o.customer = {
+    ...o.customer,
+    account_type:    "juristic",
+    company_name:    EDGE_NAME,
+    tax_id:          EDGE_BUYER_TAX_ID,
+    company_address: EDGE_ADDRESS,
+  };
+  o.items = [
+    { id: "i1", provider: "1688",   shop_name: "Shop A 商店",   title: "เสื้อยืดสั่งทำ ฯลฯ ๒๓ สี",      color: "ดำ ก่ก้",         size: "XXL",      price_cny: 89.5,  amount: 100, domestic_china_cny: 200, shipping_number: "12345", tracking_number: null },
+    { id: "i2", provider: "taobao", shop_name: "Shop B ロト",    title: "หน้ากากผ้าฤดูร้อน",            color: null,             size: null,        price_cny: 35.5,  amount: 50,  domestic_china_cny: null as unknown as number, shipping_number: null,    tracking_number: "TH987654321" },
+  ];
+  return o;
+}
+
+function pendingShopOrder(): ShopOrderReceiptData {
+  const o = baseShopOrder();
+  o.status = "awaiting_payment";
+  o.date_completed = null;
+  return o;
+}
+
 // ────────────────────────────────────────────────────────────
 // Run tests
 // ────────────────────────────────────────────────────────────
@@ -187,6 +270,11 @@ async function renderAndAssert(label: string, doc: ReactElement<DocumentProps>):
   await renderAndAssert("base issued",      <TaxInvoice data={baseTaxInvoice()} />);
   await renderAndAssert("edge Thai chars",  <TaxInvoice data={edgeTaxInvoice()} />);
   await renderAndAssert("cancelled (watermark)", <TaxInvoice data={cancelledTaxInvoice()} />);
+
+  console.log("  ShopOrderReceipt (LP-6)");
+  await renderAndAssert("paid (personal)",                          <ShopOrderReceipt data={baseShopOrder()} />);
+  await renderAndAssert("invoice (awaiting_payment)",               <ShopOrderReceipt data={pendingShopOrder()} />);
+  await renderAndAssert("juristic + V-C2 override + edge Thai",     <ShopOrderReceipt data={juristicShopOrderWithOverride()} />);
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);
