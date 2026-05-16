@@ -11,6 +11,7 @@ import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NotificationBell } from "@/components/notification-bell";
 import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
@@ -68,11 +69,15 @@ export function NavBar() {
           {/* Social follow */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="hidden lg:inline text-white/70 text-[12px] font-medium mr-0.5 whitespace-nowrap">{t("followUs")}</span>
-            <a href="/line" target="_blank" rel="noopener noreferrer"
+            <TrackedExternalLink
+              href="/line"
+              cta="line_consult"
+              surface="navbar"
               aria-label="LINE Official"
-              className="text-white hover:opacity-70 transition-opacity">
+              className="text-white hover:opacity-70 transition-opacity"
+            >
               <LineIcon className="h-[18px] w-[18px]" />
-            </a>
+            </TrackedExternalLink>
             <a href="https://www.facebook.com/PacredShippingCustomsClearanceImportExport/" target="_blank" rel="noopener noreferrer"
               aria-label="Facebook"
               className="hover:opacity-70 transition-opacity">

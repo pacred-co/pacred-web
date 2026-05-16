@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useTranslations } from "next-intl";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const GAP = 20;
 const CARD_WIDTH = 240;
@@ -59,14 +60,15 @@ function SalesCard({ person }: { person: ResolvedPerson }) {
         <p className="text-[11px] font-medium text-primary-600 leading-tight">{person.role}</p>
         <p className="text-[11px] text-muted leading-snug line-clamp-1">{person.tagline}</p>
         <p className="text-[13px] font-semibold text-foreground">{person.phone}</p>
-        <a
+        <TrackedExternalLink
           href="/line"
-          target="_blank"
-          rel="noopener noreferrer"
+          cta="line_consult"
+          surface="sales_carousel"
+          ctaProps={{ rep: person.name }}
           className="mt-auto w-full rounded-lg bg-[#06C755] py-1.5 text-[11px] font-semibold text-white text-center hover:bg-[#05a548] transition-colors"
         >
           {person.button}
-        </a>
+        </TrackedExternalLink>
       </div>
     </div>
   );

@@ -23,6 +23,7 @@ import {
 import { LineIcon } from "@/components/icons/social-icons";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
@@ -338,10 +339,10 @@ export default async function CustomsClearancePage({
              (mode cards → process → LINE conversion CTA funnel). */}
         <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="customs_addline_banner"
               aria-label="สินค้าติดด่าน? ทักไลน์ Pacred Shipping ปรึกษาฟรี รู้ผลใน 1 ชม."
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
@@ -405,7 +406,7 @@ export default async function CustomsClearancePage({
                   </div>
                 </div>
               </div>
-            </a>
+            </TrackedExternalLink>
           </div>
         </section>
 
@@ -469,10 +470,10 @@ export default async function CustomsClearancePage({
         {/* ─── Add-LINE banner #2 — duplicate placed after Why Pacred per ปอน 2026-05-16 */}
         <section className="relative pt-1.5 md:pt-3 pb-1 md:pb-2">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="customs_addline_banner_2"
               aria-label="สินค้าติดด่าน? ทักไลน์ Pacred Shipping ปรึกษาฟรี รู้ผลใน 1 ชม."
               className="group block relative max-w-[1100px] mx-auto no-underline"
             >
@@ -536,7 +537,7 @@ export default async function CustomsClearancePage({
                   </div>
                 </div>
               </div>
-            </a>
+            </TrackedExternalLink>
           </div>
         </section>
 
@@ -590,13 +591,15 @@ export default async function CustomsClearancePage({
                 />
 
                 {/* LINE click overlay — sits behind partner logos (z-10 < logos z-20) */}
-                <a
+                <TrackedExternalLink
                   href={LINE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  cta="line_consult"
+                  surface="customs_guarantee_banner"
                   aria-label="ทักไลน์ Pacred Shipping ปรึกษาเคลียร์ของฟรี"
                   className="absolute inset-0 z-10"
-                />
+                >
+                  <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+                </TrackedExternalLink>
 
                 <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
                   <div className="min-w-0 py-3 md:py-3">
@@ -703,10 +706,10 @@ export default async function CustomsClearancePage({
                 </div>
               </Link>
 
-              <a
+              <TrackedExternalLink
                 href={LINE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                cta="line_consult"
+                surface="customs_guarantee_cta"
                 className="group relative overflow-hidden rounded-2xl border border-green-200 bg-white shadow-[0_8px_22px_-10px_rgba(6,199,85,0.20)] hover:shadow-[0_14px_30px_-8px_rgba(6,199,85,0.35)] hover:-translate-y-0.5 transition-all duration-300"
               >
                 <div className="flex items-center gap-2 md:gap-4 px-2.5 md:px-5 py-2.5 md:py-4">
@@ -727,7 +730,7 @@ export default async function CustomsClearancePage({
                     </p>
                   </div>
                 </div>
-              </a>
+              </TrackedExternalLink>
             </div>
           </div>
         </section>

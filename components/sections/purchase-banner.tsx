@@ -6,6 +6,7 @@ import { X, Phone, Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { trackCtaClick } from "@/lib/analytics";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
 
@@ -45,12 +46,12 @@ export function PurchaseBanner() {
           <div className="relative w-full min-h-[220px] md:min-h-[220px] rounded-[28px] overflow-hidden bg-[#06c755] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
 
             {/* Background */}
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="purchase_banner"
+              ctaProps={{ position: "banner_image" }}
               aria-label={t("lineAria")}
-              onClick={() => trackCtaClick("banner_line", "home_purchase_banner", { surface: "banner_image" })}
               className="absolute inset-0 z-[1] block"
             >
               <Image
@@ -67,7 +68,7 @@ export function PurchaseBanner() {
                 className="object-cover object-center block md:hidden"
                 priority
               />
-            </a>
+            </TrackedExternalLink>
 
             {/* Dark gradient overlay — left side for text readability */}
             <div
@@ -202,17 +203,18 @@ export function PurchaseBanner() {
                     {card.phone}
                   </a>
 
-                  <a
+                  <TrackedExternalLink
                     href={LINE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    cta="line_consult"
+                    surface="purchase_banner"
+                    ctaProps={{ position: "sales_modal", rep: card.name }}
                     className="w-full flex items-center justify-center gap-1.5 min-h-[38px] rounded-[10px] bg-gray-100 text-[#111827] text-[13px] font-bold mt-auto hover:bg-red-600 hover:text-white transition-colors"
                   >
                     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
                     </svg>
                     {card.button}
-                  </a>
+                  </TrackedExternalLink>
                 </div>
               ))}
             </div>

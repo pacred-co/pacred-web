@@ -54,7 +54,7 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "services_import_china";
+const SURFACE = "import_china_landing";
 
 const PATH = "/services/import-china";
 const NS = "seo.services.importChina";
@@ -397,7 +397,7 @@ export default async function ImportChinaPage({
             </h1>
 
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย รถ/เรือ/แอร์ · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ <span className="text-primary-600/80 font-bold">ทีมล่ามจีนปิดดีลในนามคุณ</span>
+              บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย รถ/เรือ/แอร์ · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ — <span className="text-primary-600/80 font-bold">ราคาเริ่มต้น 40฿/kg · ทีมล่ามจีนปิดดีลในนามคุณ</span>
             </h2>
 
             {/* LINE attention banner — primary CTA above the fold */}

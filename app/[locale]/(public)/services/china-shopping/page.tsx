@@ -47,7 +47,7 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "services_china_shopping";
+const SURFACE = "china_shopping_landing";
 
 const PATH = "/services/china-shopping";
 const NS = "seo.services.chinaShopping";
@@ -331,7 +331,7 @@ export default async function ChinaShoppingPage({
             </h1>
 
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการฝากสั่งของจีนแบบมืออาชีพ — ทีมล่ามจีนปิดดีลกับโรงงาน · ตรวจสินค้าก่อนส่ง · ฝากโอนหยวน · รวมส่งคุ้ม · ใบกำกับภาษีครบ <span className="text-primary-600/80 font-bold">เริ่มจาก 0 ก็ทำได้</span>
+              บริการฝากสั่งของจีนแบบมืออาชีพ — ทีมล่ามจีนปิดดีลกับโรงงาน · ตรวจสินค้าก่อนส่ง · ฝากโอนหยวน · รวมส่งคุ้ม · ใบกำกับภาษีครบ — <span className="text-primary-600/80 font-bold">ค่าบริการฝากสั่งเริ่ม 3% · เริ่มจาก 0 ก็ทำได้</span>
             </h2>
 
             {/* LINE attention banner */}

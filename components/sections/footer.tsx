@@ -2,6 +2,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 // Brand SVG icons (inline)
 function IconYoutube({ className }: { className?: string }) {
@@ -124,15 +125,15 @@ export function Footer() {
               >
                 <IconFacebook className="w-[18px] h-[18px]" />
               </a>
-              <a
+              <TrackedExternalLink
                 href={LINE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+                cta="line_consult"
+                surface="footer"
                 aria-label="LINE"
                 className="w-9 h-9 rounded-full bg-[#111827] dark:bg-white/10 text-white flex items-center justify-center hover:bg-primary-600 transition-colors"
               >
                 <IconLine className="w-[18px] h-[18px]" />
-              </a>
+              </TrackedExternalLink>
               <a
                 href={TIKTOK_URL}
                 target="_blank"
@@ -154,10 +155,11 @@ export function Footer() {
             </div>
 
             {/* QR code */}
-            <a
+            <TrackedExternalLink
               href={LINE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              cta="line_consult"
+              surface="footer"
+              ctaProps={{ position: "qr_code" }}
               className="inline-block group"
             >
               <div className="relative w-[100px] h-[100px] bg-white border border-border rounded-lg p-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.06)] group-hover:shadow-[0_6px_18px_rgba(179,0,0,0.15)] group-hover:border-primary-300 transition-all">
@@ -171,7 +173,7 @@ export function Footer() {
               <p className="mt-2 text-[11px] font-black text-[#111827] dark:text-white text-center tracking-wider">
                 066-131-0253
               </p>
-            </a>
+            </TrackedExternalLink>
           </div>
 
           {/* Col 2 — About */}

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
+import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 // Pacred main office line — single number for mobile FAB (per ปอน 2026-05-17,
 // no random sales-rep rotation).
@@ -159,16 +160,16 @@ export function FloatingTabs() {
         <span className="hidden sm:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
           {t("askMore")}
         </span>
-        <a
+        <TrackedExternalLink
           href="/line"
-          target="_blank"
-          rel="noopener noreferrer"
+          cta="line_consult"
+          surface="floating_tabs"
           suppressHydrationWarning
           className="w-[52px] h-[52px] md:w-[70px] md:h-[70px] rounded-full bg-[#06C755] shadow-lg flex items-center justify-center hover:bg-[#05a548] transition-colors shrink-0 text-white"
           aria-label={t("chatAria")}
         >
           <LineIcon className="h-7 w-7 md:h-9 md:w-9" />
-        </a>
+        </TrackedExternalLink>
       </div>
     </>
   );

@@ -35,9 +35,6 @@ export const metadata: Metadata = {
       "en-US": "/en",
       "x-default": "/",
     },
-    types: {
-      "application/rss+xml": "/feed.xml",
-    },
   },
   openGraph: {
     title: DEFAULT_TITLE,

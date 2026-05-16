@@ -43,7 +43,7 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "services_import_china_fcl";
+const SURFACE = "fcl_landing";
 
 const PATH = "/services/import-china-fcl";
 const NS = "seo.services.importChinaFcl";
@@ -253,7 +253,7 @@ export default async function ImportChinaFclPage({
               <span className="hidden md:inline"> จากจีน Door-to-Door</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              สำหรับ order ปริมาณมาก — เหมาตู้คุ้มที่สุด · รับของจากโรงงานจีน · ลำเลียงตู้ตรงสู่ Port ไทย · เคลียร์ภาษี · ส่งถึงประตู <span className="text-primary-600/80 font-bold">รองรับ DDP / EXW / FOB / CIF</span>
+              สำหรับ order ปริมาณมาก — เหมาตู้คุ้มที่สุด · รับของจากโรงงานจีน · ลำเลียงตู้ตรงสู่ Port ไทย · เคลียร์ภาษี · ส่งถึงประตู — <span className="text-primary-600/80 font-bold">ค่าตู้ FCL 20{"'"} เริ่ม $500 · รองรับ DDP / EXW / FOB / CIF</span>
             </h2>
 
             <TrackedExternalLink
