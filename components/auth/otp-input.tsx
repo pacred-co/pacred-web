@@ -10,6 +10,10 @@ import { useRef, useEffect } from "react";
  * Used by `/register` step "otp" — Pacred prod OTP path (with
  * `OTP_BYPASS=false`). When bypass is on, the register flow skips the
  * OTP step entirely and never instantiates this component.
+ *
+ * Styled with the site theme tokens (primary-* / border / surface /
+ * foreground) so it matches the restyled register page in both light
+ * and dark mode — never hardcode hex here.
  */
 
 interface OtpInputProps {
@@ -82,7 +86,7 @@ export function OtpInput({
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+    <div className="flex justify-center gap-2">
       {Array.from({ length }).map((_, i) => (
         <input
           key={i}
@@ -97,23 +101,11 @@ export function OtpInput({
           onPaste={handlePaste}
           disabled={disabled}
           aria-label={`OTP digit ${i + 1}`}
-          style={{
-            width: 44,
-            height: 52,
-            textAlign: "center",
-            fontSize: 22,
-            fontWeight: 700,
-            borderRadius: 12,
-            border: `1.5px solid ${digits[i] ? "#E8A0A0" : "#ECEEF2"}`,
-            background: digits[i] ? "#FFF5F5" : "#FAFBFC",
-            color: digits[i] ? "#D42B2B" : "#1A1D23",
-            outline: "none",
-            transition: "all .15s",
-            boxShadow: digits[i]
-              ? "0 2px 8px rgba(212,43,43,0.10)"
-              : "0 1px 3px rgba(0,0,0,0.05)",
-            opacity: disabled ? 0.5 : 1,
-          }}
+          className={`h-[52px] w-11 rounded-xl border-[1.5px] text-center text-[22px] font-bold outline-none transition-all focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 disabled:opacity-50 ${
+            digits[i]
+              ? "border-primary-300 bg-primary-50 text-primary-600 shadow-[0_2px_8px_rgba(179,0,0,0.10)] dark:bg-primary-950/30"
+              : "border-border bg-white text-foreground dark:bg-surface"
+          }`}
         />
       ))}
     </div>

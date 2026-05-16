@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect, Fragment } from "react";
 import Image from "next/image";
-import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone } from "lucide-react";
+import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
 import { Footer } from "@/components/sections/footer";
@@ -373,7 +373,12 @@ function PersonalForm() {
       <AgreeRow checked={agreed} onChange={setAgreed} />
       {error && <ErrorBox msg={error} />}
       <HCaptchaInvisible ref={captchaRef} />
-      <SubmitBtn pending={pending}>สมัครสมาชิก</SubmitBtn>
+      <p className="text-center text-[12px] leading-[1.5] text-muted">
+        กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วสมัครเสร็จในขั้นถัดไป
+      </p>
+      <SubmitBtn pending={pending}>
+        <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
+      </SubmitBtn>
     </form>
   );
 }
@@ -621,8 +626,13 @@ function JuristicForm() {
 
           {error && <ErrorBox msg={error} />}
           <HCaptchaInvisible ref={captchaRef} />
+          <p className="text-center text-[12px] leading-[1.5] text-muted">
+            กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วกรอกข้อมูลบริษัทขั้นถัดไป
+          </p>
           <div className="flex">
-            <NextBtn onClick={nextStep1} pending={pending}>ถัดไป</NextBtn>
+            <NextBtn onClick={nextStep1} pending={pending}>
+              <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
+            </NextBtn>
           </div>
         </>
       )}

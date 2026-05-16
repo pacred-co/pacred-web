@@ -204,6 +204,40 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 
 ---
 
+## 📥 Sync the weekend big-batch — ภูม + ปอน, do this FIRST next session
+
+A large batch landed in `main` over 2026-05-16/17 (B1 OTP UI · register restyle · OTP-UX polish · DBD fix · ADR-0015/0016 locks · D-7 Xendit · ESLint cleanup · T-D1 re-audit · BANK constant · E-5 interpreter role · all the merges). Before any new work, pull it:
+
+```bash
+# ภูม (on Poom)
+git fetch origin
+git checkout Poom
+git merge origin/main          # pull the weekend batch into your branch
+pnpm install                   # (only if package.json moved — it didn't, but safe)
+pnpm verify                    # confirm green on your branch after the merge
+
+# ปอน (on podeng)
+git fetch origin
+git checkout podeng
+git merge origin/main
+pnpm verify
+```
+
+**What changed that touches your files — conflict-watch:**
+
+| Branch | Files to watch | Note |
+|---|---|---|
+| **ภูม** (Poom) | `actions/*` revenue-path files — เดฟ only READ them in the T-D1 re-audit, **no edits**. Your night-3..6 batches are already merged into dave/main. | Low conflict risk. The only auth-area code change = `components/auth/otp-input.tsx` (theme tokens) + `app/[locale]/(auth)/register/page.tsx` (OTP-UX) — if you have local edits there, resolve in favour of the new theme-token version. |
+| **ปอน** (podeng) | `app/[locale]/(public)/services/*` — เดฟ removed dead lucide imports (ESLint cleanup). `messages/th.json` + `en.json` — `login.emailPlaceholder` PC001→PR00001. `components/booking/BookingHero.tsx` + `floating-tabs.tsx` — your own commits, already merged. | Low conflict risk — all your own pushed work is already in. Take the merged version. |
+
+**After sync — your next pickup:**
+- **ภูม:** F-11 pay-from-wallet double-debit fix (G9, ~30-45m, week-1) → then V-A6 WHT (ADR-0015 unblocked). Open Qs all resolved — see [`poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md) + [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md).
+- **ปอน:** Standby Mon AM for landing tweaks → post-launch T-N1/T-N2 SEO playbook → theme-token migration of remaining hardcoded surfaces ([`pacred-info.md`](../pacred-info.md) §"Migration tracker").
+
+**Push discipline:** still save-points-only (per `push_frequency_strict`). 1 push per session.
+
+---
+
 ## 🚨 Crisis playbook (if something breaks Mon morning)
 
 Per [`pre-launch-checklist-2026-05-18.md`](pre-launch-checklist-2026-05-18.md) §8.2:
