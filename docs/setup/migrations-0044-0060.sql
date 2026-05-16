@@ -1,6 +1,7 @@
 -- ════════════════════════════════════════════════════════════
--- Pacred — combined migrations 0044 → 0048 + 0060
--- (ภูม Phase-I2 batch + เดฟ member_code) · generated 2026-05-17 by เดฟ
+-- Pacred — combined migrations 0044 → 0049 + 0060
+-- (ภูม Phase-I2 batch + F-11 wallet guard + เดฟ member_code)
+-- generated 2026-05-17 by เดฟ
 -- ════════════════════════════════════════════════════════════
 -- HOW TO APPLY — ภูม, run on BOTH environments (dev FIRST, then production):
 --   1. Supabase Dashboard → select the project (dev, then prod)
@@ -11,7 +12,7 @@
 --      drop+recreate trigger/policy · on conflict do nothing) — re-run anytime.
 --
 -- PREREQUISITES: migrations 0002-0043 already applied (the live system runs
--- on them). These 6 migrations are mutually INDEPENDENT — order does not
+-- on them). These 7 migrations are mutually INDEPENDENT — order does not
 -- matter; each only needs the 0002-0043 base.
 --
 -- WHAT THIS ADDS:
@@ -20,10 +21,17 @@
 --   0046  org_contacts                   — V-G5 owner-self-serve contact management
 --   0047  tos_versions + tos_acceptances — V-G4 TOS version management
 --   0048  freight_quotes + items (+seq)  — V-E6 freight quotation workflow
+--   0049  wallet_tx_order_payment_uniq   — F-11/G9 partial-unique guard (pay-from-wallet double-debit)
 --   0060  generate_member_code()         — member_code PR00001 → PR001 + backfill
 --
+-- ⚠️ 0049 NOTE: it creates a UNIQUE index. If production wallet_transactions
+-- already holds a double-debited order (2 completed order_payment rows for the
+-- same h_no), the index build fails with "could not create unique index".
+-- Pre-launch the table is empty/test-only, so this is not expected — but if it
+-- happens, dedupe the offending rows first, then re-run. (Zero-data otherwise.)
+--
 -- AFTER RUNNING: scroll to the VERIFY block at the bottom — it returns
--- three result sets; eyeball each against its "Expected" comment.
+-- four result sets; eyeball each against its "Expected" comment.
 -- ════════════════════════════════════════════════════════════
 
 
@@ -882,6 +890,58 @@ comment on function public.next_freight_quote_no is
   'Atomic FQYYMMDD-NNNN serial generator with daily counter reset (Bangkok TZ). Concurrent calls serialise on upsert lock.';
 
 
+-- ════════════════════════════════════════════════════════════
+-- F-11 / G9 · wallet_transactions partial-unique guard for order_payment
+-- ════════════════════════════════════════════════════════════
+-- Per [docs/runbook/poom-handoff-2026-05-16.md] §F-11 (เดฟ → ภูม,
+-- T-D1 re-audit 2026-05-17 finding G9).
+--
+-- Problem: `payServiceOrderFromWallet` + `adminMarkServiceOrderPaid`
+-- use check-then-act idempotency (SELECT existing completed tx →
+-- INSERT if none). Under concurrent submits (2 tabs / back-button /
+-- API replay), both can pass the SELECT and both INSERT, causing a
+-- double-debit. Pay button's `disabled={pending}` client-side guard
+-- blocks the common case but cannot stop the residual race.
+--
+-- This migration adds a DB-level partial-unique index keyed on
+-- (reference_id) for the completed-order_payment slice of
+-- wallet_transactions — so the second concurrent INSERT raises
+-- 23505 and the actions can catch + re-SELECT idempotently.
+--
+-- Why partial:
+-- - `wallet_transactions` carries many kinds (deposit, withdraw, etc).
+--   The uniqueness rule is "≤1 COMPLETED order_payment per service
+--   order" — specifically the (reference_type='order_header', kind=
+--   'order_payment', status='completed') slice.
+-- - Forwarder payments use `reference_type='forwarder'` — separate
+--   slice, no collision risk.
+-- - Yuan/wallet-deposit/etc. payments use other reference_types
+--   and/or other kinds — also unaffected.
+-- - reference_id repeats per kind/type globally — the partial WHERE
+--   constrains the uniqueness to the order_payment slice only.
+--
+-- After this migration:
+-- - actions/service-order.ts::payServiceOrderFromWallet
+-- - actions/admin/service-orders.ts::adminMarkServiceOrderPaid
+-- both wrap their wallet INSERT in a try-catch — on Postgres error
+-- code '23505' (unique_violation) they re-SELECT the existing tx and
+-- return { ok: true, data: { tx_id, already_paid: true } }. Existing
+-- check-then-act SELECT stays as the fast path; the catch is the
+-- atomic backstop.
+--
+-- Idempotent. Zero data migration. Safe to apply on prod live.
+-- ════════════════════════════════════════════════════════════
+
+create unique index if not exists wallet_tx_order_payment_uniq
+  on public.wallet_transactions (reference_id)
+  where reference_type = 'order_header'
+    and kind           = 'order_payment'
+    and status         = 'completed';
+
+comment on index public.wallet_tx_order_payment_uniq is
+  'F-11/G9 — DB-level guard against double-debit on pay-from-wallet. Partial unique on completed order_payment per service-order h_no. Actions catch 23505 + re-SELECT for idempotent retry.';
+
+
 -- 0060_member_code_3digit.sql
 -- Member code pattern change: PR00001 (5-digit fixed) → PR001 (min-3-digit).
 --
@@ -931,7 +991,7 @@ where member_code ~ '^PR\d+$';
 
 
 -- ════════════════════════════════════════════════════════════
--- VERIFY — run after the migrations above (3 result sets)
+-- VERIFY — run after the migrations above (4 result sets)
 -- ════════════════════════════════════════════════════════════
 -- (1) Expected: 9 rows — the new tables.
 select table_name
@@ -951,7 +1011,11 @@ select id from storage.buckets
  where id in ('wht-certs', 'qa-inspection-photos')
  order by id;
 
--- (3) Expected: 1 row, pads_to_3 = true — the member_code generator now
+-- (3) Expected: 1 row — the F-11/G9 pay-from-wallet double-debit guard index.
+select indexname from pg_indexes
+ where schemaname = 'public' and indexname = 'wallet_tx_order_payment_uniq';
+
+-- (4) Expected: 1 row, pads_to_3 = true — the member_code generator now
 --     zero-pads to a MINIMUM of 3 digits (PR001), not a fixed 5 (PR00001).
 select proname,
        pg_get_functiondef(oid) like '%lpad%3%' as pads_to_3

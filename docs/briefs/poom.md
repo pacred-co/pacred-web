@@ -9,19 +9,19 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 **All open Qs in [`poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md) RESOLVED:**
 - D-1 LP-1c2 UNIQUE → ภูม shipped option (b); refactor optional (Not required for launch)
-- D-2 migration numbering → on disk 2026-05-17: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes (ภูม shipped) · `0060` member_code (เดฟ — numbered clear of ภูม's `0044`-`005x` freight block). ภูม next free = **`0049`**
+- D-2 migration numbering → on disk 2026-05-17: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes · `0049` wallet_order_payment_unique (ภูม shipped) · `0060` member_code (เดฟ — numbered clear of ภูม's `0044`-`005x` freight block). ภูม next free = **`0050`**
 - D-3 /admin/learning → ภูม decided KEEP as org-docs hub + redirect "training" card to HR
 - **E-1 ADR-0015 WHT** → ✅ ก๊อต locked 2026-05-16 night, 4 Qs resolved → **V-A6 UNBLOCKED Monday morning**
 - **E-2 ADR-0016 freight value** → ✅ ก๊อต locked 2026-05-16 night, 5 Qs resolved → V-E2 unblocked for Phase I2
 - **E-3 MOMO-1** → in-flight (ลูกพี่ takes call → เดฟ parses → pings you)
 - **E-4 Pacred owner Bundle 1** → 3/5 resolved: PromptPay ✅ + Bank ✅ + LIFF ✅ + Gateway DECISION CHANGED to Xendit+K-Biz+K-Shop. Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor CONTACT.*
-- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0052_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
+- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0053_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
 
 ### V-E6 approval RBAC — ✅ resolved 2026-05-17
 Use existing `super` role for V1 approval. DO NOT add new `manager` role pre-launch. Revisit only if ops actually requests distinct manager-but-not-super tier post-launch.
 
 ### Migration ownership (reconciled 2026-05-17)
-On disk: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes (ภูม shipped) · `0060` member_code (เดฟ). **ภูม: start your next Phase-I2 migration at `0049`** — the `0049`-`0059` range is reserved for your freight block; เดฟ's member_code sits at `0060` so the two devs never collide on a number again. Schema sketches in ADR-0015 + ADR-0016 match ภูม's design — single-owner per migration. Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
+On disk: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes · `0049` wallet_order_payment_unique (ภูม shipped) · `0060` member_code (เดฟ). **ภูม: start your next Phase-I2 migration at `0050`** — the `0050`-`0059` range is reserved for your freight block; เดฟ's member_code sits at `0060` so the two devs never collide on a number again. Schema sketches in ADR-0015 + ADR-0016 match ภูม's design — single-owner per migration. Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
 
 **Mon morning:**
 1. Standby for backend hotfix (Sentry watch + admin_audit_log)

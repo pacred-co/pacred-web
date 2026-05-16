@@ -155,8 +155,9 @@ Per agent 3 inventory + cross-check vs `supabase/migrations/`:
 > Actual on-disk numbering diverged once ภูม shipped the Phase-I2 batch. The
 > **canonical reconciled map** is [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md)
 > §"Migration numbering map" (on disk: `0044` WHT · `0045` qa · `0046` org_contacts ·
-> `0047` tos_versions · `0048` freight_quotes · `0060` member_code_3digit). Use the
-> table here only for the *table inventory*, not the numbers.
+> `0047` tos_versions · `0048` freight_quotes · `0049` wallet_order_payment_unique ·
+> `0060` member_code_3digit). Use the table here only for the *table inventory*,
+> not the numbers.
 
 | Table | Purpose | Migration target | Phase |
 |---|---|---|---|
