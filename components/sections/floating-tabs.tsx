@@ -7,14 +7,9 @@ import { Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
 
-// Sales reps' direct phones — kept in sync with SALES_CARDS_DATA in lib/booking-data.ts.
-// (lib/ is outside ปอน's scope, so the digits are mirrored here for the mobile FAB.)
-const SALES_PHONES = ["0660901217", "0661253007", "024213325"];
-
-function callRandomSalesRep() {
-  const num = SALES_PHONES[Math.floor(Math.random() * SALES_PHONES.length)];
-  window.location.href = `tel:${num}`;
-}
+// Pacred main office line — single number for mobile FAB (per ปอน 2026-05-17,
+// no random sales-rep rotation).
+const OFFICE_PHONE = "024213325";
 
 export function FloatingTabs() {
   const t = useTranslations("floatingTabs");
@@ -139,9 +134,8 @@ export function FloatingTabs() {
         </div>
 
         {/* Center call FAB — lifts above the bar with a subtle pulsing red aura */}
-        <button
-          type="button"
-          onClick={callRandomSalesRep}
+        <a
+          href={`tel:${OFFICE_PHONE}`}
           aria-label={t("callAria")}
           className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[68px] h-[68px] rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-lg shadow-primary-600/35 ring-2 ring-white/40 dark:ring-primary-300/30 flex items-center justify-center active:scale-95 transition-transform"
         >
@@ -155,7 +149,7 @@ export function FloatingTabs() {
             className="absolute inset-0 rounded-full ring-2 ring-primary-200/50 dark:ring-primary-300/40 animate-pulse [animation-duration:1.8s] [animation-delay:0.45s]"
           />
           <Phone className="relative w-6 h-6" strokeWidth={2.4} fill="currentColor" />
-        </button>
+        </a>
       </nav>
 
       {/* Floating LINE bubble — sits above mobile bottom nav */}
