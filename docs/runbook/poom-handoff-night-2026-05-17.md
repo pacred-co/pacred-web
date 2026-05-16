@@ -200,7 +200,7 @@
 ## 🟢 Cross-references
 
 - Migration runbook (เดฟ): [`docs/runbook/poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md)
-- Combined apply file (out-of-date — missing 0049-0051): [`docs/setup/migrations-0044-0060.sql`](../setup/migrations-0044-0060.sql)
+- ~~Combined apply file~~ — **deleted 2026-05-17 (เดฟ)** — no zip-file flow anymore; ภูม applies migrations straight from `supabase/migrations/` per the runbook above
 - Phase I2 sequence: [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Recommended sequence"
 - Playbook (browser test all sections AA-HH): [`poom-test-playbook-2026-05-16.md`](poom-test-playbook-2026-05-16.md)
 - Team status: [`team-status-2026-05-17.md`](team-status-2026-05-17.md)
