@@ -1703,9 +1703,9 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-E6 | **Quotation workflow** — admin creates quote → role-based approval (CEO/Mgr; sales rep cannot) → customer accepts → converts to forwarder order. Schema `freight_quotes` + `freight_quote_items` (was `tb_farwarder_quotation*`). PHP ref `pages/forwarder-quotation/` | ภูม | 🟠 | ⬜ |
-| V-E7 | **Receipt & payment tracking** — payment ledger w/ withholding-tax + RD Code 86. Schema `freight_invoices` + `freight_invoice_items` (was `tb_receipt*`). PHP ref `closingAccReportForwarder/` + receipt PDF | ภูม | 🟠 | ⬜ |
-| V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law. PHP ref `pages/withdraw-commission-{interpreter,sale}/` | ภูม | 🟠 | ⬜ |
+| V-E6 | **Quotation workflow** — admin creates quote → role-based approval (CEO/Mgr; sales rep cannot) → customer accepts → converts to forwarder order. Schema `freight_quotes` + `freight_quote_items` (was `tb_farwarder_quotation*`). 📐 spec → [`port-specs/freight-quotation.md`](port-specs/freight-quotation.md). PHP ref `pages/forwarder-quotation/` | ภูม | 🟠 | ⬜ |
+| V-E7 | **Receipt & payment tracking** — payment ledger w/ withholding-tax + RD Code 86. Schema `freight_invoices` + `freight_invoice_lines` + `freight_invoice_payments` (was `tb_receipt*`). 📐 spec → [`port-specs/freight-receipt-and-payment.md`](port-specs/freight-receipt-and-payment.md). PHP ref `closingAccReportForwarder/` + receipt PDF | ภูม | 🟠 | ⬜ |
+| V-E8 | **Commission withdrawal** — interpreter (ล่าม) + sales rep. Schema `commission_tiers` + `commission_accruals` + `commission_withdrawals` + `commission_withdrawal_items` (was `tb_withdraw_comm_*`). Includes WHT 15% on >5k payments per Thai law (Revenue Code §50). 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (covers V-E8 + V-H1 + V-H2 combined). PHP ref `pages/withdraw-commission-{interpreter,sale}/` | ภูม | 🟠 | ⬜ |
 | V-E9 | **Monthly closing ritual for forwarder accounting** — `freight_accounting_periods` with status=open|closed + frozen_at; read-only past periods. PHP ref `closingAccReportForwarder.php` (32KB) | ภูม | 🟠 | ⬜ |
 | V-E10 | **QA/QC intake inspection** — pre-billing gate; checklist (damage / missing / quality); pass→release, fail→rework. Schema `freight_qa_inspections` (was `tb_check_forwarder`). PHP ref `pages/forwarder-check/` | ภูม | 🟡 | ⬜ |
 | V-E11 | **Customs declaration UI (ใบขนสินค้า)** — internal-only V2 (no Thai Customs API integration yet — Phase III). Schema `freight_customs_declarations` | ภูม | 🟡 | ⬜ |
@@ -1727,10 +1727,10 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-H1 | **Interpreter (ล่าม) role** — extend `admins.role` enum + commission accrual per-job + withdrawal workflow + WHT calc. PHP ref `withdraw-commission-interpreter/` + `tb_set_comm_interpreter` lookup | ก๊อต ADR → ภูม | 🟠 | ⬜ |
-| V-H2 | **Sales rep commission finalize** — currently partial via `team_leaders` + `/admin/sales-payouts`. Add: approval workflow detail, rejection_reason, slip upload, WHT math. PHP ref `withdraw-commission-sale/` | ภูม | 🟠 | ⬜ |
+| V-H1 | **Interpreter (ล่าม) role** — extend `admins.role` enum + commission accrual per-job + withdrawal workflow + WHT calc. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md) (combined w/ V-E8 + V-H2). PHP ref `withdraw-commission-interpreter/` + `tb_set_comm_interpreter` lookup | ก๊อต confirms RBAC → ภูม | 🟠 | ⬜ |
+| V-H2 | **Sales rep commission finalize** — currently partial via `team_leaders` + `/admin/sales-payouts`. Add: approval workflow detail, rejection_reason, slip upload, WHT math. 📐 spec → [`port-specs/commission-withdrawal.md`](port-specs/commission-withdrawal.md). PHP ref `withdraw-commission-sale/` | ภูม | 🟠 | ⬜ |
 
-> 📐 **Spec docs for V-E6/E7/E8/E9 + V-G + V-H** → **TODO** (เดฟ post-Monday). Estimated total V2 long-phase: ~150-200h freight stack (V-E6+) + ~80-120h admin polish (V-G + audits).
+> 📐 **Spec docs shipped (เดฟ night-5):** V-E6 quotation · V-E7 freight receipt/payment · V-E8/V-H1/V-H2 commission withdrawal — all 3 in [`docs/port-specs/`](port-specs/) ready for ภูม Monday pickup. **Still TODO:** V-E9 monthly closing · V-E10 QA/QC inspection · V-E11 customs declaration · V-E12 CargoAndFreight dashboards · V-G admin polish (เดฟ writes when picked up). Estimated total V2 long-phase: ~150-200h freight stack (V-E6+) + ~80-120h admin polish (V-G + audits).
 > 📋 **Full inventory + 17 new tables + false-alarm filter** → [`docs/audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md).
 
 ## V-F — Strategic / dependency

@@ -148,13 +148,13 @@ Order recommendation:
 From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md)) — 17 new tables · 12 freight subdirs · 24 admin polish items. **All POST-Monday — do NOT touch before launch.**
 
 **Freight expansion (V-E6..V-E12 in PORT_PLAN Part V — ~150-200h):**
-- V-E6 Quotation workflow (admin → approve → customer accept → forwarder order)
-- V-E7 Receipt & payment tracking (RD Code 86 + WHT)
-- V-E8 Commission withdrawal (interpreter + sales rep + WHT 15%)
-- V-E9 Monthly closing ritual (freeze past periods)
-- V-E10 QA/QC intake inspection (pre-billing gate)
-- V-E11 Customs declaration UI (ใบขนสินค้า)
-- V-E12 CargoAndFreight role dashboards (6 sub-dashboards)
+- V-E6 Quotation workflow — 📐 spec [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md) — admin → approve → customer accept → forwarder order
+- V-E7 Receipt & payment tracking — 📐 spec [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md) — RD Code 86 + WHT integration
+- V-E8 Commission withdrawal — 📐 spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — interpreter (ล่าม) + sales rep + WHT 15%
+- V-E9 Monthly closing ritual (freeze past periods) — spec TBD เดฟ
+- V-E10 QA/QC intake inspection (pre-billing gate) — spec TBD เดฟ
+- V-E11 Customs declaration UI (ใบขนสินค้า) — spec TBD เดฟ
+- V-E12 CargoAndFreight role dashboards (6 sub-dashboards) — spec TBD เดฟ
 
 **Admin bulk-ops + polish (V-G1..V-G7 in PORT_PLAN — ~80-120h):**
 - V-G1 Bulk forwarder actions · V-G2 Bulk transfer customers · V-G3 Admin push broadcast (popup) · V-G4 Cargo TOS version mgmt · V-G5 Org 5 contact CRUDs · V-G6 New admin reports · V-G7 Audit feature-parity verifications
