@@ -177,7 +177,7 @@ erDiagram
   PROFILES {
     uuid id PK_FK
     text account_type "personal | juristic"
-    text member_code "PC001, PC002 ..."
+    text member_code "PR001, PR002 ..."
     text first_name
     text last_name
     text phone
@@ -604,7 +604,7 @@ flowchart TB
 
 - [ ] เลือก SMS gateway provider (ThaiBulkSMS / Twilio / MessageBird / 1moby ฯลฯ) → ส่งผลถึง `lib/sms/gateway.ts`
 - [ ] LINE Login channel สร้างไว้แล้วที่ developers.line.biz หรือยัง? (ต้องได้ `client_id` + `client_secret`)
-- [ ] member_code format (`PC001` running number, หรือ random 6-digit?)
+- [x] member_code format → ✅ decided: `PR` + **minimum 3-digit** zero-padded running number (`PR001` … `PR999` → `PR1000` → `PR12345`, overflow-safe). Postgres `generate_member_code()` trigger + `member_code_seq`; migration `0060_member_code_3digit.sql`.
 - [ ] Email verification — บังคับ verify อีเมลก่อนใช้งานได้ หรือ optional?
 - [ ] Password policy — ขั้นต่ำกี่ตัว? ต้องมี uppercase/digit/special หรือไม่? (ตอนนี้ UI placeholder บอก "6-30 ตัวอักษร")
 

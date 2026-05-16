@@ -12,13 +12,13 @@
 
 Latest batch on top of everything below:
 
-1. **🔢 member_code pattern `PR00001` → `PR001`** — per ลูกพี่. PR + **minimum 3 digits**, overflow-safe (`lpad(n,3,'0')` — never truncates → PR001 … PR999 → PR1000 → PR12345 with no cap, no error). Whole-system sweep: migration `0048_member_code_3digit.sql` (generator + backfill) · `supabase/schema.sql` · 3 validators (`detectIdentifier`, forwarder-driver Zod, HTML5 `pattern`) `^PR\d{5}$`→`^PR\d{3,}$` · 8 UI placeholders · 4 test files · all docs. Browser-verified login placeholder.
-2. **🔀 ภูม Phase-I2 autonomous batch merged** — ภูม shipped WHT (V-A6) · QA/QC inspection (V-E10) · org_contacts (V-G5) · TOS version mgmt (V-G4) — 4 migrations (`0044`-`0047`) + validators + admin UI + 5000+ LOC. Merged into dave; migration-numbering reconciled (member_code → `0048` after ภูม's batch — see [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) map).
+1. **🔢 member_code pattern `PR00001` → `PR001`** — per ลูกพี่. PR + **minimum 3 digits**, overflow-safe (`lpad(n,3,'0')` — never truncates → PR001 … PR999 → PR1000 → PR12345 with no cap, no error). Whole-system sweep: migration `0060_member_code_3digit.sql` (generator + backfill) · `supabase/schema.sql` · 3 validators (`detectIdentifier`, forwarder-driver Zod, HTML5 `pattern`) `^PR\d{5}$`→`^PR\d{3,}$` · 8 UI placeholders · 4 test files · all docs. Browser-verified login placeholder.
+2. **🔀 ภูม Phase-I2 autonomous batch merged** — ภูม shipped WHT (V-A6) · QA/QC inspection (V-E10) · org_contacts (V-G5) · TOS version mgmt (V-G4) · freight quotation V-E6 (`0048_freight_quotes`) · V-G6 4 admin reports — migrations `0044`-`0048` + validators + admin UI + 5000+ LOC. Merged into dave; migration-numbering reconciled (member_code moved out to `0060` so เดฟ never collides with ภูม's `0044`-`005x` freight block — see [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) map).
 3. **🐛 admin dashboard `is_active` bug fixed** — "ลูกค้าที่ใช้งานแล้ว" now keyed on real activity (`profiles.is_active`) not account-status. A fresh signup correctly shows "ยังไม่ได้ใช้งาน".
 4. **🔐 auth fixes** — OTP UI in-theme + explicit "ขอรหัส OTP" button · login Facebook/Google icons (shrink-0) · logo enlarged 76px · DBD lookup honest degradation.
 5. **OAuth login (Google/Facebook) → ก๊อต** — broken because `NEXT_PUBLIC_SITE_URL`=dead `v2.pacred.co` + Facebook app in Dev Mode. **ก๊อต takes the dashboard config 2026-05-18 morning** (Vercel env + Supabase URLs + FB/Google apps). Full steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Phone+OTP login unaffected.
 
-⚠️ **5 migrations `0044`-`0048` are in git but NOT yet applied to Supabase** — `supabase db push` (or SQL-Editor paste) on dev + prod before the dependent features go live.
+⚠️ **6 migrations `0044`-`0048` + `0060` are in git but NOT yet applied to Supabase** — `supabase db push` (or SQL-Editor paste) on dev + prod before the dependent features go live.
 
 ---
 
@@ -26,7 +26,7 @@ Latest batch on top of everything below:
 
 **Status:** 🟢 GO
 
-All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. ภูม Phase-I2 batch (WHT/QA/org-contacts/TOS) already shipped. Remaining = 2 partner calls (ลูกพี่) + ก๊อต OAuth dashboard config + apply migrations 0044-0048. Nothing blocks soft-launch 10am Mon → public-launch 2pm Mon path (phone+OTP is the primary auth flow + works).
+All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. ภูม Phase-I2 batch (WHT/QA/org-contacts/TOS/freight-quotes/reports) already shipped. Remaining = 2 partner calls (ลูกพี่) + ก๊อต OAuth dashboard config + apply migrations `0044`-`0048` + `0060`. Nothing blocks soft-launch 10am Mon → public-launch 2pm Mon path (phone+OTP is the primary auth flow + works).
 
 50+ commits since previous main checkpoint (`d9bc2c2`, Sat night). Merged: dave + Poom (night-6 V-G7 audits + Phase-I2 batch) + podeng (mobile UX polish). Build green. md links resolve. lint 0 problems · tsc 0 errors.
 
@@ -56,7 +56,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 | **OAuth login (Google/Facebook)** | เดฟ/ก๊อต — dashboard config | ⚠️ broken — `NEXT_PUBLIC_SITE_URL` in Vercel points at dead `v2.pacred.co` → OAuth redirect 404s; Facebook app in Dev Mode. **Phone+OTP login unaffected.** Full fix steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md) |
 | **LINE web-login** | deferred | Stub ("เร็วๆ นี้"). Needs custom OIDC build (~4-8h) — post-launch task, not launch-week |
 
-> 🔐 **Auth + admin launch fixes (2026-05-17)** — OTP UI theme + "ขอรหัส OTP" button · login social icons · logo enlarge · **member_code pattern `PR00001→PR001`** (PR + min-3-digit, migration `0048`) · **admin dashboard `is_active` logic bug** — all in [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Code fixes shipped; OAuth = dashboard config still needed (ก๊อต 2026-05-18 morning).
+> 🔐 **Auth + admin launch fixes (2026-05-17)** — OTP UI theme + "ขอรหัส OTP" button · login social icons · logo enlarge · **member_code pattern `PR00001→PR001`** (PR + min-3-digit, migration `0060`) · **admin dashboard `is_active` logic bug** — all in [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Code fixes shipped; OAuth = dashboard config still needed (ก๊อต 2026-05-18 morning).
 
 ---
 
@@ -204,7 +204,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 - 🚀 Mon afternoon ลุย **V-A6 WHT** per ADR-0015 unblocked (migration `0044_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) (~8-12h)
 - 🚀 Tue: V-E10 QA/QC (~4-6h, prereq for V-E7) → V-E6 quotation (~6-8h, super-only approval per RBAC ack)
 - T+30d: wire Xendit + K-Biz + K-Shop per updated D-7 §5.3 (~16-22h, 3 channels)
-- All open Qs in handoff resolved this session — incl. **E-5 interpreter role ack-approved 2026-05-17 evening** (bundle inline in `0053_commissions.sql`): [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
+- All open Qs in handoff resolved this session — incl. **E-5 interpreter role ack-approved 2026-05-17 evening** (bundle inline in `0052_commissions.sql`): [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
 - Migration ownership clarified — ALL 0044-0051 = ภูม owns: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map"
 - Brief: [`briefs/poom.md`](../briefs/poom.md) · Phase I2 prep: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 

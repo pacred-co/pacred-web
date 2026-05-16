@@ -1,9 +1,10 @@
--- 0048_member_code_3digit.sql
+-- 0060_member_code_3digit.sql
 -- Member code pattern change: PR00001 (5-digit fixed) → PR001 (min-3-digit).
 --
--- Numbered 0048 (after ภูม's Phase-I2 batch 0044-0047) — this migration is
--- independent (only the generate_member_code function + a profiles backfill),
--- so apply-order relative to 0044-0047 does not matter. Applies cleanly last.
+-- Numbered 0060 — clear of ภูม's fast-moving Phase-I2 migration block
+-- (0044-005x). This migration is independent (only the generate_member_code
+-- function + a profiles backfill), so apply-order does not matter; the gap
+-- between 0048 and 0060 is harmless (migrations apply in sorted version order).
 --
 -- Per ลูกพี่ 2026-05-17: รหัสลูกค้าต้องเป็นแพทเทิน PR001 — ขั้นต่ำ 3 หลัก,
 -- รันต่อไปเรื่อย ๆ ได้, เกินหลักร้อย (PR1000, PR12345) ก็รันได้ปกติ ห้ามเออเร่อ.

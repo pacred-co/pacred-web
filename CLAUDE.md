@@ -197,7 +197,7 @@ Sprint 6.5/7+ adds (~88% customer / ~98% HR / ~50% admin-ops): `/service-order` 
 - ADR-0015/0016 (DRAFT — WHT + freight value model; fastlane pre-answered in [`briefs/got.md`](docs/briefs/got.md))
 - ADR-0011/0012/0013 (DRAFT — V3 RBAC granular + ERP shell + V2→V3 migration)
 
-🌱 **Infra stack:** Vercel + Supabase Cloud · `proxy.ts` middleware · ThaiBulkSMS OTP (`OTP_BYPASS` flag) · `member_code` = `PR001` running — **PR + minimum 3 digits**, overflow-safe past PR999 (Postgres trigger `generate_member_code`, migration `0048`; **NO compat with PHP `PCS<num>`** — Pacred is new company).
+🌱 **Infra stack:** Vercel + Supabase Cloud · `proxy.ts` middleware · ThaiBulkSMS OTP (`OTP_BYPASS` flag) · `member_code` = `PR001` running — **PR + minimum 3 digits**, overflow-safe past PR999 (Postgres trigger `generate_member_code`, migration `0060`; **NO compat with PHP `PCS<num>`** — Pacred is new company).
 
 ---
 

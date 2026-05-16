@@ -151,6 +151,13 @@ PHP models 2 commission-earning roles Pacred doesn't have:
 
 Per agent 3 inventory + cross-check vs `supabase/migrations/`:
 
+> ⚠️ **Migration numbers below are the original 2026-05-16 *proposal* — superseded.**
+> Actual on-disk numbering diverged once ภูม shipped the Phase-I2 batch. The
+> **canonical reconciled map** is [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md)
+> §"Migration numbering map" (on disk: `0044` WHT · `0045` qa · `0046` org_contacts ·
+> `0047` tos_versions · `0048` freight_quotes · `0060` member_code_3digit). Use the
+> table here only for the *table inventory*, not the numbers.
+
 | Table | Purpose | Migration target | Phase |
 |---|---|---|---|
 | `freight_quotes` (was `tb_farwarder_quotation`) | Quote header | `0044_freight_quotes.sql` | V-E6 |

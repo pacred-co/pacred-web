@@ -119,7 +119,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ### V-E8 + V-H1 + V-H2 — Commission withdrawal (one combined batch)
 **Blocker:** ✅ ALL CLEAR (ADR-0015 WHT locked + E-5 interpreter role ack-approved 2026-05-17)
 **Spec:** [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md)
-**Migration:** `0053_commissions.sql` — **ภูม owns** — 4 tables + `admins.role` enum extension (interpreter role per E-5 ack):
+**Migration:** `0052_commissions.sql` — **ภูม owns** — 4 tables + `admins.role` enum extension (interpreter role per E-5 ack):
 - `commission_tiers` (per-role/per-service rate lookup)
 - `commission_accruals` (earned-but-unpaid)
 - `commission_withdrawals` (request → admin approve → paid)
@@ -174,10 +174,13 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 
 ---
 
-## 🧱 Migration numbering map — ✅ reconciled 2026-05-17 (post ภูม Phase-I2 merge)
+## 🧱 Migration numbering map — ✅ reconciled 2026-05-17 (post ภูม V-E6 merge)
 
-> **Actual on-disk state.** ภูม shipped `0044`-`0047` autonomously 2026-05-17;
-> เดฟ's member_code took `0048` (after ภูม's batch). Next free = **`0049`**.
+> **Actual on-disk state.** ภูม owns the fast-moving Phase-I2 block `0044`-`005x`
+> (freight/commission stack). เดฟ's member_code migration was moved **out of that
+> block to `0060`** so ภูม can keep numbering freight migrations sequentially
+> without colliding with เดฟ. Migrations apply in **sorted version order**, so the
+> `0049`-`0059` gap is harmless — `0060` simply runs last. ภูม's next free = **`0049`**.
 
 | Number | Item | Owner | Status |
 |---|---|---|---|
@@ -188,20 +191,25 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0045` | **freight_qa_inspections** (V-E10) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0046` | **org_contacts** (V-G5) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0047` | **tos_versions** (V-G4) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
-| `0048` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
-| `0049` | freight_quotes + items (V-E6) | ภูม | ⬜ next — post-launch |
-| `0050` | freight_shipments (V-E1) | ภูม | ⬜ ADR-0016 locked — post-launch |
-| `0051` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0050 + 0044 |
-| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0051 + V-E10 QA-pass gate |
-| `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
-| `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
-| `0055` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
+| `0048` | **freight_quotes + items** (V-E6) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
+| `0049` | freight_shipments (V-E1) | ภูม | ⬜ next — ADR-0016 locked — post-launch |
+| `0050` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0049 + 0044 |
+| `0051` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0050 + V-E10 QA-pass gate |
+| `0052` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
+| `0053` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
+| `0054` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
+| `0049`-`0059` | *(reserved for ภูม's freight block — fill sequentially)* | ภูม | — |
+| `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 
-> ⚠️ **5 migrations (`0044`-`0048`) shipped to git but NOT yet applied to
-> Supabase.** Run `supabase db push` (or paste each into the SQL Editor) on
+> ⚠️ **6 migrations (`0044`-`0048` + `0060`) shipped to git but NOT yet applied
+> to Supabase.** Run `supabase db push` (or paste each into the SQL Editor) on
 > dev + prod before launch / before the features that depend on them.
 
-**Note:** `0044`-`0047` + `0049`-`0055` = ภูม. `0048` (member_code) = เดฟ. Single-owner per migration — ภูม spec'd the freight/commission schemas in the ADRs, so no "เดฟ structural lane" handoff needed.
+**Note:** `0044`-`0059` block = ภูม (freight/commission stack). `0060`
+(member_code) = เดฟ — deliberately numbered clear of ภูม's block so the two devs
+never collide on a migration number again. Single-owner per migration — ภูม
+spec'd the freight/commission schemas in the ADRs, so no "เดฟ structural lane"
+handoff needed.
 
 ---
 

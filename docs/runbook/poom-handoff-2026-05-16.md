@@ -38,7 +38,7 @@
 ### D-2 · Migration numbering — ✅ confirmed 2026-05-16 night
 **ภูม ใช้:** `0041` bill_to_name_override (V-C2) · `0042` cargo_containers.close_at (V-C3) · `0043` slip_transferred_at (V-A1).
 
-**ภูม shipped `0044_withholding_tax.sql`** for V-A6 2026-05-17 (ADR-0015 ✅ locked). ✅ on-disk migration order: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions (ภูม) · `0048` member_code (เดฟ). Next free = `0049`. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map".
+**ภูม shipped `0044_withholding_tax.sql`** for V-A6 2026-05-17 (ADR-0015 ✅ locked). ✅ on-disk migration order: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions · `0048` freight_quotes (ภูม) · `0060` member_code (เดฟ — numbered clear of ภูม's `0044`-`005x` freight block). ภูม next free = `0049`. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map".
 
 **Owner:** ✅ resolved (เดฟ ack 2026-05-16 night).
 
@@ -90,7 +90,7 @@
 - Required for V-E8/H1/H2 commission flow per [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — already specced + ADR-0015 (WHT 15% payout rule) locked
 - Per ADR-0010 V2 owner-pleaser principle: additive RBAC for paid interpreter staff is owner-aligned (cargo ops needs this; existing PHP role model has it)
 
-**ภูม implementation:** Bundle into `0053_commissions.sql` migration (3 lines: drop constraint + add constraint with 7th value):
+**ภูม implementation:** Bundle into `0052_commissions.sql` migration (3 lines: drop constraint + add constraint with 7th value):
 ```sql
 alter table public.admins drop constraint if exists admins_role_check;
 alter table public.admins add  constraint admins_role_check
@@ -136,7 +136,7 @@ Plus 1 line in [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts)
 
 **Fix (เดฟ recommends — ภูม owns since it's a migration + action edit):**
 
-1. Migration `0053_wallet_order_payment_unique.sql` (or fold into another batch — see the numbering map in [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md); `0044`=member_code, `0045`=WHT, … `0053`=this):
+1. Migration `0054_wallet_order_payment_unique.sql` (or fold into another batch — see the canonical numbering map in [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map"; ภูม's freight block is `0044`-`0054`, เดฟ's member_code is `0060`):
 ```sql
 -- One completed order_payment per service-order — DB-enforced idempotency.
 create unique index if not exists wallet_tx_order_payment_uniq

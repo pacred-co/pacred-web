@@ -66,14 +66,14 @@ After deploy: a freshly-registered customer with zero orders correctly shows und
 | 12345 | `PR12345` |
 
 **Changed across the whole system (this session):**
-- **Migration `0048_member_code_3digit.sql`** (NEW) — `create or replace generate_member_code()` with `lpad(…,3,…)` + backfills existing rows (`PR00001`→`PR001`; number preserved, only padding changes; `member_code` is not FK'd anywhere → safe). `member_code_seq` untouched → next signup continues cleanly. Numbered `0048` (after ภูม's just-shipped Phase-I2 batch `0044`-`0047`).
+- **Migration `0060_member_code_3digit.sql`** (NEW) — `create or replace generate_member_code()` with `lpad(…,3,…)` + backfills existing rows (`PR00001`→`PR001`; number preserved, only padding changes; `member_code` is not FK'd anywhere → safe). `member_code_seq` untouched → next signup continues cleanly. Numbered `0060` — deliberately clear of ภูม's fast-moving Phase-I2 freight block (`0044`-`005x`) so the two devs never collide on a migration number. The migration is independent (generator function + a `profiles` backfill), so apply-order vs ภูม's batch does not matter; migrations apply in sorted version order, so the `0049`-`0059` gap is harmless.
 - `supabase/schema.sql` — generator + comment synced to the 3-digit pattern.
 - **3 validators** (the load-bearing bit): `lib/utils/phone.ts` (`detectIdentifier`) · `actions/admin/forwarder-drivers.ts` (Zod) · `app/[locale]/(admin)/admin/forwarders/[fNo]/driver-assign-form.tsx` (HTML5 `pattern`) — all `^PR\d{5}$` → **`^PR\d{3,}$`** (accepts the new 3-digit codes AND any legacy 5-digit). `0044` is WHT not member_code (see numbering note below).
 - 8 UI placeholders / labels / comments → `PR001`. `messages/{th,en}.json` login placeholder → `PR001`.
 - 4 test files (`signup` / `phone` / `analytics` / `pdf`) — assertions + fixtures updated; `phone.test.ts` gained `PR001`/`PR1000` cases (the old "PR123 → phone fallback" assertion was inverted by the new regex and is now `→ memberCode`).
 - All docs (`CLAUDE.md`, `PACRED-SECOND-BRAIN.md`, setup guides, architecture, legacy-schema, momo-1-call-prep) — `PR00001` example → `PR001`.
 
-**Migration numbering:** ภูม shipped `0044`-`0047` (WHT / qa / org_contacts / tos_versions) autonomously 2026-05-17; member_code took **`0048`** after that batch. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map".
+**Migration numbering:** ภูม shipped `0044`-`0048` (WHT / qa / org_contacts / tos_versions / freight_quotes) autonomously 2026-05-17; member_code took **`0060`** — numbered clear of ภูม's `0044`-`005x` freight block so the two devs never collide. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map".
 
 ---
 
