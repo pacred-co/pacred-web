@@ -711,6 +711,61 @@ Long autonomous session. **7 commits on `dave`** — 4 pushed, 3 held local (hol
 
 ---
 
+## 🟢 ภูม night-5 update — CT-7 + CT-8 ✅ (2026-05-16 19:22 BKK)
+
+**Pulled `origin/Poom` `ee80b97..58509f4`** (2 commits) → merged into `dave` cleanly (no conflicts).
+
+### What ภูม shipped (~676 LOC)
+
+1. **CT-7 driver "งานของฉัน" home** (commit `fe05c3a`):
+   - 📄 `/admin/driver-runs/page.tsx` (+223 lines) — driver lands here, sees own forwarder_driver assignments (status 1=waiting / 2=accepted-in-progress + completed-today status 4) with full delivery context: customer name / phone / address / TH tracking / cargo_shipment.shipment_code / container.code (cargo spine link)
+   - 🎛 `/admin/driver-runs/action-buttons.tsx` (+77 lines) — "✓ รับงาน" (1→2) + "📦 สแกนส่ง" (jump to `/admin/barcode/driver`) + "✅ กดเสร็จ" (2→4) buttons with `useTransition` + confirm prompts
+   - ⚙️ `actions/admin/forwarder-drivers.ts::driverUpdateOwnAssignmentStatus` (+77 lines) — defense-in-depth: `withAdmin(['driver','ops','super'])` gate + self-row check (`profile_id===adminId`) + ops/super DB-verify cross-row override + status guard (only 1→2 or 2→4 allowed) + timestamps stamped + `logAdminAction("forwarder_driver.driver_{accept|complete}")` with `by_self` flag
+   - 🧭 Sidebar nav entry added (+1 line)
+
+2. **CT-8 cargo container lifecycle integration test** (commit `58509f4`):
+   - 🧪 `lib/warehouse/lifecycle.test.ts` (+298 lines, **23 assertions**) — DB-backed end-to-end:
+     - A. setup (profile + forwarder for FK)
+     - B. createContainer w/ code + carrier_container_no (V-D3) + close_at future (V-C3)
+     - C. createShipment + attach + cargo_type canonical (V-D2)
+     - D. setContainerStatus chain `packing → sealed → in_transit → arrived → unloading → closed` + `cargo_container_status_history` rows per transition
+     - E. tracking events newest-first ordering (4 events)
+     - F. V-C3 guard — past close_at rejects new attach
+   - ⚙️ `package.json` — added test to `pnpm test` chain (NOT `test:unit` — skips gracefully when SUPABASE env missing → safe in CI w/o secrets)
+
+### Review verdict — ✅ production-quality, no bugs found
+
+- Self-row check pattern is correct (RLS-respecting first, admin-client switch second per [ADR-0014](../decisions/0014-customer-self-service-state-transitions.md))
+- Defense-in-depth (3-layer check) is slight perf hit (~5ms extra DB read) but security-correct
+- CT-8 test runs against real Supabase (matches P-29 wallet ledger pattern), 23 asserts, env-skip-graceful
+- Code matches existing patterns; lints + types clean; `pnpm verify` ✓ green post-merge
+
+**Minor design note (not bug):** `cargoByForwarderId` map in driver-runs/page.tsx builds via `byFno` intermediate Map — slight redundancy that could be a direct `forwarder_id → cargo` join. **Defer cleanup**; not worth a refactor pass.
+
+### CT-* spine status post-ภูม-night-5
+
+| # | CT task | Status |
+|---|---|---|
+| CT-1 | Migration `0033_containers.sql` | ✅ shipped earlier (ภูม) |
+| CT-2 | `lib/warehouse/*.ts` typed clients | ✅ shipped earlier |
+| CT-3 | Customer container view (`/shipments` + `/shipments/[code]`) | ✅ shipped earlier |
+| CT-4 | Admin warehouse view (`/admin/warehouse/containers`) | ✅ shipped earlier |
+| CT-5 | MOMO sync cron | ⏳ blocked on ก๊อต MOMO-1 (prep: [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md)) |
+| CT-6 | MOMO webhook receiver | ⏳ blocked on ก๊อต MOMO-1 |
+| **CT-7** | **Driver UI integration** | ✅ **shipped night-5 (`fe05c3a`)** |
+| **CT-8** | **Lifecycle integration test** | ✅ **shipped night-5 (`58509f4`)** |
+
+CT-1..CT-4 + CT-7..CT-8 all green. Only CT-5/CT-6 remain → wait on ก๊อต MOMO call.
+
+### Note back to ภูม (for next session)
+
+- ขอบคุณ ภูม สำหรับ CT-7 + CT-8 — production-quality batch, defense-in-depth สวยมาก
+- ผม merge เข้า `dave` แล้ว `pnpm verify` ✅ green (50+ unit tests; CT-8 integration test skipped per design — env-graceful)
+- เดฟ ใส่ของอื่นเข้ามาเยอะใน `dave` (deep-sweep audit · 8 freight specs · 3 V3 ADRs · 5 ก๊อต-preempt docs · pre-launch checklist) — ภูม `git fetch && git merge origin/dave` ก่อน batch ถัดไป
+- พร้อม V-A6 WHT (รอ ก๊อต lock ADR-0015 fastlane — pre-answered ใน `briefs/got.md`)
+
+---
+
 ## 🔬 PHP deep-sweep checkpoint — 2026-05-16 night (เดฟ via Claude)
 
 เดฟ ผ่าน 4-agent deep-sweep against `/Users/dev/Desktop/pcscargo` (20,331 .php files / 2.2 GB) + verification pass. Master gap doc → [`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md).

@@ -1,6 +1,6 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight)
+Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight · + เดฟ preempted 6 ก๊อต P1 items: K-sec-2/3 audits + MOMO-2 reverse-engineer + Renovate config + CSP-1 plan + V-F3 resilience review)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
 ---
@@ -187,6 +187,36 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 
 #### P1 (production hardening — pre-public-beta)
 
+> 🆕 **เดฟ preempted 4 of 5 P1 items 2026-05-16 night (audits + configs + plans — no risky code changes shipped).** See "P1 preempted output" section below; ก๊อต just reviews + commits the rest.
+
+| # | Task | Effort | Source | Status |
+|---|---|---|---|---|
+| **K-sec-2** | RLS policy comprehensive audit — every Supabase table | 3–4h | Part O5 Track K3 | ✅ done by เดฟ → [`audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md) |
+| **K-sec-3** | Audit log coverage gap report | 1–2h | Part O5 Track K3 | ✅ done by เดฟ → same doc above (combined) |
+| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan + exec post-launch | Part O5 Track K3 | ⬜ deferred (post-launch P2) |
+| **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 | 📋 plan ready by เดฟ → [`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md); ภูม or เดฟ executes week-2 post-launch |
+| **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 | ✅ done by เดฟ → [`.github/renovate.json5`](../../.github/renovate.json5); ก๊อต enables Renovate GitHub App + merges onboarding PR |
+| **MOMO-2** | (was nested in MOMO-1) reverse-engineer legacy JMF integration | ~2-3h | Part S2 | ✅ done by เดฟ → [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md); ก๊อต uses §3 question list when MOMO-1 call happens |
+| **V-F3** | Legacy-infra resilience review | ~1h | Part V V-F3 | ✅ done by เดฟ → [`audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md); ก๊อต confirms legacy retirement date |
+
+#### 🆕 P1 preempted output (เดฟ 2026-05-16 night — for ก๊อต review)
+
+6 ก๊อต-queue items done by เดฟ + pushed to dave. ก๊อต just reads + agrees + (if approves) flips status in this file:
+
+1. **K-sec-2 + K-sec-3 combined RLS+audit audit** ([`audit/rls-and-audit-log-2026-05-16.md`](../audit/rls-and-audit-log-2026-05-16.md), 350+ lines) — **verdict: 🟢 strong posture, no blockers.** 58/58 tables RLS-enabled · 4 permissive patterns all justified · 8/8 storage buckets covered · 96 admin actions logged · `is_admin()` correct. Minor polish items (audit-log convention docs · retention policy · /admin/audit UI verify) flagged for V2 long-phase. ก๊อต action: read + agree.
+
+2. **MOMO-2 reverse-engineer + MOMO-1 call prep** ([`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md), 300+ lines) — JMF (closest analog) integration contract decoded from legacy PHP (PUT 25-field receiver + GET caller patterns). 24 prepared questions for MOMO dev grouped by topic (endpoints / auth / data model / webhook / ops / strategic). ก๊อต action: use §3 question list when making MOMO call. After call → ภูม wires `lib/integrations/momo-jmf/sync.ts` per §4.
+
+3. **Renovate config** ([`.github/renovate.json5`](../../.github/renovate.json5)) — auto-dep PRs with Pacred-specific defaults (weekly schedule · group non-major into 1 PR · auto-merge dev-deps · pin load-bearing packages Next/React/TS/Supabase for manual review). ก๊อต action: install [Renovate GitHub App](https://github.com/apps/renovate) → grant access to pacred-web → merge the onboarding PR Renovate opens.
+
+4. **CSP-1 nonce migration plan** ([`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md), 250+ lines) — full execution plan (5 inline-script sites inventoried · 4-phase migration · 7-risk register · 4 open Qs). **Not yet implemented** (too risky to ship in same session w/o per-route smoke). ก๊อต action: decide ship-week (recommend week 2 post-launch); ภูม or เดฟ executes per Phase 1-4.
+
+5. **V-F3 legacy-infra resilience review** ([`audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md), 200+ lines) — F1-* risk matrix (none-blocking right now), 7 hardening recommendations R1-R7, cutover gate criteria, recommended drills. ก๊อต action: confirm **legacy retirement target date** (recommend week 8-12 post-launch).
+
+---
+
+#### P1 (production hardening — pre-public-beta — original list for reference)
+
 | # | Task | Effort | Source |
 |---|---|---|---|
 | **K-sec-2** | RLS policy comprehensive audit — every Supabase table | 3–4h | Part O5 Track K3 |
@@ -195,21 +225,28 @@ New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13
 | **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 |
 | **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 |
 
-#### P2 (V3 prep — Track D ADRs)
+#### P2 (V3 prep — Track D ADRs) — 🆕 เดฟ preempted all 3 with DRAFTs
 
-| # | Task | Effort | Source |
-|---|---|---|---|
-| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 |
-| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 |
-| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 |
+| # | Task | Effort | Source | Status |
+|---|---|---|---|---|
+| **P-38** | ADR-0011 ERP RBAC granular roles per module | 2–3h | Part S2 + ADR-0008 + ADR-0009 | ✅ DRAFT by เดฟ → [`decisions/0011-erp-rbac-granular.md`](../decisions/0011-erp-rbac-granular.md); ก๊อต reviews + answers 5 open Qs + flips Accepted |
+| **P-39** | ADR-0012 ERP frontend shell — same app vs separate `erp.pacred.co` | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0012-erp-frontend-shell.md`](../decisions/0012-erp-frontend-shell.md); same review pattern |
+| **P-40** | ADR-0013 ERP migration strategy from V2 → V3 | 2–3h | Part S2 | ✅ DRAFT by เดฟ → [`decisions/0013-erp-v2-v3-migration-strategy.md`](../decisions/0013-erp-v2-v3-migration-strategy.md); same review pattern |
 
-#### P3 (Strategic decisions)
+#### P3 (Strategic decisions) — 🆕 เดฟ pre-researched 2 of 3 decision matrices
 
-| # | Task | Effort | Source |
-|---|---|---|---|
-| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 |
-| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 |
-| **Pacred owner call** | bundle: bank/PromptPay/tax-ID/legal name | ~30m | Part Q Bundle 1 |
+| # | Task | Effort | Source | Status |
+|---|---|---|---|---|
+| **D-7** | Payment Gateway provider choice (Omise / 2C2P / Stripe TH) for post-beta | Owner-call ~30m + decision | ADR-0004 | 📋 matrix ready by เดฟ → [`decisions/d7-payment-gateway-decision-matrix.md`](../decisions/d7-payment-gateway-decision-matrix.md); **recommend Omise** + ก๊อต confirms with พี่ป๊อป owner call |
+| **R1-pick** | China-search replacement (Option A scraper / B Alibaba API / C SaaS) | Owner-call + decision | ADR-0003 | 📋 matrix ready by เดฟ → [`decisions/r1-pick-china-search-options-matrix.md`](../decisions/r1-pick-china-search-options-matrix.md); **recommend defer to T+30d** + SaaS RFP if demand confirmed |
+| **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan | Part O5 K3 | 📋 plan ready by เดฟ → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md); **recommend Aiwen Tech** (~฿150-200k) at T+30d post-launch |
+| **Pacred owner call** | bundle: bank/PromptPay/tax-ID/legal name | ~30m | Part Q Bundle 1 | ⏳ ก๊อต-only (call พี่ป๊อป) |
+
+---
+
+#### 📋 Pre-launch checklist (single source of truth for Sunday-night → Monday)
+
+🆕 [`docs/runbook/pre-launch-checklist-2026-05-18.md`](../runbook/pre-launch-checklist-2026-05-18.md) — Sunday-night blockers (B1-B5) + soft blockers + verify gates + T-D1 smoke + Monday timeline + crisis playbook. All in one doc. **Read this on Saturday morning to align day-of work.**
 
 ---
 

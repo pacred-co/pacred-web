@@ -1,0 +1,157 @@
+// Renovate config — auto-dependency updates for Pacred (ก๊อต P3 task)
+//
+// Setup: install Renovate GitHub App at https://github.com/apps/renovate → grant access to pacred-web repo
+// On first run, Renovate opens a "Configure Renovate" onboarding PR you merge.
+// After that, it opens grouped PRs per schedule below.
+//
+// Pacred-specific defaults:
+// - GROUP minor + patch updates per ecosystem so we get 1 PR/week, not 50
+// - SEPARATE major updates (require human review per breaking-change scan)
+// - PIN Next.js / React / TypeScript to manual review (load-bearing for V2 contract)
+// - QUIET on weekends — don't ping team Sat/Sun
+//
+// Reference: https://docs.renovatebot.com/configuration-options/
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  extends: [
+    "config:recommended",
+    "schedule:weekly",       // run Sat morning UTC; PRs land Mon morning Asia/Bangkok
+    ":dependencyDashboard",  // single tracking issue + per-PR view
+    ":semanticCommits",      // commit messages follow conventional commits (matches Pacred style)
+    ":separateMajorReleases",
+    ":pinDevDependencies",
+  ],
+
+  timezone: "Asia/Bangkok",
+  schedule: ["before 9am on monday"],
+
+  // Cap concurrent PRs so team doesn't drown — review pace ~1-3/week
+  prConcurrentLimit: 5,
+  prHourlyLimit: 2,
+
+  // Auto-merge low-risk updates after CI passes
+  packageRules: [
+    {
+      description: "Group all non-major dev dependencies into one weekly PR",
+      matchDepTypes: ["devDependencies"],
+      matchUpdateTypes: ["patch", "minor"],
+      groupName: "dev dependencies (non-major)",
+      labels: ["dependencies", "dev-deps"],
+      automerge: true,
+      automergeType: "pr",
+    },
+    {
+      description: "Group all non-major runtime dependencies into one weekly PR",
+      matchDepTypes: ["dependencies"],
+      matchUpdateTypes: ["patch"],
+      groupName: "runtime dependencies (patch)",
+      labels: ["dependencies"],
+      automerge: true,
+      automergeType: "pr",
+    },
+    {
+      description: "Minor runtime updates — one PR per package, human review",
+      matchDepTypes: ["dependencies"],
+      matchUpdateTypes: ["minor"],
+      labels: ["dependencies", "minor"],
+    },
+    {
+      description: "Major updates — open one PR per package, never automerge",
+      matchUpdateTypes: ["major"],
+      labels: ["dependencies", "major", "needs-review"],
+      automerge: false,
+    },
+    {
+      description: "Pacred load-bearing — pin to manual review (Next 16 contract per AGENTS.md)",
+      matchPackageNames: [
+        "next",
+        "react",
+        "react-dom",
+        "typescript",
+        "next-intl",
+        "@supabase/ssr",
+        "@supabase/supabase-js",
+        "tailwindcss",
+        "@tailwindcss/postcss",
+      ],
+      automerge: false,
+      labels: ["dependencies", "load-bearing", "needs-review"],
+      reviewers: ["@got"],
+    },
+    {
+      description: "Pacred LINE / payment integrations — load-bearing, manual review",
+      matchPackageNames: [
+        "@line/liff",
+        "promptpay-qr",
+        "@react-pdf/renderer",
+        "@sentry/nextjs",
+        "@upstash/ratelimit",
+        "@upstash/redis",
+        "@hcaptcha/react-hcaptcha",
+        "zod",
+      ],
+      automerge: false,
+      labels: ["dependencies", "load-bearing", "needs-review"],
+    },
+    {
+      description: "ESLint + plugins — group + auto-merge non-major",
+      matchPackageNames: [
+        "eslint",
+        "eslint-config-next",
+      ],
+      matchPackagePatterns: ["^@typescript-eslint/", "^eslint-plugin-"],
+      matchUpdateTypes: ["patch", "minor"],
+      groupName: "eslint stack",
+      automerge: true,
+    },
+    {
+      description: "Lock-file maintenance — refresh pnpm-lock weekly",
+      matchDatasources: ["npm"],
+      enabled: true,
+    },
+  ],
+
+  // Lock-file maintenance (refresh peer-deps, security audit)
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 9am on monday"],
+    automerge: true,
+    labels: ["dependencies", "lockfile"],
+  },
+
+  // GitHub Actions versions
+  github-actions: {
+    enabled: true,
+    automerge: true,
+  },
+
+  // Vulnerability alerts: open PR immediately (override schedule)
+  vulnerabilityAlerts: {
+    enabled: true,
+    schedule: ["at any time"],
+    labels: ["security", "vulnerability"],
+    addLabels: ["security"],
+  },
+
+  // pnpm-specific
+  ignorePaths: [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/storage/**",
+    "**/.claude/worktrees/**",
+  ],
+
+  // Don't try to update these (legacy / pinned by design)
+  ignoreDeps: [
+    // Add packages here that need manual-only review
+  ],
+
+  // Commit message template (matches Pacred conventional commits)
+  commitMessagePrefix: "chore(deps):",
+  prTitle: "{{commitMessagePrefix}} {{prTitle}}",
+
+  // Onboarding PR will explain all of the above to the team
+  onboardingPrTitle: "chore(deps): configure Renovate (auto dep updates)",
+  onboardingConfigFileName: ".github/renovate.json5",
+}
