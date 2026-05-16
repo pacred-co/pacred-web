@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/expire-driver-assignments",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sms-balance-check",
+      "schedule": "0 23 * * *"
     }
   ]
 }

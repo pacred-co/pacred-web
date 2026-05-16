@@ -1,7 +1,7 @@
 # Vercel cron — plan limits + Pacred footprint
 
-**Last updated:** 2026-05-15 (P-vercel-plan, ภูม)
-**Action needed:** เดฟ confirm Pacred uses Vercel **Pro** plan (not Hobby).
+**Last updated:** 2026-05-17 (เดฟ — Pro plan confirmed)
+**Status:** ✅ RESOLVED — Pacred is on Vercel **Pro**. All 6 crons wired + within limit.
 
 ## Pacred current cron footprint (`vercel.json`)
 
@@ -12,8 +12,9 @@
 | `/api/cron/refresh-active-customers` | 01:00 daily | `0 1 * * *` | 1/day |
 | `/api/cron/expire-probation` | 02:00 daily | `0 2 * * *` | 1/day |
 | `/api/cron/expire-driver-assignments` | hourly | `0 * * * *` | 24/day |
+| `/api/cron/sms-balance-check` | 06:00 ICT daily | `0 23 * * *` | 1/day |
 
-**Total: 5 cron jobs, ~123 invocations/day.**
+**Total: 6 cron jobs, ~124 invocations/day.** Well within the Pro 100-cron ceiling.
 
 ## Vercel plan limits (per [Vercel Cron Jobs docs](https://vercel.com/docs/cron-jobs))
 
@@ -23,28 +24,33 @@
 | **Pro ($20/user/mo)** | 100 cron jobs | min interval **none** (any cron expr OK) |
 | **Enterprise** | unlimited | none |
 
-## Diagnosis
+## Diagnosis — ✅ resolved 2026-05-17
 
-**Pacred has 5 cron jobs.**  Hobby allows **2**.  If Pacred ends up on Hobby:
-- Vercel **silently drops** crons #3-5 (no error in deploy logs in some cases)
-- Even crons #1-2 cap to once per day — `auto-cancel-orders` (intended every 15min) would only run once/day → orders sit pending in `awaiting_payment` for up to 24h before sweep, breaking the SLA we promise customers
+**Pacred is on Vercel Pro** (เดฟ confirmed 2026-05-17). The Pro ceiling is 100
+concurrent crons at any frequency. Pacred runs **6** → ~94 crons of headroom.
+No consolidation needed — every cron runs at its true schedule, so
+`auto-cancel-orders` keeps sweeping every 15 min and the `awaiting_payment`
+SLA stays tight.
 
-**Action items:**
+**Action items — all done:**
 
-- [ ] **เดฟ:** confirm Vercel project plan in Vercel dashboard → Project → Settings → General → Plan
-- [ ] If on Hobby:
-  - **Option 1 (preferred):** Upgrade to Pro ($20/mo) — covers all 5 crons + future room
-  - **Option 2 (no upgrade):** Consolidate 5 → 2 crons:
-    - Combine all daily 1/day crons into `/api/cron/daily-batch` (digest + active-customers + probation expire) at 02:00
-    - Combine `auto-cancel-orders` + `expire-driver-assignments` into one hourly `/api/cron/hourly-batch` (auto-cancel runs every 4 ticks = effective 4h interval — degraded SLA)
-- [ ] If on Pro: ✅ no action; we have headroom for ~95 more crons before hitting limit
+- [x] **เดฟ** confirmed Vercel project plan = **Pro** (2026-05-17)
+- [x] `sms-balance-check` wired into `vercel.json` (cron #6, `0 23 * * *` = 06:00 ICT)
+- [x] No Hobby consolidation needed — Pro covers all 6 + headroom
+
+> **If the project is ever downgraded to Hobby:** 6 crons > the 2-cron Hobby
+> limit → Vercel would silently drop crons #3-6 + cap the rest to once/day.
+> The fix would be to consolidate: fold the 4 daily crons into one
+> `/api/cron/daily-batch` + the 2 sub-daily (`auto-cancel-orders` +
+> `expire-driver-assignments`) into one `/api/cron/hourly-batch`. **Not needed
+> while on Pro** — documented here only as the downgrade contingency.
 
 ## Pre-flight check before next deploy
 
 ```bash
 # Local sanity (count entries):
 jq '.crons | length' vercel.json
-# Returns 5; must be ≤ plan limit
+# Returns 6; must be ≤ 100 (Pro plan limit)
 ```
 
 ## References

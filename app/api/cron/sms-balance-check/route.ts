@@ -13,9 +13,8 @@ import { logger } from "@/lib/logger";
  * Schedule: daily at 06:00 ICT (= 23:00 UTC the previous day).
  *   vercel.json: { "path": "/api/cron/sms-balance-check", "schedule": "0 23 * * *" }
  *
- * **Not yet added to vercel.json** — pending เดฟ confirmation of Pacred
- * Vercel Pro plan (Hobby max 2 crons; currently at 5; this would make 6).
- * See docs/runbook/vercel-cron-plan.md.
+ * Wired into vercel.json 2026-05-17 — เดฟ confirmed Pacred is on the Vercel
+ * Pro plan (100-cron ceiling; this is cron #6). See docs/runbook/vercel-cron-plan.md.
  *
  * Logic:
  *   1. Call checkSmsBalance() (provider abstraction in lib/sms/gateway.ts)
