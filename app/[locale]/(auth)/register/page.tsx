@@ -436,15 +436,22 @@ function JuristicForm() {
       `https://opendata.dbd.go.th/api/v1/nameAndAddress?JuristicID=${id}`,
       `https://opendata.dbd.go.th/api/v1/juristicNameAll?JuristicID=${id}`,
     ];
-    // Track whether *any* endpoint behaved like a real API. If every call
-    // failed with a network error / 5xx, the API is down — don't gaslight
-    // the user with "ไม่พบข้อมูล" when their tax ID may be perfectly valid.
+    // Track whether *any* endpoint failed to complete a real lookup. If every
+    // call errored (network / WAF block / 4xx / 5xx), the API is unreachable —
+    // don't gaslight the user with "ไม่พบข้อมูล" when their tax ID may be
+    // perfectly valid. "notfound" is reserved for a genuine 200-with-no-record.
+    //
+    // NOTE 2026-05-17: DBD retired the `api/v1/*` endpoints (now 404 for every
+    // request) + the CKAN `api/3/*` API sits behind an Incapsula WAF that
+    // rejects programmatic calls. So in practice every lookup currently lands
+    // in the `unavailable` branch → customer fills the form manually. Verified
+    // via T-D1 smoke gate. Treat ANY non-OK status as an API error (incl. 404)
+    // so the honest "ระบบค้นหาไม่พร้อม กรอกด้วยตนเอง" notice shows.
     let sawApiError = false;
     for (const url of endpoints) {
       try {
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (res.status >= 500) { sawApiError = true; continue; }
-        if (!res.ok) continue;
+        if (!res.ok) { sawApiError = true; continue; }
         const json = await res.json();
         const d = json?.data?.[0] || json?.result?.[0] || json?.[0] || null;
         if (!d) continue;
