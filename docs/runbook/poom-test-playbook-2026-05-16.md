@@ -156,6 +156,22 @@
 - [ ] เปิด `/admin/dashboard` → ควร redirect → `/admin` ทันที (ไม่เห็นหน้า stub เดิม)
 - [ ] login เป็น admin → ควรไป `/admin` ตรง ๆ ไม่ผ่าน /admin/dashboard
 
+### X. **NEW (CT-7)** — Driver "งานของฉัน" home
+- [ ] login เป็น admin role=driver → sidebar เห็น "งานของฉัน (driver)" ใน group ปฏิบัติการ
+- [ ] เปิด `/admin/driver-runs` → 2 section: 🛻 งานที่ต้องทำ (status 1+2) · ✅ ส่งสำเร็จวันนี้ (status 4)
+- [ ] Status 1 ("รอรับงาน") → ปุ่ม "✓ รับงาน" → กด → status flip 1→2 + accepted_at stamp
+- [ ] Status 2 ("รับงานแล้ว") → 2 ปุ่ม: 📦 สแกนส่ง (→/admin/barcode/driver) · ✅ ยืนยันส่งสำเร็จ (confirm → status flip 2→4)
+- [ ] ลูกค้าทุก row: tap เบอร์โทร → tel: link · ถ้ามี cargo_shipment ผูก → 🚚 ดู timeline (→/shipments/[code])
+- [ ] login เป็น admin role=ops หรือ super → เปิด /admin/driver-runs เห็นของตัวเอง (ของ ops/super); สามารถ accept/complete แทน driver ได้ (oversight)
+
+### Y. **NEW (LP-6)** — ShopOrderReceipt PDF coverage
+- [ ] `pnpm test` → ดูบรรทัด "ShopOrderReceipt (LP-6)" — 9 asserts (3 cases × 3 assertions each) ผ่านครบ
+- [ ] ลองเปิด `/api/pdf/shop-order/<h_no>` ใน browser ของลูกค้าที่เป็นนิติบุคคล (ที่ตั้ง bill_to_name_override) → PDF render ชื่อใน override (ไม่ใช่ company_name)
+
+### Z. **NEW** — /admin/learning training card redirects
+- [ ] เปิด `/admin/learning` → card "การอบรม → HR" → กดแล้วไป /admin/hr/training (blue accent + "→ เปิดในโมดูล HR" hint)
+- [ ] อีก 3 cards (rules/news/customer-terms) → ยังไปยัง /admin/learning/* (Phase H placeholders)
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร

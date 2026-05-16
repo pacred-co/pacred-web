@@ -17,6 +17,15 @@
 >
 > **⏳ รอ ก๊อต คืนนี้:** apply migration 0033–0043 บน prod Supabase · ใส่ SMS OTP key · `NEXT_PUBLIC_SITE_URL` + Supabase Google/FB provider (OAuth ยังไม่ทำงานจนกว่าจะตั้ง). ดู `env.md` §15.
 > **🧹 docs-dedup:** decision handed to **ก๊อต for tonight** — see [`docs/briefs/got.md`](../briefs/got.md) "docs-dedup decision" section (A: do now / B: defer / C: rescope). CLAUDE.md ~200–300/550 lines restate canonical docs.
+> **Last updated:** 2026-05-16 night-5 (ภูม via Claude) — **ภูม-lane "เก็บงานครบ" pass complete.** Synced merge from `origin/dave` (เดฟ pushed 17 commits with 8 new port-specs for Phase I2) + cleared remaining unblocked ภูม-lane items. 5 new commits `fe05c3a..b115b95`:
+> - `fe05c3a` **CT-7** Driver "งานของฉัน" home — driver-self serve assignment view + accept/complete actions + sidebar entry
+> - `58509f4` **CT-8** Container lifecycle integration test (DB-backed, 23 asserts, mirrors P-29 wallet ledger pattern)
+> - `92fdb29` **LP-6** PDF spot-check — extended render.test.tsx with 3 ShopOrderReceipt cases (paid/awaiting/juristic+V-C2 override+edge Thai)
+> - `b115b95` **/admin/learning** decision — keep as org-docs hub, redirect "training" card → /admin/hr/training (no duplicate)
+> - Plus dave→Poom merge ee80b97..d69e993 (เดฟ structural + B1 OTP UI + 8 new port-specs available for Phase I2 reference)
+>
+> **All ภูม-lane unblocked items now ✅ — Phase I2 freight stack (V-E6..V-G7 ~150-200h + V-G1..V-G7 ~32-40h) waiting for post-launch signal.**
+>
 > **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
 > - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
 > - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)
