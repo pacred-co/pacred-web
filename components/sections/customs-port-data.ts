@@ -52,7 +52,10 @@ export type CustomsPort = {
   modeIcon: LucideIcon;
   /** Tailwind gradient tokens for the image multiply overlay. */
   accent: string;
+  /** Landscape image (5:2) for the landing carousel card. */
   image: string;
+  /** Optional 4:3 / square image for the detail-page hero. Falls back to `image`. */
+  heroImage?: string;
   imageAlt: string;
   /**
    * Headline price shown big on the landing card. ปอน 2026-05-15:
@@ -456,7 +459,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "AIR FREIGHT",
     modeIcon: Plane,
     accent: "from-sky-500 to-sky-700",
-    image: "/images/cardclearance/suwanboys.png",
+    image: "/images/countryport/suvannapoomlong.png",
+    heroImage: "/images/countryport/suvannapoomshort.png",
     imageAlt: "เคลียร์สินค้า สุวรรณภูมิ Pacred",
     customsServiceFee: "2,800",
     shortDesc:
@@ -480,7 +484,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "AIR FREIGHT",
     modeIcon: Plane,
     accent: "from-sky-400 to-sky-600",
-    image: "/images/cardclearance/donmueng.png",
+    image: "/images/countryport/donmeunglong.png",
+    heroImage: "/images/countryport/donmeungshort.png",
     imageAlt: "เคลียร์สินค้า ดอนเมือง Pacred",
     customsServiceFee: "2,800",
     shortDesc:
@@ -504,7 +509,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "POSTAL",
     modeIcon: Mail,
     accent: "from-rose-400 to-rose-600",
-    image: "/images/cardclearance/praisaneelaksee.png",
+    image: "/images/countryport/laksinlong.png",
+    heroImage: "/images/countryport/laksishort.png",
     imageAlt: "เคลียร์พัสดุ ไปรษณีย์หลักสี่ Pacred",
     customsServiceFee: "2,800",
     shortDesc:
@@ -528,7 +534,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "SEA FREIGHT",
     modeIcon: Ship,
     accent: "from-blue-600 to-blue-800",
-    image: "/images/cardclearance/klongtoey.png",
+    image: "/images/countryport/klongtoeylong.png",
+    heroImage: "/images/countryport/klontoeyshort.png",
     imageAlt: "เคลียร์สินค้า คลองเตย Pacred",
     customsServiceFee: "3,500",
     shortDesc:
@@ -552,7 +559,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "SEA FREIGHT",
     modeIcon: Container,
     accent: "from-blue-700 to-blue-900",
-    image: "/images/cardclearance/laemport.png",
+    image: "/images/countryport/laemchabanglong.png",
+    heroImage: "/images/countryport/laemchabangshort.png",
     imageAlt: "เคลียร์สินค้า แหลมฉบัง Pacred",
     customsServiceFee: "3,500",
     shortDesc:
@@ -576,7 +584,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "INLAND DEPOT",
     modeIcon: Container,
     accent: "from-indigo-600 to-indigo-800",
-    image: "/images/cardclearance/laemport.png",
+    image: "/images/countryport/icdlong.png",
+    heroImage: "/images/countryport/icdshort.png",
     imageAlt: "เคลียร์สินค้า ICD ลาดกระบัง Pacred",
     customsServiceFee: "3,500",
     shortDesc:
@@ -600,7 +609,8 @@ export const CUSTOMS_PORTS: CustomsPort[] = [
     modeBadge: "TRUCK · CROSS-BORDER",
     modeIcon: Truck,
     accent: "from-primary-500 to-primary-700",
-    image: "/images/cardclearance/mukdahanport.png",
+    image: "/images/countryport/mukdahanlong.png",
+    heroImage: "/images/countryport/mukdahanshort.png",
     imageAlt: "เคลียร์สินค้า ด่านชายแดน Pacred",
     customsServiceFee: "3,500",
     shortDesc:

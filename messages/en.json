@@ -1144,6 +1144,7 @@
     "promotions": "Promotions",
     "blog": "Blog",
     "partner": "Partners",
+    "news": "News",
     "contact": "Contact",
     "askMore": "Ask us anything",
     "chatAria": "Chat on LINE",
@@ -1570,17 +1571,21 @@
     "payment": "Supplier payment",
     "warehouse": "Warehouses",
     "about": "About us",
-    "lclTitle": "LCL (shared / consolidated)",
-    "fclTitle": "FCL (full container)",
+    "lclTitle": "LCL",
+    "fclTitle": "FCL",
     "china": "China",
     "whTh": "Thailand warehouses",
     "whCn": "China warehouses",
     "customsHot": "Customs clearance for stuck cargo",
     "importChina": "Import from China",
+    "importChinaLcl": "Import from China — shared / consolidated container",
+    "importChinaFcl": "Import from China — full container (FCL)",
+    "orderChina": "China — 1688 / Taobao / Alibaba",
     "whThPhetkasem": "Phetkasem 118 warehouse",
     "whGuangzhou": "Guangzhou warehouse",
     "whYiwu": "Yiwu warehouse",
     "aboutPacred": "About Pacred",
+    "news": "Pacred News",
     "knowledge": "Articles & insights",
     "faq": "FAQ",
     "join": "Sign up with Pacred",
@@ -1997,6 +2002,12 @@
       "index": {
         "title": "Knowledge Base · Import, Export & Customs",
         "description": "In-depth Pacred Shipping articles — China imports, CIF/FOB/EXW Incoterms, customs clearance, permits, and how to reduce risk."
+      }
+    },
+    "news": {
+      "index": {
+        "title": "Pacred News · Announcements & Service Updates",
+        "description": "Follow announcements from Pacred Shipping — shipping measures, service updates, and company activities."
       }
     },
     "faq": {

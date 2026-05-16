@@ -129,7 +129,7 @@ const WHY = [
   { icon: BadgePercent, title: "ใช้สิทธิ Form E", desc: "ลดภาษีนำเข้าผ่าน FTA ASEAN-China" },
   { icon: Receipt, title: "ออกใบกำกับภาษีครบ", desc: "ภพ.20 · ใช้ลดหย่อนนิติบุคคล" },
   { icon: Container, title: "ตู้ครบทุกขนาด", desc: "20' · 40' · 40HQ · Reefer (อาหารแช่เย็น)" },
-  { icon: Award, title: "ทีมหน้างานจริง", desc: "ประจำPort + คลัง + พิธีการ" },
+  { icon: Award, title: "ทีมหน้างานจริง", desc: "ประจำ Port + คลัง + พิธีการ" },
 ];
 
 const FAQ_ITEMS = [

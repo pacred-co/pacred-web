@@ -24,11 +24,11 @@ function buildMenu(t: Translator): Item[] {
       groups: [
         {
           title: t("lclTitle"),
-          items: [{ label: t("importChina"), href: "/services/import-china", hot: true }],
+          items: [{ label: t("importChinaLcl"), href: "/services/import-china-lcl", hot: true }],
         },
         {
           title: t("fclTitle"),
-          items: [{ label: t("importChina"), href: "/services/import-china" }],
+          items: [{ label: t("importChinaFcl"), href: "/services/import-china-fcl" }],
         },
       ],
     },
@@ -37,12 +37,8 @@ function buildMenu(t: Translator): Item[] {
       label: t("order"),
       groups: [
         {
-          title: t("china"),
           items: [
-            { label: "1688",    href: "https://www.1688.com" },
-            { label: "Taobao",  href: "https://world.taobao.com" },
-            { label: "Alibaba", href: "https://www.alibaba.com" },
-            { label: "Tmall",   href: "https://www.tmall.com" },
+            { label: t("orderChina"), href: "/services/china-shopping" },
           ],
         },
       ],
@@ -84,6 +80,7 @@ function buildMenu(t: Translator): Item[] {
         {
           items: [
             { label: t("aboutPacred"), href: "/about" },
+            { label: t("news"),        href: "/news" },
             { label: t("knowledge"),   href: "/knowledge" },
             { label: t("faq"),         href: "/faq" },
             { label: t("join"),        href: "/register" },
@@ -111,6 +108,10 @@ function HotBadge() {
 }
 
 function MenuLink({ href, children, onClick }: { href: string; children: React.ReactNode; onClick?: () => void }) {
+  // whitespace-nowrap = sub-item text + HOT badge stay on one line; the
+  // dropdown's `min-w-[240px]` floors width but content can grow it.
+  const cls =
+    "block px-4 py-2 text-[13px] font-bold text-[#111827] hover:bg-primary-50 hover:text-primary-600 dark:text-white dark:hover:bg-primary-900/20 transition-colors whitespace-nowrap";
   if (isExternal(href) || href.startsWith("/#")) {
     return (
       <a
@@ -118,18 +119,14 @@ function MenuLink({ href, children, onClick }: { href: string; children: React.R
         target={isExternal(href) ? "_blank" : undefined}
         rel={isExternal(href) ? "noopener noreferrer" : undefined}
         onClick={onClick}
-        className="block px-4 py-2 text-[13px] font-bold text-[#111827] hover:bg-primary-50 hover:text-primary-600 dark:text-white dark:hover:bg-primary-900/20 transition-colors"
+        className={cls}
       >
         {children}
       </a>
     );
   }
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className="block px-4 py-2 text-[13px] font-bold text-[#111827] hover:bg-primary-50 hover:text-primary-600 dark:text-white dark:hover:bg-primary-900/20 transition-colors"
-    >
+    <Link href={href} onClick={onClick} className={cls}>
       {children}
     </Link>
   );
@@ -297,7 +294,7 @@ function MobileMenuItem({ item, onClose }: { item: Item; onClose: () => void }) 
                       onClick={onClose}
                       target={isExternal(it.href) ? "_blank" : undefined}
                       rel={isExternal(it.href) ? "noopener noreferrer" : undefined}
-                      className="block rounded-lg px-3 py-2 text-[13px] font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors"
+                      className="block rounded-lg px-3 py-2 text-[13px] font-bold text-white/80 hover:bg-white/10 hover:text-white transition-colors whitespace-nowrap"
                     >
                       {inner}
                     </a>

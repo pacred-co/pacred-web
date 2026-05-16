@@ -140,10 +140,11 @@ export function HomeArticle({ locale }: { locale: "th" | "en" }) {
               className="group relative block aspect-[16/10] overflow-hidden rounded-2xl md:rounded-3xl border border-border shadow-[0_14px_36px_-10px_rgba(15,23,42,0.18)] bg-gradient-to-br from-gray-100 to-gray-200 dark:from-surface-alt dark:to-background hover:shadow-[0_22px_50px_-12px_rgba(179,0,0,0.25)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
             >
               <Image
-                src="/images/pacredoffice.jpg"
+                src="/images/companyofficethai.png"
                 alt={t("officeAlt")}
                 fill
                 sizes="(max-width: 1024px) 100vw, 480px"
+                quality={95}
                 className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                 priority={false}
               />

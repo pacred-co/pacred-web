@@ -4,12 +4,8 @@ import { useEffect, useState } from "react";
 import { Eye, ThumbsUp } from "lucide-react";
 
 export function ArticleStats({ articleId }: { articleId: number }) {
-  // Base counts deterministic by id (เห็นเลขสม่ำเสมอ ไม่ใช่ random ทุก reload)
-  const baseViews = 247 + articleId * 113;
-  const baseLikes = 18 + articleId * 7;
-
-  const [views, setViews] = useState<number>(baseViews);
-  const [likes, setLikes] = useState<number>(baseLikes);
+  const [views, setViews] = useState<number>(0);
+  const [likes, setLikes] = useState<number>(0);
   const [liked, setLiked] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -34,9 +30,9 @@ export function ArticleStats({ articleId }: { articleId: number }) {
 
     setMounted(true);
     setLiked(wasLiked);
-    setViews(baseViews + newViews);
-    setLikes(baseLikes + savedLikes);
-  }, [articleId, baseViews, baseLikes]);
+    setViews(newViews);
+    setLikes(savedLikes);
+  }, [articleId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const toggleLike = () => {
@@ -64,7 +60,7 @@ export function ArticleStats({ articleId }: { articleId: number }) {
       {/* View count */}
       <span className="inline-flex items-center gap-1" suppressHydrationWarning>
         <Eye className="w-3.5 h-3.5" strokeWidth={2.5} />
-        {mounted ? views.toLocaleString() : baseViews.toLocaleString()} วิว
+        {mounted ? views.toLocaleString() : "0"} วิว
       </span>
       <span className="text-muted/50">·</span>
 
@@ -89,7 +85,7 @@ export function ArticleStats({ articleId }: { articleId: number }) {
           strokeWidth={2.5}
         />
         <span suppressHydrationWarning>
-          {mounted ? likes.toLocaleString() : baseLikes.toLocaleString()}
+          {mounted ? likes.toLocaleString() : "0"}
         </span>
       </button>
     </>

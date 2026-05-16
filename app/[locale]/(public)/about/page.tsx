@@ -124,10 +124,11 @@ export default async function AboutPage({
               {/* Right — Pacred Office image */}
               <div className="relative aspect-[4/3] lg:aspect-auto lg:min-h-[420px] overflow-hidden rounded-2xl md:rounded-3xl border border-border shadow-[0_14px_34px_rgba(15,23,42,0.10)]">
                 <Image
-                  src="/images/pacredoffice.jpg"
+                  src="/images/companyofficethai.png"
                   alt="ออฟฟิศ Pacred Shipping"
                   fill
                   sizes="(max-width: 1024px) 100vw, 620px"
+                  quality={95}
                   className="object-cover"
                   priority
                 />
