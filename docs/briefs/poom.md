@@ -109,8 +109,8 @@ The biggest backend addition. Read [`docs/architecture/container-centric-model.m
 | **CT-2** | `lib/warehouse/*.ts` — typed clients for upsert + tracking-event-append | ~2h |
 | **CT-3** | Customer view `/(protected)/service-import/[fNo]/container` — container card + tracking timeline | ~3h |
 | **CT-4** | Admin view `/(admin)/admin/warehouse/containers` — list + filter + detail with customer list inside | ~4h |
-| **CT-5** | Block on ก๊อต MOMO endpoint inventory → wire sync cron `app/api/cron/momo-jmf-sync/route.ts` | ~3h |
-| **CT-6** | Block on ก๊อต webhook decision → wire `app/api/webhooks/momo-jmf/route.ts` | ~2h |
+| **CT-5** | Block on MOMO endpoint inventory (call in-flight — **ลูกพี่ takes call**, เดฟ parses) → wire sync cron `app/api/cron/momo-jmf-sync/route.ts` | ~3h |
+| **CT-6** | Block on webhook decision (same call as CT-5) → wire `app/api/webhooks/momo-jmf/route.ts` | ~2h |
 | **CT-7** | Driver UI integration — driver sees their container's shipments | ~2h |
 | **CT-8** | Integration test for container lifecycle (create → pack → seal → in-transit → arrived → unload → deliver) | ~2h |
 
@@ -193,7 +193,7 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| ก๊อต MOMO endpoint inventory | Migration CT-1 (no MOMO dependency) + customer-side view CT-3 (works with manual entry) |
+| MOMO endpoint inventory (ลูกพี่ + เดฟ in-flight) | Migration CT-1 (no MOMO dependency) + customer-side view CT-3 (works with manual entry) |
 | ก๊อต K-1 ADR-0003 (already locked) | All Track G is your follow-up label work; pickup at any time |
 | ปอน hasn't shipped theme tokens | Use existing `app/globals.css` tokens as-is; flag any new tokens you need to ปอน + เดฟ |
 | Phase G2 tax invoice (waiting on Pacred tax-ID) | CT-1..CT-8 don't need it; do those first |

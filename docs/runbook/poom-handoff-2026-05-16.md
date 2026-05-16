@@ -51,8 +51,8 @@
 - Duty rate: snapshot from `hs_codes` at issuance, overridable + logged
 - V-E3 (Form E) / V-E4 (D/O) = pure templating, no new ADR needed
 
-### E-3 · MOMO endpoint inventory — block MOMO sync wire
-`lib/integrations/momo-jmf/sync.ts` ยังเป็น skeleton. ภูม ไม่กรอกจนกว่า ก๊อต MOMO-1 confirm shape. ไม่ block.
+### E-3 · MOMO endpoint inventory — **in-flight 2026-05-16 night**
+**Call owner changed:** ก๊อต → ลูกพี่ ("เอามาทำเอง"). เดฟ wrote ลูกพี่-friendly call script [`docs/runbook/momo-1-bboy-call-script.md`](momo-1-bboy-call-script.md) (6 topics, 30-45m, plain-Thai). ลูกพี่ schedules + calls BBOY → ส่ง audio + notes ให้ เดฟ → เดฟ กรอก [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) → ping ภูม. ภูม ไม่ต้องทำอะไรจนกว่า ping.
 
 ### E-4 · Pacred owner Bundle 1 — block tax-invoice prod + LIFF + payment
 ก๊อต/เดฟ คุยกับพี่ป๊อปเอง — ภูม ไม่เข้าไปยุ่ง.

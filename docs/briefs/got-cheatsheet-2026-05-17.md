@@ -82,10 +82,11 @@
 
 ## 2. 📞 Partner / owner calls (กอต-only · ~3h)
 
-### 2.1 MOMO-1 — call MOMO dev (BBOY) (~2-3h call + doc)
-- ผม prep question list ครบ 24 ข้อใน [`docs/integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) §3
-- มี JMF (PHP analog) reverse-engineered ใน §2 — เพื่อ ก๊อต ใช้อ้างอิงระหว่างคุย
-- หลังคุยเสร็จ → กรอกข้อมูลที่ได้ใน [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md)
+### 2.1 MOMO-1 — call MOMO dev (BBOY) — ⏳ **ลูกพี่ takes** 2026-05-16 night
+- **Owner changed:** ก๊อต → ลูกพี่ (per ลูกพี่ "เอามาทำเอง" 2026-05-16 night)
+- เดฟ wrote ลูกพี่-friendly call script: [`docs/runbook/momo-1-bboy-call-script.md`](../runbook/momo-1-bboy-call-script.md) (6 topics, 30-45m, plain-Thai questions wrapped over the 24-Q technical reference)
+- Full technical reference (for เดฟ post-call parse) → [`docs/integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md)
+- หลังคุยเสร็จ → ลูกพี่ ส่ง audio + notes ให้ เดฟ → เดฟ กรอก [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md)
 - **Unblocks:** CT-5 (MOMO sync cron) + CT-6 (webhook receiver) ภูม จะ implement ทันที post-call
 
 ### 2.2 T-G3 — call พี่ป๊อป Bundle 1 (~30m + รอ)
