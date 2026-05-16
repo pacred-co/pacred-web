@@ -76,6 +76,7 @@ const items: NavItem[] = [
   { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
   { href: "/admin/audit",            label: "Audit log",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
+  { href: "/admin/settings/contacts",label: "ข้อมูลติดต่อ (V-G5)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super","accounting","sales_admin"], group: "ระบบ" },
 ];
 
 export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
