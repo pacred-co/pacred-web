@@ -1,6 +1,6 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16 (+ Part V cargo-forensics ADR-0015/0016 hand-off)
+Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
 ---
@@ -102,6 +102,30 @@ Two DRAFT ADRs from the cargo-ops forensics need your review + lock. **ADR-0015 
 | **ADR-0015 lock** | Review [`0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — answer the **4 open questions**, flip Status → Accepted. Unblocks 🔴 **V-A6** (withholding tax — the #1 accounting pain in the ไอแต้ม chat). | ~45m | PORT_PLAN Part V |
 | **ADR-0016 lock** | Review [`0016-freight-value-model.md`](../decisions/0016-freight-value-model.md) — answer the **5 open questions** (incl. who issues Form E), flip Status → Accepted. Unblocks **V-E2** (freight value model). | ~45m | PORT_PLAN Part V |
 | **V-F context** | Skim [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + Part V; own **V-F3** (legacy-infra resilience) inside [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md) — you confirm each row's `✅ cut over` (the green light to scrub PCS/ไอแต้ม refs). | ~30m | PORT_PLAN Part V |
+
+#### 📋 docs-dedup decision (NEW 2026-05-16 — เดฟ hand-off · DECIDE tonight)
+
+เดฟ asked you to **call this tonight** while you're in `main`. Not revenue / not urgent (docs don't affect production) — but a quick decision, and you're the right reviewer ("คนเฝ้า") because dedup is judgment-heavy.
+
+**Situation:** docs have real duplication. Main offender = **`CLAUDE.md` (550 lines)** — roughly 200–300 lines restate canonical docs:
+
+| CLAUDE.md section | duplicates canonical |
+|---|---|
+| "Team & Branch workflow" | `docs/team.md` (CLAUDE.md even self-admits "CANONICAL moved to team.md") |
+| "Legacy PHP Port Plan" (feature-map + roadmap) | `docs/PORT_PLAN.md` |
+| "Conventions" (Routing / Styling / Components) | `docs/conventions.md` |
+| "Pacred DNA" / company info | `docs/pacred-info.md` |
+
+New rule just landed (commit `a6fc67d`, `AGENTS.md` §12 / `conventions.md` §13): **every `.md` ≤ 2000 lines · one canonical home per fact.** No file exceeds 2000 today (biggest = `PORT_PLAN.md` 1727 — cap is preventive) but the duplication is real and `CLAUDE.md` is the cleanup target.
+
+**Decide (pick one):**
+- **A** — green-light a `CLAUDE.md`-focused dedup now: an agent replaces each restated section with a 1–2 line summary + link to the canonical doc (**pointers, not deletes** — no info lost), verifies `pnpm audit:md`, commits `docs(dedup): …` on `dave` → you review the diff → FF `main`. ~30–40 min agent work + ~10 min your review.
+- **B** — defer to a normal supervised session (no rush — docs block nothing).
+- **C** — scope differently (e.g. also tidy `team-status` + the role briefs).
+
+**Risk to weigh:** docs are NOT deployed → **zero production risk**. Real risks are only (1) broken cross-links — `pnpm audit:md` (793 links) catches all of them; (2) judgment — some restatement is *intentional* (`CLAUDE.md` is a load-bearing always-loaded primer · `STRATEGY.md` is a deliberate consolidation · briefs are per-role digests). A dedup must KEEP those and cut only genuine rot. That judgment is why เดฟ routed it to you rather than letting an agent decide unsupervised.
+
+**Recommended: A** — safe (pointers + audit gate), `CLAUDE.md` is the clear 80% win, and you're online tonight to review. Say go and an agent executes it; you just review the diff + FF to `main`.
 
 #### P1 (production hardening — pre-public-beta)
 

@@ -16,7 +16,7 @@
 > **📏 กฎ docs ใหม่:** ทุก `.md` ≤ 2000 บรรทัด (เกิน → แยกไฟล์ + ลิงค์ถึงกัน) · ห้ามเขียนซ้ำ (canonical เดียว ที่เหลือลิงค์). ดู `AGENTS.md` §12 + `conventions.md` §13.
 >
 > **⏳ รอ ก๊อต คืนนี้:** apply migration 0033–0043 บน prod Supabase · ใส่ SMS OTP key · `NEXT_PUBLIC_SITE_URL` + Supabase Google/FB provider (OAuth ยังไม่ทำงานจนกว่าจะตั้ง). ดู `env.md` §15.
-> **🧹 Follow-up ที่วางแผนไว้:** docs dedup pass เต็มรูปแบบ — ทำแบบตั้งใจ ไม่เร่ง (กัน cross-link พัง).
+> **🧹 docs-dedup:** decision handed to **ก๊อต for tonight** — see [`docs/briefs/got.md`](../briefs/got.md) "docs-dedup decision" section (A: do now / B: defer / C: rescope). CLAUDE.md ~200–300/550 lines restate canonical docs.
 > **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
 > - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
 > - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)
