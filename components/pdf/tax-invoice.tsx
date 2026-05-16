@@ -33,6 +33,7 @@ import {
   ADDRESSES,
   SITE_LEGAL_NAME_TH,
   TAX_ID,
+  BANK,
 } from "@/components/seo/site";
 
 export type TaxInvoiceData = {
@@ -227,6 +228,27 @@ export function TaxInvoice({ data }: { data: TaxInvoiceData }) {
           <Text style={styles.amountInWords}>
             ({readThaiBaht(Number(data.total_thb))})
           </Text>
+        </View>
+
+        {/* Bank-transfer payment info (BANK constant — wired from site.ts after T-G3 Bundle 1) */}
+        <View style={styles.bankBlock}>
+          <Text style={styles.bankTitle}>ช่องทางการชำระเงิน / PAYMENT — โอนผ่านธนาคาร / Bank transfer</Text>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>ธนาคาร / Bank</Text>
+            <Text style={styles.bankValue}>{BANK.name} ({BANK.nameEn})</Text>
+          </View>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>ชื่อบัญชี / Account</Text>
+            <Text style={styles.bankValue}>{BANK.accountName} / {BANK.accountNameEn}</Text>
+          </View>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>เลขที่ / No.</Text>
+            <Text style={[styles.bankValue, styles.bankAccountNumber]}>{BANK.accountNumber}</Text>
+          </View>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>ประเภท / Type</Text>
+            <Text style={styles.bankValue}>{BANK.accountType} / {BANK.accountTypeEn}</Text>
+          </View>
         </View>
 
         {/* Signature lines */}
