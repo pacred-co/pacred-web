@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getMyShipment } from "@/actions/shipments";
+import { createClient } from "@/lib/supabase/server";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
 import { CARGO_TYPE_LABEL_TH, isCargoType } from "@/lib/warehouse/cargo-type";
 
@@ -90,6 +91,24 @@ export default async function ShipmentDetailPage({
   const statusBadge = STATUS_BADGE[s.status] ?? "bg-gray-50 text-gray-700 border-gray-200";
   const statusLabel = STATUS_LABEL[s.status] ?? s.status;
   const transport   = s.container?.transport_mode ? TRANSPORT_LABEL[s.container.transport_mode] : null;
+
+  // V-E10: QA/QC inspection for this shipment (latest row).
+  // RLS: customer reads own (via cargo_shipments.profile_id = auth.uid()).
+  const supabase = await createClient();
+  const { data: qaRow } = await supabase
+    .from("freight_qa_inspections")
+    .select("inspection_no, outcome, damage_level, missing_items, notes, inspected_at")
+    .eq("cargo_shipment_id", s.id)
+    .order("inspected_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{
+      inspection_no:  string;
+      outcome:        "pass" | "fail_minor" | "fail_major" | "waived";
+      damage_level:   string | null;
+      missing_items:  number;
+      notes:          string | null;
+      inspected_at:   string;
+    }>();
 
   // U1-7 freshness: most recent scanned_at across all events
   const latestScannedAt = s.events[0]?.scanned_at ?? null;
@@ -202,6 +221,43 @@ export default async function ShipmentDetailPage({
             >
               ↗ ฝากสั่ง: <span className="font-mono">{s.service_order_h_no}</span>
             </Link>
+          )}
+        </div>
+      )}
+
+      {/* V-E10 QA status panel */}
+      {qaRow && (
+        <div className={`rounded-2xl border p-5 ${
+          qaRow.outcome === "pass"       ? "border-green-200 bg-green-50/40"
+          : qaRow.outcome === "fail_minor" ? "border-yellow-200 bg-yellow-50/40"
+          : qaRow.outcome === "fail_major" ? "border-red-200 bg-red-50/40"
+          :                                 "border-gray-200 bg-gray-50/40"
+        }`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-sm font-bold">
+              {qaRow.outcome === "pass"       && "✅ ผ่านการตรวจคุณภาพแล้ว"}
+              {qaRow.outcome === "fail_minor" && "⚠️ ตรวจพบปัญหาเล็กน้อย (ส่งมอบได้)"}
+              {qaRow.outcome === "fail_major" && "🚨 ตรวจพบปัญหาสำคัญ"}
+              {qaRow.outcome === "waived"     && "ℹ️ ยกเว้นการตรวจ"}
+            </h3>
+            <span className="text-[10px] font-mono text-muted">{qaRow.inspection_no}</span>
+          </div>
+          <p className="text-xs text-muted mt-1">
+            ตรวจเมื่อ {new Date(qaRow.inspected_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+          </p>
+          {qaRow.damage_level && qaRow.damage_level !== "none" && (
+            <p className="text-xs mt-2">ระดับความเสียหาย: <strong>{qaRow.damage_level}</strong></p>
+          )}
+          {qaRow.missing_items > 0 && (
+            <p className="text-xs mt-1">ของขาด: <strong>{qaRow.missing_items}</strong> ชิ้น</p>
+          )}
+          {qaRow.notes && (
+            <p className="text-xs mt-2 whitespace-pre-line">{qaRow.notes}</p>
+          )}
+          {qaRow.outcome === "fail_major" && (
+            <p className="text-xs mt-3 text-red-700">
+              📞 กรุณาติดต่อทีมงาน — LINE @pacred เพื่อหารือเกี่ยวกับการรับสินค้า
+            </p>
           )}
         </div>
       )}
