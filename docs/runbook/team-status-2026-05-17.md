@@ -18,7 +18,7 @@ Latest batch on top of everything below:
 4. **🔐 auth fixes** — OTP UI in-theme + explicit "ขอรหัส OTP" button · login Facebook/Google icons (shrink-0) · logo enlarged 76px · DBD lookup honest degradation.
 5. **OAuth login (Google/Facebook) → ก๊อต** — broken because `NEXT_PUBLIC_SITE_URL`=dead `v2.pacred.co` + Facebook app in Dev Mode. **ก๊อต takes the dashboard config 2026-05-18 morning** (Vercel env + Supabase URLs + FB/Google apps). Full steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Phone+OTP login unaffected.
 
-⚠️ **6 migrations `0044`-`0048` + `0060` are in git but NOT yet applied to Supabase** — `supabase db push` (or SQL-Editor paste) on dev + prod before the dependent features go live.
+⚠️ **6 migrations `0044`-`0048` + `0060` are in git but NOT yet applied to Supabase** — เดฟ reviewed all 6 SQL files 2026-05-17 (sound · idempotent · no bugs). **ภูม owns applying them to dev + prod** — exact steps + one-paste combined file + verify queries in [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 
 ---
 

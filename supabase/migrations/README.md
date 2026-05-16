@@ -56,6 +56,19 @@
 | 41 | [0041_bill_to_name_override.sql](0041_bill_to_name_override.sql) | forwarders + service_orders bill_to_name_override (V-C2) | **V-C2** |
 | 42 | [0042_cargo_containers_close_at.sql](0042_cargo_containers_close_at.sql) | cargo_containers close_at ตัดตู้ deadline (V-C3) | **V-C3** |
 | 43 | [0043_slip_transferred_at.sql](0043_slip_transferred_at.sql) | wallet_transactions + yuan_payments slip_transferred_at (V-A1) | **V-A1** |
+| 44 | [0044_withholding_tax.sql](0044_withholding_tax.sql) | withholding_tax_entries + wht-certs storage bucket (V-A6) | **V-A6 · I2** |
+| 45 | [0045_freight_qa_inspections.sql](0045_freight_qa_inspections.sql) | freight_qa_inspections + qa_inspection_seq + qa-inspection-photos bucket (V-E10) | **V-E10 · I2** |
+| 46 | [0046_org_contacts.sql](0046_org_contacts.sql) | org_contacts — owner-self-serve contact mgmt (V-G5) | **V-G5 · I2** |
+| 47 | [0047_tos_versions.sql](0047_tos_versions.sql) | tos_versions + tos_acceptances — TOS version mgmt (V-G4) | **V-G4 · I2** |
+| 48 | [0048_freight_quotes.sql](0048_freight_quotes.sql) | freight_quotes + freight_quote_items + freight_quote_seq (V-E6) | **V-E6 · I2** |
+| 49 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
+
+> ⚡ **Shortcut for 0044–0060 (ภูม Phase-I2 batch + เดฟ member_code):** open
+> [`../../docs/setup/migrations-0044-0060.sql`](../../docs/setup/migrations-0044-0060.sql)
+> — combined, idempotent, ends with a 3-part verify query. Paste the whole
+> file → **Run** once, on **dev AND production**. The 6 migrations are mutually
+> independent (only need the 0002-0043 base). The `0049`-`0059` gap is
+> intentional — reserved for ภูม's freight block; `0060` simply sorts last.
 
 > ⚡ **Shortcut for 0023–0038:** instead of pasting 16 files one by one,
 > open [`../../docs/setup/migrations-0023-0038.sql`](../../docs/setup/migrations-0023-0038.sql)
