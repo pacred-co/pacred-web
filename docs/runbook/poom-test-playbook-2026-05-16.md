@@ -243,6 +243,31 @@
 - [ ] เดียวกัน with "<uuid-no-inspection>" → false
 - [ ] เมื่อ V-E7 ships, billing flow จะใช้ helper นี้ block invoice issuance
 
+### DD. **NEW (V-G5) — Org contacts management** ⚠️ **PRE-FLIGHT: รัน migration 0046 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0046_org_contacts.sql` ใน Supabase Studio → ดู table `org_contacts` + RLS policies (public read active-only, admin write super/accounting/sales_admin)
+
+**Admin CRUD (super):**
+- [ ] เปิด `/admin/settings/contacts` → tab "อีเมล" active by default; เห็น tabs ครบ 7 (โดเมน/อีเมล/LINE OA/โทรศัพท์/WeChat/Social/ที่อยู่) + count badges
+- [ ] กด "+ เพิ่มข้อมูลติดต่อ" → form ปรากฏ → กรอก label="ฝ่ายขาย", value="sales@pacred.co", department="ขาย", order=0 → ✓ เพิ่ม
+- [ ] Row ใหม่ปรากฏในตาราง + count tab "อีเมล" เพิ่ม 1
+- [ ] กดปุ่ม "✓ เปิด" → flip เป็น "○ ปิด" (rgb opacity ลด); กดอีกครั้ง → กลับ
+- [ ] กด "แก้ไข" → inline form → เปลี่ยน value → ✓ บันทึก → ค่าใหม่ปรากฏ + audit log
+- [ ] กด "ลบ" → ปุ่ม "✓ ยืนยันลบ" + "ยกเลิก" → ยกเลิก → ไม่เกิดอะไร; ยืนยัน → row หายไป
+
+**Role gating:**
+- [ ] role=accounting → เข้า `/admin/settings/contacts` ได้ + แก้ไขได้
+- [ ] role=sales_admin → เข้าได้ + แก้ไขได้
+- [ ] role=ops → 404 (ไม่ allowed)
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`org_contact` → เห็น actions org_contact.create / org_contact.update (มี before+patch) / org_contact.delete (มี before snapshot)
+
+**Customer-side (V-G5.1 not shipped yet):**
+- [ ] Footer + contact-us page ยังใช้ constants ใน `components/seo/site.ts` — ไม่เปลี่ยนพฤติกรรม
+- [ ] DB rows ที่เพิ่ม **ไม่กระทบ** หน้า public ใดๆ ใน V1 — สามารถ test ได้ปลอดภัยบน prod
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
