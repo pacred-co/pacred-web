@@ -63,7 +63,7 @@ One row per WHT event, FK to the parent order (`order_h_no` *or* `forwarder_f_no
 
 **Adopt Option B — a dedicated `withholding_tax_entries` table.** WHT is a *payment-settlement* concept layered onto an order; the invoice/order gross and its VAT are **unchanged** (the receipt always shows `Gross`).
 
-### Schema sketch — migration `0039_withholding_tax.sql`
+### Schema sketch — migration `0045_withholding_tax.sql`
 
 ```sql
 create table public.withholding_tax_entries (
@@ -135,7 +135,7 @@ create table public.withholding_tax_entries (
 
 ## V1 scope (what ภูม builds for V-A6, after ก๊อต locks)
 
-In: migration `0039` · `wht-certs` bucket · Zod validator `lib/validators/withholding-tax.ts` · admin UI to record an entry + mark cert received/waived · the receipt + tax-invoice **issuance gate** · the V-A3 reconciliation read.
+In: migration `0045` · `wht-certs` bucket · Zod validator `lib/validators/withholding-tax.ts` · admin UI to record an entry + mark cert received/waived · the receipt + tax-invoice **issuance gate** · the V-A3 reconciliation read.
 Deferred: customer self-upload of the certificate (V1.1) · 50 ทวิ OCR · line-level WHT base · auto-generating Pacred's own ภ.ง.ด.53 summary.
 
 ## Resolved questions (locked by ก๊อต 2026-05-16 night)

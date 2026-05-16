@@ -177,8 +177,9 @@ export async function adminUpdateDriverAssignmentStatus(
 //
 // Driver identification: the schema allows any profile_id (no driver
 // role flag).  In practice ops staff knows the driver by their member
-// code (PR<5-digit>), so we accept member_code OR raw profile_id.
-// Resolving by member_code is friendlier — typing UUIDs is error-prone.
+// code (PR + min 3 digits, e.g. PR001), so we accept member_code OR raw
+// profile_id.  Resolving by member_code is friendlier — typing UUIDs is
+// error-prone.
 //
 // Re-assignment: if an open (status=1 or 2) assignment already exists
 // for this forwarder, fail loud — admin should explicitly cancel the
@@ -189,7 +190,7 @@ const assignSchema = z.object({
   forwarder_id: z.string().uuid(),
   // Either provide member_code (friendlier) or profile_id (fallback).
   // At least one must be present.
-  member_code:  z.string().trim().regex(/^PR\d{5}$/i, "member_code ต้องเป็นรูปแบบ PR00001").optional(),
+  member_code:  z.string().trim().regex(/^PR\d{3,}$/i, "member_code ต้องเป็นรูปแบบ PR001").optional(),
   profile_id:   z.string().uuid().optional(),
   note:         z.string().trim().max(500).optional(),
 }).refine(

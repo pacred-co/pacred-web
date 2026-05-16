@@ -54,7 +54,7 @@ Headers:
 
 Body fields (per shipment update):
   token              (auth — Bearer-equivalent in body; replace w/ JWT for MOMO)
-  userIDSub          (PCS customer code — e.g. PCS10005; for MOMO this would be Pacred PR00001)
+  userIDSub          (PCS customer code — e.g. PCS10005; for MOMO this would be Pacred PR001)
   fTrackingCHN       (China-side tracking number — the key)
   fStatus            (numeric status code — JMF custom enum)
   fDateStatus2       (timestamp for status 2 transition)

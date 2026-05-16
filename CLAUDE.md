@@ -165,7 +165,7 @@ Last updated: 2026-05-16
 
 ### What works
 - **Supabase Auth** — email/phone + password, OAuth Google/Facebook (LINE = mocked)
-- **DB** — profiles (auto-gen `PR00001` member_code), documents, otp_codes, orders
+- **DB** — profiles (auto-gen `PR001` member_code — PR + min-3-digit running no.), documents, otp_codes, orders
 - **Storage** — `member-docs/` private bucket, RLS = owner-only
 - **OTP** — custom via ThaiBulkSMS, hashed (sha256+pepper), TTL 5min, rate-limited 3/hour
   - **`OTP_BYPASS=true`** in dev → skip SMS + accept any code
@@ -197,7 +197,7 @@ Sprint 6.5/7+ adds (~88% customer / ~98% HR / ~50% admin-ops): `/service-order` 
 - ADR-0015/0016 (DRAFT — WHT + freight value model; fastlane pre-answered in [`briefs/got.md`](docs/briefs/got.md))
 - ADR-0011/0012/0013 (DRAFT — V3 RBAC granular + ERP shell + V2→V3 migration)
 
-🌱 **Infra stack:** Vercel + Supabase Cloud · `proxy.ts` middleware · ThaiBulkSMS OTP (`OTP_BYPASS` flag) · `member_code` = `PR00001` running (Postgres trigger; **NO compat with PHP `PCS<num>`** — Pacred is new company).
+🌱 **Infra stack:** Vercel + Supabase Cloud · `proxy.ts` middleware · ThaiBulkSMS OTP (`OTP_BYPASS` flag) · `member_code` = `PR001` running — **PR + minimum 3 digits**, overflow-safe past PR999 (Postgres trigger `generate_member_code`, migration `0044`; **NO compat with PHP `PCS<num>`** — Pacred is new company).
 
 ---
 
@@ -325,7 +325,7 @@ git checkout <my-branch> && git merge main && git push origin <my-branch>
 
 - **PHP source:** `/Users/dev/Desktop/pcscargo/member/` (Mac) · `C:\xampp\htdocs\pcscargo\member\` (Windows) — 20,331 .php files / 2.2 GB
 - **DB:** MySQL `pcsc_main` (110+ tables; full schema in legacy SQL dumps)
-- **member_code เดิม:** `PCS<int>` (PHP) — **ทิ้งไม่ใช้**; Pacred ใช้ `PR00001` running
+- **member_code เดิม:** `PCS<int>` (PHP) — **ทิ้งไม่ใช้**; Pacred ใช้ `PR001` running (PR + ขั้นต่ำ 3 หลัก)
 - **Stack PHP:** mysqli plain SQL, mPDF (THSarabunNew), PHPMailer, Bootstrap 4
 
 ## Customer-side / Admin-side feature maps + migration concerns + integrations

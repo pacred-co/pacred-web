@@ -211,7 +211,7 @@ export function NewCustomHsRateRow({ defaultMember, defaultHs }: { defaultMember
       <div className="grid sm:grid-cols-2 gap-2">
         <label className="block space-y-0.5">
           <span className="text-[10px] text-muted">ลูกค้า (member_code หรือ UUID)</span>
-          <input value={customerRef} onChange={(e) => setCustomerRef(e.target.value)} className={textCls + " font-mono"} placeholder="PR00001 หรือ UUID" required disabled={pending} />
+          <input value={customerRef} onChange={(e) => setCustomerRef(e.target.value)} className={textCls + " font-mono"} placeholder="PR001 หรือ UUID" required disabled={pending} />
         </label>
         <label className="block space-y-0.5">
           <span className="text-[10px] text-muted">HS code</span>

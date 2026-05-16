@@ -33,13 +33,16 @@ create table if not exists public.profiles (
 create index if not exists profiles_member_code_idx on public.profiles(member_code);
 create index if not exists profiles_phone_idx       on public.profiles(phone);
 
--- ── Auto-generate member_code: PR + 5-digit running number (PR00001) ──
+-- ── Auto-generate member_code: PR + min-3-digit running number (PR001) ──
+-- Pattern: PR001, PR002, … PR999, then PR1000, PR12345, … — `lpad` to 3 is a
+-- MINIMUM, never a cap (lpad never truncates), so the counter runs forever
+-- past 999 with no error. Changed from 5-digit (PR00001) per ลูกพี่ 2026-05-17.
 create sequence if not exists public.member_code_seq start with 1;
 
 create or replace function public.generate_member_code() returns trigger as $$
 begin
   if new.member_code is null then
-    new.member_code := 'PR' || lpad(nextval('public.member_code_seq')::text, 5, '0');
+    new.member_code := 'PR' || lpad(nextval('public.member_code_seq')::text, 3, '0');
   end if;
   return new;
 end;

@@ -363,7 +363,7 @@
   "login": {
     "title": "เข้าสู่ระบบ",
     "emailLabel": "อีเมล หรือ รหัสสมาชิก หรือ เบอร์โทรศัพท์",
-    "emailPlaceholder": "example@email.com หรือ PR00001",
+    "emailPlaceholder": "example@email.com หรือ PR001",
     "passwordLabel": "รหัสผ่าน",
     "passwordPlaceholder": "••••••••",
     "forgotPassword": "ลืมรหัสผ่าน?",

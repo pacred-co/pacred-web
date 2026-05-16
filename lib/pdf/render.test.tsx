@@ -185,7 +185,7 @@ function baseShopOrder(): ShopOrderReceiptData {
     ship_province:         "กรุงเทพฯ",
     ship_postal_code:      "10900",
     customer: {
-      member_code:     "PR00042",
+      member_code:     "PR042",
       first_name:      "สมหญิง",
       last_name:       "พร้อมส่ง",
       email:           "test@pacred.test",

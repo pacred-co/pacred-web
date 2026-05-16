@@ -168,7 +168,7 @@ Per agent 3 inventory + cross-check vs `supabase/migrations/`:
 | `commission_withdrawals` (was `tb_withdraw_comm_*_h`) | Withdrawal request header | (same) | V-H1/H2 |
 | `commission_withdrawal_items` (was `tb_withdraw_comm_*_item`) | Withdrawal line items | (same) | V-H1/H2 |
 
-**ADR-0015 WHT migration `0044_withholding_tax.sql`** (per pre-answered fastlane) lands FIRST before freight stack — V-A6 path.
+**ADR-0015 WHT migration `0045_withholding_tax.sql`** (per pre-answered fastlane) lands FIRST before freight stack — V-A6 path.
 
 → Renumber needed: WHT = `0044`, freight stack starts `0045`. Or use 0044+ block reserved for WHT, freight at 0050+. **เดฟ assigns** when implementing.
 

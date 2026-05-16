@@ -98,7 +98,7 @@ export default async function AdminAuditPage({
       <form action="/admin/audit" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
           <span className="text-[10px] text-muted">แอดมิน (member_code)</span>
-          <input name="admin" defaultValue={sp.admin ?? ""} placeholder="PR00001" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
+          <input name="admin" defaultValue={sp.admin ?? ""} placeholder="PR001" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
         <label className="space-y-1">
           <span className="text-[10px] text-muted">action prefix</span>

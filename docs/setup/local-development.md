@@ -69,7 +69,7 @@ pnpm dev
 1. ไป `/register` → tab "บุคคลธรรมดา"
 2. กรอกฟอร์ม + กด "สมัครสมาชิก" — OTP จะถูก bypass
 3. หลัง register จะ redirect ไป `/` พร้อม session cookie
-4. คลิก avatar (มุมขวาบน) → "แดชบอร์ด" → เห็นข้อมูลตัวเอง + member_code (PR00001)
+4. คลิก avatar (มุมขวาบน) → "แดชบอร์ด" → เห็นข้อมูลตัวเอง + member_code (PR001)
 5. คลิก "ออเดอร์ของคุณ" → สร้างออเดอร์ทดสอบ
 6. กลับ Supabase → SQL Editor → `select * from auth.users`, `select * from profiles`, `select * from orders`
 

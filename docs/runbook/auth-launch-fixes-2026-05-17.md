@@ -17,7 +17,7 @@
 |---|---|---|
 | 1 | OTP code field "หลุด theme" | `components/auth/otp-input.tsx` was on old hardcoded hex — converted to theme tokens (light + dark verified) |
 | 2 | No visible "ขอ OTP" button on register | Form submit relabelled "สมัครสมาชิก" → **"ขอรหัส OTP"** + hint line (personal + juristic step 1) |
-| 3 | Login placeholder showed `PC001` (old PCS prefix) | `messages/{th,en}.json` → **`PR00001`** (Pacred format). Already in `main` since commit `cf0cd71` — if you still see PC001, the Vercel deploy hadn't finished; hard-refresh. |
+| 3 | Login placeholder showed `PC001` (old PCS prefix) | `messages/{th,en}.json` → **`PR001`** (the new Pacred member-code pattern — see §"Member code pattern" below). |
 | 4 | Facebook + Google icons missing on login | Social SVG icons collapsed to width 0 — flex-shrink in the narrow 3-col grid. Added `shrink-0`. |
 | 5 | Pacred logo too small | Enlarged to 76px on login + register (PNG is 140×140 square). Wrapper height pinned + `items-end` → logo grows UPWARD into card padding, **form below does not move**. |
 | 6 | Admin dashboard counts a fresh signup as "ลูกค้าที่ใช้งานแล้ว" | **Logic bug — fixed.** See §"Admin dashboard" below. |
@@ -48,6 +48,32 @@ After deploy: a freshly-registered customer with zero orders correctly shows und
 > ภูม owns `app/[locale]/(admin)/` — เดฟ made this fix at ลูกพี่'s direct request during launch-week. ภูม: heads-up, low-risk (5 query/link swaps, no schema change).
 >
 > **Minor follow-up (not urgent):** the customer counts include any admin's own `profiles` row. If "ลูกค้าทั้งหมด" should exclude staff, join/except the `admins` table — V2.1 polish, flag only.
+
+---
+
+## 🔢 Member code pattern — `PR00001` → `PR001` (whole system)
+
+**ลูกพี่ 2026-05-17:** รหัสลูกค้าต้องเป็นแพทเทิน **`PR001`** — `PR` + **ขั้นต่ำ 3 หลัก** zero-padded, รันต่อไปเรื่อย ๆ; เกินหลักร้อย (`PR1000`, `PR12345`) รันได้ปกติ ห้ามเออเร่อ.
+
+**Implementation — `lpad(n, 3, '0')`.** `lpad` pads to a *minimum* of 3 and **never truncates**, so the counter is unbounded + overflow-safe:
+
+| seq n | member_code |
+|---|---|
+| 1 | `PR001` |
+| 42 | `PR042` |
+| 999 | `PR999` |
+| 1000 | `PR1000` |
+| 12345 | `PR12345` |
+
+**Changed across the whole system (this session):**
+- **Migration `0044_member_code_3digit.sql`** (NEW) — `create or replace generate_member_code()` with `lpad(…,3,…)` + backfills existing rows (`PR00001`→`PR001`; number preserved, only padding changes; `member_code` is not FK'd anywhere → safe). `member_code_seq` untouched → next signup continues cleanly.
+- `supabase/schema.sql` — generator + comment synced to the 3-digit pattern.
+- **3 validators** (the load-bearing bit): `lib/utils/phone.ts` (`detectIdentifier`) · `actions/admin/forwarder-drivers.ts` (Zod) · `app/[locale]/(admin)/admin/forwarders/[fNo]/driver-assign-form.tsx` (HTML5 `pattern`) — all `^PR\d{5}$` → **`^PR\d{3,}$`** (accepts the new 3-digit codes AND any legacy 5-digit `PR00001`).
+- 8 UI placeholders / labels / comments → `PR001`. `messages/{th,en}.json` login placeholder → `PR001`.
+- 4 test files (`signup` / `phone` / `analytics` / `pdf`) — assertions + fixtures updated; `phone.test.ts` gained `PR001`/`PR1000` cases (the old "PR123 → phone fallback" assertion was inverted by the new regex and is now `→ memberCode`).
+- All docs (`CLAUDE.md`, `PACRED-SECOND-BRAIN.md`, setup guides, architecture, legacy-schema, momo-1-call-prep) — `PR00001` example → `PR001`.
+
+**Migration numbering note:** `0044` is now member_code. ภูม's reserved Phase-I2 block shifts **+1** → WHT = `0045`, qa = `0046`, … accounting_periods = `0052`. See [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map".
 
 ---
 

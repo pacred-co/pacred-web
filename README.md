@@ -177,7 +177,7 @@ pacred-web/
 - **Hosting:** Vercel (frontend + Server Actions) + Supabase Cloud (auth/db/storage)
 - **Phone OTP:** ThaiBulkSMS (custom — bypass via `OTP_BYPASS=true` ใน dev)
 - **OAuth:** Google + Facebook + LINE (LINE ผ่าน custom OIDC)
-- **member_code:** `PR00001` running, auto-gen ผ่าน Postgres trigger
+- **member_code:** `PR001` running (PR + ขั้นต่ำ 3 หลัก, overflow-safe), auto-gen ผ่าน Postgres trigger
 - **Email verification:** optional (Supabase confirm-email = OFF)
 - **Password:** min 6 / max 30 (no complexity rules)
 - **Backend pattern:** Hybrid — Supabase BaaS + Next.js Server Actions (ไม่มี service แยก)

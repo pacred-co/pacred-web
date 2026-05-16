@@ -149,7 +149,7 @@ export function NewCustomUserRateRow({ defaultMember }: { defaultMember: string 
     setMsg(null);
     const n = Number(rate);
     if (!customerRef.trim()) {
-      setErr("ระบุลูกค้า (member_code เช่น PR00001 หรือ UUID)");
+      setErr("ระบุลูกค้า (member_code เช่น PR001 หรือ UUID)");
       return;
     }
     if (!Number.isFinite(n) || n <= 0) {
@@ -195,7 +195,7 @@ export function NewCustomUserRateRow({ defaultMember }: { defaultMember: string 
 
       <label className="block space-y-0.5">
         <span className="text-[10px] text-muted">ลูกค้า (member_code หรือ profile UUID)</span>
-        <input value={customerRef} onChange={(e) => setCustomerRef(e.target.value)} className={textCls + " font-mono"} placeholder="PR00001 หรือ UUID" required disabled={pending} />
+        <input value={customerRef} onChange={(e) => setCustomerRef(e.target.value)} className={textCls + " font-mono"} placeholder="PR001 หรือ UUID" required disabled={pending} />
       </label>
 
       <div className="grid sm:grid-cols-4 gap-2">

@@ -124,7 +124,7 @@
 - [ ] `/admin/rates` → 3 cards ทุกใบ live
 - [ ] `/admin/rates/general?group=PR` → tab ลูกค้ากลุ่ม → แก้ tier1/2/3 inline → save dirty-only → delete confirm; add new row form
 - [ ] `/admin/rates/vip?group=PR` → flat rate; เพิ่มใหม่ลอง upsert (ใส่คีย์เดิม ค่าใหม่ → ทับ)
-- [ ] `/admin/rates/custom-user` → add ด้วย member_code (PR00001) → ดูจัดกลุ่มตามลูกค้า; กรอง `?member=PR00001`
+- [ ] `/admin/rates/custom-user` → add ด้วย member_code (PR001) → ดูจัดกลุ่มตามลูกค้า; กรอง `?member=PR001`
 
 ### Q. Daily container bulletin (U2-1)
 - [ ] `/admin/warehouse/bulletin` → ปุ่ม 📋 copy-to-clipboard → paste ไหนก็ได้ดูฟอร์แมท
