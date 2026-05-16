@@ -128,6 +128,23 @@ export async function GET(
       .eq("tax_invoice_id", h.id)
       .order("position", { ascending: true });
 
+    // Optional WHT breakdown (per ADR-0015) — only render the block when the
+    // cert is settled (received | waived); pending entries shouldn't reach here
+    // anyway because the gate blocked issuance.
+    const whtQuery = admin
+      .from("withholding_tax_entries")
+      .select("cert_status, wht_base_thb, wht_rate_pct, wht_amount_thb, net_expected_thb, cert_number")
+      .eq("tax_invoice_id", h.id)
+      .limit(1);
+    const { data: whtRow } = await whtQuery.maybeSingle<{
+      cert_status:      "pending" | "received" | "waived";
+      wht_base_thb:     number;
+      wht_rate_pct:     number;
+      wht_amount_thb:   number;
+      net_expected_thb: number;
+      cert_number:      string | null;
+    }>();
+
     const data: TaxInvoiceData = {
       serial_no:     h.serial_no,
       status:        h.status,
@@ -152,6 +169,16 @@ export async function GET(
       })),
       order_h_no:     h.order_h_no,
       forwarder_f_no: h.forwarder_f_no,
+      wht: whtRow && whtRow.cert_status !== "pending"
+        ? {
+            base_thb:    Number(whtRow.wht_base_thb),
+            rate_pct:    Number(whtRow.wht_rate_pct),
+            amount_thb:  Number(whtRow.wht_amount_thb),
+            net_thb:     Number(whtRow.net_expected_thb),
+            cert_status: whtRow.cert_status,
+            cert_number: whtRow.cert_number,
+          }
+        : null,
     };
     const buffer = await renderToBuffer(<TaxInvoice data={data} />);
     return new NextResponse(buffer as unknown as BodyInit, {

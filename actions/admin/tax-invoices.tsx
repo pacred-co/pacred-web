@@ -82,6 +82,37 @@ export async function issueTaxInvoice(
       return { ok: false, error: "zero_total" };
     }
 
+    // ── 1b. WHT cert gate (ADR-0015) ──
+    // If the parent order has a withholding_tax_entries row with
+    // cert_status='pending', BLOCK issuance — staff explicit ask
+    // (chat 11/12/2025 + 30/3/2026): "ถ้าไม่แนบใบหัก ยังไม่ได้รับใบเสร็จ".
+    // Personal customers (no juristic WHT) → no row → no gate.
+    // We also snapshot the row id to backfill `tax_invoice_id` after the
+    // tax_invoices UPDATE succeeds (so V-A3 / V-A8 reports can join cleanly),
+    // and read the breakdown fields so the PDF can print the WHT block.
+    const whtSelect = "id, cert_status, wht_base_thb, wht_rate_pct, wht_amount_thb, net_expected_thb, cert_number";
+    const whtLookup = header.forwarder_f_no
+      ? await admin
+          .from("withholding_tax_entries")
+          .select(whtSelect)
+          .eq("forwarder_f_no", header.forwarder_f_no)
+          .maybeSingle<WhtRow>()
+      : header.order_h_no
+      ? await admin
+          .from("withholding_tax_entries")
+          .select(whtSelect)
+          .eq("order_h_no", header.order_h_no)
+          .maybeSingle<WhtRow>()
+      : { data: null, error: null };
+    if (whtLookup.error) {
+      return { ok: false, error: `wht_lookup_failed: ${whtLookup.error.message}` };
+    }
+    if (whtLookup.data && whtLookup.data.cert_status === "pending") {
+      return { ok: false, error: "wht_cert_pending" };
+    }
+    const whtEntryId: string | null = whtLookup.data?.id ?? null;
+    const whtRow:     WhtRow | null = whtLookup.data ?? null;
+
     // ── Read lines ──
     const { data: linesRaw, error: linesErr } = await admin
       .from("tax_invoice_lines")
@@ -127,6 +158,16 @@ export async function issueTaxInvoice(
       })),
       order_h_no:     header.order_h_no,
       forwarder_f_no: header.forwarder_f_no,
+      wht: whtRow && whtRow.cert_status !== "pending"
+        ? {
+            base_thb:    Number(whtRow.wht_base_thb),
+            rate_pct:    Number(whtRow.wht_rate_pct),
+            amount_thb:  Number(whtRow.wht_amount_thb),
+            net_thb:     Number(whtRow.net_expected_thb),
+            cert_status: whtRow.cert_status,
+            cert_number: whtRow.cert_number,
+          }
+        : null,
     };
 
     let pdfBuffer: Buffer;
@@ -174,11 +215,31 @@ export async function issueTaxInvoice(
       };
     }
 
+    // ── 5b. Backfill WHT entry link (ADR-0015) ──
+    // Best-effort: the tax invoice is already issued (DB-canonical). If the
+    // WHT link write fails (rare), we log + continue; the V-A3 / V-A8
+    // reconciliation can recover via order_h_no / forwarder_f_no joins.
+    if (whtEntryId) {
+      const { error: linkErr } = await admin
+        .from("withholding_tax_entries")
+        .update({ tax_invoice_id: header.id })
+        .eq("id", whtEntryId)
+        .is("tax_invoice_id", null);
+      if (linkErr) {
+        // Soft-fail — issuance already committed.
+        await logAdminAction(adminId, "tax_invoice.wht_link_failed", "tax_invoice", header.id, {
+          wht_entry_id: whtEntryId,
+          error:        linkErr.message,
+        });
+      }
+    }
+
     // ── 6. Audit + notify + revalidate ──
     await logAdminAction(adminId, "tax_invoice.issue", "tax_invoice", header.id, {
-      serial_no:  serialNo,
-      total_thb:  Number(header.total_thb),
-      buyer_name: header.buyer_name,
+      serial_no:    serialNo,
+      total_thb:    Number(header.total_thb),
+      buyer_name:   header.buyer_name,
+      wht_entry_id: whtEntryId,
     });
 
     const orderRef = header.order_h_no ?? header.forwarder_f_no ?? "";
@@ -342,4 +403,14 @@ type LineRow = {
   unit_price_thb: number;
   amount_thb:     number;
   vat_thb:        number;
+};
+
+type WhtRow = {
+  id:                string;
+  cert_status:       "pending" | "received" | "waived";
+  wht_base_thb:      number;
+  wht_rate_pct:      number;
+  wht_amount_thb:    number;
+  net_expected_thb:  number;
+  cert_number:       string | null;
 };

@@ -69,6 +69,21 @@ export type TaxInvoiceData = {
   /** Source order pointer (for ref text on the invoice). */
   order_h_no:     string | null;
   forwarder_f_no: string | null;
+
+  /**
+   * Withholding-tax breakdown (per ADR-0015). `null` for personal customers /
+   * no-WHT orders. When present, the PDF prints the WHT lines below the
+   * grand-total AND the bank block re-labels its number as the Net amount
+   * the customer should transfer.
+   */
+  wht?: {
+    base_thb:   number;
+    rate_pct:   number;
+    amount_thb: number;
+    net_thb:    number;     // = total_thb − amount_thb
+    cert_status: "received" | "waived";
+    cert_number: string | null;
+  } | null;
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -228,6 +243,28 @@ export function TaxInvoice({ data }: { data: TaxInvoiceData }) {
           <Text style={styles.amountInWords}>
             ({readThaiBaht(Number(data.total_thb))})
           </Text>
+
+          {/* WHT breakdown (ADR-0015) — print as informational rows below the
+              grand total. The grand total itself does NOT change — RD Code 86
+              requires the receipt to show the gross amount. */}
+          {data.wht && (
+            <>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>
+                  หัก ภาษี ณ ที่จ่าย {Number(data.wht.rate_pct)}%
+                  {data.wht.cert_number ? ` (ใบที่ ${data.wht.cert_number})` : ""}
+                </Text>
+                <Text style={styles.totalValue}>−฿{fmtBaht(Number(data.wht.amount_thb))}</Text>
+              </View>
+              <View style={styles.grandTotalRow}>
+                <Text style={styles.grandTotalLabel}>คงเหลือชำระสุทธิ (Net)</Text>
+                <Text style={styles.grandTotalValue}>฿{fmtBaht(Number(data.wht.net_thb))}</Text>
+              </View>
+              <Text style={styles.amountInWords}>
+                ({readThaiBaht(Number(data.wht.net_thb))})
+              </Text>
+            </>
+          )}
         </View>
 
         {/* Bank-transfer payment info (BANK constant — wired from site.ts after T-G3 Bundle 1) */}
