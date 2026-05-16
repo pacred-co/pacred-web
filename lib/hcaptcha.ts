@@ -8,11 +8,11 @@
  *     return { ok: false, error: "captcha_failed" };
  *   }
  *
- * Activates only when `HCAPTCHA_SECRET_KEY` is set. In dev (DSN unset)
- * it returns `{ success: true }` so flows aren't blocked locally. In
- * production with secret unset it FAILS CLOSED (returns
- * `missing_secret`) — better to break loudly than silently accept
- * unverified tokens.
+ * Activates only when `HCAPTCHA_SECRET_KEY` is set. When the secret is
+ * unset it degrades OPEN (returns `{ success: true }`) in BOTH dev and
+ * prod — signup stays gated by phone OTP + IP rate-limiting, so flows
+ * aren't hard-blocked. Prod logs a loud warning. Set the secret to
+ * restore full verification (zero code change).
  *
  * Pairs with the client-side `<HCaptchaInvisible />` component which
  * obtains the token. Configure `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` for
@@ -47,15 +47,19 @@ export async function verifyHcaptcha(
 ): Promise<HcaptchaVerifyResult> {
   const secret = process.env.HCAPTCHA_SECRET_KEY;
 
-  // Dev-only no-op: in production we must have a real secret to verify
-  // tokens, but in dev we let everything through so signup/contact
-  // flows work without a Pacred-owned hCaptcha account.
+  // No secret configured → degrade OPEN. hCaptcha is a 🟡 optional
+  // anti-abuse layer (docs/env.md §12); signup is still gated by phone
+  // OTP + IP rate-limiting. Hard-blocking every real signup to stop
+  // hypothetical bots is the wrong trade during the launch push — set
+  // HCAPTCHA_SECRET_KEY to restore full verification (zero code change).
   if (!secret) {
-    if (process.env.NODE_ENV !== "production") {
-      return { success: true };
+    if (process.env.NODE_ENV === "production") {
+      logger.warn(
+        "hcaptcha",
+        "HCAPTCHA_SECRET_KEY unset in production — bot protection DEGRADED; allowing request. Set the key to restore.",
+      );
     }
-    logger.error("hcaptcha", "HCAPTCHA_SECRET_KEY unset in production — failing closed");
-    return { success: false, error: "missing_secret" };
+    return { success: true };
   }
 
   if (!token) {

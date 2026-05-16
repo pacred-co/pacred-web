@@ -208,8 +208,8 @@ Currently the LINE login button is a stub ("coming soon"). Either remove or wire
 
 **Behaviour by env:**
 - **Both unset, dev** — `lib/hcaptcha.ts` `verifyHcaptcha()` returns `{success:true}`; client component renders nothing; flows pass with no captcha
-- **Both unset, prod** — server FAILS CLOSED with `{success:false, error:"missing_secret"}` + `logger.error`; client component renders nothing
-- **Both set, any env** — full invisible CAPTCHA flow active
+- **Both unset, prod** — `verifyHcaptcha()` DEGRADES OPEN (`{success:true}`) + `logger.warn`; signup stays gated by phone OTP + IP rate-limit. *(Changed 2026-05-16 from fail-closed — fail-closed was hard-blocking 100% of real signups while the keys were unconfigured.)* Set the keys to restore full bot protection — zero code change.
+- **Both set, any env** — full invisible CAPTCHA flow active. CSP in `next.config.ts` allows `hcaptcha.com` in `script-src` + `frame-src`.
 
 **Usage pattern (combine client + server):**
 ```tsx
@@ -342,7 +342,7 @@ Adjust in `sentry.{client,server,edge}.config.ts` once traffic shape is known.
 - [ ] `PROMPTPAY_ID` = Pacred company actual ID
 - [ ] `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` set (D-11) — verify test error reaches Sentry
 - [ ] `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` set (D-12) — without these the rate-limit memory fallback leaks quota across Vercel function instances
-- [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — server fails closed in prod without secret
+- [ ] `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` set (D-13) — without them prod degrades open (signup works, no bot protection); set to restore full verification
 - [ ] `NEXT_PUBLIC_LIFF_ID` set (D-1-LIFF) — without it `/liff/link` shows error + customers can't link → no LINE push reaches customers
 - [ ] `NEXT_PUBLIC_GTM_ID` set (L-22) — without it conversion tracking silently disabled; landing pivot acquisition metrics missing
 - [ ] `NEXT_PUBLIC_CLARITY_ID` set (L-23) — without it heatmap + session recording missing; behavioural debug data unavailable
