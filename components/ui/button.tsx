@@ -34,6 +34,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
+        suppressHydrationWarning
         className={[
           "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors",
           "disabled:pointer-events-none disabled:opacity-50",

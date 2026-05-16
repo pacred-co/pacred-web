@@ -70,9 +70,9 @@ const REVIEWS: Review[] = [
 
 type ReviewsT = ReturnType<typeof useTranslations<"reviews">>;
 
-export function Reviews() {
+export function Reviews({ defaultFilter = "all" }: { defaultFilter?: "all" | ServiceType } = {}) {
   const t = useTranslations("reviews");
-  const [filter, setFilter] = useState<"all" | ServiceType>("all");
+  const [filter, setFilter] = useState<"all" | ServiceType>(defaultFilter);
 
   const FILTERS: Array<{ id: "all" | ServiceType; label: string }> = [
     { id: "all",       label: t("filterAll")        },

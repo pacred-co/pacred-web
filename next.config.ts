@@ -45,7 +45,7 @@ const SECURITY_HEADERS = [
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self' https: wss:",
-      "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com",
+      "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",

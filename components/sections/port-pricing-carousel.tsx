@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import Image from "next/image";
 import {
   ChevronLeft,
@@ -14,116 +14,14 @@ import { CUSTOMS_PORTS, type CustomsPort } from "./customs-port-data";
 
 const PARENT_PATH = "/customs-clearance-shipping-suvarnabhumi";
 
-/**
- * Per-port pricing carousel for the customs-clearance landing.
- *
- * Cards loop infinitely (เลื่อนหมุนเป็นวงกลม per ปอน 2026-05-15).
- *
- * Mechanic: render 3 identical copies of CUSTOMS_PORTS so the scroller's
- * scrollWidth = 3 × setWidth. Mount-time we centre the start of the
- * middle set on screen, then a requestAnimationFrame ticker nudges
- * scrollLeft forward 0.4px per frame. When scrollLeft crosses 2 sets we
- * subtract one setWidth (jump back invisibly because the next set
- * renders identical content). Going left under 0 we add one setWidth.
- *
- * Manual control:
- *   - hover (desktop) or touchstart/wheel (mobile/scroll wheel) pauses
- *     auto-rotation; idle 1.5s after release resumes
- *   - chevron buttons call scrollBy(±card) on the same scroller, which
- *     plays nicely with the loop because of the edge-jump check
- */
-const SETS = 3;
-const TRIPLED_PORTS: CustomsPort[] = Array.from({ length: SETS }, () =>
-  CUSTOMS_PORTS,
-).flat();
-const MIDDLE_SET_INDEX = CUSTOMS_PORTS.length;
-/**
- * Sub-pixel accumulator approach — many browsers (Chromium-based,
- * Firefox via some embedders) floor `scrollLeft` to integer when set,
- * so a sub-1px increment never lands. Accumulate fractional progress
- * separately, only writing to scrollLeft when at least 1px has built
- * up. This makes the speed look genuinely slow (~30 px/sec ≈ a slow
- * cinema crawl) without stalling.
- */
-const SPEED_PX_PER_FRAME = 0.5;
-
 export function PortPricingCarousel() {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
-  const pauseUntilRef = useRef(0);
-  const accumulatorRef = useRef(0);
-
-  /* Mount setup + RAF auto-rotation + edge-jump in a single effect so
-     the start-position scroll and the ticker share the same lifecycle.
-     Hover-pause was dropped because iframe sandboxes (Vercel preview,
-     CMS embeds, etc.) auto-fire mouseenter when focused and never fire
-     mouseleave — pausedRef would stay true forever. Touchstart + wheel
-     pause for 4s is enough to stop motion when the user actually
-     interacts. */
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-
-    // Scroll to start of middle set immediately + once more after a
-     // frame for layout-after-image-load adjustment.
-    const setStartPosition = () => {
-      const middleFirst = el.querySelector<HTMLElement>(
-        `[data-tri-index="${MIDDLE_SET_INDEX}"]`,
-      );
-      if (!middleFirst) return;
-      const isDesktop = window.innerWidth >= 1024;
-      const target = isDesktop
-        ? middleFirst.offsetLeft -
-          el.clientWidth / 2 +
-          middleFirst.offsetWidth / 2
-        : middleFirst.offsetLeft - 16;
-      el.scrollLeft = Math.max(0, target);
-    };
-    setStartPosition();
-    const initRaf = requestAnimationFrame(setStartPosition);
-
-    const tick = () => {
-      const now = performance.now();
-      const w = el.scrollWidth / SETS;
-      if (now > pauseUntilRef.current && w > 0) {
-        accumulatorRef.current += SPEED_PX_PER_FRAME;
-        if (accumulatorRef.current >= 1) {
-          const whole = Math.floor(accumulatorRef.current);
-          el.scrollLeft += whole;
-          accumulatorRef.current -= whole;
-        }
-      }
-      if (el.scrollLeft >= w * 2) {
-        el.scrollLeft -= w;
-      } else if (el.scrollLeft <= 0 && w > 0) {
-        el.scrollLeft += w;
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-
-    const pauseTransient = () => {
-      pauseUntilRef.current = performance.now() + 4000;
-    };
-    el.addEventListener("touchstart", pauseTransient, { passive: true });
-    el.addEventListener("wheel", pauseTransient, { passive: true });
-    el.addEventListener("pointerdown", pauseTransient);
-
-    return () => {
-      cancelAnimationFrame(initRaf);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      el.removeEventListener("touchstart", pauseTransient);
-      el.removeEventListener("wheel", pauseTransient);
-      el.removeEventListener("pointerdown", pauseTransient);
-    };
-  }, []);
 
   function scrollByCard(direction: 1 | -1) {
     const el = scrollerRef.current;
     if (!el) return;
     const card = el.querySelector<HTMLDivElement>("[data-port]");
     const step = card ? card.offsetWidth + 16 : el.clientWidth * 0.9;
-    pauseUntilRef.current = performance.now() + 4000;
     el.scrollBy({ left: step * direction, behavior: "smooth" });
   }
 
@@ -133,13 +31,8 @@ export function PortPricingCarousel() {
         ref={scrollerRef}
         className="flex gap-3 md:gap-4 overflow-x-auto pb-3 -mx-4 md:-mx-5 px-4 md:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [scroll-snap-type:none]"
       >
-        {TRIPLED_PORTS.map((port, i) => (
-          <PortCard
-            key={`${port.code}-${i}`}
-            port={port}
-            triIndex={i}
-            isCloneSet={i < MIDDLE_SET_INDEX || i >= MIDDLE_SET_INDEX * 2}
-          />
+        {CUSTOMS_PORTS.map((port) => (
+          <PortCard key={port.code} port={port} />
         ))}
       </div>
 
@@ -179,24 +72,11 @@ export function PortPricingCarousel() {
   );
 }
 
-function PortCard({
-  port,
-  triIndex,
-  isCloneSet,
-}: {
-  port: CustomsPort;
-  triIndex: number;
-  isCloneSet: boolean;
-}) {
+function PortCard({ port }: { port: CustomsPort }) {
   const Icon = port.modeIcon;
-  // Clones are aria-hidden so screen readers + crawlers see the canonical
-  // 7 cards only; the middle set is the "real" one.
   return (
     <article
       data-port={port.code}
-      data-tri-index={triIndex}
-      aria-hidden={isCloneSet ? "true" : undefined}
-      tabIndex={isCloneSet ? -1 : undefined}
       className="shrink-0 w-[85%] sm:w-[340px] lg:w-[360px] flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
     >
       <div className="relative h-32 md:h-36 overflow-hidden">

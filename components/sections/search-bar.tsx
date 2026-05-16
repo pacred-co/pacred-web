@@ -88,11 +88,13 @@ export function SearchBar({ embedded = false }: SearchBarProps) {
               type="text"
               name="url"
               placeholder={t("placeholder")}
+              suppressHydrationWarning
               className="w-full h-[44px] rounded-full border border-gray-200 dark:border-border bg-gray-50 dark:bg-background pl-5 pr-[92px] text-[13px] font-medium text-gray-900 dark:text-foreground placeholder:text-gray-400 dark:placeholder:text-muted outline-none transition-all duration-200 focus:bg-white dark:focus:bg-surface focus:border-red-300 focus:shadow-[0_0_0_3px_#fef2f2]"
             />
             <button
               type="button"
               aria-label={t("imageSearchAria")}
+              suppressHydrationWarning
               className="absolute right-[48px] top-1/2 -translate-y-1/2 w-[30px] h-[30px] flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -103,6 +105,7 @@ export function SearchBar({ embedded = false }: SearchBarProps) {
             <button
               type="submit"
               aria-label={t("searchAria")}
+              suppressHydrationWarning
               className="absolute right-[4px] top-1/2 -translate-y-1/2 w-[38px] h-[38px] rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center shadow-[0_4px_10px_rgba(220,38,38,0.20)] transition-colors duration-200"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
