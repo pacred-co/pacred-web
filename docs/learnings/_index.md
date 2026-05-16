@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-16 evening (nextjs-16-quirks +1 · ci-and-deploy +1 — DYNAMIC_SERVER_USAGE production-500 fix + the "verify/build green ≠ prod works" prevention gate)
+Last reviewed: 2026-05-16 night-5 (nextjs-16-quirks +2 — `??` mixed with `||` requires parens (Next 16 strict parser) + React Compiler `react-hooks/purity` flags `Date.now()` in render → extract to module-scope helper)
 
 ---
 

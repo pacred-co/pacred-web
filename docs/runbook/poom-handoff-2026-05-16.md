@@ -59,6 +59,18 @@
 ### F-2 · LP-1c2 rate_custom_hs UI ✅
 Shipped ใน commit `0d35f1f` พร้อม F-1 (เลือก option (b) ตาม D-1).
 
+### F-3 · /admin/learning "training" decision ✅
+**Decision:** KEEP /admin/learning as org-wide docs hub (rules/news/customer T&C). REDIRECT "การอบรม" card → /admin/hr/training (HR owns employee training per CLAUDE.md). Avoids duplicate code paths. Phase H ships the editor + sign-acknowledge flow for remaining 3 sections.
+
+### F-4 · CT-7 driver self-serve runs ✅
+Shipped `fe05c3a` — /admin/driver-runs + driverUpdateOwnAssignmentStatus action.
+
+### F-5 · CT-8 container lifecycle integration test ✅
+Shipped `58509f4` — lib/warehouse/lifecycle.test.ts (23 asserts, DB-backed).
+
+### F-6 · LP-6 PDF spot-check ✅
+Shipped `92fdb29` — extended render.test.tsx with 3 ShopOrderReceipt cases (paid/awaiting/juristic+override+edgeThai).
+
 ---
 
 ## 🟢 ของพร้อมเทสต์ — ภูม จะลุยตาม [poom-test-playbook-2026-05-16.md](poom-test-playbook-2026-05-16.md)
