@@ -1,6 +1,3 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Ship,
@@ -9,8 +6,6 @@ import {
   CheckCircle2,
   ArrowRight,
   MessageCircle,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 
@@ -111,46 +106,17 @@ const MODES = [
 ];
 
 export function CustomsModeCards() {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const update = () => {
-      setCanScrollLeft(el.scrollLeft > 8);
-      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      el.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  function scrollBy(direction: 1 | -1) {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const card = el.querySelector<HTMLElement>("article");
-    const step = card ? card.offsetWidth + 16 : el.clientWidth * 0.85;
-    el.scrollBy({ left: step * direction, behavior: "smooth" });
-  }
-
   return (
     <div className="relative">
       <div
-        ref={scrollerRef}
-        className="flex overflow-x-auto gap-3 md:gap-5 -mx-4 md:-mx-2 px-4 md:px-2 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none"
       >
         {MODES.map((c) => {
           const Icon = c.badgeIcon;
           return (
             <article
               key={c.mode}
-              className="group flex flex-col shrink-0 w-[88%] sm:w-[400px] md:w-[440px] snap-start rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
+              className="group flex flex-col shrink-0 w-[88%] sm:w-[400px] md:w-auto snap-start md:snap-none rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 transition-all duration-400"
             >
               <div className="relative h-40 md:h-48 overflow-hidden">
                 <Image
@@ -277,30 +243,6 @@ export function CustomsModeCards() {
           );
         })}
       </div>
-
-      {/* Chevron prev/next buttons — visible md+ */}
-      <button
-        type="button"
-        aria-label="เลื่อนซ้าย"
-        onClick={() => scrollBy(-1)}
-        suppressHydrationWarning
-        className={`hidden md:flex absolute left-[-18px] top-1/2 -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all ${
-          canScrollLeft ? "opacity-100" : "opacity-30 cursor-not-allowed"
-        }`}
-      >
-        <ChevronLeft className="w-5 h-5" strokeWidth={2.6} />
-      </button>
-      <button
-        type="button"
-        aria-label="เลื่อนขวา"
-        onClick={() => scrollBy(1)}
-        suppressHydrationWarning
-        className={`hidden md:flex absolute right-[-18px] top-1/2 -translate-y-1/2 z-10 items-center justify-center w-11 h-11 rounded-full bg-white border border-border shadow-[0_8px_24px_rgba(15,23,42,0.12)] hover:border-primary-300 hover:text-primary-600 transition-all ${
-          canScrollRight ? "opacity-100" : "opacity-30 cursor-not-allowed"
-        }`}
-      >
-        <ChevronRight className="w-5 h-5" strokeWidth={2.6} />
-      </button>
     </div>
   );
 }

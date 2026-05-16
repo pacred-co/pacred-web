@@ -40,7 +40,7 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
   const keys = HERO_CONTENT_KEYS[contentKey] ?? HERO_CONTENT_KEYS.default;
 
   return (
-    <div className="relative overflow-hidden aspect-[768/340] md:aspect-auto md:h-[400px] flex flex-col items-center justify-center px-4 md:px-7 pb-[64px] md:pb-[96px] rounded-b-2xl md:rounded-b-3xl">
+    <div className="relative overflow-hidden aspect-[768/430] md:aspect-auto md:h-[400px] flex flex-col items-center justify-center px-4 md:px-7 pt-6 pb-[64px] md:pt-0 md:pb-[96px] rounded-b-2xl md:rounded-b-3xl">
       {/* Mobile background */}
       <div
         aria-hidden
