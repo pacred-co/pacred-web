@@ -34,6 +34,12 @@ const items: NavItem[] = [
   { href: "/admin/reports/refunds",               label: "คืนเงิน",            icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
   { href: "/admin/reports/monthly-orders",        label: "ออเดอร์รายเดือน",   icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
 
+  // V-G6 analytical reports
+  { href: "/admin/reports/forwarder-volume",      label: "ปริมาณฝากนำเข้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/sales-by-rep",          label: "ยอด/Sales rep (V-G6)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/hs-code-revenue",       label: "HS-code revenue (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
+  { href: "/admin/reports/user-sales-history",    label: "ประวัติยอด/ลูกค้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
+
   // Operations
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
