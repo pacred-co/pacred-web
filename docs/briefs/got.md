@@ -1,7 +1,37 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16 (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight · + เดฟ preempted 6 ก๊อต P1 items: K-sec-2/3 audits + MOMO-2 reverse-engineer + Renovate config + CSP-1 plan + V-F3 resilience review)
+Last reviewed: 2026-05-16 night (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight · + เดฟ preempted 6 ก๊อต P1 items + 3 V3 ADR DRAFTs + K-sec-4 + D-7 + R1 + launch checklist · + cheat-sheet + **DV-2 LIFF + OTP_PEPPER rotation done late-night ลูกพี่**)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
+
+> ## 🆕 Prod env changes done 2026-05-16 late-night (ลูกพี่ + เดฟ pair) — **กอตอ่านก่อน touch Vercel**
+>
+> ลูกพี่ + เดฟ ทำ DV-2 LIFF setup + ปะหลายๆ env hole คืนนี้. **เพื่อ ก๊อต รู้ว่ามีอะไรเปลี่ยน ก่อนเข้า Vercel:**
+>
+> ### Added (4 new env vars in Vercel)
+> | Var | Value (visible part) | Sensitivity | Environments |
+> |---|---|---|---|
+> | `NEXT_PUBLIC_LIFF_ID` | `2010105778-SaSkkGza` | Public | Prod + Preview + Dev |
+> | `LINE_LOGIN_CLIENT_ID` | `2010105778` | Sensitive flag ON | Prod + Preview + Dev |
+> | `LINE_LOGIN_CLIENT_SECRET` | (set, channel secret from new LINE Login channel) | Sensitive flag ON | Production ONLY |
+>
+> New **LINE Login channel "Pacred Login"** was created at LINE Developer Console (alongside the existing Messaging API channel `2009931373`) because LINE policy now requires LIFF on LINE Login channels, not Messaging API. Channel ID = `2010105778`. LIFF endpoint URL set to `https://pacred.co.th/liff/link` (matches `NEXT_PUBLIC_SITE_URL`).
+>
+> ### Changed (rotated 1 env var)
+> | Var | Old value | New value | Reason |
+> |---|---|---|---|
+> | `OTP_PEPPER` | `change-this-random-string-in-prod` (default placeholder !!) | `<openssl rand -hex 32 generated>` | **Security:** default placeholder was visible in Vercel env list = rainbow-table risk for OTP hashes. Safe to rotate now because `OTP_BYPASS=true` still on → no real OTP rows hashed under old pepper. After `OTP_BYPASS` flips to `false` (DV-3 follow-up), new pepper applies cleanly. See [`runbook/otp-pepper-rotation.md`](../runbook/otp-pepper-rotation.md) for future dual-pepper rotations after launch. |
+>
+> ### Still TODO — ลูกพี่ ทำต่อ Sunday morning
+> - Vercel redeploy to pick up new env (manual or wait for next push to trigger)
+> - LIFF smoke test on LINE mobile (open `liff.line.me/2010105778-SaSkkGza` on phone w/ LINE app)
+> - `OTP_BYPASS=true → false` flip + verify ThaiBulkSMS sends real SMS (B4 blocker — keys already set by ก๊อต earlier; just flip the flag after smoke)
+>
+> ### Recommended ก๊อต follow-up (NOT urgent)
+> - Rotate LINE_LOGIN_CLIENT_SECRET via LINE Console once → ลูกพี่ sent the secret via chat (low immediate risk because LP-3 LINE Login OAuth not active yet; recommend rotate within 30 days)
+> - Confirm `NEXT_PUBLIC_SITE_URL = https://pacred.co.th` is correct canonical (ลูกพี่ verified ตอน DV-2 setup — looks right)
+> - Verify `OTP_PEPPER` rotation didn't accidentally break any QA test users (after `OTP_BYPASS=false` flip)
+>
+> Full audit of env state ตอน screenshot = see `briefs/got.md` History or ask ลูกพี่
 
 ---
 
