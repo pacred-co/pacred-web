@@ -9,24 +9,24 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 **All open Qs in [`poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md) RESOLVED:**
 - D-1 LP-1c2 UNIQUE → ภูม shipped option (b); refactor optional (Not required for launch)
-- D-2 migration numbering → ภูม owns 0041-0043. ⚠️ **Renumbered 2026-05-17:** `0044` = `member_code_3digit` (เดฟ shipped pre-launch); ภูม's Phase-I2 block = **`0045`-`0053`**; ภูม takes `0045_withholding_tax.sql` Monday
+- D-2 migration numbering → on disk 2026-05-17: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions (ภูม shipped) · `0048` member_code (เดฟ). ภูม next free = **`0049`**
 - D-3 /admin/learning → ภูม decided KEEP as org-docs hub + redirect "training" card to HR
 - **E-1 ADR-0015 WHT** → ✅ ก๊อต locked 2026-05-16 night, 4 Qs resolved → **V-A6 UNBLOCKED Monday morning**
 - **E-2 ADR-0016 freight value** → ✅ ก๊อต locked 2026-05-16 night, 5 Qs resolved → V-E2 unblocked for Phase I2
 - **E-3 MOMO-1** → in-flight (ลูกพี่ takes call → เดฟ parses → pings you)
 - **E-4 Pacred owner Bundle 1** → 3/5 resolved: PromptPay ✅ + Bank ✅ + LIFF ✅ + Gateway DECISION CHANGED to Xendit+K-Biz+K-Shop. Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor CONTACT.*
-- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0051_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
+- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0053_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
 
 ### V-E6 approval RBAC — ✅ resolved 2026-05-17
 Use existing `super` role for V1 approval. DO NOT add new `manager` role pre-launch. Revisit only if ops actually requests distinct manager-but-not-super tier post-launch.
 
-### Migration ownership — ภูม-owned `0045`-`0053` (renumbered 2026-05-17)
-`0044` = `member_code_3digit` (เดฟ, shipped pre-launch). All Phase I2 migrations `0045`-`0053` = ภูม owns. Schema sketches in ADR-0015 + ADR-0016 already match ภูม's design intent. No "เดฟ structural lane" handoff — single-owner per migration. **ภูม: start your Phase-I2 migrations at `0045`, NOT 0044.** Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
+### Migration ownership (reconciled 2026-05-17)
+On disk: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions (ภูม shipped) · `0048` member_code (เดฟ). **ภูม: start your next Phase-I2 migration at `0049`.** Schema sketches in ADR-0015 + ADR-0016 match ภูม's design — single-owner per migration. Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
 
 **Mon morning:**
 1. Standby for backend hotfix (Sentry watch + admin_audit_log)
 2. After ลูกพี่+team confirm T-D4 soft launch green at 10am → start **V-A6 WHT impl** per [ADR-0015 §"Schema sketch"](../decisions/0015-withholding-tax-model.md) (~8-12h):
-   - Migration `0045_withholding_tax.sql`
+   - Migration `0044_withholding_tax.sql`
    - Bucket `wht-certs` (RLS mirror `tax-invoices`)
    - Admin UI to record + waive
    - Receipt + tax-invoice issuance gate
@@ -193,7 +193,7 @@ From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit
 - 📐 [`port-specs/admin-polish-bundle.md`](../port-specs/admin-polish-bundle.md) — V-G1 bulk forwarder · V-G2 bulk transfer customers · V-G3 admin broadcast · V-G4 TOS version mgmt · V-G5 org contacts CRUD · V-G6 4 new reports · V-G7 6 feature-parity audits
 
 **Implementation order (recommended after Monday launch):**
-1. V-A6 WHT — ✅ ก๊อต locked ADR-0015 2026-05-16 night → unblocked. Use migration `0045_withholding_tax.sql` + bucket `wht-certs`. Schema spec in [ADR-0015](../decisions/0015-withholding-tax-model.md) §"Schema sketch". Resolved-questions section ใน ADR ตอบ rate set / admin-only / single-approver / dedicated-bucket แล้ว — unblocks juristic customers
+1. V-A6 WHT — ✅ ก๊อต locked ADR-0015 2026-05-16 night → unblocked. Use migration `0044_withholding_tax.sql` + bucket `wht-certs`. Schema spec in [ADR-0015](../decisions/0015-withholding-tax-model.md) §"Schema sketch". Resolved-questions section ใน ADR ตอบ rate set / admin-only / single-approver / dedicated-bucket แล้ว — unblocks juristic customers
 2. V-E10 QA/QC inspection — needed before V-E7 billing gate
 3. V-E6 quotation — unlock freight sales funnel
 4. V-E1 commercial invoice + V-E7 receipt/payment — full freight billing loop

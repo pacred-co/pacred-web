@@ -42,7 +42,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 | **OAuth login (Google/Facebook)** | เดฟ/ก๊อต — dashboard config | ⚠️ broken — `NEXT_PUBLIC_SITE_URL` in Vercel points at dead `v2.pacred.co` → OAuth redirect 404s; Facebook app in Dev Mode. **Phone+OTP login unaffected.** Full fix steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md) |
 | **LINE web-login** | deferred | Stub ("เร็วๆ นี้"). Needs custom OIDC build (~4-8h) — post-launch task, not launch-week |
 
-> 🔐 **Auth + admin launch fixes (2026-05-17)** — OTP UI theme + "ขอรหัส OTP" button · login social icons · logo enlarge · **member_code pattern `PR00001→PR001`** (PR + min-3-digit, migration `0044`) · **admin dashboard `is_active` logic bug** — all in [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Code fixes shipped; OAuth = dashboard config still needed (ก๊อต 2026-05-18 morning).
+> 🔐 **Auth + admin launch fixes (2026-05-17)** — OTP UI theme + "ขอรหัส OTP" button · login social icons · logo enlarge · **member_code pattern `PR00001→PR001`** (PR + min-3-digit, migration `0048`) · **admin dashboard `is_active` logic bug** — all in [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Code fixes shipped; OAuth = dashboard config still needed (ก๊อต 2026-05-18 morning).
 
 ---
 
@@ -141,7 +141,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 | Owner | Pickup | Effort |
 |---|---|---|
 | **ภูม** | F-11 pay-from-wallet double-debit fix (G9 — partial unique index + catch 23505 in 2 actions) — week-1, before ad-driven concurrency | ~30-45m |
-| **ภูม** | V-A6 WHT impl per ADR-0015 (migration `0045_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) | ~8-12h |
+| **ภูม** | V-A6 WHT impl per ADR-0015 (migration `0044_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) | ~8-12h |
 | **ภูม** | V-E10 QA/QC intake inspection (no blocker, prereq for V-E7) | ~4-6h |
 | **ภูม** | V-E6 quotation workflow (opens freight sales funnel) | ~6-8h |
 | **ปอน** | T-N1/T-N2 SEO + ad landing playbook per [`briefs/podeng-seo-and-ad-landing-playbook.md`](../briefs/podeng-seo-and-ad-landing-playbook.md) | ongoing |
@@ -187,10 +187,10 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 
 ### ภูม (Backend / Customer Portal / Admin / Cargo Port)
 - ⏳ Standby Mon morning for backend hotfix
-- 🚀 Mon afternoon ลุย **V-A6 WHT** per ADR-0015 unblocked (migration `0045_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) (~8-12h)
+- 🚀 Mon afternoon ลุย **V-A6 WHT** per ADR-0015 unblocked (migration `0044_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) (~8-12h)
 - 🚀 Tue: V-E10 QA/QC (~4-6h, prereq for V-E7) → V-E6 quotation (~6-8h, super-only approval per RBAC ack)
 - T+30d: wire Xendit + K-Biz + K-Shop per updated D-7 §5.3 (~16-22h, 3 channels)
-- All open Qs in handoff resolved this session — incl. **E-5 interpreter role ack-approved 2026-05-17 evening** (bundle inline in `0050_commissions.sql`): [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
+- All open Qs in handoff resolved this session — incl. **E-5 interpreter role ack-approved 2026-05-17 evening** (bundle inline in `0053_commissions.sql`): [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
 - Migration ownership clarified — ALL 0044-0051 = ภูม owns: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map"
 - Brief: [`briefs/poom.md`](../briefs/poom.md) · Phase I2 prep: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 

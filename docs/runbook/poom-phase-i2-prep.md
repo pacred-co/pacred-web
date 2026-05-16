@@ -42,42 +42,43 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 
 ## ✅ Per-item readiness checklist
 
-### V-A6 — WHT (ภาษีหัก ณ ที่จ่าย)
+### V-A6 — WHT (ภาษีหัก ณ ที่จ่าย) ✅ SHIPPED 2026-05-17 (commit e95c0bc)
 **Blocker:** ✅ ALL CLEAR (ADR-0015 locked 2026-05-16 night, 4 Qs resolved)
 **Spec:** [`decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — see "Resolved questions" section at the bottom for the locked answers
-**Migration:** `0045_withholding_tax.sql` — **ภูม owns** (renumbered from 0044 — that slot is now member_code). Spec has full schema sketch in ADR §"Schema sketch" — use file name `0045_withholding_tax.sql` + apply.
-**Code touch:**
-- `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT branch + receipt-gate check
-- `tax_invoices` table — relates via `withholding_tax_entries.tax_invoice_id` (per ADR-0015 schema)
-- 50-ทวิ document upload — Supabase Storage bucket `wht-certs` (DEDICATED, per Q4 resolved)
-- `lib/validators/withholding-tax.ts` — Zod schema enforcing rate set `{1, 1.5, 2, 3, 5}` (per Q1 resolved)
-- Receipt + tax-invoice issuance gate active per ADR §"Rules" #4
-**Pre-implementation check:**
-- [x] ADR-0015 Status ✅ Accepted (2026-05-16 night)
-- [x] 4 open Qs resolved (in ADR "Resolved questions" section)
-- [x] ภูม writes migration (D-2 resolved)
+**Migration:** ✅ `0044_withholding_tax.sql` shipped — needs `supabase db push` on dev/prod
+**Code touch (all done):**
+- ✅ `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT cert gate + tax_invoice_id backfill + pipe wht to PDF
+- ✅ `actions/admin/wht.ts` — 5 actions: createWhtEntry / uploadWhtCert / markWhtCertReceived / waiveWhtCert / cancelWhtEntry
+- ✅ `lib/validators/withholding-tax.ts` — Zod schemas + WHT_RATES const + computeWhtNumbers helper
+- ✅ `app/(admin)/admin/tax-invoices/[id]/wht-panel.tsx` — admin panel (create / pending / received / waived states)
+- ✅ `components/pdf/tax-invoice.tsx` — optional `wht` field renders WHT block under totals
+- ✅ `app/api/tax-invoice/[id]/route.tsx` — cancelled re-render pulls WHT too
+- ✅ `app/(protected)/service-(import|order)/[id]/receipt/page.tsx` — WHT info banner + Net total rows
+- ✅ Storage bucket `wht-certs` (DEDICATED) + RLS policies in migration 0044
+**Test list:** see `poom-test-playbook-2026-05-16.md` section **BB**
+**Follow-ups (deferred to V1.1):** customer self-upload of cert · 50 ทวิ OCR · line-level WHT base · auto-generate Pacred's ภ.ง.ด.53 summary
 
-### V-E10 — QA/QC intake inspection
+### V-E10 — QA/QC intake inspection ✅ SHIPPED 2026-05-17 (commit fb99a68)
 **Blocker:** none (purely additive)
 **Spec:** [`port-specs/freight-qa-qc-inspection.md`](../port-specs/freight-qa-qc-inspection.md)
-**Migration:** ~`0046_freight_qa_inspections.sql` (mine)
-**New entities:**
-- table `freight_qa_inspections` (15 cols + 4 CHECK constraints + RLS for customer-read-own + warehouse-write)
-- Storage bucket `qa-inspection-photos/`
-**Code touch:**
-- `actions/admin/qa-inspections.ts` (new) — 3 actions: create / update_outcome / waive
-- `/admin/warehouse/qa-inspections/page.tsx` (new) — list view
-- `/admin/warehouse/qa-inspections/[id]/page.tsx` (new) — detail + photos
-- `lib/warehouse/qa.ts` (new) — typed client
-**Effort:** ~6-8h
-**Pre-implementation check:**
-- [ ] Verify `freight_shipments` table EXISTS (V-E1 prereq) OR plan for cargo-only first
-- [ ] If freight_shipments not yet shipped, the FK column stays nullable + V-E10 keys to `cargo_shipments` only initially
+**Migration:** ✅ `0045_freight_qa_inspections.sql` shipped — needs `supabase db push` on dev/prod
+**V1 scope:** cargo_shipments-only (freight_shipment_id reserved nullable; follow-up migration after V-E1 adds FK + relaxes XOR)
+**Code touch (all done):**
+- ✅ `supabase/migrations/0045_freight_qa_inspections.sql` — table + RLS + bucket `qa-inspection-photos` + next_qa_inspection_no() fn
+- ✅ `lib/validators/qa-inspection.ts` — QA_OUTCOMES + QA_DAMAGE + Zod refinements
+- ✅ `actions/admin/qa-inspections.ts` — createQaInspection (waived super-only), updateQaInspectionNotes, uploadQaPhoto, isCargoShipmentQaPassed (V-E7 gate consumer)
+- ✅ `lib/notifications/templates.ts::qaFailed` — fail_minor/fail_major customer notif
+- ✅ `/admin/warehouse/qa-inspections/page.tsx` — pending queue + recent inspections
+- ✅ `/admin/warehouse/qa-inspections/new/page.tsx` + form — radio cards + photo multi-upload
+- ✅ `/admin/warehouse/qa-inspections/[id]/page.tsx` — detail + photo gallery (signed URLs)
+- ✅ `/shipments/[code]/page.tsx` — customer QA status panel
+**Test list:** see playbook section **CC**
+**V-E7 gate integration:** call `isCargoShipmentQaPassed(cargo_shipment_id)` from V-E7 `adminCreateFreightInvoice` → reject `qa_not_passed` if false
 
 ### V-E6 — Freight quotation workflow
 **Blocker:** none
 **Spec:** [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
-**Migration:** ~`0047_freight_quotes.sql` (mine)
+**Migration:** ~`0049_freight_quotes.sql` (mine)
 **New entities:**
 - `freight_quotes` (28 cols including approval workflow fields)
 - `freight_quote_items` (per-line)
@@ -95,7 +96,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ### V-E1 — Commercial invoice + packing list
 **Blocker:** ✅ ALL CLEAR (ADR-0016 locked 2026-05-16 night, 5 Qs resolved)
 **Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md#field-model-sketch--final-table-layout-part-of-the-v-e1-freight-schema-migration) for shipment-level fields
-**Migration:** `0048_freight_shipments.sql` + `0049_freight_invoices.sql` — **ภูม owns both** (เดฟ confirmed — ADR-0016 has the schema sketch ภูม wrote; same lane pattern as 0045 WHT)
+**Migration:** `0050_freight_shipments.sql` + `0051_freight_invoices.sql` — **ภูม owns both** (ADR-0016 has the schema sketch ภูม wrote — single-owner per migration)
 **New entities:** `freight_shipments` (cargo spine for freight, w/ `commercial_value_*` + `declared_customs_value_thb` + `exchange_rate` + `vat_plan_label` per ADR §"Field model") + `freight_invoices` + `freight_invoice_lines`
 **Rules per ADR-0016 locked:** `rate_source` enum = `{'staff_entered'}` V1 · Option A (committed plan only, what-if = calculator UI) · declared-value edit = super+accounting + `declared_value_basis` + audit log · duty rate = snapshot from `hs_codes` at issuance, overridable + logged
 **Effort:** ~10-15h (spine alone; receipt/payment is V-E7 separate)
@@ -103,7 +104,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ### V-E7 — Receipt + payment tracking
 **Blocker:** V-E1 (freight_invoices) + V-A6 WHT (ADR-0015) + V-E10 (QA gate)
 **Spec:** [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md)
-**Migration:** ~`0050_freight_invoice_payments.sql` + `next_freight_invoice_serial()` SECURITY DEFINER fn
+**Migration:** ~`0052_freight_invoice_payments.sql` + `next_freight_invoice_serial()` SECURITY DEFINER fn
 **New entities:** `freight_invoice_payments` (partial-pay ledger)
 **Code touch:**
 - `actions/admin/freight-invoices.ts` (new) — create invoice (with QA-pass gate) · record payment · issue receipt PDF
@@ -118,7 +119,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ### V-E8 + V-H1 + V-H2 — Commission withdrawal (one combined batch)
 **Blocker:** ✅ ALL CLEAR (ADR-0015 WHT locked + E-5 interpreter role ack-approved 2026-05-17)
 **Spec:** [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md)
-**Migration:** `0051_commissions.sql` — **ภูม owns** — 4 tables + `admins.role` enum extension (interpreter role per E-5 ack):
+**Migration:** `0053_commissions.sql` — **ภูม owns** — 4 tables + `admins.role` enum extension (interpreter role per E-5 ack):
 - `commission_tiers` (per-role/per-service rate lookup)
 - `commission_accruals` (earned-but-unpaid)
 - `commission_withdrawals` (request → admin approve → paid)
@@ -133,13 +134,13 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Effort:** ~20-30h
 **Pre-implementation check:**
 - [x] ADR-0015 locked (WHT 15% rate applied here — locked 2026-05-16 night)
-- [x] `interpreter` role ack-approved (E-5 resolved 2026-05-17 — bundle inline in 0051)
+- [x] `interpreter` role ack-approved (E-5 resolved 2026-05-17 — bundle inline in 0053)
 - [ ] Existing `team_leaders` table mapped → new `commission_tiers` (per-existing-row migration) — ภูม design call per spec
 
 ### V-E9 — Monthly closing ritual
 **Blocker:** none (additive)
 **Spec:** [`port-specs/freight-monthly-closing.md`](../port-specs/freight-monthly-closing.md)
-**Migration:** ~`0052_accounting_periods.sql` + read-only trigger
+**Migration:** ~`0054_accounting_periods.sql` + read-only trigger
 **Effort:** ~10-15h
 **Pre-implementation check:**
 - [ ] At least 1 closed accounting month of freight data (otherwise feature has nothing to freeze)
@@ -173,29 +174,34 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 
 ---
 
-## 🧱 Migration numbering map — ⚠️ RENUMBERED 2026-05-17
+## 🧱 Migration numbering map — ✅ reconciled 2026-05-17 (post ภูม Phase-I2 merge)
 
-> **`0044` is now `member_code_3digit` (เดฟ, shipped pre-launch).** The whole
-> ภูม freight/commission block shifted **+1** → now `0045`-`0052`. ภูม: do NOT
-> create a `0044_*.sql` — it exists. Start your Phase-I2 migrations at `0045`.
+> **Actual on-disk state.** ภูม shipped `0044`-`0047` autonomously 2026-05-17;
+> เดฟ's member_code took `0048` (after ภูม's batch). Next free = **`0049`**.
 
 | Number | Item | Owner | Status |
 |---|---|---|---|
 | `0041` | bill_to_name_override | ภูม | ✅ shipped + run on dev + prod |
 | `0042` | cargo_containers.close_at | ภูม | ✅ shipped + run on dev + prod |
 | `0043` | slip_transferred_at | ภูม | ✅ shipped + run on dev + prod |
-| `0044` | **member_code_3digit** (PR00001→PR001) | **เดฟ** | ✅ **SHIPPED 2026-05-17** (pre-launch — generator + backfill) |
-| `0045` | withholding_tax model (V-A6) | **ภูม** | ✅ unblocked — ADR-0015 locked → ภูม Mon AM (D-2 resolved) |
-| `0046` | freight_qa_inspections (V-E10) | ภูม | ⬜ post-launch |
-| `0047` | freight_quotes + items (V-E6) | ภูม | ⬜ post-launch |
-| `0048` | freight_shipments (V-E1) | **ภูม** | ✅ unblocked — ADR-0016 locked → ภูม Phase I2 (schema in ADR §"Field model") |
-| `0049` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0048 + 0045 |
-| `0050` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0049 + V-E10 QA-pass gate |
-| `0051` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ✅ unblocked — dep 0045 ✅ + E-5 interpreter role ack 2026-05-17 |
-| `0052` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
-| `0053` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
+| `0044` | **withholding_tax** (V-A6) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` on dev+prod |
+| `0045` | **freight_qa_inspections** (V-E10) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
+| `0046` | **org_contacts** (V-G5) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
+| `0047` | **tos_versions** (V-G4) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
+| `0048` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
+| `0049` | freight_quotes + items (V-E6) | ภูม | ⬜ next — post-launch |
+| `0050` | freight_shipments (V-E1) | ภูม | ⬜ ADR-0016 locked — post-launch |
+| `0051` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0050 + 0044 |
+| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0051 + V-E10 QA-pass gate |
+| `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
+| `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
+| `0055` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
 
-**Note:** ภูม owns `0045`-`0053`. The "เดฟ structural?" question from a previous version resolved by ก๊อต ADR locks — ภูม spec'd the schemas in the ADRs herself, so single-owner per migration. The one exception is `0044` (member_code) — เดฟ shipped that pre-launch per ลูกพี่ 2026-05-17.
+> ⚠️ **5 migrations (`0044`-`0048`) shipped to git but NOT yet applied to
+> Supabase.** Run `supabase db push` (or paste each into the SQL Editor) on
+> dev + prod before launch / before the features that depend on them.
+
+**Note:** `0044`-`0047` + `0049`-`0055` = ภูม. `0048` (member_code) = เดฟ. Single-owner per migration — ภูม spec'd the freight/commission schemas in the ADRs, so no "เดฟ structural lane" handoff needed.
 
 ---
 

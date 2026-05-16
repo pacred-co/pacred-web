@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getServiceOrderForReceipt } from "@/actions/service-order";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
+import { createClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/print-button";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
@@ -42,6 +43,21 @@ export default async function ShopOrderReceiptPage({
   // Service-order receipt only carries the snapshot fields — derive both paths.
   const buyerTaxId = o.customer.tax_id ?? "";
   const isEligible = buyerTaxId.replace(/\D/g, "").length === 13;
+
+  // V-A6: WHT info banner (juristic customer who withholds tax — see ADR-0015).
+  // RLS allows the customer to read OWN withholding_tax_entries row.
+  const supabase = await createClient();
+  const { data: whtRow } = await supabase
+    .from("withholding_tax_entries")
+    .select("cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
+    .eq("order_h_no", o.h_no ?? hNo)
+    .maybeSingle<{
+      cert_status:        "pending" | "received" | "waived";
+      wht_rate_pct:       number;
+      wht_amount_thb:     number;
+      net_expected_thb:   number;
+      gross_invoice_thb:  number;
+    }>();
 
   const isPaid       = o.status === "completed";
   const docLabel     = isPaid ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
@@ -215,9 +231,51 @@ export default async function ShopOrderReceiptPage({
                   ฿{o.total_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                 </td>
               </tr>
+              {whtRow && (
+                <>
+                  <tr className="text-sm">
+                    <td className="py-1 text-amber-700">
+                      หัก ภาษี ณ ที่จ่าย {Number(whtRow.wht_rate_pct)}%
+                    </td>
+                    <td className="text-right font-mono text-amber-700">
+                      −฿{Number(whtRow.wht_amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-black font-bold text-base">
+                    <td className="py-1">ลูกค้าโอนสุทธิ (Net)</td>
+                    <td className="text-right font-mono text-primary-700">
+                      ฿{Number(whtRow.net_expected_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </section>
+
+        {/* V-A6: WHT info banner */}
+        {whtRow && (
+          <section className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4 space-y-2 text-sm">
+            <h3 className="font-bold text-amber-900">📋 สำหรับลูกค้านิติบุคคล (มีหัก ณ ที่จ่าย)</h3>
+            <p className="text-amber-900">
+              ยอดในใบเสร็จ (Gross) ฿{Number(whtRow.gross_invoice_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              {" — "}
+              หัก ณ ที่จ่าย {Number(whtRow.wht_rate_pct)}% (฿{Number(whtRow.wht_amount_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}){" — "}
+              <strong>โอนสุทธิ ฿{Number(whtRow.net_expected_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</strong>
+            </p>
+            {whtRow.cert_status === "pending" && (
+              <p className="text-xs text-amber-800">
+                ⚠️ กรุณาส่งหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ) ให้ Pacred — มิเช่นนั้นจะออกใบกำกับภาษีให้ไม่ได้
+              </p>
+            )}
+            {whtRow.cert_status === "received" && (
+              <p className="text-xs text-green-700">✅ ได้รับใบ 50 ทวิ ครบแล้ว — สามารถออกใบกำกับภาษีได้</p>
+            )}
+            {whtRow.cert_status === "waived" && (
+              <p className="text-xs text-gray-700">ℹ️ ใบ 50 ทวิ ได้รับการยกเว้น (Pacred รับเป็นค่าใช้จ่าย)</p>
+            )}
+          </section>
+        )}
 
         {/* Shipment info */}
         <section className="text-xs text-gray-700">

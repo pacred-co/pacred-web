@@ -38,7 +38,7 @@
 ### D-2 · Migration numbering — ✅ confirmed 2026-05-16 night
 **ภูม ใช้:** `0041` bill_to_name_override (V-C2) · `0042` cargo_containers.close_at (V-C3) · `0043` slip_transferred_at (V-A1).
 
-**ภูม Monday morning takes `0045_withholding_tax.sql`** สำหรับ V-A6 (ADR-0015 ✅ locked → spec ready in [ADR-0015 §"Schema sketch"](../decisions/0015-withholding-tax-model.md) — use file name `0045_withholding_tax.sql` + apply). ⚠️ **renumbered: `0044` is now `member_code_3digit` (เดฟ shipped pre-launch 2026-05-17)** — ภูม Phase-I2 block = `0045`-`0053`.
+**ภูม shipped `0044_withholding_tax.sql`** for V-A6 2026-05-17 (ADR-0015 ✅ locked). ✅ on-disk migration order: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions (ภูม) · `0048` member_code (เดฟ). Next free = `0049`. Full map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map".
 
 **Owner:** ✅ resolved (เดฟ ack 2026-05-16 night).
 
@@ -51,7 +51,7 @@
 
 ### E-1 · ADR-0015 WHT lock — ✅ UNBLOCKED 2026-05-16 night
 **ก๊อต locked ADR-0015** (Status ✅ Accepted, 4 Qs resolved). **ภูม Monday morning ลุย V-A6 ได้เลย** ตาม spec ใน [ADR-0015](../decisions/0015-withholding-tax-model.md):
-- Migration `0045_withholding_tax.sql` (rate set `{1, 1.5, 2, 3, 5}`)
+- Migration `0044_withholding_tax.sql` (rate set `{1, 1.5, 2, 3, 5}`)
 - New bucket `wht-certs` (DEDICATED, RLS mirror `tax-invoices` pattern)
 - Admin-only V1 (customer self-upload deferred to V1.1)
 - `waived` = SINGLE approver `super` OR `accounting` + `waived_reason` + audit log row
@@ -90,7 +90,7 @@
 - Required for V-E8/H1/H2 commission flow per [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — already specced + ADR-0015 (WHT 15% payout rule) locked
 - Per ADR-0010 V2 owner-pleaser principle: additive RBAC for paid interpreter staff is owner-aligned (cargo ops needs this; existing PHP role model has it)
 
-**ภูม implementation:** Bundle into `0051_commissions.sql` migration (3 lines: drop constraint + add constraint with 7th value):
+**ภูม implementation:** Bundle into `0053_commissions.sql` migration (3 lines: drop constraint + add constraint with 7th value):
 ```sql
 alter table public.admins drop constraint if exists admins_role_check;
 alter table public.admins add  constraint admins_role_check

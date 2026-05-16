@@ -244,6 +244,47 @@ export const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
+  // ── Bank-transfer payment block (post-T-G3 Bundle 1 — BANK constant) ──
+  bankBlock: {
+    marginTop: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderStyle: "solid",
+    borderRadius: 4,
+    backgroundColor: COLORS.surfaceAlt,
+  },
+  bankTitle: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    marginBottom: 6,
+  },
+  bankRow: {
+    flexDirection: "row",
+    marginBottom: 2,
+  },
+  bankLabel: {
+    fontSize: 9,
+    color: COLORS.muted,
+    width: 80,
+  },
+  bankValue: {
+    fontSize: 10,
+    color: COLORS.foreground,
+    flex: 1,
+  },
+  bankAccountNumber: {
+    fontWeight: "bold",
+    color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  bankNote: {
+    marginTop: 6,
+    fontSize: 8,
+    color: COLORS.muted,
+  },
+
   // ── Footer ───────────────────────────────────────────────────────────
   footer: {
     position: "absolute",

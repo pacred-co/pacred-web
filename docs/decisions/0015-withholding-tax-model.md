@@ -63,7 +63,7 @@ One row per WHT event, FK to the parent order (`order_h_no` *or* `forwarder_f_no
 
 **Adopt Option B — a dedicated `withholding_tax_entries` table.** WHT is a *payment-settlement* concept layered onto an order; the invoice/order gross and its VAT are **unchanged** (the receipt always shows `Gross`).
 
-### Schema sketch — migration `0045_withholding_tax.sql`
+### Schema sketch — migration `0044_withholding_tax.sql`
 
 ```sql
 create table public.withholding_tax_entries (

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { IssueButton } from "./issue-button";
 import { CancelButton } from "./cancel-button";
+import { WhtPanel, type WhtPanelEntry } from "./wht-panel";
 
 /**
  * /admin/tax-invoices/[id] — detail view (T-P4 G2c).
@@ -110,6 +111,25 @@ export default async function AdminTaxInvoiceDetailPage({
     .order("position", { ascending: true });
 
   const lineRows = (lines ?? []) as Line[];
+
+  // ── WHT panel data (ADR-0015 / V-A6) ──
+  // Look up an existing entry by the parent order. A single row per parent
+  // order is enforced by partial-unique indexes; we read it (or null).
+  const whtQuery = admin
+    .from("withholding_tax_entries")
+    .select(
+      "id, cert_status, gross_invoice_thb, wht_base_thb, wht_rate_pct, wht_amount_thb, net_expected_thb, cert_number, cert_storage_path, cert_received_at, waived_reason, waived_at",
+    )
+    .limit(1);
+  const whtRes = header.forwarder_f_no
+    ? await whtQuery.eq("forwarder_f_no", header.forwarder_f_no).maybeSingle<WhtPanelEntry>()
+    : header.order_h_no
+    ? await whtQuery.eq("order_h_no",     header.order_h_no    ).maybeSingle<WhtPanelEntry>()
+    : { data: null };
+  const whtEntry: WhtPanelEntry | null = whtRes.data ?? null;
+
+  // Suggested rate: forwarder (cargo/freight) → 1%, service-order (shop) → 3%
+  const suggestedRate: 1 | 3 = header.forwarder_f_no ? 1 : 3;
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
@@ -225,6 +245,20 @@ export default async function AdminTaxInvoiceDetailPage({
           </tfoot>
         </table>
       </section>
+
+      {/* WHT panel (juristic-customer flow per ADR-0015) — shown for pending
+          invoices so admin can record/clear the WHT entry before issuing.
+          Also shown for issued (read-only display) if a WHT row exists. */}
+      {(header.status === "pending" || (header.status === "issued" && whtEntry)) && (
+        <WhtPanel
+          taxInvoiceId={header.id}
+          orderType={header.forwarder_f_no ? "forwarder" : "service_order"}
+          orderId={header.forwarder_f_no ?? header.order_h_no ?? ""}
+          suggestedGross={Number(header.total_thb)}
+          suggestedRate={suggestedRate}
+          entry={whtEntry}
+        />
+      )}
 
       {/* Action zone */}
       {header.status === "pending" && (

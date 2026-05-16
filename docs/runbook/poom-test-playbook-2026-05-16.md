@@ -172,6 +172,102 @@
 - [ ] เปิด `/admin/learning` → card "การอบรม → HR" → กดแล้วไป /admin/hr/training (blue accent + "→ เปิดในโมดูล HR" hint)
 - [ ] อีก 3 cards (rules/news/customer-terms) → ยังไปยัง /admin/learning/* (Phase H placeholders)
 
+### AA. **NEW (T-G3 follow-up)** — BANK constants wired into PDFs
+- [ ] เปิด `/api/pdf/forwarder/<f_no>` → ดู bank block ใต้ totals (ก่อน signature) → ตัวเลข `225-2-91144-0` ใหญ่/หนา
+- [ ] `/api/pdf/shop-order/<h_no>` (status ≠ completed = invoice) → bank block ปรากฏ
+- [ ] เดียวกัน แต่ status=completed (paid receipt) → **bank block ไม่ปรากฏ** (พิมพ์ "ชำระจาก wallet")
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ status=issued → bank block bilingual TH/EN ทุก field
+
+### BB. **NEW (V-A6) — Withholding tax (ADR-0015)** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0044 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0044_withholding_tax.sql` ใน Supabase Studio (หรือ `supabase db push`) → ดู table `withholding_tax_entries` + bucket `wht-certs` ใน Storage
+- [ ] ทดสอบ partial-unique indexes: insert WHT row ซ้ำกับ order_h_no เดียว → ควร error 23505
+
+**Admin flow (super หรือ accounting):**
+- [ ] เปิด `/admin/tax-invoices/[id]` ของใบ pending → เห็นแผง "🧾 ภาษีหัก ณ ที่จ่าย (WHT)" สีอำพัน
+- [ ] กรอก gross/base/rate → ดู Net คำนวณ live → กด "📝 บันทึก WHT + เริ่ม gate"
+- [ ] แผงเปลี่ยนเป็น status `รอใบหัก (gate ON)` พร้อม 4 stats (Gross/Base/Amount/Net)
+- [ ] กด "ออกใบกำกับภาษี" → fail ด้วย error "กรุณาแนบหรือยกเว้นใบ 50 ทวิ ในแผง WHT ก่อน"
+- [ ] อัพโหลด PDF/JPG cert + เลขที่ 50 ทวิ → status flip เป็น `ได้รับใบหัก` (เขียว)
+- [ ] กด "ออกใบกำกับภาษี" อีกครั้ง → ✅ ออกสำเร็จ + PDF มี WHT line + Net total + bank block
+- [ ] เปิด WHT entry ใหม่อีก order → ลองกด "ยกเว้นใบหัก" → กรอกเหตุผล ≥5 ตัวอักษร → status `ยกเว้น`
+- [ ] เปิด WHT entry ใหม่อีก order → ลอง "ลบ WHT" ขณะ pending → ลบสำเร็จ; ลองอีกที (ไม่มี row) → form กลับมา
+
+**Customer flow (open as the customer who owns the order):**
+- [ ] เปิด `/service-import/<f_no>/receipt` ของออเดอร์ที่มี WHT row → เห็น banner สีอำพัน "📋 สำหรับลูกค้านิติบุคคล" + ตาราง totals แสดง −WHT + Net
+- [ ] เดียวกัน `/service-order/<h_no>/receipt`
+- [ ] cert_status='pending' → banner เตือน "กรุณาส่ง 50 ทวิ"
+- [ ] cert_status='received' → banner เขียว "ได้รับใบ 50 ทวิ ครบแล้ว"
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`withholding_tax_entry` → เห็น actions: wht.create / wht.cert_upload / wht.cert_received / wht.cert_waive / wht.cancel + payload ครบ
+
+**PDF rendering:**
+- [ ] เปิด `/api/tax-invoice/<id>` ของใบที่ issued + มี WHT received → ดู PDF: "หัก ภาษี ณ ที่จ่าย N%" + "คงเหลือชำระสุทธิ (Net)" + Thai-baht spell-out ของ Net
+- [ ] Grand total (gross) **ต้องไม่เปลี่ยน** — RD Code 86
+
+**Negative cases / edge:**
+- [ ] ลูกค้า personal (ไม่มี WHT row) → ออกใบกำกับภาษีได้ปกติ ไม่มี gate, ไม่มี banner
+- [ ] WHT row exist + status=waived → ออกใบกำกับภาษีได้, PDF มี WHT block แต่ไม่มีหมายเลขใบ 50 ทวิ
+- [ ] ลบ WHT entry หลัง cert_status=received → fail "ลบไม่ได้ — สถานะไม่ใช่ pending" (preserved for audit)
+
+### CC. **NEW (V-E10) — QA/QC inspection** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0045 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0045_freight_qa_inspections.sql` ใน Supabase Studio → ดู table `freight_qa_inspections` + sequence `qa_inspection_seq` + function `next_qa_inspection_no` + bucket `qa-inspection-photos`
+- [ ] ทดสอบ CHECK constraints: insert fail_major พร้อม damage_level=null → error; insert waived พร้อม waived_reason=null → error
+
+**Admin pending queue (warehouse + super + accounting):**
+- [ ] เปิด `/admin/warehouse/qa-inspections` → เห็น "🕓 คิวรอตรวจ" แสดง cargo_shipments ที่ status=`arrived_th` แต่ไม่มี inspection
+- [ ] กด "บันทึกการตรวจ" → ไปหน้า `/admin/warehouse/qa-inspections/new?shipment=...`
+
+**Create inspection (4 outcome paths):**
+- [ ] **pass** → กรอก outcome=pass, missing_items=0, upload 1-2 รูป → redirect ไป detail; QA-YYMMDD-NNNN ขึ้น; รูปแสดงในแกลเลอรี
+- [ ] **fail_minor** → กรอก outcome=fail_minor, damage_level=cosmetic, missing_items=2, notes="กล่องบุบ" → บันทึก + ลูกค้าได้ notification "ตรวจพบปัญหาเล็กน้อย" + customer_notified_at ถูกตั้งค่า
+- [ ] **fail_major** → กรอก outcome=fail_major, damage_level=partial → notification severity=error ("ตรวจพบปัญหาสำคัญ")
+- [ ] **waived** (super only) → ลอง role=accounting → fail; ลอง role=super → กรอก waived_reason ≥5 → บันทึก; ดู detail page เห็น banner สีแดง "⚠️ ยกเว้น (waived)" + เหตุผล
+
+**Customer view:**
+- [ ] เปิด `/shipments/[code]` ของลูกค้าที่ shipment ถูกตรวจ → เห็น QA status panel สีตาม outcome (เขียว/เหลือง/แดง/เทา)
+- [ ] fail_major → ดู "📞 กรุณาติดต่อทีมงาน" CTA
+- [ ] รูปไม่อยู่ใน customer view (V1 — admin-only). Path มี cargo_shipment_id แต่ signed URL render บน admin detail page เท่านั้น
+
+**Audit + photo:**
+- [ ] `/admin/audit` → กรอง target_type=`qa_inspection` → เห็น actions: qa_inspection.create / qa_inspection.photo_upload / qa_inspection.notify_failed (ถ้ามี)
+- [ ] เปิด detail page → คลิกรูป → signed URL เปิดในแท็บใหม่; ลอง paste URL ใน private window → ใช้งานได้ภายใน 60 วินาที
+
+**Gate readiness (sanity, no UI yet):**
+- [ ] เปิด server console → `await isCargoShipmentQaPassed("<uuid-with-pass>")` → true
+- [ ] เดียวกัน with "<uuid-with-fail_major>" → false
+- [ ] เดียวกัน with "<uuid-no-inspection>" → false
+- [ ] เมื่อ V-E7 ships, billing flow จะใช้ helper นี้ block invoice issuance
+
+### DD. **NEW (V-G5) — Org contacts management** ⚠️ **PRE-FLIGHT: รัน migration 0046 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0046_org_contacts.sql` ใน Supabase Studio → ดู table `org_contacts` + RLS policies (public read active-only, admin write super/accounting/sales_admin)
+
+**Admin CRUD (super):**
+- [ ] เปิด `/admin/settings/contacts` → tab "อีเมล" active by default; เห็น tabs ครบ 7 (โดเมน/อีเมล/LINE OA/โทรศัพท์/WeChat/Social/ที่อยู่) + count badges
+- [ ] กด "+ เพิ่มข้อมูลติดต่อ" → form ปรากฏ → กรอก label="ฝ่ายขาย", value="sales@pacred.co", department="ขาย", order=0 → ✓ เพิ่ม
+- [ ] Row ใหม่ปรากฏในตาราง + count tab "อีเมล" เพิ่ม 1
+- [ ] กดปุ่ม "✓ เปิด" → flip เป็น "○ ปิด" (rgb opacity ลด); กดอีกครั้ง → กลับ
+- [ ] กด "แก้ไข" → inline form → เปลี่ยน value → ✓ บันทึก → ค่าใหม่ปรากฏ + audit log
+- [ ] กด "ลบ" → ปุ่ม "✓ ยืนยันลบ" + "ยกเลิก" → ยกเลิก → ไม่เกิดอะไร; ยืนยัน → row หายไป
+
+**Role gating:**
+- [ ] role=accounting → เข้า `/admin/settings/contacts` ได้ + แก้ไขได้
+- [ ] role=sales_admin → เข้าได้ + แก้ไขได้
+- [ ] role=ops → 404 (ไม่ allowed)
+
+**Audit trail:**
+- [ ] `/admin/audit` → กรอง target_type=`org_contact` → เห็น actions org_contact.create / org_contact.update (มี before+patch) / org_contact.delete (มี before snapshot)
+
+**Customer-side (V-G5.1 not shipped yet):**
+- [ ] Footer + contact-us page ยังใช้ constants ใน `components/seo/site.ts` — ไม่เปลี่ยนพฤติกรรม
+- [ ] DB rows ที่เพิ่ม **ไม่กระทบ** หน้า public ใดๆ ใน V1 — สามารถ test ได้ปลอดภัยบน prod
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
