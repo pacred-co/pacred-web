@@ -12,10 +12,10 @@
 | # | Owner | Item | Status |
 |---|---|---|---|
 | **B1** | เดฟ | OTP UI for prod (2-step register + OtpInput component) | ✅ shipped 73cbf0d |
-| **B2** | เดฟ | Migrations 0023..0043 apply prod Supabase | ⏳ Sat-Sun |
-| **B3** | ก๊อต | Lock ADR-0015 + ADR-0016 (fastlane pre-answered in briefs/got.md) | ⏳ tonight |
-| **B4** | เดฟ | DV-3 ThaiBulkSMS signup + `OTP_BYPASS=false` flip in Vercel | ⏳ Sat-Sun |
-| **B5** | ก๊อต | Sign up K-12 GTM + K-13 Clarity + DV-1a Sentry + DV-1b Upstash + DV-1c hCaptcha | ⏳ Sat-Sun (~2.5h browser) |
+| **B2** | เดฟ + ลูกพี่ | Migrations 0023..0043 apply prod Supabase | ✅ DONE 2026-05-16 (10/10 rows verify) |
+| **B3** | ก๊อต + เดฟ | Lock ADR-0015 + ADR-0016 (fastlane pre-answered in briefs/got.md) | ✅ DONE 2026-05-16 night (both ✅ Accepted, all 9 Qs resolved) |
+| **B4** | เดฟ | DV-3 ThaiBulkSMS signup + `OTP_BYPASS=false` flip in Vercel | ⏳ pending (เดฟ owns) |
+| **B5** | ก๊อต | Sign up K-12 GTM + K-13 Clarity + DV-1a Sentry + DV-1b Upstash + DV-1c hCaptcha | ✅ DONE 2026-05-16 night (all 5 signups + Vercel env set + redeployed) |
 
 ---
 
@@ -23,10 +23,11 @@
 
 | Item | Owner | Degradation if not done |
 |---|---|---|
-| LIFF app create + `NEXT_PUBLIC_LIFF_ID` (DV-2) | เดฟ | LINE push works without LIFF; `/liff/link` page non-functional. Guide: [`setup/line-liff-create-guide.md`](../setup/line-liff-create-guide.md) |
-| Pacred owner Bundle 1 (PromptPay number + bank acct + tax ID + legal name + LIFF ID) | ก๊อต call พี่ป๊อป | PromptPay QR shows soft-degrade notice ("ค่า PromptPay ยังไม่เปิด — ติดต่อทีม"); receipts missing legal name |
+| LIFF app create + `NEXT_PUBLIC_LIFF_ID` (DV-2) | เดฟ + ลูกพี่ | ✅ DONE 2026-05-16 night — new LINE Login channel 2010105778 + LIFF `2010105778-SaSkkGza` |
+| Pacred owner Bundle 1 (T-G3: PromptPay + bank acct + Pacred legal info + Omise approval + PDPA reg) | ลูกพี่ call พี่ป๊อป (owner change from ก๊อต) | PromptPay QR shows soft-degrade ("ติดต่อทีม"); receipts missing legal name. Script: [`runbook/t-g3-popop-call-script.md`](t-g3-popop-call-script.md) |
 | Resend API key (`RESEND_API_KEY`) | Pacred owner | Email notifications silently skip (log only); LINE push still works |
-| ก๊อต MOMO-1 endpoint inventory call | ก๊อต call MOMO | Container tracking shows demo data only; admin manual entry works as fallback. Prep doc: [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) |
+| MOMO-1 endpoint inventory call | ลูกพี่ call BBOY (owner change from ก๊อต) | Container tracking shows demo data only; admin manual entry works as fallback. Script: [`runbook/momo-1-bboy-call-script.md`](momo-1-bboy-call-script.md) · Tech ref: [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) |
+| Renovate GitHub App install | ก๊อต | ✅ DEFERRED 2026-05-16 night ("ก๊อต บอกข้ามเลย ยังไม่จำเป็น"). Config `.github/renovate.json5` stays inert until App install. Re-open T+30d post-launch. |
 
 ---
 

@@ -105,15 +105,15 @@ Per เดฟ brief 2026-05-16: "**ให้กอตจัดการงาน
 
 ### 🟡 Pending — your pickup list (priority order)
 
-#### P0 (block production beta)
+#### P0 (block production beta) — ✅ ALL DONE 2026-05-16 night by ก๊อต
 
-| # | Task | Effort | Source |
+| # | Task | Effort | Status |
 |---|---|---|---|
-| **K-12** | GTM container signup → `NEXT_PUBLIC_GTM_ID` in Vercel | 30–45m | Part S2 |
-| **K-13** | Microsoft Clarity signup → `NEXT_PUBLIC_CLARITY_ID` in Vercel | 15–30m | Part S2 |
-| **DV-1a** | Sentry account → `SENTRY_DSN` in Vercel | ~30m | Part S4 |
-| **DV-1b** | Upstash Redis DB → `UPSTASH_REDIS_REST_URL/_TOKEN` in Vercel | ~30m | Part S4 |
-| **DV-1c** | hCaptcha site (invisible) → `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` | ~30m | Part S4 |
+| **K-12** | GTM container signup → `NEXT_PUBLIC_GTM_ID` in Vercel | 30–45m | ✅ done + env set + redeployed |
+| **K-13** | Microsoft Clarity signup → `NEXT_PUBLIC_CLARITY_ID` in Vercel | 15–30m | ✅ done + env set + redeployed |
+| **DV-1a** | Sentry account → `SENTRY_DSN` in Vercel | ~30m | ✅ done + env set + redeployed (unblocks CSP-1 report-uri) |
+| **DV-1b** | Upstash Redis DB → `UPSTASH_REDIS_REST_URL/_TOKEN` in Vercel | ~30m | ✅ done + env set + redeployed (rate-limit live in 6 actions) |
+| **DV-1c** | hCaptcha site (invisible) → `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` + `HCAPTCHA_SECRET_KEY` | ~30m | ✅ done + env set + redeployed (bot filter live in 3 forms + 5 actions) |
 
 #### P0.5 (MOMO partner — production cargo dependency)
 
@@ -226,7 +226,7 @@ Pre-answers (kept below for posterity):
 | **K-sec-3** | Audit log coverage gap report | 1–2h | Part O5 Track K3 | ✅ done by เดฟ → same doc above (combined) — same ack |
 | **K-sec-4** | External pen test — vendor + scope + timeline | 2–3h plan + exec post-launch | Part O5 Track K3 | ✅ **DECIDED 2026-05-16 night — Aiwen Tech ฿150-200k Tier-1 + T+8-13wk window** → [`audit/pen-test-plan-2026-05-16.md`](../audit/pen-test-plan-2026-05-16.md) §7 resolved. RFP fan-out at T+5wk to Aiwen+Stelia+MFEC; HackerOne month-9. **เดฟ tickle calendar 2026-06-22** |
 | **CSP-1** | CSP migrate from `'unsafe-inline'` to nonce-based per Next 16 docs | ~4h | OWASP P2 | ✅ **DECIDED 2026-05-16 night — Ship week-2 post-launch (≈ Mon 2026-06-01) + Sentry CSP Reports + 48h Report-Only soft-launch + zero-violations enforce gate** → [`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md) §6 resolved. ภูม or เดฟ executes Phase 1-4 post DV-1a Sentry live |
-| **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 | ✅ done by เดฟ → [`.github/renovate.json5`](../../.github/renovate.json5); ⏳ ก๊อต enables Renovate GitHub App + merges onboarding PR |
+| **Renovate** | Set up Renovate or Dependabot for auto dep PRs | ~1h | Part O5 K-tooling-2 | ✅ config done by เดฟ → [`.github/renovate.json5`](../../.github/renovate.json5); **DEFERRED 2026-05-16 night ("ก๊อต บอกข้ามเลย ยังไม่จำเป็น")** — re-open T+30d post-launch when dep drift accumulates |
 | **MOMO-2** | (was nested in MOMO-1) reverse-engineer legacy JMF integration | ~2-3h | Part S2 | ✅ done by เดฟ → [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md). **MOMO-1 call owner changed ก๊อต → ลูกพี่** 2026-05-16 night — เดฟ wrote ลูกพี่-friendly wrapper [`runbook/momo-1-bboy-call-script.md`](../runbook/momo-1-bboy-call-script.md) |
 | **V-F3** | Legacy-infra resilience review | ~1h | Part V V-F3 | ✅ done by เดฟ → [`audit/v-f3-legacy-infra-resilience-2026-05-16.md`](../audit/v-f3-legacy-infra-resilience-2026-05-16.md); ก๊อต confirms legacy retirement date |
 
@@ -238,7 +238,7 @@ Pre-answers (kept below for posterity):
 
 2. **MOMO-2 reverse-engineer + MOMO-1 call prep** ([`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md), 300+ lines) — JMF (closest analog) integration contract decoded from legacy PHP (PUT 25-field receiver + GET caller patterns). 24 prepared questions for MOMO dev grouped by topic (endpoints / auth / data model / webhook / ops / strategic). ก๊อต action: use §3 question list when making MOMO call. After call → ภูม wires `lib/integrations/momo-jmf/sync.ts` per §4.
 
-3. **Renovate config** ([`.github/renovate.json5`](../../.github/renovate.json5)) — auto-dep PRs with Pacred-specific defaults (weekly schedule · group non-major into 1 PR · auto-merge dev-deps · pin load-bearing packages Next/React/TS/Supabase for manual review). ก๊อต action: install [Renovate GitHub App](https://github.com/apps/renovate) → grant access to pacred-web → merge the onboarding PR Renovate opens.
+3. **Renovate config** ([`.github/renovate.json5`](../../.github/renovate.json5)) — auto-dep PRs with Pacred-specific defaults (weekly schedule · group non-major into 1 PR · auto-merge dev-deps · pin load-bearing packages Next/React/TS/Supabase for manual review). **DEFERRED 2026-05-16 night** ("ก๊อต บอกข้ามเลย ยังไม่จำเป็น"). Config stays inert until App install — re-open T+30d post-launch.
 
 4. **CSP-1 nonce migration plan** ([`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md), 250+ lines) — full execution plan (5 inline-script sites inventoried · 4-phase migration · 7-risk register · 4 open Qs). **Not yet implemented** (too risky to ship in same session w/o per-route smoke). ก๊อต action: decide ship-week (recommend week 2 post-launch); ภูม or เดฟ executes per Phase 1-4.
 
@@ -289,7 +289,7 @@ When you're blocked:
 |---|---|
 | Pacred owner not responding | Take a P1 hardening item from the table above |
 | Waiting on MOMO call back | Draft RLS audit (K-sec-2) or RBAC ADR (P-38) |
-| Indecision between Omise/2C2P/Stripe | Take the Renovate setup (~1h, unblocks team long-term) |
+| Indecision between Omise/2C2P/Stripe | ~~Take the Renovate setup~~ (Renovate DEFERRED 2026-05-16; pick something from V-F3 weekly check-in instead) |
 
 **Note back to เดฟ when:** you decide a strategic direction, sign up for any external service, request anything from Pacred owner.
 

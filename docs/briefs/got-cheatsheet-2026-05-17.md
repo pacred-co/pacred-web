@@ -19,15 +19,15 @@
 | **B2** Migrations apply prod Supabase | ลูกพี่/กอต | ✅ **DONE** (ลูกพี่ apply วันนี้) |
 | **B3** ก๊อต lock ADR-0015/0016 | **ก๊อต + เดฟ** | ✅ **DONE** 2026-05-16 night (ก๊อต ack fastlane → เดฟ flip Status. Both ADRs ✅ Accepted. ภูม Mon morning ลุย V-A6) |
 | **B4** DV-3 ThaiBulkSMS signup | เดฟ | ⏳ ~30m (เดฟ ทำเอง) |
-| **B5** ก๊อต signups K-12/K-13/DV-1a/b/c | **ก๊อต ⬇️** | ⏳ ~2.5h browser |
+| **B5** ก๊อต signups K-12/K-13/DV-1a/b/c | ก๊อต | ✅ **DONE** 2026-05-16 night — all 5 signups + Vercel env set + redeployed |
 
 ---
 
-## 1. 🖥️ Browser signups (กอต-only · ~2.5-3h)
+## 1. 🖥️ Browser signups (กอต-only · ~2.5-3h) — ✅ ALL DONE 2026-05-16 night
 
-ทำได้ทุกเมื่อ. ครั้งเดียวจบ. เสร็จแล้วเอา key/ID มา set ใน Vercel.
+ก๊อต completed all 5 signups + Vercel env set + redeploy triggered. **Section preserved below for the env-var inventory** (in case rotation/audit needed later).
 
-### 1.1 K-12 — Google Tag Manager (GTM) (~30-45m)
+### 1.1 K-12 — Google Tag Manager (GTM) (~30-45m) — ✅ done
 - ไป https://tagmanager.google.com → Create Account
   - Account name: `Pacred`
   - Container name: `pacred.co` · platform: **Web**
@@ -39,7 +39,7 @@
 - Save → Redeploy
 - **Unblocks:** 9 conversion events + 13 CTA surfaces ทำงานทันที (code wired ใน `lib/analytics.ts` รอ env)
 
-### 1.2 K-13 — Microsoft Clarity (~15-30m)
+### 1.2 K-13 — Microsoft Clarity (~15-30m) — ✅ done
 - ไป https://clarity.microsoft.com → Sign in (Microsoft/Google/FB)
 - Create new project: `Pacred` · website `pacred.co`
 - หลัง create → ได้ Project ID
@@ -48,7 +48,7 @@
 - Save + Redeploy
 - **Unblocks:** heatmaps + session recordings (ก๊อต/ปอน อ่าน analytics)
 
-### 1.3 DV-1a — Sentry (~30m)
+### 1.3 DV-1a — Sentry (~30m) — ✅ done
 - ไป https://sentry.io → Sign up (free tier OK เริ่ม)
 - Create new project: Platform = **Next.js**
 - หลัง create → ได้ DSN (URL format `https://xxx@sentry.io/yyy`)
@@ -58,7 +58,7 @@
 - Save + Redeploy
 - **Unblocks:** production error tracking active (SDK already wired in `instrumentation.ts`)
 
-### 1.4 DV-1b — Upstash Redis (~30m)
+### 1.4 DV-1b — Upstash Redis (~30m) — ✅ done
 - ไป https://console.upstash.com → Sign up (free tier OK)
 - Create Database: Type = **Redis** · region = `Singapore` (ใกล้สุดสำหรับ TH)
 - หลัง create → REST URL + REST Token
@@ -68,7 +68,7 @@
 - Save + Redeploy
 - **Unblocks:** rate-limit active (wired into 6 server actions; currently soft-degrade)
 
-### 1.5 DV-1c — hCaptcha (~30m)
+### 1.5 DV-1c — hCaptcha (~30m) — ✅ done
 - ไป https://www.hcaptcha.com → Sign up · choose **Invisible**
 - Create site → domain `pacred.co` · pacred.co.th · localhost (สำหรับ dev)
 - หลัง create → Site Key + Secret Key
@@ -136,13 +136,10 @@
 - **Ship week-2 post-launch (≈ Mon 2026-06-01) + 48h Report-Only + Sentry CSP Reports endpoint + zero-violations enforce gate.** Plan [§6](../decisions/csp-nonce-migration-plan.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่) resolved.
 - Pre-req: DV-1a Sentry live + CSP Reports endpoint URL captured (after ก๊อต Sentry signup).
 
-### 3.8 Renovate config (~10 นาที)
-- 🆕 [`.github/renovate.json5`](../../.github/renovate.json5) — เดฟ wrote Pacred-specific config
-- **Need from กอต:**
-  1. ไป https://github.com/apps/renovate → Install (or "Configure")
-  2. Grant access to `pacred-co/pacred-web` repo
-  3. Merge the onboarding PR Renovate opens automatically
-  4. หลังจากนั้น Renovate รัน Mon-morning weekly batch
+### 3.8 ✅ Renovate config — DEFERRED 2026-05-16 night (ก๊อต call)
+**ก๊อต บอกข้ามเลย ยังไม่จำเป็น** — V2 launch focus ก่อน. Config `.github/renovate.json5` ยังอยู่ ready-to-activate เมื่อ ก๊อต พร้อม install GitHub App ในอนาคต (no harm — config inert without App install).
+
+Future trigger: เมื่อ V2 stable + dependency drift เริ่มสะสม (recommend revisit T+30d post-launch ตอนเดียวกับ V3 ADRs review). Re-open this section + Install App + merge onboarding PR.
 
 ### 3.9 ✅ V3 ADRs (0011/0012/0013) — DECIDED defer T+30d 2026-05-16 night
 **ทั้ง 3 DRAFTs → DEFERRED to T+30d post-launch** (V2 launch focus). ภูม ไม่ implement จนกว่า ก๊อต กลับมา flip Status → Accepted หลังจาก V2 stable + ops-staff feedback มา.
@@ -190,26 +187,24 @@ Per [`docs/runbook/pre-launch-checklist-2026-05-18.md`](../runbook/pre-launch-ch
 
 ---
 
-## 7. 🎯 Recommended order ทำงาน (ถ้ากอตอยากเรียง)
+## 7. 🎯 Status (updated 2026-05-16 night)
 
-**คืนนี้ (Sat night → Sun morning):**
-1. ~~ADR-0015 + ADR-0016 fastlane sign (5m)~~ ✅ DONE
-2. Renovate GitHub App install (10m)
-3. ~~K-sec audits + V-F3 + K-sec-4 + D-7 + R1 + CSP-1 reads (45m)~~ ✅ DONE — เดฟ + ลูกพี่ ack ทุก decision per §3.3-3.7
-4. ~~V3 ADRs (~15-20m)~~ ✅ DONE — all 3 DEFERRED to T+30d
+**ก๊อต cleared (DONE คืนนี้):**
+1. ~~ADR-0015 + ADR-0016 fastlane sign (5m)~~ ✅
+2. ~~K-sec audits + V-F3 + K-sec-4 + D-7 + R1 + CSP-1 reads (45m)~~ ✅ (เดฟ + ลูกพี่ ack per §3.3-3.7)
+3. ~~V3 ADRs (~15-20m)~~ ✅ all 3 DEFERRED to T+30d
+4. ~~K-12 GTM + K-13 Clarity + DV-1a Sentry + DV-1b Upstash + DV-1c hCaptcha signups (~2.5h)~~ ✅
+5. ~~Set Vercel env vars + redeploy~~ ✅
+6. ~~Renovate GitHub App install~~ ✅ DEFERRED ("ก๊อต บอกข้ามเลย ยังไม่จำเป็น")
 
-**Sun afternoon:**
-4. K-12 GTM signup (45m)
-5. K-13 Clarity signup (30m)
-6. DV-1a Sentry signup (30m)
-
-**Sun evening:**
-7. DV-1b Upstash + DV-1c hCaptcha signups (60m)
-8. MOMO-1 call BBOY (if can schedule) — else Monday
-9. T-G3 พี่ป๊อป call
+**Ownership transferred → ลูกพี่ + เดฟ:**
+7. ~~MOMO-1 call BBOY~~ — ⏳ ลูกพี่ takes call ([script](../runbook/momo-1-bboy-call-script.md)) → เดฟ parse
+8. ~~T-G3 พี่ป๊อป call~~ — ⏳ ลูกพี่ takes call ([script](../runbook/t-g3-popop-call-script.md))
 
 **Mon morning before launch:**
-10. Final review of dave state + ✅ tick พร้อม launch
+- Final review of dave state + ✅ tick พร้อม launch (เดฟ runs T-D1 smoke + soft-launch coord)
+
+**ก๊อต queue เหลือ:** **NONE** — handed everything off or completed. Standby Mon morning launch only.
 
 **ทุก step ทำเสร็จ commit:** `chore(launch): ✅ <item>` แล้ว push ไป main เพื่อ trigger Vercel redeploy
 
