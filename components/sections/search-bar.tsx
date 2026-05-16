@@ -8,9 +8,11 @@ import { useTranslations } from "next-intl";
 interface SearchBarProps {
   /** When `embedded`, renders without sticky/border — used inside NavBar mobile dropdown. */
   embedded?: boolean;
+  /** When `hideOnMobile`, sticky bar is hidden < md (used on customs landing where BookingCalculator replaces it). */
+  hideOnMobile?: boolean;
 }
 
-export function SearchBar({ embedded = false }: SearchBarProps) {
+export function SearchBar({ embedded = false, hideOnMobile = false }: SearchBarProps) {
   const t = useTranslations("searchBar");
   // Embedded mode starts collapsed (trigger button only); full mode renders straight away
   const [expanded, setExpanded] = useState(false);
@@ -61,7 +63,7 @@ export function SearchBar({ embedded = false }: SearchBarProps) {
 
   const rootClass = embedded
     ? "w-full bg-white dark:bg-surface overflow-hidden"
-    : "hidden md:block sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden";
+    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden`;
 
   return (
     <div className={rootClass}>

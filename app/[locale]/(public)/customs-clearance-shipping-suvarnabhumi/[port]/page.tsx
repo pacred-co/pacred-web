@@ -119,7 +119,7 @@ export default async function CustomsPortDetailPage({
         ]}
       />
       <NavBar />
-      <SearchBar />
+      <SearchBar hideOnMobile />
       <main>
         {/* Breadcrumb */}
         <nav

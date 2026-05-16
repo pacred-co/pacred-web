@@ -136,7 +136,7 @@ export default async function CustomsClearancePage({
         ]}
       />
       <NavBar />
-      <SearchBar />
+      <SearchBar hideOnMobile />
       <main>
         <BookingCalculator landing="customs" />
 
