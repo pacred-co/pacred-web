@@ -269,3 +269,29 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/<route>
 - [`.claude/skills/phase-verify-loop/SKILL.md`](../../.claude/skills/phase-verify-loop/SKILL.md) — production smoke gate (mandatory step)
 
 ---
+
+## [2026-05-17] Production smoke test in a git worktree — copy `.env.local` + REBUILD first
+
+**Context:** Running the `pnpm build && pnpm start` prod smoke gate (the entry above) inside a `git worktree` (`.claude/worktrees/...`). Every page returned 500. Server log: `"Your project's URL and Key are required to create a Supabase client"`.
+
+**Root cause — two worktree-specific traps:**
+1. **`.env.local` is git-ignored → it does NOT exist in a fresh worktree.** Only the main checkout has it. Without `NEXT_PUBLIC_SUPABASE_URL` / `_ANON_KEY` the server-side Supabase client throws on every render → 500. Environment gap, not a code bug — but it looks exactly like a code bug in the stack trace.
+2. **`NEXT_PUBLIC_*` vars are inlined at BUILD time**, not read at runtime. Copying `.env.local` in *after* `pnpm build` is not enough — the build already baked in `undefined`. Copy the env file, THEN rebuild.
+
+**Fix — worktree smoke prep (step 0 of any smoke test in a worktree):**
+```bash
+cp /Users/dev/pacred-web/.env.local .env.local   # git-ignored, safe; never committed
+pnpm build                                        # rebuild so NEXT_PUBLIC_* inline correctly
+pnpm start                                         # now pages render
+```
+
+**Why this matters next time:**
+- A worktree is a clean checkout — env setup is step 0, before `pnpm build`.
+- "Copied the env file, still 500" → you skipped the rebuild. `NEXT_PUBLIC_*` is build-time, full stop.
+- The 500 is in a stack trace so it reads like a code bug — check `.env.local` exists FIRST before chasing code.
+
+**Cross-links:**
+- The entry above — the prod smoke gate this happened during.
+- [`docs/env.md`](../env.md) — env var reference.
+
+---

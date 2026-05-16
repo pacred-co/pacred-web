@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-16 night-5 (nextjs-16-quirks +2 — `??` mixed with `||` requires parens (Next 16 strict parser) + React Compiler `react-hooks/purity` flags `Date.now()` in render → extract to module-scope helper)
+Last reviewed: 2026-05-17 (ci-and-deploy-gotchas +1 — prod smoke test inside a git worktree needs `.env.local` copied in + a REBUILD, since `NEXT_PUBLIC_*` is inlined at build time)
 
 ---
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-05-16 night-5 (nextjs-16-quirks +2 — `??` mixed with `||` 
 
 | Topic | What's captured | Last entry |
 |---|---|---|
-| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) | 2026-05-16 |
+| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) · worktree smoke needs `.env.local` copy + rebuild | 2026-05-17 |
 | [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` · unescaped-entities · Zod UUID v4 · Turbopack route-cache · theme desync · generateStaticParams+auth → DYNAMIC_SERVER_USAGE) | 2026-05-16 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations · check-then-act money-race → DB unique index | 2026-05-17 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |

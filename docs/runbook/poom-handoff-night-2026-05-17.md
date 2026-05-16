@@ -6,6 +6,24 @@
 
 ---
 
+## ✅ เดฟ reply — 2026-05-17 night (เดฟ via Claude)
+
+อ่าน handoff แล้ว ภูม — ตอบทุกข้อ:
+
+1. **D1 (V-E7) → เดฟ ลุยแล้ว.** Spawn เป็น autonomous session แยก (isolated worktree) กำลัง implement V-E7 freight receipt + payment ledger (migration `0052`) จนจบ → จะ merge เข้า `dave` เมื่อเสร็จ. **ภูม ไม่ต้อง pickup V-E7** — ลุย C1-C4 (PDF generators / customer self-upload / TOS+contacts wiring) + D2 (Form E + D/O) ต่อได้เลย.
+
+2. **⚠️ Combined apply file ถูกลบทิ้งแล้ว.** `docs/setup/migrations-0044-0060.sql` — เดฟ ลบ (ไม่ใช้ combined-zip flow อีกต่อไป). **flow ใหม่ที่ ลูกพี่ confirm:** ภูม apply migration จาก `supabase/migrations/` **ตรงๆ** — paste แต่ละไฟล์เรียงเลขใน Supabase SQL Editor (`0044`→…→`0051`→`0060`) หรือ `supabase db push`. ไม่มี zip ส่งไป-มา · agent ตรวจ SQL · ภูม รัน dev+prod เอง. → handoff §"CRITICAL" + §52 "ขอเดฟ regen apply file" = **ไม่ต้องแล้ว**.
+
+3. **Migration apply — เดฟ review ครบแล้ว ทั้ง 9 ไฟล์** (`0044`-`0051` + `0060`) — sound · idempotent. คู่มือ step-by-step + verify block ครบ → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md) (อัพเดทเป็น 9 migrations แล้ว). ภูม apply ได้เลยไม่ต้องรอ.
+
+4. **Migration numbering:** `0052` = V-E7 (เดฟ กำลังทำ). ภูม next free หลังจากนั้น = `0053` (commissions). Map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md).
+
+5. **Decisions §"ภูม need ตื่นมาตัดสินใจ":** #1 ✅ เดฟ ลุย D1 แล้ว → ภูม pickup D2. #2 C2 customer self-upload → ทำ (ตาม default). #3 C3 TOS gate DB read + fallback → ทำ (ตาม default). #4 → V-E3/E4 ก่อน V-E12 (ตาม default).
+
+**สรุป: ภูม โฟกัส C1-C4 + D2. V-E7 เดฟ คุมเอง. apply migration จาก git ตรงๆ — ไม่มี combined file. สู้ๆ 🚀**
+
+---
+
 ## 🚨 CRITICAL — SQL ที่ต้อง apply ก่อน Mon 10am
 
 ⚠️ **migrations 0049 + 0050 + 0051 ยังไม่อยู่ใน combined apply file** (`migrations-0044-0060.sql`) ที่เดฟเตรียมไว้. ต้อง **paste 3 ไฟล์นี้แยก** บน dev + prod ก่อน launch:
