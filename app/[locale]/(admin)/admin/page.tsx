@@ -45,8 +45,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("yuan_payments").select("thb_amount").gte("created_at", monthStart).eq("status", "completed"),
     admin.from("yuan_payments").select("thb_amount").gte("created_at", todayStart).eq("status", "completed"),
     admin.from("wallet").select("balance"),
-    admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "incomplete"),
-    admin.from("profiles").select("id", { count: "exact", head: true }).eq("status", "active"),
+    // "used a service" vs "registered but never used" — keyed on
+    // `profiles.is_active` (the cron `/api/cron/refresh-active-customers`
+    // flips false→true when a profile has real order/forwarder/yuan
+    // activity). NOT `profiles.status` — that is the *account* state
+    // (active/incomplete/suspended) and would count every fresh signup
+    // as "ใช้งานแล้ว" even though they've never transacted.
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", false),
+    admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
     admin.from("profiles").select("id", { count: "exact", head: true }),
     admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "cancelled").gte("created_at", monthStart),
     admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "deposit").eq("status", "pending"),
@@ -177,7 +183,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           value={activeUsers}
           progress={activePct}
           subtitle={`${activePct}% ของลูกค้าทั้งหมด`}
-          href="/admin/customers?status=active"
+          href="/admin/customers/recently-active"
         />
         <UserStatCard
           tone="warning"
@@ -186,7 +192,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           value={inactiveUsers}
           progress={inactivePct}
           subtitle={`${inactivePct}% ของลูกค้าทั้งหมด`}
-          href="/admin/customers?status=incomplete"
+          href="/admin?tab=inactiveCustomers"
         />
         <UserStatCard
           tone="danger"
@@ -332,9 +338,11 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       return mapPayoutRows(data as RawPayoutRow[]);
     }
     case "inactiveCustomers": {
+      // Registered profiles that have never used a service (is_active=false).
+      // NOT status='incomplete' — that is mid-registration juristic accounts.
       const { data } = await admin.from("profiles")
         .select("id, member_code, first_name, last_name, company_name, phone, email, created_at, account_type")
-        .eq("status", "incomplete")
+        .eq("is_active", false)
         .order("created_at", { ascending: false }).limit(50);
       return ((data ?? []) as RawProfileRow[]).map((p) => ({
         id: p.id,
@@ -344,7 +352,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         amount: 0,
         detail: `${p.phone ?? "—"}${p.email ? ` · ${p.email}` : ""}`,
         link: `/admin/customers/${p.id}`,
-        status: "incomplete",
+        status: "registered",
       }));
     }
     default:

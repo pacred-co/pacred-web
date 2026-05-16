@@ -39,6 +39,10 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 | **MOMO-1 endpoint inventory call** | ลูกพี่ call BBOY | ⏳ scheduled — script [`runbook/momo-1-bboy-call-script.md`](momo-1-bboy-call-script.md). Demo data fallback active until called |
 | **Resend API key** | Pacred owner | Email notifications silently skip (log only); LINE push still works |
 | **Renovate GitHub App install** | ก๊อต | ✅ DEFERRED ("ก๊อต บอกข้ามเลย"). Config inert until install. Re-open T+30d |
+| **OAuth login (Google/Facebook)** | เดฟ/ก๊อต — dashboard config | ⚠️ broken — `NEXT_PUBLIC_SITE_URL` in Vercel points at dead `v2.pacred.co` → OAuth redirect 404s; Facebook app in Dev Mode. **Phone+OTP login unaffected.** Full fix steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md) |
+| **LINE web-login** | deferred | Stub ("เร็วๆ นี้"). Needs custom OIDC build (~4-8h) — post-launch task, not launch-week |
+
+> 🔐 **Auth + admin launch fixes (2026-05-17)** — OTP UI theme + "ขอรหัส OTP" button · login social icons · logo enlarge · `PC001→PR00001` · **admin dashboard `is_active` logic bug** — all in [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Code fixes shipped; OAuth = dashboard config still needed.
 
 ---
 

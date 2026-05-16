@@ -72,14 +72,17 @@ export default function LoginPage() {
       <NavBar />
       <main className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-background px-5 py-10">
         <div className="w-full max-w-[520px] rounded-[30px] border border-white/80 bg-white dark:bg-surface dark:border-border p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)]">
-          {/* Logo */}
-          <div className="-mb-1 flex justify-center">
+          {/* Logo — enlarged to 76px (PNG is a 140x140 square). Wrapper height
+              pinned at the old 52px with items-end, so the bigger logo
+              overflows UPWARD into the card's top padding only — the title +
+              form below keep their exact positions. */}
+          <div className="-mb-1 flex h-[52px] items-end justify-center">
             <Image
               src="/images/pacred-logo-red.png"
               alt="Pacred"
-              width={160}
-              height={52}
-              className="h-auto w-auto"
+              width={140}
+              height={140}
+              className="h-[76px] w-[76px]"
               priority
             />
           </div>
@@ -189,7 +192,7 @@ export default function LoginPage() {
               disabled={pending}
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <GoogleIcon className="h-[18px] w-[18px]" /> Google
+              <GoogleIcon className="h-[18px] w-[18px] shrink-0" /> Google
             </button>
             <button
               type="button"
@@ -198,7 +201,7 @@ export default function LoginPage() {
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ color: "#00B900" }}
             >
-              <LineIcon className="h-[18px] w-[18px]" /> LINE
+              <LineIcon className="h-[18px] w-[18px] shrink-0" /> LINE
             </button>
             <button
               type="button"
@@ -207,7 +210,7 @@ export default function LoginPage() {
               className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ color: "#1877F2" }}
             >
-              <FacebookIcon className="h-[18px] w-[18px]" /> Facebook
+              <FacebookIcon className="h-[18px] w-[18px] shrink-0" /> Facebook
             </button>
           </div>
 

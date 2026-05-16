@@ -152,14 +152,17 @@ export default function RegisterPage() {
       <main className="flex min-h-[calc(100vh-200px)] items-start justify-center bg-background px-4 py-10">
         <div className="w-full max-w-[540px] rounded-[30px] border border-white/80 bg-white p-8 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-10">
 
-          {/* Logo */}
-          <div className="-mb-1 flex justify-center">
+          {/* Logo — enlarged to 76px (PNG is a 140x140 square). Wrapper height
+              pinned at the old 52px with items-end, so the bigger logo
+              overflows UPWARD into the card's top padding only — the title +
+              tabs + form below keep their exact positions. */}
+          <div className="-mb-1 flex h-[52px] items-end justify-center">
             <Image
               src="/images/pacred-logo-red.png"
               alt="Pacred"
-              width={160}
-              height={52}
-              className="h-auto w-auto"
+              width={140}
+              height={140}
+              className="h-[76px] w-[76px]"
               priority
             />
           </div>
