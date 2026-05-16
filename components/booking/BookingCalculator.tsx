@@ -234,7 +234,7 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
     <div className="w-full max-w-[1280px] mx-auto pb-6 md:pb-10">
       <BookingHero activeTab={activeTab} seaMode={seaMode} />
 
-      <div className="relative z-10 max-w-[1150px] mx-auto -mt-8 md:-mt-12 px-3 md:px-5">
+      <div className="relative z-10 max-w-[1280px] mx-auto -mt-10 md:-mt-16 px-3 md:px-5">
         <div className="bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100">
 
           {isCustomsLanding ? (
