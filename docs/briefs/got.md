@@ -1,7 +1,23 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-16 night (+ Part V ADR-0015/0016 hand-off · + docs-dedup decision hand-off · + ADR-0015/0016 pre-answer fastlane เดฟ tonight · + เดฟ preempted 6 ก๊อต P1 items + 3 V3 ADR DRAFTs + K-sec-4 + D-7 + R1 + launch checklist · + cheat-sheet + **DV-2 LIFF + OTP_PEPPER rotation done late-night ลูกพี่**)
+Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
+
+## 🎯 Current state — ก๊อต queue NEARLY EMPTY (snapshot 2026-05-17)
+
+🟢 **All P0 + P1 + P3 cleared** tonight + Sat night: 5 browser signups + Vercel env set + 2 ADRs locked + 5 reviews acked + 3 V3 ADRs deferred + Renovate deferred. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full snapshot.**
+
+**Mon morning standby (only thing left):**
+1. LINE + workstation 9am
+2. Sentry alert watch first 48h post-launch (error spike >5/hr → war-room with เดฟ)
+3. Any owner escalation from ลูกพี่/พี่ป๊อป
+
+**Defer-able items waiting for ก๊อต re-engagement T+30d post-launch:**
+- R1 china-search eval (re-open if >10 "can't add URL" tickets/wk surfacing in Sentry)
+- V3 ADRs (0011 RBAC + 0012 frontend shell + 0013 migration) — revisit after V2 stable + real ops-staff feedback
+- Renovate GitHub App install (if dep drift accumulates)
+
+**Tomorrow morning** = standby only. No coding work scheduled for ก๊อต.
 
 > ## 🆕 Prod env changes done 2026-05-16 late-night (ลูกพี่ + เดฟ pair) — **กอตอ่านก่อน touch Vercel**
 >

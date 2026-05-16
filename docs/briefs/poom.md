@@ -1,7 +1,34 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-16 night (post-deep-sweep — added V-E6..V-E12 freight stack + V-G admin bulk-ops + V-H commission roles to Phase I2 post-Monday)
+Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
+
+## 🎯 Current state — Mon morning launch sequence ready (snapshot 2026-05-17)
+
+🟢 All ภูม-lane Sunday blockers cleared. Last night-6 batch (V-G7 audits + handoff refresh) merged into dave ✅. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full team status.**
+
+**All open Qs in [`poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md) RESOLVED:**
+- D-1 LP-1c2 UNIQUE → ภูม shipped option (b); refactor optional (Not required for launch)
+- D-2 migration numbering → ภูม owns 0041-0043; ภูม also takes `0044_withholding_tax.sql` Monday
+- D-3 /admin/learning → ภูม decided KEEP as org-docs hub + redirect "training" card to HR
+- **E-1 ADR-0015 WHT** → ✅ ก๊อต locked 2026-05-16 night, 4 Qs resolved → **V-A6 UNBLOCKED Monday morning**
+- **E-2 ADR-0016 freight value** → ✅ ก๊อต locked 2026-05-16 night, 5 Qs resolved → V-E2 unblocked for Phase I2
+- **E-3 MOMO-1** → in-flight (ลูกพี่ takes call → เดฟ parses → pings you)
+- **E-4 Pacred owner Bundle 1** → 3/5 resolved: PromptPay ✅ + Bank ✅ + LIFF ✅ + Gateway DECISION CHANGED to Xendit+K-Biz+K-Shop. Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor CONTACT.*
+- E-5 ก๊อต RBAC review for interpreter role → defer to V-H1 implementation prep (post-Monday)
+
+**Mon morning:**
+1. Standby for backend hotfix (Sentry watch + admin_audit_log)
+2. After ลูกพี่+team confirm T-D4 soft launch green at 10am → start **V-A6 WHT impl** per [ADR-0015 §"Schema sketch"](../decisions/0015-withholding-tax-model.md) (~8-12h):
+   - Migration `0044_withholding_tax.sql`
+   - Bucket `wht-certs` (RLS mirror `tax-invoices`)
+   - Admin UI to record + waive
+   - Receipt + tax-invoice issuance gate
+   - V-A3 reconciliation read
+
+**Day-1 next (Tue):** V-E10 QA/QC intake inspection (no blocker, prereq for V-E7) → V-E6 quotation workflow
+
+**T+30d:** Xendit + K-Biz + K-Shop wire-up per [updated D-7 §5.3](../decisions/d7-payment-gateway-decision-matrix.md#53-pacred-side-wiring-estimate-xendit--k-biz--k-shop) (~16-22h, 3 channels). ลูกพี่ + พี่ป๊อป handle vendor signups in parallel.
 
 ---
 

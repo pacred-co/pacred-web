@@ -1,7 +1,20 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-16 night (cargo forensics + PORT_PLAN Part V + ADR-0015/0016 + PHP deep-sweep added B1 OTP UI as Sunday-night blocker)
+Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for current state)
 Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authority: second-tier owner
+
+## 🎯 Current state — READY for Monday launch (snapshot 2026-05-17)
+
+🟢 All 5 Sunday blockers closed. 39 commits since Sat night main checkpoint. Build green. 1242/1242 md links resolve. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full snapshot — incl. all decisions locked + propagation.**
+
+**Mon morning checklist (เดฟ):**
+1. DV-3 ThaiBulkSMS signup + flip `OTP_BYPASS=false` in Vercel (~30m)
+2. T-D1 smoke test prod per AGENTS.md §11 — `next start` + curl every NEW/CHANGED route (~1h)
+3. Standby LINE + workstation 9am for T-D4 soft launch 10am
+4. Post-launch: monitor Sentry + customer surfaces 48h
+5. CSP-1 ship week 2 (≈ Mon 2026-06-01) per [resolved decision](../decisions/csp-nonce-migration-plan.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่)
+
+**Post-MOMO-1 call (ลูกพี่ runs call):** parse audio + notes → fill [`integrations/momo-jmf.md`](../integrations/momo-jmf.md) → ping ภูม for CT-5 + CT-6 wire
 
 ---
 
