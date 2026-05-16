@@ -557,7 +557,13 @@ export async function payServiceOrderFromWallet(
   // 4. Debit + status flip — admin client (gated by ownership check above)
   const admin = createAdminClient();
 
-  const { data: tx, error: txErr } = await admin
+  // F-11 / G9 — wrap INSERT to catch the partial-unique violation from
+  // migration 0049 (wallet_tx_order_payment_uniq). Under concurrent
+  // submits (2 tabs / back-button), the check-then-act SELECT above
+  // may miss a still-committing peer INSERT — the DB-level guard
+  // raises 23505, we re-SELECT, and return as if we were the second
+  // arrival in normal idempotent flow.
+  const { data: insertedTx, error: txErr } = await admin
     .from("wallet_transactions")
     .insert({
       profile_id:     user.id,
@@ -571,8 +577,31 @@ export async function payServiceOrderFromWallet(
       note:           `ชำระค่าฝากสั่ง ${order.h_no} (ตัดจาก wallet โดยลูกค้า)`,
     })
     .select("id")
-    .single<{ id: string }>();
-  if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+    .maybeSingle<{ id: string }>();
+
+  if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
+    // Concurrent peer beat us — re-SELECT the canonical row.
+    const { data: peerTx } = await admin
+      .from("wallet_transactions")
+      .select("id")
+      .eq("reference_type", "order_header")
+      .eq("reference_id", order.h_no)
+      .eq("kind", "order_payment")
+      .eq("status", "completed")
+      .maybeSingle<{ id: string }>();
+    if (!peerTx) {
+      // 23505 fired but no row visible — partial-index predicate mismatch
+      // or unexpected race. Surface so admin can investigate.
+      return { ok: false, error: `wallet insert race: 23505 but no peer tx found for ${order.h_no}` };
+    }
+    revalidatePath(`/service-order/${order.h_no}`);
+    revalidatePath("/service-order");
+    return { ok: true, data: { tx_id: peerTx.id, already_paid: true } };
+  }
+  if (txErr || !insertedTx) {
+    return { ok: false, error: `wallet insert: ${txErr?.message ?? "no row"}` };
+  }
+  const tx = insertedTx;
 
   const { error: ordErr } = await admin
     .from("service_orders")

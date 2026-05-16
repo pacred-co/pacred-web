@@ -193,12 +193,12 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0046` | **org_contacts** (V-G5) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0047` | **tos_versions** (V-G4) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0048` | **freight_quotes + items** (V-E6) | ภูม | ✅ **SHIPPED 2026-05-17** — needs `db push` |
-| `0049` | freight_shipments (V-E1) | ภูม | ⬜ next — ADR-0016 locked — post-launch |
-| `0050` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0049 + 0044 |
-| `0051` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0050 + V-E10 QA-pass gate |
-| `0052` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
-| `0053` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
-| `0054` | wallet_order_payment_unique (G9 / F-11 fix) | ภูม | ⬜ week-1 post-launch |
+| `0049` | **wallet_order_payment_unique** (G9 / F-11 fix) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 53c11f8) — needs `db push` on dev+prod before public launch 2pm |
+| `0050` | freight_shipments (V-E1) | ภูม | ⬜ next — ADR-0016 locked — post-launch |
+| `0051` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0050 + 0044 |
+| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0051 + V-E10 QA-pass gate |
+| `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
+| `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
 | `0055`-`0059` | *(reserved headroom for ภูม's freight block — fill sequentially)* | ภูม | — |
 | `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 

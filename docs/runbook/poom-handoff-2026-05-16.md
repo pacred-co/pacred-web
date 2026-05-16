@@ -129,26 +129,17 @@ Plus 1 line in [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts)
 **Status:** ~30+ PHP report files; Pacred has 5 main tabs + 6 V-B1 reports + containers-hs. Missing = operational monitoring reports (system errors / SMS log / promo tracking).
 **Recommendation:** Use Sentry + admin_audit_log + existing logs instead. Skip dedicated UI in V2.
 
-### F-11 · 🆕 pay-from-wallet double-debit race (เดฟ → ภูม, from T-D1 re-audit 2026-05-17)
-**Symptom:** `payServiceOrderFromWallet` (`actions/service-order.ts`) + its mirror `adminMarkServiceOrderPaid` (`actions/admin/service-orders.ts`) use a **check-then-act** idempotency: `SELECT` for an existing completed `order_payment` tx → if none, `INSERT` the `-total_thb` debit. No DB-level guard between the SELECT and the INSERT — two near-simultaneous submits (2 tabs / back-button / API-replay) can both pass the check and both debit.
+### F-11 · ✅ SHIPPED 2026-05-17 (commit 53c11f8) — pay-from-wallet double-debit race
+**Symptom (was):** `payServiceOrderFromWallet` (`actions/service-order.ts`) + its mirror `adminMarkServiceOrderPaid` (`actions/admin/service-orders.ts`) used check-then-act idempotency (SELECT existing completed order_payment tx → INSERT debit if none). No DB-level guard between SELECT and INSERT → two concurrent submits could both pass + both debit.
 
-**Severity:** low-med. The pay button is `disabled={pending}` client-side (`pay-from-wallet-button.tsx`) so the common impatient double-click is already blocked; residual race is edge-case + recoverable via refund. **NOT a launch blocker** — soft-launch (5 hand-held customers) is safe. Fix in week-1 post-launch before ad-driven concurrency ramps.
+**Fix shipped (commit 53c11f8):**
+1. ✅ Migration `0049_wallet_order_payment_unique.sql` — partial unique index on `wallet_transactions(reference_id)` WHERE `reference_type='order_header' AND kind='order_payment' AND status='completed'`. DB enforces ≤1 completed order_payment per `h_no`. Forwarder/yuan/deposit payments use different reference_type or kind — separate slice, no collision.
+2. ✅ BOTH actions wrap the wallet INSERT to catch `error.code='23505'` → re-SELECT canonical tx → return `{ ok: true, data: { tx_id, already_paid: true } }`. Defensive: if 23505 fires but no peer row visible, surfaces descriptive error rather than swallowing.
+3. ✅ `adminMarkServiceOrderPaid` catch path also nudges order status forward (mirrors fast-path's existing logic).
 
-**Fix (เดฟ recommends — ภูม owns since it's a migration + action edit):**
+**Needs:** `db push` migration 0049 on dev + prod before public launch 2pm Mon. Combined apply file at `docs/setup/migrations-0044-0060.sql` does NOT include 0049 (was shipped after that file generated) — paste 0049 separately or include in the next combined re-gen.
 
-1. Migration `0054_wallet_order_payment_unique.sql` (or fold into another batch — see the canonical numbering map in [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map"; ภูม's freight block is `0044`-`0054`, เดฟ's member_code is `0060`):
-```sql
--- One completed order_payment per service-order — DB-enforced idempotency.
-create unique index if not exists wallet_tx_order_payment_uniq
-  on public.wallet_transactions (reference_id)
-  where kind = 'order_payment'
-    and reference_type = 'order_header'
-    and status = 'completed';
-```
-2. In BOTH `payServiceOrderFromWallet` + `adminMarkServiceOrderPaid` — wrap the debit `INSERT` so a unique-violation (`error.code === '23505'`) is caught → re-SELECT the existing tx → return `{ ok: true, data: { tx_id, already_paid: true } }`. The existing check-then-act SELECT stays as the fast path; the catch is the atomic backstop.
-3. Note — `wallet_transactions` may have `order_payment` rows from yuan-payments or other flows keyed differently; verify the partial-index predicate (`reference_type='order_header'`) doesn't collide with those before applying. (forwarder payments use `reference_type='forwarder'` — separate, safe.)
-
-**Effort:** ~30-45 min. Full context: [`cargo-smoke-test-T-D1.md`](cargo-smoke-test-T-D1.md) §"Re-audit 2026-05-17" G9 + [`docs/learnings/supabase-rls-patterns.md`](../learnings/supabase-rls-patterns.md) (check-then-act money-race entry).
+**Verified:** `pnpm verify EXIT=0` · all wallet/payment tests pass.
 
 ---
 

@@ -217,8 +217,14 @@ export async function adminMarkServiceOrderPaid(
       }
     }
 
-    // Create the debit wallet_transaction
-    const { data: tx, error: txErr } = await admin
+    // Create the debit wallet_transaction.
+    // F-11 / G9 — wrap INSERT to catch the partial-unique violation from
+    // migration 0049 (wallet_tx_order_payment_uniq). Under concurrent
+    // submits (admin double-click / 2 tabs / customer-side race), the
+    // check-then-act SELECT above may miss a still-committing peer — the
+    // DB-level guard raises 23505, we re-SELECT, return as if we were the
+    // second arrival in normal idempotent flow.
+    const { data: insertedTx, error: txErr } = await admin
       .from("wallet_transactions")
       .insert({
         profile_id:     order.profile_id,
@@ -232,8 +238,41 @@ export async function adminMarkServiceOrderPaid(
         note:           `ชำระค่าฝากสั่ง ${order.h_no}${d.allow_overdraw ? " (admin override — รับเงินสด/โอนตรง)" : ""}`,
       })
       .select("id")
-      .single<{ id: string }>();
-    if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+      .maybeSingle<{ id: string }>();
+
+    if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
+      // Concurrent peer beat us — re-SELECT canonical row.
+      const { data: peerTx } = await admin
+        .from("wallet_transactions")
+        .select("id")
+        .eq("reference_type", "order_header")
+        .eq("reference_id", order.h_no)
+        .eq("kind", "order_payment")
+        .eq("status", "completed")
+        .maybeSingle<{ id: string }>();
+      if (!peerTx) {
+        return { ok: false, error: `wallet insert race: 23505 but no peer tx found for ${order.h_no}` };
+      }
+      // Nudge order status forward if not yet (mirror existing fast-path logic).
+      if (order.status === "awaiting_payment" || order.status === "pending") {
+        await admin
+          .from("service_orders")
+          .update({
+            status:           "ordered",
+            date_ordered:     new Date().toISOString(),
+            admin_id_update:  adminId,
+          })
+          .eq("id", order.id);
+      }
+      revalidatePath("/admin/service-orders");
+      revalidatePath(`/admin/service-orders/${order.h_no}`);
+      revalidatePath("/admin/wallet");
+      return { ok: true, data: { tx_id: peerTx.id, already_paid: true } };
+    }
+    if (txErr || !insertedTx) {
+      return { ok: false, error: `wallet insert: ${txErr?.message ?? "no row"}` };
+    }
+    const tx = insertedTx;
 
     // Flip the order status forward
     const { error: ordErr } = await admin
