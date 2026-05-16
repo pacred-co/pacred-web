@@ -1,6 +1,22 @@
 # 📋 Team status checkpoint — 2026-05-16 (post-merge + T-P1 batch)
 
 > **Purpose:** ใครเปิด repo มาแล้วเห็นไฟล์นี้ → รู้ทันทีว่าเรา **อยู่ตรงไหน · ติดอะไร · ใครต้องทำอะไร**.
+>
+> ## 🟢 2026-05-16 — PRODUCTION IS LIVE + prevention plan (เดฟ via Claude)
+>
+> **`main` = `dave` = `fdd3a8d`, deployed on Vercel.** ทุกคน: **`git fetch && git merge origin/dave` ก่อนเริ่ม batch ถัดไป** — main+dave ขยับเยอะวันนี้.
+>
+> **ขึ้น production วันนี้:**
+> - Full `dave→main` integration deploy — 120 commits (Poom + podeng + T-D1 batches).
+> - 🔧 `5c6bb8a` `fix(auth)`: hCaptcha degrade-open + CSP allow hcaptcha.com — signup โดน block ("ติดความปลอดภัย") แก้แล้ว.
+> - 🔧 `fdd3a8d` `fix(landing)`: `force-dynamic` ที่ `[port]` / `news/[slug]` / `knowledge/[slug]` — 500 บน prod (`DYNAMIC_SERVER_USAGE`) แก้แล้ว ยืนยัน 200.
+>
+> **🛡️ กฎใหม่ — ทุกคนทำตาม (กันพังซ้ำ):** `pnpm verify` + `pnpm build` ผ่าน **ไม่ได้แปลว่า prod ใช้ได้**. ก่อน deploy `main` ทุกครั้ง → `pnpm build && pnpm start` แล้ว `curl` ทุก route ที่ใหม่/เปลี่ยน → ต้อง 200 ไม่ใช่ 500. Gate เต็ม: `phase-verify-loop` skill "Production smoke gate" · `AGENTS.md` §11 · `docs/learnings/ci-and-deploy-gotchas.md`.
+>
+> **📏 กฎ docs ใหม่:** ทุก `.md` ≤ 2000 บรรทัด (เกิน → แยกไฟล์ + ลิงค์ถึงกัน) · ห้ามเขียนซ้ำ (canonical เดียว ที่เหลือลิงค์). ดู `AGENTS.md` §12 + `conventions.md` §13.
+>
+> **⏳ รอ ก๊อต คืนนี้:** apply migration 0033–0043 บน prod Supabase · ใส่ SMS OTP key · `NEXT_PUBLIC_SITE_URL` + Supabase Google/FB provider (OAuth ยังไม่ทำงานจนกว่าจะตั้ง). ดู `env.md` §15.
+> **🧹 Follow-up ที่วางแผนไว้:** docs dedup pass เต็มรูปแบบ — ทำแบบตั้งใจ ไม่เร่ง (กัน cross-link พัง).
 > **Last updated:** 2026-05-16 night-4 (ภูม via Claude) — **ภูม run-long continued.** Now at 20 commits `171080d..4c45bf5`. Added since night-3:
 > - `bf2c2a3` /admin/dashboard → /admin redirect + customer-detail shows linked custom rates (LP-1c surface)
 > - `b86313c` /admin/forwarders/[fNo] + /admin/service-orders/[hNo] surface cargo_shipments inline (status + cargo_type + B/L + ETA + ตัดตู้ + link to spine)

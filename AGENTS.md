@@ -88,6 +88,20 @@ When a situation matches a skill's description → invoke via the Skill tool (`s
 
 Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a working solution after debugging, a partner-API quirk — write to `docs/learnings/<topic>.md` per the `scholar-immortal` SKILL.md protocol. Even small entries compound. Pacred-specific knowledge that no LLM training has = our moat.
 
+## 11. Production deploy gate — `next start` smoke, not just `pnpm verify`
+
+`pnpm verify` (lint/tsc/test/audit) and `pnpm build` passing does **not** prove pages work in production — none of them execute a real render, and a route can 500 at request time while `build` exits 0. `next dev` masks it too (always renders dynamically). This is how the 2026-05-16 `DYNAMIC_SERVER_USAGE` 500 reached prod.
+
+**Before any deploy to `main`:** `pnpm build && pnpm start`, then `curl` every NEW or CHANGED route (especially dynamic `[param]` routes) — each must return 200 (or an intended 3xx/404). A 500 there = a 500 in production. Full procedure: "Production smoke gate" in [`.claude/skills/phase-verify-loop/SKILL.md`](.claude/skills/phase-verify-loop/SKILL.md).
+
+**Pattern rule:** a page under a dynamic segment (`[slug]`/`[port]`/`[id]`) that renders `<NavBar>` (or anything reading cookies/auth) MUST have `export const dynamic = "force-dynamic"` — else `DYNAMIC_SERVER_USAGE` 500. See [`docs/learnings/nextjs-16-quirks.md`](docs/learnings/nextjs-16-quirks.md).
+
+## 12. Docs: every `.md` ≤ 2000 lines · no duplication
+
+- **Hard cap: every `.md` file ≤ 2000 lines.** If a file would exceed it, split into a new file and cross-link both ways — never let one file grow past the cap. Agents read docs into a context window; oversized files truncate mid-content.
+- **One canonical home per fact — no duplication.** Information lives in exactly ONE file; everywhere else links to it. When you edit a doc and spot the same content duplicated elsewhere, delete the copy and leave a link. Dedup what you touch.
+- Detail in [`docs/conventions.md`](docs/conventions.md) §13.
+
 ---
 
 For project facts (architecture, schema, env, branches, decisions): see [CLAUDE.md](CLAUDE.md) and the linked docs.

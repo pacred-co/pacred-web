@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-16 (testing-patterns +2 · nextjs-16-quirks +2 · ci-and-deploy +3 · pacred-domain-knowledge +1 — combined ภูม + เดฟ session, includes IPv4-first DNS fix CONFIRMED)
+Last reviewed: 2026-05-16 evening (nextjs-16-quirks +1 · ci-and-deploy +1 — DYNAMIC_SERVER_USAGE production-500 fix + the "verify/build green ≠ prod works" prevention gate)
 
 ---
 
@@ -14,8 +14,8 @@ Last reviewed: 2026-05-16 (testing-patterns +2 · nextjs-16-quirks +2 · ci-and-
 
 | Topic | What's captured | Last entry |
 |---|---|---|
-| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS fix) | 2026-05-16 |
-| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` · unescaped-entities · Zod UUID v4 · Turbopack route-cache · theme head-script↔provider desync) | 2026-05-16 |
+| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) | 2026-05-16 |
+| [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` · unescaped-entities · Zod UUID v4 · Turbopack route-cache · theme desync · generateStaticParams+auth → DYNAMIC_SERVER_USAGE) | 2026-05-16 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations | 2026-05-16 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |

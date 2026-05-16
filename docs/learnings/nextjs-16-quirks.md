@@ -294,3 +294,30 @@ After this:
 - [`app/layout.tsx`](../../app/layout.tsx) — head-script injection + `<ThemeProvider defaultTheme="light">`
 
 ---
+
+## [2026-05-16] `generateStaticParams` + auth component → `DYNAMIC_SERVER_USAGE` 500 (dev hides it)
+
+**Context:** Three public pages under dynamic segments — `customs-clearance-shipping-suvarnabhumi/[port]`, `news/[slug]`, `knowledge/[slug]` — returned HTTP 500 on production. They render 200 in `pnpm dev`.
+
+**Symptom:** Production 500 ("This page couldn't load — A server error occurred"). `next start` reproduces it; server log shows `[Error: ...Server Components render...] { digest: 'DYNAMIC_SERVER_USAGE' }`. `next dev` renders the same pages fine — the bug is invisible in dev.
+
+**Root cause:** All 3 pages export `generateStaticParams()` → Next.js tries to **statically prerender** them. But they render the shared `<NavBar>`, which reads the auth session (cookies) — a **dynamic API**. Static prerender + dynamic API => `DYNAMIC_SERVER_USAGE`. Dev never hits it because dev always renders dynamically (no prerender pass).
+
+**Fix (commit `fdd3a8d`):** add `export const dynamic = "force-dynamic";` to the page. It then renders per-request like every other public page (the whole public site is already dynamic because of `<NavBar>`). `generateStaticParams` can stay — it just enumerates valid slugs.
+
+```ts
+// Any [param] page that renders <NavBar> / reads cookies:
+export const dynamic = "force-dynamic";
+export function generateStaticParams() { /* still fine */ }
+```
+
+**Why this matters next time:**
+- **Rule:** a new page under a dynamic segment (`[slug]`/`[port]`/`[id]`) that renders `<NavBar>` (or anything auth/cookie-bound) MUST have `export const dynamic = "force-dynamic"`.
+- `next dev`, `pnpm verify`, AND `pnpm build` all FAILED to catch this — the build "passes" while the page silently bails to dynamic-and-broken. Only `next start` + hitting the route catches it.
+
+**Cross-links:**
+- Commit `fdd3a8d`
+- [`docs/learnings/ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) — the "build green ≠ prod works" lesson
+- [`.claude/skills/phase-verify-loop/SKILL.md`](../../.claude/skills/phase-verify-loop/SKILL.md) — production smoke gate
+
+---

@@ -98,6 +98,25 @@ git status --short                     # working tree state
 pnpm exec next build                   # only if a route boundary changed (slow)
 ```
 
+## Production smoke gate — MANDATORY before any deploy to `main`
+
+`pnpm verify` + `pnpm build` passing does NOT prove pages work in production.
+A dynamic route can 500 at request time while `build` exits 0, and `next dev`
+masks it (dev always renders dynamically). The 2026-05-16 `DYNAMIC_SERVER_USAGE`
+500 reached production exactly this way — see [`docs/learnings/ci-and-deploy-gotchas.md`](../../../docs/learnings/ci-and-deploy-gotchas.md).
+
+Before promoting `dave → main`:
+
+1. `pnpm build` — must pass.
+2. `pnpm start` (= `next start`) — production server on the built output.
+3. `curl` every NEW or CHANGED route — **especially dynamic `[param]` routes**:
+   `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/<route>`
+4. Every route returns 200 (or an intended 3xx / 404). **A 500 here = a production 500.**
+5. Stop the server when done.
+
+`next dev` returning 200 is NOT a substitute — `next start` is the source of truth
+for "will production work".
+
 ## Anti-patterns (don't do)
 
 - **"Tests pass locally, ship it"** — CI runs in clean env. Always re-check after merge.

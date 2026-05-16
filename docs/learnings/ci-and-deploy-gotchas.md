@@ -240,3 +240,32 @@ If you see those four → the fix is already in `package.json`. If a future dev 
 **Cross-links:** `package.json` `dev` script · `proxy.ts` (Supabase session refresh runs here) · `lib/supabase/server.ts` · `instrumentation.ts` (Sentry hook) · `docs/learnings/nextjs-16-quirks.md` (Turbopack route cache — different diagnostic skill)
 
 ---
+
+## [2026-05-16] `pnpm verify` + `pnpm build` both green ≠ production works
+
+**Context:** The `dave → main` integration deploy (120 commits). `pnpm verify` ✅ and `pnpm build` ✅ both passed → deployed. Three new dynamic-segment pages then returned 500 in production. A customer found it before the team did.
+
+**Root cause — two-layer false confidence:**
+1. `pnpm verify` = lint + tsc + test:unit + audit. **None of these execute a real page render.** A runtime crash (`DYNAMIC_SERVER_USAGE`, a bad DB call, a null deref) is invisible to all four.
+2. `pnpm build` exiting 0 doesn't mean every route works — a route that fails prerender can silently bail to dynamic and the build still passes; the error only fires at request time.
+3. `next dev` renders everything dynamically → it masks static/prerender bugs that only exist in the prod build.
+
+**Fix — the gate the team was missing:** before any deploy to `main`, run a **prod-mode smoke test**:
+```bash
+pnpm build && pnpm start          # next start serves the prod build
+# for each NEW or CHANGED route (especially [param] dynamic routes):
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/<route>
+# must be 200 (or intended 3xx/404). A 500 here = a 500 in production.
+```
+
+**Why this matters next time:**
+- "lint/tsc/tests/build all green" is necessary, NOT sufficient. Rendering the page in prod mode is the only proof.
+- Highest risk: NEW pages, dynamic `[param]` routes, big merges — untested render paths hide there.
+- `next dev` 200 ≠ `next start` 200. `next start` is the source of truth.
+
+**Cross-links:**
+- Commits `5c6bb8a` (the deploy) · `fdd3a8d` (the fix)
+- [`docs/learnings/nextjs-16-quirks.md`](nextjs-16-quirks.md) — `DYNAMIC_SERVER_USAGE` root cause
+- [`.claude/skills/phase-verify-loop/SKILL.md`](../../.claude/skills/phase-verify-loop/SKILL.md) — production smoke gate (mandatory step)
+
+---

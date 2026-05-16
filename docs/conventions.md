@@ -241,12 +241,29 @@ Don't create new long-lived branches without lead approval.
 ## 12. Performance / SEO (ปอน scope)
 
 - Public pages ต้องมี `metadata` export — title (50 char), description (155 char), Open Graph
-- Static pages ต้อง prerender (no `force-dynamic`)
+- Pages with NO auth/cookies prerender as static. But a page that renders `<NavBar>` reads cookies → it is dynamic; if it also has `generateStaticParams` it MUST set `export const dynamic = "force-dynamic"` or it 500s in production (`DYNAMIC_SERVER_USAGE` — see [`learnings/nextjs-16-quirks.md`](learnings/nextjs-16-quirks.md))
 - Images: ใช้ `next/image` กับ `width`, `height`, `alt` — `priority` สำหรับ above-fold
 - `lazy` load all below-fold images
 - Lighthouse target: Performance ≥85, SEO 100, Accessibility ≥90, Best Practices ≥90
 - ใส่ `sitemap.xml` + `robots.txt` ใน `app/`
 - ใส่ structured data (Organization, Service, BreadcrumbList) สำหรับ landing pages
+
+---
+
+## 13. Documentation (.md files)
+
+- **Every `.md` file ≤ 2000 lines — hard cap.** If a file would exceed it, split into a new file (pattern: `docs/PORT_PLAN.md` → archived old parts into `docs/sprints/archive-a-to-n.md`) and cross-link both ways. Agents read docs into a context window — oversized files get truncated mid-content, so anything past the cap is invisible.
+- **One canonical home per fact — no duplication.** A piece of information lives in exactly one file; everywhere else links to it. When you edit a doc and spot the same content duplicated in another, delete the copy and leave a link. Dedup what you touch.
+- Cross-link generously — every doc that references a concept links to its canonical doc.
+- Living docs near the cap (`PORT_PLAN.md` ~1740) — when they approach 2000, archive the oldest sections out before adding new ones.
+- See [`/AGENTS.md`](/AGENTS.md) §12 for the agent-behaviour version of this rule.
+
+---
+
+## 14. Pre-deploy verification
+
+- `pnpm verify` + `pnpm build` passing is **necessary, not sufficient** — neither executes a real page render.
+- Before any `main`/production deploy: run the **Production smoke gate** — `pnpm build && pnpm start`, then `curl` every new/changed route (must be 200, not 500). Procedure: [`.claude/skills/phase-verify-loop/SKILL.md`](/.claude/skills/phase-verify-loop/SKILL.md) · rationale: [`learnings/ci-and-deploy-gotchas.md`](learnings/ci-and-deploy-gotchas.md).
 
 ---
 
