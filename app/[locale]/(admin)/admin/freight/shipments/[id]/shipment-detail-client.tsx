@@ -253,7 +253,26 @@ function InvoicePanel({
           📄 Commercial Invoice {inv.invoice_no ? <span className="font-mono">{inv.invoice_no}</span> : <span className="text-muted">(ร่าง)</span>}
           <span className="ml-2 text-[10px] font-normal text-muted">{FREIGHT_INVOICE_STATUS_LABEL[inv.status]}</span>
         </h2>
-        <InvoiceActions invoice={inv} hasLines={lines.length > 0} valueBlockReady={valueBlockReady} />
+        <div className="flex items-center gap-2">
+          {/* V-E1.1 PDF downloads — works for draft too (uses live shipment fallback) */}
+          <a
+            href={`/api/freight-invoice/${inv.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-primary-300 bg-white px-3 py-1.5 text-xs text-primary-700 hover:bg-primary-50"
+          >
+            📥 CI (USD)
+          </a>
+          <a
+            href={`/api/freight-invoice/${inv.id}/packing-list`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            📥 Packing List
+          </a>
+          <InvoiceActions invoice={inv} hasLines={lines.length > 0} valueBlockReady={valueBlockReady} />
+        </div>
       </div>
 
       {lines.length === 0 && isDraft && (
