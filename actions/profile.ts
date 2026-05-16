@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENT_TOS_VERSION } from "@/lib/tos";
+import { getActiveTosVersion } from "@/lib/tos";
 import {
   profileBasicSchema,
   corporateSchema,
@@ -194,6 +194,9 @@ export async function completeProfile(
     return { ok: false, error: "juristic_use_register_flow" };
   }
 
+  // V-G4.1 — accept the currently-active TOS version (DB-driven with
+  // hardcoded fallback). Same behavior as TOS gate.
+  const activeTos = await getActiveTosVersion("all");
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -202,7 +205,7 @@ export async function completeProfile(
       phone:                d.phone,
       sex:                  d.sex ?? null,
       birthday:             d.birthday ?? null,
-      tos_accepted_version: CURRENT_TOS_VERSION,
+      tos_accepted_version: activeTos.version_no,
       tos_accepted_at:      new Date().toISOString(),
       status:               "active",
     })
