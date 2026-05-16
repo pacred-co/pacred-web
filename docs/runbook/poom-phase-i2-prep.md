@@ -75,10 +75,23 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see playbook section **CC**
 **V-E7 gate integration:** call `isCargoShipmentQaPassed(cargo_shipment_id)` from V-E7 `adminCreateFreightInvoice` → reject `qa_not_passed` if false
 
-### V-E6 — Freight quotation workflow
+### V-E6 — Freight quotation workflow ✅ V1 SHIPPED 2026-05-17 (commit a0c9c78)
 **Blocker:** none
 **Spec:** [`port-specs/freight-quotation.md`](../port-specs/freight-quotation.md)
-**Migration:** ~`0046_freight_quotes.sql` (mine)
+**Migration:** ✅ `0048_freight_quotes.sql` shipped — needs `supabase db push` on dev/prod
+**V1 shipped:**
+- ✅ `0048_freight_quotes.sql` — freight_quotes + freight_quote_items + freight_quote_seq + next_freight_quote_no() + RLS
+- ✅ `lib/validators/freight-quote.ts` — 7-status enum + 4 transport modes + 11 incoterms + 9 units + computeQuoteTotals
+- ✅ `actions/admin/freight-quotes.ts` — 11 actions (create/update header + 3 item CRUD + 6 status flips + convert stub)
+- ✅ `/admin/freight/quotes` — list + new + detail (inline-edit items + status action buttons + audit timeline)
+- ✅ Sidebar group "Freight" with V-E6 link
+**V1 deferred (= V-E6.1):**
+- Customer portal at /(protected)/freight/quotes
+- PDF rendering (components/pdf/freight-quote.tsx + /api/freight-quote/[id]/route.ts)
+- LINE notification on send
+- Header-edit UI (V1 = delete-and-recreate)
+- adminConvertQuoteToShipment body (V-E1 dep — replaces stub once 0049 ships)
+**Test list:** see playbook section **FF**
 **New entities:**
 - `freight_quotes` (28 cols including approval workflow fields)
 - `freight_quote_items` (per-line)
