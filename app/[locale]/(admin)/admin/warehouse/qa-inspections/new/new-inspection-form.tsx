@@ -73,7 +73,6 @@ export function NewInspectionForm({ cargoShipmentId, shipmentCode }: Props) {
         const upRes = await uploadQaPhoto(inspectionId, file);
         if (!upRes.ok) {
           // Don't bail — inspection already recorded.
-          // eslint-disable-next-line no-console
           console.warn("photo upload failed", file.name, upRes.error);
         }
       }
