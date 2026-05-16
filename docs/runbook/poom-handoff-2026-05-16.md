@@ -84,14 +84,15 @@ See [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) "Migration numbering map" f
 **Fix:** Wire `appendTrackingEvent` to also flip latest forwarder_driver row to status 4 when event = `scan_deliver` AND driver_id matches. ~30 min.
 **Why deferred:** Cosmetic — driver does 2 actions instead of 1. Workable post-launch.
 
-### F-8 · V-G7 audit verifications — 4 of 6 still queued
-**Done:** [`parity-hs-customrate.md`](../audit/parity-hs-customrate.md) · [`parity-forwarder-driver.md`](../audit/parity-forwarder-driver.md)
-**Remaining (each ~1h):**
-- `parity-time-attendance.md` — HR scope, less direct ภูม knowledge
-- `parity-settings-vip.md` — ภูม ใกล้ scope (LP-1b VIP rates)
-- `parity-admin-profile.md` — 152KB PHP, needs PHP source access
-- `parity-admin-table.md` — admin list + RBAC compare to /admin/admins
-**Why deferred:** Pure docs, low value vs ก๊อต/เดฟ unblocking work; pick à la carte.
+### F-8 · V-G7 audit verifications — 5 of 6 shipped
+**Done:**
+- [`parity-hs-customrate.md`](../audit/parity-hs-customrate.md) — 🟢 covered + 1 gap (effective dates → V2.1)
+- [`parity-forwarder-driver.md`](../audit/parity-forwarder-driver.md) — 🟢 covered + 4 net-new Pacred capabilities
+- [`parity-settings-vip.md`](../audit/parity-settings-vip.md) — 🟡 partial (per-group fee overrides → V2.1 ~3-4h)
+- [`parity-admin-table.md`](../audit/parity-admin-table.md) — 🟢 covered + simpler (intentional per ADR-0002)
+- [`parity-time-attendance.md`](../audit/parity-time-attendance.md) — 🟢 covered per CLAUDE.md HR 100%
+**Remaining:**
+- `parity-admin-profile.md` — 152KB PHP file; needs source dive that Pacred-side knowledge doesn't support; defer to post-launch when admin profile pages are added incrementally.
 
 ### F-9 · LP-4 verify-tel phone re-verification
 **Status:** No phone_verified_at column in profiles → not a real V2 gap; change-phone has OTP, signup mandates OTP.
