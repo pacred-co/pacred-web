@@ -1,6 +1,6 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last reviewed: 2026-05-16 night (post-deep-sweep — added V-E6..V-E12 freight stack + V-G admin bulk-ops + V-H commission roles to Phase I2 post-Monday)
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
 
 ---
@@ -142,6 +142,28 @@ Order recommendation:
 - P-22 Time attendance system port (~4–6h)
 - P-23 Meeting room booking (~2–3h)
 - P-27 DPX ERP phase 2 ADR co-authoring (with เดฟ + ก๊อต)
+
+### 🆕 Phase I2 — Freight stack + admin polish (post-Monday launch, V2 long-phase)
+
+From deep-sweep 2026-05-16 ([`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md)) — 17 new tables · 12 freight subdirs · 24 admin polish items. **All POST-Monday — do NOT touch before launch.**
+
+**Freight expansion (V-E6..V-E12 in PORT_PLAN Part V — ~150-200h):**
+- V-E6 Quotation workflow (admin → approve → customer accept → forwarder order)
+- V-E7 Receipt & payment tracking (RD Code 86 + WHT)
+- V-E8 Commission withdrawal (interpreter + sales rep + WHT 15%)
+- V-E9 Monthly closing ritual (freeze past periods)
+- V-E10 QA/QC intake inspection (pre-billing gate)
+- V-E11 Customs declaration UI (ใบขนสินค้า)
+- V-E12 CargoAndFreight role dashboards (6 sub-dashboards)
+
+**Admin bulk-ops + polish (V-G1..V-G7 in PORT_PLAN — ~80-120h):**
+- V-G1 Bulk forwarder actions · V-G2 Bulk transfer customers · V-G3 Admin push broadcast (popup) · V-G4 Cargo TOS version mgmt · V-G5 Org 5 contact CRUDs · V-G6 New admin reports · V-G7 Audit feature-parity verifications
+
+**Commission role models (V-H1/H2 — ~16-20h):**
+- V-H1 Interpreter (ล่าม) role + WHT calc
+- V-H2 Sales rep commission finalize (approval workflow + slip upload)
+
+Wait for เดฟ-written port-specs per V-E6..V-E12 before implementing — backend prep is เดฟ's structural lane.
 
 ### V-ADM1 — Admin UI polish (เดฟ instruction 2026-05-16 evening — do before the next big batch)
 

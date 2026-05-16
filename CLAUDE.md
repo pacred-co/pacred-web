@@ -373,11 +373,13 @@ git checkout <my-branch> && git merge main && git push origin <my-branch>
 
 # 📋 Legacy PHP Port Plan (in progress)
 
-> **Goal:** Port ทั้งระบบ PHP เดิม (`C:\xampp\htdocs\pcscargo\member\`) มาเป็น Next.js + Supabase
+> **Goal:** Port ทั้งระบบ PHP เดิม (`/Users/dev/Desktop/pcscargo/member/` บน Mac · `C:\xampp\htdocs\pcscargo\member\` บน Windows) มาเป็น Next.js + Supabase
 > **Strategy:** เอา **logic + structure** มาก่อน ไม่ต้อง migrate data → ค่อย rebrand UI/UX + จัดกลุ่มใหม่ในเฟสถัดไป
 > **Order:** ฝั่งลูกค้าก่อน (member portal) → ฝั่ง admin (back office)
 >
-> ⚠️ **Scope reminder:** PHP เดิมครอบเฉพาะ **cargo** (services #2, #3, #4-cargo-mode ใน ecosystem table ด้านบน) — services อื่น (`#1, #5-13`) ต้อง **build ใหม่ทั้งหมด** ในเฟสถัดไป (Phase I+) ตามแผน Pacred Ecosystem ไม่มีต้นแบบให้ port
+> ⚠️ **Scope reminder:** PHP เดิมครอบทั้ง **cargo** (services #2, #3, #4-cargo-mode) **+ freight** (ใน `pcs-admin/include/pages/{home/Freight, home/CargoAndFreight, hs-forwarder-invoice, forwarder-quotation, withdraw-commission-*}`) — services อื่น (`#1, #5-13`) ต้อง **build ใหม่ทั้งหมด** ในเฟสถัดไป (Phase I+)
+>
+> 🆕 **AUTHORITATIVE gap status (2026-05-16 night):** [`docs/audit/php-deep-sweep-2026-05-16.md`](docs/audit/php-deep-sweep-2026-05-16.md) — เดฟ-led 4-agent deep-sweep against 20,331 .php files + verification pass. Found **17 NEW DB tables** + **12 freight subdirs** + **24 admin polish items** that the prior `legacy-cleanup-2026-05-16` audit §6 missed. The deep-sweep audit replaces §6 "should-port" assessment; tables below remain useful as **customer-side / admin-side historical reference** but for current Sunday-night blockers + V2 long-phase backlog **read the deep-sweep doc + [PORT_PLAN Part V](docs/PORT_PLAN.md) V-E6..V-E12 / V-G / V-H**.
 
 ## Survey snapshot (สำรวจแล้ว 2026-05-12)
 

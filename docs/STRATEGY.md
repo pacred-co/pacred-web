@@ -252,13 +252,14 @@ Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) r
 
 ### 🆕 Verified deficiency audits (2026-05-16)
 
-Three audits produced concrete leak-hole + cleanup + cargo-backlog task lists:
+Four audits produced concrete leak-hole + cleanup + cargo-backlog + V2-completeness task lists:
 
 - [`audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE groups · 6 months · 10 ranked leak holes · canonical MOMO 9-status enum · workflows team really uses
-- [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload)
+- [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload). §6 "should-port" SUPERSEDED by deep-sweep below.
 - [`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md) — the legacy developer (ไอแต้ม) chat + **10 real China-cargo documents** · decoded cargo/freight ops model (GZE truck / GZS sea · A/M/X/O/Z type taxonomy · Form E / D-O / invoice value-engineering) · problem catalog A–F (withholding tax, status rollback, CBM mismatch, the ไอแต้ม single-point-of-failure)
+- 🆕 [`audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md) — **master gap doc** · เดฟ-led 4-agent deep-sweep against actual PHP source at `/Users/dev/Desktop/pcscargo` (20,331 .php files / 2.2 GB) + verification pass. Found **17 new DB tables** (freight + quotation + commission + receipt) · **12 freight subdirs** previously unexplored · **24 admin polish items**. 5 true Sunday-night blockers identified; rest = Phase I2 V2 long-phase.
 
-Master task lists: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5) + **Part V** (V-A1…V-F3 cargo-forensics backlog + V-ADM1 admin-UI polish). WHT design = [ADR-0015](decisions/0015-withholding-tax-model.md) (DRAFT).
+Master task lists: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5) + **Part V** (V-A1…V-F3 cargo-forensics backlog + **V-E6..V-E12** freight expansion + **V-G1..V-G7** admin bulk-ops + **V-H1/H2** commission role models + V-ADM1 admin-UI polish). WHT design = [ADR-0015](decisions/0015-withholding-tax-model.md) (DRAFT — fastlane pre-answered in [`briefs/got.md`](briefs/got.md) tonight).
 
 ---
 
@@ -271,8 +272,8 @@ When this checklist hits 100% → Pacred confidently scales Ads:
 - [x] Customer can create service-import order (forwarder rate engine · uploads work) — full flow shipped
 - [x] **Customer can pay from wallet self-service** (BOTH service-order + service-import) — closed by `payServiceOrderFromWallet` (evening-4) + `payForwarderFromWallet` (evening-6) — no more admin bottleneck per order
 - [x] Customer receives receipt PDF (Pacred legal + tax-ID + bank info) — receipt page + PDF route shipped evening-3
-- [ ] Customer can request tax invoice if juristic (per ADR-0006) — pending ภูม T-P4 G2b form + admin issuance flow; schema 0034 ready
-- [ ] Customer can see container/shipment status (CT-3 view · MOMO sync OR manual) — pending ภูม T-P2 UI + MOMO endpoint inventory (ก๊อต MOMO-1)
+- [x] Customer can request tax invoice if juristic (per ADR-0006) — `components/tax-invoice-request-panel.tsx` wired into both receipt pages + admin issuance flow shipped (T-P4 G2a-G2f, only G2e-2 credit-note deferred)
+- [x] Customer can see container/shipment status (CT-3 view) — `/shipments` + `/shipments/[code]` with last-sync freshness pill shipped; MOMO auto-sync still pending ก๊อต MOMO-1 (manual admin entry works as fallback)
 - [x] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL) — `adminMarkServiceOrderPaid` (T-P1) + `adminAssignDriverToForwarder` (T-P1) + bulk approve (T-P3) all shipped
 - [ ] Conversion events flow GTM → GA4 (K-12 active) — code shipped, awaits ก๊อต K-12 GTM_ID signup
 - [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod — awaits ก๊อต DV-1..DV-3 + Pacred owner Bundle 1

@@ -700,4 +700,37 @@ Long autonomous session. **7 commits on `dave`** — 4 pushed, 3 held local (hol
 
 ---
 
+---
+
+## 🔬 PHP deep-sweep checkpoint — 2026-05-16 night (เดฟ via Claude)
+
+เดฟ ผ่าน 4-agent deep-sweep against `/Users/dev/Desktop/pcscargo` (20,331 .php files / 2.2 GB) + verification pass. Master gap doc → [`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md).
+
+**Big-picture verdict:**
+- Cargo loop V1 (Monday launch) **~95% complete** — only 5 true Sunday-night blockers (B1-B5 in deep-sweep §3)
+- Most "🔴 MISSING" calls in legacy-cleanup audit §6 were false alarms (agents reading stale docs) — verified-real list = 24 admin polish items + 17 NEW DB tables
+- Freight side (V2 long-phase) **largely net-new build** — 12 subdirs in PHP that prior audits never explored; folded into PORT_PLAN Part V as V-E6..V-E12 + V-G + V-H sections
+
+**Sunday-night blockers (B1-B5):**
+1. **B1 (เดฟ)** Build OTP UI for prod — register page hardcodes `otp: "bypass"` (~2-3h)
+2. **B2 (เดฟ)** Apply migrations 0023..0043 on prod Supabase (~30m)
+3. **B3 (ก๊อต)** Lock ADR-0015 + ADR-0016 via fastlane in [`briefs/got.md`](../briefs/got.md) (~5m)
+4. **B4 (เดฟ)** DV-3 ThaiBulkSMS signup + `OTP_BYPASS=false` (~30m)
+5. **B5 (ก๊อต)** Sign up K-12 GTM + K-13 Clarity + DV-1a/b/c Sentry/Upstash/hCaptcha (~2.5h browser)
+
+**Soft blockers (degrade safely):** LIFF ID · PromptPay number · Resend API key — owner Bundle 1 + DV-2.
+
+**Phase I2 (V2 long-phase post-Monday):** V-E6..V-E12 freight stack (~150-200h) + V-G admin polish (~80-120h) — สเปก per task: เดฟ writes port-specs after launch, ภูม implements.
+
+**Docs updated this session:**
+- 🆕 [`audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md) (master gap, 440 lines)
+- [`PORT_PLAN.md`](../PORT_PLAN.md) Part V — added V-E6..V-E12 + V-G1..V-G7 + V-H1/H2 sections
+- [`STRATEGY.md`](../STRATEGY.md) §9 — verified state (tax invoice + container view checkmarks corrected)
+- [`audit/legacy-cleanup-2026-05-16.md`](../audit/legacy-cleanup-2026-05-16.md) — §6 marked SUPERSEDED
+- [`CLAUDE.md`](../../CLAUDE.md) — Legacy PHP Port Plan section + freight scope expanded
+- [`briefs/dave.md`](../briefs/dave.md) — added B1 OTP UI to P0 list
+- [`briefs/poom.md`](../briefs/poom.md) — added Phase I2 backlog (V-E6.. / V-G.. / V-H..)
+
+---
+
 **End of checkpoint.** Update freq: when blocker resolves / new blocker appears / สำคัญ batch ship → edit this file + commit `docs(team): status checkpoint — <date> — <what changed>`.

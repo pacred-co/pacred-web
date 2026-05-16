@@ -1,6 +1,6 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-16 night (cargo forensics + PORT_PLAN Part V + ADR-0015/0016)
+Last reviewed: 2026-05-16 night (cargo forensics + PORT_PLAN Part V + ADR-0015/0016 + PHP deep-sweep added B1 OTP UI as Sunday-night blocker)
 Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authority: second-tier owner
 
 ---
@@ -9,13 +9,17 @@ Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authori
 
 บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. คุณคือ integrator — ทำให้ภูม + ปอน + ก๊อต ส่งของได้ + path ไป revenue คุย flow ได้.
 
-**เดฟ P0 (do these in this order — Part T2):**
-1. **T-D1 Cargo flow end-to-end smoke test** — signup → topup → service-order → admin paid → receipt issues. Find every gap. Fill or assign to ภูม (~4h test + 2h fix)
-2. **T-D2 Backend specs for ภูม** — G2 tax invoice schema `0034_tax_invoices.sql` + container `0033_containers.sql` (draft → ภูม reviews → applies)
-3. **T-D3 L-22 GTM verify** (after ก๊อต K-12) — events flow into GTM Preview Mode → GA4 → reports ก๊อต sees
-4. **T-D4 Internal soft-launch coordination** — pick 5 friendly customers (พี่ป๊อป's network) for first real transactions
+**เดฟ P0 (do these in this order — Part T2 + deep-sweep blockers):**
+1. 🆕 **B1 OTP UI for prod** — `app/[locale]/(auth)/register/page.tsx` hardcodes `otp: "bypass"` on lines 244 + 415; no `OtpInput` component. With `OTP_BYPASS=false` registration silently fails. Build 2-step register + OtpInput form. **Sunday-night blocker** (~2-3h). Source: [`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md) §3 B1
+2. **Migration apply prod Supabase** (0023..0043) — ~30m, pre-req for T-D1
+3. **T-D1 Cargo flow end-to-end smoke test** — signup → topup → service-order → admin paid → receipt issues. Find every gap. Fill or assign to ภูม (~4h test + 2h fix)
+4. **DV-2 LIFF app create** + `NEXT_PUBLIC_LIFF_ID` set in Vercel (~30m)
+5. **DV-3 ThaiBulkSMS signup** + `OTP_BYPASS=false` flip (~30m)
+6. **T-D2 Backend specs for ภูม** — G2 tax invoice schema ✅ + container ✅ done; next freight specs (V-E6/E7/E8/E9) post-Monday
+7. **T-D3 L-22 GTM verify** (after ก๊อต K-12) — events flow into GTM Preview Mode → GA4 → reports ก๊อต sees
+8. **T-D4 Internal soft-launch coordination** — pick 5 friendly customers (พี่ป๊อป's network) for first real transactions (Mon)
 
-**Defer:** DV-7/DV-8 backlog polish until revenue path live. Landing pivot Phase 2 only when ก๊อต K-12 lands (otherwise no data).
+**Defer:** DV-7/DV-8 backlog polish until revenue path live. Landing pivot Phase 2 only when ก๊อต K-12 lands (otherwise no data). Freight side (V-E6..V-E12) = Phase I2 long-phase post-Monday.
 
 Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the full per-role emergency table + T1 critical path + T5 revenue-ready DoD checklist.
 
