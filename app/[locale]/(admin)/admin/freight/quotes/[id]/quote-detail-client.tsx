@@ -356,7 +356,7 @@ function StatusActions({ data, hasItems }: { data: QuoteDetailData; hasItems: bo
             onClick={() => call(() => adminConvertQuoteToShipment({ id: data.id }))}
             className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50"
           >
-            🚚 แปลงเป็น freight shipment (V-E1)
+            🚚 แปลงเป็น freight shipment
           </button>
         )}
 
@@ -422,8 +422,8 @@ function translateError(code: string): string {
     case "parent_not_found":      return "ไม่พบใบแม่";
     case "not_draft":             return "ใบนี้ไม่ได้อยู่สถานะ draft";
     case "no_items":              return "ต้องมี line item อย่างน้อย 1 รายการ";
-    case "freight_shipments_table_not_ready":
-                                   return "ตาราง freight_shipments ยังไม่ shipped (V-E1) — รอ Phase I2 batch ถัดไป";
+    case "not_accepted":           return "ใบนี้ยังไม่ได้สถานะ accepted";
+    case "quote_has_no_profile":   return "ใบนี้เป็น cold quote (ไม่มี profile_id) — ไม่สามารถแปลงเป็น shipment ได้";
     default:                      return code;
   }
 }

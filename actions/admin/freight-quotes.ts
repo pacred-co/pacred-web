@@ -476,11 +476,17 @@ export async function adminMarkQuoteExpired(
 }
 
 // ────────────────────────────────────────────────────────────
-// 5) Convert to freight_shipments — V-E1 dependency
+// 5) Convert to freight_shipments — V-E1 wired (migration 0050)
 // ────────────────────────────────────────────────────────────
-// V1: returns `freight_shipments_table_not_ready` until V-E1 ships
-// migration 0049 with `freight_shipments`. After 0049 lands, replace
-// this body to actually insert + link converted_to_shipment_id.
+// Creates a freight_shipments row from an accepted quote. Maps the quote's
+// transport_mode + ports + incoterm + customer pointer into the shipment;
+// the shipment's commercial value block + parties are filled later via the
+// freight-shipments admin UI (separate concerns: quote = sales agreement,
+// shipment = the actual goods + customs).
+//
+// Idempotency: UNIQUE on freight_shipments.source_quote_id prevents
+// double-conversion at the DB level (per migration 0050). If a peer beats
+// us, we re-SELECT the existing shipment and return it.
 
 export async function adminConvertQuoteToShipment(
   input: QuoteIdOnlyInput,
@@ -488,8 +494,110 @@ export async function adminConvertQuoteToShipment(
   const parsed = quoteIdOnlySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
-  return withAdmin([...ROLES_APPROVE], async () => {
-    return { ok: false, error: "freight_shipments_table_not_ready" };
+  return withAdmin([...ROLES_APPROVE], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: quote } = await admin
+      .from("freight_quotes")
+      .select("id, quote_no, status, profile_id, buyer_name_snapshot, buyer_contact_snapshot, transport_mode, port_loading, port_discharge, place_delivery, incoterm, converted_to_shipment_id, notes")
+      .eq("id", input.id)
+      .maybeSingle<{
+        id: string; quote_no: string; status: string;
+        profile_id: string | null;
+        buyer_name_snapshot: string; buyer_contact_snapshot: string | null;
+        transport_mode: string;
+        port_loading: string | null; port_discharge: string | null; place_delivery: string | null;
+        incoterm: string | null;
+        converted_to_shipment_id: string | null;
+        notes: string | null;
+      }>();
+    if (!quote) return { ok: false, error: "not_found" };
+    if (quote.status !== "accepted") return { ok: false, error: "not_accepted" };
+    if (!quote.profile_id)           return { ok: false, error: "quote_has_no_profile" };
+    if (quote.converted_to_shipment_id) {
+      return { ok: true, data: { freight_shipment_id: quote.converted_to_shipment_id } };
+    }
+
+    // Reserve job_no.
+    const { data: jobNo, error: serialErr } = await admin.rpc("next_freight_job_no");
+    if (serialErr || typeof jobNo !== "string") {
+      return { ok: false, error: `serial_reserve_failed: ${serialErr?.message ?? "rpc"}` };
+    }
+
+    // Combine buyer + contact into a notes blob for the shipment so the
+    // info isn't lost. Parties (shipper/consignee) need to be filled
+    // separately via the freight-shipments admin UI.
+    const initialNotes = [
+      `แปลงจากใบเสนอราคา ${quote.quote_no}`,
+      `Buyer: ${quote.buyer_name_snapshot}`,
+      quote.buyer_contact_snapshot ? `Contact: ${quote.buyer_contact_snapshot}` : null,
+      quote.notes ? `Quote notes: ${quote.notes}` : null,
+    ].filter(Boolean).join("\n");
+
+    const { data: inserted, error: insErr } = await admin
+      .from("freight_shipments")
+      .insert({
+        profile_id:          quote.profile_id,
+        status:              "draft",
+        transport_mode:      quote.transport_mode,
+        port_loading:        quote.port_loading,
+        port_discharge:      quote.port_discharge,
+        place_delivery:      quote.place_delivery,
+        incoterm:            quote.incoterm,
+        origin_country:      "CHINA",
+        source_quote_id:     quote.id,
+        notes:               initialNotes,
+        job_no:              jobNo,
+        created_by_admin_id: adminId,
+      })
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    // UNIQUE on source_quote_id may fire if a concurrent convert won.
+    if (insErr && (insErr.code === "23505" || /duplicate|unique/i.test(insErr.message))) {
+      const { data: peer } = await admin
+        .from("freight_shipments")
+        .select("id")
+        .eq("source_quote_id", quote.id)
+        .maybeSingle<{ id: string }>();
+      if (!peer) return { ok: false, error: "convert_race: 23505 but no peer shipment" };
+      // Backfill the quote link on our side too (best-effort).
+      await admin
+        .from("freight_quotes")
+        .update({ converted_to_shipment_id: peer.id })
+        .eq("id", quote.id)
+        .is("converted_to_shipment_id", null);
+      revalidatePath(`/admin/freight/quotes/${quote.id}`);
+      revalidatePath(`/admin/freight/shipments/${peer.id}`);
+      return { ok: true, data: { freight_shipment_id: peer.id } };
+    }
+    if (insErr || !inserted) {
+      return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
+    }
+
+    // Backlink the quote → shipment.
+    const { error: linkErr } = await admin
+      .from("freight_quotes")
+      .update({ converted_to_shipment_id: inserted.id })
+      .eq("id", quote.id)
+      .is("converted_to_shipment_id", null);
+    if (linkErr) {
+      // Soft-fail — shipment exists, link can be repaired manually.
+      await logAdminAction(adminId, "freight_quote.convert_link_failed", "freight_quote", quote.id, {
+        shipment_id: inserted.id,
+        error:       linkErr.message,
+      });
+    }
+
+    await logAdminAction(adminId, "freight_quote.convert", "freight_quote", quote.id, {
+      quote_no:    quote.quote_no,
+      job_no:      jobNo,
+      shipment_id: inserted.id,
+    });
+
+    revalidatePath(`/admin/freight/quotes/${quote.id}`);
+    revalidatePath(`/admin/freight/shipments/${inserted.id}`);
+    return { ok: true, data: { freight_shipment_id: inserted.id } };
   });
 }
 
