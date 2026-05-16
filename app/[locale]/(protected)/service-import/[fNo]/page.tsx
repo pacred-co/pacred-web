@@ -20,6 +20,11 @@ const TRANSPORT_ICON: Record<string, string> = {
   truck: "🚚", ship: "🚢", air: "✈️",
 };
 
+// Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
+function isFutureIso(iso: string): boolean {
+  return new Date(iso).getTime() > Date.now();
+}
+
 export default async function ForwarderDetailPage({ params }: { params: Promise<{ fNo: string }> }) {
   const { fNo } = await params;
   const t = await getTranslations("forwarder");
@@ -250,7 +255,7 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
                       <p className="text-[10px] text-muted">
                         ได้รับแล้ว <span className={s.received_box_count >= s.box_count ? "text-green-700 font-medium" : ""}>{s.received_box_count}/{s.box_count}</span> กล่อง
                         {s.container?.eta && <> · ETA {new Date(s.container.eta).toLocaleDateString("th-TH")}</>}
-                        {s.container?.close_at && new Date(s.container.close_at).getTime() > Date.now() && (
+                        {s.container?.close_at && isFutureIso(s.container.close_at) && (
                           <> · ตัดตู้ {new Date(s.container.close_at).toLocaleDateString("th-TH")}</>
                         )}
                       </p>
