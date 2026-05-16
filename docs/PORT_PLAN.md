@@ -1689,7 +1689,7 @@ These T-U* items = the "**เก็บกวาดบ้านเก่า + อ
 
 | # | Task | Owner | Rev | Status |
 |---|---|---|---|---|
-| V-E1 | Commercial **Invoice + Packing List** generator (China shipper → Thai consignee) | ภูม | 🟠 | ⬜ |
+| V-E1 | Commercial **Invoice + Packing List** generator — ✅ V1 SHIPPED 2026-05-17 (commit 6478efe). freight_shipments + parties + invoices + lines + 14 admin actions + admin list/new/detail + V-E6 convert wired. PDF generators + customer portal = V-E1.1 follow-up. | ภูม | 🟠 | ✅ V1 |
 | V-E2 | Freight **value model** — `real_value` vs `declared_value` vs `vat_plan` ("แผน VAT" 1/2/…); VAT 7% on the declared figure. Design = [ADR-0016](decisions/0016-freight-value-model.md) (🟡 DRAFT — ก๊อต to lock) | ภูม impl · ก๊อต lock ADR-0016 | 🟠 | ⬜ |
 | V-E3 | **Form E** (ASEAN-China FTA Certificate of Origin) generator — 12-box form, HS code, origin criterion | ภูม | 🟡 | ⬜ |
 | V-E4 | **D/O exchange letter** generator (sea) — B/L no, vessel/voyage, container no, telex-release wording | ภูม | 🟡 | ⬜ |
