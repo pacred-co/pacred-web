@@ -118,6 +118,16 @@ export const KNOWLEDGE_ARTICLES: KnowledgeArticle[] = [
     category: "นำเข้า",
     image: "/images/knowledge/12.png",
   },
+  {
+    // ภาพ /images/knowledge/13.png ยังไม่มี — ใช้ 4.png ชั่วคราว (สินค้าใบอนุญาต)
+    id: 13,
+    slug: "high-risk-import-goods",
+    title: "สินค้าเสี่ยงในการนำเข้า — บุหรี่ เครื่องตรวจสัญญาณ และของควบคุมพิเศษ ที่ต้องเช็คก่อนสั่ง",
+    excerpt:
+      "รวม 10 กลุ่มสินค้านำเข้าที่ติดด่านบ่อยที่สุด — บุหรี่ Vape โดรน อุปกรณ์ Wi-Fi อาหารเสริม อาวุธ ฯลฯ พร้อมหน่วยงานเจ้าของเรื่อง เช็คก่อนสั่งป้องกันของกลายเป็นของกลาง",
+    category: "เคลียร์",
+    image: "/images/knowledge/4.png",
+  },
 ];
 
 export const getArticleBySlug = (slug: string): KnowledgeArticle | undefined =>
