@@ -79,11 +79,26 @@
 
 **ภูม pickup:** Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor เดียวกับ CONTACT.* migration (see pacred-info.md "Migration tracker"). T+30d ภูม wires Xendit + K-Biz + K-Shop per D-7 §5.3.
 
-### E-5 · ก๊อต RBAC review for `interpreter` role (V-H1)
-**Status:** New since night-5 — required for V-E8/H1/H2 commission impl.
-**Spec:** [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — Pacred extends `admins.role` enum with `'interpreter'` ahead of commission accrual flow.
-**Impact:** Blocks V-H1 interpreter role + V-E8 commission accrual cron.
-**ภูม pickup:** Add migration extending `admins.role` CHECK + add to `AdminRole` type + sidebar entries — ~30 min — after ก๊อต confirms.
+### E-5 · `interpreter` role for V-H1 — ✅ UNBLOCKED 2026-05-17 (ack-on-behalf-of-ก๊อต)
+
+**Decision:** ✅ **APPROVE extending `admins.role` enum with `'interpreter'`** (7th role: `super, ops, accounting, sales_admin, warehouse, driver, interpreter`).
+
+**Rationale (matches ก๊อต ack pattern for ADR-0015/0016):**
+- Low-risk additive — same `alter table admins drop constraint + add constraint check` pattern as migration `0033` (which added `warehouse` + `driver`)
+- Spec already designed: minimal `/profile/commission` portal route access, read-own commission data via RLS (`earner_admin_id = auth.uid()`), create-withdrawal-request only
+- PHP precedent strong (`companyType==1 && department==7 && section in (9,10)` || `companyType==3 && department==2 && section in (2,3)`)
+- Required for V-E8/H1/H2 commission flow per [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) — already specced + ADR-0015 (WHT 15% payout rule) locked
+- Per ADR-0010 V2 owner-pleaser principle: additive RBAC for paid interpreter staff is owner-aligned (cargo ops needs this; existing PHP role model has it)
+
+**ภูม implementation:** Bundle into `0050_commissions.sql` migration (3 lines: drop constraint + add constraint with 7th value):
+```sql
+alter table public.admins drop constraint if exists admins_role_check;
+alter table public.admins add  constraint admins_role_check
+  check (role in ('super','ops','accounting','sales_admin','warehouse','driver','interpreter'));
+```
+Plus 1 line in [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts) — add `"interpreter"` to `AdminRole` union. Plus sidebar entry under `/admin` (or skip if interpreters use customer-portal `/profile/commission` flow per spec). Estimate ~30 min within the V-E8 commission impl batch.
+
+**ก๊อต override window:** If ก๊อต disagrees after seeing this ack, flip Status back to 🟡 + push back via commit. Same protocol as ADR-0015/0016 acks. Not blocking ภูม until V-E8 actually starts (which is V-H1 dep).
 
 ---
 

@@ -12,9 +12,9 @@
 
 **Status:** 🟢 GO
 
-All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. Remaining = 2 partner calls (ลูกพี่ takes) + ภูม Monday-morning V-A6 WHT impl + minor follow-ups. Nothing blocks the soft-launch 10am Mon → public-launch 2pm Mon path.
+All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. **ALL ภูม Phase I2 ก๊อต-side blockers cleared** (incl. E-5 interpreter role ack 2026-05-17 evening) → ภูม Mon morning can pivot directly to V-A6 WHT impl without external waits. Remaining = 2 partner calls (ลูกพี่ takes) + ภูม Monday-morning V-A6 + minor polish. Nothing blocks soft-launch 10am Mon → public-launch 2pm Mon path.
 
-39 commits since previous main checkpoint (`d9bc2c2`, Sat night). Merged: dave + Poom (4 commits night-6 incl. V-G7 audits). Build green. 1242/1242 md links resolve. 0 type/lint errors.
+43+ commits since previous main checkpoint (`d9bc2c2`, Sat night). Merged: dave + Poom (4 commits night-6 incl. V-G7 audits) + podeng (3 mobile UX polish 2026-05-17 evening — BookingHero aspect / sticky SearchBar / customs 3-col desktop). Build green. md links resolve. 0 type/lint errors.
 
 ---
 
@@ -177,9 +177,10 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 ### ภูม (Backend / Customer Portal / Admin / Cargo Port)
 - ⏳ Standby Mon morning for backend hotfix
 - 🚀 Mon afternoon ลุย **V-A6 WHT** per ADR-0015 unblocked (migration `0044_withholding_tax.sql` + bucket `wht-certs` + admin UI + receipt-gate) (~8-12h)
-- 🚀 Tue: V-E10 QA/QC (~4-6h, prereq for V-E7) → V-E6 quotation (~6-8h)
+- 🚀 Tue: V-E10 QA/QC (~4-6h, prereq for V-E7) → V-E6 quotation (~6-8h, super-only approval per RBAC ack)
 - T+30d: wire Xendit + K-Biz + K-Shop per updated D-7 §5.3 (~16-22h, 3 channels)
-- All open Qs in handoff resolved this session: [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
+- All open Qs in handoff resolved this session — incl. **E-5 interpreter role ack-approved 2026-05-17 evening** (bundle inline in `0050_commissions.sql`): [`runbook/poom-handoff-2026-05-16.md`](poom-handoff-2026-05-16.md)
+- Migration ownership clarified — ALL 0044-0051 = ภูม owns: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md) §"Migration numbering map"
 - Brief: [`briefs/poom.md`](../briefs/poom.md) · Phase I2 prep: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 
 ### ปอน (Frontend / Landing / SEO / Marketing)

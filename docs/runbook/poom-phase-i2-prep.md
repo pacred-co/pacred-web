@@ -7,20 +7,20 @@
 
 ---
 
-## 🗺️ Dependency map — who blocks whom
+## 🗺️ Dependency map — ✅ ALL ก๊อต-side blockers cleared 2026-05-17
 
 ```
-ก๊อต lock ADR-0015 (WHT)          → V-A6 WHT impl ✅ unblocks → V-E7 receipt + V-E8/H1/H2 commission
-ก๊อต lock ADR-0016 (freight value) → V-E1/V-E2 impl ✅ unblocks → V-E7 receipt billing
-ก๊อต confirm RBAC (interpreter role) → V-H1 interpreter impl ✅ unblocks → V-E8 commission
+ก๊อต lock ADR-0015 (WHT) ✅ DONE          → V-A6 WHT impl ✅ unblocked → V-E7 receipt + V-E8/H1/H2 commission
+ก๊อต lock ADR-0016 (freight value) ✅ DONE → V-E1/V-E2 impl ✅ unblocked → V-E7 receipt billing
+ก๊อต RBAC (interpreter role) ✅ ack       → V-H1 interpreter impl ✅ unblocked → V-E8 commission
 
 V-E10 QA/QC (no deps)             → unblocks V-E7 (billing gate: qa_status='pass'|'fail_minor'|'waived')
-V-E6 quotation (no deps)          → opens freight sales funnel (independent of billing)
+V-E6 quotation (no deps, super-only V1 approval per RBAC ack 2026-05-17) → opens freight sales funnel (independent of billing)
 V-E1 commercial invoice           → V-E7 (receipt joins invoice lines)
 V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipments spine)
 ```
 
-**Implication:** V-E10 + V-E6 are the only items with **zero blockers** post-launch — both can start day-1. V-A6 + V-E1 unblock the bulk; ก๊อต lock-pending.
+**Implication:** ทุก ก๊อต-side blocker ✅ cleared. ภูม Phase I2 ลุยได้เต็มที่ — no external waits left. Internal sequencing only (V-A6 → V-E10 → V-E6 → V-E1/E7 → V-E3/E4 → V-E8/H1/H2 → V-E9 → V-E11/E12).
 
 ---
 
@@ -43,17 +43,19 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 ## ✅ Per-item readiness checklist
 
 ### V-A6 — WHT (ภาษีหัก ณ ที่จ่าย)
-**Blocker:** ก๊อต lock ADR-0015 (4 open Qs in DRAFT)
-**Spec:** [`decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md)
-**Migration:** ~`0044_wht_model.sql` (เดฟ structural lane?) — confirm with เดฟ before writing
+**Blocker:** ✅ ALL CLEAR (ADR-0015 locked 2026-05-16 night, 4 Qs resolved)
+**Spec:** [`decisions/0015-withholding-tax-model.md`](../decisions/0015-withholding-tax-model.md) — see "Resolved questions" section at the bottom for the locked answers
+**Migration:** `0044_withholding_tax.sql` — **ภูม owns** (เดฟ confirmed 2026-05-16 night via D-2 resolution). Spec has full schema sketch in ADR §"Schema sketch" — rename file from spec's `0039_withholding_tax.sql` → `0044_withholding_tax.sql` + apply.
 **Code touch:**
-- `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT branch
-- `tax_invoices` table — add `wht_*` columns
-- 50-ทวิ document upload — Supabase Storage bucket
+- `actions/admin/tax-invoices.tsx::issueTaxInvoice` — WHT branch + receipt-gate check
+- `tax_invoices` table — relates via `withholding_tax_entries.tax_invoice_id` (per ADR-0015 schema)
+- 50-ทวิ document upload — Supabase Storage bucket `wht-certs` (DEDICATED, per Q4 resolved)
+- `lib/validators/withholding-tax.ts` — Zod schema enforcing rate set `{1, 1.5, 2, 3, 5}` (per Q1 resolved)
+- Receipt + tax-invoice issuance gate active per ADR §"Rules" #4
 **Pre-implementation check:**
-- [ ] ADR-0015 Status flipped to "Accepted"
-- [ ] 4 open Qs answered (in ADR diff)
-- [ ] เดฟ confirms whether ภูม writes the migration OR เดฟ does
+- [x] ADR-0015 Status ✅ Accepted (2026-05-16 night)
+- [x] 4 open Qs resolved (in ADR "Resolved questions" section)
+- [x] ภูม writes migration (D-2 resolved)
 
 ### V-E10 — QA/QC intake inspection
 **Blocker:** none (purely additive)
@@ -87,14 +89,15 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 - Optional customer-side accept: `/quotes/[token]/page.tsx` (public/protected)
 **Effort:** ~15-20h
 **Pre-implementation check:**
-- [ ] Confirm `freight_shipments` table to convert TO exists (otherwise impl just keeps `converted_to_shipment_id` nullable until V-E1 ships)
-- [ ] RBAC review with ก๊อต — who can approve? (spec says CEO/Manager; need `super` + new `manager` role?)
+- [x] ✅ Approval RBAC = **use existing `super` role for V1** (เดฟ + ลูกพี่ ack 2026-05-17). DO NOT add new `manager` role pre-launch — V2 doesn't have distinct "manager-but-not-super" tier in ops org. Revisit only if ops actually requests it post-launch (=fragmented authority signal).
+- [ ] Confirm `freight_shipments` table to convert TO exists (otherwise impl just keeps `converted_to_shipment_id` nullable until V-E1 ships) — checks via ADR-0016 `freight_shipments` migration timing
 
 ### V-E1 — Commercial invoice + packing list
-**Blocker:** ก๊อต lock ADR-0016 (5 open Qs)
-**Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4)
-**Migration:** ~`0047_freight_shipments.sql` + `0048_freight_invoices.sql` (เดฟ structural?)
-**New entities:** `freight_shipments` (cargo spine for freight) + `freight_invoices` + `freight_invoice_lines`
+**Blocker:** ✅ ALL CLEAR (ADR-0016 locked 2026-05-16 night, 5 Qs resolved)
+**Spec:** [`port-specs/freight-document-suite.md`](../port-specs/freight-document-suite.md) (combined w/ V-E3 + V-E4) + [ADR-0016 §"Field model"](../decisions/0016-freight-value-model.md#field-model-sketch--final-table-layout-part-of-the-v-e1-freight-schema-migration) for shipment-level fields
+**Migration:** `0047_freight_shipments.sql` + `0048_freight_invoices.sql` — **ภูม owns both** (เดฟ confirmed — ADR-0016 has the schema sketch ภูม wrote; same lane pattern as 0044 WHT)
+**New entities:** `freight_shipments` (cargo spine for freight, w/ `commercial_value_*` + `declared_customs_value_thb` + `exchange_rate` + `vat_plan_label` per ADR §"Field model") + `freight_invoices` + `freight_invoice_lines`
+**Rules per ADR-0016 locked:** `rate_source` enum = `{'staff_entered'}` V1 · Option A (committed plan only, what-if = calculator UI) · declared-value edit = super+accounting + `declared_value_basis` + audit log · duty rate = snapshot from `hs_codes` at issuance, overridable + logged
 **Effort:** ~10-15h (spine alone; receipt/payment is V-E7 separate)
 
 ### V-E7 — Receipt + payment tracking
@@ -113,25 +116,25 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 - [ ] `next_freight_invoice_serial()` fn deployed (mirror migration 0034 `next_tax_invoice_serial`)
 
 ### V-E8 + V-H1 + V-H2 — Commission withdrawal (one combined batch)
-**Blocker:** ADR-0015 WHT (15% on payouts > 5k per Thai law) + ก๊อต RBAC for new `interpreter` role
+**Blocker:** ✅ ALL CLEAR (ADR-0015 WHT locked + E-5 interpreter role ack-approved 2026-05-17)
 **Spec:** [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md)
-**Migration:** ~`0050_commissions.sql` (4 tables: tiers · accruals · withdrawals · withdrawal_items)
-**New entities:**
+**Migration:** `0050_commissions.sql` — **ภูม owns** — 4 tables + `admins.role` enum extension (interpreter role per E-5 ack):
 - `commission_tiers` (per-role/per-service rate lookup)
 - `commission_accruals` (earned-but-unpaid)
 - `commission_withdrawals` (request → admin approve → paid)
 - `commission_withdrawal_items` (link withdrawal ← accruals)
+- + `alter table admins drop constraint + add constraint admins_role_check check (role in (...,'interpreter'))` — bundle inline per [E-5 resolution](../runbook/poom-handoff-2026-05-16.md)
 **Code touch:**
 - `actions/admin/commissions.ts` (new) — bulk-accrue (cron) · request-payout · approve+slip-upload · mark-paid
-- `lib/auth/require-admin.ts` — extend `AdminRole` with `"interpreter"` (waits on ก๊อต)
+- `lib/auth/require-admin.ts:20` — extend `AdminRole` union with `"interpreter"` (single line)
 - `/admin/commissions/*` pages (request form · admin approval queue · history)
 - `/commissions/me/*` (interpreter/sales-rep self-serve request flow)
 - Background cron `/api/cron/commission-accrue` (daily — scans closed orders → writes accruals)
 **Effort:** ~20-30h
 **Pre-implementation check:**
-- [ ] ADR-0015 locked (WHT 15% rate applied here)
-- [ ] ก๊อต confirms `interpreter` role addition to admins.role enum
-- [ ] Existing `team_leaders` table mapped → new `commission_tiers` (per-existing-row migration)
+- [x] ADR-0015 locked (WHT 15% rate applied here — locked 2026-05-16 night)
+- [x] `interpreter` role ack-approved (E-5 resolved 2026-05-17 — bundle inline in 0050)
+- [ ] Existing `team_leaders` table mapped → new `commission_tiers` (per-existing-row migration) — ภูม design call per spec
 
 ### V-E9 — Monthly closing ritual
 **Blocker:** none (additive)
@@ -170,23 +173,23 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 
 ---
 
-## 🧱 Migration numbering map (proposed — confirm with เดฟ)
+## 🧱 Migration numbering map — ✅ ownership clarified 2026-05-17
 
 | Number | Item | Owner | Status |
 |---|---|---|---|
-| `0041` | bill_to_name_override | ภูม | ✅ shipped + run on dev |
-| `0042` | cargo_containers.close_at | ภูม | ✅ shipped + run on dev |
-| `0043` | slip_transferred_at | ภูม | ✅ shipped + run on dev |
-| `0044` | WHT model (V-A6) | เดฟ structural? | 🔴 pending ก๊อต ADR-0015 lock |
+| `0041` | bill_to_name_override | ภูม | ✅ shipped + run on dev + prod |
+| `0042` | cargo_containers.close_at | ภูม | ✅ shipped + run on dev + prod |
+| `0043` | slip_transferred_at | ภูม | ✅ shipped + run on dev + prod |
+| `0044` | withholding_tax model (V-A6) | **ภูม** | ✅ unblocked — ADR-0015 locked 2026-05-16 night → ภูม Mon AM (D-2 resolved) |
 | `0045` | freight_qa_inspections (V-E10) | ภูม | ⬜ post-launch |
 | `0046` | freight_quotes + items (V-E6) | ภูม | ⬜ post-launch |
-| `0047` | freight_shipments (V-E1) | เดฟ structural? | 🔴 pending ก๊อต ADR-0016 lock |
-| `0048` | freight_invoices + lines (V-E1/E7) | ภูม | 🔴 dep 0047 + 0044 |
-| `0049` | freight_invoice_payments (V-E7) | ภูม | 🔴 dep 0048 |
-| `0050` | commissions (4 tables, V-E8/H1/H2) | ภูม | 🔴 dep 0044 (WHT) + ก๊อต RBAC |
+| `0047` | freight_shipments (V-E1) | **ภูม** | ✅ unblocked — ADR-0016 locked 2026-05-16 night → ภูม Phase I2 (schema in ADR §"Field model") |
+| `0048` | freight_invoices + lines (V-E1/E7) | ภูม | ⬜ dep 0047 + 0044 |
+| `0049` | freight_invoice_payments (V-E7) | ภูม | ⬜ dep 0048 + V-E10 QA-pass gate |
+| `0050` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ✅ unblocked — dep 0044 ✅ + E-5 interpreter role ack 2026-05-17 |
 | `0051` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
 
-**Note:** numbers tentative — confirm with เดฟ before allocating. Pattern from earlier: ภูม picked 0041-0043 then เดฟ took 0044 for WHT when she writes it.
+**Note:** ภูม owns all 0044-0051. The "เดฟ structural?" question from previous version resolved by ก๊อต ADR locks — ภูม spec'd the schemas in the ADRs herself, so single-owner per migration. เดฟ's "structural lane" was a placeholder for big-cross-cutting changes; for these freight/commission migrations the ownership is unambiguous ภูม-side.
 
 ---
 

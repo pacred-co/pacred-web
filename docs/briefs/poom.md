@@ -15,7 +15,13 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 - **E-2 ADR-0016 freight value** → ✅ ก๊อต locked 2026-05-16 night, 5 Qs resolved → V-E2 unblocked for Phase I2
 - **E-3 MOMO-1** → in-flight (ลูกพี่ takes call → เดฟ parses → pings you)
 - **E-4 Pacred owner Bundle 1** → 3/5 resolved: PromptPay ✅ + Bank ✅ + LIFF ✅ + Gateway DECISION CHANGED to Xendit+K-Biz+K-Shop. Wire `BANK.*` ลง [`components/pdf/forwarder-receipt.tsx`](../../components/pdf/forwarder-receipt.tsx) + [`shop-order-receipt.tsx`](../../components/pdf/shop-order-receipt.tsx) ในรอบ refactor CONTACT.*
-- E-5 ก๊อต RBAC review for interpreter role → defer to V-H1 implementation prep (post-Monday)
+- **E-5 `interpreter` role** → ✅ **APPROVED 2026-05-17 (เดฟ ack-on-behalf-of-ก๊อต).** Bundle inline ใน migration `0050_commissions.sql` (3-line `alter table admins drop+add constraint`) + add `"interpreter"` to `AdminRole` union ใน [`lib/auth/require-admin.ts:20`](../../lib/auth/require-admin.ts). Spec [`port-specs/commission-withdrawal.md`](../port-specs/commission-withdrawal.md) §"admins.role enum extension" + handoff [E-5 entry](../runbook/poom-handoff-2026-05-16.md) for full rationale. **All RBAC blockers for V-E8/V-H1/V-H2 cleared.**
+
+### V-E6 approval RBAC — ✅ resolved 2026-05-17
+Use existing `super` role for V1 approval. DO NOT add new `manager` role pre-launch. Revisit only if ops actually requests distinct manager-but-not-super tier post-launch.
+
+### Migration ownership — ✅ ALL ภูม-owned (0044-0051)
+All Phase I2 migrations 0044..0051 = ภูม owns. Schema sketches in ADR-0015 + ADR-0016 already match ภูม's design intent. No "เดฟ structural lane" handoff — single-owner per migration. Full map: [`poom-phase-i2-prep.md`](../runbook/poom-phase-i2-prep.md) §"Migration numbering map".
 
 **Mon morning:**
 1. Standby for backend hotfix (Sentry watch + admin_audit_log)
