@@ -58,22 +58,22 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see `poom-test-playbook-2026-05-16.md` section **BB**
 **Follow-ups (deferred to V1.1):** customer self-upload of cert · 50 ทวิ OCR · line-level WHT base · auto-generate Pacred's ภ.ง.ด.53 summary
 
-### V-E10 — QA/QC intake inspection
+### V-E10 — QA/QC intake inspection ✅ SHIPPED 2026-05-17 (commit fb99a68)
 **Blocker:** none (purely additive)
 **Spec:** [`port-specs/freight-qa-qc-inspection.md`](../port-specs/freight-qa-qc-inspection.md)
-**Migration:** ~`0045_freight_qa_inspections.sql` (mine)
-**New entities:**
-- table `freight_qa_inspections` (15 cols + 4 CHECK constraints + RLS for customer-read-own + warehouse-write)
-- Storage bucket `qa-inspection-photos/`
-**Code touch:**
-- `actions/admin/qa-inspections.ts` (new) — 3 actions: create / update_outcome / waive
-- `/admin/warehouse/qa-inspections/page.tsx` (new) — list view
-- `/admin/warehouse/qa-inspections/[id]/page.tsx` (new) — detail + photos
-- `lib/warehouse/qa.ts` (new) — typed client
-**Effort:** ~6-8h
-**Pre-implementation check:**
-- [ ] Verify `freight_shipments` table EXISTS (V-E1 prereq) OR plan for cargo-only first
-- [ ] If freight_shipments not yet shipped, the FK column stays nullable + V-E10 keys to `cargo_shipments` only initially
+**Migration:** ✅ `0045_freight_qa_inspections.sql` shipped — needs `supabase db push` on dev/prod
+**V1 scope:** cargo_shipments-only (freight_shipment_id reserved nullable; follow-up migration after V-E1 adds FK + relaxes XOR)
+**Code touch (all done):**
+- ✅ `supabase/migrations/0045_freight_qa_inspections.sql` — table + RLS + bucket `qa-inspection-photos` + next_qa_inspection_no() fn
+- ✅ `lib/validators/qa-inspection.ts` — QA_OUTCOMES + QA_DAMAGE + Zod refinements
+- ✅ `actions/admin/qa-inspections.ts` — createQaInspection (waived super-only), updateQaInspectionNotes, uploadQaPhoto, isCargoShipmentQaPassed (V-E7 gate consumer)
+- ✅ `lib/notifications/templates.ts::qaFailed` — fail_minor/fail_major customer notif
+- ✅ `/admin/warehouse/qa-inspections/page.tsx` — pending queue + recent inspections
+- ✅ `/admin/warehouse/qa-inspections/new/page.tsx` + form — radio cards + photo multi-upload
+- ✅ `/admin/warehouse/qa-inspections/[id]/page.tsx` — detail + photo gallery (signed URLs)
+- ✅ `/shipments/[code]/page.tsx` — customer QA status panel
+**Test list:** see playbook section **CC**
+**V-E7 gate integration:** call `isCargoShipmentQaPassed(cargo_shipment_id)` from V-E7 `adminCreateFreightInvoice` → reject `qa_not_passed` if false
 
 ### V-E6 — Freight quotation workflow
 **Blocker:** none

@@ -212,6 +212,37 @@
 - [ ] WHT row exist + status=waived → ออกใบกำกับภาษีได้, PDF มี WHT block แต่ไม่มีหมายเลขใบ 50 ทวิ
 - [ ] ลบ WHT entry หลัง cert_status=received → fail "ลบไม่ได้ — สถานะไม่ใช่ pending" (preserved for audit)
 
+### CC. **NEW (V-E10) — QA/QC inspection** ⭐ ⚠️ **PRE-FLIGHT: รัน migration 0045 ก่อน**
+
+**Pre-flight:**
+- [ ] รัน `0045_freight_qa_inspections.sql` ใน Supabase Studio → ดู table `freight_qa_inspections` + sequence `qa_inspection_seq` + function `next_qa_inspection_no` + bucket `qa-inspection-photos`
+- [ ] ทดสอบ CHECK constraints: insert fail_major พร้อม damage_level=null → error; insert waived พร้อม waived_reason=null → error
+
+**Admin pending queue (warehouse + super + accounting):**
+- [ ] เปิด `/admin/warehouse/qa-inspections` → เห็น "🕓 คิวรอตรวจ" แสดง cargo_shipments ที่ status=`arrived_th` แต่ไม่มี inspection
+- [ ] กด "บันทึกการตรวจ" → ไปหน้า `/admin/warehouse/qa-inspections/new?shipment=...`
+
+**Create inspection (4 outcome paths):**
+- [ ] **pass** → กรอก outcome=pass, missing_items=0, upload 1-2 รูป → redirect ไป detail; QA-YYMMDD-NNNN ขึ้น; รูปแสดงในแกลเลอรี
+- [ ] **fail_minor** → กรอก outcome=fail_minor, damage_level=cosmetic, missing_items=2, notes="กล่องบุบ" → บันทึก + ลูกค้าได้ notification "ตรวจพบปัญหาเล็กน้อย" + customer_notified_at ถูกตั้งค่า
+- [ ] **fail_major** → กรอก outcome=fail_major, damage_level=partial → notification severity=error ("ตรวจพบปัญหาสำคัญ")
+- [ ] **waived** (super only) → ลอง role=accounting → fail; ลอง role=super → กรอก waived_reason ≥5 → บันทึก; ดู detail page เห็น banner สีแดง "⚠️ ยกเว้น (waived)" + เหตุผล
+
+**Customer view:**
+- [ ] เปิด `/shipments/[code]` ของลูกค้าที่ shipment ถูกตรวจ → เห็น QA status panel สีตาม outcome (เขียว/เหลือง/แดง/เทา)
+- [ ] fail_major → ดู "📞 กรุณาติดต่อทีมงาน" CTA
+- [ ] รูปไม่อยู่ใน customer view (V1 — admin-only). Path มี cargo_shipment_id แต่ signed URL render บน admin detail page เท่านั้น
+
+**Audit + photo:**
+- [ ] `/admin/audit` → กรอง target_type=`qa_inspection` → เห็น actions: qa_inspection.create / qa_inspection.photo_upload / qa_inspection.notify_failed (ถ้ามี)
+- [ ] เปิด detail page → คลิกรูป → signed URL เปิดในแท็บใหม่; ลอง paste URL ใน private window → ใช้งานได้ภายใน 60 วินาที
+
+**Gate readiness (sanity, no UI yet):**
+- [ ] เปิด server console → `await isCargoShipmentQaPassed("<uuid-with-pass>")` → true
+- [ ] เดียวกัน with "<uuid-with-fail_major>" → false
+- [ ] เดียวกัน with "<uuid-no-inspection>" → false
+- [ ] เมื่อ V-E7 ships, billing flow จะใช้ helper นี้ block invoice issuance
+
 ---
 
 ## 🚨 อะไรเป็นบัค → ทำอย่างไร
