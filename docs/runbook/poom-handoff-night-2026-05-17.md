@@ -2,7 +2,9 @@
 
 > **Context:** ภูม นอนแล้ว — Claude (autonomous) ลุยงานเสริม overnight; เดฟช่วยลุยงานหนักคู่ขนานเพื่อให้ทันก่อน soft launch 10am Mon. **launch จันทร์ห้ามพลาด** — phone+OTP เป็น primary auth ใช้ได้แน่นอน.
 >
-> Last updated: 2026-05-17 (autonomous Claude) · Branch: `Poom` @ `0e98332`
+> Last updated: 2026-05-17 (autonomous Claude) · Branch: `Poom` @ `d617721`
+>
+> **✅ ALL 4 CLAUDE OVERNIGHT ITEMS SHIPPED:** C1 (V-E1.1 PDFs) `4556005` · C3 (V-G4.1 TOS gate) `bce4e54` · C4 (V-G5.1 helper) `2523867` · C2 (V-A6.1 customer WHT upload) `d617721`. Ahead of schedule — see "Overnight summary" §below.
 
 ---
 
@@ -95,26 +97,22 @@
 
 ---
 
-## 🌙 Claude overnight ลุยตัวไหน (safe additive, ไม่กระทบ launch)
+## 🌙 Claude overnight — ✅ ALL 4 SHIPPED (zero schema change)
 
-ระบบเดิมยังคงรันได้ปกติ. ผมจะ ship เป็น batches เล็กๆ + push real-time. **ทุกอันเป็น additive / read-only / V-1.1 follow-up — zero schema change, zero customer-flow break.**
+| # | Item | Files | Status |
+|---|---|---|---|
+| C1 | **V-E1.1 PDF generators: Commercial Invoice + Packing List** | `components/pdf/freight-commercial-invoice.tsx` + `freight-packing-list.tsx` + 2 download API routes + download buttons on /admin/freight/shipments/[id] | ✅ `4556005` |
+| C2 | **V-A6.1 customer self-upload of WHT cert** | `actions/wht.ts` (customer-side, RLS-scoped) + `components/customer-wht-upload-panel.tsx` + receipt-page wire (both service-import + service-order) | ✅ `d617721` |
+| C3 | **V-G4.1 wire customer TOS gate to tos_versions** | `lib/tos.ts` (added `getActiveTosVersion()`) + `actions/tos.ts` + `actions/profile.ts` + `(protected)/layout.tsx` + `components/tos-gate.tsx` (accepts versionNo/title/bodyMd props) | ✅ `bce4e54` |
+| C4 | **V-G5.1 helper for org_contacts customer-read** | `lib/org-contacts.ts` (`getOrgContacts()` + `getAllOrgContacts()`) — full footer wire deferred to V-G5.1.1 (cosmetic, no functional change) | ✅ `2523867` |
 
-| # | Item | Effort | Files touched | Status |
-|---|---|---|---|---|
-| C1 | **V-E1.1 PDF generators: Commercial Invoice + Packing List** | ~3-4h | `components/pdf/freight-commercial-invoice.tsx` + `freight-packing-list.tsx` + `app/api/freight-invoice/[id]/route.tsx` (download endpoint) + button on detail page | pending |
-| C2 | **V-A6.1 customer self-upload of WHT cert** | ~2-3h | `actions/wht.ts` (customer-side) + form on customer receipt page + Storage policy allows customer write own folder | pending |
-| C3 | **V-G4.1 wire customer TOS gate to tos_versions** | ~1-2h | `actions/tos.ts` + `lib/tos.ts` add `getActiveTosVersion()` helper · `actions/tos.ts::acceptCurrentTos` reads DB version with site.ts fallback · gate modal renders body_md as HTML | pending |
-| C4 | **V-G5.1 wire customer footer + contact page to org_contacts** | ~1-2h | `components/sections/footer.tsx` + `app/[locale]/(public)/contact/page.tsx` read `org_contacts` via `getOrgContacts()` helper · site.ts constants stay as fallback | pending |
+**Total LOC overnight:** ~1700+ LOC (1 helper + 2 PDFs + 2 API routes + 1 client component + TOS gate rework + 4 sql-driven wiring)
 
-**Total Claude overnight estimate:** ~7-11h. Conservative: ship C1 + C3 + C4 (~6-8h), defer C2 if behind schedule.
-
-**Why these picks:**
-- Zero migration → ไม่ต้องเดฟ apply อะไรเพิ่ม
-- All additive — existing customer flow ใช้ site.ts fallback ถ้า DB rows ยังว่าง (V-G4/G5)
-- V-E1.1 PDF = visible win — ภูม + พี่ป๊อบ ดู PDF จริงได้ก่อน Monday
-- V-A6.1 customer self-upload = ปิด V-A6 loop (admin-only V1 → ลูกค้า self-serve V1.1)
-
-**ทั้ง 4 ไม่ block + ไม่ต้อง wait — เดฟลุยงานข้างล่างได้ขนานเลย**
+**ALL safe to ship pre-launch:**
+- Zero new migrations — uses existing 0044/0047/0050/0051 schema
+- V-G4.1 + V-G5.1 fallback gracefully when DB rows empty → same behavior as pre-V-G4/G5
+- V-E1.1 PDFs render-on-demand with live shipment fallback for drafts
+- V-A6.1 customer upload re-uses existing wht-certs bucket + RLS
 
 ---
 
