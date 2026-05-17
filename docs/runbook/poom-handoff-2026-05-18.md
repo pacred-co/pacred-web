@@ -45,6 +45,20 @@
 
 Procedure detail → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 
+## ⚠️ U1/U2 code-review findings (Agent X, 2026-05-18) — read before continuing
+
+A post-launch review of your U1/U2 code landed → [`../research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md) — **1 P0 · 5 P1 · 7 P2.** Verdict: structurally sound (idempotency guards · race-guards · `0066` terminal-reversal trigger · `0062` role-pin — all correct + well-built) — the blocker is one **missing business rule**, not a code bug.
+
+**Ownership split — to avoid double-work:**
+
+| Finding | Owner | Note |
+|---|---|---|
+| **P0-1** refund path: no amount cap / no paid-status check · **P1-1** admin-refund IDOR | 🔵 **เดฟ — fixing NOW via agent** | **DO NOT touch `actions/refunds.ts` / `actions/admin/refunds.ts`** — เดฟ owns this fix (+ P2-1/P2-6 in the same files). Blocks the deploy. |
+| **P1-2** PCS-migration phone/email collision (`actions/admin/pcs-migration.ts:280`) | 🔴 **ภูม — before you RUN the U2-1 backfill** | without it a chunk of the ~9,000 customers strand on duplicate phone/email |
+| P1-3 billing-gate fails-open on container read · P1-4 `0067` backfill comment-not-code · P1-5 cascade non-atomic · P2-2 `0059` re-run abort · P2-4 orphan-auth cleanup · P2-5 `0068` sack RLS leak · P2-7 migrated-status | 🟡 ภูม — follow-up | per-finding detail + suggested fix in the review doc |
+
+**→ The `dave→main` deploy gate is now two-part: (1) migrations `0058`-`0068` on prod [ภูม] + (2) P0-1 fixed [เดฟ].** Both clear in parallel — no extra delay.
+
 ## Then — your feature queue (UPGRADE_PLAN order)
 
 | # | Task | Note |
