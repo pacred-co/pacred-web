@@ -420,6 +420,13 @@ export async function confirmPasswordResetByPhone(
   const d = parsed.data;
   const phone = normalizePhone(d.phone);
 
+  // S-3 — IP rate-limit this OTP-confirm step. requestPasswordResetByPhone is
+  // rate-limited but this confirm step (it sets the new password) was not — a
+  // 6-digit reset OTP is brute-forceable without an IP-level ceiling.
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("otpVerify", ip);
+  if (blocked) return blocked;
+
   const otpOk = await verifyOtp(phone, d.otp, "reset");
   if (!otpOk) return { ok: false, error: "invalid_otp" };
 

@@ -40,6 +40,11 @@ export const RATE_LIMITS = {
   login:         { limit: 10, windowMs: 3_600_000 },   // 10 / hour
   /** Password-reset request per IP — anti-enumeration. */
   passwordReset: { limit: 5,  windowMs: 3_600_000 },   // 5 / hour
+  /** OTP-confirm steps (password-reset confirm, phone-change confirm) per
+   *  IP — S-3. verifyOtp itself caps 5 tries per OTP row; this adds the
+   *  missing IP-level ceiling so a 6-digit OTP can't be brute-forced across
+   *  successive rows, and gives one IP-level lockout signal. */
+  otpVerify:     { limit: 10, windowMs: 3_600_000 },   // 10 / hour
   /** Contact form per IP — anti-spam. */
   contact:       { limit: 5,  windowMs: 3_600_000 },   // 5 / hour
   /** Generic API endpoint default (calls without their own bucket). */

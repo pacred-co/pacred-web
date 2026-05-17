@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { headers } from "next/headers";
 import { requestOtp, verifyOtp } from "@/actions/otp";
 import { normalizePhone } from "@/lib/utils/phone";
+import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import {
   changePasswordSchema,
   confirmPhoneChangeSchema,
@@ -143,6 +145,11 @@ export async function confirmPhoneChange(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
+
+  // S-3 — IP rate-limit this OTP-confirm step (mirrors confirmPasswordResetByPhone).
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("otpVerify", ip);
+  if (blocked) return blocked;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
