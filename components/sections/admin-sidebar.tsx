@@ -8,6 +8,7 @@ import {
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
   MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell,
+  Search,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -91,10 +92,11 @@ const items: NavItem[] = [
   { href: "/admin/rates/vip",        label: "แก้เรท VIP (LP-1)",     icon: <BarChart3 className="w-5 h-5" />,   roles: ["super","accounting"], group: "ระบบ" },
   { href: "/admin/rates/custom-user",label: "แก้เรท Custom-user (LP-1)", icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
   { href: "/admin/rates/custom-hs",  label: "แก้เรท Custom-HS (LP-1)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
-  { href: "/admin/admins",           label: "จัดการ admin",   icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
-  { href: "/admin/audit",            label: "Audit log",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
-  { href: "/admin/system/crons",     label: "Cron Health (U4-1)",      icon: <Activity className="w-5 h-5" />, roles: ["super","ops"], group: "ระบบ" },
-  { href: "/admin/system/notifications", label: "Notification log (U4-1)", icon: <Bell className="w-5 h-5" />, roles: ["super","ops"], group: "ระบบ" },
+  { href: "/admin/search",           label: "ค้นหาทุกที่ (U4-1)",        icon: <Search className="w-5 h-5" />,          roles: ["super","ops","accounting","sales_admin"], group: "ระบบ" },
+  { href: "/admin/admins",           label: "จัดการ admin (U4-1 RBAC)", icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
+  { href: "/admin/audit",            label: "Audit log",                icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
+  { href: "/admin/system/crons",     label: "Cron Health (U4-1)",       icon: <Activity className="w-5 h-5" />,        roles: ["super","ops"], group: "ระบบ" },
+  { href: "/admin/system/notifications", label: "Notification log (U4-1)", icon: <Bell className="w-5 h-5" />,         roles: ["super","ops"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings/contacts",label: "ข้อมูลติดต่อ (V-G5)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super","accounting","sales_admin"], group: "ระบบ" },
   { href: "/admin/settings/tos-versions", label: "TOS versions (V-G4)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super"], group: "ระบบ" },
