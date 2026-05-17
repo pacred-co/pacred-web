@@ -4,11 +4,18 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
-// Slide order: หนังสือรับรองนิติบุคคล (DBD) is the hero (left big),
-// สมาคมตัวแทนออกของ + ทีมงาน Pacred fill the right column.
-// Per ปอน 2026-05-18 — collage layout (1 big + 2 small) replaces the prior
-// single-active carousel. Each cell opens a full-screen lightbox on click.
+// Slide order (per ปอน 2026-05-18): ภาพทีมงาน Pacred (office) is the hero
+// (left big), DBD นิติบุคคล + สมาคมตัวแทนออกของ fill the right column.
+// Collage layout (1 big + 2 small) replaces the prior single-active carousel.
+// Each cell opens a full-screen lightbox on click.
 const SLIDES = [
+  {
+    src: "/images/companyofficethai.png",
+    alt: "ทีมงาน Pacred Shipping ที่ออฟฟิศจริง 15+ ปี เคลียร์ทุกด่านในไทย",
+    caption: "ทีมงาน Pacred Shipping",
+    sub: "15+ ปี · เคลียร์ทุกด่านในไทย",
+    fit: "cover" as const,
+  },
   {
     src: "/images/aboutus/rubrong.png",
     alt: "หนังสือรับรองนิติบุคคล กรมพัฒนาธุรกิจการค้า — Pacred Shipping",
@@ -22,13 +29,6 @@ const SLIDES = [
     caption: "สมาคมตัวแทนออกของฯ",
     sub: "Shipping License ถูกกฎหมาย",
     fit: "contain" as const,
-  },
-  {
-    src: "/images/companyofficethai.png",
-    alt: "ทีมงาน Pacred Shipping",
-    caption: "ทีมงาน Pacred Shipping",
-    sub: "15+ ปี · เคลียร์ทุกด่านในไทย",
-    fit: "cover" as const,
   },
 ];
 
@@ -125,7 +125,7 @@ export function CertsSlideshow() {
 
   return (
     <>
-      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2 aspect-[5/6] w-full max-w-[340px] lg:max-w-none mx-auto lg:mx-0">
+      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[5/6] md:aspect-[16/10] w-full max-w-[340px] md:max-w-[860px] mx-auto">
         <div className="row-span-2 min-h-0">
           <Cell i={0} big onOpen={open} />
         </div>
