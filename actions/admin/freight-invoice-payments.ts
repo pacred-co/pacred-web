@@ -197,6 +197,36 @@ export async function recordFreightPayment(
       .select("id")
       .single<{ id: string }>();
     if (insErr || !inserted) {
+      // P1-2: 23505 = the 0061 partial-unique guard
+      // (freight_payment_bank_ref_uniq) caught a double-submit — the same
+      // bank_ref was already recorded on this invoice. Re-SELECT the
+      // existing payment + return idempotently instead of inserting a
+      // duplicate that would over-collect / flip the invoice to overpaid.
+      if (
+        insErr &&
+        (insErr.code === "23505" || /duplicate|unique/i.test(insErr.message)) &&
+        d.bank_ref
+      ) {
+        const { data: raced } = await admin
+          .from("freight_invoice_payments")
+          .select("id")
+          .eq("freight_invoice_id", invoice.id)
+          .eq("bank_ref", d.bank_ref)
+          .eq("status", "recorded")
+          .maybeSingle<{ id: string }>();
+        if (raced) {
+          const recomputed = await recomputeInvoicePayment(admin, invoice);
+          return {
+            ok: true,
+            data: {
+              id:             raced.id,
+              paid_thb:       recomputed.paid_thb,
+              total_thb:      recomputed.total_thb,
+              payment_status: recomputed.payment_status,
+            },
+          };
+        }
+      }
       return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
     }
 

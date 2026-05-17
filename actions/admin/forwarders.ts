@@ -318,7 +318,31 @@ export async function adminMarkForwarderPaid(
       })
       .select("id")
       .single<{ id: string }>();
-    if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+    if (txErr) {
+      // 23505 = the 0061 partial-unique guard (wallet_tx_import_payment_uniq)
+      // caught a concurrent double-debit. Re-SELECT the winning tx + nudge
+      // status forward — mirrors the idempotency branch above.
+      if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
+        const { data: raced } = await admin
+          .from("wallet_transactions")
+          .select("id")
+          .eq("reference_type", "forwarder")
+          .eq("reference_id", forwarder.f_no)
+          .eq("kind", "import_payment")
+          .eq("status", "completed")
+          .maybeSingle<{ id: string }>();
+        if (raced) {
+          if (forwarder.status === "pending_payment") {
+            await admin
+              .from("forwarders")
+              .update({ status: "shipped_china", admin_id_update: adminId })
+              .eq("id", forwarder.id);
+          }
+          return { ok: true, data: { tx_id: raced.id, already_paid: true } };
+        }
+      }
+      return { ok: false, error: `wallet insert: ${txErr.message}` };
+    }
 
     // Status flip pending_payment → shipped_china (matches customer flow)
     const { error: fwdErr } = await admin

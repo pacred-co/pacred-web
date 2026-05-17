@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   yuanPaymentSchema,
   type YuanPaymentInput,
@@ -114,8 +115,18 @@ export async function createYuanPayment(
 
   // If wallet-paid, write a pending debit to the ledger. Status stays
   // pending; admin flips both rows to completed atomically in Phase G.
+  //
+  // P0-2: this MUST use the admin client. The RLS INSERT policy
+  // wallet_tx_insert_self_serve (migration 0007) only permits self-serve
+  // inserts with kind in ('deposit','withdraw') — a kind='yuan_payment'
+  // insert from the user-scoped client is silently rejected by RLS, so
+  // the customer's wallet would never be debited. The ownership check is
+  // satisfied above (profile_id = the authenticated user.id). We also
+  // CHECK the insert error now — a failed money insert must fail the
+  // whole action and roll back the orphan yuan_payments row.
   if (d.paid_via_wallet) {
-    await supabase.from("wallet_transactions").insert({
+    const admin = createAdminClient();
+    const { error: walletErr } = await admin.from("wallet_transactions").insert({
       profile_id:     user.id,
       bucket:         "main",
       amount:         -thb_amount,
@@ -124,6 +135,12 @@ export async function createYuanPayment(
       reference_type: "yuan_payment",
       reference_id:   created.id,
     });
+    if (walletErr) {
+      // Roll back the orphan yuan_payments row so the customer is not
+      // shown success for a transfer the wallet was never reserved for.
+      await admin.from("yuan_payments").delete().eq("id", created.id);
+      return { ok: false, error: `wallet_debit_failed: ${walletErr.message}` };
+    }
   }
 
   revalidatePath("/service-payment");

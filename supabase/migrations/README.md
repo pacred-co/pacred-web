@@ -66,6 +66,7 @@
 | 51 | [0051_freight_invoices.sql](0051_freight_invoices.sql) | freight_invoices + freight_invoice_lines + freight_invoice_seq (V-E1) | **V-E1 · I2** |
 | 52 | [0052_freight_invoice_payments.sql](0052_freight_invoice_payments.sql) | freight_invoice_payments ledger + freight_invoices.payment_status + freight-payment-slips bucket (V-E7) | **V-E7 · I2** |
 | 53 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
+| 54 | [0061_money_idempotency_guards.sql](0061_money_idempotency_guards.sql) | wallet_transactions kind+='cost_adjustment' + 3 partial-unique guards (forwarder pay · freight payment · tax invoice) — money audit P0-1/P1-2/P1-4 | **launch fix** |
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in

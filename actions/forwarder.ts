@@ -570,7 +570,23 @@ export async function payForwarderFromWallet(
     })
     .select("id")
     .single<{ id: string }>();
-  if (txErr) return { ok: false, error: `wallet insert: ${txErr.message}` };
+  if (txErr) {
+    // 23505 = the 0061 partial-unique guard (wallet_tx_import_payment_uniq)
+    // caught a concurrent double-debit. Re-SELECT the winning tx and return
+    // idempotently — mirrors the F-11 pattern in payServiceOrderFromWallet.
+    if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
+      const { data: raced } = await admin
+        .from("wallet_transactions")
+        .select("id")
+        .eq("reference_type", "forwarder")
+        .eq("reference_id", forwarder.f_no)
+        .eq("kind", "import_payment")
+        .eq("status", "completed")
+        .maybeSingle<{ id: string }>();
+      if (raced) return { ok: true, data: { tx_id: raced.id, already_paid: true } };
+    }
+    return { ok: false, error: `wallet insert: ${txErr.message}` };
+  }
 
   const { error: fwdErr } = await admin
     .from("forwarders")
