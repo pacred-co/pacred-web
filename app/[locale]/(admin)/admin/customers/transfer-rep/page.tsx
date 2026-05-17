@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { ArrowLeftRight, ChevronRight, Home, Users } from "lucide-react";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { TransferRepForm } from "./transfer-form";
 
 type FilterValue = string;     // uuid | "noSale" | "all"
@@ -40,6 +41,10 @@ export default async function TransferSalesRepPage({
 }: {
   searchParams: Promise<{ from?: string }>;
 }) {
+  // W-1 (gap-admin H-1/H-7): page-level role gate. Reassigns
+  // customers' sales rep + lists customer PII — ops + sales.
+  await requireAdmin(["ops", "sales_admin"]);
+
   const sp = await searchParams;
   const fromFilter: FilterValue = sp.from ?? "all";
 

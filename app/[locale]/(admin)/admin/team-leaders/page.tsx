@@ -1,9 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { AddTeamLeaderForm } from "./add-form";
 import { TeamLeaderRowActions } from "./row-actions";
 
 export default async function AdminTeamLeadersPage() {
+  // W-1 (gap-admin H-1): page-level role gate. Manages team leaders +
+  // commission % (sales-money config) via createAdminClient
+  // (RLS-bypass) — accounting + sales_admin (super implicit).
+  await requireAdmin(["accounting", "sales_admin"]);
+
   const admin = createAdminClient();
 
   const [{ data: leaders }, { data: groups }] = await Promise.all([

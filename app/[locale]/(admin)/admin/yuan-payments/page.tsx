@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { YuanPaymentActions } from "./actions-cell";
 import { YuanBulkApproveBar, YuanRowCheckbox } from "./bulk-approve-bar";
 import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
@@ -16,6 +17,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function AdminYuanPaymentsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  // W-1 (gap-admin H-1): page-level role gate. Exposes customer slip +
+  // ID-doc images + transfer recipients via createAdminClient
+  // (RLS-bypass) — accounting only (super implicit).
+  await requireAdmin(["accounting"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 

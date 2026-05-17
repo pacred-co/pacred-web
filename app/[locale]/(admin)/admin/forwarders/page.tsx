@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
@@ -33,6 +34,11 @@ type SearchParams = {
 };
 
 export default async function AdminForwardersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  // W-1 (gap-admin H-1): page-level role gate. Lists every customer's
+  // import orders + prices via createAdminClient (RLS-bypass) — ops
+  // (runs the orders) + accounting (bills them). super implicit.
+  await requireAdmin(["ops", "accounting"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 

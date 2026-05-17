@@ -7,7 +7,9 @@ import { Clock } from "lucide-react";
  *  Admin can approve (→ 'active') or open profile via the row actions.
  *  Counterpart to the all-customers list at /admin/customers. */
 export default async function AdminCustomersPendingPage() {
-  await requireAdmin();
+  // W-1 (gap-admin H-1/H-7): role-pin (was bare requireAdmin() — only
+  // proved "some admin"). Pending-customer queue lists customer PII.
+  await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const admin = createAdminClient();
   const { data: customers, count } = await admin

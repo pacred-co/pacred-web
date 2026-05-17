@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/validators/cart";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
@@ -563,9 +564,12 @@ export async function payServiceOrderFromWallet(
   // may miss a still-committing peer INSERT — the DB-level guard
   // raises 23505, we re-SELECT, and return as if we were the second
   // arrival in normal idempotent flow.
+  // W-1/S-2: assertOwnedProfileId makes the ownership check un-skippable
+  // — if a future edit sets profile_id from an untrusted input, this
+  // throws instead of writing a cross-customer wallet debit.
   const { data: insertedTx, error: txErr } = await admin
     .from("wallet_transactions")
-    .insert({
+    .insert(assertOwnedProfileId(user.id, {
       profile_id:     user.id,
       bucket:         "main",
       amount:         -totalThb,
@@ -575,7 +579,7 @@ export async function payServiceOrderFromWallet(
       reference_id:   order.h_no,
       admin_id:       null,
       note:           `ชำระค่าฝากสั่ง ${order.h_no} (ตัดจาก wallet โดยลูกค้า)`,
-    })
+    }))
     .select("id")
     .maybeSingle<{ id: string }>();
 
