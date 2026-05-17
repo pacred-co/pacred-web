@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/sms-balance-check",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/send-scheduled-broadcasts",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
