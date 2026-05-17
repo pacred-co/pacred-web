@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { Clock } from "lucide-react";
 import { HERO_IMGS, HERO_CONTENT_KEYS } from "@/lib/booking-data";
 import type { TabMode, SeaMode } from "@/types/booking";
 
@@ -56,7 +57,11 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
       <div className="relative z-10 max-w-[1000px] mx-auto text-center text-white">
         <h1 className="text-[24px] sm:text-[30px] md:text-[clamp(36px,4.5vw,60px)] font-black tracking-tight leading-[1.1] md:leading-[1.1] mb-1.5 md:mb-4 text-white [-webkit-text-stroke:1.5px_#7f1d1d] md:[-webkit-text-stroke:2.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)]">
           {t.rich(keys.titleKey, {
-            em: (chunks: ReactNode) => <em className="text-yellow-300 not-italic">{chunks}</em>,
+            em: (chunks: ReactNode) => (
+              <em className="text-yellow-300 not-italic text-[26px] sm:text-[33px] md:text-[clamp(40px,5vw,66px)]">
+                {chunks}
+              </em>
+            ),
             nowrap: (chunks: ReactNode) => <span className="whitespace-nowrap">{chunks}</span>,
             mbr: () => <br aria-hidden />,
           })}
@@ -72,6 +77,16 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
           })}
         </p>
       </div>
+
+      {/* Speed tag — anchored above the booking tabs (pb-[64px] mobile,
+          pb-[96px] desktop) so it doesn't fight the flex justify-center of
+          the H1/sub block. Customs-variant only. */}
+      {contentKey === "customs" && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[72px] md:bottom-[104px] z-20 inline-flex items-center gap-1.5 md:gap-2 rounded-full bg-yellow-300 text-[#7f1d1d] px-2.5 md:px-4 py-1 md:py-1.5 text-[11.5px] sm:text-[13px] md:text-[16px] font-black tracking-tight shadow-[0_6px_18px_rgba(0,0,0,0.35)] ring-2 ring-white/40 whitespace-nowrap">
+          <Clock className="w-3 h-3 md:w-4 md:h-4" strokeWidth={2.8} />
+          <span>{t("customsTag")}</span>
+        </div>
+      )}
     </div>
   );
 }
