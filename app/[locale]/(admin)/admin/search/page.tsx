@@ -210,7 +210,7 @@ export default async function AdminGlobalSearchPage({
       {willRun && (
         <p className="text-xs text-muted">
           พบ <span className="font-mono font-bold text-foreground">{totalHits}</span> รายการ
-          (จำกัด {PER_ENTITY_LIMIT}/หมวด — "ดูเพิ่ม" เพื่อดู list หมวดนั้น)
+          (จำกัด {PER_ENTITY_LIMIT}/หมวด — &quot;ดูเพิ่ม&quot; เพื่อดู list หมวดนั้น)
         </p>
       )}
 
