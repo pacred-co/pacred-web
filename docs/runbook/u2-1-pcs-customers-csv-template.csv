@@ -1,0 +1,4 @@
+legacy_user_id,user_tel,first_name,last_name,email,line_id,facebook_url,user_registered,user_sex,user_birthday,user_last_login,co_id,admin_id,sales_admin_id,user_recom,channel,company_customer,shop_user,user_note,user_active
+PCS00001,0812345678,สมชาย,ใจดี,somchai@example.com,,,2022-01-15 09:30:00,ชาย,1980-05-12,2026-04-20 10:00:00,PCS,,,,FB,2,0,VIP เก่า 5 ปี,1
+PCS00002,0823456789,วันดี,รักการเรียน,wandi@example.com,wandi_line,https://facebook.com/wandi,2023-03-10 14:00:00,หญิง,1990-08-22,2026-05-10 09:15:00,VIP,,,PCS00001,LINE,1,1,,1
+PCS10594,0987654321,เก่งกล้า,กล้าหาญ,kengkla@example.com,,,2026-03-18 22:15:00,ชาย,1995-12-01,,PCS,,,,WALK-IN,2,0,signup ล่าสุดก่อน cutover,1

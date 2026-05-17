@@ -95,6 +95,42 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
           </div>
         </div>
 
+        {/* gap-customer G-C5: forwarding instruction recap.
+            Shows during pre-arrival statuses — most LINE-chat-asked
+            question is "ส่งของไปไหน + เขียน mark อะไร". Surface the
+            answer right at the top of the order detail so customer
+            doesn't have to navigate to /service-import/warehouse-addresses. */}
+        {["pending_payment", "shipped_china", "in_transit"].includes(f.status) && (
+          <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5 space-y-3">
+            <div className="flex items-start justify-between flex-wrap gap-3">
+              <div>
+                <p className="text-xs font-semibold tracking-widest text-amber-900">📦 วิธีส่งของจากจีนมาที่โกดัง</p>
+                <h2 className="text-base font-bold text-amber-900 mt-0.5">ขั้นตอน + ที่อยู่</h2>
+              </div>
+              <Link href="/service-import/warehouse-addresses" className="text-xs rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-amber-900 hover:bg-amber-100">
+                ดูที่อยู่โกดังเต็ม →
+              </Link>
+            </div>
+
+            {/* Mark code — the one thing customer MUST write on every box */}
+            <div className="rounded-xl bg-white border border-amber-200 p-3 space-y-1">
+              <p className="text-[10px] uppercase font-semibold text-amber-700">เขียน mark นี้บนทุกกล่อง</p>
+              <p className="font-mono text-lg font-bold text-amber-950 select-all">{f.f_no}</p>
+              <p className="text-[11px] text-amber-800">
+                เขียนตัวใหญ่ ชัดเจน บนกล่องทุกใบ — โกดังใช้ mark นี้จับคู่กับ order ของคุณ. <span className="font-medium">ห้ามตกหล่น</span> ไม่งั้นโกดังจะส่งของให้ไม่ได้.
+              </p>
+            </div>
+
+            {/* Quick 4-step recap */}
+            <ol className="text-xs space-y-1.5 text-amber-900 list-decimal list-inside">
+              <li>นำสินค้าไปส่งที่โกดัง <span className="font-semibold">{f.source_warehouse === "yiwu" ? "อี้อู" : "กวางโจว"}</span> (ดูที่อยู่เต็มที่ปุ่มขวาบน)</li>
+              <li>แจ้งโกดัง: ส่งให้บริษัท Pacred · ใส่ mark <span className="font-mono font-bold">{f.f_no}</span> ทุกกล่อง</li>
+              <li>ถ่ายรูปใบรับของจากโกดัง ส่งเข้า LINE OA Pacred (ตัวช่วยติดตาม)</li>
+              <li>รอ Pacred update status ใน order นี้ — เห็นใน "ติดตาม" หน้านี้</li>
+            </ol>
+          </div>
+        )}
+
         {/* U4-3a: delivery acknowledgement — green confirm card when delivered + not yet acked */}
         {f.status === "delivered" && !f.acknowledged_at && f.f_no && (
           <DeliveryAckPanel kind="forwarder" refNo={f.f_no} />

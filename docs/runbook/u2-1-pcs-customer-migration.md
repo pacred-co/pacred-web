@@ -46,6 +46,11 @@ The dump file is a phpMyAdmin SQL export — Postgres can't import it
 directly. Convert the relevant `INSERT INTO tb_users` block to CSV
 (or any tabular format your SQL Editor accepts).
 
+📋 **CSV template + 3 sample rows:**
+[`u2-1-pcs-customers-csv-template.csv`](u2-1-pcs-customers-csv-template.csv)
+— column order matches the staging table 1:1. Use the header row as
+the contract; replace the 3 sample rows with the real `tb_users` dump.
+
 Easiest path: load the dump into a local MySQL/MariaDB, then export
 `tb_users` as CSV.
 
