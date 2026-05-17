@@ -204,7 +204,7 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 > (freight/commission stack). เดฟ's member_code migration was moved **out of that
 > block to `0060`** so ภูม can keep numbering freight migrations sequentially
 > without colliding with เดฟ. Migrations apply in **sorted version order**, so the
-> `0052`-`0059` gap is harmless — `0060` simply runs last. ภูม's next free = **`0052`**.
+> `0053`-`0059` gap is harmless — `0060` simply runs last. ภูม's next free = **`0053`**.
 
 | Number | Item | Owner | Status |
 |---|---|---|---|

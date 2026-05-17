@@ -13,14 +13,14 @@
 Latest batch on top of everything below:
 
 1. **🔢 member_code pattern `PR00001` → `PR001`** — per ลูกพี่. PR + **minimum 3 digits**, overflow-safe (`lpad(n,3,'0')` — never truncates → PR001 … PR999 → PR1000 → PR12345 with no cap, no error). Whole-system sweep: migration `0060_member_code_3digit.sql` (generator + backfill) · `supabase/schema.sql` · 3 validators (`detectIdentifier`, forwarder-driver Zod, HTML5 `pattern`) `^PR\d{5}$`→`^PR\d{3,}$` · 8 UI placeholders · 4 test files · all docs. Browser-verified login placeholder.
-2. **🔀 ภูม Phase-I2 autonomous batch merged** — ภูม shipped WHT (V-A6) · QA/QC inspection (V-E10) · org_contacts (V-G5) · TOS version mgmt (V-G4) · freight quotation V-E6 · V-G6 4 admin reports · F-11 wallet double-debit DB guard · **V-E1 freight shipments + commercial invoices** (`0050`/`0051`) — migrations `0044`-`0051` + validators + admin UI + 8000+ LOC. Merged into dave; migration-numbering reconciled (member_code moved out to `0060` so เดฟ never collides with ภูม's `0044`-`005x` freight block — see [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) map).
+2. **🔀 ภูม Phase-I2 autonomous batch merged** — ภูม shipped WHT (V-A6) · QA/QC inspection (V-E10) · org_contacts (V-G5) · TOS version mgmt (V-G4) · freight quotation V-E6 · V-G6 4 admin reports · F-11 wallet double-debit DB guard · **V-E1 freight shipments + commercial invoices** (`0050`/`0051`) · overnight C1-C4 (PDFs / WHT upload / TOS+contacts wiring) — plus **V-E7 freight receipt/payment** (`0052`, เดฟ via worktree agent) — migrations `0044`-`0052` + validators + admin UI + 10000+ LOC. Merged into dave; migration-numbering reconciled (member_code moved out to `0060` so เดฟ never collides with ภูม's `0044`-`005x` freight block — see [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md) map).
 3. **🐛 admin dashboard `is_active` bug fixed** — "ลูกค้าที่ใช้งานแล้ว" now keyed on real activity (`profiles.is_active`) not account-status. A fresh signup correctly shows "ยังไม่ได้ใช้งาน".
 4. **🔐 auth fixes** — OTP UI in-theme + explicit "ขอรหัส OTP" button · login Facebook/Google icons (shrink-0) · logo enlarged 76px · DBD lookup honest degradation.
 5. **OAuth login (Google/Facebook) → ก๊อต** — broken because `NEXT_PUBLIC_SITE_URL`=dead `v2.pacred.co` + Facebook app in Dev Mode. **ก๊อต takes the dashboard config 2026-05-18 morning** (Vercel env + Supabase URLs + FB/Google apps). Full steps → [`auth-launch-fixes-2026-05-17.md`](auth-launch-fixes-2026-05-17.md). Phone+OTP login unaffected.
 6. **🕐 Vercel cron audit** — found `/api/cron/sms-balance-check` had a route handler + auth guard but no `vercel.json` schedule (the OTP-credit-low alert would never fire). Wired as cron #6 (`0 23 * * *` = 06:00 ICT). 6 route handlers ↔ 6 schedules now match 1:1. Pacred is on Vercel Pro (100-cron ceiling) — fully within limit. [`vercel-cron-plan.md`](vercel-cron-plan.md).
 7. **🎨 ปอน landing batch merged** — customs-clearance landing refresh + `[port]` detail pages · `/line` redirect route + GTM tracking on every LINE CTA · ad-landing polish (20 components). **T-D1 production smoke gate re-run post-merge** → 🟢 35 routes (public + auth + admin + dynamic `[param]`), **zero 500s**.
 
-⚠️ **9 migrations `0044`-`0051` + `0060` are in git but NOT yet applied to Supabase** — เดฟ/agent reviewed all 9 SQL files 2026-05-17 (sound · idempotent · no bugs). **ภูม owns applying them to dev + prod** — apply straight from `supabase/migrations/` in ascending number order; steps + verify block in [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
+⚠️ **10 migrations `0044`-`0052` + `0060` are in git but NOT yet applied to Supabase** — เดฟ/agent reviewed all 10 SQL files 2026-05-17 (sound · idempotent · no bugs). **ภูม owns applying them to dev + prod** — apply straight from `supabase/migrations/` in ascending number order; steps + verify block in [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 
 ---
 
@@ -28,7 +28,7 @@ Latest batch on top of everything below:
 
 **Status:** 🟢 GO
 
-All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. ภูม Phase-I2 batch (WHT/QA/org-contacts/TOS/freight-quotes/reports + F-11 wallet guard + V-E1 freight shipments/invoices) already shipped. Remaining = 2 partner calls (ลูกพี่) + ก๊อต OAuth dashboard config + ภูม applies migrations `0044`-`0051` + `0060`. Nothing blocks soft-launch 10am Mon → public-launch 2pm Mon path (phone+OTP is the primary auth flow + works).
+All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items done. ภูม Phase-I2 batch (WHT/QA/org-contacts/TOS/freight-quotes/reports + F-11 wallet guard + V-E1 freight shipments/invoices + overnight C1-C4) + เดฟ V-E7 receipt/payment — already shipped. Remaining = 2 partner calls (ลูกพี่) + ก๊อต OAuth dashboard config + ภูม applies migrations `0044`-`0052` + `0060`. Nothing blocks soft-launch 10am Mon → public-launch 2pm Mon path (phone+OTP is the primary auth flow + works).
 
 50+ commits since previous main checkpoint (`d9bc2c2`, Sat night). Merged: dave + Poom (night-6 V-G7 audits + Phase-I2 batch) + podeng (mobile UX polish). Build green. md links resolve. lint 0 problems · tsc 0 errors.
 
@@ -194,7 +194,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 - Brief: [`briefs/got.md`](../briefs/got.md) · Cheat-sheet: [`briefs/got-cheatsheet-2026-05-17.md`](../briefs/got-cheatsheet-2026-05-17.md)
 
 ### เดฟ (Project Lead / Integrator)
-- ✅ 2026-05-17: member_code `PR001` sweep · merged ภูม Phase-I2 (`0044`-`0051`) + ปอน landing batch · Vercel cron audit (cron #6 wired) · T-D1 smoke gate post-merge (0 × 500) · reviewed all 9 migration SQL files (sound)
+- ✅ 2026-05-17: member_code `PR001` sweep · merged ภูม Phase-I2 (`0044`-`0051`) + ปอน landing batch · Vercel cron audit (cron #6 wired) · T-D1 smoke gate post-merge (0 × 500) · **shipped V-E7 freight receipt/payment via autonomous worktree agent (`0052`)** · reviewed all 10 migration SQL files (sound)
 - ⏳ DV-3 ThaiBulkSMS signup + flip `OTP_BYPASS=false` (Mon ~6am) → re-run T-D1 on the post-DV-3 deploy
 - ⏳ MOMO-1 post-call parse + กรอก [`integrations/momo-jmf.md`](../integrations/momo-jmf.md) + ping ภูม
 - ⏳ Keep integrating ภูม/ปอน autonomous pushes into `dave`; monitor Sentry + customer surfaces 48h post-launch
@@ -202,9 +202,10 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 - Brief: [`briefs/dave.md`](../briefs/dave.md)
 
 ### ภูม (Backend / Customer Portal / Admin / Cargo Port)
-- 🔴 **FIRST next session — apply migrations `0044`-`0051` + `0060` to Supabase dev + prod.** ภูม owns this (no zip hand-off — apply straight from `supabase/migrations/` in ascending number order). `0049` wallet guard before public launch 2pm. Steps + verify block → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
-- ✅ Phase-I2 shipped autonomously 2026-05-17: V-A6 WHT (`0044`) · V-E10 QA (`0045`) · V-G5 org_contacts (`0046`) · V-G4 TOS (`0047`) · V-E6 quotation (`0048`) · V-G6 4 reports · F-11 wallet guard (`0049`) · V-E1 freight shipments+invoices (`0050`/`0051`)
-- 🚀 Next Phase-I2 (post-launch, keep autonomous): V-E7 freight receipt/payment (migration `0052`) → V-E3/E4 Form E + D/O → V-E8/H1/H2 commission (`0053`, interpreter role inline) → V-E9 closing (`0054`). Next free migration number = **`0052`**.
+- 🔴 **FIRST next session — apply migrations `0044`-`0052` + `0060` to Supabase dev + prod.** ภูม owns this (no zip hand-off — apply straight from `supabase/migrations/` in ascending number order). `0049` wallet guard before public launch 2pm. Steps + verify block → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
+- ✅ Phase-I2 shipped autonomously 2026-05-17: V-A6 WHT (`0044`) · V-E10 QA (`0045`) · V-G5 org_contacts (`0046`) · V-G4 TOS (`0047`) · V-E6 quotation (`0048`) · V-G6 4 reports · F-11 wallet guard (`0049`) · V-E1 freight shipments+invoices (`0050`/`0051`) · overnight C1-C4 (V-E1.1 PDFs · V-A6.1 customer WHT upload · V-G4.1 TOS gate · V-G5.1 helper)
+- ✅ **V-E7 freight receipt/payment (`0052`) — shipped by เดฟ** (autonomous worktree agent, merged into dave). Phase-I2 = 5/8.
+- 🚀 Next Phase-I2 (post-launch, keep autonomous): V-E3/E4 Form E + D/O → V-E8/H1/H2 commission (`0053`, interpreter role inline) → V-E9 closing (`0054`). Next free migration number = **`0053`**.
 - T+30d: wire Xendit + K-Biz + K-Shop per updated D-7 §5.3 (~16-22h, 3 channels)
 - Brief: [`briefs/poom.md`](../briefs/poom.md) · Phase I2 prep: [`runbook/poom-phase-i2-prep.md`](poom-phase-i2-prep.md) · Migration map + apply runbook linked there
 

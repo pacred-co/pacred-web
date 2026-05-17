@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**9 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+**10 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -23,11 +23,12 @@ each file into the SQL Editor **in ascending number order**.
 | 0049 | `0049_wallet_order_payment_unique.sql` | `wallet_tx_order_payment_uniq` partial-unique index | F-11/G9 wallet guard | ✅ |
 | 0050 | `0050_freight_shipments.sql` | `freight_shipments` + `freight_parties` + `freight_job_seq` + QA FK backfill | V-E1 spine | ✅ |
 | 0051 | `0051_freight_invoices.sql` | `freight_invoices` + `freight_invoice_lines` + `freight_invoice_seq` | V-E1 CI | ✅ |
+| 0052 | `0052_freight_invoice_payments.sql` | `freight_invoice_payments` ledger + `freight_invoices.payment_status` + `freight-payment-slips` bucket | V-E7 receipt/payment | ✅ |
 | 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
 
 ---
 
-## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 9 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 10 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
   replace` / `create [unique] index if not exists` / `drop+recreate`
@@ -35,8 +36,10 @@ each file into the SQL Editor **in ascending number order**.
   Re-running is safe — never destroys data.
 - **Dependencies** — `0044`-`0049` only need the `0002`-`0043` base.
   **`0050` depends on `0045` + `0048`** (it FK-links `freight_quotes` and adds
-  the reserved FK onto `freight_qa_inspections`); **`0051` depends on `0050`**.
-  → **Apply in ascending number order** and every dependency is satisfied.
+  the reserved FK onto `freight_qa_inspections`); **`0051` depends on `0050`**;
+  **`0052` depends on `0051`** (FK → `freight_invoices` + adds the
+  `payment_status` column). → **Apply in ascending number order** and every
+  dependency is satisfied.
 - Verified present: `set_updated_at()` (schema.sql) · `is_admin(text[])` (0015)
   · `warehouse` role (0033) · `hs_codes.code` PK · `service_orders.h_no` +
   `forwarders.f_no` unique · `wallet_transactions` columns + CHECK values.
@@ -53,8 +56,8 @@ each file into the SQL Editor **in ascending number order**.
 
 ### 1. dev Supabase
 1. **`supabase db push`** against the dev project — OR — Supabase Dashboard →
-   dev → **SQL Editor**, open each file `0044` → `0045` → … → `0051` → `0060`
-   **in order**, paste + **Run** one at a time.
+   dev → **SQL Editor**, open each file `0044` → `0045` → … → `0051` → `0052` →
+   `0060` **in order**, paste + **Run** one at a time.
 2. `"already exists"` / `"duplicate"` notices = **safe** (idempotent). A red
    error that aborts a file = NOT safe — stop, fix or ping เดฟ with the message.
 3. Run the **verify block** below — eyeball each result set.
@@ -66,7 +69,7 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0051 + 0060 applied to dev + prod ✅". เดฟ flips the
+Post: "migrations 0044-0052 + 0060 applied to dev + prod ✅". เดฟ flips the
 status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
@@ -74,7 +77,7 @@ status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 ## 🔎 Verify block — run after applying
 
 ```sql
--- (1) Expected: 15 rows — the new tables.
+-- (1) Expected: 16 rows — the new tables.
 select table_name from information_schema.tables
  where table_schema = 'public' and table_name in (
    'withholding_tax_entries',
@@ -83,12 +86,13 @@ select table_name from information_schema.tables
    'tos_versions','tos_acceptances',
    'freight_quotes','freight_quote_items','freight_quote_seq',
    'freight_shipments','freight_parties','freight_job_seq',
-   'freight_invoices','freight_invoice_lines','freight_invoice_seq'
+   'freight_invoices','freight_invoice_lines','freight_invoice_seq',
+   'freight_invoice_payments'
  ) order by table_name;
 
--- (2) Expected: 2 rows — new Storage buckets.
+-- (2) Expected: 3 rows — new Storage buckets.
 select id from storage.buckets
- where id in ('wht-certs','qa-inspection-photos') order by id;
+ where id in ('wht-certs','qa-inspection-photos','freight-payment-slips') order by id;
 
 -- (3) Expected: 1 row — F-11 double-debit guard index.
 select indexname from pg_indexes
@@ -97,6 +101,11 @@ select indexname from pg_indexes
 -- (4) Expected: 1 row, pads_to_3 = true — member_code generator min-3-digit.
 select proname, pg_get_functiondef(oid) like '%lpad%3%' as pads_to_3
   from pg_proc where proname='generate_member_code';
+
+-- (5) Expected: 1 row — V-E7 added the payment_status axis to freight_invoices.
+select column_name from information_schema.columns
+ where table_schema='public' and table_name='freight_invoices'
+   and column_name='payment_status';
 ```
 
 ---
@@ -118,7 +127,7 @@ select proname, pg_get_functiondef(oid) like '%lpad%3%' as pads_to_3
 
 ## 🔓 Next
 
-ภูม's next freight migration = **`0052`** (`freight_invoice_payments`, V-E7).
+ภูม's next freight migration = **`0053`** (`commissions`, V-E8/H1/H2).
 Full numbering map → [`poom-phase-i2-prep.md`](poom-phase-i2-prep.md)
 §"Migration numbering map".
 

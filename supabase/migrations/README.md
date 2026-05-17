@@ -64,14 +64,15 @@
 | 49 | [0049_wallet_order_payment_unique.sql](0049_wallet_order_payment_unique.sql) | partial-unique guard — double-debit fix on pay-from-wallet (F-11/G9) | **F-11 · I2** |
 | 50 | [0050_freight_shipments.sql](0050_freight_shipments.sql) | freight_shipments + freight_parties + freight_job_seq + V-E10 QA FK backfill (V-E1) | **V-E1 · I2** |
 | 51 | [0051_freight_invoices.sql](0051_freight_invoices.sql) | freight_invoices + freight_invoice_lines + freight_invoice_seq (V-E1) | **V-E1 · I2** |
-| 52 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
+| 52 | [0052_freight_invoice_payments.sql](0052_freight_invoice_payments.sql) | freight_invoice_payments ledger + freight_invoices.payment_status + freight-payment-slips bucket (V-E7) | **V-E7 · I2** |
+| 53 | [0060_member_code_3digit.sql](0060_member_code_3digit.sql) | generate_member_code() PR00001→PR001 (min-3-digit) + profiles backfill | **launch fix** |
 
-> 📋 **Phase-I2 batch (`0044`-`0051` + `0060`) — ภูม applies.** ภูม owns running
+> 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in
 > ascending number order, or `supabase db push`. Apply in number order:
-> `0050`/`0051` reference `0045`/`0048`, so ascending order satisfies every
-> dependency. เดฟ/agent reviews the SQL; ภูม applies — no zip hand-off. Status +
-> per-file detail → [`../../docs/runbook/poom-apply-migrations-2026-05-17.md`](../../docs/runbook/poom-apply-migrations-2026-05-17.md).
+> `0050`/`0051` reference `0045`/`0048` and `0052` references `0051`, so ascending
+> order satisfies every dependency. เดฟ/agent reviews the SQL; ภูม applies — no zip
+> hand-off. Status + per-file detail → [`../../docs/runbook/poom-apply-migrations-2026-05-17.md`](../../docs/runbook/poom-apply-migrations-2026-05-17.md).
 
 > ⚡ **Shortcut for 0023–0038:** instead of pasting 16 files one by one,
 > open [`../../docs/setup/migrations-0023-0038.sql`](../../docs/setup/migrations-0023-0038.sql)
