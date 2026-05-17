@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AssignRepForm } from "./assign-rep";
 import { CustomerActions } from "./customer-actions";
+import { CreditLineForm } from "./credit-line-form";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
@@ -12,7 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Customer detail =
   // full PII (corporate, addresses, wallet). ops + sales + accounting.
-  await requireAdmin(["ops", "sales_admin", "accounting"]);
+  const { roles } = await requireAdmin(["ops", "sales_admin", "accounting"]);
+  // U4-2 — credit-line edits are super + accounting only. Other roles
+  // see the read-only summary; the form hides the buttons + the
+  // server action would refuse anyway via withAdmin role pin.
+  const canEditCredit = roles.includes("super") || roles.includes("accounting");
 
   const { id } = await params;
   const admin = createAdminClient();
@@ -20,6 +25,7 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   const [
     { data: profile }, { data: corporate }, { data: addresses }, { data: wallet }, { data: repProfiles },
     { data: customRatesUser }, { data: customRatesHs },
+    { data: creditState }, { data: recentCreditTx },
   ] = await Promise.all([
     admin.from("profiles").select("*").eq("id", id).maybeSingle(),
     admin.from("corporate").select("*").eq("profile_id", id).maybeSingle(),
@@ -41,6 +47,20 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
       .eq("profile_id", id)
       .order("updated_at", { ascending: false })
       .limit(10),
+    // U4-2: credit-line state (view filters: profile must have
+    // credit_limit > 0 OR existing credit txns; maybeSingle handles
+    // the "no credit yet" case)
+    admin.from("v_customer_credit_outstanding")
+      .select("credit_limit_thb, credit_terms_days, outstanding_thb, available_credit_thb")
+      .eq("profile_id", id)
+      .maybeSingle(),
+    // U4-2: recent credit-line ledger activity (charges + payments)
+    admin.from("wallet_transactions")
+      .select("id, kind, amount, status, reference_type, reference_id, note, admin_id, created_at")
+      .eq("profile_id", id)
+      .eq("bucket", "credit")
+      .order("created_at", { ascending: false })
+      .limit(15),
   ]);
 
   if (!profile) notFound();
@@ -88,12 +108,38 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   type CustomUserRate = { id: string; source_warehouse: string; transport_type: string; product_type: string; basis: string; rate: number; updated_at: string };
   type CustomHsRate   = { id: string; hs_code: string; source_warehouse: string; transport_type: string; product_type: string; basis: string; rate: number; rate_before: number | null; updated_at: string };
 
+  // U4-2 — credit-line view + recent credit ledger
+  type CreditState = {
+    credit_limit_thb: number;
+    credit_terms_days: number;
+    outstanding_thb: number;
+    available_credit_thb: number;
+  };
+  type CreditTx = {
+    id: string;
+    kind: string;
+    amount: number;
+    status: string;
+    reference_type: string | null;
+    reference_id: string | null;
+    note: string | null;
+    admin_id: string | null;
+    created_at: string;
+  };
+
   const p   = profile as Profile;
   const c   = (corporate as Corporate | null) ?? null;
   const a   = (addresses as Address[] | null) ?? [];
   const w   = (wallet as Wallet | null) ?? { balance: 0, cashback_balance: 0, credit_balance: 0 };
   const cu  = ((customRatesUser ?? []) as CustomUserRate[]);
   const ch  = ((customRatesHs   ?? []) as CustomHsRate[]);
+  const cs  = (creditState as CreditState | null) ?? {
+    credit_limit_thb: 0,
+    credit_terms_days: 0,
+    outstanding_thb: 0,
+    available_credit_thb: 0,
+  };
+  const ctx = (recentCreditTx as CreditTx[] | null) ?? [];
   const displayName = p.account_type === "juristic" && p.company_name
     ? p.company_name
     : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
@@ -115,8 +161,50 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
       <section className="grid sm:grid-cols-3 gap-3">
         <WalletCard label="กระเป๋า" value={w.balance} tone="primary" />
         <WalletCard label="Cashback" value={w.cashback_balance} tone="orange" />
-        <WalletCard label="เครดิต" value={w.credit_balance} tone="blue" />
+        <WalletCard label="เครดิต (สุทธิ)" value={w.credit_balance} tone="blue" />
       </section>
+
+      {/* U4-2 — credit-line section (always render — form shows
+          "open new credit" when limit is 0) */}
+      <CreditLineForm
+        profileId={p.id}
+        creditLimitThb={Number(cs.credit_limit_thb)}
+        creditTermsDays={Number(cs.credit_terms_days)}
+        outstandingThb={Number(cs.outstanding_thb)}
+        availableCreditThb={Number(cs.available_credit_thb)}
+        canEdit={canEditCredit}
+      />
+
+      {/* Recent credit-line ledger (charges + payments) — useful for
+          accounting reconciliation. Only render when there's activity. */}
+      {ctx.length > 0 && (
+        <Section title={`📒 บัญชีเครดิต (15 รายการล่าสุด)`}>
+          <ul className="divide-y divide-border text-xs">
+            {ctx.map((t) => {
+              const dt = new Date(t.created_at);
+              const isCharge = t.kind === "credit_charge";
+              return (
+                <li key={t.id} className="py-2 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {isCharge ? "ใช้เครดิต" : "ชำระเครดิต"}
+                      <span className="ml-2 text-[10px] text-muted font-mono">{t.kind}</span>
+                    </p>
+                    {t.note && <p className="text-muted line-clamp-2">{t.note}</p>}
+                    <p className="text-[10px] text-muted font-mono">
+                      {dt.toLocaleString("th-TH")}
+                      {t.reference_id ? ` · ref: ${t.reference_id}` : ""}
+                    </p>
+                  </div>
+                  <span className={`font-mono font-bold ${isCharge ? "text-red-600" : "text-emerald-600"}`}>
+                    {t.amount >= 0 ? "+" : ""}{Number(t.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
+      )}
 
       {/* Approve / Suspend / Edit */}
       <CustomerActions

@@ -1,8 +1,10 @@
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getWallet, listWalletTransactions, type WalletTransaction } from "@/actions/wallet";
+import { getMyCredit } from "@/actions/credit";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Wallet as WalletIcon, Plus, History, Banknote, CreditCard, ArrowDownToLine, ChevronRight, Home } from "lucide-react";
+import { CreditLinePanel } from "../credit-panel";
 
 const BUCKET_LABEL: Record<WalletTransaction["bucket"], string> = {
   main:     "เงินสด",
@@ -42,6 +44,11 @@ const KIND_LABEL: Record<string, string> = {
   yuan_payment:    "ฝากโอนหยวน",
   cashback_earn:   "ได้ Cashback",
   cashback_redeem: "แลก Cashback",
+  // U4-2 credit-line ledger labels
+  credit_charge:              "ใช้วงเงินเครดิต",
+  credit_payment:             "ชำระยอดค้างเครดิต",
+  wallet_to_credit_transfer:  "โอนกระเป๋า → ชำระเครดิต",
+  cost_adjustment:            "ค่าปรับ/ส่วนต่างต้นทุน",
 };
 
 type TabKey = "all" | "deposit" | "payment" | "withdraw";
@@ -54,14 +61,18 @@ const TAB_DEFS: { key: TabKey; label: string; icon: React.ReactNode; kinds: stri
 
 export default async function WalletHistoryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const sp = await searchParams;
-  const [walletRes, txRes, userData] = await Promise.all([
+  const [walletRes, txRes, userData, creditRes] = await Promise.all([
     getWallet(),
     listWalletTransactions(200),
     getCurrentUserWithProfile(),
+    getMyCredit(),
   ]);
   const balance = walletRes.ok ? walletRes.data : { balance: 0, cashback_balance: 0, credit_balance: 0 };
   const allTx = (txRes.ok ? txRes.data : []) as WalletTransaction[];
   const profile = userData?.profile;
+  // U4-2 — light up the credit panel only when the customer is enrolled.
+  const credit = creditRes.ok ? creditRes.data : null;
+  const creditEnrolled = !!credit && Number(credit.credit_limit_thb) > 0;
   const fullName = profile
     ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() || profile.company_name || "ลูกค้า Pacred"
     : "ลูกค้า Pacred";
@@ -120,8 +131,8 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
           </div>
         </div>
 
-        {/* Side buckets (cashback + credit) — smaller, on the side */}
-        <div className="grid sm:grid-cols-2 gap-3">
+        {/* Cashback side card (credit moved below to the live panel) */}
+        <div className={`grid ${creditEnrolled ? "sm:grid-cols-1" : "sm:grid-cols-2"} gap-3`}>
           <div className="rounded-2xl border border-orange-200 bg-gradient-to-br from-orange-50 to-orange-50/30 p-4">
             <p className="text-xs font-semibold text-orange-700">Cashback</p>
             <p className="mt-1 text-xl font-bold font-mono text-orange-700">
@@ -129,14 +140,23 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
             </p>
             <p className="text-[10px] text-muted mt-1">ใช้ลดยอดออเดอร์ฝากสั่ง / นำเข้า</p>
           </div>
-          <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50/30 p-4">
-            <p className="text-xs font-semibold text-blue-700">เครดิต</p>
-            <p className="mt-1 text-xl font-bold font-mono text-blue-700">
-              ฿{Number(balance?.credit_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-muted mt-1">วงเงินเครดิตจาก Pacred</p>
-          </div>
+          {!creditEnrolled && (
+            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-50/30 p-4">
+              <p className="text-xs font-semibold text-blue-700">เครดิต</p>
+              <p className="mt-1 text-xl font-bold font-mono text-blue-700">
+                ฿{Number(balance?.credit_balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] text-muted mt-1">
+                ยังไม่มีวงเงินเครดิต — สอบถามทีม Pacred เพื่อขอเปิดใช้
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* U4-2 — live credit-line panel (limit / outstanding / pay) */}
+        {creditEnrolled && credit && (
+          <CreditLinePanel credit={credit} walletBalance={Number(balance?.balance ?? 0)} />
+        )}
 
         {/* Transaction tabs */}
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
