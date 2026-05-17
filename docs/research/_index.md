@@ -53,6 +53,7 @@
 | [`legacy-chat-dev-it-momo.md`](legacy-chat-dev-it-momo.md) | Dev/IT chat decode — single-dev bottleneck, web outages, MOMO read-only API, HS/VAT desk, leak holes DI-1..DI-16 | 2026-05-17 |
 | [`legacy-chat-ops-transport.md`](legacy-chat-ops-transport.md) | Ops/transport chat decode — China→Mukdahan truck + sea route, "ของอยู่ไหน" status-relay failure, leak holes OT-1..OT-14 | 2026-05-17 |
 | [`legacy-chat-sale-pricing-people.md`](legacy-chat-sale-pricing-people.md) | Sales/pricing/HR chat decode — 3-human quote relay, lead ownership, commission disputes, leak holes SP-1..SP-8 | 2026-05-17 |
+| [`legacy-chat-datanew-2026-05-17.md`](legacy-chat-datanew-2026-05-17.md) | `datanew` drop decode (launch-eve) — **corrects the MOMO API host/format** (`api.momocargo.com:8080` REST, not `alilogisticshub.com/?api=`), day-1 billing acceptance script, billing-reconciliation gap proven by screenshots, new items DN-1..DN-5 | 2026-05-17 |
 | [`momo-jmf-api-decoded.md`](momo-jmf-api-decoded.md) | MOMO partner API decode — `?api=` endpoints, 9-status enum, wallet/credit Pay-Later pivot (2026-05-15), 6 known data bugs | 2026-05-17 |
 | [`ttp-cargothai-decoded.md`](ttp-cargothai-decoded.md) | TTP + CargoThai decode — carrier partners (not APIs), the `booking.php` 8-tab quote-calculator formulas (exact) | 2026-05-17 |
 | [`legacy-accounting-billing-workflow.md`](legacy-accounting-billing-workflow.md) | AXELRA/NNB accounting decode — AR/AP dual ledger, เบิกเงิน + กองกลาง float, PEAK/NetBay stubs, 10 money-handling risks | 2026-05-17 |
