@@ -12,6 +12,11 @@ import { buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
+import {
+  getAvailableBalance,
+  hasSufficientAvailable,
+  type LedgerRow,
+} from "@/lib/wallet/ledger";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -167,16 +172,39 @@ export async function createWithdraw(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // Front-end shows the live balance, but check again here to give a
-  // useful error if the user submitted a stale form.
+  // W-3 / H-1 — check against the AVAILABLE balance, not the raw
+  // `wallet.balance`. `wallet.balance` (trigger wallet_recompute_balance,
+  // 0007) counts only status='completed' rows, so a still-pending withdraw
+  // / wallet-paid yuan transfer does NOT reduce it. Without this, a
+  // customer stacks N pending debits each individually ≤ balance → an
+  // admin approves them all → the wallet goes negative. We subtract the
+  // sum of pending debits (see lib/wallet/ledger.ts) so the Nth request
+  // is rejected the moment cumulative pending debits would overdraw.
   const { data: w } = await supabase
     .from("wallet")
     .select("balance")
     .eq("profile_id", user.id)
     .maybeSingle<{ balance: number }>();
-
-  if (!w || Number(w.balance) < d.amount) {
+  if (!w) {
     return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ" };
+  }
+
+  const { data: pendingRows } = await supabase
+    .from("wallet_transactions")
+    .select("amount, status")
+    .eq("profile_id", user.id)
+    .eq("bucket", "main")
+    .eq("status", "pending");
+
+  const available = getAvailableBalance(
+    Number(w.balance),
+    (pendingRows ?? []) as LedgerRow[],
+  );
+  if (!hasSufficientAvailable(available, d.amount)) {
+    return {
+      ok: false,
+      error: `ยอดเงินที่ถอนได้ไม่พอ — ใช้ได้ ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (หักรายการที่รออนุมัติแล้ว) ต้อง ฿${d.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+    };
   }
 
   // Negative amount because withdraw is a debit

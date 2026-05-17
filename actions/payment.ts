@@ -8,6 +8,11 @@ import {
   type YuanPaymentInput,
 } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
+import {
+  getAvailableBalance,
+  hasSufficientAvailable,
+  type LedgerRow,
+} from "@/lib/wallet/ledger";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -82,13 +87,38 @@ export async function createYuanPayment(
 
   // If paying via wallet, verify balance
   if (d.paid_via_wallet) {
+    // W-3 / H-1 — check the AVAILABLE balance (completed balance minus the
+    // sum of pending debits), not the raw `wallet.balance`. The yuan debit
+    // below is inserted as status='pending', and `wallet.balance` (trigger
+    // wallet_recompute_balance, 0007) counts only completed rows — so
+    // stacked pending yuan transfers / withdraws would each pass a raw
+    // check and an admin approving them all drives the wallet negative.
+    // Subtracting pending debits (lib/wallet/ledger.ts) closes that.
     const { data: w } = await supabase
       .from("wallet")
       .select("balance")
       .eq("profile_id", user.id)
       .maybeSingle<{ balance: number }>();
-    if (!w || Number(w.balance) < thb_amount) {
+    if (!w) {
       return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ" };
+    }
+
+    const { data: pendingRows } = await supabase
+      .from("wallet_transactions")
+      .select("amount, status")
+      .eq("profile_id", user.id)
+      .eq("bucket", "main")
+      .eq("status", "pending");
+
+    const available = getAvailableBalance(
+      Number(w.balance),
+      (pendingRows ?? []) as LedgerRow[],
+    );
+    if (!hasSufficientAvailable(available, thb_amount)) {
+      return {
+        ok: false,
+        error: `ยอดเงินในกระเป๋าไม่พอ — ใช้ได้ ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (หักรายการที่รออนุมัติแล้ว) ต้อง ฿${thb_amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+      };
     }
   } else if (!d.slip_url) {
     return { ok: false, error: "กรุณาแนบสลิปโอนเงิน" };
