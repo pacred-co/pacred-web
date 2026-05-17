@@ -90,7 +90,7 @@ The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080`
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
 
 **Living docs (เดฟ updates):**
-- 🚀 [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — **the post-launch roadmap** (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). This is the current execution doc — start here for "what's next".
+- 🚀 [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — **THE canonical forward roadmap** — the single post-launch phase/stage plan. This is the current execution doc — start here for "what's next".
 - 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — sprint history + cargo/gap-hunt backlogs (Parts O–W; Part V = cargo-forensics, Part W = gap-hunt; ~1825 lines — watch the 2000-line cap)
 - 📚 [`docs/sprints/archive-a-to-n.md`](docs/sprints/archive-a-to-n.md) — historic survey (Parts A–N — moved out to keep PORT_PLAN under 2000-line agent ceiling)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
