@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**11 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+**13 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -26,10 +26,12 @@ each file into the SQL Editor **in ascending number order**.
 | 0052 | `0052_freight_invoice_payments.sql` | `freight_invoice_payments` ledger + `freight_invoices.payment_status` + `freight-payment-slips` bucket | V-E7 receipt/payment | ✅ |
 | 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
 | 0061 | `0061_money_idempotency_guards.sql` | `cost_adjustment` kind + 3 partial-unique guards (forwarder main-payment · freight payment · tax invoice) | money P0-1/P1-2/P1-4 fix | ✅ |
+| 0062 | `0062_rls_role_pin_money_pii.sql` | role-pins ~24 `*_admin_all` RLS policies to explicit role arrays + `audit_wallet_transaction()` trigger | W-1 S-1 security keystone | ✅ |
+| 0063 | `0063_wallet_freight_invoice_reference.sql` | `wallet_transactions.reference_type` += `freight_invoice` + `wallet_tx_freight_payment_uniq` index | W-3 G-3 freight wallet-pay | ✅ |
 
 ---
 
-## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 10 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 13 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
   replace` / `create [unique] index if not exists` / `drop+recreate`
@@ -70,8 +72,8 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0052 + 0060 + 0061 applied to dev + prod ✅". เดฟ flips the
-status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
+Post: "migrations 0044-0052 + 0060 + 0061 + 0062 + 0063 applied to dev + prod ✅".
+เดฟ flips the status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
 
@@ -107,6 +109,21 @@ select proname, pg_get_functiondef(oid) like '%lpad%3%' as pads_to_3
 select column_name from information_schema.columns
  where table_schema='public' and table_name='freight_invoices'
    and column_name='payment_status';
+
+-- (6) Expected: 1 row — W-1/0062 DB-level money-mutation audit trigger.
+select tgname from pg_trigger
+ where tgname = 'wallet_tx_audit_trigger' and not tgisinternal;
+
+-- (7) Expected: 1 row — W-1/0062 role-pinned the wallet write policy.
+--     `qual` must now name the role array, not bare is_admin().
+select policyname from pg_policies
+ where schemaname='public' and tablename='wallet'
+   and policyname='wallet_admin_all' and qual like '%super%';
+
+-- (8) Expected: 1 row — W-3/0063 reference_type CHECK accepts freight_invoice.
+select conname from pg_constraint
+ where conname='wallet_transactions_reference_type_check'
+   and pg_get_constraintdef(oid) like '%freight_invoice%';
 ```
 
 ---
