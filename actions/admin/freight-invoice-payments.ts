@@ -595,10 +595,22 @@ export type FreightReceiptGate =
 /**
  * Returns whether the freight receipt download is blocked.
  *
- * V1: always { blocked:false } — freight↔WHT linkage does not exist.
- * The /api/freight-receipt/[id] route calls this so that when V-A6.1
- * adds freight_invoice_id to withholding_tax_entries, only THIS function
- * needs the join + cert_status check.
+ * U2-3 wire-up (per [docs/UPGRADE_PLAN.md] §2 U2-3):
+ * Migration 0053 added `freight_invoice_id` to `withholding_tax_entries`
+ * + the 3-way XOR constraint. This function now queries that link — if
+ * a freight WHT row exists with cert_status='pending', the receipt is
+ * blocked until the 50-ทวิ certificate is uploaded. Mirrors the legacy
+ * order/forwarder WHT gate from V-A6.
+ *
+ * Returns { blocked:false } when:
+ *   - freightInvoiceId is empty/invalid (defensive — never throw)
+ *   - no WHT entry exists for this invoice (customer is not juristic,
+ *     no withholding applies)
+ *   - the WHT entry has a non-pending cert_status (received / waived /
+ *     anything-else terminal)
+ *
+ * Returns { blocked:true, reason:'wht_cert_pending' } when:
+ *   - a WHT row exists with cert_status='pending'
  */
 export async function getFreightReceiptGate(
   freightInvoiceId: string,
@@ -607,12 +619,26 @@ export async function getFreightReceiptGate(
   if (!freightInvoiceId || typeof freightInvoiceId !== "string") {
     return { blocked: false };
   }
-  // V-A6.1 hook: when withholding_tax_entries gains a freight_invoice_id
-  // column, query it here and return
-  //   { blocked: true, reason: "wht_cert_pending" }
-  // while cert_status === 'pending'. Until then there is no freight WHT
-  // row to find → allow.
-  return { blocked: false };
+
+  const admin = createAdminClient();
+  // Multiple WHT rows per freight invoice are unusual but possible
+  // (e.g. partial-deduction re-issue). Block if ANY pending exists —
+  // safer to block one too-many than to leak a receipt with cert holes.
+  const { data, error } = await admin
+    .from("withholding_tax_entries")
+    .select("cert_status")
+    .eq("freight_invoice_id", freightInvoiceId)
+    .eq("cert_status", "pending")
+    .limit(1)
+    .maybeSingle<{ cert_status: string }>();
+
+  // On read error, fail OPEN (let through) — the receipt page itself
+  // does the auth check; a transient DB blip should not lock customers
+  // out of their own receipt. The 50-ทวิ paper trail is separate.
+  if (error) return { blocked: false };
+  if (!data)  return { blocked: false };
+
+  return { blocked: true, reason: "wht_cert_pending" };
 }
 
 // ────────────────────────────────────────────────────────────
