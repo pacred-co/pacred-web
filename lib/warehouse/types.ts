@@ -99,6 +99,31 @@ export type ContainerInsert = Pick<
 };
 
 // ────────────────────────────────────────────────────────────
+// Sacks — consolidation bag inside a container (U2-5)
+// ────────────────────────────────────────────────────────────
+
+export type SackSource = "momo" | "pacred" | "self";
+
+export type Sack = {
+  id:                 string;
+  /** CBX<YYMMDD>-EK<NN> — MOMO-issued or self-issued via next_sack_code(). */
+  code:               string;
+  cargo_container_id: string | null;
+  /** MOMO outside-of-bag weight; distinct from per-shipment inside weight. */
+  weight_kg:          number | null;
+  /** MOMO outside-of-bag CBM; used as billing-reconciliation reference (L-3 gap). */
+  cbm:                number | null;
+  origin:             string | null;
+  destination:        string | null;
+  source:             SackSource;
+  packed_at:          string | null;
+  arrived_at:         string | null;
+  note:               string | null;
+  created_at:         string;
+  updated_at:         string;
+};
+
+// ────────────────────────────────────────────────────────────
 // Shipments — one customer's portion of a container
 // ────────────────────────────────────────────────────────────
 
@@ -147,6 +172,9 @@ export type Shipment = {
   status:              ShipmentStatus;
   received_at_cn:      string | null;
   delivered_at_th:     string | null;
+  /** U2-5: optional sack this shipment is bundled inside the container.
+   *  NULL = directly in container without a sack (larger goods). */
+  cargo_sack_id?:      string | null;
   created_at:          string;
   updated_at:          string;
 };
