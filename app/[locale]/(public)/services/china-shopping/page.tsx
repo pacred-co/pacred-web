@@ -33,6 +33,7 @@ import { ContactSales } from "@/components/sections/contact-sales";
 import { PurchaseBanner } from "@/components/sections/purchase-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
 import { Footer } from "@/components/sections/footer";
+import { TrustStatsStrip } from "@/components/sections/trust-stats-strip";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
@@ -333,6 +334,8 @@ export default async function ChinaShoppingPage({
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
               บริการฝากสั่งของจีนแบบมืออาชีพ — ทีมล่ามจีนปิดดีลกับโรงงาน · ตรวจสินค้าก่อนส่ง · ฝากโอนหยวน · รวมส่งคุ้ม · ใบกำกับภาษีครบ — <span className="text-primary-600/80 font-bold">ค่าบริการฝากสั่งเริ่ม 3% · เริ่มจาก 0 ก็ทำได้</span>
             </h2>
+
+            <TrustStatsStrip className="mt-3 md:mt-4" />
 
             {/* LINE attention banner */}
             <TrackedExternalLink

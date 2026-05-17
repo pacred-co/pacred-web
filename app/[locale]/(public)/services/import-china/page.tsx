@@ -40,6 +40,7 @@ import { ContactSales } from "@/components/sections/contact-sales";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
 import { Footer } from "@/components/sections/footer";
+import { TrustStatsStrip } from "@/components/sections/trust-stats-strip";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
@@ -145,7 +146,7 @@ const MODES: Mode[] = [
       "ติดตามสถานะแบบ real-time",
     ],
     highlights: ["รถ/เรือ/แอร์", "ติดตามเรียลไทม์", "Form E"],
-    href: "/services/import-china-fcl",
+    href: "/booking",
     cta: "ปรึกษาฟรี",
   },
 ];
@@ -399,6 +400,8 @@ export default async function ImportChinaPage({
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
               บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย รถ/เรือ/แอร์ · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ — <span className="text-primary-600/80 font-bold">ราคาเริ่มต้น 40฿/kg · ทีมล่ามจีนปิดดีลในนามคุณ</span>
             </h2>
+
+            <TrustStatsStrip className="mt-3 md:mt-4" />
 
             {/* LINE attention banner — primary CTA above the fold */}
             <TrackedExternalLink
