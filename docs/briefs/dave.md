@@ -13,6 +13,7 @@ Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Aut
 3. **Integration cycle** — keep merging ภูม/ปอน pushes into `dave`, verify, distribute back (the `branch-integrate-loop` skill).
 4. **Re-run `qa-flow-simulator`** functional QA once ภูม posts the new dev Supabase ref (blocked until then).
 5. **Monitor** post-deploy — Sentry + `admin_audit_log` + Clarity for first-customer issues; CSP-1 nonce migration week 2 (≈ Mon 2026-06-01).
+6. **BUILD — the platform-observability system (เดฟ-lane).** Owner system 4 — design → [`research/platform-observability-system-2026-05-18.md`](../research/platform-observability-system-2026-05-18.md). Start with **IO-1 MVP**: auto-incident capture (a React error boundary + a Server-Action wrapper + a Sentry-webhook ingest route — *no submit button*) + `platform_incidents` with the user-visible status lifecycle + an `/admin/incidents` triage queue. Monitoring/measurable = เดฟ-lane; non-colliding with ภูม's Tier-3 work. Coordinate the migration number with ภูม at build time.
 
 ---
 

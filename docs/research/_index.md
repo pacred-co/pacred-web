@@ -77,13 +77,14 @@
 
 ### Owner-requested system designs (2026-05-18)
 
-> Three systems the owner (พี่ป๊อป) named after the capability synthesis — each now a full design doc. Tier 3 of the unified roadmap; sequenced after the Tier-2 work-board ships. See [`capability-tools-strategy-2026-05-18.md`](capability-tools-strategy-2026-05-18.md) §"Owner-requested systems".
+> Four systems the owner (พี่ป๊อป) named after the capability synthesis — each now a full design doc. Tier 3 of the unified roadmap; sequenced after the Tier-2 work-board ships. See [`capability-tools-strategy-2026-05-18.md`](capability-tools-strategy-2026-05-18.md) §"Owner-requested systems".
 
 | Doc | Topic | Date |
 |---|---|---|
 | [`internal-chat-system-2026-05-18.md`](internal-chat-system-2026-05-18.md) | **Internal org-chat — shipment/job-scoped work-comms** — a `work_item_messages` thread layer + `work_item_message_mentions` + a `waiting_for` block (`blocked_on_role` / `blocked_on_admin` / `waiting_reason`) on `work_items`; staff talk *on the job*, the job *shows why it is stuck* — the structural cure for "ของอยู่ไหน / รอใครเฟิม". MVP **IC-1** = migration `0081` + actions + `<WorkItemThread>` + board badges + inbox; rides on the shipped `0080` work-board | 2026-05-18 |
 | [`disbursement-system-2026-05-18.md`](disbursement-system-2026-05-18.md) | **Disbursement / payment system (เบิก-จ่าย)** — `disbursement_requests` + per-recipient `disbursement_lines` + `disbursement_allocations` + `disbursement_fund` (กองกลาง) + outbound `wht_certificates` (50-ทวิ, 1%/3%); flow `draft→pending_approval→approved→paid→reconciled`; claim modes เบิกขาด/เบิกเกิน/เบิกด่วน; money-OUT fail-closed safeguards copying `checkRefundCeiling` + the `0064` floor; migrations `0073`-`0075` | 2026-05-18 |
 | [`china-ops-container-closing-2026-05-18.md`](china-ops-container-closing-2026-05-18.md) | **China-ops / container-closing (ปิดตู้)** — a `cn_warehouse` role + `warehouses` table + `(cn)/cn/*` portal; the receive → measure → barcode → close-sack → close-container → hand-to-freight ceremony (MOMO / CargoThai pattern); migrations `0073+`; **volume-gated** — build once Pacred's cargo queue is large enough to consolidate its own containers | 2026-05-18 |
+| [`platform-observability-system-2026-05-18.md`](platform-observability-system-2026-05-18.md) | **Platform observability — รายงานสถานะ Platform** — the capture rails (Sentry/GA4/Clarity) are wired-but-off; the *system on top* is net-new. `platform_incidents` (auto-captured errors with a user-visible `open→acknowledged→in_progress→resolved` lifecycle — **no submit button**) + `platform_events` (unified cross-surface log) + audience-scoped KPI views (admin/dept/partner/customer/overseas) + a marketing funnel rollup + a status page. **CONNECT** the 3 free rails · **BUILD** everything that holds the data. Staged **IO-1** (MVP auto-incident triage) → IO-2 → IO-3 → IO-4. เดฟ-lane (monitoring/measurable) | 2026-05-18 |
 
 ## Cross-references
 

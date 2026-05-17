@@ -66,13 +66,16 @@ The tools analysis verdict: **"the tools we have aren't switched on, and the too
 
 ---
 
-## 🆕 Owner-requested systems (2026-05-18) — three more, designed
+## 🆕 Owner-requested systems (2026-05-18) — four more, designed
 
-After the synthesis, the owner (พี่ป๊อป) named three systems the analyses had under-weighted. Each is now a design doc:
+After the synthesis, the owner (พี่ป๊อป) named four systems the analyses had under-weighted. Each is now a design doc:
 
 1. **Internal org-chat — shipment/job-scoped work-comms** → [`internal-chat-system-2026-05-18.md`](internal-chat-system-2026-05-18.md). A `work_item_messages` thread layer + a `waiting_for` block (`blocked_on_role` / `blocked_on_admin` / `waiting_reason`) on `work_items` — staff talk *on the job*, the job *shows why it is stuck*. The structural cure for "ของอยู่ไหน / รอใครเฟิม". MVP **IC-1** rides on the shipped `0080` work-board.
 2. **Disbursement / payment system (เบิก-จ่าย)** → [`disbursement-system-2026-05-18.md`](disbursement-system-2026-05-18.md). Today Pacred has fragments (commission `0054` · container-disbursements `0069` · inbound-WHT `0044/0053`) — not a system. Design: `disbursement_requests` + per-recipient `disbursement_lines` + `disbursement_allocations` + `disbursement_fund` (กองกลาง) + outbound `wht_certificates` (50-ทวิ, 1%/3%); claim modes (เบิกขาด/เบิกเกิน/เบิกด่วน); money-OUT fail-closed safeguards copying `checkRefundCeiling` + the `0064` floor.
 3. **China-ops / container-closing (ปิดตู้)** → [`china-ops-container-closing-2026-05-18.md`](china-ops-container-closing-2026-05-18.md). The container *data* model is ~80% built; what is missing is the China *origin* — a `cn_warehouse` role + portal, the receive → measure → barcode → close-sack → **close-container** → hand-to-freight ceremony. Post-launch, **volume-gated** (only once Pacred's cargo queue is large enough to consolidate its own containers).
+4. **Platform observability — รายงานสถานะ Platform** → [`platform-observability-system-2026-05-18.md`](platform-observability-system-2026-05-18.md). The capture *rails* are wired but env-gated off (Sentry/GA4/Clarity); the *system on top* is net-new. Design: `platform_incidents` — auto-captured errors carrying an `open→acknowledged→in_progress→resolved` lifecycle the user **sees** (no submit button — the visible-status pattern borrowed from internal-chat) — + `platform_events` (unified cross-surface event log) + audience-scoped KPI views (admin/dept/partner/customer/overseas) + a find→convert→buy marketing rollup + a status page. **CONNECT** Sentry/GA4/Clarity (the free rails) · **BUILD** everything that holds Pacred's data. Staged: **IO-1** MVP = auto-incident capture + `/admin/incidents` triage → IO-2 event log + per-dept KPI → IO-3 partner/customer/overseas views + marketing rollup → IO-4 always-on monitoring + alert rules.
+
+> **Migration numbering across the 4 systems:** numbers are assigned at *build time, in build order* — not pre-allocated. The per-doc provisional numbers (`0073`+ etc.) are indicative only; `0080` (work_items) is the last taken.
 
 ---
 
@@ -81,7 +84,7 @@ After the synthesis, the owner (พี่ป๊อป) named three systems the a
 - **Tier 0 — ✅ code SHIPPED · ⏳ dashboard pending:** `ContactForm` is live on `/contact` (`b90806b`) — the lead funnel is connected. The env-var switch-on + GSC + Google Business + Meta = ก๊อต/เดฟ dashboard actions (checklist → [`launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md)) — **the one open Tier-0 item.**
 - **Tier 1 — ✅ SHIPPED:** the "เปิดออเดอร์ราคานี้" calculator→buy bridge (`/start-order` + `QuoteCTA`) · CI build-step · the `/admin/kpi` executive dashboard — integrated + verified on `dave`.
 - **Tier 2 — 🟡 PARTIAL:** the cross-department `work_items` work-board (`/admin/board` + inbox) is ✅ SHIPPED (migration `0080`). MOMO sync + per-department workspaces remain specced → [`port-specs/operating-system-tier2.md`](../port-specs/operating-system-tier2.md).
-- **Tier 3 — the owner's three systems (above):** internal-chat (IC-1 next) · disbursement · china-ops (volume-gated).
+- **Tier 3 — the owner's four systems (above):** internal-chat (IC-1 next) · disbursement · china-ops (volume-gated) · platform-observability (IO-1 MVP — เดฟ-lane).
 
 All shipped Tier 0/1/2 code is on `dave`, ahead of `main` — the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
 
@@ -94,7 +97,7 @@ All shipped Tier 0/1/2 code is on `dave`, ahead of `main` — the `dave→main` 
 | **ก๊อต / เดฟ** | Tier-0 dashboard — flip the monitoring env vars in Vercel · GSC + submit sitemap · Google Business · Meta Business. *The one thing still blocking ad-conversion visibility.* |
 | **ภูม** | Apply migrations `0058`-`0080` to prod (unblocks `dave→main`) · then BUILD, in order: internal-chat IC-1 → disbursement system → china-ops (volume-gated) · + the U4 / work-item-hook follow-ups. ภูม owns migrations `0073`-`0079` + `0081`+ — `0080` is taken (work_items). |
 | **ปอน** | Frontend — the [`frontend-tooling-2026-05-18.md`](frontend-tooling-2026-05-18.md) recommendations (data-driven landing template) · polish the new `/contact` + `/start-order` + `QuoteCTA` surfaces. |
-| **เดฟ** | Integrate the team's pushes · run the `dave→main` deploy once ภูม clears the migration gate · monitor post-deploy (Sentry/Clarity). |
+| **เดฟ** | Integrate the team's pushes · run the `dave→main` deploy once ภูม clears the migration gate · monitor post-deploy (Sentry/Clarity) · **BUILD the platform-observability system** — IO-1 MVP (auto-incident capture + `/admin/incidents` triage) first; เดฟ-lane (monitoring/measurable), non-colliding with ภูม's Tier-3 work. |
 
 ---
 
@@ -106,4 +109,5 @@ All shipped Tier 0/1/2 code is on `dave`, ahead of `main` — the `dave→main` 
 - [`internal-chat-system-2026-05-18.md`](internal-chat-system-2026-05-18.md) — the shipment/job-scoped work-comms design (owner system 1)
 - [`disbursement-system-2026-05-18.md`](disbursement-system-2026-05-18.md) — the เบิก-จ่าย system design (owner system 2)
 - [`china-ops-container-closing-2026-05-18.md`](china-ops-container-closing-2026-05-18.md) — the ปิดตู้ / China-ops design (owner system 3)
+- [`platform-observability-system-2026-05-18.md`](platform-observability-system-2026-05-18.md) — the รายงานสถานะ Platform observability / KPI / auto-incident design (owner system 4)
 - Prior: [`PACRED-MASTER-STRATEGY.md`](PACRED-MASTER-STRATEGY.md) · [`launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md) (the exact env vars for Tier 0 ①)
