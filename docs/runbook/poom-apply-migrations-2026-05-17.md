@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**10 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+**11 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -25,6 +25,7 @@ each file into the SQL Editor **in ascending number order**.
 | 0051 | `0051_freight_invoices.sql` | `freight_invoices` + `freight_invoice_lines` + `freight_invoice_seq` | V-E1 CI | ✅ |
 | 0052 | `0052_freight_invoice_payments.sql` | `freight_invoice_payments` ledger + `freight_invoices.payment_status` + `freight-payment-slips` bucket | V-E7 receipt/payment | ✅ |
 | 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
+| 0061 | `0061_money_idempotency_guards.sql` | `cost_adjustment` kind + 3 partial-unique guards (forwarder main-payment · freight payment · tax invoice) | money P0-1/P1-2/P1-4 fix | ✅ |
 
 ---
 
@@ -69,7 +70,7 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0052 + 0060 applied to dev + prod ✅". เดฟ flips the
+Post: "migrations 0044-0052 + 0060 + 0061 applied to dev + prod ✅". เดฟ flips the
 status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
