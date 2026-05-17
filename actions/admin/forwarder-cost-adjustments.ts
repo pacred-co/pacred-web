@@ -161,7 +161,11 @@ export async function adminMarkCostAdjustmentPaid(
         profile_id:     adj.profile_id,
         bucket:         "main",
         amount:         -total,
-        kind:           "import_payment",          // reuses existing kind for ledger consistency
+        // P0-1: distinct kind so a cost-adjustment debit never collides
+        // with the MAIN forwarder payment's idempotency tuple. The
+        // payForwarderFromWallet / adminMarkForwarderPaid idempotency
+        // SELECTs filter kind='import_payment' → they skip these rows.
+        kind:           "cost_adjustment",
         status:         "completed",
         reference_type: "forwarder",
         reference_id:   fNo,

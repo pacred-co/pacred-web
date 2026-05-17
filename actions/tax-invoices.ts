@@ -173,7 +173,30 @@ export async function requestTaxInvoice(
     .select("id, status")
     .single<{ id: string; status: string }>();
 
-  if (insErr) return { ok: false, error: insErr.message };
+  if (insErr) {
+    // P1-4: 23505 = the 0061 partial-unique guard
+    // (tax_invoice_one_per_order_uidx / _forwarder_uidx) caught a
+    // concurrent double-request — a non-cancelled invoice already exists
+    // for this order/forwarder. Re-SELECT it + return idempotently rather
+    // than letting two pending invoices race to issuance (RD Code 86
+    // numbering risk).
+    if (insErr.code === "23505" || /duplicate|unique/i.test(insErr.message)) {
+      const racedFilter = admin
+        .from("tax_invoices")
+        .select("id, status")
+        .neq("status", "cancelled");
+      const { data: raced } = d.order_type === "service_order"
+        ? await racedFilter.eq("order_h_no", order_h_no).maybeSingle<{ id: string; status: string }>()
+        : await racedFilter.eq("forwarder_f_no", forwarder_f_no).maybeSingle<{ id: string; status: string }>();
+      if (raced) {
+        return {
+          ok: true,
+          data: { id: raced.id, status: raced.status, already_exists: true },
+        };
+      }
+    }
+    return { ok: false, error: insErr.message };
+  }
 
   // ── 5. Insert one summary line item (admin can refine in G2c if needed) ──
   const { error: linesErr } = await admin
