@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AssignRepForm } from "./assign-rep";
 import { CustomerActions } from "./customer-actions";
 import { CreditLineForm } from "./credit-line-form";
+import { ViewAsCustomerButton } from "./view-as-customer-button";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
@@ -18,6 +19,10 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   // see the read-only summary; the form hides the buttons + the
   // server action would refuse anyway via withAdmin role pin.
   const canEditCredit = roles.includes("super") || roles.includes("accounting");
+  // G-4 — only super + ops may impersonate (server action enforces the
+  // same gate via withAdmin(["super","ops"]); button visibility is
+  // best-effort UX).
+  const canImpersonate = roles.includes("super") || roles.includes("ops");
 
   const { id } = await params;
   const admin = createAdminClient();
@@ -152,9 +157,14 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
           <h1 className="mt-1 text-2xl font-bold">{displayName}</h1>
           <p className="text-sm text-muted font-mono">{p.member_code}</p>
         </div>
-        <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          ← กลับ
-        </Link>
+        <div className="flex items-center gap-2">
+          {canImpersonate && (
+            <ViewAsCustomerButton targetProfileId={p.id} targetDisplayName={displayName} />
+          )}
+          <Link href="/admin/customers" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            ← กลับ
+          </Link>
+        </div>
       </div>
 
       {/* Wallet quick view */}

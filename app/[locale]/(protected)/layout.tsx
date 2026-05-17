@@ -3,6 +3,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { ProtectedSidebar } from "@/components/sections/protected-sidebar";
 import { TosGate } from "@/components/tos-gate";
 import { FloatingActionMenu } from "@/components/floating-action-menu";
+import { ImpersonationBanner } from "@/components/sections/impersonation-banner";
 import { isTosCurrent } from "@/lib/tos";
 import { getActiveTosVersion } from "@/lib/tos-server";
 import { getSidebarData } from "@/lib/sidebar-data";
@@ -43,6 +44,7 @@ export default async function ProtectedLayout({
 
   return (
     <>
+      <ImpersonationBanner />
       <NavBar />
       <div className="protected-content pb-16 lg:pb-0">{children}</div>
       <ProtectedSidebar badges={sidebarData.badges} salesRep={sidebarData.salesRep} />
