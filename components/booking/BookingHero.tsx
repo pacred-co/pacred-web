@@ -13,10 +13,10 @@ interface BookingHeroProps {
 // Per-tab background overrides — mobile/desktop pair for landing pages that
 // need a richer hero than the shared `HERO_IMGS` registry in `lib/booking-data.ts`.
 const BG_OVERRIDES_MOBILE: Record<string, string> = {
-  customs: "/images/bannermobile/clearacnebanner.png",
+  customs: "/images/bannermobile/clearacnebanner2.png",
 };
 const BG_OVERRIDES_DESKTOP: Record<string, string> = {
-  customs: "/images/bannerdesktop/clearancedesktop.png",
+  customs: "/images/bannerdesktop/clearancedesktop2.png",
 };
 
 export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
