@@ -1,5 +1,6 @@
 import { BulkSearchForm } from "./bulk-search-form";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 /**
  * /admin/forwarders/bulk-search — bulk tracking lookup (U2-5).
@@ -20,7 +21,12 @@ import { Link } from "@/i18n/navigation";
  * which calls the action + manages local state for results display.
  */
 
-export default function BulkSearchPage() {
+export default async function BulkSearchPage() {
+  // W-1 (gap-admin H-1): page-level role gate, consistent with the
+  // forwarders list. The bulk-search action is withAdmin-gated, but
+  // gate the page too so the chrome is not shown to driver/warehouse.
+  await requireAdmin(["ops", "accounting"]);
+
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <div>

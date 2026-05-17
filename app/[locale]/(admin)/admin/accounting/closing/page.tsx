@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { ClosingMonthPicker } from "./closing-month-picker";
 
@@ -62,6 +63,11 @@ export default async function ClosingReportPage({
 }: {
   searchParams: Promise<{ tab?: string; year?: string; month?: string }>;
 }) {
+  // W-1 (gap-admin H-1): page-level role gate. Month-end revenue +
+  // customer tax IDs via createAdminClient (RLS-bypass) — accounting
+  // only (super implicit).
+  await requireAdmin(["accounting"]);
+
   const sp     = await searchParams;
   const tab    = (sp.tab === "juristic" || sp.tab === "personal" ? sp.tab : "all") as Tab;
   const now    = new Date();

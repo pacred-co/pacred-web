@@ -1,9 +1,15 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { IssueButton } from "./issue-button";
 import { CancelButton } from "./cancel-button";
 import { WhtPanel, type WhtPanelEntry } from "./wht-panel";
+
+// W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
+// segment that reads cookies MUST be force-dynamic (AGENTS.md §11 —
+// else DYNAMIC_SERVER_USAGE 500 at request time).
+export const dynamic = "force-dynamic";
 
 /**
  * /admin/tax-invoices/[id] — detail view (T-P4 G2c).
@@ -79,6 +85,10 @@ export default async function AdminTaxInvoiceDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // W-1 (gap-admin H-1): same gate as the list page — tax-invoice
+  // detail (RD Code 86 + buyer tax ID) is accounting-only.
+  await requireAdmin(["accounting"]);
+
   const { id } = await params;
   const admin = createAdminClient();
 

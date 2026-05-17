@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { ReconcileRow } from "./reconcile-row";
 
 /**
@@ -69,6 +70,11 @@ type ReconcileItem = {
 };
 
 export default async function ReconcilePage() {
+  // W-1 (gap-admin H-1): page-level role gate. Surfaces wallet_tx ↔
+  // forwarder money mismatches via createAdminClient (RLS-bypass) —
+  // the docstring already specified accounting; now enforced.
+  await requireAdmin(["accounting"]);
+
   const admin = createAdminClient();
   const sinceIso = getRecentWindowIso(DAYS_BACK);
 

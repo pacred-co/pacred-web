@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { Suspense } from "react";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 
@@ -87,6 +88,11 @@ export default async function AdminAccountingPage({
 }: {
   searchParams: Promise<SP>;
 }) {
+  // W-1 (gap-admin H-1): page-level role gate. Exposes company-wide
+  // revenue + per-customer financial rows via createAdminClient
+  // (RLS-bypass) — accounting only (super implicit).
+  await requireAdmin(["accounting"]);
+
   const sp       = await searchParams;
   const tab      = sp.tab ?? "summary";
   const dateFrom = sp.date_from;

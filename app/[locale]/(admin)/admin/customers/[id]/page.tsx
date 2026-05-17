@@ -1,10 +1,19 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { AssignRepForm } from "./assign-rep";
 import { CustomerActions } from "./customer-actions";
 
+// W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
+// segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
+export const dynamic = "force-dynamic";
+
 export default async function AdminCustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // W-1 (gap-admin H-1/H-7): page-level role gate. Customer detail =
+  // full PII (corporate, addresses, wallet). ops + sales + accounting.
+  await requireAdmin(["ops", "sales_admin", "accounting"]);
+
   const { id } = await params;
   const admin = createAdminClient();
 

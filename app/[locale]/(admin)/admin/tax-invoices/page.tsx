@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 
 /**
  * /admin/tax-invoices — list view (T-P4 G2c).
@@ -47,6 +48,11 @@ export default async function AdminTaxInvoicesPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  // W-1 (gap-admin H-1): page-level role gate. Per ADR-0006 §1.4 only
+  // super/accounting see tax invoices (RD Code 86 + buyer tax IDs);
+  // the docstring stated this — now enforced, not layout-only.
+  await requireAdmin(["accounting"]);
+
   const sp = await searchParams;
   const statusFilter = (sp.status ?? "pending") as "pending" | "issued" | "cancelled" | "all";
 

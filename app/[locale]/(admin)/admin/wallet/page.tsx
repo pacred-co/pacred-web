@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { WalletTxActions } from "./actions-cell";
 import { WalletBulkApproveBar, WalletRowCheckbox } from "./bulk-approve-bar";
 import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
@@ -19,6 +20,13 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default async function AdminWalletPage({ searchParams }: { searchParams: Promise<{ kind?: string; status?: string }> }) {
+  // W-1 (gap-admin H-1): page-level role gate. The (admin) layout only
+  // proves "some admin"; this page reads every customer's wallet PII
+  // (bank, account no., slips) via createAdminClient (RLS-bypass), so a
+  // low-trust driver/warehouse admin must be refused here, not just in
+  // the nav. Money page → accounting (super implicit).
+  await requireAdmin(["accounting"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 

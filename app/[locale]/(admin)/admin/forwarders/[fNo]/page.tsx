@@ -1,10 +1,15 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminForwarderUpdateForm } from "./update-form";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+
+// W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
+// segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
+export const dynamic = "force-dynamic";
 
 const SHIPMENT_STATUS_LABEL: Record<string, string> = {
   received_cn:         "รับเข้าโกดังจีน",
@@ -18,6 +23,10 @@ const SHIPMENT_STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function AdminForwarderDetail({ params }: { params: Promise<{ fNo: string }> }) {
+  // W-1 (gap-admin H-1): same gate as the list page — import-order
+  // detail + cost adjustments is ops + accounting only.
+  await requireAdmin(["ops", "accounting"]);
+
   const { fNo } = await params;
   const admin = createAdminClient();
 

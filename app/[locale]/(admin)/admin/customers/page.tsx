@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 
 const STATUS_CFG: Record<string, { label: string; className: string }> = {
@@ -9,6 +10,12 @@ const STATUS_CFG: Record<string, { label: string; className: string }> = {
 };
 
 export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string }> }) {
+  // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
+  // customer's member_code/name/phone/email + wallet balances via
+  // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
+  // accounting (super implicit); driver/warehouse refused.
+  await requireAdmin(["ops", "sales_admin", "accounting"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 

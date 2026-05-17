@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import { forwarderSchema, type ForwarderInput } from "@/lib/validators/forwarder";
 import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forwarder/calc-price";
 import { sendNotification } from "@/lib/notifications";
@@ -555,9 +556,12 @@ export async function payForwarderFromWallet(
   // 4. Debit + status flip — admin client (gated by ownership check above)
   const admin = createAdminClient();
 
+  // W-1/S-2: assertOwnedProfileId makes the ownership check un-skippable
+  // — if a future edit sets profile_id from an untrusted input, this
+  // throws instead of writing a cross-customer wallet debit.
   const { data: tx, error: txErr } = await admin
     .from("wallet_transactions")
-    .insert({
+    .insert(assertOwnedProfileId(user.id, {
       profile_id:     user.id,
       bucket:         "main",
       amount:         -totalThb,
@@ -567,7 +571,7 @@ export async function payForwarderFromWallet(
       reference_id:   forwarder.f_no,
       admin_id:       null,
       note:           `ชำระค่าฝากนำเข้า ${forwarder.f_no} (ตัดจาก wallet โดยลูกค้า)`,
-    })
+    }))
     .select("id")
     .single<{ id: string }>();
   if (txErr) {

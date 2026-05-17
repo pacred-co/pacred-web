@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 
@@ -51,6 +52,10 @@ export default async function RecentlyActiveCustomersPage({
     date_to?:   string;
   }>;
 }) {
+  // W-1 (gap-admin H-1/H-7): page-level role gate. Lists customer PII
+  // (name/phone) + their order activity — ops + sales + accounting.
+  await requireAdmin(["ops", "sales_admin", "accounting"]);
+
   const sp        = await searchParams;
   const type: ActType = sp.type === "personal" || sp.type === "juristic" ? sp.type : "all";
   const dateFrom  = sp.date_from ?? "";

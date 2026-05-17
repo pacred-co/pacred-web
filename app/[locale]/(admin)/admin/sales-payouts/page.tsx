@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { SalesPayoutActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -13,6 +14,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function AdminSalesPayoutsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  // W-1 (gap-admin H-1): page-level role gate. Exposes sales-rep bank
+  // accounts + commission payouts via createAdminClient (RLS-bypass) —
+  // accounting + sales_admin (super implicit).
+  await requireAdmin(["accounting", "sales_admin"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 

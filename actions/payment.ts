@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import {
   yuanPaymentSchema,
   type YuanPaymentInput,
@@ -156,15 +157,20 @@ export async function createYuanPayment(
   // whole action and roll back the orphan yuan_payments row.
   if (d.paid_via_wallet) {
     const admin = createAdminClient();
-    const { error: walletErr } = await admin.from("wallet_transactions").insert({
-      profile_id:     user.id,
-      bucket:         "main",
-      amount:         -thb_amount,
-      kind:           "yuan_payment",
-      status:         "pending",
-      reference_type: "yuan_payment",
-      reference_id:   created.id,
-    });
+    // W-1/S-2: assertOwnedProfileId makes the ownership check
+    // un-skippable — a future edit that sets profile_id from an
+    // untrusted input throws here instead of debiting another wallet.
+    const { error: walletErr } = await admin.from("wallet_transactions").insert(
+      assertOwnedProfileId(user.id, {
+        profile_id:     user.id,
+        bucket:         "main",
+        amount:         -thb_amount,
+        kind:           "yuan_payment",
+        status:         "pending",
+        reference_type: "yuan_payment",
+        reference_id:   created.id,
+      }),
+    );
     if (walletErr) {
       // Roll back the orphan yuan_payments row so the customer is not
       // shown success for a transfer the wallet was never reserved for.
