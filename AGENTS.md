@@ -68,7 +68,7 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 10 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 11 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
 - `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
 - `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
@@ -80,6 +80,7 @@ The `.claude/skills/` directory contains 10 starter skills (see [`.claude/skills
 - `copyist-unlimited` — clone templates at scale (N variants)
 - `legacy-php-sweep` — port from `D:\xampp\htdocs\pcscargo` to Pacred Next.js
 - `qa-flow-simulator` — agent simulates a user journey end-to-end, asserts the real outcome (not just a 200)
+- `branch-integrate-loop` — consolidate teammate branches into `dave` safely (integrate → verify → distribute)
 
 When a situation matches a skill's description → invoke via the Skill tool (`skill: <name>`). Or describe the situation and let the harness match.
 

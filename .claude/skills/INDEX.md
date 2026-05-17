@@ -4,11 +4,11 @@
 
 > **How they fit into Pacred's workflow:** The role briefs say WHAT to work on. ADRs say WHAT was decided. Skills say HOW to execute repeatable patterns — bug hunts, audits, refactors, ports, knowledge capture — without the agent reinventing the approach each time.
 
-Last reviewed: 2026-05-17 (+qa-flow-simulator — agent-driven end-to-end flow verification, the UPGRADE_PLAN §0 gate)
+Last reviewed: 2026-05-18 (+branch-integrate-loop — the integrate→verify→distribute consolidation cycle; +qa-flow-simulator earlier — agent-driven end-to-end flow verification)
 
 ---
 
-## The starter set (10 skills — all `.claude/skills/<name>/SKILL.md`)
+## The starter set (11 skills — all `.claude/skills/<name>/SKILL.md`)
 
 | Skill | Trigger keywords / context | One-line purpose |
 |---|---|---|
@@ -22,6 +22,7 @@ Last reviewed: 2026-05-17 (+qa-flow-simulator — agent-driven end-to-end flow v
 | **copyist-unlimited** | "9 landing pages" · "N variants of this template" · "scaffold X for each service" | Clone + adapt templates at scale |
 | **legacy-php-sweep** | "port the X feature from old PHP" · "find how PHP did Y" | Sweep `D:\xampp\htdocs\pcscargo` for feature source + extract logic |
 | **qa-flow-simulator** | "run test cases" · "did the flow actually work" · "functional verification" · "§0 gate" · before a dave→main deploy | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
+| **branch-integrate-loop** | "consolidate the branches" · "merge ภูม/ปอน's work" · "ดึงงานทุก branch มารวม" · "integrate + distribute" · before a dave→main deploy | The daily integrate → verify → distribute cycle — consolidate teammate branches into dave without losing work or shipping a half-state |
 
 ---
 
