@@ -40,7 +40,10 @@
  * freight_payment.*.
  *
  * Currency: THB only V1. Methods: cash / bank_transfer / wallet (manual
- * entry — no external gateway, no auto wallet-debit; see notes below).
+ * entry — no external gateway). method='wallet' DOES debit the customer's
+ * Pacred wallet (W-3 / gap-schema-security G-3 — migration 0063 added the
+ * 'freight_invoice' reference_type so the bridge exists); voiding such a
+ * payment reverses the debit. See debitWalletForFreightPayment below.
  */
 
 import { revalidatePath } from "next/cache";
@@ -55,6 +58,11 @@ import {
   roundThb,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+import {
+  getAvailableBalance,
+  hasSufficientAvailable,
+  type LedgerRow,
+} from "@/lib/wallet/ledger";
 
 const ROLES = ["super", "ops", "accounting"] as const;
 
@@ -133,6 +141,93 @@ async function loadInvoiceFinancials(
   return data ?? null;
 }
 
+/**
+ * W-3 / gap-schema-security G-3 — debit the customer's wallet for a
+ * freight payment recorded with method='wallet'.
+ *
+ * Before this fix, method='wallet' was a bookkeeping note that did NOT
+ * move money: wallet_transactions.reference_type had no 'freight_invoice'
+ * value (the 0007 CHECK), so the invoice flipped to `paid` while the
+ * wallet balance never dropped — a free shipment. Migration 0063 adds the
+ * reference_type value + a partial-unique guard; this helper writes the
+ * actual debit, mirroring the cargo order_payment debit in
+ * payServiceOrderFromWallet.
+ *
+ * Contract:
+ *   - `paymentRowId` is the freight_invoice_payments row just inserted —
+ *     it is the reference_id, giving a 1:1 debit per partial payment and
+ *     matching the wallet_tx_freight_payment_uniq index (0063).
+ *   - The debit is status='completed' (an instant debit, like cargo
+ *     pay-from-wallet) so it reduces wallet.balance immediately.
+ *   - Balance is checked against the AVAILABLE balance (completed minus
+ *     pending debits — lib/wallet/ledger.ts) so a freight wallet payment
+ *     cannot push the wallet negative past funds already reserved by
+ *     pending withdraws / yuan transfers.
+ *   - 23505 (the 0063 unique guard) is treated as an idempotent retry:
+ *     the debit already exists for this payment row → success.
+ *
+ * Returns { ok:true } on success (debit written or already present), or
+ * { ok:false, error } — the caller MUST then void the freight payment
+ * row so the invoice is never flipped to paid without the debit.
+ */
+async function debitWalletForFreightPayment(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { profileId: string; paymentRowId: string; amountThb: number; invoiceNo: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { profileId, paymentRowId, amountThb, invoiceNo } = args;
+
+  // Available-balance check (completed balance − Σ pending debits).
+  const { data: wallet } = await admin
+    .from("wallet")
+    .select("balance")
+    .eq("profile_id", profileId)
+    .maybeSingle<{ balance: number }>();
+  const { data: pendingRows } = await admin
+    .from("wallet_transactions")
+    .select("amount, status")
+    .eq("profile_id", profileId)
+    .eq("bucket", "main")
+    .eq("status", "pending");
+  const available = getAvailableBalance(
+    Number(wallet?.balance ?? 0),
+    (pendingRows ?? []) as LedgerRow[],
+  );
+  if (!hasSufficientAvailable(available, amountThb)) {
+    return {
+      ok: false,
+      error: `wallet_insufficient — ใช้ได้ ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+    };
+  }
+
+  // Write the debit. kind='import_payment' — freight is the import side
+  // (legacy enum 5 ชำระนำเข้า → import_payment); reference_type=
+  // 'freight_invoice' is the value migration 0063 added to the CHECK.
+  const { error: debitErr } = await admin
+    .from("wallet_transactions")
+    .insert({
+      profile_id:     profileId,
+      bucket:         "main",
+      amount:         -amountThb,
+      kind:           "import_payment",
+      status:         "completed",
+      reference_type: "freight_invoice",
+      reference_id:   paymentRowId,
+      admin_id:       null,
+      note:           `ชำระค่าขนส่ง freight invoice ${invoiceNo ?? paymentRowId} (ตัดจาก wallet)`,
+    });
+
+  if (debitErr) {
+    // 23505 = the 0063 partial-unique guard (wallet_tx_freight_payment_uniq)
+    // caught a double-submit — the debit for this payment row already
+    // exists. Idempotent: treat as success, don't double-debit.
+    if (debitErr.code === "23505" || /duplicate|unique/i.test(debitErr.message)) {
+      return { ok: true };
+    }
+    return { ok: false, error: `wallet_debit_failed: ${debitErr.message}` };
+  }
+  return { ok: true };
+}
+
 // ────────────────────────────────────────────────────────────
 // 1) Record a payment
 // ────────────────────────────────────────────────────────────
@@ -174,11 +269,14 @@ export async function recordFreightPayment(
     });
     if (total <= 0) return { ok: false, error: "invoice_total_zero" };
 
-    // NOTE on method='wallet': V1 records the ledger row as a bookkeeping
-    // note that the customer settled via their Pacred wallet. It does NOT
-    // auto-debit wallet_transactions — that table's reference_type CHECK
-    // (migration 0007) has a fixed enum with no 'freight_invoice' value;
-    // a real wallet bridge needs a schema change → follow-up V-E7.1.
+    // W-3 / gap-schema-security G-3 — method='wallet' now writes a REAL
+    // wallet debit. Migration 0063 added the 'freight_invoice'
+    // reference_type value + a partial-unique guard, so the freight
+    // payment can be bridged to wallet_transactions exactly like the
+    // cargo order_payment debit. The debit is inserted just below, after
+    // the ledger row exists (it is the reference_id); if the debit fails
+    // the freight payment row is voided so the invoice never flips to
+    // `paid` without the money being taken.
 
     const { data: inserted, error: insErr } = await admin
       .from("freight_invoice_payments")
@@ -228,6 +326,32 @@ export async function recordFreightPayment(
         }
       }
       return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
+    }
+
+    // W-3 / G-3 — if the customer settled via wallet, take the money now.
+    // The debit references THIS payment row (1:1 per partial payment). If
+    // it fails (insufficient balance, DB error), VOID the freight payment
+    // row so recomputeInvoicePayment below does not count it — the invoice
+    // must never flip to `paid` without the wallet actually being debited.
+    if (d.method === "wallet") {
+      const debit = await debitWalletForFreightPayment(admin, {
+        profileId:    invoice.profile_id,
+        paymentRowId: inserted.id,
+        amountThb:    d.amount_thb,
+        invoiceNo:    invoice.invoice_no,
+      });
+      if (!debit.ok) {
+        await admin
+          .from("freight_invoice_payments")
+          .update({
+            status:             "voided",
+            voided_at:          new Date().toISOString(),
+            voided_by_admin_id: adminId,
+            void_reason:        `auto-void — wallet debit failed: ${debit.error}`,
+          })
+          .eq("id", inserted.id);
+        return { ok: false, error: debit.error };
+      }
     }
 
     const recomputed = await recomputeInvoicePayment(admin, invoice);
@@ -333,9 +457,9 @@ export async function voidFreightPayment(
 
     const { data: payment } = await admin
       .from("freight_invoice_payments")
-      .select("id, status, freight_invoice_id, amount_thb")
+      .select("id, status, freight_invoice_id, amount_thb, method")
       .eq("id", d.id)
-      .maybeSingle<{ id: string; status: string; freight_invoice_id: string; amount_thb: number }>();
+      .maybeSingle<{ id: string; status: string; freight_invoice_id: string; amount_thb: number; method: string }>();
     if (!payment) return { ok: false, error: "payment_not_found" };
     if (payment.status === "voided") return { ok: false, error: "already_voided" };
 
@@ -350,6 +474,30 @@ export async function voidFreightPayment(
       .eq("id", d.id)
       .eq("status", "recorded");                                       // optimistic race-guard
     if (updErr) return { ok: false, error: `update_failed: ${updErr.message}` };
+
+    // W-3 / G-3 — if this payment debited the wallet (method='wallet'),
+    // reverse it: flip the paired wallet_transactions debit to 'cancelled'
+    // so the balance trigger (0007) drops it from the balance and the
+    // customer is refunded the freight charge. The debit is keyed on the
+    // payment row id (reference_id) per migration 0063.
+    if (payment.method === "wallet") {
+      const { error: revErr } = await admin
+        .from("wallet_transactions")
+        .update({ status: "cancelled", admin_id_update: adminId })
+        .eq("reference_type", "freight_invoice")
+        .eq("reference_id", payment.id)
+        .eq("kind", "import_payment")
+        .eq("status", "completed");
+      if (revErr) {
+        // The payment is already voided; surface so an admin reconciles
+        // the still-standing debit rather than silently leaving the
+        // customer charged.
+        return {
+          ok: false,
+          error: `payment voided but wallet refund failed (debit for payment ${payment.id} stands): ${revErr.message}`,
+        };
+      }
+    }
 
     const invoice = await loadInvoiceFinancials(admin, payment.freight_invoice_id);
     if (!invoice) {
