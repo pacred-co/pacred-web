@@ -54,9 +54,13 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
         style={{ background: `url('${bgDesktop}') center/cover no-repeat` }}
       />
       <div className="relative z-10 max-w-[1000px] mx-auto text-center text-white">
-        <h1 className="text-[24px] sm:text-[30px] md:text-[clamp(36px,4.5vw,60px)] font-black tracking-tight leading-[1.1] md:leading-[1.1] mb-1.5 md:mb-4 text-white [-webkit-text-stroke:1.5px_#7f1d1d] md:[-webkit-text-stroke:2.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)]">
+        <h1 className="text-[20px] sm:text-[28px] md:text-[clamp(34px,4.2vw,56px)] font-black tracking-tight leading-[1.1] md:leading-[1.1] mb-1.5 md:mb-4 text-white [-webkit-text-stroke:1.5px_#7f1d1d] md:[-webkit-text-stroke:2.5px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)]">
           {t.rich(keys.titleKey, {
-            em: (chunks: ReactNode) => <em className="text-yellow-300 not-italic">{chunks}</em>,
+            em: (chunks: ReactNode) => (
+              <em className="text-yellow-300 not-italic text-[26px] sm:text-[34px] md:text-[clamp(42px,5.2vw,68px)]">
+                {chunks}
+              </em>
+            ),
             nowrap: (chunks: ReactNode) => <span className="whitespace-nowrap">{chunks}</span>,
             mbr: () => <br aria-hidden />,
           })}
