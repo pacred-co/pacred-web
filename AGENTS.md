@@ -17,9 +17,10 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 **Step 1 — Read your role brief** ([`docs/briefs/<your-name>.md`](docs/briefs/) — routing in [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md)).
 
 **Step 2 — Scan canonical context** (parallel reads):
-- [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~350 lines)
+- [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~370 lines)
+- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch roadmap (what's next + the §0 gate)
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since last session (immortal-scholar — `.claude/skills/scholar-immortal/`)
-- Your brief's "Force-read" cross-links (e.g. PORT_PLAN Part T, relevant ADRs)
+- Your brief's "Force-read" cross-links (relevant ADRs, runbooks)
 
 **Step 3 — Surface a state summary to the user** (don't ask first — present it):
 - 🟢 **Shipped** — what's behind us (1-3 lines, latest sprint)
@@ -31,16 +32,13 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 
 **Triggers:** any session that starts with sync ("ต่อที่ทำงาน", "เปิดมาใหม่", new worktree, machine change, fresh Claude Code window). Per memory `session_start_handshake`.
 
-## 2. Revenue-first lens (emergency mode active)
+## 2. Revenue-first lens (post-launch — still applies, no longer crisis)
 
-The company is burning runway (per `cash_burning_p0_emergency` memory). Default to the question: **"งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?"**
+Pacred **launched 2026-05-17**. The emergency "เผาเงิน" framing is over — but the lens stays: prefer work that makes the product more **true** (the flow actually closes), **billable** (revenue is captured, not silently lost), or **measurable** (you can see what's happening). De-prioritise V3 prep, broad refactors, and nice-to-haves that don't move one of those three.
 
-- Yes → do it now (P0)
-- No → defer or hand off (don't do mid-emergency)
+Difference from emergency mode: **plan work properly now.** Don't ship half-built to chase a deadline; don't skip the §0 gate to "save time". Crisis-mode shortcuts are no longer the right call.
 
-Cargo system getting customers > everything else (V3 prep, refactors, "nice-to-have" features, broad cleanup).
-
-📋 The decoded cargo revenue backlog = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) **Part V**, sourced from [`docs/audit/cargo-ops-forensics-2026-05-16.md`](docs/audit/cargo-ops-forensics-2026-05-16.md) (8 months of legacy-system pain + 10 real cargo documents decoded into tasks `V-A1…V-F3`). Start cargo work there.
+📋 Post-launch work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
 
 ## 3. Don't preempt brand cleanup
 
@@ -95,6 +93,8 @@ Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a
 
 **Before any deploy to `main`:** `pnpm build && pnpm start`, then `curl` every NEW or CHANGED route (especially dynamic `[param]` routes) — each must return 200 (or an intended 3xx/404). A 500 there = a 500 in production. Full procedure: "Production smoke gate" in [`.claude/skills/phase-verify-loop/SKILL.md`](.claude/skills/phase-verify-loop/SKILL.md).
 
+**The route smoke is necessary but NOT sufficient — it cannot detect a dead database.** Public pages degrade to `200` and protected pages `307`-redirect *before* any DB query, so "every route → 200/307, zero 500s" passed even against a deleted Supabase project on launch day (`docs/learnings/ci-and-deploy-gotchas.md`). To gate a deploy, also run the [`qa-flow-simulator`](.claude/skills/qa-flow-simulator/SKILL.md) skill (asserts a real DB row / balance delta — the UPGRADE_PLAN §0 functional gate) or probe the DB directly: `curl https://<ref>.supabase.co/auth/v1/health` (live → `401 no apikey`; deleted → NXDOMAIN).
+
 **Pattern rule:** a page under a dynamic segment (`[slug]`/`[port]`/`[id]`) that renders `<NavBar>` (or anything reading cookies/auth) MUST have `export const dynamic = "force-dynamic"` — else `DYNAMIC_SERVER_USAGE` 500. See [`docs/learnings/nextjs-16-quirks.md`](docs/learnings/nextjs-16-quirks.md).
 
 ## 12. Docs: every `.md` ≤ 2000 lines · no duplication
@@ -102,6 +102,19 @@ Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a
 - **Hard cap: every `.md` file ≤ 2000 lines.** If a file would exceed it, split into a new file and cross-link both ways — never let one file grow past the cap. Agents read docs into a context window; oversized files truncate mid-content.
 - **One canonical home per fact — no duplication.** Information lives in exactly ONE file; everywhere else links to it. When you edit a doc and spot the same content duplicated elsewhere, delete the copy and leave a link. Dedup what you touch.
 - Detail in [`docs/conventions.md`](docs/conventions.md) §13.
+
+## 13. Worktree base is stale — resync to `dave` before trusting it
+
+A `git worktree` (including the `.claude/worktrees/*` one a session or a spawned `isolation: "worktree"` agent runs in) is **cut from a point-in-time snapshot, and `origin/HEAD` points at `origin/main`** — the *held* production branch, which on this team lags the live integration branch `dave` by dozens of commits. Acting on a stale base re-derives fixes that already exist, fails task premises ("file X is missing" when X is on `dave`), and sets up merge conflicts.
+
+**Rule — at session start (this is §1's `git fetch` step) and in every spawn prompt for a worktree agent:**
+```bash
+git fetch origin && git merge origin/dave --no-edit && git log --oneline -3
+```
+- If a task says "X is broken/missing on `dave`" but `ls`/`find` can't see X → **stop and reconcile branch ages**, don't "fix" a phantom. `git worktree list` → the `[dave]` line is the live checkout; inspect THAT, or `git show dave:<file>`.
+- When you spawn a worktree-isolation agent, the spawn prompt MUST tell it to resync to `dave` first — otherwise it surveys `origin/main` and reports a stale picture.
+
+Three separate sessions lost time to this; full detail + recovery steps in [`docs/learnings/ci-and-deploy-gotchas.md`](docs/learnings/ci-and-deploy-gotchas.md).
 
 ---
 
