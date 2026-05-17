@@ -1766,3 +1766,56 @@ Full hand-off + acceptance criteria → [`docs/briefs/poom.md`](briefs/poom.md).
 
 **End of Part V.** Each ✅ shipped → tick the table + commit `docs(port-plan): V-N shipped — <description>`. New cargo-forensics findings → append rows here, never rewrite history.
 
+---
+
+# 🕳 Part W — Gap-hunt backlog (2026-05-17)
+
+> **Source:** the 5-angle source-code gap-hunt + the chained synthesis in
+> [`docs/research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md)
+> — read that doc for the **why** (the 4 chains: the P0 security keystone, the
+> wallet-leak chain, the "islands with no bridges" theme). This Part is the
+> **schedule**: every genuinely *unplanned* `G-*` finding across the 5 gap docs,
+> **deduped** against `R-1..R-19` ([`docs/research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md))
+> and Part V (`V-A..V-H`), consolidated into one ranked list.
+>
+> Revenue/launch lens: 🔴 = launch-week or post-launch P0 · 🟠 = post-launch P1 ·
+> 🟡 = post-launch P2/P3. Effort: **S** ≤3 d · **M** 1–2 wk · **L** 2–4 wk.
+> Owner TBD — assign at planning. Each row keeps its gap-doc source IDs.
+
+## W-1..W-8 — ranked backlog
+
+| # | What | Why | Sev | Effort | Depends on | Launch-blocker | Source |
+|---|---|---|---|---|---|---|---|
+| **W-1** | **Security keystone** — role-pin every money/PII/order RLS policy (`is_admin(array[...])`, never bare); add `requireAdmin([roles])` to the 11 ungated finance pages; make the `createAdminClient` ownership check un-skippable via a `lib/` helper; add a DB-level money-mutation audit trigger | Money is reachable (read), movable (write) + un-attributed: a low-trust `driver`/`warehouse` admin JWT passes RLS to every wallet/order/tax table, the finance pages have no page gate, and direct PostgREST writes leave no `admin_audit_log` row | 🔴 P0 | M | none | **YES — launch-week** (before any `warehouse`/`driver` account) | sec S-1·S-2·G-6 · admin H-1·H-2·H-7 |
+| **W-3** | **Wallet-integrity guard** — add `freight_invoice` to `wallet_transactions.reference_type` CHECK + a real debit in `recordFreightPayment`; sum **pending+completed** debits in every balance check; add a status-transition guard to `adminUpdateYuanPayment` + fire the refund credit for a *completed* wallet-tx; atomic non-negative-balance mechanism (`SELECT … FOR UPDATE` in a DB fn, not a naive CHECK) | One bug class leaking money: freight wallet-pay flips invoice `paid` with no debit; stacked pending debits overdraw to negative; yuan refund→re-completed never re-debits | 🔴 P0/P1 | M | none | **YES — launch-week** (H-1 overdraw exploitable once withdraw+yuan live) | sec G-3·S-5 · customer H-1 · rev-flow H-1·H-2 |
+| **W-2** | **Wire the flow** — unify the 2 container tables (`cargo_containers` canonical, migrate `containers`, repoint `forwarders.container_id`, redirect `/admin/containers`); propagate container status onto `forwarders`/`service_orders` via a documented enum; arrival→billing gate (block `mark*Paid` until container-no + final CBM confirmed); freight `quote.convert`→shipment + `markDelivered`→invoice wiring + `freight_invoices` partial-unique index; order auto-close action + trigger | Pacred-web is correct islands with no edges: container `delivered` never closes the order, the customer portal reads a frozen status, freight jobs reach `delivered` un-billed, no order ever auto-closes — the legacy "ของอยู่ไหน" leak rebuilt inside Pacred. Precondition for `R-1` having value | 🟠 P1 | L | container-unify must precede `R-1`/`R-10` | No (post-launch P0 first wave) | rev-flow Stages 4·6·7·9 · admin H-3 |
+| **W-4** | **MOMO JMF sync made runnable** — fill the `sync.ts` upsert loop, add `app/api/cron/momo-jmf-sync/route.ts`, add the 7th `vercel.json` cron, capture the real `?api=` endpoint names | `lib/integrations/momo-jmf/` has a typed client but the sync body is a stub with **zero callers and no cron** — it cannot run at all; every container is hand-typed. MOMO is Pacred's only digital container-status source | 🔴 P0 | L | the `?api=` endpoint capture + the MOMO-1 call | No (manual entry covers launch; P0 immediately after) | integrations G-1 |
+| **W-5** | **Refund money path** — one credit-writing action (`kind='refund'`) covering cancel-after-paid, yuan refund of a *completed* payment, carrier-change over-collection (`V-C1`); plus a customer-facing claim/issue entry ("ตกหล่น" — type, photos, status lifecycle) that can link an `R-9` warehouse discrepancy row | Statuses say "refunded" while no money moves; cancelling a paid order orphans the wallet debit; customers have no channel but LINE to report a missing/damaged item or request a refund | 🟠 P1 | M | `V-C1`; loosely `R-9` | No | rev-flow H-3 · admin G-6 · customer G-C2 |
+| **W-6** | **Admin supervisory layer** — audit-log search/filter/export + per-target history; staff RBAC console (capability view, section scoping, `super`-holder review); notification delivery log; admin global search (customer / h_no / f_no / container); cron-health panel; bulk-action failed-id summary rows | The admin can write money but nobody can answer "who changed this / can I trust the team with RLS-bypass UI"; `admin_audit_log` is write-only with no query UI; `super` proliferation has no review surface; failed LINE pushes vanish silently | 🟠 P1 | M | pairs with W-1 (audit trigger) | No | admin G-1·G-2·G-5·G-7·G-9·H-5·H-6 |
+| **W-7** | **Customer credit line (เครดิตสินค้า / "pay later")** — `profiles.credit_limit` + a credit-charge ledger kind + a credit-outstanding view + a "pay my credit" action + an admin grant/limit + aging screen | `wallet.credit_balance` + the `/wallet` "เครดิต — วงเงินเครดิตจาก Pacred" card are rendered but **no code earns, grants, or spends credit** — the largest customer-facing dead surface; the legacy portal had a real credit line as a repeat-importer retention lever | 🟠 High | L | a small ADR (eligibility + limit rules + overdue handling); feeds `R-7` | No | customer G-C1 |
+| **W-8** | **Freight WHT gate + per-container cost basis** — add `freight_invoice_id` to `withholding_tax_entries` + relax the XOR CHECK so `getFreightReceiptGate` stops being a permanent no-op; add a `container_costs` carrier-rate-card table (cost per cabinet × cargo type) | A juristic freight customer can pull a receipt with no 50-ทวิ cert on file (the ADR-0015 control simply does not exist for freight); Pacred has no record of what a container *cost* it → margin-blind on the cargo side; feeds `R-7` | 🟠 P1 | M | feeds `R-7` (which must be 2 tables: rate card + AP ledger) | No | sec G-1·G-4 · rev-flow Stage 8 |
+
+## W-9+ — Tier 2 tail (post-launch P2/P3)
+
+Lower-severity unplanned items; schedule interleaved with `R-3..R-19`. Grouped by source doc — see [`PACRED-MASTER-STRATEGY.md` §4.2](research/PACRED-MASTER-STRATEGY.md) and the per-doc detail:
+
+- **Customer** ([`gap-customer.md`](research/gap-customer.md)) — G-C3 delivery-acknowledgement ("ยืนยันรับสินค้าครบถ้วน"); G-C4 tax invoice for ฝากโอน (yuan); G-C5 per-shipment forwarding-instruction recap; G-C6 pre-payment self-service order edit; H-2/H-3/H-4/H-6 wallet-tx + order lifecycle UX (post-debit-failure visibility, customer cancel of a pending deposit/withdraw, stray-`cancelled`-order cleanup, slip-rejection-with-reason loop); H-5 `how-to-use` stub content.
+- **Admin** ([`gap-admin.md`](research/gap-admin.md)) — G-3 ops-facing container cost-entry; G-4 view-as-customer / session tools; G-8 export hub + scheduled reports; G-10 editable business config (OTP TTL, min-deposit, feature flags, cashback %); H-4 widen the reconcile `kind` match.
+- **Integrations** ([`gap-integrations-tools.md`](research/gap-integrations-tools.md)) — G-3 resolve the hCaptcha prod-fail-mode doc contradiction (decide **before** the launch checklist); G-4 clear the 2 Sentry deprecation warnings; G-5 webhook-receiver harness (`app/api/webhooks/`, signature-verifying); G-6 real ship-tracking feed (vs the hand-typed `vessel_voyage` string); G-7 PEAK; G-8 NetBay; G-9 fuel-cost calculator; G-10 Customs Trader Portal; G-11 driver/warehouse scan + capacity layer; G-13 flag (do NOT scrub) the dead legacy carrier env stubs.
+- **Schema/security** ([`gap-schema-security.md`](research/gap-schema-security.md)) — S-3 rate-limit `confirmPasswordResetByPhone` (+ `confirmPhoneChange`, `registerPersonal`); S-4 add an edge route-protection check in `proxy.ts`; S-6 IP/global cap on `requestOtp` (SMS-cost abuse); S-7 `admins` default-deny guard test; S-8 transactional money-audit insert; G-5 yuan-refund / cancel slip+reason parity; G-7 audit-log retention column + `tax_id` DBD-verification gate before tax-invoice issuance.
+
+> **Dedup.** `gap-revenue-flow`'s own `W-1..W-8` numbering is folded into the
+> Part W ids above (its container/propagation/billing items ⇒ **W-2**; its
+> deposit/refund items ⇒ **W-3**+**W-5**; its yuan-guard/orphan-report ⇒
+> **W-3**+**W-6**). Items already in `R-1..R-19` / `V-A..V-H` are **not**
+> re-listed here — Part W is strictly the *delta* the 5 gap-hunts found.
+
+## Cross-links
+
+- The **why** + the 4 chains + phasing → [`docs/research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md)
+- The earlier `R-1..R-19` roadmap this extends → [`docs/research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md)
+- Pacred-identity guardrail (legitimate-path-only — load-bearing) → [`docs/research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md) §4
+- Security audits W-1 corrects → [`docs/audit/owasp-2026-05.md`](audit/owasp-2026-05.md) · [`docs/audit/rls-and-audit-log-2026-05-16.md`](audit/rls-and-audit-log-2026-05-16.md)
+
+**End of Part W.** Each ✅ shipped → tick the table + commit `docs(port-plan): W-N shipped — <description>`. New gap-hunt findings → append rows here, never rewrite history.
+
