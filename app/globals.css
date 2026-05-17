@@ -54,32 +54,12 @@ body {
   font-family: var(--font-prompt), "Noto Sans Thai", "Prompt", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
-/* Desktop only: floating red clouds (ปอน: mostly white with very faint red clouds) */
-@media (min-width: 768px) {
-  body {
-    background:
-      radial-gradient(1300px circle at  6%   4%, rgba(255, 184, 184, 0.14) 0%, transparent 62%),
-      radial-gradient(1400px circle at 96%  32%, rgba(255, 168, 168, 0.12) 0%, transparent 62%),
-      radial-gradient(1250px circle at 28%  72%, rgba(255, 200, 200, 0.10) 0%, transparent 62%),
-      radial-gradient(1300px circle at 82%  98%, rgba(255, 176, 176, 0.10) 0%, transparent 62%),
-      var(--background);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
-  }
+/* Pure white background site-wide (per ปอน 2026-05-18) — the previous
+   desktop-only red-cloud gradient was removed; body now uses the flat
+   --background token (#ffffff) on every viewport. Footer carries the
+   light-gray surface tint to delineate the page edge. */
 
-  .dark body {
-    background:
-      radial-gradient(1300px circle at  6%   4%, rgba(140, 0, 0, 0.18) 0%, transparent 62%),
-      radial-gradient(1400px circle at 96%  32%, rgba(120, 0, 0, 0.15) 0%, transparent 62%),
-      radial-gradient(1250px circle at 28%  72%, rgba(140, 0, 0, 0.14) 0%, transparent 62%),
-      radial-gradient(1300px circle at 82%  98%, rgba(120, 0, 0, 0.12) 0%, transparent 62%),
-      var(--background);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
-  }
-}
-
-/* Mobile: pure white background + bottom-nav clearance */
+/* Mobile bottom-nav clearance */
 @media (max-width: 767px) {
   body {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
