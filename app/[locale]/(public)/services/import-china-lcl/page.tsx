@@ -29,6 +29,7 @@ import { ContactSales } from "@/components/sections/contact-sales";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
 import { Footer } from "@/components/sections/footer";
+import { TrustStatsStrip } from "@/components/sections/trust-stats-strip";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
@@ -209,12 +210,14 @@ export default async function ImportChinaLclPage({
               LCL · LESS CONTAINER LOAD
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              นำเข้าทางเรือ <span className="text-primary-600">LCL รวมตู้</span> จากจีน
+              นำเข้าจีน <span className="text-primary-600">LCL รวมตู้</span>
               <span className="hidden md:inline"> เริ่มต้นไม่กี่กล่อง</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
               จ่ายตาม CBM/KG ที่ใช้จริง · ไม่ต้องเหมาตู้ · เหมาะกับ order เริ่มต้น 1-15 CBM · ขนส่ง 15-20 วัน · เคลียร์ภาษีครบ — <span className="text-primary-600/80 font-bold">LCL เริ่ม $150/CBM · Door-to-Door ทั่วประเทศ</span>
             </h2>
+
+            <TrustStatsStrip className="mt-3 md:mt-4" />
 
             <TrackedExternalLink
               href={LINE_URL}

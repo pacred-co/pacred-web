@@ -79,6 +79,12 @@
     "ordersUnit": "รายการ",
     "deposit": "ฝากสั่ง"
   },
+  "trustStrip": {
+    "ariaLabel": "ความน่าเชื่อถือของ Pacred",
+    "years": "ประสบการณ์ 15+ ปี",
+    "customers": "ลูกค้า 10,600+ ราย",
+    "formE": "Form E ทุก order"
+  },
   "promotion": {
     "sectionBadge": "โปรโมชั่น",
     "title": "โปรโมชั่นสิทธิ์พิเศษสำหรับ",

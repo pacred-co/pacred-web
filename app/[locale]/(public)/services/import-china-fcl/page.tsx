@@ -29,6 +29,7 @@ import { ContactSales } from "@/components/sections/contact-sales";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
 import { Footer } from "@/components/sections/footer";
+import { TrustStatsStrip } from "@/components/sections/trust-stats-strip";
 import { Link } from "@/i18n/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
@@ -249,12 +250,14 @@ export default async function ImportChinaFclPage({
               FCL · FULL CONTAINER LOAD
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              นำเข้าทางเรือ <span className="text-primary-600">FCL เหมาตู้</span> 20{"'"} · 40{"'"} · 40HQ
-              <span className="hidden md:inline"> จากจีน Door-to-Door</span>
+              นำเข้าจีน <span className="text-primary-600">FCL เหมาตู้</span> 20{"'"} · 40{"'"} · 40HQ
+              <span className="hidden md:inline"> Door-to-Door</span>
             </h1>
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
               สำหรับ order ปริมาณมาก — เหมาตู้คุ้มที่สุด · รับของจากโรงงานจีน · ลำเลียงตู้ตรงสู่ Port ไทย · เคลียร์ภาษี · ส่งถึงประตู — <span className="text-primary-600/80 font-bold">ค่าตู้ FCL 20{"'"} เริ่ม $500 · รองรับ DDP / EXW / FOB / CIF</span>
             </h2>
+
+            <TrustStatsStrip className="mt-3 md:mt-4" />
 
             <TrackedExternalLink
               href={LINE_URL}

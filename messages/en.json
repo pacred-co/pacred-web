@@ -79,6 +79,12 @@
     "ordersUnit": "items",
     "deposit": "Purchase"
   },
+  "trustStrip": {
+    "ariaLabel": "Pacred trust signals",
+    "years": "15+ years experience",
+    "customers": "10,600+ customers",
+    "formE": "Form E on every order"
+  },
   "promotion": {
     "sectionBadge": "Promotions",
     "title": "Special Offers Just for ",
