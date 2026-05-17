@@ -64,20 +64,29 @@ function Cell({ i, big, onOpen }: CellProps) {
         priority={i === 0}
       />
 
-      {/* Bottom gradient + caption (only on the big cell to avoid clutter on the small ones) */}
-      {big && (
-        <>
-          <span aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-primary-900/80 via-primary-800/15 to-transparent" />
-          <span className="pointer-events-none absolute bottom-0 left-0 right-0 px-3 md:px-4 py-2.5 md:py-3 text-white">
-            <span className="block text-[13px] md:text-[15px] font-black leading-tight tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] truncate">
-              {s.caption}
-            </span>
-            <span className="block mt-0.5 text-[10.5px] md:text-[12px] font-semibold opacity-95 leading-snug drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)] truncate">
-              {s.sub}
-            </span>
+      {/* Bottom gradient + caption — on every cell so each image is labelled.
+          Big cell shows caption + sub; small cells show caption only (per ปอน). */}
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 bottom-0 ${
+          big ? "h-2/5 bg-gradient-to-t from-primary-900/85 via-primary-900/30 to-transparent"
+              : "h-1/3 bg-gradient-to-t from-black/75 via-black/35 to-transparent"
+        }`}
+      />
+      <span className={`pointer-events-none absolute bottom-0 left-0 right-0 text-white ${
+        big ? "px-3 md:px-4 py-2.5 md:py-3" : "px-2 md:px-2.5 py-1.5 md:py-2"
+      }`}>
+        <span className={`block font-black leading-tight tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)] truncate ${
+          big ? "text-[13px] md:text-[15px]" : "text-[10.5px] md:text-[12px]"
+        }`}>
+          {s.caption}
+        </span>
+        {big && (
+          <span className="block mt-0.5 text-[10.5px] md:text-[12px] font-semibold opacity-95 leading-snug drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)] truncate">
+            {s.sub}
           </span>
-        </>
-      )}
+        )}
+      </span>
 
       {/* Zoom-in affordance — visible on all cells so user knows it's clickable */}
       <span
@@ -129,7 +138,7 @@ export function CertsSlideshow() {
 
   return (
     <>
-      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[5/6] md:aspect-[16/10] w-full max-w-[340px] md:max-w-[860px] mx-auto">
+      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[16/10] w-full max-w-[360px] md:max-w-[860px] mx-auto">
         <div className="row-span-2 min-h-0">
           <Cell i={0} big onOpen={open} />
         </div>
