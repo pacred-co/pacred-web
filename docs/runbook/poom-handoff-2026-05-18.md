@@ -53,11 +53,15 @@ A post-launch review of your U1/U2 code landed → [`../research/review-u1-u2-20
 
 | Finding | Owner | Note |
 |---|---|---|
-| **P0-1** refund path: no amount cap / no paid-status check · **P1-1** admin-refund IDOR | 🔵 **เดฟ — fixing NOW via agent** | **DO NOT touch `actions/refunds.ts` / `actions/admin/refunds.ts`** — เดฟ owns this fix (+ P2-1/P2-6 in the same files). Blocks the deploy. |
+| **P0-1** refund path: no amount cap / no paid-status check · **P1-1** admin-refund IDOR | 🔵 **เดฟ — ✅ FIXED, merged into dave** | P0-1 + P1-1 + P2-6 done — `refund.ts` ceiling helpers + `resolveRefundCeiling` (per-source collected amount, fails closed on DB error) + IDOR guard in `verifySourceRef`. Gated green. ภูม: nothing to do here. |
 | **P1-2** PCS-migration phone/email collision (`actions/admin/pcs-migration.ts:280`) | 🔴 **ภูม — before you RUN the U2-1 backfill** | without it a chunk of the ~9,000 customers strand on duplicate phone/email |
 | P1-3 billing-gate fails-open on container read · P1-4 `0067` backfill comment-not-code · P1-5 cascade non-atomic · P2-2 `0059` re-run abort · P2-4 orphan-auth cleanup · P2-5 `0068` sack RLS leak · P2-7 migrated-status | 🟡 ภูม — follow-up | per-finding detail + suggested fix in the review doc |
 
-**→ The `dave→main` deploy gate is now two-part: (1) migrations `0058`-`0068` on prod [ภูม] + (2) P0-1 fixed [เดฟ].** Both clear in parallel — no extra delay.
+**→ `dave→main` deploy gate: (1) migrations on prod [ภูม — now `0058`-`0070`, see the apply-runbook] + (2) ✅ P0-1 fixed (เดฟ — merged into dave).** Gate (2) is cleared — only the migration apply remains.
+
+## ⚠️ Core-audit finding (2026-05-18) — C-1, a launch-week P1 for ภูม
+
+A money + security audit of the core launch code landed → [`../research/audit-core-2026-05-18.md`](../research/audit-core-2026-05-18.md) — verdict 🟢 HIGH (all prior P0s confirmed fixed line-by-line), **0 new P0** — but **1 P1: C-1.** The `wallet_tx_insert_self_serve` RLS policy (`0007_wallet.sql`) does not constrain the **sign** of `amount`: a customer can self-insert a `pending` `withdraw` of `+50000` — the `0064` overdraw trigger ignores positive amounts, so on an accounting admin's approval the balance **inflates with money that never entered Pacred**. Fix = a new migration re-creating the policy with `amount`-sign bound to `kind`. **ภูม — launch-week P1**, fold it into your migration block. The other 4 P2s (C-2..C-5) are post-launch — detail in the audit doc.
 
 ## Then — your feature queue (UPGRADE_PLAN order)
 
