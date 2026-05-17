@@ -231,7 +231,96 @@ export async function createWithdraw(
 // ────────────────────────────────────────────────────────────
 // CANCEL (user cancels own pending deposit/withdraw)
 // ────────────────────────────────────────────────────────────
-// User-side cancel happens via update from 'pending' → 'cancelled', but
-// our RLS update policy only allows pending→pending. So this currently
-// requires an admin client. Wire-up deferred to Phase G; for now user
-// must contact admin for cancellation.
+// User-side cancel: RLS update policy in 0007 only allows pending→pending
+// (status flips are admin-only). So this action uses the admin client
+// AFTER auth + ownership verification + status guard. Audited via
+// admin_audit_log with admin_id=NULL + customer_initiated=true (mirrors
+// the customer-self-serve refund pattern in actions/refunds.ts).
+//
+// What it does:
+// - Auth-check (customer must be signed in)
+// - Read row via the user-scoped client (RLS verifies ownership)
+// - Refuse if not pending OR not deposit/withdraw OR already terminal
+// - Flip status='cancelled' via admin client
+// - Notify customer
+// - Audit log
+//
+// Why it matters (gap-customer H-3): today a customer who typo'd an
+// amount has to call admin. With this, cancel + redo themselves in 1 click.
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { z } from "zod";
+
+const cancelPendingSchema = z.object({
+  tx_id: z.string().uuid(),
+});
+export type CustomerCancelPendingInput = z.infer<typeof cancelPendingSchema>;
+
+export async function customerCancelPendingWalletTx(
+  input: CustomerCancelPendingInput,
+): Promise<ActionResult<{ tx_id: string }>> {
+  // G-4 — impersonation is read-only.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = cancelPendingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // RLS-scoped read = ownership verification. Returns null if not owned
+  // (customer can't even see other users' rows).
+  const { data: existing } = await supabase
+    .from("wallet_transactions")
+    .select("id, kind, status, amount, profile_id")
+    .eq("id", parsed.data.tx_id)
+    .maybeSingle<{ id: string; kind: string; status: string; amount: number; profile_id: string }>();
+
+  if (!existing)                             return { ok: false, error: "ไม่พบรายการ" };
+  if (existing.profile_id !== user.id)       return { ok: false, error: "ไม่ใช่รายการของคุณ" };
+  if (existing.status !== "pending")         return { ok: false, error: `ยกเลิกไม่ได้ — สถานะปัจจุบัน: ${existing.status}` };
+  if (!["deposit","withdraw"].includes(existing.kind))
+    return { ok: false, error: "ยกเลิกได้เฉพาะรายการฝาก/ถอน" };
+
+  // Flip status via admin client (RLS user-policy blocks status changes).
+  const admin = createAdminClient();
+  const { error: updErr } = await admin
+    .from("wallet_transactions")
+    .update({
+      status: "cancelled",
+      note:   "ยกเลิกโดยลูกค้า (self-cancel)",
+    })
+    .eq("id", existing.id)
+    .eq("status", "pending");    // race-guard: admin must not have just approved
+  if (updErr) return { ok: false, error: `ยกเลิกไม่สำเร็จ: ${updErr.message}` };
+
+  // Audit (customer-initiated cancel — admin_id = user.id per the same
+  // pattern in actions/refunds.ts customerCreateRefundRequest).
+  await admin.from("admin_audit_log").insert({
+    admin_id:    user.id,
+    action:      "wallet_tx.customer_cancel",
+    target_type: "wallet_transaction",
+    target_id:   existing.id,
+    payload:     {
+      kind:                 existing.kind,
+      amount:               existing.amount,
+      customer_initiated:   true,
+      customer_profile_id:  user.id,
+    },
+  });
+
+  void sendNotification(user.id, notify.walletTxStatusChanged({
+    kind:   existing.kind,
+    status: "cancelled",
+    amount: Number(existing.amount),
+    note:   "ยกเลิกโดยลูกค้า",
+    txId:   existing.id,
+  }));
+
+  revalidatePath("/wallet/history");
+  return { ok: true, data: { tx_id: existing.id } };
+}

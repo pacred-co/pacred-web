@@ -5,6 +5,7 @@ import { getMyCredit } from "@/actions/credit";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { Wallet as WalletIcon, Plus, History, Banknote, CreditCard, ArrowDownToLine, ChevronRight, Home } from "lucide-react";
 import { CreditLinePanel } from "../credit-panel";
+import { CancelPendingButton } from "./cancel-pending-button";
 
 const BUCKET_LABEL: Record<WalletTransaction["bucket"], string> = {
   main:     "เงินสด",
@@ -259,6 +260,10 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                           <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[tx.status]}`}>
                             {STATUS_LABEL[tx.status]}
                           </span>
+                          {/* gap-customer H-3: self-cancel pending deposit/withdraw — no need to call admin */}
+                          {tx.status === "pending" && (tx.kind === "deposit" || tx.kind === "withdraw") && (
+                            <CancelPendingButton txId={tx.id} kind={tx.kind} />
+                          )}
                         </td>
                       </tr>
                     );

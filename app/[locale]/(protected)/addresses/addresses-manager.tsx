@@ -13,6 +13,7 @@ import {
 } from "@/actions/addresses";
 import type { AddressInput } from "@/lib/validators/addresses";
 import { Pencil, Trash2, Star, Phone, MapPin, Plus } from "lucide-react";
+import { THAI_PROVINCES } from "@/lib/thai-provinces";
 
 type Props = {
   initialAddresses: Address[];
@@ -269,7 +270,18 @@ export function AddressesManager({ initialAddresses }: Props) {
               <input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} className={inputCls} required />
             </Field>
             <Field label={t("province")} required>
-              <input value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })} className={inputCls} required />
+              {/* gap-customer H-6: dropdown of 77 official provinces (no more typo-prone typing) */}
+              <select
+                value={form.province}
+                onChange={(e) => setForm({ ...form, province: e.target.value })}
+                className={inputCls}
+                required
+              >
+                <option value="" disabled>— เลือกจังหวัด —</option>
+                {THAI_PROVINCES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </Field>
             <Field label={t("postalCode")} required hint={t("postalCodeHint")}>
               <input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} className={inputCls} required maxLength={5} />
