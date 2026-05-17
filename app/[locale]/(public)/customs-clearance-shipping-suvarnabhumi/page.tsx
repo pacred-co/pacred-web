@@ -218,16 +218,14 @@ export default async function CustomsClearancePage({
               รับเคลียร์ทุกเรื่องที่ด่าน — ทั้งภาษีนำเข้า ของติดด่าน และพิธีการศุลกากร <span className="text-primary-600/80 font-semibold">เริ่มเพียง 2,800 บาท</span> ทักไลน์ปรึกษาฟรีตลอด 24 ชม.
             </h2>
 
-            {/* ─── Service scope banner (red, per ปอน 2026-05-18) — replaces
-                 the prior white border-card so the section header reads as a
-                 prominent banner like the green LINE add-friend strip ─── */}
+            {/* ─── Service scope banner (red, per ปอน 2026-05-18 v2) ─── */}
             <div
-              className="relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.30)]"
-              style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
+              className="relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.30)]"
+              style={{ background: "linear-gradient(135deg, #d60000 0%, #b30000 45%, #8c0000 100%)" }}
             >
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-0 opacity-50 mix-blend-overlay"
+                className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
                 style={{ background: "radial-gradient(circle at 25% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
               />
               <span
@@ -247,14 +245,16 @@ export default async function CustomsClearancePage({
                     width={28}
                     height={28}
                     aria-hidden
-                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain brightness-0 invert"
+                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
                   />
                   <span className="inline-flex flex-wrap items-center gap-1.5">
                     บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
-                    <span className="inline-flex items-center gap-0.5">
-                      <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
-                      <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
-                      <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
+                    {/* Transport icons — desktop inline only; mobile hides
+                        them so the title doesn't wrap awkwardly */}
+                    <span className="hidden md:inline-flex items-center gap-0.5">
+                      <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
                     </span>
                   </span>
                 </h3>
