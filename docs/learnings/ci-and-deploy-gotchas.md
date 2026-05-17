@@ -295,3 +295,33 @@ pnpm start                                         # now pages render
 - [`docs/env.md`](../env.md) — env var reference.
 
 ---
+
+## [2026-05-17] A "bug on branch `dave`" can be a stale-worktree phantom — verify against the LIVE `dave` worktree
+
+**Context:** A task arrived describing a concrete defect — `supabase/migrations/README.md` "on branch `dave`" was missing the apply-table row for `0053_freight_invoice_wht.sql` (table jumped row 52 `0052` → row 53 `0060`). It asked to insert the row, renumber the sequence, and commit on the handed-out Claude worktree branch.
+
+**Symptom / question:** The defect was real in the worktree the agent was handed (`.claude/worktrees/optimistic-hypatia-8e9c86`) — but that worktree did not even contain `0053_freight_invoice_wht.sql`. The task premise ("the file exists in the repo") failed on the spot: `ls` and `find` could not locate it.
+
+**Root cause:** Three checkouts of the same repo, three different ages:
+- `.claude/worktrees/optimistic-hypatia-8e9c86` (handed-out worktree) — ~20 commits behind `dave`; missing the `0053` file *and* its README row.
+- `/Users/dev/pacred-web` (the **main worktree**, branch `main`) — **532 commits behind `dave`**; migrations dir held only `0002_orders.sql` and had no migrations README at all.
+- `.claude/worktrees/recursing-meitner-d8aa71` (branch `dave`, the live integration branch) — current; README **already** had the `0053` row, correctly numbered and contiguous. The real fix had landed in commit `e3245e3` ("docs: F-1 fix — add 0053 to migrations/README").
+
+`dave` even advanced mid-session (`c9b92a6` → `705edb0`) — another agent was committing to it in parallel — so an early `git rev-parse dave` and a later `git worktree list` disagreed until reconciled by an ancestry check.
+
+The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing the README on the stale worktree would have re-derived an existing fix, produced a README linking a file absent from that branch, and set up a merge conflict against `dave`'s already-correct README.
+
+**Fix / answer:** Before acting on any task phrased as "X is broken/missing on branch `dave`":
+1. `git worktree list` → the line tagged `[dave]` is the path of the live `dave` checkout.
+2. Inspect THAT path on disk (or `git show dave:<file>`), not the worktree you were handed.
+3. `git rev-list --left-right --count <here>...dave` → `0   N` means `dave` is N commits ahead and you are a pure ancestor (a clean `git merge --ff-only dave` syncs you).
+4. If the fix already exists on `dave` → do not re-create it. Sync, don't re-edit.
+
+**Why this matters next time:** Claude worktree branches are cut from a point-in-time snapshot; `dave` keeps moving. A task author looking at the live `dave` and an agent looking at a stale handed-out worktree will describe the same repo in two incompatible ways. Early-warning signs you are on a stale checkout: a task asserts "file X exists" but `ls`/`find` can't see it; a README references migrations your `supabase/migrations/` dir doesn't have. When a task premise fails on the spot — stop and reconcile branch ages before editing. Don't "fix" a phantom.
+
+**Cross-links:**
+- `AGENTS.md` §1 — session-start handshake (`git fetch` + branch sync); this is the exact failure it exists to prevent.
+- Commit `e3245e3` "docs: F-1 fix — add 0053 to migrations/README" — where the real fix landed.
+- The entry above (worktree smoke prep) — another worktree-specific trap.
+
+---
