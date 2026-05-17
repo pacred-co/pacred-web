@@ -13,13 +13,12 @@
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
-> 🟢 **Status (2026-05-17 night):** 0044-0057 + 0060-0064 already applied
-> by ภูม. **3 new post-launch migrations to apply next:**
-> - `0058_refund_requests.sql` (U1-6 refund money path)
-> - `0059_container_unify.sql` (U1-1 cargo_containers backfill + FK repoint)
-> - `0066_post_u1_audit_fixes.sql` (refund_requests terminal-state lock + freight_invoices single-active-per-shipment unique)
+> 🟢 **Status (2026-05-17 night, updated):** 0044-0066 applied by ภูม.
+> **2 new Phase U2 migrations queued:**
+> - `0067_pcs_customer_migration.sql` (U2-1 PCS→Pacred customer backfill + member_code_seq offset — Agent-built, see below)
+> - `0068_cargo_sacks.sql` (U2-5 "กระสอบรวม" entity + next_sack_code() + RLS)
 >
-> Apply 0058 → 0059 → 0066 in that order. All idempotent + zero data migration.
+> Apply 0067 → 0068 in that order. All idempotent + zero data migration.
 
 | # | File | Adds | Feature | Review |
 |---|---|---|---|---|
@@ -44,7 +43,9 @@ each file into the SQL Editor **in ascending number order**.
 | 0064 | `0064_wallet_overdraw_guard.sql` | `wallet_available_balance()` fn + `wallet_assert_no_overdraw()` BEFORE-trigger (FOR UPDATE hard floor) | H-1/S-5 overdraw guard | ✅ |
 | 0058 | `0058_refund_requests.sql` | `refund_requests` + `refund_request_seq` + `next_refund_request_no()` + RLS | U1-6 refund money path | ⏳ apply next |
 | 0059 | `0059_container_unify.sql` | 10 backward-compat columns on `cargo_containers` + backfill from legacy `containers` + `forwarders.cargo_container_id` + `service_orders.cargo_container_id` | U1-1 container unify | ⏳ apply next |
-| 0066 | `0066_post_u1_audit_fixes.sql` | `refund_requests_block_terminal_reversal()` BEFORE-trigger + `freight_invoices_one_active_per_shipment_uidx` partial-unique | Post-U1 audit fixes (MED + LOW from 871450b/0e652f0/185adfd review) | ⏳ apply next |
+| 0066 | `0066_post_u1_audit_fixes.sql` | `refund_requests_block_terminal_reversal()` BEFORE-trigger + `freight_invoices_one_active_per_shipment_uidx` partial-unique | Post-U1 audit fixes (MED + LOW from 871450b/0e652f0/185adfd review) | ✅ |
+| 0067 | `0067_pcs_customer_migration.sql` | `profiles.migrated_from_pcs` + `pcs_legacy_customers_staging` + `member_code_seq` offset helper | U2-1 PCS→Pacred customer backfill | ⏳ apply next (after staging table loaded) |
+| 0068 | `0068_cargo_sacks.sql` | `cargo_sacks` + `cargo_sack_seq` + `next_sack_code()` + `cargo_shipments.cargo_sack_id` + RLS | U2-5 sack entity (กระสอบรวม) | ⏳ apply next |
 
 ---
 
