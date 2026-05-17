@@ -794,8 +794,8 @@ export default async function CustomsClearancePage({
                 CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
               </div>
               <h3 className="text-[20px] md:text-[28px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white">
-                มั่นใจ เคลียร์ของได้แน่ เมื่อเลือก<br className="md:hidden" />
-                {" "}<span className="text-primary-600">Pacred Shipping</span>
+                มั่นใจ เคลียร์ของได้แน่<br className="md:hidden" />
+                {" "}เมื่อเลือก <span className="text-primary-600">Pacred Shipping</span>
               </h3>
               <p className="mt-2.5 md:mt-3 text-[14px] md:text-[16px] leading-[1.65] font-medium text-muted max-w-[820px] mx-auto">
                 อยู่ข้างคุณทุกขั้นตอน — <strong className="text-primary-600 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong> ของออกจากด่านเร็ว คุ้มค่าจริง ทักไลน์ปรึกษาฟรีตลอด 24 ชม. ทีมตอบไว
