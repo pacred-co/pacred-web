@@ -65,6 +65,21 @@ export type Container = {
    *  shipments accepted (enforced server-side in attach/manual-create
    *  actions). NULL = no deadline. */
   close_at:        string | null;
+  /** U1-1: source row ID in legacy public.containers when this row was
+   *  mirrored via migration 0059. NULL for spine-native rows. */
+  legacy_container_id?:  string | null;
+  /** U1-1: legacy public.containers.container_no preserved for search
+   *  + audit. NULL for spine-native rows. */
+  legacy_container_no?:  string | null;
+  /** U1-1: legacy ops fields absorbed into the spine row. */
+  vessel?:             string | null;
+  carrier?:            string | null;
+  vendor_container_id?: string | null;
+  cost_thb?:           number | null;
+  note?:               string | null;
+  cleared_at?:         string | null;
+  delivered_at?:       string | null;
+  cancelled_at?:       string | null;
   created_at:      string;
   updated_at:      string;
 };
