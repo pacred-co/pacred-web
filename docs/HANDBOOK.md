@@ -10,9 +10,9 @@ Last updated: 2026-05-18 (post-launch revision)
 
 **Pacred is in production.** The cargo revenue path works end-to-end and the emergency "เผาเงิน" sprint is behind us. Current focus = stabilise + deepen the launched product.
 
-📋 Current roadmap: [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) — the 3-tier capability synthesis (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems). The earlier [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) U1-U4 sequence has all shipped; the Tier 0/1/2 batches have also shipped on `dave`. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
+📋 Current roadmap: [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — the canonical forward plan (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future). Phase 0 (launch + U1-U4 + capability Tier 0/1/2) has all shipped on `dave`; the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
 
-Decision lens (post-launch): does this make the product more **true** · **billable** · **measurable**? — and never code a roadmap item before its §0 gate is green.
+Decision lens (post-launch): does this make the product more **true** · **billable** · **measurable**? — and never ship a stage before the quality gate (verify + build smoke + a functional pass) is green.
 
 ---
 
@@ -68,10 +68,10 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 **Need help:**
 - งานของฉันคืออะไร → YOUR brief at [`briefs/<your-name>.md`](briefs/) + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (post-launch roadmap)
-- 🚀 post-launch progress / what's next? → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (U-items) + [`STRATEGY.md`](STRATEGY.md) §9 (shipped vs pending)
+- 🚀 post-launch progress / what's next? → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (the phase/stage plan) + [`STRATEGY.md`](STRATEGY.md) §9 (shipped vs pending)
 - Daily integration cycle (pull/push cadence, review checklist) → [`team.md`](team.md) §10
 - ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
-- 🚨 มี blocker / urgent? → latest `runbook/team-status-*.md` + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) §0 (the deploy gate)
+- 🚨 มี blocker / urgent? → latest `runbook/team-status-*.md` + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) Phase 1 (the release gate)
 - เขียน code ยังไง → [`conventions.md`](conventions.md)
 - Architecture → [`architecture.md`](architecture.md) + [`architecture/container-centric-model.md`](architecture/container-centric-model.md)
 - ที่อยู่ / เบอร์ Pacred / LINE OA IDs → [`pacred-info.md`](pacred-info.md)
@@ -86,9 +86,9 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 | File | คืออะไร |
 |---|---|
 | [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~400-line read. Open every session for full context. |
-| [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) | **Post-launch capability roadmap** — the current "what's next" doc (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems) + a per-role work-split. |
-| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | The U1-U4 sequence (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory) — all shipped; kept as the spec for those items. |
-| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 11 starter skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep · branch-integrate-loop) |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **The canonical forward roadmap** — the post-launch phase/stage plan (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future) + a per-role work-split. Open every session for "what's next". |
+| [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) | The 2026-05-18 capability synthesis that seeded the roadmap — the Tier 0/1/2/3 analysis behind the phases. |
+| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 12 starter skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep · branch-integrate-loop · mobile-first-verify) |
 | [`learnings/_index.md`](learnings/_index.md) | Compounding knowledge corpus — every dev / agent adds new gotchas via `scholar-immortal` skill. 1-min scan each session. |
 
 ### 🧑‍💻 Role briefs (force-read — open YOUR file first)
@@ -108,6 +108,7 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 |---|---|---|
 | [`team.md`](team.md) | **Roles + permissions + branch flow (น้อง pull from `dave`!) + §3.0 push-frequency cost rule (save-points only) + §6 self-directed mode + §9 Claude Code async collab** | ทุกคน — ครั้งแรก |
 | [`conventions.md`](conventions.md) | Code style + commit format + i18n + DB rules | ทุกคน |
+| [`mobile-first-playbook.md`](mobile-first-playbook.md) | Mobile-first checklist + Tailwind patterns + pitfalls — Pacred customers are mostly on phones | ปอน + anyone touching customer UI |
 | [`env.md`](env.md) | Every env var explained + production checklist (17 sections covering Supabase / OTP / SMS / China search / PromptPay / LINE+LIFF / Sentry / Upstash / hCaptcha / **MOMO JMF**) | เดฟ + ภูม + ก๊อต |
 | [`pacred-info.md`](pacred-info.md) | Company info SOT — addresses, phones, emails, LINE OA, sales reps | ทุกคน — when touching contact UI |
 | [`glossary.md`](glossary.md) | WHT / 50-ทวิ / Form-E / D/O / CBM / ใบกำกับภาษี / ใบขนสินค้า / GZE-GZS / CBX-EK + code formats + role workspaces + forbidden legacy patterns | ทุกคน — when a term ใหม่ |
@@ -117,8 +118,8 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 | File | คืออะไร |
 |---|---|
-| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **The current execution doc** — post-launch roadmap (U1-U4 + the §0 deploy gate) |
-| [`PORT_PLAN.md`](PORT_PLAN.md) | Sprint history + cargo/gap-hunt backlogs — Parts O–W (Part V = cargo-forensics, Part W = gap-hunt). ~1825 lines — watch the 2000-line cap; archive oldest Parts before adding. |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **The canonical forward roadmap** — post-launch phase/stage plan + work-split |
+| [`PORT_PLAN.md`](PORT_PLAN.md) | Sprint history + cargo/gap-hunt backlogs — Parts V/W (Part V = cargo-forensics, Part W = gap-hunt). Historic Parts O–U archived to [`sprints/archive-o-to-u.md`](sprints/archive-o-to-u.md). |
 | [`sprints/archive-a-to-n.md`](sprints/archive-a-to-n.md) | Historic survey + earlier sprint plans (Parts A–N — moved out for size, kept for reference) |
 | [`architecture.md`](architecture.md) | System architecture — diagrams, DB schema, auth flow, security |
 | [`architecture/container-centric-model.md`](architecture/container-centric-model.md) | **NEW** warehouse / container / shipment data spine — 4 tables, RLS, status enums, CT-1..CT-8 implementation |
@@ -221,7 +222,7 @@ git push origin <my-branch>
 
 ## 🎯 Current state (2026-05-18 — post-launch)
 
-- **Active phase:** 🚀 **Post-launch capability roadmap** ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) — Tier 0/1/2/3). Production launched 2026-05-17; the cargo revenue path works end-to-end. Brief-driven async execution — start each session with your brief → the capability synthesis → work your tier items → push at save-points.
+- **Active phase:** 🚀 **Post-launch — Phase 1 release** ([`UPGRADE_PLAN.md`](UPGRADE_PLAN.md): Phase 0 foundation shipped → **Phase 1 release** → Phase 2 the four owner systems → Phase 3 future). Production launched 2026-05-17; the cargo revenue path works end-to-end. Brief-driven async execution — start each session with your brief → UPGRADE_PLAN → work your phase items → push at save-points.
 - **Branch state:** `main` = production (live, 19 launch-week migrations on prod) · `dave` = integration, well ahead of `main` (carries the shipped U1/U2/U4 + Tier 0/1/2 batches) · `Poom` + `podeng` = น้อง working branches, synced to `dave`.
 - **Production readiness:** launched — customer portal + 60+ admin routes + cargo loop all live. The bar is now "is the flow *true* / *billable* / *measurable*" — see [`STRATEGY.md`](STRATEGY.md) §9 for the full shipped-vs-pending snapshot.
 - **Recent landmarks (latest first):**
@@ -234,13 +235,13 @@ git push origin <my-branch>
   - **Launch (2026-05-17)** — W-1 security keystone (`0062`) · W-3 wallet-integrity (`0063`) · `0064` overdraw-guard · S-3/S-4/S-7 · production smoke gate passed → `dave→main` deployed (`314a528`, then `4ef2ee6`)
 - **Next `dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0080` to prod. See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
 - **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo). V3 wishlist appends to `docs/v3-wishlist.md` — don't refactor V2 into V3 mid-flight.
-- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) + the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) U-item table for your role.
+- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) + the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) work-split for your role.
 
 ---
 
 ## ⚠️ Things that bite
 
-1. **Post-launch — `dave→main` is gated.** Any new `supabase/migrations/*` must be applied to **prod** Supabase before the deploy, else the new routes 500. See [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) §0.
+1. **Post-launch — `dave→main` is gated.** Any new `supabase/migrations/*` must be applied to **prod** Supabase before the deploy, else the new routes 500. See [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) Phase 1.
 2. **Skipping your brief = wandering session.** Open [`briefs/<your-name>.md`](briefs/) FIRST. CLAUDE.md top section enforces this.
 3. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
 4. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — `false` in prod (flipped at launch after ThaiBulkSMS signup). See [`env.md`](env.md) §3.

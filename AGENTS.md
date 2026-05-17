@@ -18,7 +18,7 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 
 **Step 2 — Scan canonical context** (parallel reads):
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~370 lines)
-- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch roadmap (what's next + the §0 gate)
+- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch roadmap (the phase/stage plan + work-split)
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since last session (immortal-scholar — `.claude/skills/scholar-immortal/`)
 - Your brief's "Force-read" cross-links (relevant ADRs, runbooks)
 
@@ -36,9 +36,9 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 
 Pacred **launched 2026-05-17**. The emergency "เผาเงิน" framing is over — but the lens stays: prefer work that makes the product more **true** (the flow actually closes), **billable** (revenue is captured, not silently lost), or **measurable** (you can see what's happening). De-prioritise V3 prep, broad refactors, and nice-to-haves that don't move one of those three.
 
-Difference from emergency mode: **plan work properly now.** Don't ship half-built to chase a deadline; don't skip the §0 gate to "save time". Crisis-mode shortcuts are no longer the right call.
+Difference from emergency mode: **plan work properly now.** Don't ship half-built to chase a deadline; don't skip the quality gate to "save time". Crisis-mode shortcuts are no longer the right call.
 
-📋 Post-launch work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
+📋 Post-launch work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
 
 ## 3. Don't preempt brand cleanup
 
@@ -70,7 +70,7 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 11 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 12 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
 - `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
 - `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
@@ -83,6 +83,7 @@ The `.claude/skills/` directory contains 11 starter skills (see [`.claude/skills
 - `legacy-php-sweep` — port from `D:\xampp\htdocs\pcscargo` to Pacred Next.js
 - `qa-flow-simulator` — agent simulates a user journey end-to-end, asserts the real outcome (not just a 200)
 - `branch-integrate-loop` — consolidate teammate branches into `dave` safely (integrate → verify → distribute)
+- `mobile-first-verify` — render a customer surface at 360/390px + assert it's mobile-clean before pushing
 
 When a situation matches a skill's description → invoke via the Skill tool (`skill: <name>`). Or describe the situation and let the harness match.
 
@@ -96,7 +97,7 @@ Every time you learn something tricky — a Next 16 gotcha, a Vercel surprise, a
 
 **Before any deploy to `main`:** `pnpm build && pnpm start`, then `curl` every NEW or CHANGED route (especially dynamic `[param]` routes) — each must return 200 (or an intended 3xx/404). A 500 there = a 500 in production. Full procedure: "Production smoke gate" in [`.claude/skills/phase-verify-loop/SKILL.md`](.claude/skills/phase-verify-loop/SKILL.md).
 
-**The route smoke is necessary but NOT sufficient — it cannot detect a dead database.** Public pages degrade to `200` and protected pages `307`-redirect *before* any DB query, so "every route → 200/307, zero 500s" passed even against a deleted Supabase project on launch day (`docs/learnings/ci-and-deploy-gotchas.md`). To gate a deploy, also run the [`qa-flow-simulator`](.claude/skills/qa-flow-simulator/SKILL.md) skill (asserts a real DB row / balance delta — the UPGRADE_PLAN §0 functional gate) or probe the DB directly: `curl https://<ref>.supabase.co/auth/v1/health` (live → `401 no apikey`; deleted → NXDOMAIN).
+**The route smoke is necessary but NOT sufficient — it cannot detect a dead database.** Public pages degrade to `200` and protected pages `307`-redirect *before* any DB query, so "every route → 200/307, zero 500s" passed even against a deleted Supabase project on launch day (`docs/learnings/ci-and-deploy-gotchas.md`). To gate a deploy, also run the [`qa-flow-simulator`](.claude/skills/qa-flow-simulator/SKILL.md) skill (asserts a real DB row / balance delta — the functional quality gate) or probe the DB directly: `curl https://<ref>.supabase.co/auth/v1/health` (live → `401 no apikey`; deleted → NXDOMAIN).
 
 **Pattern rule:** a page under a dynamic segment (`[slug]`/`[port]`/`[id]`) that renders `<NavBar>` (or anything reading cookies/auth) MUST have `export const dynamic = "force-dynamic"` — else `DYNAMIC_SERVER_USAGE` 500. See [`docs/learnings/nextjs-16-quirks.md`](docs/learnings/nextjs-16-quirks.md).
 

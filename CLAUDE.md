@@ -21,22 +21,22 @@
 
 Pacred **launched to production 2026-05-17** — `main` is live + verified healthy on a separate prod Supabase project. The cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The emergency "เผาเงิน" framing is behind us — runway is no longer the daily lens; **stabilising + deepening the launched product** is.
 
-**Current phase:** post-launch **capability roadmap** — `docs/research/capability-tools-strategy-2026-05-18.md` synthesises the next 3 tiers (read it first). The earlier `docs/UPGRADE_PLAN.md` (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory) has **all shipped on `dave`** (U1 refund money path + container unify · U2 PCS migration + per-container cost ledger · U4 staff RBAC console + credit line). On top of it the **Tier 0/1/2** capability batches have also shipped on `dave`:
+**Current phase:** post-launch — **Phase 1 release**. The canonical roadmap is `docs/UPGRADE_PLAN.md` — a phase/stage plan (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future). **Phase 0 has all shipped on `dave`** — the launch + the U1-U4 upgrade (refund money path · container unify · PCS migration · per-container cost ledger · staff RBAC console · credit line) + the capability **Tier 0/1/2** batches:
 - **Tier 0** — `ContactForm` live on `/contact` (`b90806b`); remaining = dashboard clicks (analytics env vars · GSC + sitemap · Google Business · Meta Business — ก๊อต/เดฟ).
 - **Tier 1** — `/start-order` + `QuoteCTA` calculator→buy bridge · CI `pnpm build` step · `/admin/kpi` exec dashboard (`bcd752c`).
 - **Tier 2** — cross-department `work_items` work-board: migration `0080` + `/admin/board` + `/admin/inbox` (`bcd752c`). MOMO sync + per-department workspaces remain specced.
-- **Tier 3** — 3 owner-requested systems designed (internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้) — design docs in `docs/research/`.
+- **Tier 3 (Phase 2)** — four owner-requested systems designed (internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ · platform-observability) — design docs in `docs/research/`.
 
 The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
 
 **Decision lens (every task):** still revenue-aware — "does this make the product more *true*, *billable*, or *measurable*?" — but no longer crisis-mode. Plan work properly; don't ship half-built to chase a deadline.
 
-📋 **Roadmap:** [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) — the post-launch capability synthesis (Tier 0/1/2/3 + work-split). [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the U1-U4 sequence (shipped). [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V/W = the cargo + gap-hunt backlog they draw from.
+📋 **Roadmap:** [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — THE canonical forward plan (phase/stage + work-split). [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) — the capability synthesis that seeded it. [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V/W = the cargo + gap-hunt backlogs they draw from.
 
 **Anti-patterns (still hold post-launch):**
 - V3 architecture redesign in this repo (V3 = `pacred-DPX`, separate repo — append ideas to `docs/v3-wishlist.md`)
 - Wide refactor cleanup with no product tie-in
-- Coding an UPGRADE_PLAN item before its §0 gate is green (migrations applied + live functional verify)
+- Shipping a stage before the quality gate is green (`pnpm verify` + build smoke + a functional pass)
 - Scrub PCS/TTP/ไอแต้ม **before** ก๊อต API switchover (would break the revenue path)
 
 ---
@@ -84,7 +84,7 @@ The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080`
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
 
 **🛠 Skills kit (playbooks the agent follows when triggered):**
-- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 11 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 12 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify
 
 **📚 Learnings (compounding knowledge — read before re-debugging):**
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill

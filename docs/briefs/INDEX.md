@@ -11,7 +11,7 @@
 > cargo sprint is behind us. Current work is sequenced in
 > [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) (the post-launch roadmap).
 > Each brief still opens with its role's current pickup list — read
-> your brief, then the UPGRADE_PLAN U-item table for your role.
+> your brief, then the UPGRADE_PLAN work-split for your role.
 
 Last reviewed: 2026-05-18 (post-launch revision)
 
@@ -107,8 +107,8 @@ This pattern is now **mandatory** per [`/CLAUDE.md`](../../CLAUDE.md) "Read brie
 | Doc | Purpose |
 |---|---|
 | [`../STRATEGY.md`](../STRATEGY.md) | **Master strategic single-read** — all briefs/ADRs/plans condensed (use as session warm-up) |
-| [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) | **Post-launch roadmap** — the current execution doc (U1-U4 + §0 deploy gate) |
-| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 10 playbooks for repeatable patterns |
+| [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) | **Post-launch roadmap** — the canonical forward plan (phase/stage + work-split) |
+| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 12 playbooks for repeatable patterns |
 | [`../learnings/_index.md`](../learnings/_index.md) | Compounding learnings — scan at session start |
 | [`../HANDBOOK.md`](../HANDBOOK.md) | Master index — start of everything |
 | [`../team.md`](../team.md) | Role + branch + workflow rules |

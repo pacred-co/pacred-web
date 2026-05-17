@@ -49,7 +49,7 @@ A separate **LINE Login channel "Pacred Login"** (channel ID `2010105778`) was c
 
 ## 🚀 Post-launch focus (read FIRST)
 
-Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. The lens stays revenue-aware: prefer work that makes the product more **true** / **billable** / **measurable**. Plan work properly now — don't skip the §0 gate or ship half-built to chase a deadline.
+Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. The lens stays revenue-aware: prefer work that makes the product more **true** / **billable** / **measurable**. Plan work properly now — don't skip the quality gate or ship half-built to chase a deadline.
 
 **Your job post-launch:** gate `dave→main` deploys · finish the Tier-0 dashboard (the conversion-visibility unblock) · clear partner-API decisions for ภูม · watch production.
 

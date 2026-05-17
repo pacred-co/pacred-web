@@ -24,7 +24,7 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 ## 🚀 Post-launch focus (read FIRST)
 
-Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ภูม is still the single biggest backend lever** — the cargo path + the Tier-3 owner-requested systems are where the product gets deeper. The lens stays: more **true** / **billable** / **measurable** — and never code a roadmap item before its §0 gate is green.
+Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ภูม is still the single biggest backend lever** — the cargo path + the Tier-3 owner-requested systems are where the product gets deeper. The lens stays: more **true** / **billable** / **measurable** — and never ship a stage before the quality gate is green.
 
 **ภูม post-launch priorities** — see the §"Current state" block above: clear the migration gate first (unblocks `dave→main`), then build internal-chat IC-1 → disbursement → china-ops (volume-gated).
 

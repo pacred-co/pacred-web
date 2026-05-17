@@ -25,7 +25,7 @@ Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Aut
 
 The emergency cargo sprint is over — Pacred is in production. คุณคือ integrator: keep ภูม + ปอน + ก๊อต shipping cleanly, drive the post-launch roadmap, watch production.
 
-**The lens:** does this make the product more **true** / **billable** / **measurable**? — and never code a roadmap item before its §0 gate is green.
+**The lens:** does this make the product more **true** / **billable** / **measurable**? — and never ship a stage before the quality gate is green.
 
 **Sequenced post-launch work** → [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) is the canonical forward roadmap. It was seeded by [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — Tier 0 connect (✅ code shipped, dashboard pending) → Tier 1 buy-bridge (✅ shipped) → Tier 2 internal OS (✅ work-board shipped) → Tier 3 owner systems (designed). The earlier U1-U4 sequence has all shipped. The cargo + gap-hunt backlogs they draw from = [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V + Part W.
 

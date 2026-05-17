@@ -32,7 +32,7 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 - **The canonical forward roadmap is [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** — the single phase/stage plan for what's next. The 3-tier **capability** synthesis ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md): Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems) is the 2026-05-18 analysis that seeded it. The earlier U1-U4 sequence has all shipped.
 
 **Decision lens (post-launch):**
-> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never code a roadmap item before its §0 gate is green.
+> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never ship a stage before the quality gate is green.
 
 **Full post-launch plan:** [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — THE canonical forward roadmap. Seeded by [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (the Tier 0/1/2/3 synthesis). Backlogs they draw from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
 
@@ -285,7 +285,7 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | Skill | When to invoke | Purpose |
 |---|---|---|
 | **phase-verify-loop** | After finishing any phase / batch of work | Assume → check → verify → analyze → fix in iterations until clean |
-| **qa-flow-simulator** | Before a `dave→main` deploy · after a flow-touching merge · the UPGRADE_PLAN §0 functional gate | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
+| **qa-flow-simulator** | Before a `dave→main` deploy · after a flow-touching merge · the functional quality gate | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
 | **bug-swarm-loop** | When a bug is intermittent / cross-cutting / hard to repro | Spawn parallel agents to hunt, isolate, fix |
 | **audit-kpi-dashboard** | When you need visibility into "how are we doing?" | Generate KPI dashboards from existing data |
 | **test-coverage-writer** | After a function ships untested | Write unit + integration tests up to repo coverage target |
@@ -295,8 +295,9 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | **copyist-unlimited** | When you need N variants of a template | Clone + adapt template files at scale (e.g., 9 landing shells) |
 | **legacy-php-sweep** | When porting a feature from old PHP system | Sweep the legacy `pcscargo` source for that feature + extract logic + write to Next.js |
 | **branch-integrate-loop** | Consolidating teammate branches into `dave` · before any `dave→main` deploy | The integrate → verify → distribute cycle — merge without losing work or shipping a half-state |
+| **mobile-first-verify** | Before pushing a customer surface · "check this on mobile" · "is this responsive" | Render at the 360/390px reference viewports + assert no horizontal scroll · tap targets ≥ 44px · text ≥ 16px |
 
-11 skills shipped. Index: [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
+12 skills shipped. Index: [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 
 📋 Skills are project assets — ก๊อต iterates on them via skill-creator's eval loop. See [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 
@@ -328,7 +329,7 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 |---|---|
 | งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` + `UPGRADE_PLAN.md` (post-launch roadmap) |
 | ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs) |
-| สเปกของ feature Y? | `UPGRADE_PLAN.md` (U-items) · `PORT_PLAN.md` Parts O–W — search an ID like `U1-3` / `V-A6` / `W-2` |
+| สเปกของ feature Y? | `UPGRADE_PLAN.md` (the phase/stage plan) · `PORT_PLAN.md` Parts O–W — search an ID like `U1-3` / `V-A6` / `W-2` |
 | คาร์โก้/เฟรท: ระบบจริงทำงานยังไง + ปัญหาอะไร? | `audit/cargo-ops-forensics-2026-05-16.md` (decoded model + problem catalog A–F) |
 | Schema ของ table Z? | `architecture/container-centric-model.md` or `decisions/0009-erp-schema-sketch.md` |
 | Env var คืออะไร / set ยังไง? | `env.md` |
