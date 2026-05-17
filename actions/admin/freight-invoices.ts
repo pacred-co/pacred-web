@@ -309,6 +309,24 @@ export async function adminIssueFreightInvoice(
       return { ok: false, error: "no_lines" };
     }
 
+    // U2-3 / ADR-0015 — WHT cert gate (freight side).
+    // If a juristic customer has a withholding_tax_entries row keyed to
+    // THIS freight invoice with cert_status='pending', refuse issuance —
+    // staff explicit ask: "ถ้าไม่แนบใบหัก ยังไม่ได้รับใบเสร็จ".
+    // Personal customers / no-WHT invoices → no row → no gate.
+    const { data: whtRow, error: whtErr } = await admin
+      .from("withholding_tax_entries")
+      .select("id, cert_status")
+      .eq("freight_invoice_id", input.id)
+      .limit(1)
+      .maybeSingle<{ id: string; cert_status: "pending" | "received" | "waived" }>();
+    if (whtErr) {
+      return { ok: false, error: `wht_lookup_failed: ${whtErr.message}` };
+    }
+    if (whtRow && whtRow.cert_status === "pending") {
+      return { ok: false, error: "wht_cert_pending" };
+    }
+
     // Load parent shipment + parties for snapshot.
     const { data: shipment } = await admin
       .from("freight_shipments")

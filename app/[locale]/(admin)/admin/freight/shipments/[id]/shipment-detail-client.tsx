@@ -29,6 +29,8 @@ import {
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
   type FreightPaymentMethod, type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
+// U2-3 — reuse the cargo WHT panel for freight invoices (extended for "freight_invoice" parent).
+import { WhtPanel, type WhtPanelEntry } from "@/app/[locale]/(admin)/admin/tax-invoices/[id]/wht-panel";
 
 export type PartyData = {
   id:       string;
@@ -116,6 +118,10 @@ type Props = {
   lines:          LineItemData[];
   allInvoices:    InvoiceData[];
   paymentPanel:   PaymentPanelData | null;
+  /** U2-3 — WHT entry for the active invoice (null = no WHT row yet). */
+  whtEntry?:      WhtPanelEntry | null;
+  /** U2-3 — suggested commercial value for the WHT panel form (THB). */
+  whtSuggestedGross?: number;
 };
 
 function usd(n: number | null): string {
@@ -128,13 +134,28 @@ function thb(n: number | null): string {
   return "฿" + Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
 
-export function ShipmentDetailClient({ data, parties, activeInvoice, lines, allInvoices, paymentPanel }: Props) {
+export function ShipmentDetailClient({
+  data, parties, activeInvoice, lines, allInvoices, paymentPanel,
+  whtEntry, whtSuggestedGross,
+}: Props) {
   const editable = !["delivered", "cancelled"].includes(data.status);
   void allInvoices; // shown in parent footer
+  // U2-3 — show WHT panel when there's an active (non-cancelled) invoice; admin
+  // can create the WHT row on draft, and once issued the panel acts as the
+  // cert upload + waive surface (mirror cargo flow on /admin/tax-invoices/[id]).
   return (
     <div className="space-y-4">
       <PartiesPanel shipmentId={data.id} parties={parties} editable={editable} />
       <InvoicePanel shipmentId={data.id} activeInvoice={activeInvoice} lines={lines} shipmentEditable={editable} valueBlockReady={data.commercial_value_usd != null && data.exchange_rate != null} />
+      {activeInvoice && (
+        <WhtPanel
+          orderType="freight_invoice"
+          orderId={activeInvoice.id}
+          suggestedGross={whtSuggestedGross ?? 0}
+          suggestedRate={1}
+          entry={whtEntry ?? null}
+        />
+      )}
       {paymentPanel && <PaymentPanel panel={paymentPanel} />}
       <StatusActions data={data} />
     </div>
@@ -314,6 +335,24 @@ function InvoicePanel({
             className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
           >
             📥 Packing List
+          </a>
+          {/* V-E3 Form E (ASEAN-China FTA Certificate of Origin — DRAFT for filing) */}
+          <a
+            href={`/api/freight-invoice/${inv.id}/form-e`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            📥 Form E
+          </a>
+          {/* V-E4 D/O letter (Thai consignee→carrier release request) */}
+          <a
+            href={`/api/freight-invoice/${inv.id}/do-letter`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+          >
+            📥 D/O Letter
           </a>
           <InvoiceActions invoice={inv} hasLines={lines.length > 0} valueBlockReady={valueBlockReady} />
         </div>
@@ -1011,7 +1050,9 @@ function translateError(code: string): string {
   if (code.startsWith("upsert_failed"))  return `อัพเซิร์ทล้มเหลว: ${code}`;
   if (code.startsWith("bad_status"))     return `สถานะไม่ถูกต้อง: ${code}`;
   if (code.startsWith("existing_invoice")) return `มี invoice อยู่แล้ว (${code})`;
+  if (code.startsWith("wht_lookup_failed")) return `อ่าน WHT ล้มเหลว: ${code}`;
   switch (code) {
+    case "wht_cert_pending":               return "issue invoice ไม่ได้ — กรุณาแนบหรือยกเว้นใบ 50 ทวิ ในแผง WHT ก่อน (U2-3)";
     case "not_found":                      return "ไม่พบ";
     case "not_draft":                      return "สถานะไม่ใช่ draft";
     case "terminal_status":                return "สถานะ terminal — แก้ไม่ได้";

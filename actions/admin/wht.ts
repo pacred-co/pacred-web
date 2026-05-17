@@ -52,7 +52,7 @@ export async function createWhtEntry(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // ── Resolve parent order → profile_id snapshot ──
+    // ── Resolve parent order → profile_id snapshot (3-way XOR per U2-3) ──
     let profileId: string | null = null;
     if (d.order_type === "forwarder") {
       const { data, error } = await admin
@@ -63,7 +63,7 @@ export async function createWhtEntry(
       if (error) return { ok: false, error: error.message };
       if (!data)  return { ok: false, error: "forwarder_not_found" };
       profileId = data.profile_id;
-    } else {
+    } else if (d.order_type === "service_order") {
       const { data, error } = await admin
         .from("service_orders")
         .select("profile_id")
@@ -72,9 +72,19 @@ export async function createWhtEntry(
       if (error) return { ok: false, error: error.message };
       if (!data)  return { ok: false, error: "service_order_not_found" };
       profileId = data.profile_id;
+    } else {
+      // freight_invoice (U2-3 / migration 0053)
+      const { data, error } = await admin
+        .from("freight_invoices")
+        .select("profile_id")
+        .eq("id", d.order_id)
+        .maybeSingle<{ profile_id: string }>();
+      if (error) return { ok: false, error: error.message };
+      if (!data)  return { ok: false, error: "freight_invoice_not_found" };
+      profileId = data.profile_id;
     }
 
-    // ── Idempotency guard: refuse duplicate per parent order ──
+    // ── Idempotency guard: refuse duplicate per parent ──
     // The DB enforces this via partial-unique indexes too — this just
     // gives a nicer error than 23505.
     {
@@ -82,10 +92,11 @@ export async function createWhtEntry(
         .from("withholding_tax_entries")
         .select("id")
         .limit(1);
-      const { data: existing, error } =
-        d.order_type === "forwarder"
-          ? await q.eq("forwarder_f_no", d.order_id).maybeSingle<{ id: string }>()
-          : await q.eq("order_h_no",     d.order_id).maybeSingle<{ id: string }>();
+      const lookup =
+        d.order_type === "forwarder"       ? q.eq("forwarder_f_no",     d.order_id)
+        : d.order_type === "service_order" ? q.eq("order_h_no",         d.order_id)
+        :                                    q.eq("freight_invoice_id", d.order_id);
+      const { data: existing, error } = await lookup.maybeSingle<{ id: string }>();
       if (error)    return { ok: false, error: error.message };
       if (existing) return { ok: false, error: "wht_entry_exists" };
     }
@@ -101,18 +112,19 @@ export async function createWhtEntry(
       return { ok: false, error: "net_expected_non_positive" };
     }
 
-    // ── Insert ──
+    // ── Insert (3-way XOR per U2-3) ──
     const payload = {
-      profile_id:         profileId,
-      order_h_no:         d.order_type === "service_order" ? d.order_id : null,
-      forwarder_f_no:     d.order_type === "forwarder"     ? d.order_id : null,
-      gross_invoice_thb:  d.gross_invoice_thb,
-      wht_base_thb:       d.wht_base_thb,
-      wht_rate_pct:       d.wht_rate_pct,
+      profile_id:           profileId,
+      order_h_no:           d.order_type === "service_order"   ? d.order_id : null,
+      forwarder_f_no:       d.order_type === "forwarder"       ? d.order_id : null,
+      freight_invoice_id:   d.order_type === "freight_invoice" ? d.order_id : null,
+      gross_invoice_thb:    d.gross_invoice_thb,
+      wht_base_thb:         d.wht_base_thb,
+      wht_rate_pct:         d.wht_rate_pct,
       wht_amount_thb,
       net_expected_thb,
-      cert_status:        "pending" as const,
-      recorded_by_admin:  adminId,
+      cert_status:          "pending" as const,
+      recorded_by_admin:    adminId,
     };
 
     const { data: inserted, error: insErr } = await admin
@@ -161,13 +173,14 @@ export async function markWhtCertReceived(
 
     const { data: row, error: readErr } = await admin
       .from("withholding_tax_entries")
-      .select("id, cert_status, order_h_no, forwarder_f_no")
+      .select("id, cert_status, order_h_no, forwarder_f_no, freight_invoice_id")
       .eq("id", d.id)
       .maybeSingle<{
-        id:             string;
-        cert_status:    "pending" | "received" | "waived";
-        order_h_no:     string | null;
-        forwarder_f_no: string | null;
+        id:                  string;
+        cert_status:         "pending" | "received" | "waived";
+        order_h_no:          string | null;
+        forwarder_f_no:      string | null;
+        freight_invoice_id:  string | null;
       }>();
     if (readErr) return { ok: false, error: readErr.message };
     if (!row)    return { ok: false, error: "not_found" };
@@ -219,13 +232,14 @@ export async function waiveWhtCert(
 
     const { data: row, error: readErr } = await admin
       .from("withholding_tax_entries")
-      .select("id, cert_status, order_h_no, forwarder_f_no")
+      .select("id, cert_status, order_h_no, forwarder_f_no, freight_invoice_id")
       .eq("id", d.id)
       .maybeSingle<{
-        id:             string;
-        cert_status:    "pending" | "received" | "waived";
-        order_h_no:     string | null;
-        forwarder_f_no: string | null;
+        id:                  string;
+        cert_status:         "pending" | "received" | "waived";
+        order_h_no:          string | null;
+        forwarder_f_no:      string | null;
+        freight_invoice_id:  string | null;
       }>();
     if (readErr) return { ok: false, error: readErr.message };
     if (!row)    return { ok: false, error: "not_found" };
@@ -277,13 +291,14 @@ export async function cancelWhtEntry(
 
     const { data: row, error: readErr } = await admin
       .from("withholding_tax_entries")
-      .select("id, cert_status, order_h_no, forwarder_f_no")
+      .select("id, cert_status, order_h_no, forwarder_f_no, freight_invoice_id")
       .eq("id", d.id)
       .maybeSingle<{
-        id:             string;
-        cert_status:    "pending" | "received" | "waived";
-        order_h_no:     string | null;
-        forwarder_f_no: string | null;
+        id:                  string;
+        cert_status:         "pending" | "received" | "waived";
+        order_h_no:          string | null;
+        forwarder_f_no:      string | null;
+        freight_invoice_id:  string | null;
       }>();
     if (readErr) return { ok: false, error: readErr.message };
     if (!row)    return { ok: false, error: "not_found" };
@@ -339,14 +354,15 @@ export async function uploadWhtCert(
     // (storage policy uses the first folder segment as profile_id).
     const { data: row, error: readErr } = await admin
       .from("withholding_tax_entries")
-      .select("id, profile_id, order_h_no, forwarder_f_no, cert_status")
+      .select("id, profile_id, order_h_no, forwarder_f_no, freight_invoice_id, cert_status")
       .eq("id", whtEntryId)
       .maybeSingle<{
-        id:             string;
-        profile_id:     string;
-        order_h_no:     string | null;
-        forwarder_f_no: string | null;
-        cert_status:    "pending" | "received" | "waived";
+        id:                  string;
+        profile_id:          string;
+        order_h_no:          string | null;
+        forwarder_f_no:      string | null;
+        freight_invoice_id:  string | null;
+        cert_status:         "pending" | "received" | "waived";
       }>();
     if (readErr) return { ok: false, error: readErr.message };
     if (!row)    return { ok: false, error: "not_found" };
@@ -354,7 +370,10 @@ export async function uploadWhtCert(
       return { ok: false, error: "cannot_upload_after_settled" };
     }
 
-    const parentKey = row.order_h_no ?? row.forwarder_f_no ?? "unknown";
+    // U2-3 — 3-way parent: order_h_no | forwarder_f_no | freight_invoice_id
+    const parentKey = row.order_h_no
+      ?? row.forwarder_f_no
+      ?? (row.freight_invoice_id ? `fi-${row.freight_invoice_id.slice(0, 8)}` : "unknown");
     const ext       = inferExtension(file);
     const stamp     = certTimestamp();
     const path      = `${row.profile_id}/${parentKey}/cert-${stamp}${ext}`;
@@ -407,24 +426,37 @@ function inferExtension(file: File): string {
   return ".bin";
 }
 
-function revalidateParent(orderType: "forwarder" | "service_order", orderId: string): void {
+function revalidateParent(
+  orderType: "forwarder" | "service_order" | "freight_invoice",
+  orderId:   string,
+): void {
   if (orderType === "forwarder") {
     revalidatePath(`/admin/forwarders/${orderId}`);
     revalidatePath(`/service-import/${orderId}/receipt`);
-  } else {
+  } else if (orderType === "service_order") {
     revalidatePath(`/admin/service-orders/${orderId}`);
     revalidatePath(`/service-order/${orderId}/receipt`);
+  } else {
+    // U2-3 — freight_invoice id; the freight invoice lives on the parent
+    // freight_shipments detail page (no dedicated /admin/freight/invoices/[id]).
+    // V-E1.1 customer freight portal not yet shipped — skip customer revalidate.
+    revalidatePath("/admin/freight/shipments");
+    // Specific shipment id is the parent of the invoice; broad invalidate is
+    // safer than computing FK chain here.
   }
   revalidatePath("/admin/tax-invoices");
 }
 
 function revalidateParentFromRow(row: {
-  order_h_no:     string | null;
-  forwarder_f_no: string | null;
+  order_h_no:          string | null;
+  forwarder_f_no:      string | null;
+  freight_invoice_id?: string | null;
 }): void {
   if (row.forwarder_f_no) {
     revalidateParent("forwarder", row.forwarder_f_no);
   } else if (row.order_h_no) {
     revalidateParent("service_order", row.order_h_no);
+  } else if (row.freight_invoice_id) {
+    revalidateParent("freight_invoice", row.freight_invoice_id);
   }
 }

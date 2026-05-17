@@ -45,17 +45,22 @@ export function computeWhtNumbers(args: {
 // ────────────────────────────────────────────────────────────
 
 /**
- * Refine: exactly one parent order (forwarder XOR service_order).
- * Mirrors the DB constraint `wht_one_parent_order`.
+ * Refine: exactly one parent order (forwarder XOR service_order XOR freight_invoice).
+ * Mirrors the DB constraint `wht_one_parent_order` (3-way XOR per U2-3 / migration 0053).
  */
 const oneParentOrder = (data: { order_type: string; order_id: string }) =>
-  ["forwarder", "service_order"].includes(data.order_type) && data.order_id.length > 0;
+  ["forwarder", "service_order", "freight_invoice"].includes(data.order_type) && data.order_id.length > 0;
 
 export const createWhtEntrySchema = z
   .object({
-    /** Which parent. EXACTLY ONE must be set. */
-    order_type: z.enum(["forwarder", "service_order"]),
-    /** f_no for forwarder, h_no for service_order. */
+    /**
+     * Which parent. EXACTLY ONE per row.
+     * - "forwarder"       → order_id = f_no (cargo import)
+     * - "service_order"   → order_id = h_no (China shop)
+     * - "freight_invoice" → order_id = freight_invoices.id (V-E1 international freight; U2-3)
+     */
+    order_type: z.enum(["forwarder", "service_order", "freight_invoice"]),
+    /** f_no | h_no | freight_invoices.id (uuid). */
     order_id:   z.string().trim().min(1).max(100),
 
     /**

@@ -46,14 +46,14 @@ export type WhtPanelEntry = {
 };
 
 type Props = {
-  /** Parent tax-invoice id (used only for context display). */
-  taxInvoiceId: string;
-  /** Parent order pointer — exactly one of order_h_no / forwarder_f_no is set. */
-  orderType:    "forwarder" | "service_order";
+  /** Parent tax-invoice id (used only for context display). Optional for freight reuse. */
+  taxInvoiceId?: string;
+  /** Parent pointer — one of order_h_no / forwarder_f_no / freight_invoice_id (U2-3). */
+  orderType:    "forwarder" | "service_order" | "freight_invoice";
   orderId:      string;
-  /** Suggested gross = tax_invoices.total_thb. Used as initial form value. */
+  /** Suggested gross = tax_invoices.total_thb (or freight_invoice.commercial_value_thb). */
   suggestedGross: number;
-  /** Suggested rate based on service: cargo/forwarder → 1, pure service → 3. */
+  /** Suggested rate: cargo/forwarder/freight → 1, pure service → 3. */
   suggestedRate:  1 | 3;
   /** Existing WHT row, if any. */
   entry: WhtPanelEntry | null;
@@ -447,6 +447,7 @@ function translateError(code: string): string {
     case "wht_entry_exists":            return "มี WHT entry อยู่แล้วสำหรับออเดอร์นี้";
     case "forwarder_not_found":         return "ไม่พบเลขที่ forwarder";
     case "service_order_not_found":     return "ไม่พบเลขที่ service order";
+    case "freight_invoice_not_found":   return "ไม่พบ freight invoice (U2-3)";
     case "net_expected_non_positive":   return "ยอด Net ที่คำนวณ ≤ 0 — โปรดตรวจสอบ Gross/Base/Rate";
     case "no_file":                     return "ไม่ได้แนบไฟล์";
     case "file_too_large":              return "ไฟล์ใหญ่เกิน 10 MB";

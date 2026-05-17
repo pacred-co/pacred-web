@@ -206,6 +206,35 @@ export default async function AdminFreightShipmentDetailPage({
       account_type: string | null; tax_id: string | null;
     }>();
 
+  // U2-3 — WHT entry for the active invoice (mirror tax_invoices side).
+  type WhtRow = {
+    id:                 string;
+    cert_status:        "pending" | "received" | "waived";
+    gross_invoice_thb:  number;
+    wht_base_thb:       number;
+    wht_rate_pct:       number;
+    wht_amount_thb:     number;
+    net_expected_thb:   number;
+    cert_number:        string | null;
+    cert_storage_path:  string | null;
+    cert_received_at:   string | null;
+    waived_reason:      string | null;
+    waived_at:          string | null;
+  };
+  let whtEntry: WhtRow | null = null;
+  if (activeInvoice) {
+    const { data: wht } = await admin
+      .from("withholding_tax_entries")
+      .select("id, cert_status, gross_invoice_thb, wht_base_thb, wht_rate_pct, wht_amount_thb, net_expected_thb, cert_number, cert_storage_path, cert_received_at, waived_reason, waived_at")
+      .eq("freight_invoice_id", activeInvoice.id)
+      .limit(1)
+      .maybeSingle<WhtRow>();
+    whtEntry = wht ?? null;
+  }
+  const whtSuggestedGross = Number(
+    invoicesAll.find((i) => i.id === activeInvoice?.id)?.commercial_value_thb ?? 0,
+  );
+
   // Audit.
   const { data: auditRaw } = await admin
     .from("admin_audit_log")
@@ -329,7 +358,7 @@ export default async function AdminFreightShipmentDetailPage({
         </p>
       </section>
 
-      {/* Parties + Invoice + Lines + Payments + Actions (client-managed) */}
+      {/* Parties + Invoice + Lines + Payments + WHT + Actions (client-managed) */}
       <ShipmentDetailClient
         data={detailData}
         parties={parties}
@@ -337,6 +366,8 @@ export default async function AdminFreightShipmentDetailPage({
         lines={lines}
         allInvoices={invoices}
         paymentPanel={paymentPanel}
+        whtEntry={whtEntry}
+        whtSuggestedGross={whtSuggestedGross}
       />
 
       {/* Audit timeline */}
