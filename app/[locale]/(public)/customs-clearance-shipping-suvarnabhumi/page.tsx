@@ -218,32 +218,55 @@ export default async function CustomsClearancePage({
               รับเคลียร์ทุกเรื่องที่ด่าน — ทั้งภาษีนำเข้า ของติดด่าน และพิธีการศุลกากร <span className="text-primary-600/80 font-semibold">เริ่มเพียง 2,800 บาท</span> ทักไลน์ปรึกษาฟรีตลอด 24 ชม.
             </h2>
 
-            {/* ─── Detailed service list — moved here per ปอน 2026-05-16 ─── */}
-            <div className="mt-3 md:mt-4 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
-              <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug md:whitespace-nowrap">
-                <Image
-                  src="/images/hero-section/icon-draf/alert.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  aria-hidden
-                  className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
-                />
-                <span className="inline-flex flex-wrap items-center gap-1.5">
-                  บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
-                  <span className="inline-flex items-center gap-0.5">
-                    <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                    <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                    <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+            {/* ─── Service scope banner (red, per ปอน 2026-05-18) — replaces
+                 the prior white border-card so the section header reads as a
+                 prominent banner like the green LINE add-friend strip ─── */}
+            <div
+              className="relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.30)]"
+              style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-50 mix-blend-overlay"
+                style={{ background: "radial-gradient(circle at 25% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-[0.08]"
+                style={{
+                  backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
+                  backgroundSize: "16px 16px",
+                }}
+              />
+
+              <div className="relative px-4 md:px-6 py-4 md:py-5">
+                <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.35)]">
+                  <Image
+                    src="/images/hero-section/icon-draf/alert.png"
+                    alt=""
+                    width={28}
+                    height={28}
+                    aria-hidden
+                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain brightness-0 invert"
+                  />
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
+                    <span className="inline-flex items-center gap-0.5">
+                      <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
+                      <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
+                      <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert" />
+                    </span>
                   </span>
-                </span>
-              </h3>
+                </h3>
 
-              <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed md:whitespace-nowrap">
-                รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
-              </p>
+                <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-white/95 leading-relaxed md:whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
+                  รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
+                </p>
+              </div>
+            </div>
 
-              <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
+            {/* Bullet list — flat list under the banner (no card wrapper) */}
+            <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
                   { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
                   { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
@@ -260,7 +283,6 @@ export default async function CustomsClearancePage({
                   </li>
                 ))}
               </ul>
-            </div>
 
           </div>
         </section>
