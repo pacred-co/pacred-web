@@ -75,6 +75,15 @@
 | 60 | [0062_rls_role_pin_money_pii.sql](0062_rls_role_pin_money_pii.sql) | role-pin every money/PII/order/pricing `*_admin_all` RLS policy to explicit role arrays + wallet_transactions DB-level audit trigger — W-1 / gap-schema-security S-1 keystone (closes the driver/warehouse direct-PostgREST money-write hole) | **launch fix** |
 | 61 | [0063_wallet_freight_invoice_reference.sql](0063_wallet_freight_invoice_reference.sql) | wallet_transactions reference_type+='freight_invoice' + partial-unique guard on the freight-payment wallet slice — W-3 / gap-schema-security G-3 (freight wallet-pay now writes a real wallet debit instead of a free shipment) | **launch fix** |
 | 62 | [0064_wallet_overdraw_guard.sql](0064_wallet_overdraw_guard.sql) | wallet_available_balance() fn + wallet_assert_no_overdraw() BEFORE-trigger — hard non-negative floor on customer pending main-bucket debits with FOR UPDATE row-lock — gap-customer H-1 / S-5 aggregate-pending overdraw | **launch fix** |
+| 63 | [0080_work_items.sql](0080_work_items.sql) | work_items — cross-department work-board / job-assignment spine (polymorphic entity link + assignment + lifecycle) + ensure_work_item() find-or-create helper. Powers `/admin/board` + per-role inbox. Additive overlay — domain tables unchanged. operating-system-analysis §1.4 Tier-2 centrepiece | **Tier 2** |
+
+> 🔢 **Numbering note — `0080` is a เดฟ-reserved block.** It deliberately skips
+> the `0073`-`0079` range, which is ภูม's active migration sequence. Tier-2 +
+> later เดฟ-side migrations continue from `0080`. Apply order: `0080` depends
+> only on `set_updated_at()` (early migrations) + `is_admin()` (`0015`) + the
+> `admins.role` enum extensions (`0033` + `0054`) — all already applied in
+> production. Idempotent + additive; safe to apply on prod live, zero data
+> migration.
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in

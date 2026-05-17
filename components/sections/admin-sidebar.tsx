@@ -8,7 +8,7 @@ import {
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
   MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell,
-  Search,
+  Search, Kanban, Inbox,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -26,6 +26,12 @@ const items: NavItem[] = [
   { href: "/admin/reports",          label: "รายงานรายได้",     icon: <BarChart3 className="w-5 h-5" />,       group: "ภาพรวม" },
   { href: "/admin/reports/containers-hs", label: "รายงาน HS code",  icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ภาพรวม" },
   { href: "/admin/accounting",       label: "บัญชี Cargo/Freight", icon: <Wallet className="w-5 h-5" />,    roles: ["accounting"], group: "ภาพรวม" },
+
+  // 0080 — cross-department work-board + per-role inbox (operating-system §1.4).
+  // No `roles` restriction: every department needs the shared board (that IS
+  // the cross-department-visibility point). Mutations are super+ops-gated.
+  { href: "/admin/board",            label: "กระดานงานข้ามแผนก",   icon: <Kanban className="w-5 h-5" />,         group: "กระดานงาน" },
+  { href: "/admin/board/inbox",      label: "งานของฉัน (Inbox)",   icon: <Inbox className="w-5 h-5" />,          group: "กระดานงาน" },
 
   // Self-serve reports (V-B1) — staff sees the operational state without dev tickets
   { href: "/admin/reports/pending-payments",      label: "รอชำระเงิน",        icon: <Receipt className="w-5 h-5" />,    roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
