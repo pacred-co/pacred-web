@@ -21,7 +21,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { LineIcon } from "@/components/icons/social-icons";
-import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NavBar } from "@/components/sections/navbar";
@@ -845,70 +844,6 @@ export default async function CustomsClearancePage({
             {/* Tabs + content panel — Trip.com style (per ปอน 2026-05-17) */}
             <div className="mt-6 md:mt-8">
               <RelatedTagsTabs groups={TAG_GROUPS} />
-            </div>
-
-            {/* Featured articles — filtered to category="เคลียร์" */}
-            <div className="mt-10 md:mt-14">
-              <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-                <span aria-hidden className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-                CLEARANCE ARTICLES · สาระสำหรับลูกค้าเคลียร์ของ
-              </div>
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <h3 className="text-[20px] md:text-[28px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
-                  อ่านเพิ่ม — <span className="text-primary-600">บทความเคลียร์ของ · เคลียร์ภาษี · เคลียร์พิธีการ</span>
-                </h3>
-                <Link
-                  href="/knowledge"
-                  className="inline-flex items-center gap-1 text-[13px] md:text-[14px] font-bold text-primary-600 hover:text-primary-700 transition-colors"
-                >
-                  ดูบทความทั้งหมด
-                  <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.6} />
-                </Link>
-              </div>
-
-              <div className="mt-5 md:mt-6 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
-                {(() => {
-                  // Pin article 13 (high-risk-import-goods — new for this page)
-                  // first, then fill with other เคลียร์ articles up to 4.
-                  const pinned = KNOWLEDGE_ARTICLES.find((a) => a.id === 13);
-                  const rest = KNOWLEDGE_ARTICLES
-                    .filter((a) => a.category === "เคลียร์" && a.id !== 13)
-                    .slice(0, pinned ? 3 : 4);
-                  return (pinned ? [pinned, ...rest] : rest);
-                })()
-                  .map((article) => (
-                    <Link
-                      key={article.id}
-                      href={`/knowledge/${article.slug}`}
-                      className="group shrink-0 w-[78%] sm:w-[280px] snap-start md:w-auto md:shrink rounded-2xl overflow-hidden border border-border bg-white dark:bg-surface shadow-[0_6px_16px_rgba(15,23,42,0.06)] hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(179,0,0,0.12)] hover:border-primary-300 transition-all duration-300"
-                    >
-                      <div className="relative aspect-[16/10] bg-primary-50">
-                        <Image
-                          src={article.image}
-                          alt={article.title}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                          className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                        <span className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-md bg-white/95 dark:bg-surface/95 text-[11px] font-black text-primary-700 dark:text-primary-300 border border-primary-100 dark:border-primary-900/40">
-                          เคลียร์
-                        </span>
-                      </div>
-                      <div className="p-3 md:p-4">
-                        <h4 className="text-[13.5px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug line-clamp-2 group-hover:text-primary-600 transition-colors">
-                          {article.title}
-                        </h4>
-                        <p className="mt-1.5 text-[12px] md:text-[12.5px] leading-[1.5] text-muted line-clamp-2">
-                          {article.excerpt}
-                        </p>
-                        <span className="mt-2 inline-flex items-center gap-1 text-[12px] md:text-[12.5px] font-bold text-primary-600 group-hover:text-primary-700">
-                          อ่านบทความ
-                          <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-              </div>
             </div>
           </div>
         </section>
