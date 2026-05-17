@@ -413,3 +413,28 @@ export default function Page() {
 **Cross-links:**
 - Commit `a26434d` — extract Date.now to module-scope helpers (4 files)
 - Commit `7d89564` — original V-A3 fix pattern
+
+---
+
+## [2026-05-17] A `server-only` module reaching a Client Component (transitively) → Turbopack build fail · `tsc`/`verify` do NOT catch it
+
+**Context:** Vercel `pnpm run build` exited 1. `pnpm verify` (lint + tsc + test + audit) was fully green. `next build` failed with:
+> `'server-only' cannot be imported from a Client Component module`
+
+**Root cause:** `lib/tos.ts` was given a DB-read helper that imports `createAdminClient` from `lib/supabase/admin.ts` — which starts with `import "server-only"`. That marks the WHOLE `lib/tos.ts` module server-only. But `components/tos-gate.tsx` is a `"use client"` component that imports `lib/tos.ts` (only for the `CURRENT_TOS_VERSION` constant). The chain is transitive — client → `lib/tos.ts` → `lib/supabase/admin.ts` (`server-only`) — and Turbopack rejects it.
+
+**Why `tsc` / `pnpm verify` miss it:** `import "server-only"` is a *runtime/bundler* boundary marker, not a type. `tsc --noEmit` type-checks fine; ESLint does not trace the import graph across the client/server boundary. Only `next build` (Turbopack) walks the graph and enforces the rule → **green verify, red build**.
+
+**Fix — split the module by boundary, not by feature:**
+- Keep the client-safe surface (constants, types, pure sync helpers) in the original module — NO server imports.
+- Move anything touching a server-only API (DB client, `cookies()`, secrets) into a sibling `*-server.ts` with its own `import "server-only"` at the top.
+- Server callers import `*-server.ts`; Client Components import the client-safe module.
+
+**Why this matters next time:**
+- Adding a DB read to a `lib/*.ts` "utility" is the trap — if ANY Client Component imports that util (even for one constant), the build breaks.
+- Rule of thumb: a `lib/*.ts` module imported by a Client Component must stay free of server-only imports. When in doubt, put server logic in `*-server.ts`.
+- `pnpm verify` green is necessary, not sufficient — the `pnpm build` gate (AGENTS.md §11) is the only thing that catches client/server boundary breaks.
+
+**Cross-links:**
+- Commit `ccf109e` — the split fix (`lib/tos.ts` client-safe + new `lib/tos-server.ts`)
+- [`docs/learnings/ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) — "verify + build green ≠ prod" family
