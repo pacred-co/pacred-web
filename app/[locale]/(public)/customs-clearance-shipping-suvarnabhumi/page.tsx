@@ -365,7 +365,7 @@ export default async function CustomsClearancePage({
                   }}
                 />
 
-                <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[100px] md:min-h-[150px]">
+                <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[130px] md:min-h-[170px]">
                   <div className="min-w-0 py-3 md:py-3">
                     <p className="hidden md:block text-[44px] font-black text-white leading-[1.05] tracking-tight whitespace-nowrap [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
                       สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
@@ -382,27 +382,27 @@ export default async function CustomsClearancePage({
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
                       สินค้าติดด่าน?
                     </p>
-                    <p className="md:hidden mt-1.5 text-[16px] font-extrabold text-white leading-snug [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
+                    <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
                       ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                   </div>
 
-                  <div className="relative w-[96px] md:w-[170px] h-[100px] md:h-[150px] self-stretch shrink-0">
+                  <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
                       alt="ทีมเซลล์ Pacred Shipping พร้อมตอบใน 5 นาที"
                       fill
-                      sizes="(max-width: 768px) 96px, 170px"
+                      sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
                     />
                   </div>
 
-                  <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
-                    <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
+                  <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
+                    <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
                       คลิ๊กตรงนี้
                     </span>
-                    <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
+                    <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
                 </div>
               </div>
@@ -496,7 +496,7 @@ export default async function CustomsClearancePage({
                   }}
                 />
 
-                <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[100px] md:min-h-[150px]">
+                <div className="relative grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[130px] md:min-h-[170px]">
                   <div className="min-w-0 py-3 md:py-3">
                     <p className="hidden md:block text-[44px] font-black text-white leading-[1.05] tracking-tight whitespace-nowrap [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
                       สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
@@ -513,27 +513,27 @@ export default async function CustomsClearancePage({
                     <p className="md:hidden text-[32px] font-black text-white leading-[1.0] tracking-tight [text-shadow:0_2px_6px_rgba(1,58,20,0.45)]">
                       สินค้าติดด่าน?
                     </p>
-                    <p className="md:hidden mt-1.5 text-[16px] font-extrabold text-white leading-snug [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
+                    <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
                       ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
                   </div>
 
-                  <div className="relative w-[96px] md:w-[170px] h-[100px] md:h-[150px] self-stretch shrink-0">
+                  <div className="relative w-[110px] md:w-[180px] h-[130px] md:h-[170px] self-stretch shrink-0">
                     <Image
                       src="/images/visit/visit01.png"
                       alt="ทีมเซลล์ Pacred Shipping พร้อมตอบใน 5 นาที"
                       fill
-                      sizes="(max-width: 768px) 96px, 170px"
+                      sizes="(max-width: 768px) 110px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(1,58,20,0.35)]"
                     />
                   </div>
 
-                  <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
-                    <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
+                  <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
+                    <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
                       คลิ๊กตรงนี้
                     </span>
-                    <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
+                    <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
                 </div>
               </div>
