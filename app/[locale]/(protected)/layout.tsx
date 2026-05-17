@@ -3,7 +3,8 @@ import { NavBar } from "@/components/sections/navbar";
 import { ProtectedSidebar } from "@/components/sections/protected-sidebar";
 import { TosGate } from "@/components/tos-gate";
 import { FloatingActionMenu } from "@/components/floating-action-menu";
-import { isTosCurrent, getActiveTosVersion } from "@/lib/tos";
+import { isTosCurrent } from "@/lib/tos";
+import { getActiveTosVersion } from "@/lib/tos-server";
 import { getSidebarData } from "@/lib/sidebar-data";
 
 /**

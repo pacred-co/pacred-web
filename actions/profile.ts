@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveTosVersion } from "@/lib/tos";
+import { getActiveTosVersion } from "@/lib/tos-server";
 import {
   profileBasicSchema,
   corporateSchema,

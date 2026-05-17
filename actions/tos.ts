@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getActiveTosVersion } from "@/lib/tos";
+import { getActiveTosVersion } from "@/lib/tos-server";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
