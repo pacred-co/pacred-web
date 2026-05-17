@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logger } from "@/lib/logger";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   createContainer as dbCreateContainer,
@@ -38,6 +40,261 @@ import {
  *   - revalidatePath the affected admin pages
  *   - return AdminActionResult<T>
  */
+
+// ────────────────────────────────────────────────────────────
+// U1-2 / U1-5 — Status propagation maps + helpers
+// ────────────────────────────────────────────────────────────
+//
+// When admin flips a container's status, we cascade down the spine:
+//   container.status  → cargo_shipments.status
+//   cargo_shipments.status → forwarders.status OR service_orders.status
+//
+// Forward-only: never regress a row already past the target. The order
+// arrays below encode lifecycle progression; idx < idx means "behind",
+// idx > idx means "ahead". A row "ahead" of the proposed target is left
+// untouched (no error, no audit spam).
+//
+// Best-effort: a propagation failure must NOT roll back the parent flip.
+// We catch and log, then continue (mirror of U1-4 pattern in
+// adminMarkFreightDelivered).
+
+const SHIPMENT_ORDER: readonly ShipmentStatus[] = [
+  "received_cn",
+  "packed_cn",
+  "sealed_in_container",
+  "in_transit",
+  "arrived_th",
+  "unloaded",
+  "out_for_delivery",
+  "delivered",
+] as const;
+
+const FORWARDER_STATUS_ORDER = [
+  "pending_payment",
+  "shipped_china",
+  "in_transit",
+  "arrived_thailand",
+  "out_for_delivery",
+  "delivered",
+] as const;
+type ForwarderStatus = (typeof FORWARDER_STATUS_ORDER)[number] | "cancelled";
+
+const SERVICE_ORDER_STATUS_ORDER = [
+  "pending",
+  "awaiting_payment",
+  "ordered",
+  "awaiting_chn_dispatch",
+  "completed",
+] as const;
+type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUS_ORDER)[number] | "cancelled";
+
+/** container.status → shipment.status (null = no cascade). */
+const CONTAINER_TO_SHIPMENT: Partial<Record<ContainerStatusSpine, ShipmentStatus>> = {
+  sealed:     "sealed_in_container",
+  in_transit: "in_transit",
+  arrived:    "arrived_th",
+  unloading:  "unloaded",
+  // packing  — no cascade (shipments stay at received_cn / packed_cn during packing phase)
+  // closed   — no cascade (container archival doesn't downgrade shipments)
+};
+
+/** shipment.status → forwarder.status (null = no cascade). */
+const SHIPMENT_TO_FORWARDER: Partial<Record<ShipmentStatus, ForwarderStatus>> = {
+  sealed_in_container: "shipped_china",
+  in_transit:          "in_transit",
+  arrived_th:          "arrived_thailand",
+  // unloaded         — no cascade (forwarder is still "arrived_thailand")
+  out_for_delivery:    "out_for_delivery",
+  delivered:           "delivered",
+};
+
+/** shipment.status → service_order.status (only delivered → completed; the
+ *  rest of the cargo-side lifecycle is opaque to service_orders, which model
+ *  shop-purchase phases, not transport phases). U1-5 hook lives here. */
+const SHIPMENT_TO_SERVICE_ORDER: Partial<Record<ShipmentStatus, ServiceOrderStatus>> = {
+  delivered: "completed",
+};
+
+/** date_* column to stamp when a forwarder enters each status. Matches
+ *  actions/admin/forwarders.ts::STATUS_DATE_COL so cascades + manual flips
+ *  produce the same row shape. */
+const FORWARDER_DATE_COL: Record<string, string | null> = {
+  shipped_china:    "date_shipped_china",
+  in_transit:       "date_in_transit",
+  arrived_thailand: "date_arrived_thailand",
+  out_for_delivery: "date_out_for_delivery",
+  delivered:        "date_delivered",
+};
+
+/** date_* column to stamp when a service_order enters each status. Matches
+ *  actions/admin/service-orders.ts::STATUS_DATE_COL. */
+const SERVICE_ORDER_DATE_COL: Record<string, string | null> = {
+  awaiting_payment:      "date_awaiting_payment",
+  ordered:               "date_ordered",
+  awaiting_chn_dispatch: "date_dispatched",
+  completed:             "date_completed",
+};
+
+/** Returns true if `current` is at or past `target` in the lifecycle order.
+ *  Unknown statuses (e.g. 'cancelled', legacy values) are treated as "ahead"
+ *  so we never auto-overwrite them. */
+function isAtOrPast<T extends string>(
+  order: readonly T[],
+  current: string,
+  target: T,
+): boolean {
+  const ci = order.indexOf(current as T);
+  const ti = order.indexOf(target);
+  if (ci === -1) return true;   // unknown current (e.g. 'cancelled') — don't overwrite
+  if (ti === -1) return false;  // unknown target — defensively let the caller try
+  return ci >= ti;
+}
+
+/** U1-2 hop 1: container → all attached shipments. */
+async function cascadeContainerToShipments(
+  admin: SupabaseClient,
+  containerId: string,
+  containerStatus: ContainerStatusSpine,
+  adminId: string,
+): Promise<void> {
+  const target = CONTAINER_TO_SHIPMENT[containerStatus];
+  if (!target) return;   // packing / closed — no shipment-level change
+
+  try {
+    const { data: ships, error: listErr } = await admin
+      .from("cargo_shipments")
+      .select("id, status, forwarder_f_no, service_order_h_no")
+      .eq("cargo_container_id", containerId)
+      .returns<Array<{ id: string; status: ShipmentStatus; forwarder_f_no: string | null; service_order_h_no: string | null }>>();
+    if (listErr) {
+      logger.error("warehouse", "cascadeContainerToShipments list failed", listErr, { containerId });
+      return;
+    }
+    const rows = ships ?? [];
+
+    for (const ship of rows) {
+      // Forward-only: skip if already at or past target
+      if (isAtOrPast(SHIPMENT_ORDER, ship.status, target)) continue;
+
+      const setRes = await dbSetShipmentStatus(admin, ship.id, target);
+      if (!setRes.ok) {
+        logger.error("warehouse", "cascadeContainerToShipments shipment flip failed", new Error(setRes.error), {
+          containerId, shipmentId: ship.id, from: ship.status, to: target,
+        });
+        continue;
+      }
+
+      await logAdminAction(adminId, "container.cascade_shipment_status", "shipment", ship.id, {
+        cargo_container_id: containerId,
+        container_status:   containerStatus,
+        from_status:        ship.status,
+        to_status:          target,
+      });
+
+      // Hop 2: shipment → forwarder / service_order
+      await cascadeShipmentToOrders(admin, ship.id, target, ship.forwarder_f_no, ship.service_order_h_no, adminId);
+    }
+  } catch (e) {
+    logger.error("warehouse", "cascadeContainerToShipments threw", e, { containerId, containerStatus });
+  }
+}
+
+/** U1-2 hop 2 + U1-5: shipment → linked forwarder / service_order. */
+async function cascadeShipmentToOrders(
+  admin: SupabaseClient,
+  shipmentId: string,
+  shipmentStatus: ShipmentStatus,
+  forwarderFNo: string | null,
+  serviceOrderHNo: string | null,
+  adminId: string,
+): Promise<void> {
+  // ── Forwarder hop ──
+  const fwdTarget = SHIPMENT_TO_FORWARDER[shipmentStatus];
+  if (fwdTarget && forwarderFNo) {
+    try {
+      const { data: fwd, error: fwdErr } = await admin
+        .from("forwarders")
+        .select("id, status")
+        .eq("f_no", forwarderFNo)
+        .maybeSingle<{ id: string; status: string }>();
+      if (fwdErr) {
+        logger.error("warehouse", "cascadeShipmentToOrders forwarder lookup failed", fwdErr, { shipmentId, forwarderFNo });
+      } else if (fwd && !isAtOrPast(FORWARDER_STATUS_ORDER, fwd.status, fwdTarget as typeof FORWARDER_STATUS_ORDER[number])) {
+        const update: Record<string, unknown> = {
+          status:           fwdTarget,
+          admin_id_update:  adminId,
+        };
+        // Stamp the matching date_* column (mirrors actions/admin/forwarders.ts STATUS_DATE_COL).
+        const dateCol = FORWARDER_DATE_COL[fwdTarget];
+        if (dateCol) update[dateCol] = new Date().toISOString();
+
+        const { error: updErr } = await admin
+          .from("forwarders")
+          .update(update)
+          .eq("id", fwd.id);
+        if (updErr) {
+          logger.error("warehouse", "cascadeShipmentToOrders forwarder flip failed", updErr, {
+            shipmentId, forwarderId: fwd.id, from: fwd.status, to: fwdTarget,
+          });
+        } else {
+          await logAdminAction(adminId, "shipment.cascade_forwarder_status", "forwarder", fwd.id, {
+            cargo_shipment_id: shipmentId,
+            shipment_status:   shipmentStatus,
+            from_status:       fwd.status,
+            to_status:         fwdTarget,
+          });
+        }
+      }
+    } catch (e) {
+      logger.error("warehouse", "cascadeShipmentToOrders forwarder hop threw", e, { shipmentId, forwarderFNo });
+    }
+  }
+
+  // ── Service-order hop (U1-5 hook on shipment 'delivered' → service_order 'completed') ──
+  const soTarget = SHIPMENT_TO_SERVICE_ORDER[shipmentStatus];
+  if (soTarget && serviceOrderHNo) {
+    try {
+      const { data: so, error: soErr } = await admin
+        .from("service_orders")
+        .select("id, status")
+        .eq("h_no", serviceOrderHNo)
+        .maybeSingle<{ id: string; status: string }>();
+      if (soErr) {
+        logger.error("warehouse", "cascadeShipmentToOrders service_order lookup failed", soErr, { shipmentId, serviceOrderHNo });
+      } else if (so && !isAtOrPast(SERVICE_ORDER_STATUS_ORDER, so.status, soTarget as typeof SERVICE_ORDER_STATUS_ORDER[number])) {
+        const update: Record<string, unknown> = {
+          status:           soTarget,
+          admin_id_update:  adminId,
+        };
+        const dateCol = SERVICE_ORDER_DATE_COL[soTarget];
+        if (dateCol) update[dateCol] = new Date().toISOString();
+
+        const { error: updErr } = await admin
+          .from("service_orders")
+          .update(update)
+          .eq("id", so.id);
+        if (updErr) {
+          logger.error("warehouse", "cascadeShipmentToOrders service_order flip failed", updErr, {
+            shipmentId, serviceOrderId: so.id, from: so.status, to: soTarget,
+          });
+        } else {
+          // U1-5: distinct audit event on the delivered → completed auto-close hop
+          const action = (shipmentStatus === "delivered" && soTarget === "completed")
+            ? "service_order.auto_close_on_delivery"
+            : "shipment.cascade_service_order_status";
+          await logAdminAction(adminId, action, "service_order", so.id, {
+            cargo_shipment_id: shipmentId,
+            shipment_status:   shipmentStatus,
+            from_status:       so.status,
+            to_status:         soTarget,
+          });
+        }
+      }
+    } catch (e) {
+      logger.error("warehouse", "cascadeShipmentToOrders service_order hop threw", e, { shipmentId, serviceOrderHNo });
+    }
+  }
+}
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -154,6 +411,11 @@ export async function adminSetContainerStatus(
       note:      d.note ?? null,
     });
 
+    // U1-2 + U1-5: cascade down the spine — container → shipments → forwarders / service_orders.
+    // Best-effort: parent flip already committed; failures inside cascade log + continue and
+    // must NOT roll back the container status update. Mirrors adminMarkFreightDelivered U1-4.
+    await cascadeContainerToShipments(admin, d.container_id, d.status as ContainerStatusSpine, adminId);
+
     revalidatePath("/admin/warehouse/containers");
     if (res.data.code) {
       revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
@@ -221,6 +483,17 @@ export async function adminSetShipmentStatus(
     await logAdminAction(adminId, "shipment.set_status", "shipment", d.shipment_id, {
       to_status: d.status,
     });
+
+    // U1-2 hop 2 + U1-5: cascade shipment → linked forwarder OR service_order.
+    // Best-effort — failures here don't roll back the shipment flip.
+    await cascadeShipmentToOrders(
+      admin,
+      d.shipment_id,
+      d.status as ShipmentStatus,
+      res.data.forwarder_f_no,
+      res.data.service_order_h_no,
+      adminId,
+    );
 
     revalidatePath("/admin/warehouse/containers");
     return { ok: true, data: res.data };
