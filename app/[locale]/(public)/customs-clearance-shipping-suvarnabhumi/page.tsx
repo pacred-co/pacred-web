@@ -240,7 +240,7 @@ export default async function CustomsClearancePage({
               <div className="relative px-4 md:px-6 py-4 md:py-5">
                 <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.35)]">
                   <Image
-                    src="/images/hero-section/icon-draf/alert.png"
+                    src="/images/iconwhite/silent.png"
                     alt=""
                     width={28}
                     height={28}
@@ -252,9 +252,9 @@ export default async function CustomsClearancePage({
                     {/* Transport icons — desktop inline only; mobile hides
                         them so the title doesn't wrap awkwardly */}
                     <span className="hidden md:inline-flex items-center gap-0.5">
-                      <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
                     </span>
                   </span>
                 </h3>
