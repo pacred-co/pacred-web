@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild; supabase-rls-patterns +1 — `wallet.balance` is pending-blind, spend gates must use the available-balance helper; ci-and-deploy-gotchas +1 — a "bug on branch `dave`" can be a stale-worktree phantom, verify against the live `dave` worktree; ci-and-deploy-gotchas +1 — worktree-isolation agents you spawn branch from `origin/main`, brief them to resync to `dave`)
+Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild; supabase-rls-patterns +1 — `wallet.balance` is pending-blind, spend gates must use the available-balance helper; ci-and-deploy-gotchas +1 — a "bug on branch `dave`" can be a stale-worktree phantom, verify against the live `dave` worktree; ci-and-deploy-gotchas +1 — worktree-isolation agents you spawn branch from `origin/main`, brief them to resync to `dave`; ci-and-deploy-gotchas +1 — a `next start` + curl smoke does NOT detect a dead database, public pages degrade + protected pages redirect before the DB call)
 
 ---
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reachi
 
 | Topic | What's captured | Last entry |
 |---|---|---|
-| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) · worktree smoke needs `.env.local` copy + rebuild · stale-worktree phantom bugs (verify vs the live `dave` worktree) · spawned worktree-isolation agents branch from `origin/main` not your working branch | 2026-05-17 |
+| [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) · worktree smoke needs `.env.local` copy + rebuild · stale-worktree phantom bugs (verify vs the live `dave` worktree) · spawned worktree-isolation agents branch from `origin/main` not your working branch · a next-start+curl smoke can't detect a dead database | 2026-05-17 |
 | [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` · unescaped-entities · Zod UUID v4 · Turbopack route-cache · theme desync · generateStaticParams+auth → DYNAMIC_SERVER_USAGE · server-only transitive import → Turbopack build fail) | 2026-05-17 |
 | [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations · check-then-act money-race → DB unique index · `wallet.balance` is pending-blind → spend gates use `getWalletAvailableBalance` | 2026-05-17 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |

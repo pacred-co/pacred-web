@@ -60,6 +60,7 @@
 | [`audit-money-billing-2026-05-17.md`](audit-money-billing-2026-05-17.md) | Pre-launch money audit of `pacred-web` — 2 P0 money-loss bugs, 5 P1s, money-math verification, gateway-readiness gap | 2026-05-17 |
 | [`audit-system-2026-05-17.md`](audit-system-2026-05-17.md) | Pre-launch whole-system audit of `pacred-web` — build/verify green, 155 routes smoked, 1 contained 502, GO verdict | 2026-05-17 |
 | [`prelaunch-verification-2026-05-17.md`](prelaunch-verification-2026-05-17.md) | Pre-launch code-level verification audit — traced all 5 launch-critical paths (auth · wallet/money · admin RLS · order/forwarder · tax/WHT); confirmed W-1/W-3/S-3/S-4 + migrations 0062/0063/0064/0053 landed correctly line-by-line; 🟢 GO, 3 non-blocker findings F-1..F-3 | 2026-05-17 |
+| [`qa-flow-run-2026-05-17.md`](qa-flow-run-2026-05-17.md) | First functional QA pass (post-launch, `qa-flow-simulator` skill) — 3 pass / 0 fail / 8 blocked; 0 code defects; dev Supabase `gnortvyazfmocvcbvfbs` found DELETED (blocks local QA); **production Supabase `yzljakczhwrpbxflnmco` probed + verified ALIVE** — launch confirmed fine | 2026-05-17 |
 
 ## Cross-references
 

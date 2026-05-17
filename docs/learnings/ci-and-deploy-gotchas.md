@@ -348,3 +348,27 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - `AGENTS.md` §1 — session-start handshake (the resync discipline that prevents it).
 
 ---
+
+## [2026-05-17] A `next start` + curl smoke does NOT detect a dead database
+
+**Context:** Launch day. The production smoke gate — `pnpm build && pnpm start` + curl ~24 routes (public · protected · admin · dynamic `[param]`) — returned **zero 500s**, and the `dave→main` deploy was cleared on that signal.
+
+**Symptom:** A follow-up `qa-flow-simulator` agent found the dev Supabase project the smoke had run against (`gnortvyazfmocvcbvfbs` — the `.env.local` ref) was **DELETED** (DNS NXDOMAIN). The smoke had curled an app wired to a dead database the whole time and still showed zero 500s.
+
+**Why the smoke missed it:**
+- **Public pages** don't hard-depend on the DB — Server Components either skip it, or `@supabase/ssr` `auth.getUser()` swallows the network failure and returns `{user:null}`, so the page renders degraded-but-`200`.
+- **Protected / admin pages** → `requireAuth()`/`requireAdmin()` → `getUser()` → no user → `redirect("/login")`. The **`307` fires before any data query** — a dead DB is never exercised.
+- "curl every route → 200/307, zero 500s" proves the **render + routing layer**. It proves **nothing about the database.**
+
+**Rule:** a route-level smoke is necessary but NOT sufficient. To gate a deploy, also assert the DB:
+- Hit a route that **server-renders real DB data** and assert the *content*, not the status code.
+- Or run the [`qa-flow-simulator`](../../.claude/skills/qa-flow-simulator/SKILL.md) skill — it asserts observable outcomes (a row, a balance delta), which is exactly what a dead/empty DB fails.
+- Probe the project directly: `curl https://<ref>.supabase.co/auth/v1/health` — live → `401 no apikey`; deleted → NXDOMAIN; paused → a "paused" page.
+
+**The launch was fine anyway** — production uses a *separate*, healthy Supabase project (`yzljakczhwrpbxflnmco`); only the *dev* project was deleted. But that was luck, not the gate working — the identical smoke would have passed against a dead *prod* DB too.
+
+**Cross-links:**
+- `.claude/skills/qa-flow-simulator/SKILL.md` — the functional layer above the route smoke.
+- `AGENTS.md` §11 — the `next start` smoke rule this entry bounds.
+
+---
