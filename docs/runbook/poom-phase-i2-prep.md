@@ -221,21 +221,25 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0051` | **freight_invoices + freight_invoice_lines** (V-E1 part 2) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
 | `0052` | **freight_invoice_payments** (V-E7) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0053` | **freight_invoice_wht** (U2-3 — WHT gate for freight invoices) | ภูม | ✅ **SHIPPED 2026-05-18** (commit 98a4c85) — needs `db push` |
-| `0054` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
-| `0055` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
-| `0056`-`0059` | *(reserved headroom for ภูม's freight block — fill sequentially)* | ภูม | — |
+| `0054` | **commissions** (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ✅ **SHIPPED 2026-05-18** (commit 998a94f) — needs `db push` |
+| `0055` | **broadcasts** (V-G3 admin push popup) | ภูม | ✅ **SHIPPED 2026-05-18** (commit 0fe8ec7) — needs `db push` |
+| `0056` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
+| `0057`-`0059` | *(reserved headroom for ภูม's block — fill sequentially)* | ภูม | — |
 | `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0061` | **money_idempotency_guards** (cost_adj kind + 3 partial-unique) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0062` | **rls_role_pin_money_pii** (W-1 security keystone) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` before `dave→main` deploy |
 | `0063` | **wallet_freight_invoice_reference** (W-3 freight wallet-pay) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 | `0064` | **wallet_overdraw_guard** (H-1/S-5 BEFORE-trigger) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 
-> ⚠️ **15 migrations (`0044`-`0053` + `0060`-`0064`) shipped to git but NOT yet
+> ⚠️ **17 migrations (`0044`-`0055` + `0060`-`0064`) shipped to git but NOT yet
 > applied to Supabase.** ภูม applies them on dev + prod — `supabase db push`
 > (or paste each into the SQL Editor in ascending number order). Dependency
 > chains: `0050`/`0051` reference `0045`/`0048`; `0052` references `0051`;
-> `0053` references `0051`; `0063` references `0051` and `0052`. Number order
-> satisfies every dependency.
+> `0053` references `0051`; `0054` extends `admins.role` enum (independent);
+> `0055` adds FK on `notifications` (independent); `0063` references `0051`
+> and `0052`. Number order satisfies every dependency.
+
+**Next free number for ภูม = `0056`.**
 
 **Note:** `0044`-`0059` block = ภูม (freight/commission stack). `0060`
 (member_code) = เดฟ — deliberately numbered clear of ภูม's block so the two devs
