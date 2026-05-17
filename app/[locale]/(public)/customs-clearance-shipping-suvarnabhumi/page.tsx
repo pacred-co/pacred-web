@@ -20,7 +20,6 @@ import {
   Briefcase,
   ShieldAlert,
 } from "lucide-react";
-import { LineIcon } from "@/components/icons/social-icons";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NavBar } from "@/components/sections/navbar";
@@ -676,59 +675,40 @@ export default async function CustomsClearancePage({
               </div>
             </div>
 
-            {/* 2 CTA buttons — สมัคร + ปรึกษาไลน์ */}
+            {/* 2 CTA image banners — สมัคร + ปรึกษาไลน์ (per ปอน 2026-05-18) */}
             <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2 md:gap-4">
               <Link
                 href="/register"
-                className="group relative overflow-hidden rounded-2xl border border-primary-200 bg-white shadow-[0_8px_22px_-10px_rgba(179,0,0,0.18)] hover:shadow-[0_14px_30px_-8px_rgba(179,0,0,0.30)] hover:-translate-y-0.5 transition-all duration-300"
+                aria-label="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
-                <div className="flex items-center gap-2 md:gap-4 px-2.5 md:px-5 py-2.5 md:py-4">
-                  <span className="inline-flex w-9 h-9 md:w-12 md:h-12 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_5px_12px_rgba(179,0,0,0.20)] border border-primary-100">
-                    <Image
-                      src="/images/hero-section/icon/customer-mock.png"
-                      alt=""
-                      width={32}
-                      height={32}
-                      aria-hidden
-                      className="w-6 h-6 md:w-8 md:h-8 object-contain"
-                    />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug truncate">
-                      สมัครสมาชิกฟรี
-                    </p>
-                    <p className="mt-0.5 text-[10.5px] md:text-[12.5px] font-bold text-primary-600 inline-flex items-center gap-0.5 md:gap-1">
-                      <ChevronRight className="w-3 h-3" strokeWidth={3} />
-                      คลิ๊กเลย !
-                    </p>
-                  </div>
-                </div>
+                <Image
+                  src="/images/cta/samak.png"
+                  alt="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                  width={534}
+                  height={200}
+                  sizes="(max-width: 768px) 45vw, 540px"
+                  quality={92}
+                  className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02]"
+                />
               </Link>
 
               <TrackedExternalLink
                 href={LINE_URL}
                 cta="line_consult"
                 surface="customs_guarantee_cta"
-                className="group relative overflow-hidden rounded-2xl border border-green-200 bg-white shadow-[0_8px_22px_-10px_rgba(6,199,85,0.20)] hover:shadow-[0_14px_30px_-8px_rgba(6,199,85,0.35)] hover:-translate-y-0.5 transition-all duration-300"
+                aria-label="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
-                <div className="flex items-center gap-2 md:gap-4 px-2.5 md:px-5 py-2.5 md:py-4">
-                  <span
-                    className="inline-flex w-9 h-9 md:w-12 md:h-12 shrink-0 items-center justify-center rounded-full text-white shadow-[0_5px_12px_rgba(6,199,85,0.30)]"
-                    style={{ background: "linear-gradient(135deg, #00B900 0%, #06C755 100%)" }}
-                  >
-                    <LineIcon className="w-5 h-5 md:w-7 md:h-7" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug inline-flex items-center gap-1 md:gap-1.5 truncate">
-                      <MessageCircle className="w-3 h-3 md:w-4 md:h-4 text-[#06C755] shrink-0" strokeWidth={2.6} />
-                      ปรึกษานำเข้าฟรี
-                    </p>
-                    <p className="mt-0.5 text-[10.5px] md:text-[12.5px] font-bold text-[#06C755] inline-flex items-center gap-0.5 md:gap-1">
-                      <ChevronRight className="w-3 h-3" strokeWidth={3} />
-                      คลิ๊กเลย !
-                    </p>
-                  </div>
-                </div>
+                <Image
+                  src="/images/cta/pruksa.png"
+                  alt="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                  width={534}
+                  height={200}
+                  sizes="(max-width: 768px) 45vw, 540px"
+                  quality={92}
+                  className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02]"
+                />
               </TrackedExternalLink>
             </div>
           </div>
