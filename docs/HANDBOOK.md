@@ -10,9 +10,9 @@ Last updated: 2026-05-18 (post-launch revision)
 
 **Pacred is in production.** The cargo revenue path works end-to-end and the emergency "เผาเงิน" sprint is behind us. Current focus = stabilise + deepen the launched product.
 
-📋 Current roadmap: [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — the post-launch execution sequence (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). U1/U2/U4 batches have shipped on `dave`; the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod Supabase.
+📋 Current roadmap: [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) — the 3-tier capability synthesis (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems). The earlier [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) U1-U4 sequence has all shipped; the Tier 0/1/2 batches have also shipped on `dave`. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
 
-Decision lens (post-launch): does this make the product more **true** · **billable** · **measurable**? — and never code an UPGRADE_PLAN item before its §0 gate is green.
+Decision lens (post-launch): does this make the product more **true** · **billable** · **measurable**? — and never code a roadmap item before its §0 gate is green.
 
 ---
 
@@ -86,8 +86,9 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 | File | คืออะไร |
 |---|---|
 | [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~400-line read. Open every session for full context. |
-| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **Post-launch roadmap** — the current execution doc (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory). Start here for "what's next". |
-| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 10 starter skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep) |
+| [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) | **Post-launch capability roadmap** — the current "what's next" doc (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems) + a per-role work-split. |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | The U1-U4 sequence (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory) — all shipped; kept as the spec for those items. |
+| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 11 starter skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep · branch-integrate-loop) |
 | [`learnings/_index.md`](learnings/_index.md) | Compounding knowledge corpus — every dev / agent adds new gotchas via `scholar-immortal` skill. 1-min scan each session. |
 
 ### 🧑‍💻 Role briefs (force-read — open YOUR file first)
@@ -220,16 +221,18 @@ git push origin <my-branch>
 
 ## 🎯 Current state (2026-05-18 — post-launch)
 
-- **Active phase:** 🚀 **Post-launch UPGRADE** ([`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)). Production launched 2026-05-17; the cargo revenue path works end-to-end. Brief-driven async execution — start each session with your brief → UPGRADE_PLAN → work U-items → push at save-points.
-- **Branch state:** `main` = production (live, 19 launch-week migrations on prod) · `dave` = integration, **30+ commits ahead of `main`** (carries the shipped U1/U2/U4 batches) · `Poom` + `podeng` = น้อง working branches, synced to `dave`.
+- **Active phase:** 🚀 **Post-launch capability roadmap** ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) — Tier 0/1/2/3). Production launched 2026-05-17; the cargo revenue path works end-to-end. Brief-driven async execution — start each session with your brief → the capability synthesis → work your tier items → push at save-points.
+- **Branch state:** `main` = production (live, 19 launch-week migrations on prod) · `dave` = integration, well ahead of `main` (carries the shipped U1/U2/U4 + Tier 0/1/2 batches) · `Poom` + `podeng` = น้อง working branches, synced to `dave`.
 - **Production readiness:** launched — customer portal + 60+ admin routes + cargo loop all live. The bar is now "is the flow *true* / *billable* / *measurable*" — see [`STRATEGY.md`](STRATEGY.md) §9 for the full shipped-vs-pending snapshot.
 - **Recent landmarks (latest first):**
+  - **Tier 2** — cross-department `work_items` work-board (`0080`) + `/admin/board` + `/admin/inbox` (`bcd752c`)
+  - **Tier 1** — `/start-order` + `QuoteCTA` calculator→buy bridge · CI `pnpm build` step · `/admin/kpi` exec dashboard (`bcd752c`)
+  - **Tier 0** — `ContactForm` live on `/contact` (`b90806b`) — lead funnel connected
   - **Post-launch U4** — admin supervisory layer (audit-log export · notification log · cron-health · staff RBAC console · global search) + customer credit line / pay-later (`0071`)
   - **Post-launch U2** — PCS→Pacred customer migration (`0067`) · per-container cost + AP/disbursement ledger (`0069`) · cargo_sacks (`0068`) · freight WHT gate
   - **Post-launch U1** — container unify (`0059`) · container→order status propagation · arrival→billing gate · freight-chain wiring · refund money path (`0058`)
-  - **Launch (2026-05-17)** — W-1 security keystone (`0062`) · W-3 wallet-integrity (`0063`) · `0064` overdraw-guard · S-3/S-4/S-7 · production smoke gate passed → `dave→main` deployed
-  - **~700 new test assertions** across 11 test files covering the new validators
-- **Next `dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0072` to prod. See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
+  - **Launch (2026-05-17)** — W-1 security keystone (`0062`) · W-3 wallet-integrity (`0063`) · `0064` overdraw-guard · S-3/S-4/S-7 · production smoke gate passed → `dave→main` deployed (`314a528`, then `4ef2ee6`)
+- **Next `dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0080` to prod. See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
 - **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo). V3 wishlist appends to `docs/v3-wishlist.md` — don't refactor V2 into V3 mid-flight.
 - **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) + the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) U-item table for your role.
 

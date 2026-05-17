@@ -1,21 +1,17 @@
 # ปอน — Frontend / Landing / SEO / Marketing
 
-Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
+Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
 
-## 🎯 Current state (snapshot 2026-05-17)
+## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
 
-🟢 Last shipped: `/customs-clearance-shipping-suvarnabhumi` redesign (56d16b0). Branch in sync with `dave` (no commits ahead).
+🟢 Pacred launched. The post-launch roadmap is [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — read it first; the §"Work split" table is ปอน's pickup list.
 
-**Mon morning standby:** landing tweaks if T-D4 customer feedback flags any visible bug.
-
-**Day-1 post-launch pickup (in priority order):**
-1. **T-N1 SEO audit** per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md) — Google Ads waste cut (~3h)
-2. **T-N2 ad landings** — paid landings for the 4 high-intent service types (~6-10h)
-3. **Theme-token migration** — remaining hardcoded surfaces per [`pacred-info.md`](../pacred-info.md) §"Migration tracker" (includes `BANK.*` integration after ภูม wires receipt/invoice PDFs)
-4. **L-5 deep polish** order: home → import-china → china-shopping → customs-clearance (เดฟ confirmed priority — register page restyle done by เดฟ on dave a2dfe99 already)
-
-**Helpful new doc since last review:** [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) — covers everything else in the team.
+**ปอน now (per the capability-strategy work-split — in priority order):**
+1. **Frontend tooling** — implement the recommendations in [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md): the data-driven landing template (one source-of-truth template that scales the per-service landings — fits the `copyist-unlimited` pattern).
+2. **Polish the new Tier-0/Tier-1 surfaces** — the `/contact` page (now rendering `ContactForm` live), `/start-order`, and the `QuoteCTA` calculator→buy component. These are freshly shipped on `dave`; make them on-voice + mobile-first.
+3. **SEO audit** per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md) — Google Ads waste cut (~3h).
+4. **L-5 deep polish** order: home → import-china → china-shopping → customs-clearance (เดฟ confirmed priority).
 
 ---
 
@@ -25,26 +21,19 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 ---
 
-## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+## 🚀 Post-launch focus (read FIRST)
 
-Google Ads ยิงไม่ติด · Search หา pacred.co ไม่เจอ · FB Ads ก็มี inquiry เข้าแต่ระบบยังไม่พร้อม. **ปอนคือ visibility lever** — ถ้า landing rank ไม่ได้ + quality score ต่ำ = Ad budget ทิ้งไปเปล่าๆ.
+Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ปอน is still the visibility lever** — landing rank + quality score decide whether ad budget converts. The lens stays: more **true** / **billable** / **measurable**. Plan work properly; don't ship half-built.
 
-**ปอน P0 (do these in this order — Part T2):**
-1. **T-N1 SEO emergency audit** — why pacred.co not indexed? verify sitemap deploys · check GSC · request manual reindex (~3h, report blocker)
-2. **T-N2 Ad landing quality** — h1 with intent keyword · CTA above fold · LCP <3s on 4G · phone+LINE CTA visible (top-5 cargo pages)
-3. **T-N3 Funnel CTA wiring** on top-5 cargo pages — `generate_lead`, `cta_click`, `start_signup` events fire correctly into GTM
-4. **T-N4 Phase I landing shells** (when Pacred owner provides copy direction)
-5. **T-N5 Mobile QA top-5 cargo pages** — most TH cargo buyers = mobile
+**ปอน post-launch priorities** — see the §"Current state" block above: the frontend-tooling landing template, then polish the new `/contact` + `/start-order` + `QuoteCTA` surfaces, then SEO + L-5.
 
 **Voice (every customer surface):** Slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Mobile-first. Copy ตรงเป้า ไม่อ้อมค้อม. CTA visible.
-
-Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + critical path + revenue-ready DoD.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-N1..T-N5)
+1. **[`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md)** — the post-launch roadmap + work-split · [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) — your tooling spec
 2. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
 3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ปอน hand-off triggers) + Part O3 (normal pipeline)
 4. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style) + §12 (Performance/SEO)

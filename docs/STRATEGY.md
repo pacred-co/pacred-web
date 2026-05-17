@@ -27,14 +27,14 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 **Pacred launched to production 2026-05-17.** `main` is live + verified healthy. The emergency "เผาเงิน" sprint is behind us — the cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The lens shifts from *survive* to *stabilise + deepen*.
 
 **Where we are:**
-- 🟢 **`main`** — production, live. 19 launch-week migrations (`0044`-`0064`) applied to prod Supabase.
-- 🟡 **`dave`** — integration branch, **30+ commits ahead of `main`**. Carries the shipped post-launch U1/U2/U4 batches. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod.
-- The post-launch roadmap is **[`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** — §0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory.
+- 🟢 **`main`** — production, live. 19 launch-week migrations (`0044`-`0064`) applied to prod Supabase. Two deploys done: `314a528` (launch) + `4ef2ee6` (U1/U2/U4 + a P0 refund-money-loss fix).
+- 🟡 **`dave`** — integration branch, well ahead of `main`. Carries the shipped post-launch U1/U2/U4 batches **plus the Tier 0/1/2 capability batches**. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod.
+- The post-launch roadmap is now the 3-tier **capability** synthesis — [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems). The earlier **[`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** U1-U4 sequence has all shipped.
 
 **Decision lens (post-launch):**
-> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never code an UPGRADE_PLAN item before its §0 gate is green.
+> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never code a roadmap item before its §0 gate is green.
 
-**Full post-launch plan:** [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md). Backlogs it draws from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
+**Full post-launch plan:** [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (current) + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (U1-U4, shipped). Backlogs they draw from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
 
 ---
 
@@ -220,19 +220,26 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 **Landing:** Home (15+ sections) · SEO bundle · customs-clearance landing + `[port]` detail pages · `/line` redirect + GTM on every LINE CTA · ad-landing polish
 
-### 🟢 Shipped on `dave` — post-launch U1/U2/U4 (NOT yet on `main` — gated on migration apply)
+### 🟢 Shipped on `dave` — post-launch U1/U2/U4 + Tier 0/1/2 (NOT yet on `main` — gated on migration apply)
 
-The post-launch [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) batches — coded + verified + on `dave`, awaiting ภูม applying migrations `0058`-`0072` to prod before the `dave→main` deploy:
+The post-launch batches — coded + verified + on `dave`, awaiting ภูม applying migrations `0058`-`0080` to prod before the `dave→main` deploy:
 
+**U1-U4 (the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) sequence):**
 - **U1 wire-the-flow** — container unify (`0059`/`0066`) · container→order status propagation · arrival→billing gate (`lib/forwarder/billing-gate.ts`) · freight-chain auto-draft/auto-convert · order auto-close · **refund money path** (`0058` `refund_requests` + customer self-serve `/refunds` + admin queue)
 - **U2** — PCS→Pacred customer migration (`0067` + `/admin/migration/pcs-customers`) · per-container cost basis + AP/disbursement ledger (`0069` + `/admin/accounting/container-costs` + `/disbursements` + `lib/cost/container-margin.ts`) · freight WHT gate · cargo_sacks / กระสอบรวม (`0068` + `lib/warehouse/sacks.ts`)
 - **U4** — admin supervisory layer (`0070` — audit-log export · notification delivery log · cron-health panel · staff RBAC console · 8-entity global search `/admin/search`) · customer credit line / pay-later (`0071` — `credit_limit_thb` + outstanding view + pay-credit action + `/wallet` credit panel)
 - **C-1 fix** (`0072`) — `wallet_tx_insert_self_serve` RLS amount-sign guard (core-audit P1)
 - **~700 new test assertions** — เดฟ wrote 11 test files covering the new validators (refund · commission · customs-declaration · freight-shipment · accounting-period · broadcast · billing-gate · booking-calc · notify-templates · short-url · admin-config · thai-tax-id)
 
+**Tier 0/1/2 (the [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) synthesis):**
+- **Tier 0 connect** — `ContactForm` rendered live on `/contact` (`b90806b`) — the lead-capture funnel is joined at stage one. Remaining Tier-0 = dashboard clicks (analytics env vars in Vercel · GSC + submit sitemap · Google Business Profile · Meta Business Suite — ก๊อต/เดฟ).
+- **Tier 1 buy-bridge** — `/start-order` page + `QuoteCTA` component (the calculator→buy "เปิดออเดอร์ราคานี้" bridge) · `.github/workflows/ci.yml` gained a `pnpm build` step · `/admin/kpi` executive dashboard (`bcd752c`).
+- **Tier 2 internal OS** — cross-department `work_items` work-board: migration `0080_work_items.sql` + `/admin/board` + `/admin/inbox` + `actions/admin/work-items.ts` + `lib/validators/work-item.ts` (`bcd752c`). MOMO sync + per-department workspaces remain specced → [`port-specs/operating-system-tier2.md`](port-specs/operating-system-tier2.md).
+- **Tier 3 designed (not built)** — 3 owner-requested systems: internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ — design docs in [`research/`](research/_index.md) (`internal-chat-system-` · `disbursement-system-` · `china-ops-container-closing-2026-05-18.md`).
+
 ### 🟡 In-flight / follow-up
 
-- **`dave→main` deploy** — gated on ภูม recreating dev Supabase + applying `0058`-`0072` to prod (the deleted dev project `gnortvyazfmocvcbvfbs` must be restored — prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
+- **`dave→main` deploy** — gated on ภูม recreating dev Supabase + applying `0058`-`0080` to prod (the deleted dev project `gnortvyazfmocvcbvfbs` must be restored — prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
 - **U1/U2 code-review follow-ups** — [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md): P0-1 + P1-1 ✅ fixed by เดฟ; P1-2..P2-7 = ภูม follow-up before running the U2-1 backfill.
 - **U1-7 MOMO JMF sync** — ⛔ blocked: the on-record MOMO API host/format is wrong (datanew L-0 — real = `api.momocargo.com:8080` REST); needs ก๊อต to clear the API docs first.
 - **U2-4 PEAK** · **U3 ecosystem tools** (NetBay · Customs Trader Portal · ship-tracking · fuel calc) · **U4-3 tier-2 tail** — later UPGRADE_PLAN phases, partner-scheduled.
@@ -287,8 +294,9 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | **scholar-immortal** | After learning something new mid-session | Capture to `docs/learnings/<topic>.md` so future agents inherit it |
 | **copyist-unlimited** | When you need N variants of a template | Clone + adapt template files at scale (e.g., 9 landing shells) |
 | **legacy-php-sweep** | When porting a feature from old PHP system | Sweep the legacy `pcscargo` source for that feature + extract logic + write to Next.js |
+| **branch-integrate-loop** | Consolidating teammate branches into `dave` · before any `dave→main` deploy | The integrate → verify → distribute cycle — merge without losing work or shipping a half-state |
 
-10 skills shipped. A pending **11th** — `branch-integrate-loop` (the daily integrate-verify-distribute cycle) — is specced in [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) "How to extend" for ก๊อต to create.
+11 skills shipped. Index: [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 
 📋 Skills are project assets — ก๊อต iterates on them via skill-creator's eval loop. See [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 

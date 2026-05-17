@@ -1,23 +1,22 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
+Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
-## 🎯 Current state — ก๊อต queue NEARLY EMPTY (snapshot 2026-05-17)
+## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
 
-🟢 **All P0 + P1 + P3 cleared** tonight + Sat night: 5 browser signups + Vercel env set + 2 ADRs locked + 5 reviews acked + 3 V3 ADRs deferred + Renovate deferred. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full snapshot.**
+🟢 Pacred launched. All pre-launch P0/P1/P3 cleared. The post-launch roadmap is [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — read it first; the §"Work split" table puts the Tier-0 dashboard on ก๊อต + เดฟ.
 
-**Mon morning standby (only thing left):**
-1. LINE + workstation 9am
-2. Sentry alert watch first 48h post-launch (error spike >5/hr → war-room with เดฟ)
-3. Any owner escalation from ลูกพี่/พี่ป๊อป
+**ก๊อต now (per the capability-strategy work-split):**
+1. **Tier-0 dashboard (with เดฟ)** — flip the monitoring env vars in Vercel (Sentry / GTM / GA4 / Clarity / hCaptcha / Upstash) · verify Google Search Console + submit the sitemap · claim Google Business Profile · set up Meta Business Suite. *The one thing still blocking ad-conversion visibility — Pacred runs ads today with no conversion tracking.* Checklist → [`runbook/launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md).
+2. **Production watch** — Sentry alert watch (error spike >5/hr → war-room with เดฟ) + any owner escalation from ลูกพี่/พี่ป๊อป.
+3. **Gate the `dave→main` deploy** — review the staged `dave` integration; FF `main` once ภูม clears the migration gate.
+4. **MOMO API docs** — clear the wrong-on-record MOMO API surface so ภูม can wire U1-7 sync.
 
 **Defer-able items waiting for ก๊อต re-engagement T+30d post-launch:**
 - R1 china-search eval (re-open if >10 "can't add URL" tickets/wk surfacing in Sentry)
 - V3 ADRs (0011 RBAC + 0012 frontend shell + 0013 migration) — revisit after V2 stable + real ops-staff feedback
 - Renovate GitHub App install (if dep drift accumulates)
-
-**Tomorrow morning** = standby only. No coding work scheduled for ก๊อต.
 
 > ## 🆕 Prod env changes done 2026-05-16 late-night (ลูกพี่ + เดฟ pair) — **กอตอ่านก่อน touch Vercel**
 >
@@ -57,29 +56,22 @@ Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memo
 
 ---
 
-## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+## 🚀 Post-launch focus (read FIRST)
 
-บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. Cargo system ต้องรับลูกค้าได้ ASAP → revenue → stop burn.
+Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. The lens stays revenue-aware: prefer work that makes the product more **true** / **billable** / **measurable**. Plan work properly now — don't skip the §0 gate or ship half-built to chase a deadline.
 
-**Your job during emergency:** API switchover decisions + signups + decisions ที่ unblock ภูม + เดฟ จะ ship cargo path.
+**Your job post-launch:** gate `dave→main` deploys · finish the Tier-0 dashboard (the conversion-visibility unblock) · clear partner-API decisions for ภูม · watch production.
 
-**ก๊อต P0 (do these in this order):**
-1. **T-G1 API borrow audit** — list every external API the cargo system uses · borrow-from / Pacred-own / switchover timeline (~2h, output: table in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T3)
-2. **T-G3 Pacred owner call** — bank/PromptPay/tax-ID/legal name (~30m call)
-3. **T-G4 K-12 GTM + K-13 Clarity** signup (existing P0)
-4. **T-G2 MOMO endpoint inventory** (existing MOMO-1)
-5. **T-G5 DV-1 Sentry + Upstash + hCaptcha** signups
-
-Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + revenue-ready DoD.
+**ก๊อต post-launch priorities** — see the §"Current state" block above + [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) §"Work split".
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency cargo sprint — your T-G1..T-G5)
+1. **[`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md)** — the post-launch Tier 0/1/2/3 roadmap + work-split
 2. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
-3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S2 (ก๊อต batch — your assigned items, normal pipeline)
-4. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor V2 → V3 mid-burn)
+3. [`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — the U1-U4 sequence (shipped) · [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V/W — the cargo + gap-hunt backlogs
+4. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor V2 → V3 mid-flight)
 5. [`docs/audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) — production hardening status
 6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
 

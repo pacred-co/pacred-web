@@ -1,11 +1,21 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md))
+Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
 
-## 🎯 Current state — Mon morning launch sequence ready (snapshot 2026-05-17)
+## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
 
-🟢 All ภูม-lane Sunday blockers cleared. Last night-6 batch (V-G7 audits + handoff refresh) merged into dave ✅. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full team status.**
+🟢 Pacred launched. The post-launch roadmap is [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — read it first; the §"Work split" table is ภูม's pickup list.
+
+**ภูม now (per the capability-strategy work-split — in order):**
+1. **Apply migrations `0058`-`0080` to prod Supabase** — this is the gate that unblocks the `dave→main` deploy (`0080` = `work_items`). Also recreate the deleted dev project `gnortvyazfmocvcbvfbs` (prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](../runbook/poom-handoff-2026-05-18.md).
+2. **Then BUILD the 3 Tier-3 owner systems, in order:**
+   - **Internal org-chat IC-1** — the shipment/job-scoped work-comms MVP; rides on the shipped `0080` work-board. Design → [`research/internal-chat-system-2026-05-18.md`](../research/internal-chat-system-2026-05-18.md).
+   - **Disbursement system (เบิก-จ่าย)** — `disbursement_requests` + lines + allocations + fund + outbound `wht_certificates`, money-OUT fail-closed safeguards. Design → [`research/disbursement-system-2026-05-18.md`](../research/disbursement-system-2026-05-18.md).
+   - **China-ops / container-closing (ปิดตู้)** — `cn_warehouse` role + portal + close-sack/close-container ceremony. **Volume-gated** — build only once the cargo queue is large enough to consolidate own containers. Design → [`research/china-ops-container-closing-2026-05-18.md`](../research/china-ops-container-closing-2026-05-18.md).
+3. **U1/U2 code-review follow-ups** + the U4 / work-item-hook follow-ups (P1-2..P2-7 from [`research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md)).
+
+**Migration numbering:** ภูม owns `0073`-`0079` + `0081`+ — **`0080` is taken** (work_items, shipped on `dave`). Start the internal-chat migration at `0073`.
 
 **All open Qs in [`poom-handoff-2026-05-16.md`](../runbook/poom-handoff-2026-05-16.md) RESOLVED:**
 - D-1 LP-1c2 UNIQUE → ภูม shipped option (b); refactor optional (Not required for launch)
@@ -38,26 +48,19 @@ On disk: `0044` WHT · `0045` qa · `0046` org_contacts · `0047` tos_versions �
 
 ---
 
-## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+## 🚀 Post-launch focus (read FIRST)
 
-บริษัทเผาเงิน. **ภูมคือ single biggest revenue lever** — backend cargo path = ทุกบาทที่ Pacred จะรับเข้ามา.
+Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ภูม is still the single biggest backend lever** — the cargo path + the 3 owner-requested systems are where the product gets deeper. The lens stays: more **true** / **billable** / **measurable** — and never code a roadmap item before its §0 gate is green.
 
-**ภูม P0 (do these in this order — Part T2):**
-1. **T-P1 Admin workflow buttons** for cargo path — `customers/[id]` approve · `forwarders/[fNo]` status + driver · `service-orders/[hNo]` mark-paid + issue-receipt. Staff cannot fulfill without these
-2. **T-P2 CT-1 container migration + CT-3 customer container view** — "Where's my container?" = #1 churn factor
-3. **T-P3 Wallet/yuan-payments bulk approve** — manual SQL bottleneck = no scale
-4. **T-P4 G2 tax invoice issuance** — juristic customers cannot pay without
-5. **T-P5 Stub `/admin/accounting`** — owner sees revenue flow → stress ↓
+**ภูม post-launch priorities** — see the §"Current state" block above: clear the migration gate first (unblocks `dave→main`), then build internal-chat IC-1 → disbursement → china-ops (volume-gated).
 
-**Defer until T-P1..T-P5 ship:** Track A integration tests, V3 prep, refactor cleanup. Tests valuable but don't earn revenue this week.
-
-Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the per-role emergency table + critical path + revenue-ready DoD.
+**Defer:** Phase I (9 new ecosystem services) until revenue is stable. China-ops is volume-gated.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T** (emergency — your T-P1..T-P5)
+1. **[`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md)** — the post-launch Tier 0/1/2/3 roadmap + work-split (your pickup list)
 2. [`docs/STRATEGY.md`](../STRATEGY.md) — master strategy single-read
 3. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow) + §10 (integration cycle)
 4. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part O2 (normal pipeline)
