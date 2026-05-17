@@ -13,6 +13,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
 import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -101,6 +102,10 @@ export async function getDepositQr(amountThb: number): Promise<ActionResult<{ da
 export async function createDeposit(
   input: DepositInput,
 ): Promise<ActionResult<{ id: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = depositSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -158,6 +163,10 @@ export async function createDeposit(
 export async function createWithdraw(
   input: WithdrawInput,
 ): Promise<ActionResult<{ id: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = withdrawSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

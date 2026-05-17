@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { addressSchema, type AddressInput } from "@/lib/validators/addresses";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -54,6 +55,10 @@ export async function listAddresses(): Promise<ActionResult<Address[]>> {
 export async function createAddress(
   input: AddressInput,
 ): Promise<ActionResult<{ id: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = addressSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -109,6 +114,10 @@ export async function updateAddress(
   id: string,
   input: AddressInput,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = addressSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -159,6 +168,10 @@ export async function updateAddress(
 // SET DEFAULT — promote a specific address to default
 // ────────────────────────────────────────────────────────────
 export async function setDefaultAddress(id: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -188,6 +201,10 @@ export async function setDefaultAddress(id: string): Promise<ActionResult> {
 // SOFT DELETE — set deleted_at (RLS allows update, blocks DELETE)
 // ────────────────────────────────────────────────────────────
 export async function softDeleteAddress(id: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };

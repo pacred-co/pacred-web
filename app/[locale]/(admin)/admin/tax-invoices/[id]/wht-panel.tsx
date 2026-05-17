@@ -28,6 +28,7 @@ import {
   waiveWhtCert,
   cancelWhtEntry,
 } from "@/actions/admin/wht";
+import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 import { WHT_RATES, computeWhtNumbers } from "@/lib/validators/withholding-tax";
 
 export type WhtPanelEntry = {
@@ -124,7 +125,8 @@ function CreateEntryForm(props: Props) {
     <div className="space-y-3">
       <p className="text-xs text-amber-900">
         บันทึก WHT สำหรับออเดอร์นี้ — ลูกค้าจะโอน <strong>ยอดสุทธิ</strong> (net) มาแทน yard
-        และต้องส่งใบ 50 ทวิให้ Pacred — ก่อนหน้านั้น<strong>ระบบจะกั้นการออกใบกำกับภาษี</strong>.
+        และต้องส่งใบ <Glossary term="50 ทวิ" definition={GLOSSARY_DEFS.wht_50_thawi} /> ให้ Pacred —
+        ก่อนหน้านั้น<strong>ระบบจะกั้นการออกใบกำกับภาษี</strong>.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -154,9 +154,17 @@ export default async function AdminFreightShipmentsListPage({
       {/* Table */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
         {rows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            ไม่มี shipment{status && ` สถานะ "${FREIGHT_SHIPMENT_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
-          </p>
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>🚢</div>
+            <p className="text-sm font-medium text-foreground">
+              ไม่มี shipment{status && ` สถานะ "${FREIGHT_SHIPMENT_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
+            </p>
+            <p className="text-xs text-muted max-w-md mx-auto">
+              {status || q
+                ? "ลองล้างตัวกรองด้านบนเพื่อดู shipment ทั้งหมด"
+                : "Shipment ใหม่ถูกสร้างจาก quote ที่ accepted แล้ว — ไปที่หน้า quotes เพื่อแปลงเป็น shipment"}
+            </p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

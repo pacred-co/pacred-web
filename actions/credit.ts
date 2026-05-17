@@ -29,6 +29,7 @@ import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -98,6 +99,10 @@ type PayCreditData = {
 export async function customerPayCreditFromWallet(
   input?: CustomerPayCreditInput,
 ): Promise<ActionResult<PayCreditData>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = payCreditSchema.safeParse(input ?? {});
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

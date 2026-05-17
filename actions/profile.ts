@@ -13,6 +13,7 @@ import {
   type NotifyChannels,
   type CompleteProfileInput,
 } from "@/lib/validators/profile";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -24,6 +25,10 @@ type ActionResult<T = void> =
 export async function updateProfileBasic(
   input: ProfileBasicInput,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = profileBasicSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -67,6 +72,10 @@ export async function updateProfileBasic(
 export async function upsertCorporate(
   input: CorporateInput,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = corporateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -119,6 +128,10 @@ export async function upsertCorporate(
 export async function updateNotifyChannels(
   input: NotifyChannels,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = notifyChannelsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -143,6 +156,10 @@ export async function updateNotifyChannels(
 // AVATAR — set avatar_url after client-side upload to 'avatars' bucket
 // ────────────────────────────────────────────────────────────
 export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   if (!publicUrl || publicUrl.length > 500) {
     return { ok: false, error: "invalid_url" };
   }
@@ -170,6 +187,10 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
 export async function completeProfile(
   input: CompleteProfileInput,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = completeProfileSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -242,6 +263,10 @@ export async function completeProfile(
 const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
 
 export async function linkLineAccount(lineUserId: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   if (typeof lineUserId !== "string" || !LINE_USER_ID_RE.test(lineUserId)) {
     return { ok: false, error: "invalid_line_user_id" };
   }
@@ -283,6 +308,10 @@ export async function linkLineAccount(lineUserId: string): Promise<ActionResult>
 }
 
 export async function unlinkLine(): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };

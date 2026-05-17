@@ -135,9 +135,17 @@ export default async function AdminFreightQuotesListPage({
       {/* Table */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
         {quotes.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            ไม่มีใบเสนอราคา{status && ` สถานะ "${QUOTE_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
-          </p>
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>📝</div>
+            <p className="text-sm font-medium text-foreground">
+              ไม่มีใบเสนอราคา{status && ` สถานะ "${QUOTE_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
+            </p>
+            <p className="text-xs text-muted max-w-md mx-auto">
+              {status || q
+                ? "ลองล้าง/เปลี่ยนตัวกรองด้านบนเพื่อดูใบเสนอราคาทั้งหมด"
+                : "ลูกค้าขอใบเสนอราคาผ่านหน้า /freight ของลูกค้า หรือกดสร้างใหม่จากปุ่มด้านบน"}
+            </p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

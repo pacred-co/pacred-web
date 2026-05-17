@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { adminBulkUpdateForwarderStatus } from "@/actions/admin/forwarders";
+import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 
 type Row = {
   id: string;
@@ -127,10 +128,14 @@ export function ForwardersTable({ rows }: { rows: Row[] }) {
                     <input type="checkbox" checked={allSelected} onChange={toggleAll}
                       className="rounded border-border" />
                   </th>
-                  <th className="px-4 py-3">เลขที่</th>
+                  <th className="px-4 py-3">
+                    <Glossary term="เลขที่ (F-no)" definition={GLOSSARY_DEFS.f_no} />
+                  </th>
                   <th className="px-4 py-3">ลูกค้า</th>
                   <th className="px-4 py-3">ขนส่ง</th>
-                  <th className="px-4 py-3 text-right">น้ำหนัก/ปริมาตร</th>
+                  <th className="px-4 py-3 text-right">
+                    น้ำหนัก/<Glossary term="ปริมาตร (CBM)" definition={GLOSSARY_DEFS.cbm} />
+                  </th>
                   <th className="px-4 py-3 text-right">ราคา</th>
                   <th className="px-4 py-3">Tracking</th>
                   <th className="px-4 py-3">สถานะ</th>

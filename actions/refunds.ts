@@ -31,6 +31,7 @@ import {
   isNeverPaidParentStatus,
   type CreateRefundRequestInput,
 } from "@/lib/validators/refund";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -39,6 +40,10 @@ type ActionResult<T = void> =
 export async function customerCreateRefundRequest(
   input: CreateRefundRequestInput,
 ): Promise<ActionResult<{ id: string; request_no: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = createRefundRequestSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

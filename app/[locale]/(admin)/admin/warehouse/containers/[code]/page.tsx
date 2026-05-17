@@ -14,6 +14,7 @@ import { ShipmentRowControls } from "./shipment-row-controls";
 import { ManualShipmentForm } from "./manual-shipment-form";
 import { CloseAtForm } from "./close-at-form";
 import { CostMarginPanel } from "./cost-margin-panel";
+import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -199,7 +200,10 @@ export default async function AdminContainerDetailPage({
               <Cell label="Shipments" value={String(shipments.length)} />
               <Cell label="กล่องรวม" value={String(container.total_boxes)} />
               <Cell label="น้ำหนักรวม" value={`${Number(container.total_weight_kg).toFixed(2)} kg`} />
-              <Cell label="ปริมาตรรวม" value={`${Number(container.total_cbm).toFixed(3)} CBM`} />
+              <Cell
+                label={<>ปริมาตรรวม (<Glossary term="CBM" definition={GLOSSARY_DEFS.cbm} />)</>}
+                value={`${Number(container.total_cbm).toFixed(3)} CBM`}
+              />
               {container.eta && (
                 <Cell label="ETA" value={new Date(container.eta).toLocaleDateString("th-TH")} />
               )}
@@ -362,7 +366,7 @@ export default async function AdminContainerDetailPage({
   );
 }
 
-function Cell({ label, value }: { label: string; value: string }) {
+function Cell({ label, value }: { label: React.ReactNode; value: string }) {
   return (
     <div>
       <p className="text-xs text-muted">{label}</p>

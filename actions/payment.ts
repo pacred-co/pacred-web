@@ -10,6 +10,7 @@ import {
 } from "@/lib/validators/payment";
 import { sendNotification } from "@/lib/notifications";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -46,6 +47,29 @@ export async function getCurrentYuanRate(): Promise<{ rate: number; updated_at: 
 }
 
 // ────────────────────────────────────────────────────────────
+// READ ONE — used by /service-payment/[id] detail page (U4-3b)
+// ────────────────────────────────────────────────────────────
+export async function getYuanPayment(id: string): Promise<ActionResult<YuanPayment>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // RLS scopes to profile_id = auth.uid() automatically — but explicit
+  // for clarity + defence in depth if RLS ever regresses.
+  const { data, error } = await supabase
+    .from("yuan_payments")
+    .select(
+      "id, profile_id, channel, recipient_detail, yuan_amount, exchange_rate, thb_amount, slip_url, id_doc_url, paid_via_wallet, status, executed_at, created_at",
+    )
+    .eq("id", id)
+    .eq("profile_id", user.id)
+    .maybeSingle<YuanPayment>();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "not_found" };
+  return { ok: true, data };
+}
+
+// ────────────────────────────────────────────────────────────
 // LIST
 // ────────────────────────────────────────────────────────────
 export async function listYuanPayments(limit = 50): Promise<ActionResult<YuanPayment[]>> {
@@ -71,6 +95,10 @@ export async function listYuanPayments(limit = 50): Promise<ActionResult<YuanPay
 export async function createYuanPayment(
   input: YuanPaymentInput,
 ): Promise<ActionResult<{ id: string; thb_amount: number }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = yuanPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };

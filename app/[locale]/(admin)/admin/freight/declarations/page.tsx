@@ -216,9 +216,17 @@ export default async function AdminCustomsDeclarationsListPage({
       {/* Table */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
         {allRows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            ไม่มีใบขนสินค้า{status && ` สถานะ "${CUSTOMS_DECLARATION_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
-          </p>
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>📋</div>
+            <p className="text-sm font-medium text-foreground">
+              ไม่มีใบขนสินค้า{status && ` สถานะ "${CUSTOMS_DECLARATION_STATUS_LABEL[status]}"`}{q && ` ตรงกับ "${q}"`}
+            </p>
+            <p className="text-xs text-muted max-w-md mx-auto">
+              {status || q
+                ? "ลองล้างตัวกรองด้านบนเพื่อดูใบขนสินค้าทั้งหมด"
+                : "ใบขนสินค้าถูกสร้างจากหน้า shipment ที่กำลังเคลียร์ของ — กด ‘สร้างใบขน’ ในหน้า shipment ที่ตรวจปล่อยแล้ว"}
+            </p>
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

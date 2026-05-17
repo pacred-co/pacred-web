@@ -27,6 +27,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
       payment_due_at, created_at,
       ship_first_name, ship_last_name, ship_phone, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
       bill_to_name_override,
+      acknowledged_at, acknowledged_note,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone, email, account_type )
     `)
     .eq("h_no", hNo)
@@ -177,6 +178,19 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
                   </li>
                 ))}
               </ul>
+            </Section>
+          )}
+
+          {(o as { acknowledged_at: string | null }).acknowledged_at && (
+            <Section title="✅ ลูกค้ายืนยันรับสินค้าแล้ว (U4-3a)">
+              <p className="text-xs text-muted">
+                {new Date((o as { acknowledged_at: string }).acknowledged_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+              </p>
+              {(o as { acknowledged_note: string | null }).acknowledged_note && (
+                <p className="mt-1 text-sm whitespace-pre-wrap">
+                  <span className="text-muted text-xs">โน้ตจากลูกค้า:</span> {(o as { acknowledged_note: string }).acknowledged_note}
+                </p>
+              )}
             </Section>
           )}
 

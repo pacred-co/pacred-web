@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { cartItemSchema, type CartItemInput, type Provider } from "@/lib/validators/cart";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -46,6 +47,10 @@ export async function listCart(): Promise<ActionResult<CartItem[]>> {
 export async function addCartItem(
   input: CartItemInput,
 ): Promise<ActionResult<{ id: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = cartItemSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -91,6 +96,10 @@ export async function updateCartItem(
   id: string,
   patch: Partial<Pick<CartItemInput, "amount" | "color" | "size" | "details" | "price_cny">>,
 ): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -114,6 +123,10 @@ export async function updateCartItem(
 // REMOVE
 // ────────────────────────────────────────────────────────────
 export async function removeCartItem(id: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -126,6 +139,10 @@ export async function removeCartItem(id: string): Promise<ActionResult> {
 }
 
 export async function clearCart(): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -152,6 +169,10 @@ export type CartItemBulkRow = CartItemInput & {
 };
 
 export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionResult<{ count: number }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty_rows" };
 
   const supabase = await createClient();
