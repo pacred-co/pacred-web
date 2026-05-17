@@ -3,13 +3,20 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Phone, Home, UserCircle2, LogIn, LogOut } from "lucide-react";
+import { Phone } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { createClient } from "@/lib/supabase/client";
 import { trackSignOut } from "@/lib/analytics";
+
+const MOBILE_ICON = {
+  home:    "/images/home/iconfloating/pacred-home-main.png",
+  blog:    "/images/home/iconfloating/checklistred.png",
+  news:    "/images/home/iconfloating/pcs-line-notify.png",
+  logout:  "/images/home/iconfloating/pcs-log-out.png", // also used flipped for login
+} as const;
 
 // Pacred main office line — single number for mobile FAB (per ปอน 2026-05-17,
 // no random sales-rep rotation).
@@ -86,56 +93,84 @@ export function FloatingTabs() {
         })}
       </div>
 
-      {/* Bottom navigation bar (mobile only) — per ปอน 2026-05-18:
-          [หน้าหลัก] [หน้าสมาชิก] [📞 call FAB] [ล็อคอิน/ล็อคเอาท์]
-          The right tab flips between login/logout depending on session. */}
+      {/* Bottom navigation bar (mobile only) — per ปอน 2026-05-18 v2:
+          [หน้าหลัก] [บทความ] [📞 call FAB] [ข่าวสาร] [ล็อคอิน/ล็อคเอาท์]
+          The last tab flips between login/logout depending on session.
+          Icons sourced from /images/home/iconfloating/* (login state uses
+          the logout door icon mirrored via scaleX(-1)). */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="grid grid-cols-[1fr_1fr_88px_1.6fr]">
+        {/* Symmetric 2|FAB|2 layout — original grid */}
+        <div className="grid grid-cols-[1fr_1fr_88px_1fr_1fr]">
           {/* Tab 1 — หน้าหลัก → / */}
           <Link
             href="/"
             onClick={() => setActive(0)}
-            className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
           >
-            <Home
-              className={`w-6 h-6 transition-colors ${
-                active === 0 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={MOBILE_ICON.home}
+              alt={t("homeMain")}
+              className={`w-7 h-7 object-contain transition-all duration-300 ${
+                active === 0 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
               }`}
-              strokeWidth={2}
             />
-            <span className={`text-[11.5px] leading-tight font-medium ${
+            <span className={`text-[11px] leading-tight font-medium ${
               active === 0 ? "text-primary-600 font-bold" : "text-muted"
             }`}>
               {t("homeMain")}
             </span>
           </Link>
 
-          {/* Tab 2 — หน้าสมาชิก → /dashboard */}
+          {/* Tab 2 — บทความ → /knowledge */}
           <Link
-            href="/dashboard"
+            href="/knowledge"
             onClick={() => setActive(1)}
-            className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
           >
-            <UserCircle2
-              className={`w-6 h-6 transition-colors ${
-                active === 1 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={MOBILE_ICON.blog}
+              alt={t("blog")}
+              className={`w-7 h-7 object-contain transition-all duration-300 ${
+                active === 1 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
               }`}
-              strokeWidth={2}
             />
-            <span className={`text-[11.5px] leading-tight font-medium ${
+            <span className={`text-[11px] leading-tight font-medium ${
               active === 1 ? "text-primary-600 font-bold" : "text-muted"
             }`}>
-              {t("member")}
+              {t("blog")}
             </span>
           </Link>
 
           {/* Spacer — leaves room for the absolutely-positioned call FAB */}
           <div aria-hidden />
 
-          {/* Tab 4 — ล็อคอิน / ล็อคเอาท์ (dynamic on session) */}
+          {/* Tab 4 — ข่าวสาร → /news */}
+          <Link
+            href="/news"
+            onClick={() => setActive(2)}
+            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={MOBILE_ICON.news}
+              alt={t("news")}
+              className={`w-7 h-7 object-contain transition-all duration-300 ${
+                active === 2 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
+              }`}
+            />
+            <span className={`text-[11px] leading-tight font-medium ${
+              active === 2 ? "text-primary-600 font-bold" : "text-muted"
+            }`}>
+              {t("news")}
+            </span>
+          </Link>
+
+          {/* Tab 5 — ล็อคอิน / ล็อคเอาท์ (dynamic on session) */}
           {user ? (
             <form
               action="/auth/signout"
@@ -145,11 +180,16 @@ export function FloatingTabs() {
             >
               <button
                 type="submit"
-                className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+                className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
                 aria-label={t("logout")}
               >
-                <LogOut className="w-6 h-6 text-muted group-hover:text-foreground transition-colors" strokeWidth={2} />
-                <span className="text-[11.5px] leading-tight font-medium text-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={MOBILE_ICON.logout}
+                  alt={t("logout")}
+                  className="w-7 h-7 object-contain grayscale brightness-75 opacity-75 transition-all duration-300"
+                />
+                <span className="text-[11px] leading-tight font-medium text-muted">
                   {t("logout")}
                 </span>
               </button>
@@ -158,15 +198,17 @@ export function FloatingTabs() {
             <Link
               href="/login"
               onClick={() => setActive(3)}
-              className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+              className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
             >
-              <LogIn
-                className={`w-6 h-6 transition-colors ${
-                  active === 3 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={MOBILE_ICON.logout}
+                alt={t("login")}
+                className={`w-7 h-7 object-contain transition-all duration-300 [transform:scaleX(-1)] ${
+                  active === 3 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
                 }`}
-                strokeWidth={2}
               />
-              <span className={`text-[11.5px] leading-tight font-medium ${
+              <span className={`text-[11px] leading-tight font-medium ${
                 active === 3 ? "text-primary-600 font-bold" : "text-muted"
               }`}>
                 {t("login")}
