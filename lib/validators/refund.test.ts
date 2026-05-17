@@ -29,6 +29,8 @@ import {
   approveRefundSchema,
   rejectRefundSchema,
   markRefundPaidSchema,
+  isNeverPaidParentStatus,
+  checkRefundCeiling,
 } from "./refund";
 
 let pass = 0;
@@ -244,6 +246,88 @@ console.log("  (f) rejectRefundSchema — reason required");
   // Trims before the length check.
   const trimmed = rejectRefundSchema.parse({ id: UUID_A, rejected_reason: "  ปฏิเสธ  " });
   assert("trims rejected_reason", trimmed.rejected_reason === "ปฏิเสธ");
+}
+
+// ────────────────────────────────────────────────────────────
+// (g) P0-1 — isNeverPaidParentStatus (never-paid parent guard)
+// ────────────────────────────────────────────────────────────
+console.log("  (g) isNeverPaidParentStatus — never-paid parent reject");
+{
+  // forwarder: only 'pending_payment' is never-paid.
+  assert("forwarder pending_payment is never-paid",
+    isNeverPaidParentStatus("forwarder", "pending_payment"));
+  assert("forwarder shipped_china is paid",
+    !isNeverPaidParentStatus("forwarder", "shipped_china"));
+  assert("forwarder arrived_thailand is paid",
+    !isNeverPaidParentStatus("forwarder", "arrived_thailand"));
+
+  // service_order: 'pending' + 'awaiting_payment' are never-paid.
+  assert("service_order pending is never-paid",
+    isNeverPaidParentStatus("service_order", "pending"));
+  assert("service_order awaiting_payment is never-paid",
+    isNeverPaidParentStatus("service_order", "awaiting_payment"));
+  assert("service_order ordered is paid",
+    !isNeverPaidParentStatus("service_order", "ordered"));
+  assert("service_order completed is paid",
+    !isNeverPaidParentStatus("service_order", "completed"));
+
+  // yuan_payment: only 'pending' is never-paid.
+  assert("yuan_payment pending is never-paid",
+    isNeverPaidParentStatus("yuan_payment", "pending"));
+  assert("yuan_payment processing is paid",
+    !isNeverPaidParentStatus("yuan_payment", "processing"));
+  assert("yuan_payment completed is paid",
+    !isNeverPaidParentStatus("yuan_payment", "completed"));
+
+  // Unknown source / status → treated as paid (helper only blocks the
+  // clear never-paid case; caller's other guards still apply).
+  assert("unknown source is not never-paid",
+    !isNeverPaidParentStatus("manual", "pending"));
+  assert("unknown status is not never-paid",
+    !isNeverPaidParentStatus("forwarder", "some_future_status"));
+}
+
+// ────────────────────────────────────────────────────────────
+// (h) P0-1 — checkRefundCeiling (amount-cap arithmetic)
+// ────────────────────────────────────────────────────────────
+console.log("  (h) checkRefundCeiling — amount cap vs collected");
+{
+  // Within the ceiling — first refund, well under collected.
+  assert("refund under collected is ok",
+    checkRefundCeiling(1000, 0, 500).ok);
+  // Exactly at the ceiling passes (full refund, nothing prior).
+  assert("refund exactly at collected is ok",
+    checkRefundCeiling(1000, 0, 1000).ok);
+  // Over the ceiling — single oversized refund.
+  {
+    const r = checkRefundCeiling(500, 0, 50_000);
+    assert("refund over collected is rejected", !r.ok);
+    assert("rejection carries a reason",
+      !r.ok && r.reason.startsWith("refund_exceeds_collected"));
+  }
+  // Partial-refund accumulation — prior + this must not exceed collected.
+  assert("partial then remainder exactly fills is ok",
+    checkRefundCeiling(1000, 400, 600).ok);
+  assert("partial then over-remainder is rejected",
+    !checkRefundCeiling(1000, 400, 700).ok);
+  assert("second full-amount refund is rejected (the 0058 partial hole)",
+    !checkRefundCeiling(1000, 1000, 1000).ok);
+
+  // Float epsilon must not trip the guard — 0.1+0.2 style sums.
+  assert("float epsilon at ceiling is ok",
+    checkRefundCeiling(0.3, 0.1, 0.2).ok);
+
+  // Defensive — bad inputs are treated as a violation (fail closed).
+  assert("NaN collected is rejected",
+    !checkRefundCeiling(NaN, 0, 100).ok);
+  assert("Infinity amount is rejected",
+    !checkRefundCeiling(1000, 0, Infinity).ok);
+  assert("negative collected is rejected",
+    !checkRefundCeiling(-1, 0, 100).ok);
+  assert("negative prior refunds is rejected",
+    !checkRefundCeiling(1000, -1, 100).ok);
+  assert("zero refund amount is rejected",
+    !checkRefundCeiling(1000, 0, 0).ok);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

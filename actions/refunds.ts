@@ -28,6 +28,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logger, redactId } from "@/lib/logger";
 import {
   createRefundRequestSchema,
+  isNeverPaidParentStatus,
   type CreateRefundRequestInput,
 } from "@/lib/validators/refund";
 
@@ -48,34 +49,48 @@ export async function customerCreateRefundRequest(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // ── Verify the source_ref is owned by this customer ──
+  // ── Verify the source_ref is owned by this customer + was ever paid ──
   // RLS already filters reads to profile_id = auth.uid() on forwarders /
   // service_orders / yuan_payments, so a missing row here = "not yours
-  // or doesn't exist".
+  // or doesn't exist". We also pull the parent's status: P0-1 — a refund
+  // against a never-paid parent (pending_payment / awaiting_payment /
+  // pending) has nothing to refund and is rejected at creation time.
   if (d.source === "forwarder") {
     const { data } = await supabase
       .from("forwarders")
-      .select("f_no")
+      .select("f_no, status")
       .eq("f_no", d.source_ref)
-      .maybeSingle<{ f_no: string }>();
+      .maybeSingle<{ f_no: string; status: string }>();
     if (!data) return { ok: false, error: "forwarder_not_found_or_not_owned" };
+    if (isNeverPaidParentStatus(d.source, data.status)) {
+      return { ok: false, error: "forwarder_not_paid — ฝากนำเข้านี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
+    }
   } else if (d.source === "service_order") {
     const { data } = await supabase
       .from("service_orders")
-      .select("h_no")
+      .select("h_no, status")
       .eq("h_no", d.source_ref)
-      .maybeSingle<{ h_no: string }>();
+      .maybeSingle<{ h_no: string; status: string }>();
     if (!data) return { ok: false, error: "service_order_not_found_or_not_owned" };
+    if (isNeverPaidParentStatus(d.source, data.status)) {
+      return { ok: false, error: "service_order_not_paid — ออเดอร์นี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
+    }
   } else if (d.source === "yuan_payment") {
     const { data } = await supabase
       .from("yuan_payments")
-      .select("id")
+      .select("id, status")
       .eq("id", d.source_ref)
-      .maybeSingle<{ id: string }>();
+      .maybeSingle<{ id: string; status: string }>();
     if (!data) return { ok: false, error: "yuan_payment_not_found_or_not_owned" };
+    if (isNeverPaidParentStatus(d.source, data.status)) {
+      return { ok: false, error: "yuan_payment_not_paid — รายการโอนหยวนนี้ยังไม่ได้ชำระเงิน ไม่มียอดให้คืน" };
+    }
   }
 
   // ── Reserve serial via admin client (the fn is service_role only) ──
+  // P2-1 accepted gap: the serial is consumed before the INSERT below, so a
+  // failed INSERT burns the number → non-contiguous RF- sequence. Matches the
+  // accepted freight-quote/invoice serial precedent; not worth a txn rewrite.
   const admin = createAdminClient();
   const { data: requestNo, error: serialErr } = await admin.rpc("next_refund_request_no");
   if (serialErr || typeof requestNo !== "string") {

@@ -36,12 +36,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logger } from "@/lib/logger";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import {
   adminCreateRefundSchema, type AdminCreateRefundInput,
   approveRefundSchema,     type ApproveRefundInput,
   rejectRefundSchema,      type RejectRefundInput,
   markRefundPaidSchema,    type MarkRefundPaidInput,
+  isNeverPaidParentStatus,
+  checkRefundCeiling,
 } from "@/lib/validators/refund";
 
 const REFUND_ROLES = ["super", "accounting"] as const;
@@ -78,11 +81,16 @@ export async function adminCreateRefund(
       if (!prof)  return { ok: false, error: "customer_not_found" };
     }
 
-    // If a source_ref is given for a non-manual source, verify it exists.
-    const verifyErr = await verifySourceRef(admin, d.source, d.source_ref);
+    // For a non-manual source, verify the parent exists, belongs to this
+    // customer (P1-1 IDOR), and was ever paid (P0-1 never-paid reject).
+    const verifyErr = await verifySourceRef(admin, d.source, d.source_ref, d.profile_id);
     if (verifyErr) return { ok: false, error: verifyErr };
 
-    // Reserve serial.
+    // Reserve serial. P2-1 accepted gap: next_refund_request_no() consumes
+    // the counter before the INSERT, so a failed INSERT leaves a hole in the
+    // RF-YYMMDD-NNNN sequence. This matches the accepted freight-quote/invoice
+    // serial precedent (freight-invoices.ts "gap will be logged") — RF numbers
+    // are non-contiguous-by-design, not a guarantee. Not worth a txn rewrite.
     const { data: requestNo, error: serialErr } = await admin.rpc("next_refund_request_no");
     if (serialErr || typeof requestNo !== "string") {
       return { ok: false, error: `serial_reserve_failed: ${serialErr?.message ?? "rpc"}` };
@@ -235,26 +243,48 @@ export async function adminMarkRefundPaid(
 
     const { data: row, error: readErr } = await admin
       .from("refund_requests")
-      .select("id, request_no, status, profile_id, amount_thb, reason, paid_wallet_tx_id")
+      .select("id, request_no, status, source, source_ref, profile_id, amount_thb, reason, paid_at, paid_wallet_tx_id")
       .eq("id", input.id)
       .maybeSingle<{
         id: string; request_no: string; status: string;
+        source: string; source_ref: string | null;
         profile_id: string; amount_thb: number; reason: string;
-        paid_wallet_tx_id: string | null;
+        paid_at: string | null; paid_wallet_tx_id: string | null;
       }>();
     if (readErr) return { ok: false, error: readErr.message };
     if (!row)    return { ok: false, error: "not_found" };
     if (row.status === "paid") {
-      // Idempotent: already paid — return the existing link.
+      // Idempotent: already paid — return the REAL existing link + timestamp
+      // (P2-6: previously returned paid_at:"" which is a falsy lie on replay).
       return {
         ok: true,
         data: {
-          paid_at:      "",
+          paid_at:      row.paid_at ?? "",
           wallet_tx_id: row.paid_wallet_tx_id ?? "",
         },
       };
     }
     if (row.status !== "approved") return { ok: false, error: `bad_status:${row.status}` };
+
+    // ── P0-1 amount-ceiling guard ──
+    // Resolve what the customer actually paid against the parent + the sum
+    // of refunds already paid for the same parent, then reject if this
+    // refund would push the total over the collected amount. A DB CHECK
+    // cannot express this (cross-table) — it must live here, mirroring the
+    // billing-gate pattern. source='manual' has no parent: admin judgement
+    // stands, but we log loudly so over-refunds are auditable.
+    if (row.source === "manual") {
+      logger.warn("refund", "manual refund mark-paid — no parent ceiling check", {
+        request_no: row.request_no,
+        amount_thb: Number(row.amount_thb),
+        admin_id:   adminId,
+      });
+    } else {
+      const ceiling = await resolveRefundCeiling(
+        admin, row.source, row.source_ref, row.id, Number(row.amount_thb),
+      );
+      if (!ceiling.ok) return { ok: false, error: ceiling.error };
+    }
 
     // ── Write wallet_transactions credit ──
     // Positive amount = credit; overdraw guard (0064) ignores credits.
@@ -332,16 +362,20 @@ export async function adminMarkRefundPaid(
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 /**
- * For non-manual sources, verify the referenced parent exists and (where
- * applicable) belongs to the customer the refund is being created for.
- * Manual sources skip this check entirely.
+ * For non-manual sources, verify the referenced parent:
+ *   - exists,
+ *   - belongs to `targetProfileId` (P1-1 IDOR guard — an admin must not be
+ *     able to refund customer B against customer A's order),
+ *   - was ever paid (P0-1 — reject creation against a never-paid parent).
+ * Manual sources skip this check entirely (no parent).
  *
- * Returns an error string when the check fails, or null on success.
+ * Returns an error string when any check fails, or null on success.
  */
 async function verifySourceRef(
-  admin:     AdminClient,
-  source:    string,
-  sourceRef: string | undefined,
+  admin:           AdminClient,
+  source:          string,
+  sourceRef:       string | undefined,
+  targetProfileId: string,
 ): Promise<string | null> {
   if (source === "manual") return null;
   if (!sourceRef) return "source_ref_required";
@@ -349,31 +383,37 @@ async function verifySourceRef(
   if (source === "forwarder") {
     const { data, error } = await admin
       .from("forwarders")
-      .select("f_no")
+      .select("f_no, profile_id, status")
       .eq("f_no", sourceRef)
-      .maybeSingle<{ f_no: string }>();
+      .maybeSingle<{ f_no: string; profile_id: string; status: string }>();
     if (error) return error.message;
     if (!data)  return "forwarder_not_found";
+    if (data.profile_id !== targetProfileId) return "forwarder_belongs_to_other_customer";
+    if (isNeverPaidParentStatus(source, data.status)) return "forwarder_not_paid";
     return null;
   }
   if (source === "service_order") {
     const { data, error } = await admin
       .from("service_orders")
-      .select("h_no")
+      .select("h_no, profile_id, status")
       .eq("h_no", sourceRef)
-      .maybeSingle<{ h_no: string }>();
+      .maybeSingle<{ h_no: string; profile_id: string; status: string }>();
     if (error) return error.message;
     if (!data)  return "service_order_not_found";
+    if (data.profile_id !== targetProfileId) return "service_order_belongs_to_other_customer";
+    if (isNeverPaidParentStatus(source, data.status)) return "service_order_not_paid";
     return null;
   }
   if (source === "yuan_payment") {
     const { data, error } = await admin
       .from("yuan_payments")
-      .select("id")
+      .select("id, profile_id, status")
       .eq("id", sourceRef)
-      .maybeSingle<{ id: string }>();
+      .maybeSingle<{ id: string; profile_id: string; status: string }>();
     if (error) return error.message;
     if (!data)  return "yuan_payment_not_found";
+    if (data.profile_id !== targetProfileId) return "yuan_payment_belongs_to_other_customer";
+    if (isNeverPaidParentStatus(source, data.status)) return "yuan_payment_not_paid";
     return null;
   }
   return `unknown_source:${source}`;
@@ -383,4 +423,82 @@ function revalidateOne(refundId: string): void {
   revalidatePath("/admin/refunds");
   revalidatePath(`/admin/refunds/${refundId}`);
   revalidatePath("/refunds");
+}
+
+/**
+ * P0-1 — resolve the amount-ceiling for a refund mark-paid and decide
+ * whether it may proceed. Cross-table: it reads what the customer actually
+ * paid against the parent + sums refunds already paid for the same parent.
+ *
+ * "Collected" per source:
+ *   - forwarder      : Σ wallet_transactions where reference_type='forwarder',
+ *                      reference_id=f_no, kind='import_payment', status='completed'
+ *                      (negative debits — summed as absolute THB)
+ *   - service_order  : same, reference_type='order_header', kind='order_payment'
+ *   - yuan_payment   : the transfer's thb_amount (rate locked at request time)
+ *
+ * On a DB read error this fails CLOSED (rejects the mark-paid) — unlike the
+ * billing-gate's fail-open: this guard protects a direct money-out path, so a
+ * transient error must not let an unbounded credit through. The admin can
+ * retry once the DB recovers.
+ *
+ * Returns { ok:true } when the credit is within the ceiling, or
+ * { ok:false, error } when it is not / cannot be verified.
+ */
+async function resolveRefundCeiling(
+  admin:        AdminClient,
+  source:       string,
+  sourceRef:    string | null,
+  refundId:     string,
+  refundAmount: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!sourceRef) {
+    // Non-manual refund with no parent ref should be impossible (DB CHECK
+    // refund_requests_source_ref_consistent + verifySourceRef). Fail closed.
+    return { ok: false, error: "refund_ceiling_no_source_ref" };
+  }
+
+  // ── 1) Collected against the parent ──
+  let collected: number;
+  if (source === "forwarder" || source === "service_order") {
+    const refType = source === "forwarder" ? "forwarder" : "order_header";
+    const refKind = source === "forwarder" ? "import_payment" : "order_payment";
+    const { data, error } = await admin
+      .from("wallet_transactions")
+      .select("amount")
+      .eq("reference_type", refType)
+      .eq("reference_id", sourceRef)
+      .eq("kind", refKind)
+      .eq("status", "completed");
+    if (error) return { ok: false, error: `refund_ceiling_read_failed: ${error.message}` };
+    // Payment debits are stored negative — sum as absolute THB collected.
+    collected = (data ?? []).reduce((sum, r) => sum + Math.abs(Number(r.amount) || 0), 0);
+  } else if (source === "yuan_payment") {
+    const { data, error } = await admin
+      .from("yuan_payments")
+      .select("thb_amount")
+      .eq("id", sourceRef)
+      .maybeSingle<{ thb_amount: number }>();
+    if (error) return { ok: false, error: `refund_ceiling_read_failed: ${error.message}` };
+    if (!data) return { ok: false, error: "refund_ceiling_parent_not_found" };
+    collected = Number(data.thb_amount) || 0;
+  } else {
+    return { ok: false, error: `refund_ceiling_unknown_source:${source}` };
+  }
+
+  // ── 2) Refunds already PAID for the same parent (exclude this row) ──
+  const { data: priorRows, error: priorErr } = await admin
+    .from("refund_requests")
+    .select("id, amount_thb")
+    .eq("source", source)
+    .eq("source_ref", sourceRef)
+    .eq("status", "paid");
+  if (priorErr) return { ok: false, error: `refund_ceiling_read_failed: ${priorErr.message}` };
+  const priorPaid = (priorRows ?? [])
+    .filter((r) => r.id !== refundId)            // never count this request against itself
+    .reduce((sum, r) => sum + (Number(r.amount_thb) || 0), 0);
+
+  // ── 3) Pure ceiling decision ──
+  const verdict = checkRefundCeiling(collected, priorPaid, refundAmount);
+  return verdict.ok ? { ok: true } : { ok: false, error: verdict.reason };
 }
