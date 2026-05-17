@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**17 migrations** are in git but **not yet applied to Supabase** (ภูม added `0053`-`0055` after the first 14). ภูม applies them
+**19 migrations** are in git but **not yet applied to Supabase** (ภูม added `0053`-`0057` after the first 14). ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -27,6 +27,8 @@ each file into the SQL Editor **in ascending number order**.
 | 0053 | `0053_freight_invoice_wht.sql` | `withholding_tax_entries.freight_invoice_id` + 3-way parent XOR + per-freight-invoice unique/lookup indexes | U2-3 freight WHT gate (G-4) | ✅ |
 | 0054 | `0054_commissions.sql` | commission ledger — `commission_tiers`/`_accruals`/`_withdrawals`/`_withdrawal_items` + `admins.role` += `interpreter` | V-E8/H1/H2 commission | ✅ |
 | 0055 | `0055_broadcasts.sql` | `broadcasts` table + `notifications.broadcast_id` FK | V-G3 admin broadcasts | ✅ |
+| 0056 | `0056_accounting_periods.sql` | `accounting_periods` + `period_close_event` + period-freeze BEFORE-trigger on invoices/payments | V-E9 monthly closing | ✅ |
+| 0057 | `0057_customs_declarations.sql` | `customs_declarations` + `customs_declaration_lines` + per-shipment partial-unique | V-E11 customs declaration | ✅ |
 | 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
 | 0061 | `0061_money_idempotency_guards.sql` | `cost_adjustment` kind + 3 partial-unique guards (forwarder main-payment · freight payment · tax invoice) | money P0-1/P1-2/P1-4 fix | ✅ |
 | 0062 | `0062_rls_role_pin_money_pii.sql` | role-pins ~24 `*_admin_all` RLS policies to explicit role arrays + `audit_wallet_transaction()` trigger | W-1 S-1 security keystone | ✅ |
@@ -35,7 +37,7 @@ each file into the SQL Editor **in ascending number order**.
 
 ---
 
-## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 17 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 19 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
   replace` / `create [unique] index if not exists` / `drop+recreate`
@@ -76,7 +78,7 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0055 + 0060-0064 applied to dev + prod ✅".
+Post: "migrations 0044-0057 + 0060-0064 applied to dev + prod ✅".
 เดฟ flips the status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
