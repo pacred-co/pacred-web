@@ -429,10 +429,10 @@ export default async function CustomsClearancePage({
               บริการครบ · ราคาโปร่งใส · ติดต่อง่าย — ทีมเคลียร์ของหน้างานจริง 15+ ปี เคลียร์ทุกด่านในไทย
             </p>
 
-            <div className="mt-6 md:mt-8 grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] gap-5 md:gap-7 items-start">
+            <div className="mt-6 md:mt-8 flex flex-col gap-6 md:gap-8 items-stretch">
               <CertsSlideshow />
 
-              {/* Why Pacred — compact emoji-bullet list per ปอน 2026-05-16 */}
+              {/* Why Pacred — compact emoji-bullet list per ปอน 2026-05-16 (stacked under collage per ปอน 2026-05-18) */}
               <div>
                 <h3 className="text-[22px] md:text-[30px] font-black text-[#111827] dark:text-white leading-[1.25] mb-3 md:mb-4 tracking-tight">
                   เคลียร์ของต้อง <span className="text-primary-600">Pacred Shipping</span>

@@ -4,17 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
-// Slide order: หนังสือรับรองนิติบุคคล (DBD) is the hero (left big),
-// สมาคมตัวแทนออกของ + ทีมงาน Pacred fill the right column.
-// Per ปอน 2026-05-18 — collage layout (1 big + 2 small) replaces the prior
-// single-active carousel. Each cell opens a full-screen lightbox on click.
+// Slide order (per ปอน 2026-05-18, refined later same day):
+//   1 (big left)    — ภาพทีมงาน Pacred ที่ออฟฟิศ (row-span-2)
+//   2 (top right)   — หนังสือรับรองสมาคมตัวแทนออกของฯ (landscape, fits small)
+//   3 (bottom right) — หนังสือรับรองนิติบุคคล DBD (portrait, fits cell)
+// 2×2 grid: big-left + 2 stacked thumbnails on the right. Image 2 (สมาคม)
+// is landscape so it naturally renders smaller inside its portrait cell —
+// that's intentional. Image 3 (DBD) is portrait and fits its cell tightly.
+// Each cell opens a full-screen lightbox on click.
 const SLIDES = [
   {
-    src: "/images/aboutus/rubrong.png",
-    alt: "หนังสือรับรองนิติบุคคล กรมพัฒนาธุรกิจการค้า — Pacred Shipping",
-    caption: "หนังสือรับรองนิติบุคคล",
-    sub: "DBD · ขึ้นทะเบียนถูกต้อง",
-    fit: "contain" as const,
+    src: "/images/companyofficethai.png",
+    alt: "ทีมงาน Pacred Shipping ที่ออฟฟิศจริง 15+ ปี เคลียร์ทุกด่านในไทย",
+    caption: "ทีมงาน Pacred Shipping",
+    sub: "15+ ปี · เคลียร์ทุกด่านในไทย",
+    fit: "cover" as const,
   },
   {
     src: "/images/aboutus/samakom.png",
@@ -24,11 +28,11 @@ const SLIDES = [
     fit: "contain" as const,
   },
   {
-    src: "/images/companyofficethai.png",
-    alt: "ทีมงาน Pacred Shipping",
-    caption: "ทีมงาน Pacred Shipping",
-    sub: "15+ ปี · เคลียร์ทุกด่านในไทย",
-    fit: "cover" as const,
+    src: "/images/aboutus/rubrong.png",
+    alt: "หนังสือรับรองนิติบุคคล กรมพัฒนาธุรกิจการค้า — Pacred Shipping",
+    caption: "หนังสือรับรองนิติบุคคล",
+    sub: "DBD · ขึ้นทะเบียนถูกต้อง",
+    fit: "contain" as const,
   },
 ];
 
@@ -52,10 +56,10 @@ function Cell({ i, big, onOpen }: CellProps) {
         src={s.src}
         alt={s.alt}
         fill
-        sizes={big ? "(max-width: 1024px) 65vw, 320px" : "(max-width: 1024px) 33vw, 160px"}
+        sizes={big ? "(max-width: 1024px) 65vw, 540px" : "(max-width: 1024px) 33vw, 280px"}
         quality={92}
         className={`transition-transform duration-500 group-hover:scale-[1.04] ${
-          s.fit === "contain" ? "object-contain p-2 md:p-3" : "object-cover"
+          s.fit === "contain" ? "object-contain p-1" : "object-cover"
         }`}
         priority={i === 0}
       />
@@ -125,7 +129,7 @@ export function CertsSlideshow() {
 
   return (
     <>
-      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2 aspect-[5/6] w-full max-w-[340px] lg:max-w-none mx-auto lg:mx-0">
+      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[5/6] md:aspect-[16/10] w-full max-w-[340px] md:max-w-[860px] mx-auto">
         <div className="row-span-2 min-h-0">
           <Cell i={0} big onOpen={open} />
         </div>
