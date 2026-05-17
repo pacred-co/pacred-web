@@ -325,3 +325,26 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - The entry above (worktree smoke prep) — another worktree-specific trap.
 
 ---
+
+## [2026-05-17] Worktree-isolation agents you spawn start at `origin/main` — not your working branch
+
+**Context:** Spawned a survey/fix sub-agent with `isolation: "worktree"` while the session was on branch `dave` (tip `ee95a84`, 19 migrations on disk). The agent's job: survey ภูม's domain and apply collision-safe fixes.
+
+**Symptom:** The agent reported the repo held only **11 migrations** (`dave` has 19), claimed `docs/UPGRADE_PLAN.md` and `docs/research/prelaunch-verification-2026-05-17.md` "don't exist" (both are on `dave`), and re-derived **11 admin-page security gates** — 9 of which `dave` already carried from the W-1 pass. ≈14 min of agent time, mostly duplicate work.
+
+**Root cause:** A worktree created for an `isolation: "worktree"` agent branches from `origin/HEAD`, which points at `origin/main`. On this team `main` is the *held* production branch; the live integration branch is `dave`. `git merge-base dave <agent-branch>` resolved to `2136ede` = `origin/main` — the agent surveyed and fixed a snapshot frozen well behind `dave`.
+
+**Fix / rule — when spawning a worktree-isolation agent:**
+1. The spawn prompt MUST state the base is stale: *"your worktree is branched from `origin/main`, which is behind — first run `git fetch origin && git merge origin/dave` so you work against the live integration branch."*
+2. OR have the agent print `git merge-base HEAD origin/dave` + `git diff --stat HEAD origin/dave` before any survey, and resync if they differ.
+3. Treat any "what exists / what's missing" survey from such an agent as suspect until its base commit is confirmed.
+
+**Recovery when it already happened:** Do NOT cherry-pick the agent branch — it conflicts or re-applies stale work. Instead `git diff <merge-base>..<agent-branch> --stat`, then per touched file `git diff <merge-base> <integration-branch> -- <file>` to see if the integration branch already changed it. Port only the genuinely-new hunks by hand. Here: 2 of 11 gates + 3 new test files were real → ported; the other 9 gates + the survey doc (stale migration/doc counts) → discarded.
+
+**Why this matters next time:** This is the spawn-side twin of the entry above (a *handed-out* stale worktree). Same failure, different door. Whenever `main` ≠ your integration branch, every worktree agent starts behind — brief them to resync, every time.
+
+**Cross-links:**
+- The entry above — the handed-out-worktree version of this same trap.
+- `AGENTS.md` §1 — session-start handshake (the resync discipline that prevents it).
+
+---
