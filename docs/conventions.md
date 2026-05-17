@@ -2,7 +2,7 @@
 
 > **CANONICAL** — single source of truth for code style, naming, and commit format.
 
-Last updated: 2026-05-13 · See also: [`team.md`](team.md) · [`env.md`](env.md)
+Last updated: 2026-05-18 · See also: [`team.md`](team.md) · [`env.md`](env.md)
 
 ---
 
@@ -226,6 +226,23 @@ Don't create new long-lived branches without lead approval.
 ---
 
 ## 11. UI / Style
+
+### 11.0 Mobile-first (อ่านก่อนแตะ customer surface ทุกครั้ง)
+
+ลูกค้า Pacred ส่วนใหญ่เข้าผ่านมือถือ — **design + test ที่ phone viewport ก่อน** แล้วค่อยขยายขึ้น. ห้าม desktop-first.
+
+- **Design + test at a phone viewport FIRST** — 360px (Android ทั่วไป) / 390px (iPhone) — แล้วค่อย scale ขึ้น desktop. ทำกลับด้าน (desktop ก่อน) = layout เพี้ยนบนมือถือ.
+- **Tailwind v4 = mobile-first by default:** เขียน utility แบบ **ไม่มี prefix = mobile** แล้วเพิ่ม `sm:` / `md:` / `lg:` สำหรับจอใหญ่ขึ้น — ห้ามทำกลับด้าน (ไม่มี max-width-first).
+- **Touch targets ≥ 44px (iOS) / 48px (Android)** สำหรับปุ่ม · ลิงก์ · nav item — `min-h-11 min-w-11` ≈ 44px.
+- **Body text ≥ 16px** (`text-base`) — ตัวอักษรเล็กกว่านี้ใน `<input>` ทำให้ iOS zoom-on-focus เด้งเอง.
+- **ห้าม horizontal scroll ที่ความกว้างใดๆ** — เลี่ยง fixed pixel width บน layout container; ใช้ `max-w-*` + fluid width (`w-full max-w-md` ไม่ใช่ `w-[420px]`).
+- **Primary CTA ต้องอยู่ใน thumb zone** (ครึ่งล่างของ viewport) บนมือถือ — ปุ่มหลักต้องกดถึงด้วยนิ้วโป้ง.
+- **Forms:** ตั้ง `type` / `inputMode` ให้มือถือเด้ง keyboard ถูก (`type="tel"` · `type="email"` · `inputMode="numeric"`).
+- **Test 3 reference widths ก่อน push** customer surface ใดๆ: **360 · 390 · 1280+**.
+
+📱 Full checklist + รูปแบบ Tailwind ต่อกฎ + pitfalls → [`mobile-first-playbook.md`](mobile-first-playbook.md) (ปอน อ่านก่อนเริ่มงาน frontend).
+
+### 11.1 General
 
 - Theme colors define ใน `@theme inline` ของ `app/globals.css`
 - ใช้ Tailwind utility — หลีกเลี่ยง hex hardcode ยกเว้น brand color ของ social provider

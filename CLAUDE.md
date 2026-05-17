@@ -21,16 +21,22 @@
 
 Pacred **launched to production 2026-05-17** — `main` is live + verified healthy on a separate prod Supabase project. The cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The emergency "เผาเงิน" framing is behind us — runway is no longer the daily lens; **stabilising + deepening the launched product** is.
 
-**Current phase:** post-launch **UPGRADE** roadmap — `docs/UPGRADE_PLAN.md` (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). U1 (refund money path · container unify · freight-chain wiring) + U2 (PCS customer migration · per-container cost ledger · cargo_sacks) + U4 (staff RBAC console · customer credit line) have **shipped on `dave`**; the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod Supabase.
+**Current phase:** post-launch — **Phase 1 release**. The canonical roadmap is `docs/UPGRADE_PLAN.md` — a phase/stage plan (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future). **Phase 0 has all shipped on `dave`** — the launch + the U1-U4 upgrade (refund money path · container unify · PCS migration · per-container cost ledger · staff RBAC console · credit line) + the capability **Tier 0/1/2** batches:
+- **Tier 0** — `ContactForm` live on `/contact` (`b90806b`); remaining = dashboard clicks (analytics env vars · GSC + sitemap · Google Business · Meta Business — ก๊อต/เดฟ).
+- **Tier 1** — `/start-order` + `QuoteCTA` calculator→buy bridge · CI `pnpm build` step · `/admin/kpi` exec dashboard (`bcd752c`).
+- **Tier 2** — cross-department `work_items` work-board: migration `0080` + `/admin/board` + `/admin/inbox` (`bcd752c`). MOMO sync + per-department workspaces remain specced.
+- **Tier 3 (Phase 2)** — four owner-requested systems designed (internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ · platform-observability) — design docs in `docs/research/`.
+
+The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod Supabase.
 
 **Decision lens (every task):** still revenue-aware — "does this make the product more *true*, *billable*, or *measurable*?" — but no longer crisis-mode. Plan work properly; don't ship half-built to chase a deadline.
 
-📋 **Roadmap:** [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch execution sequence. [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V/W = the cargo + gap-hunt backlog it draws from.
+📋 **Roadmap:** [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — THE canonical forward plan (phase/stage + work-split). [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) — the capability synthesis that seeded it. [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V/W = the cargo + gap-hunt backlogs they draw from.
 
 **Anti-patterns (still hold post-launch):**
 - V3 architecture redesign in this repo (V3 = `pacred-DPX`, separate repo — append ideas to `docs/v3-wishlist.md`)
 - Wide refactor cleanup with no product tie-in
-- Coding an UPGRADE_PLAN item before its §0 gate is green (migrations applied + live functional verify)
+- Shipping a stage before the quality gate is green (`pnpm verify` + build smoke + a functional pass)
 - Scrub PCS/TTP/ไอแต้ม **before** ก๊อต API switchover (would break the revenue path)
 
 ---
@@ -78,13 +84,13 @@ Pacred **launched to production 2026-05-17** — `main` is live + verified healt
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
 
 **🛠 Skills kit (playbooks the agent follows when triggered):**
-- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 11 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 12 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify
 
 **📚 Learnings (compounding knowledge — read before re-debugging):**
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
 
 **Living docs (เดฟ updates):**
-- 🚀 [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — **the post-launch roadmap** (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). This is the current execution doc — start here for "what's next".
+- 🚀 [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — **THE canonical forward roadmap** — the single post-launch phase/stage plan. This is the current execution doc — start here for "what's next".
 - 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — sprint history + cargo/gap-hunt backlogs (Parts O–W; Part V = cargo-forensics, Part W = gap-hunt; ~1825 lines — watch the 2000-line cap)
 - 📚 [`docs/sprints/archive-a-to-n.md`](docs/sprints/archive-a-to-n.md) — historic survey (Parts A–N — moved out to keep PORT_PLAN under 2000-line agent ceiling)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
@@ -98,6 +104,7 @@ Pacred **launched to production 2026-05-17** — `main` is live + verified healt
 - [`docs/audit/chat-analysis-2026-05-16.md`](docs/audit/chat-analysis-2026-05-16.md) — **NEW** LINE chat audit (จุดรั่ว + MOMO status enum canonical + workflows team really uses)
 - [`docs/audit/legacy-cleanup-2026-05-16.md`](docs/audit/legacy-cleanup-2026-05-16.md) — **NEW** PHP cleanup sweep (~115 dead-code files + 6 NEW critical security findings + 5 minor port gaps)
 - [`docs/audit/cargo-ops-forensics-2026-05-16.md`](docs/audit/cargo-ops-forensics-2026-05-16.md) — **NEW** decoded cargo/freight ops model (GZE truck / GZS sea · A/M/X/O/Z types · Form E / D-O / invoice-value engineering) + ไอแต้ม-chat problem catalog → PORT_PLAN Part V
+- 🆕 [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) — **post-launch capability synthesis** — rolls the growth / operating-system / build-vs-buy analyses into the Tier 0/1/2/3 roadmap + a "who owns what next" work-split. The current "what's next" doc.
 - 🆕 [`docs/research/PACRED-MASTER-STRATEGY.md`](docs/research/PACRED-MASTER-STRATEGY.md) — **chained gap-hunt synthesis** — rolls the 5 source-code gap docs ([`docs/research/`](docs/research/_index.md)) into 4 problems: a 🔴 P0 security keystone (`driver`/`warehouse` RLS reach all money tables — fix launch-week), the 🔴 wallet-leak chain, the "islands with no bridges" flow-wiring workstream, and **[PORT_PLAN Part W](docs/PORT_PLAN.md)** backlog
 - [`docs/audit/owasp-2026-05.md`](docs/audit/owasp-2026-05.md) — pre-launch security posture (note: superseded on RLS-vs-role-model by the master strategy §1)
 - [`docs/audit/php-pcscargo-integrations.md`](docs/audit/php-pcscargo-integrations.md) — deep legacy PHP integrations audit (companion to legacy-cleanup-2026-05-16)
@@ -110,7 +117,7 @@ Pacred **launched to production 2026-05-17** — `main` is live + verified healt
 2. อ่าน [`docs/HANDBOOK.md`](docs/HANDBOOK.md) → [`docs/team.md`](docs/team.md) → [`docs/conventions.md`](docs/conventions.md)
 3. `cp .env.example .env.local` + fill values (ถามเดฟ) — รายละเอียดทุก var ใน [`docs/env.md`](docs/env.md)
 4. รัน migration ที่ยังไม่ได้รัน — ดู [`supabase/migrations/README.md`](supabase/migrations/README.md)
-5. หางานของตัวเอง: brief ของคุณ + [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part S (current hand-off batch)
+5. หางานของตัวเอง: brief ของคุณ + [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) §"Work split" (current per-role next-work)
 6. Sync branch ตามวิธีใน [`docs/team.md`](docs/team.md) §3 (น้อง pull จาก `dave` ไม่ใช่ `main`!) + §3.0 push-frequency rule (save-points only — sleep / machine change / location change / big batch done; per memory `push_frequency_strict`)
 
 ---
@@ -120,9 +127,9 @@ Pacred **launched to production 2026-05-17** — `main` is live + verified healt
 Last updated: 2026-05-18 (post-launch)
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
-> Marketing site + landing pages + customer member portal + admin back-office — **live in production since 2026-05-17**.
+> Marketing site + landing pages + customer member portal + admin back-office — **live in production since 2026-05-17**. Post-launch: the U1-U4 UPGRADE sequence + the **Tier 0/1/2 capability batches** (lead funnel connected · `/start-order` buy-bridge · `work_items` work-board) have shipped on `dave`; 3 Tier-3 owner systems are designed.
 
-> 🎯 **Live state** — ดูที่ [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point) + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (post-launch roadmap). โน้ตด้านล่าง section "Auth & Backend State" เป็น Phase 1-5 historic foundation — the full customer portal, 60+ admin routes, U1/U2/U4 features ทำงานแล้ว; current state lives in STRATEGY.md §9.
+> 🎯 **Live state** — ดูที่ [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point) + [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md) (the Tier 0/1/2/3 roadmap). โน้ตด้านล่าง section "Auth & Backend State" เป็น Phase 1-5 historic foundation — the full customer portal, 60+ admin routes, U1/U2/U4 + Tier 0/1/2 features ทำงานแล้ว; current state lives in STRATEGY.md §9.
 
 ## Stack
 - Next.js **16.2.6** (App Router) — **โปรดอ่าน AGENTS.md: เวอร์ชันนี้มี breaking changes จาก training data**
@@ -160,7 +167,7 @@ Last updated: 2026-05-18 (post-launch)
 - `app/[locale]/(admin)/admin/*` — admin back-office — `requireAdmin()` gate per [ADR-0002](docs/decisions/0002-admin-architecture.md)
 - `actions/` — Server Actions (`actions/auth.ts`, `actions/wallet.ts`, etc.); admin variants in `actions/admin/*`
 - `lib/` — `supabase/{client,server,admin}.ts` · `auth/*` · `sms/gateway.ts` · `notifications/*` · `validators/*` (Zod) · `pdf/*` · `forwarder/calc-price.ts`
-- `supabase/migrations/` — 0001..0072+ numbered migrations (`0065` is an intentional unused gap); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
+- `supabase/migrations/` — 0001..0080+ numbered migrations (`0065` is an intentional unused gap); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
 - `proxy.ts` (NOT `middleware.ts` — Next 16 rename) at repo root
 
 ## Auth & Backend State (Phase 1-5 ✅ done)
@@ -179,7 +186,7 @@ Last updated: 2026-05-18 (post-launch)
 
 📊 **Live state snapshot** is in [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point). The lists below were Phase 1-5 historic — **current state lives in STRATEGY.md §9, not here**.
 
-Shipped + in production: customer portal (`/service-order` · `/service-import` · `/service-payment` · `/wallet` +deposit/+history/+withdraw · `/refunds` · `/sales` · `/notifications` · `/shipments` +[code]) · `/admin/*` (60+ routes incl. accounting/container-costs · disbursements · refunds · migration/pcs-customers · search · system/crons · system/notifications) · tax-invoice flow · pay-from-wallet self-serve · customer credit line · staff RBAC console. **Post-launch U1/U2/U4 features shipped on `dave`** — see STRATEGY.md §9 + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md).
+Shipped + in production: customer portal (`/service-order` · `/service-import` · `/service-payment` · `/wallet` +deposit/+history/+withdraw · `/refunds` · `/sales` · `/notifications` · `/shipments` +[code]) · `/admin/*` (60+ routes incl. accounting/container-costs · disbursements · refunds · migration/pcs-customers · search · system/crons · system/notifications) · tax-invoice flow · pay-from-wallet self-serve · customer credit line · staff RBAC console. **Post-launch U1/U2/U4 + Tier 0/1/2 features shipped on `dave`** — incl. `/contact` lead funnel · `/start-order` + `QuoteCTA` buy-bridge · `/admin/kpi` exec dashboard · `/admin/board` + `/admin/inbox` work-board. See STRATEGY.md §9 + [`docs/research/capability-tools-strategy-2026-05-18.md`](docs/research/capability-tools-strategy-2026-05-18.md).
 
 ## Architecture & Roadmap
 

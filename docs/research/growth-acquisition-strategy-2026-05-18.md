@@ -45,14 +45,15 @@ machinery is built but unplugged.**
    This is the single highest-leverage fix in this doc and it costs **10
    minutes** (set env vars), not a sprint.
 
-2. **🔴 The lead-capture form exists but is on no public page.** `ContactForm`
-   (`components/contact-form.tsx`) + `submitContactMessage` (`actions/contact.ts`)
-   + the `contact_messages` table + admin fan-out notifications are **all
-   built and working**. But `ContactForm` is rendered **nowhere on the public
-   site** — `/contact` is a `StubPage`. Result: an ad-clicker who is not ready
-   to phone/LINE has **no way to leave their details**, and `trackGenerateLead`
-   (the `generate_lead` GA4 event) has **exactly one caller — the unused form** —
-   so even once GTM is on, **the lead funnel will report zero**.
+2. **✅ RESOLVED (`b90806b`) — the lead-capture form is now live on `/contact`.**
+   `ContactForm` (`components/contact-form.tsx`) + `submitContactMessage`
+   (`actions/contact.ts`) + the `contact_messages` table + admin fan-out
+   notifications were already all built; the missing wire — rendering
+   `ContactForm` on `/contact` (previously a `StubPage`) — has shipped. An
+   ad-clicker who is not ready to phone/LINE can now leave their details, and
+   `trackGenerateLead` (the `generate_lead` GA4 event) fires from a live page —
+   so once GTM is switched on, the lead funnel reports real leads. *(Original
+   finding, now closed, kept for the audit trail.)*
 
 3. **🔴 No self-serve "ad-click → กดซื้อ" path.** The conversion funnel has a
    hard wall between the *public* site and the *act of buying*. The home

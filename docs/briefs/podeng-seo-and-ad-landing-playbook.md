@@ -1,7 +1,7 @@
-# ปอน Playbook — T-N1 SEO emergency audit + T-N2 Ad landing quality
+# ปอน Playbook — T-N1 SEO audit + T-N2 Ad landing quality
 
-> **Status:** 📋 playbook by เดฟ (preempting ปอน T-N1 + T-N2 from Part T2 emergency sprint).
-> **Date:** 2026-05-16 night · **Source:** PORT_PLAN Part T2 ปอน emergency items · [`docs/briefs/podeng.md`](podeng.md).
+> **Status:** 📋 playbook by เดฟ — ปอน T-N1 + T-N2 (SEO + ad-landing quality work, post-launch).
+> **Date:** 2026-05-16 night (drafted) · refreshed 2026-05-18 post-launch · **Source:** PORT_PLAN Part T2 ปอน items · [`docs/briefs/podeng.md`](podeng.md).
 >
 > **Read with:**
 > [`docs/briefs/podeng.md`](podeng.md) (ปอน's full role brief) ·
@@ -12,23 +12,23 @@
 
 ---
 
-## 🔥 Context (why these tasks now)
+## 🎯 Context (why these tasks matter)
 
-Per [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T2:
+Pacred launched to production **2026-05-17**. The acquisition funnel is now live — Google Ads + Facebook Ads point real spend at `pacred.co`. The constraint is no longer "is the company burning runway", it is simpler and permanent: **ad budget converts into customers only if the landing pages rank in search and load fast.** Per [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T2:
 
-> **บริษัทเผาเงิน.** Google Ads ยิงไม่ติด — landing rank ต่ำ · Google Search หา pacred.co ไม่เจอ · Facebook Ads มี inquiry คาร์โก้เข้าแต่ระบบยังไม่พร้อมรับ → drop + เสียชื่อ. พี่ป๊อปเครียดมาก.
+> Google Ads ยิงแล้วต้องคุ้ม — landing ต้องติดอันดับ · Google Search ต้องหา pacred.co เจอ · Facebook Ads inquiry คาร์โก้ที่เข้ามาต้องไม่ drop เพราะหน้าเพจช้าหรือ CTA หาไม่เจอ.
 
-**T-N1** = "SEO emergency audit — why pacred.co not in Google search results?"
+**T-N1** = "SEO audit — why is pacred.co not showing in Google search results, and fix it."
 **T-N2** = "Ad landing quality — every `/services/*` must: h1 with intent keyword · CTA above fold · LCP <3s on 4G · phone+LINE visible."
 
 These directly affect revenue:
-- Site invisible to Google → Ads wasted (people search "ชิปปิ้งจีน" → Pacred doesn't show)
-- Bad LCP = lower Google Ads Quality Score = higher CPC = same budget reaches fewer customers
+- Site invisible to Google → organic search sends nobody (people search "ชิปปิ้งจีน" → Pacred doesn't show)
+- Bad LCP = lower Google Ads Quality Score = higher CPC = the same ad budget reaches fewer customers
 - Missing CTA above fold = visitor bounces before seeing how to buy
 
 ---
 
-## Part 1 — T-N1: SEO Emergency Audit (3-4h)
+## Part 1 — T-N1: SEO Audit (3-4h)
 
 ### 1.1 Why aren't we ranking? — 6 likely causes (rank by check ease)
 

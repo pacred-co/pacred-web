@@ -1,180 +1,169 @@
-# 🚀 Pacred — Upgrade Plan (post-launch roadmap)
+# 🚀 Pacred Roadmap — post-launch V2
 
-> **Produced 2026-05-17** (launch eve), for เดฟ. The single execution-sequenced
-> rollup of all **post-launch** work — phases, gate, dependencies, ownership.
+> **The single canonical forward plan** — phases, stages, and who-owns-what for
+> `pacred-web` V2. Updated each save-point. Pacred launched 2026-05-17; V2 runs
+> until พี่ป๊อป is satisfied with the owner-pleaser build.
 >
-> **This is a consolidation, not a re-spec.** Per-item detail lives in the
-> source docs (linked per item). This doc owns the *sequence*, the *gate*, and
-> the *cross-cutting phasing* — the source docs own the *what* and the *how*.
+> **This doc owns the SEQUENCE.** Per-system detail lives in the design docs
+> (linked per item) — this plan does not duplicate them. Master single-read:
+> [`STRATEGY.md`](STRATEGY.md). Backlogs it draws from: [`PORT_PLAN.md`](PORT_PLAN.md)
+> Part V (cargo) + Part W (gap-hunt). Research that seeded it: [`research/`](research/_index.md).
 >
-> **Sources consolidated:**
-> [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md)
-> §3 (wire-the-flow) + §4 (Part W ranked) + §5 (phasing) ·
-> [`PORT_PLAN.md`](PORT_PLAN.md) Part W (gap-hunt backlog) + Part V (cargo
-> backlog) · [`research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md)
-> R-1..R-19 · [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md)
-> DN-1..DN-5 · the tools agenda (PEAK / NetBay / ship-tracking / fuel-calc /
-> Customs Trader Portal).
->
-> **Scope = V2 `pacred-web` (this repo).** V3 architecture is a **separate
-> repo** (`pacred-DPX`) per [ADR-0010](decisions/0010-v2-v3-version-strategy.md)
-> — out of scope here. This plan upgrades the *shipped V2*; it does not
-> redesign it.
+> **Scope = V2 `pacred-web`.** V3 is a separate repo (`pacred-DPX`,
+> [ADR-0010](decisions/0010-v2-v3-version-strategy.md)) — out of scope here;
+> append V3 ideas to `v3-wishlist.md`.
 
 ---
 
-## §0 — 🔴 THE GATE — before ANY upgrade *execution*
+## How to read this
 
-The launch-week security/money code (W-1 · W-3 · S-3/S-4/S-7 · 0064
-overdraw-guard) is **merged** on `dave`/`Poom`/`podeng` and passes static
-verify + production build + a route-level smoke. It is **not yet** verified
-"every function works" — no authenticated end-to-end flow has been exercised,
-and the 14 migrations are not yet in the database.
-
-**No upgrade item below is *coded* until this gate is green:**
-
-1. **ภูม applies the 14 migrations** (`0044`-`0052` + `0060`-`0064`) to Supabase
-   **dev → prod** — runbook [`runbook/poom-apply-migrations-2026-05-17.md`](runbook/poom-apply-migrations-2026-05-17.md)
-   (verify queries through (9)).
-2. **`dave → main` deploy** — *after* (1), ก๊อต gate. Ordering is load-bearing:
-   the code on `main` expects schema `0062`-`0064`; deploying before the
-   migrations are applied breaks freight wallet-pay + the overdraw floor.
-3. **Post-launch functional verification on the LIVE system** — production
-   smoke + *walk the key flows* and confirm each produces the **right result**,
-   not merely "no 500":
-   - the 6-step billing flow (datanew **L-1**): button → debt notice + invoice
-     → customer pays + uploads slip → staff verifies → save → receipt;
-   - place a cargo order · pay-from-wallet (customer + admin mark-paid) ·
-     a freight invoice + payment · a withdraw (confirm the 0064 overdraw floor
-     actually rejects an overdraw) · an admin role-gated page as a low-trust
-     role (confirm W-1 RLS role-pin).
-4. **Only after (3) is green → Phase U1 execution begins.**
-
-> Planning / spec / ADR work for U1-U4 **may proceed in parallel** with the
-> gate — only *code that touches the running system* waits.
-
-**Not a phase — do this week regardless:** rotate the leaked legacy credential
-(`pacred.co/wp-admin` — datanew **L-5**). It is a WordPress login, not
-`pacred-web`, but `admin_tam` / `123456` is live and weak.
+- **Phase** = a band of work. **Stage** = a shippable increment inside a phase.
+- A stage is DONE only when verified: `pnpm verify` + a production build smoke
+  + a [`qa-flow-simulator`](../.claude/skills/qa-flow-simulator/SKILL.md)
+  functional pass (see [AGENTS.md §11](../AGENTS.md)).
+- **Mobile-first is cross-cutting** — every customer-visible stage is built +
+  checked at a phone viewport. See [`conventions.md` §11](conventions.md) +
+  [`mobile-first-playbook.md`](mobile-first-playbook.md). It is not a phase; it
+  applies to all of them.
 
 ---
 
-## §1 — Phase U1 · Make the product honest (wire the flow)
+## Phase 0 — ✅ FOUNDATION (shipped — in production or staged on `dave`)
 
-> **Why first.** Master Strategy §3: Pacred-web is "correct islands with no
-> bridges" — a container marked delivered never closes the order, a paid order
-> never appears on a container, a delivered freight job never bills. The status
-> board (R-1) is theatre until the bridges exist. U1 builds the bridges + the
-> highest-leverage unbuilt money paths. **Revenue-first** — every U1 item makes
-> the product either *true* or *able to bill*.
+**Launch (2026-05-17)** — the cargo revenue path closes end-to-end (signup →
+wallet → service-order → admin-paid → receipt); customer portal + 60+ admin
+routes live. Prod deploys `314a528` + `4ef2ee6`.
 
-| id | item | why | source | effort | status |
+**Post-launch U1-U4 upgrade** — all shipped on `dave`:
+- **U1 wire-the-flow** — container unify · container→order status propagation ·
+  arrival→billing gate · freight-chain auto-draft/convert · order auto-close ·
+  refund money path.
+- **U2 revenue/margin** — PCS→Pacred customer-migration tool · per-container
+  cost + AP ledger · freight WHT gate · cargo_sacks.
+- **U4 supervisory** — staff RBAC console · audit-log export · notification log
+  · cron-health · 8-entity global search · customer credit line.
+
+**Capability Tier 0/1/2** — shipped on `dave`:
+- **Tier 0 — lead funnel** · `ContactForm` live on `/contact` (`b90806b`).
+- **Tier 1 — buy-bridge** · `/start-order` + `QuoteCTA` · a CI `pnpm build`
+  step · `/admin/kpi` executive dashboard (`bcd752c`).
+- **Tier 2 — internal OS** · `work_items` cross-department board: `/admin/board`
+  + `/admin/inbox` + migration `0080` (`bcd752c`).
+
+> Detail + commit history: [`STRATEGY.md`](STRATEGY.md) §9 +
+> [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md).
+
+---
+
+## Phase 1 — 🚀 RELEASE (now → owner handoff)
+
+| Stage | What | Owner | Gate |
+|---|---|---|---|
+| **R-1** | **`dave→main` deploy** — carry all of Phase 0's `dave` work to production. A staged, all-green, smoke-gated fast-forward. | เดฟ (gate: ก๊อต) | ภูม applies the post-launch migrations (`0058`-`0080`, per [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md)) to prod Supabase |
+| **R-2** | **Tier-0 dashboard** — the conversion-visibility unblock: flip the monitoring env vars in Vercel (Sentry · GTM/GA4 · Clarity · hCaptcha · Upstash — all code-wired + env-gated), verify Google Search Console + submit the sitemap, claim Google Business Profile, set up Meta Business Suite. | ก๊อต + เดฟ | checklist → [`runbook/launch-monitoring-golive-2026-05-17.md`](runbook/launch-monitoring-golive-2026-05-17.md) |
+
+> R-2 absorbs the old "U1-8 launch-monitoring env" item — the code is ready;
+> only the Vercel dashboard actions remain. Until R-2 is done Pacred runs ads
+> with no conversion tracking — this is the highest-value unblocked task.
+
+---
+
+## Phase 2 — 🎯 TIER-3: the four owner systems (the bulk of forward V2)
+
+Four systems the owner (พี่ป๊อป) named — each fully designed in
+[`research/`](research/_index.md). Built in stages, MVP-first.
+
+| # | System | MVP stage | Owner | Sequencing | Design doc |
 |---|---|---|---|---|---|
-| **U1-1** | **Unify the two container tables** — pick `cargo_containers` canonical, migrate legacy `containers`, repoint `forwarders.container_id`, redirect `/admin/containers` | the rest of U1 (and R-1) inherits a split if this is not first | Part W W-2 · MS §3.2 W-1w | M | ✅ shipped 2026-05-17 (commits `cfb78aa` + `6681657` audit-fix: legacy writes stubbed, detail page redirects to spine, migration `0059` + `0066` triggers) |
-| **U1-2** | **Container→order status propagation** — `setContainerStatus` maps onto `forwarders`/`service_orders` status via a documented enum | the single highest-leverage bridge — makes the customer "track my shipment" page *true* | Part W W-2 · MS §3.2 W-2w | M | ✅ shipped 2026-05-17 (commit `d4339bd`: cascadeContainerToShipments + cascadeShipmentToOrders + 4 audit events; forward-only; best-effort) |
-| **U1-3** | **Arrival→billing gate** — block mark-paid / pay-from-wallet for an arrived cargo job until container-no + final CBM confirmed | pairs with datanew **L-3**: PCS vs MOMO CBM disagree ~31% every container — bill off the MOMO closed-container figure, not the order-time estimate | Part W W-2 · MS §3.2 W-3w · datanew L-3 | M | ✅ shipped 2026-05-17 (commit `d31e906`: `getCargoBillingGate()` + wired into `adminMarkForwarderPaid` (with `allow_unverified_billing` admin escape hatch) + `payForwarderFromWallet` (customer, no escape); fail-OPEN on DB read errors; 2 distinct audit events) |
-| **U1-4** | **Freight chain wiring** — `quote.convert` creates a shipment · `markFreightDelivered` auto-drafts the invoice · `freight_invoices` partial-unique index | a delivered freight job currently reaches `delivered` with no invoice — revenue silently un-billed | Part W W-2 · MS §3.2 W-4w · Part V V-E6/E7 | M | ✅ shipped 2026-05-17 (commits `6a63464` + `6681657`: auto-draft-invoice on delivery + auto-convert on accept + `freight_invoices` partial-unique on `(freight_shipment_id) where status != 'cancelled'`) |
-| **U1-5** | **Order auto-close** — a `…→completed` action + a trigger from container `delivered` | `service_orders.completed` is today set by nothing — the flow has no finish line | Part W W-2 · MS §3.2 W-5w | S | ✅ shipped 2026-05-17 (commit `d4339bd`: `service_order.auto_close_on_delivery` audit event on cascade hop shipment.delivered → service_order.completed) |
-| **U1-6** | **Refund money path** — one credit-writing action (`kind='refund'`) covering cancel-after-paid · yuan refund of a completed payment · carrier-change over-collection · a customer-facing refund/claim entry | Master Strategy §2 "where do refunds happen" — currently nowhere coherent | Part W W-5 · gap-revenue-flow H-3 | M | ✅ shipped 2026-05-17 (commits `1a35ada` + `6681657`: `refund_requests` table + 5 actions + customer self-serve + admin queue + terminal-state lock trigger in `0066`) |
-| **U1-7** | **MOMO JMF sync runnable** — ⚠️ **first correct the API docs** (datanew **L-0**): real surface is `https://api.momocargo.com:8080` REST (`/api/func/get/import/track/{range}`, `/api/func/get/container/closed/{range}`, `/api/sack/get/info/{code}`, date = `YYYY-MM-DD+YYYY-MM-DD`) — **not** the retired `api-cn.alilogisticshub.com` `?api=` decode. Then build the sync client + `app/api/cron/momo-jmf-sync/route.ts` + the 7th `vercel.json` cron | the status board's data source; the existing `momo-jmf-api-decoded.md` decode is wrong | Part W W-4 · datanew L-0 | L | ⏸ blocked on L-0 API doc correction |
-| **U1-8** | **Launch-monitoring env live** — `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` · `NEXT_PUBLIC_GTM_ID` · Clarity · hCaptcha + Upstash creds · OTP SMS-balance alert | observability for everything above; resolve the hCaptcha fail-mode doc contradiction first (gap-integrations G-3) | MS §5.1 R-M* · gap-integrations G-3 | S | 🟢 code-ready (audit 2026-05-17): Sentry init in `instrumentation-client.ts` + `.server.config.ts` + `.edge.config.ts` ✓; `<GtmScript />` + `<ClarityScript />` mounted in root `layout.tsx` ✓ (no-op when env unset); `lib/hcaptcha.ts` wired in `/auth/register` + `/forgot-password` ✓; `/api/cron/sms-balance-check` registered in `vercel.json` ✓. Remaining: deployment-side env-var set in Vercel (`docs/env.md` §"Launch checklist" covers acquisition steps) |
+| 1 | **Internal org-chat** — shipment/job-scoped work-comms | IC-1 | ภูม | rides on the shipped `0080` work-board | [`internal-chat-system`](research/internal-chat-system-2026-05-18.md) |
+| 2 | **Disbursement** (เบิก-จ่าย) | stage 1 | ภูม | after IC-1 | [`disbursement-system`](research/disbursement-system-2026-05-18.md) |
+| 3 | **China-ops** (ปิดตู้) | stage 1 | ภูม | **volume-gated** — build once own-container volume justifies it | [`china-ops-container-closing`](research/china-ops-container-closing-2026-05-18.md) |
+| 4 | **Platform observability** (รายงานสถานะ Platform) | IO-1 | เดฟ | parallel — a different lane, non-colliding with ภูม | [`platform-observability-system`](research/platform-observability-system-2026-05-18.md) |
 
-**Status note (2026-05-18 morning, after Wave 1+2):** **6 of 8 U1 + 4 of 5 U2 + 5 of 5 U4-1 + U4-2 ✅ shipped**. U1-7 (MOMO sync) doc now spec-corrected at [`integrations/momo-jmf-api-spec.md`](integrations/momo-jmf-api-spec.md) — ready for implementation once partner call clarifies pagination/rate-limit. U2-4 PEAK remains. **U4-3 polish: 4 of 8 sub-items shipped** (delivery-ack, yuan-tax-invoice, how-to-use content, empty-state+tooltips, customer wallet-tx self-cancel, TH province dropdown, per-shipment forwarding recap). Plus **C-1 P1 wallet RLS sign guard hotfixed** (migration `0072`). **Super tools** (view-as-customer impersonation + business config) ✅ shipped. 11 migrations applied (0067-0080).
+- **Build order** — ภูม: IC-1 → disbursement → china-ops. เดฟ: IO-1 in parallel
+  (the monitoring lane).
+- **Migration numbers** — assigned at build time, in build order; not
+  pre-allocated. `0080` is the last taken. ภูม owns `0073`-`0079` + `0081`+; the
+  platform-observability migration coordinates a number with ภูม.
+- Per-system stages (IC-2…, IO-2/3/4, disbursement + china-ops stages) live in
+  the design docs — not duplicated here.
 
-**Interleaves with:** R-1 status board (depends on U1-1 + U1-2) · R-2 MOMO
-Pay-Later gating (depends on U1-7).
-
----
-
-## §2 — Phase U2 · Revenue, margin, data integrity
-
-> Once the flow is honest (U1), U2 makes the money side *complete and
-> measurable* — and absorbs the legacy customer base.
-
-| id | item | why | source | effort | status |
-|---|---|---|---|---|---|
-| **U2-1** | **PCS→Pacred customer migration** — backfill legacy customers, re-stamp `PCS<n>` → `PR<n>`; **offset `member_code_seq`** so a migrated `PR1234` never collides with a fresh-signup `PR001` | datanew **L-2** — a launch-week job; the sequence offset is the one technical trap | datanew L-2 · migration `0060` | M | ⏳ pending |
-| **U2-2** | **Per-container cost basis + AP/disbursement ledger** — `container_costs` carrier-rate-card table + the disbursement ledger (legacy `tb_cost_container` + `tb_bill`) | Pacred has zero cost side today → no margin, no "billed below cost" flag, no commission-on-profit | Part W W-8 · R-7 · gap-schema-security G-1/G-2 | L | ✅ shipped 2026-05-18 (commit `5d9a653`: migration `0069` with `container_costs` carrier rate card + `container_disbursements` AP ledger + RLS; `lib/cost/container-margin.ts` with `computeContainerMargin()` + unit tests; `/admin/accounting/container-costs` + `/admin/accounting/disbursements` CRUD UI; cost & margin panel on container detail page) |
-| **U2-3** | **Freight WHT gate** — add `freight_invoice_id` to `withholding_tax_entries`, un-stub `getFreightReceiptGate()` | juristic freight customers withhold tax like cargo customers — the "no cert → no receipt" control does not exist for freight today | Part W W-8 · gap-schema-security G-4 · Part V V-A6.1 | S | ✅ shipped 2026-05-17 (commit `6681657`: `getFreightReceiptGate` queries `withholding_tax_entries.freight_invoice_id`; blocks when `cert_status='pending'`; fails OPEN on transient DB errors) |
-| **U2-4** | **PEAK accounting integration** — sync issued invoices / receipts to PEAK | tools agenda — closes the books loop; removes manual re-keying | tools agenda | L | ⏳ pending |
-| **U2-5** | **"sack" entity** — model the `CBX…-EK…` sack the legacy ops use; missing from the Pacred schema | datanew **L-4** — surfaces in IT-team chat container handling | datanew L-4 | M | ✅ shipped 2026-05-17 (migration `0068`: `cargo_sacks` + `cargo_sack_seq` + `next_sack_code()` daily-reset + `cargo_shipments.cargo_sack_id` FK + RLS customer-via-shipment-ownership + `lib/warehouse/sacks.ts` with `upsertSackByCode` MOMO entry-point + `reconcileSack` outside-vs-inside CBM gap helper) |
+> **Status note (2026-05-18 morning).** Phase 0 + Phase 1 R-2 code-side
+> are complete; R-1 deploy waits on ภูม applying migrations `0058`-`0080`
+> to prod Supabase (already applied to dev — verified). Phase 2 builds
+> start once R-1 is live + observability dashboards from R-2 are emitting.
 
 ---
 
-## §3 — Phase U3 · Ecosystem & integration tools
+## Phase 3 — 🔭 FUTURE (signposted, not scheduled)
 
-> The tools agenda — turn Pacred from "a portal" into the full-loop platform
-> the DNA promises ("ทุกคนนำเข้า-ส่งออกได้ ง่ายๆแค่ปลายนิ้ว"). Each item is an
-> external-integration build (L effort) — schedule by partner-readiness.
-
-| id | item | why |
-|---|---|---|
-| **U3-1** | **NetBay — ใบขนสินค้า** (customs declaration) integration | service #8 `shipping-document` — currently TBD |
-| **U3-2** | **Customs Trader Portal** integration | broker/declaration lifecycle; service #1 `customs-broker-matching` + #6 `customs-clearance` |
-| **U3-3** | **Real-time container / ship tracking** — by vessel + voyage (MarineTraffic-style live position), surfaced on the customer shipment page | makes "track my shipment" a live map, not a status string |
-| **U3-4** | **Fuel surcharge calculator** — fuel-indexed surcharge in the freight quote engine | quote accuracy; legacy ops re-price on fuel |
-| **U3-5** | **Driver scheduling** — extends the `driver-runs` / barcode-scan flow into an assignable schedule board | the warehouse/driver roles (R-8/R-9) need a workspace |
-| **U3-6** | **Webhook-receiver harness** — a tested inbound-webhook surface for partner callbacks (MOMO / carriers / payment) | gap-integrations — replaces poll-only sync where partners support push |
-
-> Sourced from the tools agenda + gap-integrations G-3..G-13 + Part W item-9+
-> tail. These are independent — sequence by which partner credential / API
-> access lands first.
-
----
-
-## §4 — Phase U4 · Supervisory layer & customer depth
-
-| id | item | why | source | status |
-|---|---|---|---|---|
-| **U4-1** | **Admin supervisory layer** — audit-log search/filter/export · staff RBAC / `super`-review console · notification delivery log · global search · cron-health panel | the back-office can *do* things but not *oversee* them | Part W W-6 | ✅ **5 of 5 shipped 2026-05-18**: audit-log export (`f13173e`) · notification log (`64a0493`) · cron-health (`64a0493`) · **staff RBAC console** (`85741bb`: distribution + filter + recent events) · **global search** (`85741bb`: 8-entity unified `/admin/search`) |
-| **U4-2** | **Customer credit line** (เครดิตสินค้า / pay-later) — `profiles.credit_limit` + a credit-charge ledger kind + an outstanding-credit view + a "pay my credit" action; lights up the dead `wallet.credit_balance` UI | a real revenue feature legacy customers expect | Part W W-7 | ✅ shipped 2026-05-18 (commit `40d7ed4`: migration `0071` with `profiles.credit_limit_thb` + `v_customer_credit_outstanding` view + `credit_charge`/`credit_payment` kinds; `adminSetCustomerCreditLimit` + `adminChargeToCredit` admin actions; `customerPayCreditFromWallet` customer action; credit panel on `/wallet` + admin section on `/admin/customers/[id]`) |
-| **U4-3** | **Tier-2 tail** — customer delivery-acknowledgement · yuan tax-invoice · wallet-tx lifecycle UX · admin view-as-customer · export hub · editable business config · audit retention · `tax_id` verification gate | the polish backlog | Part W §4.2 items 9+ · gap-customer / gap-admin | ⏳ pending |
+- **Native apps — Android + iOS.** Most Pacred customers are on phones; a
+  native app is the next surface once the mobile web is solid. Keep V2 layouts
+  component-clean + mobile-first so they port. A V2-tail / V3 candidate — not
+  scheduled.
+- **The 9 expansion services** — customs-broker matching · tax-refund · export
+  · fumigation · consignment · pay-on-behalf · logistics/messenger (the service
+  catalogue in [`../CLAUDE.md`](../CLAUDE.md) marked TBD). Phase I — after
+  revenue is stable.
+- **U3 partner-integration tools** — MOMO JMF sync (⏸ blocked: the on-record
+  API host/format is wrong — needs ก๊อต to clear the real
+  `api.momocargo.com:8080` REST spec) · NetBay ใบขนสินค้า · Customs Trader
+  Portal · PEAK accounting · real-time ship tracking · fuel-surcharge
+  calculator. Each is partner-credential-scheduled.
+- **U2-1 backfill** — the PCS→Pacred customer-migration *tool* shipped; running
+  the actual data backfill (with the `member_code_seq` offset so a migrated
+  `PR1234` never collides with a fresh `PR001`) is an operational step for ภูม.
+- **The polish backlog** — the old U4-3 tail (delivery-acknowledgement · yuan
+  tax-invoice · wallet-tx lifecycle UX · admin view-as-customer · export hub ·
+  editable business config · audit retention) + the [`PORT_PLAN.md`](PORT_PLAN.md)
+  Part V / Part W remainder.
+- **V3 (`pacred-DPX`)** — the employee-masterpiece rebuild, a separate repo
+  ([ADR-0010](decisions/0010-v2-v3-version-strategy.md)). The owner signals when
+  to start. Do not refactor V2 toward V3 — append ideas to `v3-wishlist.md`.
 
 ---
 
-## §5 — Sequencing rules (hard constraints)
+## Cross-cutting — applies to every phase
 
-1. **§0 gate is green before any U1 code.** Non-negotiable — the user's
-   "ถ้าเช็คชัวร์แล้ว" rule. Planning may run ahead; code may not.
-2. **U1-1 (container unify) before everything else in U1** — and before R-1 /
-   R-10 — or every later piece inherits the two-table split.
-3. **U1-7: correct the MOMO API docs before writing the sync client.** The
-   on-record decode is wrong (datanew L-0). A wrong client is worse than none.
-4. **W-1 must be live before any `warehouse`/`driver` admin account is created**
-   — it is already merged; migration `0062` (in the §0 batch) applies the RLS
-   role-pin. Do not create those accounts until §0 step 1 is done on prod.
-5. **L-5 credential rotation is this-week, phase-independent.**
-6. Within a phase, items are roughly ranked top-to-bottom; U1-1 → U1-5 is a
-   strict chain, U1-6/U1-7/U1-8 can run in parallel once U1-1 lands.
-
----
-
-## §6 — Pacred-identity guardrail (load-bearing — restated)
-
-The legacy PCS/TTP operation leaned on **gray-channel** practice (no-document
-"เหมาภาษี", HS-code re-engineering, declared-value engineering, ตั๋วพ่วง). The
-R&D docs catalogue it as *operational lessons*, **not features**. Every U-item
-that touches money / tax / declarations / value (U1-3 billing, U1-6 refund,
-U2-2 cost, U2-3 WHT, U3-1 NetBay, U3-2 Customs Trader Portal) builds the
-**legitimate, document-complete, fully-audited path only** — Pacred's identity
-is the *opposite* of the legacy shortcut. Full statement:
-[`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) §5.5.
+- **Mobile-first** — Pacred's customers arrive mostly on phones. Every
+  customer-visible change is designed + verified at a phone viewport
+  (360 / 390px) FIRST, then scaled up. [`conventions.md` §11](conventions.md) ·
+  [`mobile-first-playbook.md`](mobile-first-playbook.md) · the
+  `mobile-first-verify` skill.
+- **Quality gate** — no stage ships without `pnpm verify` + a production build
+  smoke + a `qa-flow-simulator` functional pass. [AGENTS.md §11](../AGENTS.md).
+- **Save-point pushes** — commit freely; push at save-points only
+  ([`team.md` §3.0](team.md)).
+- **Pacred-identity guardrail** — the legacy PCS/TTP operation leaned on
+  gray-channel practice (no-document "เหมาภาษี", HS-code / declared-value
+  engineering). The R&D docs catalogue it as *lessons*, never *features*. Every
+  money / tax / declaration / customs stage builds the legitimate,
+  document-complete, fully-audited path only. Full statement:
+  [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) §5.5.
 
 ---
 
-## §7 — Cross-references
+## Work-split — who owns what next
 
-- 🎯 Strategic synthesis this sequences → [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md)
-- 📋 Detailed backlogs → [`PORT_PLAN.md`](PORT_PLAN.md) Part W (gap-hunt) + Part V (cargo)
-- 🗺 Prior 19-item roadmap (R-1..R-19) → [`research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md)
-- 🆕 Launch-eve data findings (DN-1..DN-5) → [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md)
-- 🔐 Gap drills → [`research/gap-customer.md`](research/gap-customer.md) · [`research/gap-admin.md`](research/gap-admin.md) · [`research/gap-revenue-flow.md`](research/gap-revenue-flow.md) · [`research/gap-integrations-tools.md`](research/gap-integrations-tools.md) · [`research/gap-schema-security.md`](research/gap-schema-security.md)
-- 🗄 The §0 migration gate → [`runbook/poom-apply-migrations-2026-05-17.md`](runbook/poom-apply-migrations-2026-05-17.md)
-- 🧭 V3 (separate repo — NOT this plan) → [ADR-0010](decisions/0010-v2-v3-version-strategy.md)
+| Owner | Next work |
+|---|---|
+| **ก๊อต** | Phase 1 R-2 Tier-0 dashboard (env vars · GSC · Google Business · Meta) · gate the `dave→main` deploy · clear the MOMO API docs · production watch |
+| **เดฟ** | Phase 1 R-1 `dave→main` deploy (once ภูม clears the migration gate) · integrate the team's pushes · Phase 2 — BUILD platform-observability IO-1 · monitor post-deploy |
+| **ภูม** | Phase 1 — apply migrations `0058`-`0080` to prod (unblocks R-1) · Phase 2 — BUILD: internal-chat IC-1 → disbursement → china-ops (volume-gated) · U1/U2 review follow-ups |
+| **ปอน** | Frontend tooling (data-driven landing template) · **mobile-first hardening** of the customer surfaces · polish `/contact` + `/start-order` + `QuoteCTA` · SEO audit |
+
+---
+
+## Cross-references
+
 - 📘 Entry point → [`HANDBOOK.md`](HANDBOOK.md) · master single-read → [`STRATEGY.md`](STRATEGY.md)
+- 📋 Backlogs → [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo) + Part W (gap-hunt)
+- 🔬 Research that seeded the phases → [`research/_index.md`](research/_index.md) — esp. [`capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) + the 4 owner-system design docs
+- 🗄 The migration gate → [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md)
+- 🧭 V3 (separate repo — NOT this plan) → [ADR-0010](decisions/0010-v2-v3-version-strategy.md)
 
 ---
 
-**End — `UPGRADE_PLAN.md`.** §0 gate → §1 wire-the-flow → §2 revenue/margin →
-§3 ecosystem tools → §4 supervisory/depth. Nothing is *coded* until §0 is
-green; everything is *plannable* now.
+**End — `UPGRADE_PLAN.md`.** Phase 0 ✅ foundation → Phase 1 🚀 release →
+Phase 2 🎯 the four owner systems → Phase 3 🔭 future. Mobile-first + the
+quality gate apply across all of them.
