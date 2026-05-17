@@ -28,6 +28,9 @@ description: Use this skill at the end of every phase, batch, sprint, or "featur
 │  · "CI workflow file syntactically valid yaml"                   │
 │  · "Vercel build would succeed (no Server-Component using        │
 │    'use client' helpers / no client-imported server-only)"      │
+│  · "if a migration added/changed an admin ROLE, every RLS        │
+│    predicate + requireAdmin() gate was re-checked vs the role    │
+│    model — 'RLS enabled' ≠ 'RLS predicate matches the roles'"    │
 └──────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─ 2. CHECK — execute each assumption ────────────────────────────┐
