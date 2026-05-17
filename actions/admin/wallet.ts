@@ -38,6 +38,23 @@ export async function adminUpdateWalletTransaction(input: AdminUpdateWalletTxInp
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === d.status) return { ok: true };  // no-op
 
+    // C-1 defence-in-depth (audit-core-2026-05-18 §3): sign-sanity check
+    // before any pending→completed flip. The 0072 migration adds an RLS
+    // policy + table CHECK, but those only catch INSERTs — an admin
+    // approving an already-existing row with a wrong-signed amount
+    // would have slipped through pre-0072. This guard rejects flipping
+    // a deposit-with-non-positive-amount or withdraw-with-non-negative-
+    // amount to 'completed'. Defensive: should be unreachable after 0072.
+    if (d.status === "completed") {
+      const amt = Number(existing.amount);
+      if (existing.kind === "deposit" && !(amt > 0)) {
+        return { ok: false, error: `wallet_tx amount sign mismatch — deposit must be positive but is ${amt}. Reject + investigate.` };
+      }
+      if (existing.kind === "withdraw" && !(amt < 0)) {
+        return { ok: false, error: `wallet_tx amount sign mismatch — withdraw must be negative but is ${amt}. Reject + investigate.` };
+      }
+    }
+
     const update: Record<string, unknown> = {
       status: d.status,
       admin_id_update: adminId,
