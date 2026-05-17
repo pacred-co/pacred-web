@@ -13,6 +13,14 @@
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
+> 🟢 **Status (2026-05-17 night):** 0044-0057 + 0060-0064 already applied
+> by ภูม. **3 new post-launch migrations to apply next:**
+> - `0058_refund_requests.sql` (U1-6 refund money path)
+> - `0059_container_unify.sql` (U1-1 cargo_containers backfill + FK repoint)
+> - `0066_post_u1_audit_fixes.sql` (refund_requests terminal-state lock + freight_invoices single-active-per-shipment unique)
+>
+> Apply 0058 → 0059 → 0066 in that order. All idempotent + zero data migration.
+
 | # | File | Adds | Feature | Review |
 |---|---|---|---|---|
 | 0044 | `0044_withholding_tax.sql` | `withholding_tax_entries` + `wht-certs` bucket | V-A6 WHT | ✅ |
@@ -34,6 +42,9 @@ each file into the SQL Editor **in ascending number order**.
 | 0062 | `0062_rls_role_pin_money_pii.sql` | role-pins ~24 `*_admin_all` RLS policies to explicit role arrays + `audit_wallet_transaction()` trigger | W-1 S-1 security keystone | ✅ |
 | 0063 | `0063_wallet_freight_invoice_reference.sql` | `wallet_transactions.reference_type` += `freight_invoice` + `wallet_tx_freight_payment_uniq` index | W-3 G-3 freight wallet-pay | ✅ |
 | 0064 | `0064_wallet_overdraw_guard.sql` | `wallet_available_balance()` fn + `wallet_assert_no_overdraw()` BEFORE-trigger (FOR UPDATE hard floor) | H-1/S-5 overdraw guard | ✅ |
+| 0058 | `0058_refund_requests.sql` | `refund_requests` + `refund_request_seq` + `next_refund_request_no()` + RLS | U1-6 refund money path | ⏳ apply next |
+| 0059 | `0059_container_unify.sql` | 10 backward-compat columns on `cargo_containers` + backfill from legacy `containers` + `forwarders.cargo_container_id` + `service_orders.cargo_container_id` | U1-1 container unify | ⏳ apply next |
+| 0066 | `0066_post_u1_audit_fixes.sql` | `refund_requests_block_terminal_reversal()` BEFORE-trigger + `freight_invoices_one_active_per_shipment_uidx` partial-unique | Post-U1 audit fixes (MED + LOW from 871450b/0e652f0/185adfd review) | ⏳ apply next |
 
 ---
 
