@@ -58,11 +58,7 @@ import {
   roundThb,
   type FreightInvoicePaymentStatus,
 } from "@/lib/validators/freight-payment";
-import {
-  getAvailableBalance,
-  hasSufficientAvailable,
-  type LedgerRow,
-} from "@/lib/wallet/ledger";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 
 const ROLES = ["super", "ops", "accounting"] as const;
 
@@ -160,7 +156,7 @@ async function loadInvoiceFinancials(
  *   - The debit is status='completed' (an instant debit, like cargo
  *     pay-from-wallet) so it reduces wallet.balance immediately.
  *   - Balance is checked against the AVAILABLE balance (completed minus
- *     pending debits — lib/wallet/ledger.ts) so a freight wallet payment
+ *     pending debits — lib/wallet/balance.ts) so a freight wallet payment
  *     cannot push the wallet negative past funds already reserved by
  *     pending withdraws / yuan transfers.
  *   - 23505 (the 0063 unique guard) is treated as an idempotent retry:
@@ -176,23 +172,13 @@ async function debitWalletForFreightPayment(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { profileId, paymentRowId, amountThb, invoiceNo } = args;
 
-  // Available-balance check (completed balance − Σ pending debits).
-  const { data: wallet } = await admin
-    .from("wallet")
-    .select("balance")
-    .eq("profile_id", profileId)
-    .maybeSingle<{ balance: number }>();
-  const { data: pendingRows } = await admin
-    .from("wallet_transactions")
-    .select("amount, status")
-    .eq("profile_id", profileId)
-    .eq("bucket", "main")
-    .eq("status", "pending");
-  const available = getAvailableBalance(
-    Number(wallet?.balance ?? 0),
-    (pendingRows ?? []) as LedgerRow[],
-  );
-  if (!hasSufficientAvailable(available, amountThb)) {
+  // Available-balance check — pending-aware (completed balance minus open
+  // pending debits, gap-customer §H-1) via the shared wallet/balance helper.
+  const available = await getWalletAvailableBalance(admin, profileId);
+  if (available === null) {
+    return { ok: false, error: "wallet_balance_unavailable — ตรวจสอบยอดเงินไม่สำเร็จ ลองใหม่อีกครั้ง" };
+  }
+  if (available < amountThb) {
     return {
       ok: false,
       error: `wallet_insufficient — ใช้ได้ ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,

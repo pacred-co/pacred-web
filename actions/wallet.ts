@@ -12,11 +12,7 @@ import { buildPromptPayQrDataUrl, PromptPayConfigError } from "@/lib/promptpay";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
-import {
-  getAvailableBalance,
-  hasSufficientAvailable,
-  type LedgerRow,
-} from "@/lib/wallet/ledger";
+import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -172,39 +168,18 @@ export async function createWithdraw(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // W-3 / H-1 — check against the AVAILABLE balance, not the raw
-  // `wallet.balance`. `wallet.balance` (trigger wallet_recompute_balance,
-  // 0007) counts only status='completed' rows, so a still-pending withdraw
-  // / wallet-paid yuan transfer does NOT reduce it. Without this, a
-  // customer stacks N pending debits each individually ≤ balance → an
-  // admin approves them all → the wallet goes negative. We subtract the
-  // sum of pending debits (see lib/wallet/ledger.ts) so the Nth request
-  // is rejected the moment cumulative pending debits would overdraw.
-  const { data: w } = await supabase
-    .from("wallet")
-    .select("balance")
-    .eq("profile_id", user.id)
-    .maybeSingle<{ balance: number }>();
-  if (!w) {
-    return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ" };
+  // Check the PENDING-AWARE available balance, not the raw wallet.balance.
+  // wallet.balance (0007 trigger) sums only completed rows, so it ignores
+  // this customer's other not-yet-approved withdraw / yuan debits. Without
+  // this, stacked pending requests each pass yet aggregate-overdraw once an
+  // admin approves them all (gap-customer.md §H-1). Migration 0064's trigger
+  // is the hard DB backstop; this is the friendly-error fast path.
+  const available = await getWalletAvailableBalance(supabase, user.id);
+  if (available === null) {
+    return { ok: false, error: "ไม่สามารถตรวจสอบยอดเงินได้ กรุณาลองใหม่อีกครั้ง" };
   }
-
-  const { data: pendingRows } = await supabase
-    .from("wallet_transactions")
-    .select("amount, status")
-    .eq("profile_id", user.id)
-    .eq("bucket", "main")
-    .eq("status", "pending");
-
-  const available = getAvailableBalance(
-    Number(w.balance),
-    (pendingRows ?? []) as LedgerRow[],
-  );
-  if (!hasSufficientAvailable(available, d.amount)) {
-    return {
-      ok: false,
-      error: `ยอดเงินที่ถอนได้ไม่พอ — ใช้ได้ ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (หักรายการที่รออนุมัติแล้ว) ต้อง ฿${d.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
-    };
+  if (available < d.amount) {
+    return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ (รวมรายการที่รออนุมัติ)" };
   }
 
   // Negative amount because withdraw is a debit
@@ -224,7 +199,14 @@ export async function createWithdraw(
     .select("id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Lost a race past the check above, or a direct-RLS insert — the 0064
+    // overdraw-guard trigger rejected it. Surface the same friendly message.
+    if (isWalletOverdrawError(error)) {
+      return { ok: false, error: "ยอดเงินในกระเป๋าไม่พอ (รวมรายการที่รออนุมัติ)" };
+    }
+    return { ok: false, error: error.message };
+  }
 
   revalidatePath("/wallet/history");
   revalidatePath("/wallet/withdraw");

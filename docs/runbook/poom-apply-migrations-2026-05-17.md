@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**13 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+**14 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -28,10 +28,11 @@ each file into the SQL Editor **in ascending number order**.
 | 0061 | `0061_money_idempotency_guards.sql` | `cost_adjustment` kind + 3 partial-unique guards (forwarder main-payment · freight payment · tax invoice) | money P0-1/P1-2/P1-4 fix | ✅ |
 | 0062 | `0062_rls_role_pin_money_pii.sql` | role-pins ~24 `*_admin_all` RLS policies to explicit role arrays + `audit_wallet_transaction()` trigger | W-1 S-1 security keystone | ✅ |
 | 0063 | `0063_wallet_freight_invoice_reference.sql` | `wallet_transactions.reference_type` += `freight_invoice` + `wallet_tx_freight_payment_uniq` index | W-3 G-3 freight wallet-pay | ✅ |
+| 0064 | `0064_wallet_overdraw_guard.sql` | `wallet_available_balance()` fn + `wallet_assert_no_overdraw()` BEFORE-trigger (FOR UPDATE hard floor) | H-1/S-5 overdraw guard | ✅ |
 
 ---
 
-## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 13 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 14 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
   replace` / `create [unique] index if not exists` / `drop+recreate`
@@ -72,7 +73,7 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0052 + 0060 + 0061 + 0062 + 0063 applied to dev + prod ✅".
+Post: "migrations 0044-0052 + 0060 + 0061 + 0062 + 0063 + 0064 applied to dev + prod ✅".
 เดฟ flips the status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
@@ -124,6 +125,10 @@ select policyname from pg_policies
 select conname from pg_constraint
  where conname='wallet_transactions_reference_type_check'
    and pg_get_constraintdef(oid) like '%freight_invoice%';
+
+-- (9) Expected: 1 row — 0064 overdraw-guard BEFORE-trigger on wallet_transactions.
+select tgname from pg_trigger
+ where tgname = 'wallet_tx_overdraw_guard' and not tgisinternal;
 ```
 
 ---

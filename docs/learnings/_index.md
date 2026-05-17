@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild)
+Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild; supabase-rls-patterns +1 — `wallet.balance` is pending-blind, spend gates must use the available-balance helper)
 
 ---
 
@@ -16,7 +16,7 @@ Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reachi
 |---|---|---|
 | [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) | GitHub Actions · Vercel · pnpm · env-audit · git pathspec literal-brackets · Node fetch timeouts (IPv4-first DNS) · build/verify green ≠ prod (next-start smoke gate) · worktree smoke needs `.env.local` copy + rebuild | 2026-05-17 |
 | [`nextjs-16-quirks.md`](nextjs-16-quirks.md) | Next 16 + JSX gotchas (JSDoc `*/` · unescaped-entities · Zod UUID v4 · Turbopack route-cache · theme desync · generateStaticParams+auth → DYNAMIC_SERVER_USAGE · server-only transitive import → Turbopack build fail) | 2026-05-17 |
-| [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations · check-then-act money-race → DB unique index | 2026-05-17 |
+| [`supabase-rls-patterns.md`](supabase-rls-patterns.md) | RLS patterns + admin-client-after-ownership-verify for customer mutations · check-then-act money-race → DB unique index · `wallet.balance` is pending-blind → spend gates use `getWalletAvailableBalance` | 2026-05-17 |
 | [`i18n-pitfalls.md`](i18n-pitfalls.md) | next-intl / messages/*.json gotchas | 2026-05-15 |
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |
 | [`testing-patterns.md`](testing-patterns.md) | Pacred-specific test mocks + harness quirks | 2026-05-16 |

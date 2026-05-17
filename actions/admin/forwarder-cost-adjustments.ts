@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 
 /**
  * U2-4: Post-delivery cost adjustment workflow (chat W-4).
@@ -132,17 +133,18 @@ export async function adminMarkCostAdjustmentPaid(
     if (adj.status === "cancelled")    return { ok: false, error: "cancelled" };
 
     const total = Number(adj.amount_thb);
+    // Balance check (skip if admin overrides). Pending-aware available
+    // balance — the raw wallet.balance column (0007 trigger) is blind to
+    // the customer's own open pending debits (gap-customer §H-1).
     if (!d.allow_overdraw) {
-      const { data: wallet } = await admin
-        .from("wallet")
-        .select("balance")
-        .eq("profile_id", adj.profile_id)
-        .maybeSingle<{ balance: number }>();
-      const balance = Number(wallet?.balance ?? 0);
-      if (balance < total) {
+      const available = await getWalletAvailableBalance(admin, adj.profile_id);
+      if (available === null) {
+        return { ok: false, error: "ตรวจสอบยอด wallet ไม่สำเร็จ — ลองใหม่อีกครั้ง" };
+      }
+      if (available < total) {
         return {
           ok: false,
-          error: `wallet ไม่พอ (มี ฿${balance.toLocaleString()} ต้อง ฿${total.toLocaleString()}) — ใช้ allow_overdraw ถ้ารับเงินสด`,
+          error: `wallet ไม่พอ (มี ฿${available.toLocaleString()} ต้อง ฿${total.toLocaleString()}) — ใช้ allow_overdraw ถ้ารับเงินสด`,
         };
       }
     }

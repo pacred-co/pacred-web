@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -285,18 +286,18 @@ export async function adminMarkForwarderPaid(
     const totalThb = Number(forwarder.total_price);
     if (!(totalThb > 0)) return { ok: false, error: "total_price ไม่ถูกต้อง — บันทึกชำระไม่ได้" };
 
-    // Balance check (skip if admin overrides via cash/bank-direct path)
+    // Balance check (skip if admin overrides via cash/bank-direct path).
+    // Pending-aware available balance — the raw wallet.balance column
+    // (0007 trigger) is blind to the customer's open pending debits (§H-1).
     if (!d.allow_overdraw) {
-      const { data: wallet } = await admin
-        .from("wallet")
-        .select("balance")
-        .eq("profile_id", forwarder.profile_id)
-        .maybeSingle<{ balance: number }>();
-      const balance = Number(wallet?.balance ?? 0);
-      if (balance < totalThb) {
+      const available = await getWalletAvailableBalance(admin, forwarder.profile_id);
+      if (available === null) {
+        return { ok: false, error: "ตรวจสอบยอด wallet ไม่สำเร็จ — ลองใหม่อีกครั้ง" };
+      }
+      if (available < totalThb) {
         return {
           ok: false,
-          error: `ยอด wallet ไม่พอ (มี ฿${balance.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
+          error: `ยอด wallet ไม่พอ (มี ฿${available.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
         };
       }
     }

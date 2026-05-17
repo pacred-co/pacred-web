@@ -8,6 +8,7 @@ import { placeOrderSchema, type PlaceOrderInput, type Provider } from "@/lib/val
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -541,17 +542,18 @@ export async function payServiceOrderFromWallet(
     return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
   }
 
-  // 3. Balance check (main bucket) — RLS guarantees own wallet only
-  const { data: wallet } = await supabase
-    .from("wallet")
-    .select("balance")
-    .eq("profile_id", user.id)
-    .maybeSingle<{ balance: number }>();
-  const balance = Number(wallet?.balance ?? 0);
-  if (balance < totalThb) {
+  // 3. Balance check — PENDING-AWARE available balance. The raw
+  //    wallet.balance (0007 trigger) sums only completed rows, so it
+  //    ignores this customer's other not-yet-approved withdraw / yuan
+  //    debits (gap-customer.md §H-1). RLS scopes the read to own wallet.
+  const available = await getWalletAvailableBalance(supabase, user.id);
+  if (available === null) {
+    return { ok: false, error: "wallet_balance_unavailable — ตรวจสอบยอดเงินไม่สำเร็จ ลองใหม่อีกครั้ง" };
+  }
+  if (available < totalThb) {
     return {
       ok: false,
-      error: `wallet_insufficient — มี ฿${balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
+      error: `wallet_insufficient — มี ฿${available.toLocaleString("th-TH", { minimumFractionDigits: 2 })} ต้อง ฿${totalThb.toLocaleString("th-TH", { minimumFractionDigits: 2 })} เติมเงินก่อนชำระ`,
     };
   }
 

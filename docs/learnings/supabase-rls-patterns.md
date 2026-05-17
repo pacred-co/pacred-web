@@ -201,3 +201,24 @@ Then in the action, keep the cheap SELECT as a fast path but catch the unique-vi
 - Same pattern to fix: `actions/admin/service-orders.ts::adminMarkServiceOrderPaid`
 
 ---
+
+## [2026-05-17] `wallet.balance` is pending-blind — spend checks must use the available-balance helper
+
+**Context:** Fixing gap-customer.md §H-1 — a customer-facing wallet overdraw hole. Migration 0064 + `lib/wallet/balance.ts`.
+
+**Symptom:** `createWithdraw` (and wallet-paid `createYuanPayment`) insert their debit row as `status='pending'`, then guard with `wallet.balance < amount`. A customer could submit N withdraw requests, each individually ≤ balance, none rejected. When an admin later approved them all, the main balance went **negative** — Pacred pays out money it was never funded for.
+
+**Root cause:** The 0007 balance trigger `wallet_recompute_balance` recomputes `wallet.balance` from `sum(amount) WHERE status='completed'` — pending rows are deliberately excluded (a pending deposit must not inflate the balance). The side effect: a pending *debit* doesn't reduce `wallet.balance` either. So every check that reads the raw `wallet.balance` column is blind to this customer's own not-yet-approved debits, and stacked pending requests each pass independently.
+
+**Fix — two layers, one rule:** "available balance = completed rows + open pending DEBITS" (pending credits still don't count).
+- App layer — `lib/wallet/balance.ts` `getWalletAvailableBalance()`. Every wallet-spend path (`createWithdraw`, `createYuanPayment`, `payServiceOrderFromWallet`, `payForwarderFromWallet`, the admin mark-paid actions, the freight wallet debit) now checks *that*, not `wallet.balance`.
+- DB layer — migration 0064 `wallet_assert_no_overdraw` BEFORE INSERT/UPDATE trigger: a hard non-negative floor on customer pending main-bucket debits, with a `FOR UPDATE` row lock so it holds under concurrent submits. It deliberately does NOT block `status='completed'` debits (pay-from-wallet / admin `allow_overdraw` depend on writing those) or `kind='adjustment'`.
+
+**Why this matters next time:** Any NEW code deciding "can this customer spend X" must call `getWalletAvailableBalance()` — never `select balance from wallet`. The raw column is correct for *display* but wrong as a *spend gate*. Early-warning sign: a `.from("wallet").select("balance")` followed by a comparison before an insert → that's the bug, use the helper. Note: pending→completed approval never trips the 0064 trigger (the status flip leaves available balance unchanged), so admin approval flows stay safe.
+
+**Cross-links:**
+- gap-customer.md §H-1 · migration `0064_wallet_overdraw_guard.sql` · `lib/wallet/balance.ts`
+- Sibling money-path rule: the check-then-act entry above (0049 unique index)
+- Out of scope here (separately tracked): money-audit P0-2 (yuan debit RLS-blocked) and P1-1 (concurrent pay-from-wallet on `completed` rows)
+
+---

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 
 const STATUSES = [
   "pending","awaiting_payment","ordered","awaiting_chn_dispatch","completed","cancelled",
@@ -201,18 +202,18 @@ export async function adminMarkServiceOrderPaid(
     const totalThb = Number(order.total_thb);
     if (!(totalThb > 0)) return { ok: false, error: "total_thb invalid — ไม่สามารถบันทึกชำระได้" };
 
-    // Balance check (skip if admin overrides)
+    // Balance check (skip if admin overrides). Pending-aware available
+    // balance — the raw wallet.balance column (0007 trigger) is blind to
+    // the customer's own open pending debits (gap-customer §H-1).
     if (!d.allow_overdraw) {
-      const { data: wallet } = await admin
-        .from("wallet")
-        .select("balance")
-        .eq("profile_id", order.profile_id)
-        .maybeSingle<{ balance: number }>();
-      const balance = Number(wallet?.balance ?? 0);
-      if (balance < totalThb) {
+      const available = await getWalletAvailableBalance(admin, order.profile_id);
+      if (available === null) {
+        return { ok: false, error: "ตรวจสอบยอด wallet ไม่สำเร็จ — ลองใหม่อีกครั้ง" };
+      }
+      if (available < totalThb) {
         return {
           ok: false,
-          error: `ยอด wallet ไม่พอ (มี ฿${balance.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
+          error: `ยอด wallet ไม่พอ (มี ฿${available.toLocaleString()} ต้อง ฿${totalThb.toLocaleString()}) — ถ้ารับเงินสด/โอนตรง กดยืนยันด้วย allow_overdraw`,
         };
       }
     }
