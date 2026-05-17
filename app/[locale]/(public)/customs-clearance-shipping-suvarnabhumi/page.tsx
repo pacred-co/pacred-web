@@ -558,7 +558,7 @@ export default async function CustomsClearancePage({
 
         {/* ─── Pacred guarantee banner — per ปอน 2026-05-17 v3
              • SLIM style เหมือน Add-LINE banner สีเขียวข้างบน — แต่ Pacred red theme
-             • Headline: "เคลียร์ชิปแน่ แค่ 2,800 บาท ของแท้ต้อง Pacred Shipping"
+             • Headline: "ของติดด่าน? แค่ 2,800 บาท เคลียร์ไวกับ Pacred Shipping"
                - Pacred Shipping = white pill + red text (highlight)
              • Partner logos (FedEx/DHL/TNT/UPS) เป็น sub-strip กดได้แยก
              • visit02 photo ขวา (slim, self-stretch)
@@ -603,7 +603,7 @@ export default async function CustomsClearancePage({
                   <div className="min-w-0 py-3 md:py-3">
                     {/* Desktop headline */}
                     <p className="hidden md:flex flex-wrap items-center gap-x-2 gap-y-1 text-[30px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      <span>เคลียร์ชิปแน่ แค่ <span className="text-yellow-300">2,800 บาท</span> ของแท้ต้อง</span>
+                      <span>ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ</span>
                       <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
                         Pacred Shipping
                       </span>
@@ -612,7 +612,7 @@ export default async function CustomsClearancePage({
 
                     {/* Mobile headline */}
                     <p className="md:hidden text-[18px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      เคลียร์ชิปแน่ แค่ <span className="text-yellow-300">2,800 บาท</span> ของแท้ต้อง
+                      ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ
                     </p>
                     <p className="md:hidden mt-1 inline-flex items-center gap-1.5">
                       <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-primary-600 text-[14px] font-black tracking-tight shadow-[0_3px_8px_rgba(0,0,0,0.25)]">
