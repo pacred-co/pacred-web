@@ -13,13 +13,14 @@
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
-> 🟢 **Status (2026-05-18 early morning):** 0044-0066 + 0068 applied by ภูม.
-> **3 new migrations queued for application:**
+> 🟢 **Status (2026-05-18 early morning, updated):** 0044-0066 + 0068 applied by ภูม.
+> **4 new migrations queued for application:**
 > - `0067_pcs_customer_migration.sql` (U2-1) — **hotfixed** in commit `80533ab` (was: `relation max_staging_num does not exist` — dollar-quote conflict with `$` regex anchor). Pull latest + re-run.
 > - `0069_container_costs_disbursements.sql` (U2-2 cost basis + AP ledger)
 > - `0070_supervisory_layer.sql` (U4-1 cron-health + notification delivery log)
+> - `0071_customer_credit_line.sql` (U4-2 customer credit line)
 >
-> Apply 0067 → 0069 → 0070 in that order. All idempotent + zero data migration.
+> Apply 0067 → 0069 → 0070 → 0071 in that order. All idempotent + zero data migration.
 
 | # | File | Adds | Feature | Review |
 |---|---|---|---|---|
@@ -49,6 +50,7 @@ each file into the SQL Editor **in ascending number order**.
 | 0068 | `0068_cargo_sacks.sql` | `cargo_sacks` + `cargo_sack_seq` + `next_sack_code()` + `cargo_shipments.cargo_sack_id` + RLS | U2-5 sack entity (กระสอบรวม) | ✅ |
 | 0069 | `0069_container_costs_disbursements.sql` | `container_costs` carrier rate card + `container_disbursements` AP ledger + RLS + indexes | U2-2 cost basis + AP ledger | ⏳ apply next |
 | 0070 | `0070_supervisory_layer.sql` | `cron_invocations` (super+ops read) + `notifications.delivery_status` + `notifications.delivery_error` | U4-1 supervisory layer (cron-health + notification log) | ⏳ apply next |
+| 0071 | `0071_customer_credit_line.sql` | `profiles.credit_limit_thb` + `credit_terms_days` + extends `wallet_transactions.kind` with `credit_charge`/`credit_payment`/`wallet_to_credit_transfer` + `v_customer_credit_outstanding` view + partial-unique on credit_payment ref | U4-2 customer credit line | ⏳ apply next |
 
 ---
 

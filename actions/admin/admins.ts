@@ -7,7 +7,11 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 
-const ROLE = z.enum(["super", "ops", "accounting", "sales_admin"]);
+// U4-1 RBAC console upgrade — full 7-role enum matching the
+// `admins.role` CHECK constraint (extended by migrations 0033 +
+// 0054). Older code constrained this to 4 values; the wider set
+// lets super-admins grant warehouse / driver / interpreter via UI.
+const ROLE = z.enum(["super", "ops", "accounting", "sales_admin", "warehouse", "driver", "interpreter"]);
 
 // ────────────────────────────────────────────────────────────
 // Grant role to an existing profile

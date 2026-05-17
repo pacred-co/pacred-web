@@ -7,7 +7,10 @@ import {
   adminGrantRole, adminToggleRole, adminUpdateContactExtras,
 } from "@/actions/admin/admins";
 
-type Role = "super" | "ops" | "accounting" | "sales_admin";
+// U4-1 RBAC console upgrade — wider Role set covers all 7 enum values
+// (super / ops / accounting / sales_admin / warehouse / driver / interpreter).
+// Mirrors `AdminRole` in lib/auth/require-admin.ts.
+type Role = "super" | "ops" | "accounting" | "sales_admin" | "warehouse" | "driver" | "interpreter";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500/50";
 
@@ -50,6 +53,9 @@ export function GrantForm() {
           <option value="ops">ops — ดูแล ฝากนำเข้า + ฝากสั่ง</option>
           <option value="accounting">accounting — ดูแล wallet + ฝากโอน + เบิกค่าคอม</option>
           <option value="sales_admin">sales_admin — ดูแล ทีมขาย + assign เซลล์</option>
+          <option value="warehouse">warehouse — ตัดตู้ + แสกนสินค้า</option>
+          <option value="driver">driver — งานส่งของ</option>
+          <option value="interpreter">interpreter — ล่ามจีน (commission)</option>
           <option value="super">super — สิทธิ์ทุกอย่าง</option>
         </select>
       </label>

@@ -35,6 +35,10 @@ const WALLET_KIND_LABEL: Record<string, string> = {
   yuan_payment:   "ชำระฝากโอนหยวน",
   cashback_earn:  "ได้รับ cashback",
   cashback_redeem:"ใช้ cashback",
+  // U4-2 credit-line ledger labels (mirrors messages/th.json wallet.kind)
+  credit_charge:              "ใช้วงเงินเครดิต",
+  credit_payment:             "ชำระยอดค้างเครดิต",
+  wallet_to_credit_transfer:  "โอนกระเป๋า → ชำระเครดิต",
 };
 
 const WALLET_STATUS_LABEL: Record<string, string> = {
