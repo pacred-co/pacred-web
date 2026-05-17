@@ -28,6 +28,7 @@ import type { ReactElement } from "react";
 import { ForwarderReceipt, type ForwarderReceiptData } from "@/components/pdf/forwarder-receipt";
 import { TaxInvoice, type TaxInvoiceData } from "@/components/pdf/tax-invoice";
 import { ShopOrderReceipt } from "@/components/pdf/shop-order-receipt";
+import { FreightReceipt, type FreightReceiptData } from "@/components/pdf/freight-receipt";
 import type { ShopOrderReceiptData } from "@/actions/service-order";
 
 // Inline font registration mirroring lib/pdf/register-fonts.ts (avoid
@@ -237,6 +238,64 @@ function pendingShopOrder(): ShopOrderReceiptData {
   return o;
 }
 
+// ── FreightReceipt fixtures (V-E7 coverage) ──
+function baseFreightReceipt(): FreightReceiptData {
+  return {
+    invoice_no:      "FI260517-0001",
+    status:          "issued",
+    payment_status:  "partial",
+    issued_at:       "2026-05-17T10:00:00Z",
+    created_at:      "2026-05-17T09:00:00Z",
+    job_no:          "A2600017",
+    buyer_name:      "บริษัท นำเข้า ตัวอย่าง จำกัด",
+    buyer_address:   "99/9 ถนนพระราม 2 แขวงแสมดำ เขตบางขุนเทียน กรุงเทพฯ 10150",
+    buyer_tax_id:    "0105560123459",
+    buyer_branch:    "สำนักงานใหญ่",
+    subtotal_thb:    340000,
+    duty_thb:        17000,
+    vat_thb:         24990,
+    total_thb:       381990,
+    paid_thb:        200000,
+    outstanding_thb: 181990,
+    lines: [
+      { position: 1, description: "ค่าขนส่งทางเรือ FCL 20' จีน → ไทย", qty: 1,  unit: "LO",  amount_thb: 280000 },
+      { position: 2, description: "ค่าดำเนินพิธีการศุลกากร ฯลฯ",        qty: 1,  unit: "PCS", amount_thb: 60000  },
+    ],
+    payments: [
+      { method: "โอนผ่านธนาคาร", amount_thb: 200000, paid_at: "2026-05-17T11:00:00Z", bank_ref: "KBANK-001" },
+    ],
+  };
+}
+
+function paidFreightReceipt(): FreightReceiptData {
+  const r = baseFreightReceipt();
+  r.payment_status  = "paid";
+  r.paid_thb        = 381990;
+  r.outstanding_thb = 0;
+  r.payments = [
+    { method: "โอนผ่านธนาคาร", amount_thb: 200000, paid_at: "2026-05-17T11:00:00Z", bank_ref: "KBANK-001" },
+    { method: "เงินสด",        amount_thb: 181990, paid_at: "2026-05-18T09:30:00Z", bank_ref: null },
+  ];
+  return r;
+}
+
+function cancelledFreightReceipt(): FreightReceiptData {
+  const r = baseFreightReceipt();
+  r.status = "cancelled";
+  return r;
+}
+
+function edgeFreightReceipt(): FreightReceiptData {
+  const r = baseFreightReceipt();
+  r.buyer_name    = EDGE_NAME;
+  r.buyer_address = EDGE_ADDRESS;
+  r.buyer_tax_id  = EDGE_BUYER_TAX_ID;
+  r.lines = [
+    { position: 1, description: "ค่าขนส่งสินค้าฤดูร้อน ๒๓ ลัง ฯลฯ", qty: 23, unit: "CTN", amount_thb: 340000 },
+  ];
+  return r;
+}
+
 // ────────────────────────────────────────────────────────────
 // Run tests
 // ────────────────────────────────────────────────────────────
@@ -275,6 +334,12 @@ async function renderAndAssert(label: string, doc: ReactElement<DocumentProps>):
   await renderAndAssert("paid (personal)",                          <ShopOrderReceipt data={baseShopOrder()} />);
   await renderAndAssert("invoice (awaiting_payment)",               <ShopOrderReceipt data={pendingShopOrder()} />);
   await renderAndAssert("juristic + V-C2 override + edge Thai",     <ShopOrderReceipt data={juristicShopOrderWithOverride()} />);
+
+  console.log("  FreightReceipt (V-E7)");
+  await renderAndAssert("issued — partial paid",        <FreightReceipt data={baseFreightReceipt()} />);
+  await renderAndAssert("paid (RECEIVED stamp)",        <FreightReceipt data={paidFreightReceipt()} />);
+  await renderAndAssert("cancelled (watermark)",        <FreightReceipt data={cancelledFreightReceipt()} />);
+  await renderAndAssert("edge Thai chars",              <FreightReceipt data={edgeFreightReceipt()} />);
 
   console.log(`\n${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

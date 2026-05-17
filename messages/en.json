@@ -1937,6 +1937,26 @@
     "warehouseThailandDesc": "Om Noi destination hub. Last-mile distribution nationwide.",
     "warehouseViewAll": "View all warehouses"
   },
+  "freightReceipt": {
+    "title": "Freight Receipt / Invoice",
+    "downloadPdf": "Download receipt PDF",
+    "totalDue": "Total due",
+    "paid": "Paid",
+    "outstanding": "Outstanding",
+    "paymentHistory": "Payment history",
+    "noPayments": "No payments recorded yet",
+    "paidAt": "Payment date",
+    "method": "Method",
+    "amount": "Amount",
+    "bankRef": "Bank reference",
+    "statusUnpaid": "Unpaid",
+    "statusPartial": "Partially paid",
+    "statusPaid": "Paid in full",
+    "statusOverpaid": "Overpaid",
+    "methodCash": "Cash",
+    "methodBankTransfer": "Bank transfer",
+    "methodWallet": "Wallet debit"
+  },
   "seo": {
     "root": {
       "title": "Pacred — Import · Export · Shipping · Customs Clearance",

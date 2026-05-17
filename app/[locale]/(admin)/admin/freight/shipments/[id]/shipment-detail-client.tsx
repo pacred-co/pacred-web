@@ -18,9 +18,17 @@ import {
   adminIssueFreightInvoice, adminCancelFreightInvoice,
 } from "@/actions/admin/freight-invoices";
 import {
+  recordFreightPayment, voidFreightPayment, uploadFreightPaymentSlip,
+} from "@/actions/admin/freight-invoice-payments";
+import {
   FREIGHT_LINE_UNITS, FREIGHT_INVOICE_STATUS_LABEL,
   type FreightShipmentStatus, type FreightLineUnit, type FreightInvoiceStatus,
 } from "@/lib/validators/freight-shipment";
+import {
+  FREIGHT_PAYMENT_METHODS, FREIGHT_PAYMENT_METHOD_LABEL,
+  FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
+  type FreightPaymentMethod, type FreightInvoicePaymentStatus,
+} from "@/lib/validators/freight-payment";
 
 export type PartyData = {
   id:       string;
@@ -53,6 +61,35 @@ export type InvoiceData = {
   cancelled_at:        string | null;
   cancellation_reason: string | null;
   notes:               string | null;
+  /** V-E7 payment settlement axis — separate from `status` (document lifecycle). */
+  payment_status:      FreightInvoicePaymentStatus;
+  fully_paid_at:       string | null;
+};
+
+/** V-E7 — one ledger row in the payment panel. */
+export type PaymentLedgerRow = {
+  id:                   string;
+  method:               string;
+  amount_thb:           number;
+  paid_at:              string;
+  slip_storage_path:    string | null;
+  bank_ref:             string | null;
+  status:               "recorded" | "voided";
+  void_reason:          string | null;
+  recorded_by_admin_id: string;
+  notes:                string | null;
+  created_at:           string;
+};
+
+/** V-E7 — payment panel server-computed bundle for the active issued invoice. */
+export type PaymentPanelData = {
+  invoiceId:       string;
+  invoiceNo:       string | null;
+  payments:        PaymentLedgerRow[];
+  paidThb:         number;
+  totalThb:        number;
+  outstandingThb:  number;
+  paymentStatus:   FreightInvoicePaymentStatus;
 };
 
 export type ShipmentDetailData = {
@@ -78,6 +115,7 @@ type Props = {
   activeInvoice:  InvoiceData | null;
   lines:          LineItemData[];
   allInvoices:    InvoiceData[];
+  paymentPanel:   PaymentPanelData | null;
 };
 
 function usd(n: number | null): string {
@@ -85,13 +123,19 @@ function usd(n: number | null): string {
   return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2 });
 }
 
-export function ShipmentDetailClient({ data, parties, activeInvoice, lines, allInvoices }: Props) {
+function thb(n: number | null): string {
+  if (n == null) return "—";
+  return "฿" + Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2 });
+}
+
+export function ShipmentDetailClient({ data, parties, activeInvoice, lines, allInvoices, paymentPanel }: Props) {
   const editable = !["delivered", "cancelled"].includes(data.status);
   void allInvoices; // shown in parent footer
   return (
     <div className="space-y-4">
       <PartiesPanel shipmentId={data.id} parties={parties} editable={editable} />
       <InvoicePanel shipmentId={data.id} activeInvoice={activeInvoice} lines={lines} shipmentEditable={editable} valueBlockReady={data.commercial_value_usd != null && data.exchange_rate != null} />
+      {paymentPanel && <PaymentPanel panel={paymentPanel} />}
       <StatusActions data={data} />
     </div>
   );
@@ -566,6 +610,339 @@ function InvoiceActions({
   }
 
   return null;
+}
+
+// ────────────────────────────────────────────────────────────
+// Payment panel (V-E7) — ledger + record-payment form + receipt
+// ────────────────────────────────────────────────────────────
+
+const PAYMENT_STATUS_BADGE: Record<FreightInvoicePaymentStatus, string> = {
+  unpaid:   "bg-gray-50 text-gray-600 border-gray-200",
+  partial:  "bg-amber-50 text-amber-700 border-amber-200",
+  paid:     "bg-green-50 text-green-700 border-green-200",
+  overpaid: "bg-purple-50 text-purple-700 border-purple-200",
+};
+
+function PaymentPanel({ panel }: { panel: PaymentPanelData }) {
+  const recorded = panel.payments.filter((p) => p.status === "recorded");
+  const voided   = panel.payments.filter((p) => p.status === "voided");
+
+  return (
+    <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-bold text-sm">
+          💰 การชำระเงิน (ใบเสร็จ)
+          <span className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${PAYMENT_STATUS_BADGE[panel.paymentStatus]}`}>
+            {FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[panel.paymentStatus]}
+          </span>
+        </h2>
+        <a
+          href={`/api/freight-receipt/${panel.invoiceId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-primary-300 bg-white px-3 py-1.5 text-xs font-bold text-primary-700 hover:bg-primary-50"
+        >
+          📄 ดาวน์โหลดใบเสร็จ PDF
+        </a>
+      </div>
+
+      {/* Totals summary */}
+      <div className="grid grid-cols-3 gap-px bg-border text-center text-xs">
+        <div className="bg-white dark:bg-surface px-3 py-3">
+          <p className="text-muted">ยอดรวมที่ต้องชำระ</p>
+          <p className="mt-1 font-mono font-bold">{thb(panel.totalThb)}</p>
+        </div>
+        <div className="bg-white dark:bg-surface px-3 py-3">
+          <p className="text-muted">ชำระแล้ว</p>
+          <p className="mt-1 font-mono font-bold text-green-700">{thb(panel.paidThb)}</p>
+        </div>
+        <div className="bg-white dark:bg-surface px-3 py-3">
+          <p className="text-muted">คงค้าง</p>
+          <p className={`mt-1 font-mono font-bold ${panel.outstandingThb > 0 ? "text-amber-700" : "text-muted"}`}>
+            {thb(panel.outstandingThb)}
+          </p>
+        </div>
+      </div>
+
+      {panel.totalThb <= 0 && (
+        <p className="px-5 py-3 text-xs text-amber-700 bg-amber-50 border-t border-amber-200">
+          ⚠️ invoice นี้ยังไม่มียอดเงิน (value block ว่าง) — บันทึกการชำระไม่ได้จนกว่าจะมียอด
+        </p>
+      )}
+
+      {/* Recorded payments table */}
+      {recorded.length > 0 && (
+        <table className="w-full text-sm border-t border-border">
+          <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <tr>
+              <th className="px-3 py-2">วันที่ชำระ</th>
+              <th className="px-3 py-2">วิธีชำระ</th>
+              <th className="px-3 py-2">อ้างอิงธนาคาร</th>
+              <th className="px-3 py-2 text-right">จำนวนเงิน</th>
+              <th className="px-3 py-2 w-24"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recorded.map((p) => (
+              <PaymentRow key={p.id} row={p} />
+            ))}
+          </tbody>
+        </table>
+      )}
+      {recorded.length === 0 && panel.totalThb > 0 && (
+        <p className="px-5 py-3 text-xs text-muted border-t border-border">
+          ยังไม่มีการบันทึกการชำระเงิน — เพิ่มรายการด้านล่าง
+        </p>
+      )}
+
+      {/* Voided payments (audit visibility) */}
+      {voided.length > 0 && (
+        <div className="px-5 py-3 border-t border-border">
+          <p className="text-[11px] font-bold uppercase text-muted mb-1">รายการที่ยกเลิก ({voided.length})</p>
+          <ul className="space-y-1 text-xs">
+            {voided.map((p) => (
+              <li key={p.id} className="text-muted line-through decoration-red-400">
+                {new Date(p.paid_at).toLocaleDateString("th-TH")} ·{" "}
+                {FREIGHT_PAYMENT_METHOD_LABEL[p.method as FreightPaymentMethod] ?? p.method} ·{" "}
+                {thb(p.amount_thb)}
+                {p.void_reason && <span className="ml-1 no-underline">— {p.void_reason}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Record-payment form */}
+      {panel.totalThb > 0 && (
+        <RecordPaymentForm invoiceId={panel.invoiceId} outstandingThb={panel.outstandingThb} />
+      )}
+    </section>
+  );
+}
+
+function PaymentRow({ row }: { row: PaymentLedgerRow }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [confirmVoid, setConfirmVoid] = useState(false);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  function fireVoid() {
+    setErr(null);
+    startTransition(async () => {
+      const res = await voidFreightPayment({ id: row.id, void_reason: reason.trim() });
+      if (res.ok) { setConfirmVoid(false); router.refresh(); }
+      else        setErr(translatePaymentError(res.error));
+    });
+  }
+
+  return (
+    <tr className="border-t border-border align-top">
+      <td className="px-3 py-2 text-xs">{new Date(row.paid_at).toLocaleDateString("th-TH")}</td>
+      <td className="px-3 py-2 text-xs">{FREIGHT_PAYMENT_METHOD_LABEL[row.method as FreightPaymentMethod] ?? row.method}</td>
+      <td className="px-3 py-2 text-xs font-mono">
+        {row.bank_ref ?? "—"}
+        {row.slip_storage_path && <span className="ml-1 text-primary-500" title="มีสลิปแนบ">📎</span>}
+        {row.notes && <p className="text-[10px] text-muted not-italic">{row.notes}</p>}
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-xs font-bold">{thb(row.amount_thb)}</td>
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        {!confirmVoid ? (
+          <button type="button" onClick={() => setConfirmVoid(true)} className="text-xs text-red-600 hover:underline">
+            ยกเลิก
+          </button>
+        ) : (
+          <div className="space-y-1">
+            <input
+              type="text"
+              placeholder="เหตุผล (≥3)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={500}
+              className="w-full rounded border border-border bg-white px-1.5 py-1 text-[10px]"
+            />
+            <div className="flex gap-1 justify-end">
+              <button type="button" onClick={fireVoid} disabled={pending || reason.trim().length < 3} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white hover:bg-red-700 disabled:opacity-50">✓</button>
+              <button type="button" onClick={() => { setConfirmVoid(false); setReason(""); setErr(null); }} disabled={pending} className="rounded border border-border bg-white px-1.5 py-0.5 text-[10px] hover:bg-surface-alt disabled:opacity-50">×</button>
+            </div>
+          </div>
+        )}
+        {err && <p className="mt-1 text-[10px] text-red-700">{err}</p>}
+      </td>
+    </tr>
+  );
+}
+
+function RecordPaymentForm({ invoiceId, outstandingThb }: { invoiceId: string; outstandingThb: number }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<FreightPaymentMethod>("bank_transfer");
+  const [amount, setAmount] = useState<number>(outstandingThb > 0 ? outstandingThb : 0);
+  const [paidAt, setPaidAt] = useState("");           // empty → action defaults to now
+  const [bankRef, setBankRef] = useState("");
+  const [notes, setNotes] = useState("");
+  const [slip, setSlip] = useState<File | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  function reset() {
+    setMethod("bank_transfer");
+    setAmount(outstandingThb > 0 ? outstandingThb : 0);
+    setPaidAt(""); setBankRef(""); setNotes(""); setSlip(null); setErr(null);
+  }
+
+  function fire() {
+    setErr(null);
+    startTransition(async () => {
+      // bank_transfer: optionally upload the slip first, then record.
+      let slipPath: string | null = null;
+      if (slip && method === "bank_transfer") {
+        const up = await uploadFreightPaymentSlip(invoiceId, slip);
+        if (!up.ok) { setErr(translatePaymentError(up.error)); return; }
+        slipPath = up.data?.storage_path ?? null;
+      }
+      const res = await recordFreightPayment({
+        freight_invoice_id: invoiceId,
+        method,
+        amount_thb:         amount,
+        // datetime-local gives "YYYY-MM-DDTHH:mm" (no zone) → append :00Z
+        // so it parses as a valid offset datetime; blank → action default.
+        paid_at:            paidAt ? `${paidAt}:00Z` : undefined,
+        bank_ref:           method === "bank_transfer" ? (bankRef.trim() || null) : null,
+        slip_storage_path:  slipPath,
+        notes:              notes.trim() || null,
+      });
+      if (res.ok) { reset(); setOpen(false); router.refresh(); }
+      else        setErr(translatePaymentError(res.error));
+    });
+  }
+
+  if (!open) {
+    return (
+      <div className="px-5 py-3 border-t border-border">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700"
+        >
+          ➕ บันทึกการชำระเงิน
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 py-3 border-t border-border bg-surface-alt/30 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label className="text-xs space-y-1">
+          <span className="font-medium text-muted">วิธีชำระ</span>
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value as FreightPaymentMethod)}
+            className="w-full rounded border border-border bg-white px-2 py-1.5 text-sm"
+          >
+            {FREIGHT_PAYMENT_METHODS.map((m) => (
+              <option key={m} value={m}>{FREIGHT_PAYMENT_METHOD_LABEL[m]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs space-y-1">
+          <span className="font-medium text-muted">จำนวนเงิน (บาท)</span>
+          <input
+            type="number"
+            min={0.01}
+            step={0.01}
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value) || 0)}
+            className="w-full rounded border border-border bg-white px-2 py-1.5 text-sm text-right font-mono"
+          />
+        </label>
+        <label className="text-xs space-y-1">
+          <span className="font-medium text-muted">วันที่ชำระ (เว้นว่าง = ตอนนี้)</span>
+          <input
+            type="datetime-local"
+            value={paidAt}
+            onChange={(e) => setPaidAt(e.target.value)}
+            className="w-full rounded border border-border bg-white px-2 py-1.5 text-sm"
+          />
+        </label>
+        {method === "bank_transfer" && (
+          <label className="text-xs space-y-1">
+            <span className="font-medium text-muted">เลขอ้างอิงธนาคาร (ถ้ามี)</span>
+            <input
+              type="text"
+              value={bankRef}
+              onChange={(e) => setBankRef(e.target.value)}
+              maxLength={120}
+              className="w-full rounded border border-border bg-white px-2 py-1.5 text-sm font-mono"
+            />
+          </label>
+        )}
+        {method === "bank_transfer" && (
+          <label className="text-xs space-y-1 sm:col-span-2">
+            <span className="font-medium text-muted">สลิปโอนเงิน (ถ้ามี — PDF/รูป ≤10MB)</span>
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              onChange={(e) => setSlip(e.target.files?.[0] ?? null)}
+              className="w-full rounded border border-border bg-white px-2 py-1.5 text-xs"
+            />
+          </label>
+        )}
+        <label className="text-xs space-y-1 sm:col-span-2">
+          <span className="font-medium text-muted">หมายเหตุ</span>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={2000}
+            className="w-full rounded border border-border bg-white px-2 py-1.5 text-sm"
+          />
+        </label>
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted">
+          คงค้าง: <span className="font-mono font-bold">{thb(outstandingThb)}</span>
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={fire}
+            disabled={pending || amount <= 0}
+            className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {pending ? "..." : "✓ บันทึก"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { reset(); setOpen(false); }}
+            disabled={pending}
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt disabled:opacity-50"
+          >
+            ยกเลิก
+          </button>
+        </div>
+      </div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{err}</div>}
+    </div>
+  );
+}
+
+function translatePaymentError(code: string): string {
+  if (code.startsWith("invoice_not_issued")) return `invoice ยังไม่ได้ออก (${code})`;
+  if (code.startsWith("insert_failed"))      return `บันทึกล้มเหลว: ${code}`;
+  if (code.startsWith("update_failed"))      return `อัพเดทล้มเหลว: ${code}`;
+  if (code.startsWith("upload_failed"))      return `อัปโหลดสลิปล้มเหลว: ${code}`;
+  switch (code) {
+    case "invoice_not_found":          return "ไม่พบ invoice";
+    case "invoice_total_zero":         return "invoice นี้ยังไม่มียอดเงิน — บันทึกไม่ได้";
+    case "payment_not_found":          return "ไม่พบรายการชำระ";
+    case "already_voided":             return "ยกเลิกอยู่แล้ว";
+    case "no_file":                    return "ไม่พบไฟล์สลิป";
+    case "file_too_large":             return "ไฟล์ใหญ่เกิน 10MB";
+    case "invalid_input":              return "ข้อมูลไม่ถูกต้อง";
+    default:                           return code;
+  }
 }
 
 // ────────────────────────────────────────────────────────────
