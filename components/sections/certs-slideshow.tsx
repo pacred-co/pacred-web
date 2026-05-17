@@ -5,11 +5,12 @@ import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
 // Slide order (per ปอน 2026-05-18, refined later same day):
-//   1 (big left)  — ภาพทีมงาน Pacred ที่ออฟฟิศ
-//   2 (middle)    — หนังสือรับรองสมาคมตัวแทนออกของฯ
-//   3 (right)     — หนังสือรับรองนิติบุคคล DBD
-// All 3 cells share full collage height (3-col grid, single row) so the
-// certs read as tall portrait thumbnails matching the team photo height.
+//   1 (big left)    — ภาพทีมงาน Pacred ที่ออฟฟิศ (row-span-2)
+//   2 (top right)   — หนังสือรับรองสมาคมตัวแทนออกของฯ (landscape, fits small)
+//   3 (bottom right) — หนังสือรับรองนิติบุคคล DBD (portrait, fits cell)
+// 2×2 grid: big-left + 2 stacked thumbnails on the right. Image 2 (สมาคม)
+// is landscape so it naturally renders smaller inside its portrait cell —
+// that's intentional. Image 3 (DBD) is portrait and fits its cell tightly.
 // Each cell opens a full-screen lightbox on click.
 const SLIDES = [
   {
@@ -55,7 +56,7 @@ function Cell({ i, big, onOpen }: CellProps) {
         src={s.src}
         alt={s.alt}
         fill
-        sizes={big ? "(max-width: 1024px) 50vw, 480px" : "(max-width: 1024px) 25vw, 240px"}
+        sizes={big ? "(max-width: 1024px) 65vw, 540px" : "(max-width: 1024px) 33vw, 280px"}
         quality={92}
         className={`transition-transform duration-500 group-hover:scale-[1.04] ${
           s.fit === "contain" ? "object-contain p-1" : "object-cover"
@@ -128,10 +129,16 @@ export function CertsSlideshow() {
 
   return (
     <>
-      <div className="grid grid-cols-[2fr_1fr_1fr] gap-1.5 md:gap-2.5 aspect-[4/3] md:aspect-[5/2] w-full max-w-[360px] md:max-w-[1000px] mx-auto">
-        <Cell i={0} big onOpen={open} />
-        <Cell i={1} onOpen={open} />
-        <Cell i={2} onOpen={open} />
+      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[5/6] md:aspect-[16/10] w-full max-w-[340px] md:max-w-[860px] mx-auto">
+        <div className="row-span-2 min-h-0">
+          <Cell i={0} big onOpen={open} />
+        </div>
+        <div className="min-h-0">
+          <Cell i={1} onOpen={open} />
+        </div>
+        <div className="min-h-0">
+          <Cell i={2} onOpen={open} />
+        </div>
       </div>
 
       {active && (
