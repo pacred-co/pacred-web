@@ -7,6 +7,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -231,6 +232,10 @@ export async function adminBulkUpdateForwarderStatus(
 const markForwarderPaidSchema = z.object({
   f_no:           z.string(),
   allow_overdraw: z.boolean().optional(),
+  // U1-3 admin-only escape hatch: bypass the arrival→billing gate when the
+  // operator has confirmed the final CBM out-of-band (e.g. phone with MOMO).
+  // Audited via `forwarder.pay_with_unverified_billing_override`.
+  allow_unverified_billing: z.boolean().optional(),
 });
 export type AdminMarkForwarderPaidInput = z.infer<typeof markForwarderPaidSchema>;
 
@@ -262,6 +267,36 @@ export async function adminMarkForwarderPaid(
     // pending_payment is the canonical pre-payment state. We allow other
     // pre-delivered statuses too in case the row was status-flipped without
     // payment recorded (legacy/recovery path).
+
+    // U1-3 arrival→billing gate. Post-arrival statuses must have a closed
+    // container linked (final CBM measured) before any wallet debit lands,
+    // per datanew L-3 (MOMO vs PCS ~31% CBM disagreement). The bypass flag
+    // is for the admin-only "I confirmed CBM out-of-band" path — logged
+    // separately so reports can flag override frequency. The gate itself
+    // is read-only; the bypass uses the same in-flight forwarder row.
+    if (!d.allow_unverified_billing) {
+      const gate = await getCargoBillingGate(admin, forwarder.f_no);
+      if (gate.blocked) {
+        const errMsg =
+          gate.reason === "no_container_linked"
+            ? `ฝากนำเข้านี้ยังไม่ผูกตู้ — ต้องผูก cargo container ก่อนบันทึกชำระหลังถึงไทย (${forwarder.f_no})`
+            : `ตู้ยังไม่ปิด — ต้องรอ "ตัดตู้" (สถานะตู้ปัจจุบัน: ${gate.container_status ?? "?"}) ก่อนบันทึกชำระตามค่า CBM จริง · ถ้ายืนยัน CBM นอกระบบแล้ว กดยืนยันด้วย allow_unverified_billing`;
+        // Best-effort audit before bailing — failure to log shouldn't block.
+        await logAdminAction(
+          adminId,
+          "forwarder.pay_blocked_by_billing_gate",
+          "forwarder",
+          forwarder.id,
+          {
+            f_no:             forwarder.f_no,
+            forwarder_status: forwarder.status,
+            reason:           gate.reason,
+            container_status: gate.container_status,
+          },
+        );
+        return { ok: false, error: errMsg };
+      }
+    }
 
     // Idempotency check
     const { data: existingTx } = await admin
@@ -364,13 +399,32 @@ export async function adminMarkForwarderPaid(
     }
 
     await logAdminAction(adminId, "forwarder.mark_paid", "forwarder", forwarder.id, {
-      f_no:           forwarder.f_no,
-      total_thb:      totalThb,
-      tx_id:          tx.id,
-      allow_overdraw: !!d.allow_overdraw,
-      before:         { status: forwarder.status },
-      after:          { status: "shipped_china" },
+      f_no:                     forwarder.f_no,
+      total_thb:                totalThb,
+      tx_id:                    tx.id,
+      allow_overdraw:           !!d.allow_overdraw,
+      allow_unverified_billing: !!d.allow_unverified_billing,
+      before:                   { status: forwarder.status },
+      after:                    { status: "shipped_china" },
     });
+
+    // U1-3 distinct audit when admin used the gate override — separate
+    // event makes it cheap to query "how often did the team bypass the
+    // arrival→billing gate?" for governance reporting.
+    if (d.allow_unverified_billing) {
+      await logAdminAction(
+        adminId,
+        "forwarder.pay_with_unverified_billing_override",
+        "forwarder",
+        forwarder.id,
+        {
+          f_no:             forwarder.f_no,
+          total_thb:        totalThb,
+          tx_id:            tx.id,
+          forwarder_status: forwarder.status,
+        },
+      );
+    }
 
     void sendNotification(forwarder.profile_id, {
       category: "forwarder",

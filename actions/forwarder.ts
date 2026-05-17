@@ -9,6 +9,7 @@ import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forw
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -540,6 +541,46 @@ export async function payForwarderFromWallet(
     return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
   }
 
+  // 2b. U1-3 arrival→billing gate. The pending_payment guard above
+  // already restricts the normal customer self-pay path to pre-arrival,
+  // but we run the gate defensively in case a future status-flip widens
+  // the allowed range (e.g. recovery flows). NO admin escape hatch on
+  // the customer side — only super/accounting may override.
+  // Note: the gate needs admin client (cargo_containers RLS is admin-
+  // scoped per migration 0033); use the existing admin client below.
+  // We probe with the admin client up-front because failing closed here
+  // saves a wallet-debit round-trip vs after-the-fact unwind.
+  const adminProbe = createAdminClient();
+  const gate = await getCargoBillingGate(adminProbe, forwarder.f_no);
+  if (gate.blocked) {
+    // Best-effort audit row — best as an admin_audit_log entry with a
+    // null admin_id, captured as a customer-attempted-block event so
+    // ops can see the customer hit the gate and reach out proactively.
+    try {
+      await adminProbe.from("admin_audit_log").insert({
+        admin_id:    null,
+        action:      "forwarder.pay_blocked_by_billing_gate",
+        target_type: "forwarder",
+        target_id:   forwarder.id,
+        payload:     {
+          f_no:             forwarder.f_no,
+          forwarder_status: forwarder.status,
+          reason:           gate.reason,
+          container_status: gate.container_status,
+          customer_initiated: true,
+          customer_profile_id: user.id,
+        },
+      });
+    } catch {
+      // Audit failure must not block the gate decision.
+    }
+    const errMsg =
+      gate.reason === "no_container_linked"
+        ? "billing_blocked — ฝากนำเข้านี้ยังไม่ผูกตู้ขนส่ง รอเจ้าหน้าที่ก่อนชำระ"
+        : `billing_blocked — รอการปิดตู้ + ยืนยัน CBM จริงก่อนชำระ (สถานะตู้: ${gate.container_status ?? "?"})`;
+    return { ok: false, error: errMsg };
+  }
+
   // 3. Balance check — PENDING-AWARE available balance. The raw
   //    wallet.balance (0007 trigger) sums only completed rows, so it
   //    ignores this customer's other not-yet-approved withdraw / yuan
@@ -555,8 +596,9 @@ export async function payForwarderFromWallet(
     };
   }
 
-  // 4. Debit + status flip — admin client (gated by ownership check above)
-  const admin = createAdminClient();
+  // 4. Debit + status flip — admin client (gated by ownership check above).
+  // Reuse the U1-3 gate probe client; same service-role identity.
+  const admin = adminProbe;
 
   // W-1/S-2: assertOwnedProfileId makes the ownership check un-skippable
   // — if a future edit sets profile_id from an untrusted input, this
