@@ -21,7 +21,7 @@ The get-found machinery is ~80% ready (strong sitemap, JSON-LD, per-service land
 | # | Break | Consequence |
 |---|---|---|
 | 1 | GTM/GA4 · Clarity · Sentry — fully code-wired in `app/layout.tsx`, **env-gated to a no-op** | Pacred runs Google + FB ads **right now with zero conversion tracking** — cost-per-lead is uncomputable |
-| 2 | The lead pipeline (`ContactForm` → `submitContactMessage` → `contact_messages` → admin notify) is complete + working — but **`ContactForm` renders on no public page**; `/contact` is a `StubPage` | The lead funnel is disconnected at stage one — GA4 will report zero leads even after tracking is on |
+| 2 | ✅ **RESOLVED (`b90806b`)** — `ContactForm` is now rendered live on `/contact` (was a `StubPage`); the lead pipeline (`ContactForm` → `submitContactMessage` → `contact_messages` → admin notify) is joined end-to-end | Was: the lead funnel disconnected at stage one. Now connected — GA4 will report leads once tracking is switched on |
 | 3 | No self-serve **ad-click → กดซื้อ** path — `BookingCalculator` computes a real price, then `ResultBox` dead-ends into a phone/LINE modal | Every priced visitor must be hand-closed by a sales rep — no scalable "เปิดออเดอร์ราคานี้" |
 
 **Tier 0 — this week (~1 day total, mostly free):** ① switch on the analytics/monitoring env vars (~15 min in Vercel) · ② render `ContactForm` on `/contact` + service pages · ③ verify Google Search Console + submit the sitemap · ④ claim Google Business Profile. Three of four are *connect what exists*.
@@ -80,6 +80,8 @@ After the synthesis, the owner (พี่ป๊อป) named four systems the an
 ---
 
 ## The unified roadmap
+
+> The living forward roadmap is now [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — the single canonical phase/stage plan. This section is the 2026-05-18 snapshot that seeded it; consult `UPGRADE_PLAN.md` for the current state.
 
 - **Tier 0 — ✅ code SHIPPED · ⏳ dashboard pending:** `ContactForm` is live on `/contact` (`b90806b`) — the lead funnel is connected. The env-var switch-on + GSC + Google Business + Meta = ก๊อต/เดฟ dashboard actions (checklist → [`launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md)) — **the one open Tier-0 item.**
 - **Tier 1 — ✅ SHIPPED:** the "เปิดออเดอร์ราคานี้" calculator→buy bridge (`/start-order` + `QuoteCTA`) · CI build-step · the `/admin/kpi` executive dashboard — integrated + verified on `dave`.

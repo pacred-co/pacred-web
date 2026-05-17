@@ -29,12 +29,12 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 **Where we are:**
 - 🟢 **`main`** — production, live. 19 launch-week migrations (`0044`-`0064`) applied to prod Supabase. Two deploys done: `314a528` (launch) + `4ef2ee6` (U1/U2/U4 + a P0 refund-money-loss fix).
 - 🟡 **`dave`** — integration branch, well ahead of `main`. Carries the shipped post-launch U1/U2/U4 batches **plus the Tier 0/1/2 capability batches**. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod.
-- The post-launch roadmap is now the 3-tier **capability** synthesis — [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems). The earlier **[`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** U1-U4 sequence has all shipped.
+- **The canonical forward roadmap is [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** — the single phase/stage plan for what's next. The 3-tier **capability** synthesis ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md): Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems) is the 2026-05-18 analysis that seeded it. The earlier U1-U4 sequence has all shipped.
 
 **Decision lens (post-launch):**
 > Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never code a roadmap item before its §0 gate is green.
 
-**Full post-launch plan:** [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (current) + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (U1-U4, shipped). Backlogs they draw from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
+**Full post-launch plan:** [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — THE canonical forward roadmap. Seeded by [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (the Tier 0/1/2/3 synthesis). Backlogs they draw from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
 
 ---
 
@@ -235,7 +235,7 @@ The post-launch batches — coded + verified + on `dave`, awaiting ภูม app
 - **Tier 0 connect** — `ContactForm` rendered live on `/contact` (`b90806b`) — the lead-capture funnel is joined at stage one. Remaining Tier-0 = dashboard clicks (analytics env vars in Vercel · GSC + submit sitemap · Google Business Profile · Meta Business Suite — ก๊อต/เดฟ).
 - **Tier 1 buy-bridge** — `/start-order` page + `QuoteCTA` component (the calculator→buy "เปิดออเดอร์ราคานี้" bridge) · `.github/workflows/ci.yml` gained a `pnpm build` step · `/admin/kpi` executive dashboard (`bcd752c`).
 - **Tier 2 internal OS** — cross-department `work_items` work-board: migration `0080_work_items.sql` + `/admin/board` + `/admin/inbox` + `actions/admin/work-items.ts` + `lib/validators/work-item.ts` (`bcd752c`). MOMO sync + per-department workspaces remain specced → [`port-specs/operating-system-tier2.md`](port-specs/operating-system-tier2.md).
-- **Tier 3 designed (not built)** — 3 owner-requested systems: internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ — design docs in [`research/`](research/_index.md) (`internal-chat-system-` · `disbursement-system-` · `china-ops-container-closing-2026-05-18.md`).
+- **Tier 3 designed (not built)** — 4 owner-requested systems: internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ · platform-observability (รายงานสถานะ Platform / KPI / auto-incident) — design docs in [`research/`](research/_index.md) (`internal-chat-system-` · `disbursement-system-` · `china-ops-container-closing-` · `platform-observability-system-2026-05-18.md`).
 
 ### 🟡 In-flight / follow-up
 

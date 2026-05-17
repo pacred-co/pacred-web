@@ -5,19 +5,21 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 ## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
 
-🟢 Pacred launched. The post-launch roadmap is [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — read it first; the §"Work split" table is ปอน's pickup list.
+🟢 Pacred launched. The canonical forward roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — read it first; the post-launch capability synthesis [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) seeded it and its §"Work split" table is ปอน's pickup list.
 
-**ปอน now (per the capability-strategy work-split — in priority order):**
+**ปอน now — pickup list (priority order):**
+
 1. **Frontend tooling** — implement the recommendations in [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md): the data-driven landing template (one source-of-truth template that scales the per-service landings — fits the `copyist-unlimited` pattern).
-2. **Polish the new Tier-0/Tier-1 surfaces** — the `/contact` page (now rendering `ContactForm` live), `/start-order`, and the `QuoteCTA` calculator→buy component. These are freshly shipped on `dave`; make them on-voice + mobile-first.
-3. **SEO audit** per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md) — Google Ads waste cut (~3h).
-4. **L-5 deep polish** order: home → import-china → china-shopping → customs-clearance (เดฟ confirmed priority).
+2. **Mobile-first hardening** — most Pacred customers arrive on phones. Harden the customer surfaces at the 360/390px viewport per [`docs/conventions.md`](../conventions.md) §11 + [`docs/mobile-first-playbook.md`](../mobile-first-playbook.md) + the `mobile-first-verify` skill.
+3. **Polish the new surfaces** — `/contact` (now rendering `ContactForm` live), `/start-order`, and the `QuoteCTA` calculator→buy component. These are freshly shipped on `dave`; make them on-voice + mobile-first.
+4. **SEO audit** — per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md): cut Google Ads waste (~3h).
 
----
+**Ongoing (self-directed, fit around the pickup list):**
+- **i18n polish** — namespace-normalize (`page.section.element`) + EN translation review; watch `pnpm audit:i18n` for new untranslated keys.
+- **Marketing + SEO research** — competitor analysis (top-5 Thai cargo/shipping), keyword research, customer-painpoint synthesis; once the Tier-0 analytics dashboard is live, the GA4 funnel report + Clarity heatmaps feed the conversion read.
+- **A/B experiments** — the cookie-based substrate (`lib/experiments.ts` + `ExperimentBeacon`) is shipped; flip an experiment `active` and read `experiment_exposure` × conversion once GA4 is on.
 
-## 🚀 TEAM-WIDE RUN-LONG MODE ACTIVE (2026-05-16 evening → เดฟ check-in)
-
-ทั้งทีม autonomous mode. ดู [`../runbook/team-status-2026-05-16.md`](../runbook/team-status-2026-05-16.md) — มี cross-dep map + ปอน's full run-long queue + escape hatch. **เริ่ม T-N1 SEO audit ก่อนเลย** (P0, ~3h, ปลด Ads waste). L-5 priority order = home → import-china → china-shopping → customs-clearance (เดฟ confirmed; ไม่ต้องรอ).
+**Deferred:** Phase I ecosystem-service landings (services #1, #5-13 — `customs-broker-matching`, `tax-refund`, `tax-invoice`, `shipping-document`, `export`, `fumigation`, `consignment`, `bill-payment`, `logistics`) — build after revenue is stable; block on the Pacred-owner copy direction per service.
 
 ---
 
@@ -25,18 +27,16 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ปอน is still the visibility lever** — landing rank + quality score decide whether ad budget converts. The lens stays: more **true** / **billable** / **measurable**. Plan work properly; don't ship half-built.
 
-**ปอน post-launch priorities** — see the §"Current state" block above: the frontend-tooling landing template, then polish the new `/contact` + `/start-order` + `QuoteCTA` surfaces, then SEO + L-5.
-
 **Voice (every customer surface):** Slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Mobile-first. Copy ตรงเป้า ไม่อ้อมค้อม. CTA visible.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md)** — the post-launch roadmap + work-split · [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) — your tooling spec
-2. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
-3. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ปอน hand-off triggers) + Part O3 (normal pipeline)
-4. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style) + §12 (Performance/SEO)
+1. **[`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — THE canonical forward roadmap (post-launch phase/stage plan)
+2. [`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — the post-launch roadmap synthesis + work-split · [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) — your tooling spec
+3. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
+4. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style — mobile-first) + §12 (Performance/SEO)
 5. [`docs/decisions/0007-analytics-and-ab-testing.md`](../decisions/0007-analytics-and-ab-testing.md) — GTM + Clarity + A/B substrate
 6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT — every contact UI element imports from `components/seo/site.ts`
 
@@ -72,79 +72,21 @@ Translation: owner critiques landing the most → เดฟ helps with structura
 
 ## Current state of your domain
 
-### 🟢 Done — Phase A SEO bundle + customs polish
+### 🟢 Shipped + in production
 
-- Home page (15+ sections — BookingCalculator, StatsBar, Promotion, OurService, ProductCategories, PurchaseBanner, PricingSection, ClearanceBanner+Cards, WhyPacred, ContactSales, ImportExportBanner, Reviews, Sales, Blog, HomeArticle, Partner)
-- L-1..L-9 SEO bundle (sitemap, robots, JSON-LD on every page, OG/Twitter meta, RSS, FAQ, i18n audit script)
-- 7 bonus polish: `/line` redirect + LINE_OA constants + HomeArticle + red-cloud bg + page-mover + Bonus 6/7 + footer i18n
-- Customs landing rebuild (`/customs-clearance-shipping-suvarnabhumi`) — new banner, copy, price emphasis, h1 rewrite, breadcrumb (latest commit `e9b5564`)
-- `pacred.co/line` short-link (Bonus 6) + booking-tabs mobile fix + LCL/FCL pricing split + drop MobileTrustRibbon (Bonus 7)
+- **Home page** (15+ sections — BookingCalculator, StatsBar, Promotion, OurService, ProductCategories, PurchaseBanner, PricingSection, ClearanceBanner+Cards, WhyPacred, ContactSales, ImportExportBanner, Reviews, Sales, Blog, HomeArticle, Partner)
+- **SEO bundle** — sitemap, robots, JSON-LD on every page, OG/Twitter meta, RSS, FAQ, i18n audit script · `/line` short-link + LINE_OA constants · red-cloud body background · footer i18n
+- **Service landings** — the cargo-revenue pages (`import-china`, `-fcl`, `-lcl`, `china-shopping`, `customs-clearance-shipping-suvarnabhumi`) are **full content pages** — intent-keyword H1, FAQ schema, trust strip, phone+LINE CTAs (no longer stubs)
+- **Tier-0/Tier-1 surfaces** (shipped on `dave`) — `/contact` renders `ContactForm` live · `/start-order` + the `QuoteCTA` calculator→buy bridge
 
-### 🟡 Pending — your pickup list (priority order)
+### 🟡 Pending / ongoing
 
-#### P0 — Owner critiques (highest churn)
-
-Whenever Pacred owner (พี่ป๊อป) gives a brief that targets landing, that becomes P0. Examples landed already:
-- Customs h1 rewrite (just shipped)
-- LCL/FCL pricing reorganisation (Bonus 7)
-- Mobile trust ribbon drop
-
-When new ones come in: เดฟ helps with structure → you execute.
-
-#### P0 — L-5 service landing polish (waiting on เดฟ priority confirmation)
-
-ปอน's suggested order: home → import-china → china-shopping → customs-clearance
-
-| # | Page | Status |
-|---|---|---|
-| L-5a | `/services/import-china` | StubPage — needs full content |
-| L-5b | `/services/import-china-fcl` | StubPage |
-| L-5c | `/services/import-china-lcl` | StubPage |
-| L-5d | `/services/export-worldwide` | StubPage |
-| L-5e | `/services/china-shopping` | StubPage |
-| L-5f | `/customs-clearance-shipping-suvarnabhumi` | ✅ Done |
-
-#### P1 — Mobile responsive QA (blocked on real device test)
-
-L-8 — top 10 pages, mobile devtools + real-device check. Blocker: needs BrowserStack or real device. Workaround: use Chrome devtools mobile emulation + spot-check on your phone.
-
-#### P1 — i18n polish (self-directed)
-
-- L-9b — namespace normalize (`page.section.element` convention)
-- L-9c — EN translation polish — review `pnpm audit:i18n` same-value list (currently 0 needs-review per allowlist, but watch for new keys that should be translated)
-
-#### P1 — Phase I ecosystem landings (NEW services — no PHP analog)
-
-Per `/CLAUDE.md` Pacred Ecosystem, need landing pages for:
-- `/services/customs-broker-matching` (Service #1)
-- `/services/tax-refund` (Service #5)
-- `/services/customs-clearance` (Service #6 — already partly landed?)
-- `/services/tax-invoice` (Service #7) + `/services/shipping-document` (Service #8) — content related
-- `/services/export` (Service #9) — outbound shipping
-- `/services/fumigation` (Service #10)
-- `/services/consignment` (Service #11)
-- `/services/bill-payment` (Service #12)
-- `/services/logistics` (Service #13)
-
-Block on Pacred owner copy direction per service (escalate to เดฟ when ready).
-
-#### P2 — Marketing data + SEO research
-
-- **Competitor analysis** — top 5 Thai cargo/shipping competitors → keyword gaps + content gaps
-- **Keyword research** — Ahrefs / SE Ranking / free tools → target keyword ranking → priority pages
-- **Customer interview synthesis** — sales team intake → top-3 customer painpoints → landing copy that addresses them
-- **Conversion funnel monitoring** — once K-12 GTM activates (ก๊อต task) → GA4 funnel report → identify drop-off points
-- **Heatmap reading** — once K-13 Clarity activates → top 5 abandoned interaction patterns → fix the worst
-
-#### P2 — A/B experiments (when ready)
-
-The L-24 cookie-based A/B substrate is shipped. To run an experiment:
-1. Pick a hypothesis (e.g., "LCL-first booking tab converts higher than FCL-first")
-2. Update [`lib/experiments.ts`](../../lib/experiments.ts) `EXPERIMENTS` registry — add `active: true`
-3. Wire variant rendering in target component
-4. Drop `<ExperimentBeacon experimentKey="..." />` in the page
-5. Wait 1-2 weeks for traffic
-6. Check GA4 `experiment_exposure` events → conversion rate per variant
+- Frontend-tooling landing template — pickup #1
+- Mobile-first hardening of the customer surfaces — pickup #2
+- Polish of `/contact` + `/start-order` + `QuoteCTA` — pickup #3
+- SEO audit (Ads-waste cut) — pickup #4
+- i18n namespace normalize + EN polish · marketing/SEO research · A/B experiments — see the "Ongoing" list in §"Current state"
+- Phase I ecosystem-service landings — deferred (post-revenue-stable; block on owner copy direction)
 
 ---
 
@@ -157,11 +99,9 @@ Theme tokens are defined in [`app/globals.css`](../../app/globals.css) `@theme i
 
 **Use Tailwind utilities** — avoid hex hardcoding except for social-brand colors (Google blue, LINE green, etc.).
 
-Font: `var(--font-prompt)` (Prompt from Google Fonts).
+Font: `var(--font-prompt)` (Prompt from Google Fonts). Icons: `lucide-react` outline only.
 
-Icons: `lucide-react` outline only.
-
-**Mobile-first** — every landing change must look good on a 390px-wide viewport AND a 1440px desktop.
+**Mobile-first** — every landing change must look good on a 360/390px-wide viewport AND a 1440px desktop.
 
 ---
 
@@ -171,18 +111,18 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| เดฟ hasn't confirmed L-5 priority page | Do L-9b/c i18n polish (self-directed) OR market research |
-| Pacred owner hasn't given copy direction for Phase I | Build the page shell with placeholder copy + flag to เดฟ |
-| K-12/K-13 not activated → no analytics data | Spend time on competitor analysis or keyword research |
+| เดฟ hasn't confirmed a structural decision | Do i18n polish (self-directed) OR marketing/SEO research |
+| Pacred owner hasn't given copy direction for Phase I landings | Build the page shell with placeholder copy + flag to เดฟ |
+| Tier-0 analytics dashboard not yet live → no GA4/Clarity data | Spend time on competitor analysis or keyword research |
 | Owner critique comes in mid-task | Park current → handle owner critique → resume |
 
-**Note back to เดฟ when:** you need design system changes (new theme tokens, new typography scale), backend support (admin endpoint exposure for landing data), or you've hit a structural decision you can't make alone.
+**Note back to เดฟ when:** you need design-system changes (new theme tokens, new typography scale), backend support (admin endpoint exposure for landing data), or you've hit a structural decision you can't make alone.
 
 ---
 
 ## Work-from-home period
 
-Per request 2026-05-16: ปอน takes 3 days WFH for high-focus periods. Push at end of WFH stretch (per memory `push_frequency_strict`). Commit local freely during the stretch.
+Per request 2026-05-16: ปอน takes 3 days WFH for high-focus periods. Push at the end of the WFH stretch (per memory `push_frequency_strict`). Commit local freely during the stretch.
 
 ---
 
@@ -205,7 +145,7 @@ Per request 2026-05-16: ปอน takes 3 days WFH for high-focus periods. Push 
 
 - Commit local freely during landing iterations
 - **Push to `origin/podeng` only at save-points** — end of WFH stretch / before sleep / before owner review
-- During WFH 3-day focus block: usually 1 push at the end of the stretch
+- During the WFH 3-day focus block: usually 1 push at the end of the stretch
 - เดฟ pulls from `origin/podeng` periodically to consolidate
 
 ## Cross-links
