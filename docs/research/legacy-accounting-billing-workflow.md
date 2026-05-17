@@ -16,23 +16,20 @@
 
 ---
 
-## ⚠️ 0. Scope limitation — read first
+## ✅ 0. Status — Excel rate tables now extracted (2026-05-17 follow-up)
 
-The 5 Excel workbooks named in the research brief
-(`ACC - AXELRA&NNB เบิกเงิน.xlsx`, `AXELRA & NNB BOOKING.xlsx`,
-`AXELRA Cost & Profit & Com.xlsx`, `ข้อมูลการเบิก-จ่ายกองกลาง.xlsx`,
-`แบบฟรอมออกราคา IMPORT .xlsx`) and the two nested ZIPs
-(`ตัวอย่างราคาขาย…zip`, `ข้อมูลเช้ก…zip`) **could not be opened** in this session:
-the sandbox denied every command that reads from `~/Desktop/project dev/` or runs
-`python3`/`unzip`/`soffice`, and the `Read` tool rejects binary `.xlsx`. **A follow-up
-pass with file access must extract the actual cell formulas + rate tables.**
+The 5 Excel workbooks + 2 nested ZIPs **have now been extracted to text** and read.
+The rate cards, the cost/profit/commission model, the ออกราคา price-form fields and
+the กองกลาง ledger columns are all decoded with **real numbers** — see the new
+**§11 (rate cards)** and the verified figures folded into §3/§4/§5 below. The earlier
+"could not open" caveat is resolved; §10 now records what was actually pulled.
 
-Fortunately the Excel files are **not** the source of truth for logic — they are the
-**data layer**, and the **Apps Script reads them column-by-column with documented column
-maps**. Those column maps (reproduced below) tell us exactly what every workbook holds
-and how the math is wired, even without opening the sheets. This doc decodes the model
-**from the code that consumes the sheets**. Where a number lives only in a sheet cell
-(e.g. the exact freight rate per CBM) it is flagged `[sheet-value — verify]`.
+Two layers, both decoded:
+1. **Logic layer** — the Apps Script backend (`Code.gs` etc.), decoded in §3–§7. Reliable.
+2. **Data layer** — the Excel rate tables, now read. The pricing model is **not** a
+   formula engine in the ERP; it is a **per-mode pricing worksheet** (`แบบฟรอมออกราคา
+   IMPORT`) the Pricing staff fill, with **admin-maintained rate cards** embedded in it.
+   §11 reproduces every rate. Numbers are real cell values unless flagged otherwise.
 
 ---
 
@@ -157,13 +154,13 @@ So a Pacred-equivalent "sell price" is **three hand-entered THB line buckets sum
 - **`SALE_CUSTOMS`** — customs-clearance charges (duty handling, ใบขน, inspection).
 - **`SALE_DOC`** — documentation + service fee (`ค่าบริการ`).
 
-There is **no markup % and no rate×weight formula in this ERP.** The Pricing staff
-*decide* each bucket (using external rate sheets — the China-route estimator, carrier
-quotes from the LINE rate-check groups, and the `แบบฟรอมออกราคา IMPORT .xlsx` form,
-which is the **pricing worksheet** staff fill to derive these three numbers). The ERP
-only **stores the result**. `แบบฟรอมออกราคา IMPORT` is therefore the *upstream pricing
-calculator* `[file unreadable — its formulas must be extracted in the follow-up pass:
-expect a cost-buildup → markup → the three sell buckets]`.
+There is **no markup % and no rate×weight formula inside the ERP.** The Pricing staff
+*decide* each bucket using the **`แบบฟรอมออกราคา IMPORT` pricing worksheet** — now
+extracted (§11). It **is** a cost-buildup calculator: per-mode tabs (IM EXW/FOB/CIF ×
+SEA FCL/LCL/AIR), each summing freight + ~20 local-charge line items into a `รวมราคา`
+total, with `COST` / `PROFIT` columns beside the sell figures. The ERP only **stores
+the resulting 3 buckets**; the worksheet is where they are built. Verified markup
+policy + every rate card → §11.
 
 ### 3.2 Workflow-note evidence of the cost build-up (air route)
 
@@ -173,14 +170,16 @@ expect a cost-buildup → markup → the three sell buckets]`.
 - **ค่าภาษี (duty + VAT):** `มูลค่าสินค้า × %อากร`, then `× 7%` VAT. → the duty/VAT math.
 - **ค่าโกดัง (warehouse storage):** priced from "วันที่เครื่องลง" → "วันเข้ารับสินค้า".
 - **ค่า D/O (delivery order)** — a **fixed table by courier**:
-  `UPS = 489 · FedEx = 428 · DHL = 449.40` THB.
+  `UPS = 489 · FedEx = 428 · DHL = 449.40` THB (air-courier D/O). Sea-freight D/O is
+  a different, larger figure — see §11.4 (`8,000–13,000` THB by port/size).
 - **ต้นทุนบริการ (service cost):** `ชื่อบุคคล (personal) = 800 · บริษัท (juristic) = 1500`;
   another note says **`650 เสมอ` (always 650)** and **`customs registration = 1500`**
-  → **the service-fee rate card is inconsistent across notes** — a real risk (see §9).
+  → the customs-registration `1,500` is confirmed by the Excel (§11.4); the `650`/`800`
+  figure is the **internal cost** of the registration service (`COST` column, §11.5).
 
-This confirms the model: **cost is itemised from rate cards** (D/O table, storage,
-duty), Pricing adds a margin, and the result is bucketed into `SALE_LCL/CUSTOMS/DOC`.
-The rate cards live in the Excel files — extracting them is the follow-up pass's job.
+This confirms the model: **cost is itemised from rate cards**, Pricing adds a margin,
+the result is bucketed into `SALE_LCL/CUSTOMS/DOC`. The rate cards are now extracted —
+**see §11** for the full per-CBM / per-kg / D/O / customs / service figures.
 
 ---
 
@@ -204,10 +203,13 @@ The **AR side ledger**. One row per job, keyed on `SHIPMENT`. Column map from
 | 17 | transfer_back | transfer refunded / returned |
 | 19 | closed | close flag |
 
-**`AXELRA Cost & Profit & Com.xlsx`** is this sheet (or a working copy of it) — its
-name maps 1:1 to columns `cost` / `profit` / `Com`(mission). `[file unreadable — the
-follow-up pass should confirm whether `profit` is a stored value or an Excel formula
-`=revenue−cost`, and whether `Com` is `profit × %` or a flat figure.]`
+**`AXELRA Cost & Profit & Com.xlsx`** was extracted — and it is **not** the `4.1ACC`
+ledger. It is a 4-sheet working file: (1) `เงื่อนไข จ๊อบการทำงาน` — the **markup-policy
+sheet** (§11.1); (2) `การตอบแบบฟอร์ม` — raw Google-Form quote enquiries; (3) `Transport`
+— a **truck-cost vs sell-price table** (`Cost` / `Price` columns, §11.3); (4)
+`FRE IM SEA FCL` — the **monthly sea-freight rate card** (§11.2). So `Cost & Profit & Com`
+holds the **inputs** to pricing (rate cards + markup %), not the per-job profit ledger.
+The per-job `profit` confirmation comes from the `ตรวจ COMMISSION` sheet instead — §11.5.
 
 **Profit math, as the code treats it:**
 
@@ -265,9 +267,17 @@ gives a job's `totalAP / totalPaid / totalPending`.
 
 ### 5.3 What "กองกลาง" (central fund) is
 
-`ข้อมูลการเบิก-จ่ายกองกลาง.xlsx` (19 MB — the largest file, an operational ledger) is
-the **central-fund cash book**. The `เบิก-จ่าย` (withdraw–disburse) naming + the ACC
-`advance` column + `transfer_add`/`transfer_back` columns describe a **revolving float**:
+`ข้อมูลการเบิก-จ่ายกองกลาง.xlsx` was extracted — it is a **China-warehouse central-fund
+cash book**, one sheet per month (`ค่าใช้จ่ายโกดังจีน ธ.ค.68`, `ม.ค.69`, …). It is
+**not** a per-job AP ledger — it is the **TTP-PCS China-warehouse operating float**.
+Confirmed columns: `วันที่ · รายการ · ยอรวม(หยวน) · เรท(หยวน) · ยอดรวม(บาท) ·
+ยอดหาร(บาท)` plus `ยอดคงเหลือ(หยวน)` and slip-evidence columns. The `เรท(หยวน)` is the
+**CNY→THB exchange rate per top-up** (observed 4.54–4.66 — see §11.6). `ยอดหาร` =
+amount ÷ 2 (the float is **split 50/50** between two parties). Top-ups run ~฿45,700
+per round (10,000 CNY); monthly totals observed ฿687,684 (Dec-68) and ฿959,303
+(Jan-69). It bankrolls warehouse rent, China staff salaries, equipment — **not**
+freight/D-O. The `เบิก-จ่าย` naming + the ACC `advance` / `transfer_*` columns still
+describe a **revolving float**:
 
 1. The company funds a **central pool (กองกลาง)**.
 2. When a job needs an outflow (ค่า D/O, ค่าเร้น/ค่าล่วง — demurrage/detention, duty,
@@ -479,14 +489,14 @@ and adds detail:
    fund top-ups, disbursements out, recoveries in, running balance. Today it is a
    19 MB spreadsheet with no controls. Tie each disbursement to `paid_from = central
    fund` and each job's `advance` to un-recovered float.
-3. **A sales-commission model.** `COMMISSION` is one column today. Pacred has no
-   commission table. Decide: `commission = f(profit)` or flat-per-job, attributed to
-   `SALES`. Pair it with the sales dashboard (`salerank.html` aggregations: by-rep,
-   by-month, by-type, by-customer).
-4. **A pricing worksheet / quote calculator.** `แบบฟรอมออกราคา IMPORT .xlsx` is the
-   staff pricing tool — Pacred should port it to an admin "build a quote" UI:
-   cost build-up (rate cards) → margin → the 3 sell buckets → QO. **Rate cards must be
-   admin-editable DB tables** (D/O-by-courier, storage, service-fee) — not hard-coded.
+3. **A sales-commission model.** Now decoded (§11.5): commission is **computed** —
+   `1% × freight + 5% × customs + 5% × doc`, then `−3% WHT`, split into a SALES and a
+   DOC payout. Pacred has no commission table — build one to that formula, attributed
+   to `SALES`, paired with the sales dashboard (`salerank.html` aggregations).
+4. **A pricing worksheet / quote calculator.** `แบบฟรอมออกราคา IMPORT` is the staff
+   pricing tool — port it to an admin "build a quote" UI: cost build-up → markup
+   (the §11.1 `30/25/20/15/10%` ladder) → the 3 sell buckets → QO. **The §11.4 rate
+   cards must be admin-editable, 3-tier (ปลีก/ประจำ/ส่ง) DB tables** — not hard-coded.
 5. **A billing-vs-cost reconciliation view.** Compute `invoice_total − Σ job_costs`
    per job and flag jobs billed below cost. This automates workflow step C9.
 6. **A PEAK reconciliation bridge.** Until the PEAK API is live, replicate
@@ -537,24 +547,175 @@ and adds detail:
 
 ---
 
-## 10. Follow-up — the Excel extraction pass (must-do)
+## 10. Excel extraction pass — DONE (2026-05-17)
 
-A future session **with file access** must open the 5 workbooks + 2 ZIPs and extract:
+The 5 workbooks + 2 ZIPs were extracted to text and read. What each yielded:
 
-| File | What to pull |
+| File | What was found |
 |---|---|
-| `แบบฟรอมออกราคา IMPORT .xlsx` | the **pricing worksheet** — every cost-input cell, the markup formula, how it produces the 3 sell buckets, all embedded rate cards (D/O, storage, service fee, duty %). |
-| `AXELRA Cost & Profit & Com.xlsx` | confirm `profit` = stored vs `=revenue−cost`; the **commission formula** (`Com` column — % of profit? flat?). |
-| `AXELRA & NNB BOOKING.xlsx` | the live booking sheet — confirm the **exact v6.1 column indices** (IV/RT/SALE_*/COMMISSION). |
-| `ACC - AXELRA&NNB เบิกเงิน.xlsx` | the AP "เบิก" sheets — every status value actually in use, vendor list, cost categories. |
-| `ข้อมูลการเบิก-จ่ายกองกลาง.xlsx` | the **central-fund cash book** structure — top-up vs disburse columns, how the running balance is kept, reconciliation layout. |
-| `ตัวอย่างราคาขาย…zip` | sample sell-price sheets — real worked examples of the 3-bucket pricing. |
-| `ข้อมูลเช้ก…zip` (453 MB) | "ข้อมูลเช็ก" — likely slip / cheque / check-payment evidence; sample the structure only. |
+| `แบบฟรอมออกราคา IMPORT .xlsx` | The **pricing worksheet** — 14 tabs (IM EXW/FOB/CIF × SEA FCL/LCL/AIR + service-catalogue + term-glossary). Each tab is a cost-buildup of ~20 line items → `รวมราคา` total, with `COST`/`PROFIT` columns. All rate cards embedded — see §11.4. |
+| `AXELRA Cost & Profit & Com.xlsx` | **Not** the `4.1ACC` ledger. 4 tabs: markup-policy (§11.1), Google-Form enquiries, truck Cost/Price table (§11.3), monthly sea-freight rate card (§11.2). |
+| `AXELRA & NNB BOOKING.xlsx` | Confirmed sheets: `รหัสใบเสนอราคา` (QO-code scheme), `ตรวจ COMMISSION` (the **commission ledger** — §11.5), `SHIPMENT ตารางงาน`. Commission columns verified (§11.5). |
+| `ACC - AXELRA&NNB เบิกเงิน.xlsx` | The AP "เบิก" sheets — `SHIPMENT ตารางงาน` (per-CBM sell rate column), `Axelra เบิกเงินค่าสินค้า`, `Axelraเบิกเงินทั่วไป`. Status values + columns verified (§11.6). |
+| `ข้อมูลการเบิก-จ่ายกองกลาง.xlsx` | The **China-warehouse central-fund cash book** — monthly sheets, CNY-rate column. Decoded in §5.3 + §11.6. |
+| `ตัวอย่างราคาขาย…zip` | 449 sample per-job pricing sheets (ใบประหน้า Pricing) — same line-item structure as §11.4. Real worked totals: §11.7. |
+| `ข้อมูลเช้ก…zip` | Customs documents — supplier `COMMERCIAL INVOICE` / `PACKING LIST` / `SALES CONTRACT` (CNY unit-price × kg). Used for declared-value, not pricing. |
 
-Until then, treat every THB rate in this doc as `[sheet-value — verify]`. The **logic**
-above is decoded from the Apps Script and is reliable; the **rate numbers** are not.
+---
+
+## 11. Verified rate cards & figures (extracted 2026-05-17)
+
+> All numbers below are **real cell values** from the Excel dumps. THB unless noted.
+> The pricing worksheet quotes **3 customer tiers**: `ปลีก` (retail) / `ลูกค้าประจำ`
+> (regular) / `ส่ง` (wholesale) — most fixed fees are tier-flat, services tier-scaled.
+
+### 11.1 Markup policy — `Cost & Profit & Com → เงื่อนไข จ๊อบการทำงาน`
+
+- **Profit ladder (`อัตราการ+กำไร`):** Freight (`เฟรท`) and transport (`ขนส่ง`) each marked
+  up at one of **`30% · 25% · 20% · 15% · 10%`** — staff pick the tier (bigger/regular
+  customer = lower %). This is the markup the §3.1 `SALE_*` buckets bake in.
+- **Credit terms:** `7 / 15 / 30` days; a **credit service charge of `1.25%`** applies;
+  negotiable for large customers.
+- **Cancellation:** if a customer cancels after work started, charge **50% of the service
+  fee, or ฿1,500** (`ปิดตรวจ` example: ฿3,500 service → ฿1,500 retained).
+
+### 11.2 Sea-freight rate card — `Cost & Profit & Com → FRE IM SEA FCL`
+
+Monthly carrier rate sheet, **China → Thailand**, ~500 rows Mar-2025…Feb-2026.
+Columns: `AGENT · Continent · Country · POL · POD · CARRIER · EXCHANGE · 20'USD ·
+20'THB · 40'USD · 40'HQ'USD/THB · EXPIRE · schedule · localcharge (เมืองนอก / เมืองไทย)`.
+Freight quoted **per container in USD**, converted at **EXCHANGE = 34–35 THB/USD**.
+
+Representative ocean-freight ranges (CNY/route-dependent, China→PAT/LCB):
+
+| Route (POL→POD) | 20' USD | 40' USD | 40' THB (≈) |
+|---|---|---|---|
+| Nansha → PAT | 175–730 | 330–1,350 | 11,550–47,250 |
+| Shekou → PAT | 160–650 | 230–1,250 | 8,050–43,750 |
+| Shanghai → PAT | 350–680 | 700–1,480 | 24,500–51,800 |
+| Qingdao → PAT | 600–1,480 | 650–1,580 | 24,500–55,300 |
+| Tianjin → PAT | 600–1,350 | 650–1,750 | 22,750–61,250 |
+
+Carrier **local charges (USD/bill or /cont):** `Manifest USD75/bill · Booking USD15–50/bill ·
+EDI USD10/cont · DTHC USD120–180/cont · D/O USD75 · ค่าลาก USD15–50 · ค่าคืน USD15–30`.
+
+### 11.3 Truck/inland rate card — `Cost & Profit & Com → Transport`
+
+~280 rows, **port → Thai-province delivery**. Columns include `Cost (ต้นทุน)` and
+`Price (ราคาขาย)` — direct evidence of the cost-vs-sell margin. Examples:
+
+| Route | Vehicle | Cost | Sell price |
+|---|---|---|---|
+| Khlong Toei → Phitsanulok/Nakhon Sawan | head-truck FCL40 | 27,000 | 29,000 |
+| Khlong Toei → Lamphun/Nakhon Sawan | head-truck FCL40 | 31,000 | 39,000 |
+| Khlong Toei → Phuket (FCL20) | NINE SPEED | 28,000 | 33,000 |
+| Port → Pathum Thani (LCL, 0.11 CBM) | 4-wheel | 1,600 | 2,000 |
+
+BKK-metro container haulage **cost** runs `~4,000–6,500` (20'/40'); long-haul upcountry
+`23,000–45,000`. Margin on inland is thin — often `0–8,000` THB, frequently the sell
+price equals cost (a margin-leak flagged in §9).
+
+### 11.4 The ออกราคา IMPORT rate card — `แบบฟรอมออกราคา IMPORT`
+
+The customs/local-charge line items, **3-tier** (ปลีก / ลูกค้าประจำ / ส่ง):
+
+| Line item | 20' (ปลีก/ประจำ/ส่ง) | 40' (ปลีก/ประจำ/ส่ง) |
+|---|---|---|
+| ค่าบริการจองเฟรท (DOC / freight booking) | 3,500 / 3,000 / 2,500 | 3,500 / 3,000 / 2,500 |
+| Customs Clearance (พิธีการ) FCL | 4,000 / 3,500 / 3,000 | 4,500 / 4,000 / 3,500 |
+| Customs Registration (ลงทะเบียนกรมศุล) | 1,500 (flat, one-time) | 1,500 (flat) |
+| Customs Paperless (ค่าธรรมเนียม) | 200 (flat) | 200 (flat) |
+| Import Declaration Paperless / EDI | 350 / 250 / 200 | 350 / 250 / 200 |
+| D/O Receiving Fee | 421 (flat) | 421 (flat) |
+| D/O Services (ใบตราส่ง, by carrier) | 6,000–8,000 | 8,000–13,000 |
+| Customs Overtime (ค่าล่วงเวลา หลัง 17:00/เสาร์) | 400 (flat) | 400 (flat) |
+| Additional Customs Services (ปิดตรวจ) | 1,000 (flat) | 1,000 (flat) |
+| Gate Charge — PAT / LCB | 1,250 / 1,000 | 2,500 / 2,000 |
+| Rent (ค่าเช่าโกดัง 3 วัน) — PAT / LCB | 1,765.50 / 670 | 3,049.50 / 1,070 |
+| Transport BKK-metro — PAT / LCB | 6,000–5,500 / 11,000–10,000 | 8,500–7,000 / 12,000–11,000 |
+| Permission Service (ใบอนุญาต อย./มอก.) | 1,500 / 1,300 / 1,000 | 1,500 / 1,300 / 1,000 |
+| Labor Unloading | 3,500 / 3,200 / 3,000 | 4,000 / 3,800 / 3,500 |
+| Employee Overtime | 1,000 / 800 / 500 | 1,000 / 800 / 500 |
+| STAMP SIGNATURE (ค่าตรายาง) | 350 | 350 |
+| VAT 7% | ตามมูลค่าสินค้า (per goods value) | ตามมูลค่าสินค้า |
+
+**SEA LCL — China-side (Shanghai EXW/FOB), 3-tier:** ค่าขนส่งจีน-ไทย **`2,200 / 1,800 /
+1,600` THB per CBM** · `B/L # CUSTOM/EXW 2,500/2,000/1,500` · `DOC service 3,500/3,000/
+2,500` · `FORM E / CO 2,500/2,000/1,500` → China-side net **`6,000 / 5,000 / 4,000`**.
+**Thailand-side LCL net `8,571 / 7,950 / 7,200`.** Inland LCL: 4-wheel (1–5 CBM/1,500 kg)
+net `1,990/1,790/1,690`; 6-wheel (6–30 CBM/6,000 kg) net `4,280/4,080/3,980`.
+**SEA LCL freight itself:** `USD 15/CBM` (≈฿510–1,020/CBM at EX 34) — air-LCL similar.
+**Worked-total examples (รวมราคา) from the form:** FOB SEA FCL ≈ ฿41,086 (20') /
+฿66,120 (40'); CIF SEA FCL ≈ ฿16,736 (20') / ฿24,770 (40'); EXW SEA LCL ≈ ฿20,461;
+CIF SEA LCL ≈ ฿13,511–14,801; CIF AIR ≈ ฿10,211–13,301.
+**AIR China-side (Shanghai):** DTHC USD1, DOC USD65, CUSTOM USD75, EXPORT LICENSE
+USD60, PICK UP USD110, WAREHOUSE USD30, F/E USD40.
+
+### 11.5 Commission model — `AXELRA & NNB BOOKING → ตรวจ COMMISSION`
+
+The commission **is computed, per the three sell buckets** — header columns confirm:
+
+```
+ยอดขาย LCL/CARGO       → COMMISSION 1%
+ยอดขาย Customs Clearance → COMMISSION 5%
+ยอดขาย Document Handling → COMMISSION 5%
+TOTAL COMMISSION = sum of the three
+ยอดรวมหัก 3% ส.พ.  ← TOTAL COMMISSION minus 3% withholding
+```
+
+So the legacy `COMMISSION` column (booking col 53) is **not flat** — it is
+`1% × freight + 5% × customs + 5% × doc`, then a **3% WHT** is deducted to give the
+net payable. Worked rows confirm: e.g. customs ฿3,000 → comm ฿150; doc ฿3,500 → ฿175;
+total ฿325 → after −3% = ฿315.25. Commission is split into a **SALES** payout and a
+**DOC** payout, each tracked `รอดำเนินการ → จ่ายแล้ว` with a pay date.
+This sheet also confirms `profit` is **staff-tracked, not auto-derived** — there is no
+`=revenue−cost` formula; the per-job ledger holds typed numbers (§4 / §9.2 risk #2 holds).
+
+### 11.6 AP "เบิก" + per-CBM sell rate — `ACC - AXELRA&NNB เบิกเงิน`
+
+- **`SHIPMENT ตารางงาน`** has a `ราคาขาย THB ต่อ CBM,KGM` column — the **per-CBM (or
+  per-kg) sell rate** for consolidation jobs. Observed values **฿7,860–฿27,181 per
+  unit**; NNB โชห่วย (mixed-cargo) sea jobs cluster **฿8,000–฿19,000**, almost all at
+  **68 CBM** container fill. EK-CARGO / air jobs priced as a lump sum, not per-CBM.
+- **`Axelra เบิกเงินค่าสินค้า`** (ฝากจ่าย / pay-on-behalf) columns: `ลำดับ · วันที่ ·
+  ชื่อในไลน์/ใบวางแจ้งหนี้ · SHIPMENT · QUOTATION · หมวดหมู่รายการเบิกเงิน · รายการ ·
+  จำนวนเงินยอดเบิก · จำนวนเงินยอดคืน · ชื่อบัญชี · เลขบัญชี · ธนาคาร · สถานะโอนเงิน ·
+  วันที่โอน · เวลา · สถานะการตามใบเสร็จ`. Disbursement amounts are large CNY goods
+  payments (`CNY × rate`, rate **4.54–4.66**) paid via **สแกนจ่าย Alipay**; status
+  observed = `โอนแล้ว`. Categories: `ต้นทุนบริการ`, `โอนคืนลูกค้า`.
+- **`Axelraเบิกเงินทั่วไป`** (general reimbursement) columns: `ลำดับ · วันที่ · จำนวนเงิน ·
+  รายการเบิกเงินทั่วไป · หมายเหตุ · หัก ณ ที่จ่าย · ชื่อผู้เบิกเงิน · ชื่อบัญชี · เลขบัญชี ·
+  ธนาคาร · สถานะโอนเงิน · วันที่โอน · เวลาโอน · เลขที่ใบหัก ณ ที่จ่าย · เอกสารอ้างอิง ·
+  เลขที่ใบเสร็จรับเงิน`, grouped by `ประจำเดือน MM/YYYY` with per-batch `รวม`. Status
+  values in use: **`โอนแล้ว` / `ไม่มีโอน`**, and batch tags `เบิกแล้ว` / `ยังไม่ได้เบิก`,
+  rounds `รอบเช้า 09.30` / `รอบบ่าย`. Office costs ฿100–฿20,000 (stamps, fuel, software,
+  ปิดตรวจ-officer cash ฿6,000–฿10,000/mo).
+- **กองกลาง CNY rate** (`ข้อมูลการเบิก-จ่ายกองกลาง`): observed **4.54–4.66** CNY→THB
+  per top-up; ฿45,400–45,900 per 10,000-CNY round; the float is **halved (`ยอดหาร`)**
+  between TTP and PCS.
+
+### 11.7 Per-job sell-price examples — `ตัวอย่างราคาขาย` ZIP (449 sheets)
+
+Each is a per-job `ใบประหน้า Sale and Pricing` using the §11.4 line items + a freight
+row + `COST` / `PROFIT` columns. Worked examples:
+
+- **Export CIF SEA FCL** (BKK→Iraq): freight USD1,620 (20')/USD2,200 (40') →
+  SALE ฿55,080 / ฿74,800; profit on freight ฿270 (20') / ฿400 (40'); transport cost
+  ฿25,000 → sell ฿26,000 (profit ฿1,000). **รวมราคา ฿97,891 (20') / ฿130,911 (40').**
+- **Import FOB SEA FCL** (Shekou→BKK, plastic pellets): freight USD1,080 → ฿36,720
+  (zero freight margin); customs-clearance cost ฿500 → sell ฿4,500 (profit ฿4,000);
+  transport cost ฿6,000 → sell ฿7,000. **รวมราคา ฿74,140.**
+- **Import EXW SEA FCL** (Nansha→LCB): China local charges (THC USD125/180, DOC
+  USD75, customs USD50, pickup USD290) passed through; TH customs-clearance profit
+  ฿4,000–7,500. **รวมราคา ฿89,021 (40') / ฿143,361 (2×20').**
+- **Export CIF SEA LCL** (LCB→USA): freight **USD110/CBM** + AMS USD30 → ฿15,400 +
+  ฿1,050; total **฿27,811** for 4 CBM.
+
+Pattern: **freight is often passed through at ~0 margin**; the **profit lives in the
+customs-clearance and DOC buckets** (cost ฿500 → sell ฿2,500–8,000) and a thin
+transport margin. This matches the §11.5 commission split (1% freight vs 5% customs/doc).
 
 ---
 
 **End — `legacy-accounting-billing-workflow.md`.** Logic decoded from the Apps Script
-backend; the 5 Excel rate-tables remain to be extracted (§0, §10).
+backend (§3–§7); Excel rate tables extracted and verified (§0, §10, §11).
