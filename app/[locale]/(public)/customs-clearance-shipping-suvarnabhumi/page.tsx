@@ -3,10 +3,6 @@ import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import {
   Award,
-  FileCheck2,
-  PackageSearch,
-  Calculator,
-  Stamp,
   ArrowRight,
   MessageCircle,
   Phone,
@@ -64,14 +60,17 @@ export async function generateMetadata({
 
 // ────────────────────────── Content arrays ──────────────────────────
 
-type Step = { num: string; icon: typeof FileCheck2; title: string; desc: string };
+type Step = { num: string; icon: string; title: string; desc: string };
 
+// PNG icons from /images/hero-section/icon-draf/ — rendered white via
+// `brightness-0 invert` filter to fit the red gradient pill (per ปอน
+// 2026-05-18, wants brand-PNGs instead of lucide outlines).
 const STEPS: Step[] = [
-  { num: "01", icon: FileCheck2,    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
-  { num: "02", icon: MessageCircle, title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
-  { num: "03", icon: Calculator,    title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
-  { num: "04", icon: Stamp,         title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
-  { num: "05", icon: PackageSearch, title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
+  { num: "01", icon: "/images/hero-section/icon-draf/checklistred.png",    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
+  { num: "02", icon: "/images/hero-section/icon-draf/pcs-call-center.png", title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
+  { num: "03", icon: "/images/hero-section/icon-draf/pcs-payment.png",     title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
+  { num: "04", icon: "/images/hero-section/icon-draf/customclearance.png", title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
+  { num: "05", icon: "/images/hero-section/icon-draf/transfast.png",       title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
 ];
 
 // Tag groups — each group renders as a sub-section of chips under the
@@ -414,7 +413,6 @@ export default async function CustomsClearancePage({
 
             <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
               {STEPS.map((s, idx) => {
-                const Icon = s.icon;
                 const isLast = idx === STEPS.length - 1;
                 return (
                   <div key={s.num} className="relative shrink-0 w-[70%] sm:w-[260px] snap-start md:w-auto md:shrink">
@@ -423,8 +421,15 @@ export default async function CustomsClearancePage({
                         <span className="text-[34px] md:text-[40px] font-black text-primary-200/70 dark:text-primary-900/70 leading-none tracking-tight">
                           {s.num}
                         </span>
-                        <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
-                          <Icon className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.4} />
+                        <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
+                          <Image
+                            src={s.icon}
+                            alt=""
+                            width={28}
+                            height={28}
+                            aria-hidden
+                            className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert"
+                          />
                         </span>
                       </div>
                       <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
