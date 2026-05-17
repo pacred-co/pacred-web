@@ -26,6 +26,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { adminCreateFreightInvoice } from "./freight-invoices";
 import {
   createFreightShipmentSchema, type CreateFreightShipmentInput,
   updateFreightShipmentSchema, type UpdateFreightShipmentInput,
@@ -350,6 +351,61 @@ export async function adminMarkFreightDelivered(input: ShipmentIdOnlyInput): Pro
     const res = await flipShipmentStatus(input.id, "cleared", "delivered", { delivered_at: now });
     if (!res.ok) return res;
     await logAdminAction(adminId, "freight_shipment.delivered", "freight_shipment", input.id, {});
+
+    // U1-4 auto-chain: draft an invoice if none exists for this shipment.
+    // Best-effort — parent flip already committed; failure here must not block
+    // the delivery status update. Admin can manually create the draft later
+    // if this fails. adminCreateFreightInvoice itself is idempotent against
+    // an existing non-cancelled invoice (returns 'existing_invoice:...').
+    try {
+      const admin = createAdminClient();
+      const { data: existing } = await admin
+        .from("freight_invoices")
+        .select("id, status")
+        .eq("freight_shipment_id", input.id)
+        .neq("status", "cancelled")
+        .limit(1)
+        .maybeSingle<{ id: string; status: string }>();
+
+      if (!existing) {
+        const draftRes = await adminCreateFreightInvoice({ freight_shipment_id: input.id });
+        if (draftRes.ok) {
+          await logAdminAction(
+            adminId,
+            "freight_shipment.auto_draft_invoice_on_delivery",
+            "freight_shipment",
+            input.id,
+            { freight_invoice_id: draftRes.data?.id ?? null, result: "drafted" },
+          );
+        } else {
+          await logAdminAction(
+            adminId,
+            "freight_shipment.auto_draft_invoice_on_delivery",
+            "freight_shipment",
+            input.id,
+            { result: "failed", error: draftRes.error },
+          );
+        }
+      } else {
+        await logAdminAction(
+          adminId,
+          "freight_shipment.auto_draft_invoice_on_delivery",
+          "freight_shipment",
+          input.id,
+          { result: "skipped_existing", freight_invoice_id: existing.id, existing_status: existing.status },
+        );
+      }
+    } catch (e) {
+      // Swallow — delivery flip already committed; just log + continue.
+      await logAdminAction(
+        adminId,
+        "freight_shipment.auto_draft_invoice_on_delivery",
+        "freight_shipment",
+        input.id,
+        { result: "exception", error: e instanceof Error ? e.message : String(e) },
+      );
+    }
+
     revalidatePath(`/admin/freight/shipments/${input.id}`);
     return { ok: true };
   });

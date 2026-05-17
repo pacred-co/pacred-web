@@ -52,9 +52,8 @@ const items: NavItem[] = [
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/yuan-payments",    label: "ฝากโอนหยวน",      icon: <Languages className="w-5 h-5" />,       roles: ["accounting"], group: "ปฏิบัติการ" },
-  { href: "/admin/warehouse/containers", label: "ตู้คอนเทนเนอร์ (Spine)", icon: <Package className="w-5 h-5" />, roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
-  { href: "/admin/warehouse/bulletin",   label: "บุลเลตินตู้รายวัน",      icon: <ClipboardCheck className="w-5 h-5" />, roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
-  { href: "/admin/containers",       label: "รายการตู้ (legacy)", icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
+  { href: "/admin/warehouse/containers", label: "ตู้คอนเทนเนอร์",         icon: <Package className="w-5 h-5" />,         roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
+  { href: "/admin/warehouse/bulletin",   label: "บุลเลตินตู้รายวัน",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
   { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/drivers",          label: "คนขับส่งของ",       icon: <Truck className="w-5 h-5" />,           roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/driver-runs",      label: "งานของฉัน (driver)", icon: <Truck className="w-5 h-5" />,          roles: ["driver","super","ops"], group: "ปฏิบัติการ" },
@@ -68,6 +67,7 @@ const items: NavItem[] = [
   { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/commissions",      label: "ค่าคอม + Payouts (V-E8)", icon: <BadgePercent className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
   { href: "/admin/accounting/periods", label: "ปิดงวด (V-E9)",       icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting","ops"], group: "การเงิน" },
+  { href: "/admin/refunds",            label: "คืนเงิน (U1-6)",        icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["super","accounting","ops","sales_admin"], group: "การเงิน" },
 
   // Customer & sales
   { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
