@@ -3,10 +3,6 @@ import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import {
   Award,
-  FileCheck2,
-  PackageSearch,
-  Calculator,
-  Stamp,
   ArrowRight,
   MessageCircle,
   Phone,
@@ -46,19 +42,35 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  return buildPageMetadata({ locale, path: PATH, namespace: NS });
+  const base = await buildPageMetadata({ locale, path: PATH, namespace: NS });
+  // Per ปอน 2026-05-18 — page title must read exactly
+  // "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping"
+  // (overrides the root `%s | Pacred` template). Keep the i18n
+  // `seo.services.customsClearance.title` string as-is for JSON-LD
+  // `name` + OG/Twitter title — only the <title> tag is forced.
+  const absoluteTitle =
+    locale === "en"
+      ? "Shipping & Customs Clearance | Pacred Shipping"
+      : "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping";
+  return {
+    ...base,
+    title: { absolute: absoluteTitle },
+  };
 }
 
 // ────────────────────────── Content arrays ──────────────────────────
 
-type Step = { num: string; icon: typeof FileCheck2; title: string; desc: string };
+type Step = { num: string; icon: string; title: string; desc: string };
 
+// PNG icons from /images/hero-section/icon-draf/ — rendered white via
+// `brightness-0 invert` filter to fit the red gradient pill (per ปอน
+// 2026-05-18, wants brand-PNGs instead of lucide outlines).
 const STEPS: Step[] = [
-  { num: "01", icon: FileCheck2,    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
-  { num: "02", icon: MessageCircle, title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
-  { num: "03", icon: Calculator,    title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
-  { num: "04", icon: Stamp,         title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
-  { num: "05", icon: PackageSearch, title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
+  { num: "01", icon: "/images/hero-section/icon-draf/checklistred.png",    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
+  { num: "02", icon: "/images/hero-section/icon-draf/pcs-call-center.png", title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
+  { num: "03", icon: "/images/hero-section/icon-draf/pcs-payment.png",     title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
+  { num: "04", icon: "/images/hero-section/icon-draf/customclearance.png", title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
+  { num: "05", icon: "/images/hero-section/icon-draf/transfast.png",       title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
 ];
 
 // Tag groups — each group renders as a sub-section of chips under the
@@ -77,6 +89,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "เคลียร์ของด่วน 1 ชั่วโมง",
       "เร่งด่วน",
       "เปิดตรวจสินค้า",
+      "เคลียร์ของ Air Cargo",
+      "เคลียร์ของ Air Freight",
+      "Cargo Terminal สุวรรณภูมิ",
+      "BFS สุวรรณภูมิ",
+      "Trade Lane Air Import",
+      "Customs Air Cargo Bangkok",
+      "เคลียร์ของส่งทางอากาศ",
+      "เคลียร์ของจาก DHL สุวรรณภูมิ",
+      "เคลียร์ของจาก FedEx สุวรรณภูมิ",
+      "เคลียร์ของจาก UPS สุวรรณภูมิ",
+      "เคลียร์ของจาก TNT สุวรรณภูมิ",
     ],
   },
   {
@@ -91,6 +114,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "LCL · FCL",
       "Sea Freight Import",
       "โลจิสติกส์คลังสินค้า",
+      "เคลียร์ของท่าเรือคลองเตย",
+      "เคลียร์ของท่าเรือแหลมฉบัง",
+      "เคลียร์ของท่าเรือกรุงเทพ",
+      "ICD ลาดกระบัง",
+      "Cross-dock Port คลองเตย",
+      "Customs Bangkok Port",
+      "Bangkok Container Yard",
+      "ตู้คอนเทนเนอร์ติดด่าน",
+      "Container ติดศุลกากร",
+      "Demurrage / Detention",
+      "ค่าฝากตู้คอนเทนเนอร์",
     ],
   },
   {
@@ -100,6 +134,16 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "เคลียร์พัสดุติดค้าง",
       "นำเข้าทางไปรษณีย์",
       "พัสดุต่างประเทศติดศุลกากร",
+      "ไปรษณีย์หลักสี่ติดด่าน",
+      "Thailand Post Customs",
+      "เคลียร์พัสดุ EMS ต่างประเทศ",
+      "เคลียร์พัสดุ DHL eCommerce",
+      "เคลียร์พัสดุ Amazon",
+      "เคลียร์ของจาก eBay",
+      "เคลียร์ของจาก AliExpress",
+      "ภาษีพัสดุติดด่าน",
+      "พัสดุติด อย.",
+      "พัสดุติด มอก.",
     ],
   },
   {
@@ -110,6 +154,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "ขนส่งข้ามแดน",
       "Truck Transport",
       "เคลียร์ของทั่วประเทศ",
+      "ด่านนครพนม",
+      "ด่านอรัญประเทศ",
+      "ด่านแม่สาย",
+      "ด่านสะเดา",
+      "ด่านปาดังเบซาร์",
+      "ด่านหนองคาย",
+      "ขนส่งจีน-ไทย",
+      "ขนส่งลาว-ไทย",
+      "Cross-border Trucking",
+      "DDP จีน-ไทย",
+      "นำเข้าผ่านด่านชายแดน",
     ],
   },
   {
@@ -122,19 +177,53 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "หน่วยงานราชการ",
       "เคลียร์ของนำเข้า",
       "เคลียร์ของด่วน",
+      "พิกัดอัตราศุลกากร",
+      "HS Code ผิด",
+      "ภาษีเกินจริง",
+      "ตีราคาสินค้าสูง",
+      "เอกสารไม่ครบ",
+      "ใบขนสินค้าผิด",
+      "ติด อย.",
+      "ติด มอก.",
+      "ติด สมอ.",
+      "ติด กสทช.",
+      "ติดกรมเกษตร",
+      "ติดกรมประมง",
+      "ติดกรมปศุสัตว์",
+      "อายัดของ",
+      "ของรอเปิดตรวจ",
     ],
   },
   {
-    title: "ขั้นตอน / Door-to-Door",
+    title: "คำถามที่พบบ่อย",
     items: [
-      "ตรวจเอกสารนำเข้า",
-      "เตรียมเอกสารศุลกากร",
-      "ขั้นตอนนำเข้า",
-      "ปลดสินค้า",
-      "เคลียร์จบใน 1 ชั่วโมง",
-      "รับของภายใน 1 วัน",
-      "ขนส่งต่อเนื่อง",
-      "Door to Door Delivery",
+      "เคลียร์ของใช้เวลากี่วัน",
+      "เคลียร์ของเร็วสุดกี่ชั่วโมง",
+      "ค่าบริการเคลียร์ของกี่บาท",
+      "เคลียร์ของเสียค่าใช้จ่ายอะไรบ้าง",
+      "ภาษีนำเข้าคำนวณยังไง",
+      "Form E ลดภาษีได้กี่บาท",
+      "ของติดด่านทำยังไง",
+      "DHL ติดด่านต้องทำยังไง",
+      "FedEx ติดด่านทำยังไง",
+      "นำเข้าจากจีนต้องใช้เอกสารอะไร",
+      "นำเข้าจากญี่ปุ่นต้องทำยังไง",
+      "นำเข้าจากเกาหลีติด มอก.",
+      "บริษัทรับเคลียร์ของที่ไหนดี",
+      "ตัวแทนออกของคืออะไร",
+      "Shipping License คืออะไร",
+      "ใครเคลียร์ของให้ได้บ้าง",
+      "เคลียร์ของผ่านศุลกากรราคาเท่าไหร่",
+      "นำเข้าครั้งแรกต้องรู้อะไรบ้าง",
+      "นำเข้าสินค้าต้องลงทะเบียนที่ไหน",
+      "ค่า YY กรมศุลกากรกี่บาท",
+      "Form E ASEAN-China คืออะไร",
+      "Form D AFTA ใช้ยังไง",
+      "ใบขนสินค้าขาเข้าต้องยื่นที่ไหน",
+      "Bill of Lading คืออะไร",
+      "Air Waybill ต่างจาก B/L ยังไง",
+      "Invoice + Packing List กรอกยังไง",
+      "Door to Door Delivery มีบริการอะไรบ้าง",
     ],
   },
 ];
@@ -218,32 +307,56 @@ export default async function CustomsClearancePage({
               รับเคลียร์ทุกเรื่องที่ด่าน — ทั้งภาษีนำเข้า ของติดด่าน และพิธีการศุลกากร <span className="text-primary-600/80 font-semibold">เริ่มเพียง 2,800 บาท</span> ทักไลน์ปรึกษาฟรีตลอด 24 ชม.
             </h2>
 
-            {/* ─── Detailed service list — moved here per ปอน 2026-05-16 ─── */}
-            <div className="mt-3 md:mt-4 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
-              <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug md:whitespace-nowrap">
-                <Image
-                  src="/images/hero-section/icon-draf/alert.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  aria-hidden
-                  className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
-                />
-                <span className="inline-flex flex-wrap items-center gap-1.5">
-                  บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
-                  <span className="inline-flex items-center gap-0.5">
-                    <Image src="/images/hero-section/icon-draf/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                    <Image src="/images/hero-section/icon-draf/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                    <Image src="/images/hero-section/icon-draf/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+            {/* ─── Service scope banner (red, per ปอน 2026-05-18 v2) ─── */}
+            <div
+              className="relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.30)]"
+              style={{ background: "linear-gradient(135deg, #d60000 0%, #b30000 45%, #8c0000 100%)" }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                style={{ background: "radial-gradient(circle at 25% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-[0.08]"
+                style={{
+                  backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
+                  backgroundSize: "16px 16px",
+                }}
+              />
+
+              <div className="relative px-4 md:px-6 py-4 md:py-5">
+                <h3 className="flex items-start gap-2 text-[14.5px] sm:text-[17px] md:text-[24px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
+                  <Image
+                    src="/images/iconwhite/silent.png"
+                    alt=""
+                    width={28}
+                    height={28}
+                    aria-hidden
+                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
+                  />
+                  <span className="inline">
+                    บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน{" "}
+                    {/* Transport icons — inline so they flow with the title
+                        text. On mobile they slide onto the end of the wrap
+                        line; on desktop they sit right after "ทุกด่าน". */}
+                    <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+                      <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/box.png"   alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                    </span>
                   </span>
-                </span>
-              </h3>
+                </h3>
 
-              <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed md:whitespace-nowrap">
-                รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
-              </p>
+                <p className="mt-2 md:mt-3 text-[11px] sm:text-[13px] md:text-[15px] font-medium md:font-bold text-white/85 md:text-white/95 leading-snug md:leading-relaxed tracking-tight md:tracking-normal md:whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.25)]">
+                  รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
+                </p>
+              </div>
+            </div>
 
-              <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
+            {/* Bullet list — flat list under the banner (no card wrapper) */}
+            <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
                   { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
                   { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
@@ -260,7 +373,6 @@ export default async function CustomsClearancePage({
                   </li>
                 ))}
               </ul>
-            </div>
 
           </div>
         </section>
@@ -301,7 +413,6 @@ export default async function CustomsClearancePage({
 
             <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
               {STEPS.map((s, idx) => {
-                const Icon = s.icon;
                 const isLast = idx === STEPS.length - 1;
                 return (
                   <div key={s.num} className="relative shrink-0 w-[70%] sm:w-[260px] snap-start md:w-auto md:shrink">
@@ -310,8 +421,15 @@ export default async function CustomsClearancePage({
                         <span className="text-[34px] md:text-[40px] font-black text-primary-200/70 dark:text-primary-900/70 leading-none tracking-tight">
                           {s.num}
                         </span>
-                        <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
-                          <Icon className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.4} />
+                        <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
+                          <Image
+                            src={s.icon}
+                            alt=""
+                            width={28}
+                            height={28}
+                            aria-hidden
+                            className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert"
+                          />
                         </span>
                       </div>
                       <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
