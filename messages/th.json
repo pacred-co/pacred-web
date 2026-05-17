@@ -1183,12 +1183,16 @@
   },
   "floatingTabs": {
     "home": "หน้าแรก",
+    "homeMain": "หน้าหลัก",
+    "member": "หน้าสมาชิก",
     "services": "บริการ",
     "promotions": "โปรโมชั่น",
     "blog": "บทความ",
     "partner": "พาร์ทเนอร์",
     "news": "ข่าวสาร",
     "contact": "ติดต่อ",
+    "login": "ล็อคอิน",
+    "logout": "ล็อคเอาท์",
     "askMore": "สอบถามเพิ่มเติม",
     "chatAria": "พูดคุยทาง LINE",
     "callAria": "โทรหาเซลล์ Pacred"

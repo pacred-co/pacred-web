@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Phone } from "lucide-react";
+import { Phone, Home, UserCircle2, LogIn, LogOut } from "lucide-react";
+import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { createClient } from "@/lib/supabase/client";
+import { trackSignOut } from "@/lib/analytics";
 
 // Pacred main office line — single number for mobile FAB (per ปอน 2026-05-17,
 // no random sales-rep rotation).
@@ -15,7 +18,19 @@ const OFFICE_PHONE = "024213325";
 export function FloatingTabs() {
   const t = useTranslations("floatingTabs");
   const [active, setActive] = useState<number | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const pathname = usePathname();
+
+  // Watch auth state for the mobile login/logout tab — per ปอน 2026-05-18,
+  // the right-of-FAB slot flips between "ล็อคอิน" and "ล็อคเอาท์".
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   // Don't render in admin back-office — admin gets its own dedicated
   // sidebar UI and the customer-facing floating tabs would clutter the
@@ -33,16 +48,6 @@ export function FloatingTabs() {
     // Per ปอน 2026-05-15: partner tab swapped out for Pacred News.
     { label: t("news"),       icon: "/images/home/iconfloating/pcs-line-notify.png",  href: "/news" },
     { label: t("contact"),    icon: "/images/home/iconfloating/pcs-call-center.png",  href: "#contact" },
-  ];
-
-  // Mobile bottom nav drops `promotions` + `contact` — those slots get a
-  // centered call FAB instead. Per ปอน 2026-05-17: swap `promotions` for
-  // `news` on mobile (kept `promotions` on desktop where there's room).
-  const mobileTabs = [
-    desktopTabs[0], // home
-    desktopTabs[1], // services
-    desktopTabs[4], // news (replaces promotions)
-    desktopTabs[3], // blog
   ];
 
   return (
@@ -81,59 +86,93 @@ export function FloatingTabs() {
         })}
       </div>
 
-      {/* Bottom navigation bar (mobile only) — 4 tabs + center call FAB */}
+      {/* Bottom navigation bar (mobile only) — per ปอน 2026-05-18:
+          [หน้าหลัก] [หน้าสมาชิก] [📞 call FAB] [ล็อคอิน/ล็อคเอาท์]
+          The right tab flips between login/logout depending on session. */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {/* Grid splits 2 tabs | spacer (room for FAB) | 2 tabs — tabs "แหวก" symmetrically around the call button */}
-        <div className="grid grid-cols-[1fr_1fr_88px_1fr_1fr]">
-          {[
-            mobileTabs[0],
-            mobileTabs[1],
-            null,
-            mobileTabs[2],
-            mobileTabs[3],
-          ].map((item, i) => {
-            // The spacer slot — leaves room for the absolutely-positioned call FAB
-            if (!item) return <div key="spacer" aria-hidden />;
+        <div className="grid grid-cols-[1fr_1fr_88px_1.6fr]">
+          {/* Tab 1 — หน้าหลัก → / */}
+          <Link
+            href="/"
+            onClick={() => setActive(0)}
+            className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+          >
+            <Home
+              className={`w-6 h-6 transition-colors ${
+                active === 0 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+              }`}
+              strokeWidth={2}
+            />
+            <span className={`text-[11.5px] leading-tight font-medium ${
+              active === 0 ? "text-primary-600 font-bold" : "text-muted"
+            }`}>
+              {t("homeMain")}
+            </span>
+          </Link>
 
-            // Index in `mobileTabs` (skipping the null spacer) — used for active state
-            const tabIndex = i < 2 ? i : i - 1;
-            const isAnchor = item.href.startsWith("#");
-            const isActive = active === tabIndex;
-            const cls = "group flex flex-col items-center justify-center gap-1.5 py-4 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20";
-            const inner = (
-              <>
-                {item.icon && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.icon}
-                    alt={item.label}
-                    className={`w-8 h-8 object-contain transition-all duration-300 ${
-                      isActive
-                        ? "grayscale-0 brightness-100 opacity-100 scale-110"
-                        : "grayscale brightness-75 opacity-75"
-                    }`}
-                  />
-                )}
-                <span className={`text-[11.5px] leading-tight font-medium ${
-                  isActive ? "text-primary-600 font-bold" : "text-muted"
-                }`}>
-                  {item.label}
+          {/* Tab 2 — หน้าสมาชิก → /dashboard */}
+          <Link
+            href="/dashboard"
+            onClick={() => setActive(1)}
+            className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+          >
+            <UserCircle2
+              className={`w-6 h-6 transition-colors ${
+                active === 1 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+              }`}
+              strokeWidth={2}
+            />
+            <span className={`text-[11.5px] leading-tight font-medium ${
+              active === 1 ? "text-primary-600 font-bold" : "text-muted"
+            }`}>
+              {t("member")}
+            </span>
+          </Link>
+
+          {/* Spacer — leaves room for the absolutely-positioned call FAB */}
+          <div aria-hidden />
+
+          {/* Tab 4 — ล็อคอิน / ล็อคเอาท์ (dynamic on session) */}
+          {user ? (
+            <form
+              action="/auth/signout"
+              method="post"
+              onSubmit={() => trackSignOut()}
+              className="contents"
+            >
+              <button
+                type="submit"
+                className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+                aria-label={t("logout")}
+              >
+                <LogOut className="w-6 h-6 text-muted group-hover:text-foreground transition-colors" strokeWidth={2} />
+                <span className="text-[11.5px] leading-tight font-medium text-muted">
+                  {t("logout")}
                 </span>
-              </>
-            );
-            return isAnchor ? (
-              <a key={item.href} href={item.href} onClick={() => setActive(tabIndex)} className={cls}>
-                {inner}
-              </a>
-            ) : (
-              <Link key={item.href} href={item.href} onClick={() => setActive(tabIndex)} className={cls}>
-                {inner}
-              </Link>
-            );
-          })}
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/login"
+              onClick={() => setActive(3)}
+              className="group flex flex-col items-center justify-center gap-1 py-3.5 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
+            >
+              <LogIn
+                className={`w-6 h-6 transition-colors ${
+                  active === 3 ? "text-primary-600" : "text-muted group-hover:text-foreground"
+                }`}
+                strokeWidth={2}
+              />
+              <span className={`text-[11.5px] leading-tight font-medium ${
+                active === 3 ? "text-primary-600 font-bold" : "text-muted"
+              }`}>
+                {t("login")}
+              </span>
+            </Link>
+          )}
         </div>
 
         {/* Center call FAB — lifts above the bar with a subtle pulsing red aura */}

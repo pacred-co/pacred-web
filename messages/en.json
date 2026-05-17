@@ -1183,12 +1183,16 @@
   },
   "floatingTabs": {
     "home": "Home",
+    "homeMain": "Home",
+    "member": "My account",
     "services": "Services",
     "promotions": "Promotions",
     "blog": "Blog",
     "partner": "Partners",
     "news": "News",
     "contact": "Contact",
+    "login": "Log in",
+    "logout": "Log out",
     "askMore": "Ask us anything",
     "chatAria": "Chat on LINE",
     "callAria": "Call a Pacred sales rep"
