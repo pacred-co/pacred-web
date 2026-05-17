@@ -8,6 +8,28 @@
 
 ---
 
+## 🚀🚀 LAUNCHED — 2026-05-17 night — `dave` → `main` deployed to production
+
+**`origin/main` = `314a528`** (was `2136ede`). The production deploy is live. ภูม confirmed the 19 launch-week migrations (`0044`-`0057` + `0060`-`0064`) are applied to **prod Supabase** — the §0 ordering gate is satisfied, so `dave→main` shipped.
+
+**What's on `main` (`314a528`):**
+- 19 migrations `0044`-`0064` — all confirmed on prod Supabase (ภูม)
+- W-1 security keystone · W-3 wallet-integrity · `0064` overdraw-guard · S-3/S-4/S-7
+- **F-2 closed** — `/admin` dashboard + `/admin/reports` hub were the 2 money/PII pages the W-1 pass missed (driver/warehouse could read company-wide revenue via the service-role client). Now `requireAdmin(["ops","accounting","sales_admin"])`-gated (commit `ec8cace`). 11/11 sensitive admin pages now gated.
+- ปอน T-N1/T-N2 — trust strip + H1 keyword + cargo-href fix + SEO audit
+- 3 new validator unit tests (withholding-tax / qa-inspection / freight-quote — 126 assertions)
+
+**Gate before deploy — all green:** `pnpm verify` (lint + tsc + test:unit + audit:all, i18n 1868/1868) · `pnpm build` · production smoke (`next start` + curl every new/changed route) → **zero 500s**.
+
+**`dave` = `ce9f961` — AHEAD of `main`, holds ภูม's U1 work:**
+- ภูม U1 wire-the-flow: container unify · freight chain auto-draft/auto-convert · **refund money path** (`refund_requests` + customer self-serve + admin queue) · post-U1 audit fixes
+- migrations **`0058`/`0059`/`0066`** — NOT on prod yet (ภูม "กำลังรันใหม่")
+- ⚠️ **The next `dave→main` deploy is gated on ภูม applying `0058`/`0059`/`0066` to prod Supabase.** Until then `main` stays at `314a528`.
+
+**Branch state:** `main` `314a528` (prod) · `dave` `ce9f961` (integration, +ภูม U1) · `Poom` + `podeng` synced to `ce9f961`. Other branches (goofy-panini · nervous-nightingale · agent worktrees) — content already integrated, closed.
+
+---
+
 ## 🆕 LATEST — 2026-05-17 night (เดฟ + Claude) — security keystone · wallet-integrity · upgrade plan
 
 Newest batch — all on `dave` / `Poom` / `podeng` @ `48e472e` · `pnpm verify` + `pnpm build` + production smoke all green:
