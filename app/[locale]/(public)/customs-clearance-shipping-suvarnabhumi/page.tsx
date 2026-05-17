@@ -237,20 +237,20 @@ export default async function CustomsClearancePage({
                 }}
               />
 
-              <div className="relative px-4 md:px-6 py-4 md:py-5">
-                <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.35)]">
+              <div className="relative px-3 md:px-6 py-4 md:py-5">
+                <h3 className="flex items-center gap-1.5 md:gap-2 text-[12px] sm:text-[14px] md:text-[20px] font-black text-white tracking-tighter md:tracking-tight leading-snug whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.35)]">
                   <Image
                     src="/images/iconwhite/silent.png"
                     alt=""
                     width={28}
                     height={28}
                     aria-hidden
-                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
+                    className="w-4 h-4 md:w-7 md:h-7 shrink-0 object-contain"
                   />
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5">
                     บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
                     {/* Transport icons — desktop inline only; mobile hides
-                        them so the title doesn't wrap awkwardly */}
+                        them so the title fits one line at the smaller mobile size */}
                     <span className="hidden md:inline-flex items-center gap-0.5">
                       <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
                       <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
@@ -259,7 +259,7 @@ export default async function CustomsClearancePage({
                   </span>
                 </h3>
 
-                <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-white/95 leading-relaxed md:whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
+                <p className="mt-2 md:mt-3 text-[10.5px] sm:text-[12px] md:text-[15px] font-bold text-white/95 leading-snug md:leading-relaxed tracking-tight md:tracking-normal md:whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
                   รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
                 </p>
               </div>
