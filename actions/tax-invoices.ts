@@ -7,6 +7,7 @@ import {
   requestTaxInvoiceSchema,
   type RequestTaxInvoiceInput,
 } from "@/lib/validators/tax-invoice";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 /**
  * Customer-side tax invoice actions (T-P4 G2b).
@@ -43,6 +44,10 @@ type RequestResult = { id: string; status: string; already_exists: boolean };
 export async function requestTaxInvoice(
   input: RequestTaxInvoiceInput,
 ): Promise<ActionResult<RequestResult>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = requestTaxInvoiceSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -58,11 +63,12 @@ export async function requestTaxInvoice(
   // Default payment_method label — admin can refine per-row in G2c if
   // needed. Most flows are wallet (T-P3 bulk approve / customer self-pay
   // / T-P1 admin mark-paid all settle to wallet ledger).
-  const sourcePaymentMethod = "Wallet";
+  let sourcePaymentMethod = "Wallet";
   let sourceDescription   = "";
-  // Pull both source-order foreign keys for the tax_invoices row insert.
+  // Pull all three source-parent foreign keys for the tax_invoices row insert.
   let order_h_no:      string | null = null;
   let forwarder_f_no:  string | null = null;
+  let yuan_payment_id: string | null = null;
 
   if (d.order_type === "service_order") {
     const { data: order } = await supabase
@@ -89,7 +95,7 @@ export async function requestTaxInvoice(
       ? `ฝากสั่งซื้อ ${order.h_no}: ${order.title} (${order.item_count} รายการ)`
       : `ฝากสั่งซื้อ ${order.h_no} (${order.item_count} รายการ)`;
     order_h_no           = order.h_no;
-  } else {
+  } else if (d.order_type === "forwarder") {
     // forwarder
     const { data: f } = await supabase
       .from("forwarders")
@@ -115,6 +121,36 @@ export async function requestTaxInvoice(
     sourceOrderTotal     = Number(f.total_price);
     sourceDescription    = `ฝากนำเข้า ${f.f_no} · ${f.source_warehouse}/${f.transport_type}/${f.product_type} · ${f.box_count} กล่อง`;
     forwarder_f_no       = f.f_no;
+  } else {
+    // U4-3b — yuan_payment (ฝากโอน). order_id is the yuan_payments.id uuid.
+    const { data: yp } = await supabase
+      .from("yuan_payments")
+      .select("id, profile_id, status, thb_amount, yuan_amount, channel, paid_via_wallet")
+      .eq("id", d.order_id)
+      .maybeSingle<{
+        id: string;
+        profile_id: string;
+        status: string;
+        thb_amount: number;
+        yuan_amount: number;
+        channel: "alipay" | "wechat" | "bank";
+        paid_via_wallet: boolean;
+      }>();
+    if (!yp)                            return { ok: false, error: "order_not_found" };
+    if (yp.profile_id !== user.id)      return { ok: false, error: "not_your_order" };
+    if (yp.status === "refunded" || yp.status === "failed") {
+      return { ok: false, error: "order_cancelled" };
+    }
+    // Only completed yuan transfers are billable — pending/processing
+    // haven't settled yet, so no service was actually rendered to invoice.
+    if (yp.status !== "completed") {
+      return { ok: false, error: "order_not_paid_yet" };
+    }
+
+    sourceOrderTotal     = Number(yp.thb_amount);
+    sourceDescription    = `ฝากโอนชำระ (${yp.channel.toUpperCase()}) ¥${Number(yp.yuan_amount).toFixed(2)} = ฿${Number(yp.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`;
+    yuan_payment_id      = yp.id;
+    sourcePaymentMethod  = yp.paid_via_wallet ? "Wallet" : "Bank Transfer";
   }
 
   if (!(sourceOrderTotal && sourceOrderTotal > 0)) {
@@ -127,14 +163,17 @@ export async function requestTaxInvoice(
   // writes through the customer session).
   const admin = createAdminClient();
 
-  // ── 2. Idempotency — existing non-cancelled invoice for this order? ──
+  // ── 2. Idempotency — existing non-cancelled invoice for this parent? ──
   const idempotencyFilter = admin
     .from("tax_invoices")
     .select("id, status")
     .neq("status", "cancelled");
-  const { data: existing } = d.order_type === "service_order"
-    ? await idempotencyFilter.eq("order_h_no", order_h_no).maybeSingle<{ id: string; status: string }>()
-    : await idempotencyFilter.eq("forwarder_f_no", forwarder_f_no).maybeSingle<{ id: string; status: string }>();
+  const { data: existing } =
+    d.order_type === "service_order"
+      ? await idempotencyFilter.eq("order_h_no", order_h_no).maybeSingle<{ id: string; status: string }>()
+      : d.order_type === "forwarder"
+        ? await idempotencyFilter.eq("forwarder_f_no", forwarder_f_no).maybeSingle<{ id: string; status: string }>()
+        : await idempotencyFilter.eq("yuan_payment_id", yuan_payment_id).maybeSingle<{ id: string; status: string }>();
 
   if (existing) {
     return {
@@ -159,6 +198,7 @@ export async function requestTaxInvoice(
       profile_id:     user.id,
       order_h_no,
       forwarder_f_no,
+      yuan_payment_id,        // U4-3b
       buyer_name:     d.buyer_name,
       buyer_address:  d.buyer_address,
       buyer_tax_id:   d.buyer_tax_id,
@@ -185,9 +225,12 @@ export async function requestTaxInvoice(
         .from("tax_invoices")
         .select("id, status")
         .neq("status", "cancelled");
-      const { data: raced } = d.order_type === "service_order"
-        ? await racedFilter.eq("order_h_no", order_h_no).maybeSingle<{ id: string; status: string }>()
-        : await racedFilter.eq("forwarder_f_no", forwarder_f_no).maybeSingle<{ id: string; status: string }>();
+      const { data: raced } =
+        d.order_type === "service_order"
+          ? await racedFilter.eq("order_h_no", order_h_no).maybeSingle<{ id: string; status: string }>()
+          : d.order_type === "forwarder"
+            ? await racedFilter.eq("forwarder_f_no", forwarder_f_no).maybeSingle<{ id: string; status: string }>()
+            : await racedFilter.eq("yuan_payment_id", yuan_payment_id).maybeSingle<{ id: string; status: string }>();
       if (raced) {
         return {
           ok: true,
@@ -221,6 +264,8 @@ export async function requestTaxInvoice(
   // Receipt pages render the request CTA → need to refresh after submit
   revalidatePath(`/service-order/${d.order_id}/receipt`);
   revalidatePath(`/service-import/${d.order_id}/receipt`);
+  // U4-3b — yuan_payment listing surfaces the tax-invoice CTA.
+  revalidatePath("/service-payment");
 
   return {
     ok: true,
@@ -246,7 +291,7 @@ export type CustomerTaxInvoiceSummary = {
 };
 
 export async function getMyTaxInvoiceForOrder(
-  orderType: "forwarder" | "service_order",
+  orderType: "forwarder" | "service_order" | "yuan_payment",
   orderId:   string,
 ): Promise<ActionResult<CustomerTaxInvoiceSummary | null>> {
   const supabase = await createClient();
@@ -264,7 +309,9 @@ export async function getMyTaxInvoiceForOrder(
 
   q = orderType === "service_order"
     ? q.eq("order_h_no", orderId)
-    : q.eq("forwarder_f_no", orderId);
+    : orderType === "forwarder"
+      ? q.eq("forwarder_f_no", orderId)
+      : q.eq("yuan_payment_id", orderId);          // U4-3b
 
   const { data, error } = await q.maybeSingle<CustomerTaxInvoiceSummary>();
   if (error) return { ok: false, error: error.message };

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
@@ -10,6 +11,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -226,6 +228,8 @@ export type ForwarderDetail = ForwarderSummary & {
   detail: string | null;
   note_user: string | null;
   bill_to_name_override: string | null;        // V-C2
+  acknowledged_at:   string | null;            // U4-3a
+  acknowledged_note: string | null;            // U4-3a
   items: Array<{
     id: string;
     product_name: string;
@@ -256,7 +260,8 @@ export async function getForwarderByNo(fNo: string): Promise<ActionResult<Forwar
        domestic_china_thb, thailand_delivery_thb, other_price, service_fee, transport_price,
        ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
        ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
-       cabinet_number, tracking_chn2, detail, note_user, bill_to_name_override`,
+       cabinet_number, tracking_chn2, detail, note_user, bill_to_name_override,
+       acknowledged_at, acknowledged_note`,
     )
     .eq("f_no", fNo)
     .maybeSingle();
@@ -320,6 +325,10 @@ export async function listForwarders(opts?: {
 export async function createForwarder(
   input: ForwarderInput,
 ): Promise<ActionResult<{ id: string; f_no: string; total_price: number }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = forwarderSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -513,6 +522,10 @@ export async function createForwarder(
 export async function payForwarderFromWallet(
   fNo: string,
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -663,4 +676,99 @@ export async function payForwarderFromWallet(
   revalidatePath("/wallet/history");
 
   return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+}
+
+// ────────────────────────────────────────────────────────────
+// U4-3a · DELIVERY ACKNOWLEDGEMENT (customer-self-serve)
+// ────────────────────────────────────────────────────────────
+//
+// When the forwarder reaches status='delivered', show the customer a
+// "ยืนยันรับสินค้าครบถ้วน" button on /service-import/[fNo]. Pressing it
+// stamps `acknowledged_at` (now) + optional `acknowledged_note`. Once
+// acked, the row stays read-only (acknowledged_at IS NULL gate makes
+// the action idempotent — re-pressing returns ok+already_acked).
+//
+// Per migration 0010 RLS, the customer cannot UPDATE a row with
+// status='delivered' via createClient — so we follow the same pattern
+// as payForwarderFromWallet: RLS-protected ownership re-check, then
+// admin-client UPDATE restricted to ack columns only.
+
+const ackForwarderSchema = z.object({
+  f_no: z.string().trim().min(1).max(100),
+  note: z.string().trim().max(500).optional(),
+});
+export type AckForwarderInput = z.infer<typeof ackForwarderSchema>;
+
+export async function customerAcknowledgeForwarderDelivery(
+  input: AckForwarderInput,
+): Promise<ActionResult<{ acknowledged_at: string; already_acked: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = ackForwarderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. Verify ownership + status + ack-state via RLS-protected fetch
+  const { data: forwarder } = await supabase
+    .from("forwarders")
+    .select("id, f_no, status, acknowledged_at")
+    .eq("f_no", parsed.data.f_no)
+    .maybeSingle<{ id: string; f_no: string; status: string; acknowledged_at: string | null }>();
+  if (!forwarder)                              return { ok: false, error: "not_found" };
+  if (forwarder.status !== "delivered")        return { ok: false, error: "not_delivered_yet" };
+
+  // 2. Idempotent — if already acked, return success without re-stamping
+  if (forwarder.acknowledged_at) {
+    return {
+      ok: true,
+      data: { acknowledged_at: forwarder.acknowledged_at, already_acked: true },
+    };
+  }
+
+  // 3. UPDATE ack columns via admin client. Ownership is already proved
+  //    by the RLS-scoped select above; we restrict the UPDATE to ack
+  //    columns only AND re-verify status=delivered + acknowledged_at IS
+  //    NULL inside the predicate to defend against a concurrent
+  //    admin-side write that flipped the row to cancelled or re-acked.
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { error: updErr } = await admin
+    .from("forwarders")
+    .update({
+      acknowledged_at:   now,
+      acknowledged_note: parsed.data.note ?? null,
+    })
+    .eq("id", forwarder.id)
+    .eq("profile_id", user.id)
+    .eq("status", "delivered")
+    .is("acknowledged_at", null);
+  if (updErr) return { ok: false, error: `ack update: ${updErr.message}` };
+
+  revalidatePath(`/service-import/${forwarder.f_no}`);
+  revalidatePath("/service-import");
+
+  // Fire-and-forget customer-self notification (confirmation record).
+  void sendNotification(user.id, {
+    category:       "forwarder",
+    severity:       "success",
+    title:          `ยืนยันรับสินค้า ${forwarder.f_no}`,
+    body:           parsed.data.note
+      ? `ขอบคุณที่ยืนยันการรับสินค้า — โน้ต: ${parsed.data.note.slice(0, 120)}`
+      : "ขอบคุณที่ยืนยันการรับสินค้าครบถ้วน",
+    link_href:      `/service-import/${forwarder.f_no}`,
+    reference_type: "forwarder",
+    reference_id:   forwarder.id,
+  });
+
+  return {
+    ok: true,
+    data: { acknowledged_at: now, already_acked: false },
+  };
 }

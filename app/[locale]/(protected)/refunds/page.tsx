@@ -148,18 +148,21 @@ export default async function CustomerRefundsHubPage() {
             <ArrowRightLeft className="w-4 h-4 text-primary-600" /> ขอคืนเงินใหม่
           </h2>
           {sourceOptions.length === 0 ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 text-sm text-amber-800">
-              ยังไม่มีออเดอร์ที่จะขอคืนเงิน — เริ่มต้นใช้บริการก่อน
-              หรือ{" "}
-              <a
-                href={LINE_OA.addFriendUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-amber-900"
-              >
-                ติดต่อทีมเพื่อขอ refund แบบ manual
-              </a>
-            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-4 text-sm text-amber-800 space-y-2">
+              <p className="font-semibold">ยังไม่มีออเดอร์ที่ขอคืนเงินได้</p>
+              <p className="text-xs">
+                ระบบจะแสดงเฉพาะออเดอร์ที่ <strong>ชำระแล้ว</strong> (ฝากนำเข้า/ฝากสั่ง/ฝากโอน) —
+                เริ่มต้นใช้บริการก่อน หรือ{" "}
+                <a
+                  href={LINE_OA.addFriendUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-amber-900"
+                >
+                  ติดต่อทีมเพื่อขอ refund แบบ manual
+                </a>
+              </p>
+            </div>
           ) : (
             <RefundRequestForm sourceOptions={sourceOptions} />
           )}
@@ -173,9 +176,14 @@ export default async function CustomerRefundsHubPage() {
             </h2>
           </div>
           {refunds.length === 0 ? (
-            <p className="p-8 text-center text-sm text-muted">
-              ยังไม่มีคำขอคืนเงิน — สร้างใหม่ที่ฟอร์มด้านบน
-            </p>
+            <div className="p-8 text-center space-y-2">
+              <div className="text-4xl" aria-hidden>💸</div>
+              <p className="text-sm font-medium text-foreground">ยังไม่มีคำขอคืนเงิน</p>
+              <p className="text-xs text-muted max-w-sm mx-auto">
+                เมื่อมีปัญหาเรื่องสินค้าหรือยอด — ส่งคำขอที่ฟอร์มด้านบน
+                ทีมจะตรวจสอบและคืนเงินเข้ากระเป๋าให้ภายใน 1-3 วันทำการ
+              </p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

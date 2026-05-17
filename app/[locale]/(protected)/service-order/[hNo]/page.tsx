@@ -6,6 +6,7 @@ import { getServiceOrder } from "@/actions/service-order";
 import { createClient } from "@/lib/supabase/server";
 import { CancelButton } from "./cancel-button";
 import { PayFromWalletButton } from "./pay-from-wallet-button";
+import { DeliveryAckPanel } from "@/components/delivery-ack-panel";
 
 const STATUS_BADGE: Record<string, string> = {
   pending:               "bg-gray-50 text-gray-700 border-gray-200",
@@ -79,6 +80,28 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
             {canCancel && <CancelButton hNo={o.h_no!} />}
           </div>
         </div>
+
+        {/* U4-3a: delivery acknowledgement — green confirm card when completed + not yet acked */}
+        {o.status === "completed" && !o.acknowledged_at && o.h_no && (
+          <DeliveryAckPanel kind="service_order" refNo={o.h_no} />
+        )}
+
+        {/* U4-3a: already-acked confirmation chip */}
+        {o.acknowledged_at && (
+          <div className="rounded-2xl border border-green-200 bg-green-50/60 p-4">
+            <p className="text-sm font-semibold text-green-900">
+              ✅ คุณยืนยันรับสินค้าครบถ้วนแล้ว
+              <span className="ml-2 text-xs font-normal text-green-700">
+                ({new Date(o.acknowledged_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })})
+              </span>
+            </p>
+            {o.acknowledged_note && (
+              <p className="mt-1 text-xs text-green-800">
+                <span className="text-green-700">โน้ต:</span> {o.acknowledged_note}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Payment-due banner */}
         {o.status === "awaiting_payment" && o.payment_due_at && (

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
@@ -9,6 +10,7 @@ import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
+import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -51,6 +53,8 @@ export type ServiceOrderDetail = ServiceOrderSummary & {
   ship_postal_code: string | null;
   ship_note: string | null;
   note_user: string | null;
+  acknowledged_at:   string | null;            // U4-3a
+  acknowledged_note: string | null;            // U4-3a
   items: Array<{
     id: string;
     provider: Provider;
@@ -107,7 +111,8 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
     .select(
       `${SUMMARY_COLS}, pay_method, free_shipping, crate, service_fee, domestic_china_cny,
        ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
-       ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note, note_user`,
+       ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note, note_user,
+       acknowledged_at, acknowledged_note`,
     )
     .eq("h_no", hNo)
     .maybeSingle();
@@ -336,6 +341,10 @@ const PAYMENT_DUE_HOURS = 24;       // legacy hDatePayment timer (24h)
 export async function placeServiceOrder(
   input: PlaceOrderInput,
 ): Promise<ActionResult<{ id: string; h_no: string; total_thb: number; payment_due_at: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const parsed = placeOrderSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -477,6 +486,10 @@ export async function placeServiceOrder(
 // SELF-CANCEL (only while pending or awaiting_payment)
 // ────────────────────────────────────────────────────────────
 export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -513,6 +526,10 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
 export async function payServiceOrderFromWallet(
   hNo: string,
 ): Promise<ActionResult<{ tx_id: string; already_paid: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
@@ -642,4 +659,88 @@ export async function payServiceOrderFromWallet(
   revalidatePath("/wallet/history");
 
   return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+}
+
+// ────────────────────────────────────────────────────────────
+// U4-3a · DELIVERY ACKNOWLEDGEMENT (customer-self-serve)
+// ────────────────────────────────────────────────────────────
+//
+// Mirror of customerAcknowledgeForwarderDelivery for the ฝากสั่ง side.
+// For service_orders the terminal "delivered" status is `completed`
+// (legacy PHP status 5 — order finished, customer received). We allow
+// customer to stamp acknowledged_at + optional note exactly once.
+
+const ackOrderSchema = z.object({
+  h_no: z.string().trim().min(1).max(100),
+  note: z.string().trim().max(500).optional(),
+});
+export type AckOrderInput = z.infer<typeof ackOrderSchema>;
+
+export async function customerAcknowledgeServiceOrderDelivery(
+  input: AckOrderInput,
+): Promise<ActionResult<{ acknowledged_at: string; already_acked: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = ackOrderSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. Verify ownership + status + ack-state via RLS-protected fetch
+  const { data: order } = await supabase
+    .from("service_orders")
+    .select("id, h_no, status, acknowledged_at")
+    .eq("h_no", parsed.data.h_no)
+    .maybeSingle<{ id: string; h_no: string; status: string; acknowledged_at: string | null }>();
+  if (!order)                          return { ok: false, error: "not_found" };
+  if (order.status !== "completed")    return { ok: false, error: "not_delivered_yet" };
+
+  // 2. Idempotent
+  if (order.acknowledged_at) {
+    return {
+      ok: true,
+      data: { acknowledged_at: order.acknowledged_at, already_acked: true },
+    };
+  }
+
+  // 3. Admin UPDATE restricted to ack columns + re-verify guards
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+  const { error: updErr } = await admin
+    .from("service_orders")
+    .update({
+      acknowledged_at:   now,
+      acknowledged_note: parsed.data.note ?? null,
+    })
+    .eq("id", order.id)
+    .eq("profile_id", user.id)
+    .eq("status", "completed")
+    .is("acknowledged_at", null);
+  if (updErr) return { ok: false, error: `ack update: ${updErr.message}` };
+
+  revalidatePath(`/service-order/${order.h_no}`);
+  revalidatePath("/service-order");
+
+  void sendNotification(user.id, {
+    category:       "order",
+    severity:       "success",
+    title:          `ยืนยันรับสินค้า ${order.h_no}`,
+    body:           parsed.data.note
+      ? `ขอบคุณที่ยืนยันการรับสินค้า — โน้ต: ${parsed.data.note.slice(0, 120)}`
+      : "ขอบคุณที่ยืนยันการรับสินค้าครบถ้วน",
+    link_href:      `/service-order/${order.h_no}`,
+    reference_type: "service_order",
+    reference_id:   order.id,
+  });
+
+  return {
+    ok: true,
+    data: { acknowledged_at: now, already_acked: false },
+  };
 }

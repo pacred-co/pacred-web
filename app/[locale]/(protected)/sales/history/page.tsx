@@ -31,7 +31,14 @@ export default async function SalesHistoryPage() {
 
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           {payouts.length === 0 ? (
-            <p className="p-12 text-center text-sm text-muted">{t("noPayouts")}</p>
+            <div className="p-12 text-center space-y-2">
+              <div className="text-4xl" aria-hidden>💰</div>
+              <p className="text-sm font-medium text-foreground">{t("noPayouts")}</p>
+              <p className="text-xs text-muted max-w-sm mx-auto">
+                ทุกคำขอถอนค่าคอมมิชชั่นจะมาขึ้นที่นี่ — เมื่อยอดสะสมเพียงพอ
+                ขอถอนได้ที่หน้า <Link href="/sales" className="text-primary-600 hover:underline">พื้นที่ทีมขาย</Link>
+              </p>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">

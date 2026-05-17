@@ -19,9 +19,13 @@ const TAX_ID_RE = /^\d{13}$/;
 
 export const requestTaxInvoiceSchema = z
   .object({
-    /** Which order this invoice is for. EXACTLY ONE must be set. */
-    order_type: z.enum(["forwarder", "service_order"]),
-    /** f_no for forwarder, h_no for service_order. */
+    /**
+     * Which parent this invoice is for. EXACTLY ONE source row must be set.
+     * U4-3b: `yuan_payment` added for ฝากโอน customers (juristic) — see
+     * actions/tax-invoices.ts + migrations/0034_tax_invoices.sql.
+     */
+    order_type: z.enum(["forwarder", "service_order", "yuan_payment"]),
+    /** f_no for forwarder, h_no for service_order, id (uuid) for yuan_payment. */
     order_id:   z.string().trim().min(1).max(100),
 
     /** Buyer snapshot — captured at request time. */

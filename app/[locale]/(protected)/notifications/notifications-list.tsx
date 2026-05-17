@@ -64,8 +64,13 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
       </div>
 
       {list.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center text-sm text-muted">
-          {t("empty")}
+        <div className="rounded-2xl border border-dashed border-border p-12 text-center space-y-2">
+          <div className="text-4xl" aria-hidden>🔔</div>
+          <p className="text-sm font-medium text-foreground">{t("empty")}</p>
+          <p className="text-xs text-muted max-w-md mx-auto">
+            แจ้งเตือนจะปรากฏที่นี่เมื่อมีการอัพเดทออเดอร์ของคุณ — เปลี่ยนสถานะ ฝากนำเข้า/ฝากสั่ง,
+            อนุมัติยอดเติม-ถอน, หรือข่าวสารโปรโมชั่นจาก Pacred
+          </p>
         </div>
       ) : (
         <ul className="space-y-2">

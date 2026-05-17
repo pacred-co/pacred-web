@@ -190,14 +190,31 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
           </div>
 
           {txs.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-sm font-medium text-red-600">คุณยังไม่มีรายการ</p>
-              <p className="mt-1 text-xs text-muted">
-                {activeTab === "deposit"  ? "เริ่มต้นด้วยการเติมเงินเข้ากระเป๋า"
+            <div className="p-12 text-center space-y-2">
+              <div className="text-4xl" aria-hidden>👛</div>
+              <p className="text-sm font-medium text-foreground">
+                {activeTab === "deposit"  ? "ยังไม่มีรายการเติมเงิน"
                 : activeTab === "withdraw" ? "ยังไม่มีคำขอถอนเงิน"
-                : activeTab === "payment"  ? "ยังไม่มีรายการชำระเงินผ่านกระเป๋า"
+                : activeTab === "payment"  ? "ยังไม่มีการชำระผ่านกระเป๋า"
                 : "ยังไม่มีรายการเดินบัญชี"}
               </p>
+              <p className="text-xs text-muted max-w-sm mx-auto">
+                {activeTab === "deposit"
+                  ? "เริ่มเติมเงินครั้งแรกได้ที่ปุ่มด้านล่าง — Pacred รองรับ PromptPay + โอนธนาคาร"
+                : activeTab === "withdraw"
+                  ? "ถ้ามียอดเหลือใน wallet กดถอนได้เลย ทีมจะอนุมัติภายในเวลาทำการ"
+                : activeTab === "payment"
+                  ? "ทุกครั้งที่ชำระค่าฝากนำเข้า / ฝากสั่ง / ฝากโอน จาก wallet จะมาขึ้นที่นี่"
+                  : "ทุกการเติม-ถอน-ชำระจะมาขึ้นที่นี่ — แท็บด้านบนช่วยกรองรายการตามชนิด"}
+              </p>
+              {(activeTab === "deposit" || activeTab === "all") && (
+                <Link
+                  href="/wallet/deposit"
+                  className="mt-2 inline-flex rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-bold hover:bg-primary-600 shadow-sm"
+                >
+                  + เติมเงิน
+                </Link>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

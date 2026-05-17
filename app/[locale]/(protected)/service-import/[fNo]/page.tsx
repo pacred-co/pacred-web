@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { getForwarderByNo } from "@/actions/forwarder";
 import { createClient } from "@/lib/supabase/server";
 import { PayFromWalletButton } from "./pay-from-wallet-button";
+import { DeliveryAckPanel } from "@/components/delivery-ack-panel";
 
 const STATUS_BADGE: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -93,6 +94,28 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
             </Link>
           </div>
         </div>
+
+        {/* U4-3a: delivery acknowledgement — green confirm card when delivered + not yet acked */}
+        {f.status === "delivered" && !f.acknowledged_at && f.f_no && (
+          <DeliveryAckPanel kind="forwarder" refNo={f.f_no} />
+        )}
+
+        {/* U4-3a: already-acked confirmation chip */}
+        {f.acknowledged_at && (
+          <div className="rounded-2xl border border-green-200 bg-green-50/60 p-4">
+            <p className="text-sm font-semibold text-green-900">
+              ✅ คุณยืนยันรับสินค้าครบถ้วนแล้ว
+              <span className="ml-2 text-xs font-normal text-green-700">
+                ({new Date(f.acknowledged_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })})
+              </span>
+            </p>
+            {f.acknowledged_note && (
+              <p className="mt-1 text-xs text-green-800">
+                <span className="text-green-700">โน้ต:</span> {f.acknowledged_note}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Payment banner for pending */}
         {f.status === "pending_payment" && (

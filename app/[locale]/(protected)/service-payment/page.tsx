@@ -176,8 +176,11 @@ export default async function ServicePaymentPage({ searchParams }: { searchParam
                     return (
                       <tr key={p.id} className="hover:bg-surface-alt/30 transition-colors">
                         <td className="px-4 py-3 text-xs text-muted whitespace-nowrap align-top">
-                          <div>{created.toLocaleDateString("th-TH")}</div>
-                          <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                          <Link href={`/service-payment/${p.id}`} className="hover:text-primary-600">
+                            <div>{created.toLocaleDateString("th-TH")}</div>
+                            <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                            <div className="mt-1 text-[10px] text-primary-600 underline-offset-2 group-hover:underline">ดูรายละเอียด →</div>
+                          </Link>
                         </td>
                         <td className="px-4 py-3 align-top">
                           <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${CHANNEL_TONE[p.channel] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>

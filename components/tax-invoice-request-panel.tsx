@@ -29,8 +29,8 @@ const inputCls =
  */
 
 type Props = {
-  /** Which receipt page is hosting us. */
-  orderType: "forwarder" | "service_order";
+  /** Which parent is hosting us. */
+  orderType: "forwarder" | "service_order" | "yuan_payment";
   orderId:   string;
   /** Pre-populate form from profile if available. */
   defaults: {
