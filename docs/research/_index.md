@@ -35,6 +35,7 @@
 |---|---|---|
 | [`PACRED-MASTER-STRATEGY.md`](PACRED-MASTER-STRATEGY.md) | **Master synthesis** — chains the 5 gap-hunt docs + the R-1..R-19 roadmap into 4 problems: the P0 security keystone, the wallet-leak chain, the "islands with no bridges" theme, and the consolidated **Part W** backlog | 2026-05-17 |
 | [`PACRED-GAP-ANALYSIS.md`](PACRED-GAP-ANALYSIS.md) | **Earlier synthesis** — leak holes + Pacred coverage map + prioritized next-phase roadmap `R-1..R-19` (integrations + monitoring) | 2026-05-17 |
+| [`capability-tools-strategy-2026-05-18.md`](capability-tools-strategy-2026-05-18.md) | **Post-launch capability & tools master synthesis** — chains the growth-acquisition + operating-system + tools-build-vs-buy analyses: Pacred's bottleneck is CONNECTION not capability; customer-acquisition Tier-0 (switch on analytics + wire ContactForm) = #1; build-in-house over buy; the unified Tier 0/1/2 roadmap | 2026-05-18 |
 
 ### Source-code gap-hunt (5-angle drill)
 
@@ -63,6 +64,16 @@
 | [`qa-flow-run-2026-05-17.md`](qa-flow-run-2026-05-17.md) | First functional QA pass (post-launch, `qa-flow-simulator` skill) — 3 pass / 0 fail / 8 blocked; 0 code defects; dev Supabase `gnortvyazfmocvcbvfbs` found DELETED (blocks local QA); **production Supabase `yzljakczhwrpbxflnmco` probed + verified ALIVE** — launch confirmed fine | 2026-05-17 |
 | [`review-u1-u2-2026-05-18.md`](review-u1-u2-2026-05-18.md) | Read-only code review of ภูม's U1 + U2 batches (refund money path · billing-gate · container unify · freight chain · PCS migration · cargo_sacks · migrations 0058/0059/0066/0067/0068) — 1 P0 (refund has no amount cap / no paid-status check) + 5 P1 + 7 P2; 🟡 ship-with-follow-up, P0-1 + P1-1 block next prod deploy | 2026-05-18 |
 | [`audit-core-2026-05-18.md`](audit-core-2026-05-18.md) | Read-only rigorous audit of the CORE launch code (everything before U1/U2) — auth · wallet · order/forwarder pay · freight 0050-0057 · tax/WHT · W-1 RLS. All prior P0s (P0-1/P0-2/S-1/G-3/F-2/F-3) confirmed FIXED line-by-line; 1 NEW P1 (`wallet_tx_insert_self_serve` has no amount-sign check) + 4 P2; 🟢 core sound | 2026-05-18 |
+| [`predeploy-verify-2026-05-18.md`](predeploy-verify-2026-05-18.md) | Pre-deploy verification of `dave` @ `1b763b0` for the `main` deploy — cargo test-run (`qa-flow-simulator`: 6 pass / 0 fail / 8 blocked-on-deleted-dev-DB) + money-review of code NOT in the prior reviews (U4-2 credit line · U4-1 RBAC console + global search · migration 0072 C-1 fix) — 0 P0 + 2 P1 + 3 P2; both prior deploy-blockers (U1 refund P0-1, core C-1) verified fixed; **🟢 GO** | 2026-05-18 |
+
+### Capability & tooling research (recommend only)
+
+| Doc | Topic | Date |
+|---|---|---|
+| [`frontend-tooling-2026-05-18.md`](frontend-tooling-2026-05-18.md) | Frontend dev-experience research for ปอน — ranked tooling/technique recommendations (data-driven landing template · component preview workbench · responsive testing · image optimization · i18n key workflow · Tailwind v4 aids); highest-leverage = the data-driven landing-page template; RECOMMEND-only, nothing installed | 2026-05-18 |
+| [`growth-acquisition-strategy-2026-05-18.md`](growth-acquisition-strategy-2026-05-18.md) | Customer acquisition + conversion analysis — get-found ~80% ready but convert/buy/measure are built-and-disconnected: analytics env-gated off (ads run blind), `ContactForm` rendered on no public page + `/contact` stub, no calculator→กดซื้อ bridge; top-5 ranked BUILD/BUY moves | 2026-05-18 |
+| [`operating-system-analysis-2026-05-18.md`](operating-system-analysis-2026-05-18.md) | Internal operating-system analysis — every department/role; status-visibility half-delivered (customer ✓, staff ✗ — no cross-department board); 8 gaps all → BUILD, centrepiece = the `work_items` job-assignment spine + `/admin/board` + per-role inbox | 2026-05-18 |
+| [`tools-strategy-build-vs-buy-2026-05-18.md`](tools-strategy-build-vs-buy-2026-05-18.md) | Tools inventory + build-vs-buy decision matrix — "tools off, not absent"; connect-free now (9 monitoring env vars + GSC / Google Business / Meta Business) · build-in-house (KPI dashboard · MOMO sync · CI pipeline · CPC panel) · Empeo HR-SaaS rejected | 2026-05-18 |
 
 ## Cross-references
 

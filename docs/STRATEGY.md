@@ -2,7 +2,7 @@
 
 > **Purpose:** ทุกคน (เดฟ · ก๊อต · ปอน · ภูม · พี่ป๊อป) เปิดไฟล์เดียวจบ → เข้าใจ where we are, where we go, how each piece fits. ทุก brief / ADR / plan ย่อยลง 1 เอกสาร master นี้ + cross-link ลึกต่อ.
 
-Last reviewed: 2026-05-15 (post-DNA-embed + emergency cargo sprint launch)
+Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Living doc — update each save-point. **Keep under 800 lines** (single-read budget).
 
 ---
@@ -22,20 +22,19 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 ---
 
-## 2. Current state (2026-05-15) — 🔥 EMERGENCY
+## 2. Current state (2026-05-18) — 🚀 POST-LAUNCH
 
-**บริษัทเผาเงินตัวเอง.** เป้าตอนนี้คือ: cargo system → รับลูกค้าได้ → revenue → stop burn → fund continued dev.
+**Pacred launched to production 2026-05-17.** `main` is live + verified healthy. The emergency "เผาเงิน" sprint is behind us — the cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The lens shifts from *survive* to *stabilise + deepen*.
 
-**Symptoms:**
-- Google Ads ยิงไม่ติด — landing rank ต่ำ
-- Google Search หา pacred.co ไม่เจอ — SEO ยังไม่ทันที่ Ads
-- Facebook Ads มี inquiry คาร์โก้เข้าแต่ระบบยังไม่พร้อมรับ → drop + เสียชื่อ
-- พี่ป๊อป (owner) เครียดมาก
+**Where we are:**
+- 🟢 **`main`** — production, live. 19 launch-week migrations (`0044`-`0064`) applied to prod Supabase.
+- 🟡 **`dave`** — integration branch, **30+ commits ahead of `main`**. Carries the shipped post-launch U1/U2/U4 batches. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod.
+- The post-launch roadmap is **[`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** — §0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory.
 
-**Decision lens for every task this sprint:**
-> *"งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?"* ใช่ = P0 · ไม่ = defer
+**Decision lens (post-launch):**
+> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never code an UPGRADE_PLAN item before its §0 gate is green.
 
-**Full emergency plan:** [`PORT_PLAN.md`](PORT_PLAN.md) **Part T** (T1 critical path · T2 per-role pickups · T3 borrowed-API plan · T4 brand cleanup gate · T5 revenue-ready DoD)
+**Full post-launch plan:** [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md). Backlogs it draws from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
 
 ---
 
@@ -186,107 +185,91 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 ---
 
-## 9. What's shipped vs pending (production-readiness snapshot)
+## 9. What's shipped vs pending (post-launch snapshot)
 
-### 🟢 Shipped (in main / production-deployable)
+### 🟢 Shipped + in production (`main` — live since 2026-05-17)
 
 **Foundation:**
-- Next.js 16 + Supabase auth/RLS + OAuth Google/FB
-- `proxy.ts` middleware + locale prefix routing (as-needed)
+- Next.js 16 + Supabase auth/RLS + OAuth Google/FB · `proxy.ts` middleware + locale routing
 - `pnpm verify` umbrella (lint + tsc + test:unit + audit:all) + CI workflow
 
-**Customer portal (~88%):**
-- /login, /register (personal + juristic 3-step), /dashboard, /addresses
+**Customer portal:**
+- /login, /register (personal + juristic 3-step + OTP), /dashboard, /addresses, /forgot-password
 - /service-order (+ /add /cart /[hNo]), /service-import (+ /add /[fNo] /receipt /receipts)
-- /service-payment (+ /add), /wallet (deposit/withdraw/history with soft-degrade)
-- /notifications, /liff/link, /forgot-password
+- /service-payment (+ /add), /wallet (deposit/withdraw/history, soft-degrade), /notifications, /liff/link, /shipments (+/[code])
+- Pay-from-wallet self-serve (shop + forwarder) · receipt PDF · tax-invoice request flow
 
-**Admin back-office (~98% HR / ~50% ops):**
+**Admin back-office (60+ routes):**
 - HR full: org-chart, employees, recruitment, attendance, leaves, training, policies, audit
-- Admin dashboard, customers, admins (RBAC grant/revoke), drivers, csv-imports, hs-codes
-- Track A integration tests (P-28..P-31): OTP / wallet ledger / signup / cart cap
+- Dashboard, customers, admins (RBAC grant/revoke), drivers, csv-imports, hs-codes, containers
+- /admin/accounting (7 tabs + CSV + monthly closing) · /admin/reports (5 tabs) · /admin/barcode (intake/prepare/driver)
+- Track A integration tests (OTP / wallet ledger / signup / cart cap)
+
+**Launch-week security + money hardening (all on `main`):**
+- W-1 keystone (`0062`) — RLS role-pin on ~24 admin-write policies + `wallet_transactions` DB audit trigger; `requireAdmin([role])` on 18 finance/PII pages
+- W-3 (`0063`) — freight wallet-pay writes a real debit; yuan status-transition guard
+- `0064` overdraw-guard — non-negative wallet floor with row-lock; `lib/wallet/balance.ts` available-balance helper
+- S-3/S-4/S-7 — password-reset/phone-change IP rate-limit · edge `/admin/**` redirect · static guard test on `admins`
+- F-2 — `/admin` dashboard + `/admin/reports` hub role-gated
 
 **Infrastructure:**
-- Analytics stack — L-22 GTM scaffold + L-23 Clarity + L-24 cookie A/B (silent until env IDs set)
-- 9 conversion events + 13 CTA surfaces + first live experiment `home_hero_cta`
-- Sentry SDK (D-11) · Upstash rate-limit (D-12) · hCaptcha (D-13) — wired, await creds
-- LINE Messaging API + LIFF code scaffolded (D-1-LIFF)
-- Cron jobs (5 routes) + CRON_SECRET hardening
-- PromptPay soft-degrade · OTP dual-pepper rotation support
-- OWASP Top-10 desk audit + PCS scrub plan + OTP pepper rotation runbook
+- Analytics — GTM + Clarity + cookie A/B (env IDs set by ก๊อต) · 9 conversion events + 13 CTA surfaces
+- Sentry SDK · Upstash rate-limit · hCaptcha — wired + graceful-degrade (see [`runbook/launch-monitoring-golive-2026-05-17.md`](runbook/launch-monitoring-golive-2026-05-17.md))
+- LINE Messaging API + LIFF · 6 cron jobs (incl. SMS-balance alert) + CRON_SECRET hardening
+- `member_code` = `PR001` running (PR + min-3-digit, migration `0060`)
 
-**Landing:**
-- Home (15+ sections) · L-1..L-9 SEO bundle · 7 bonus polish · customs-clearance v2 (banner + breadcrumb + "1 ชม." stamp + new copy)
-- Mobile FloatingTabs center call FAB · shared section tweaks (ContactSales reusable + mobile swipe + shorter sales card)
+**Landing:** Home (15+ sections) · SEO bundle · customs-clearance landing + `[port]` detail pages · `/line` redirect + GTM on every LINE CTA · ad-landing polish
 
-### 🟡 Partial (need workflow buttons / wiring)
+### 🟢 Shipped on `dave` — post-launch U1/U2/U4 (NOT yet on `main` — gated on migration apply)
 
-`/admin/customers/[id]` · `/admin/forwarders/[fNo]` · `/admin/service-orders/[hNo]` · `/admin/wallet` · `/admin/yuan-payments` · `/admin/containers` · `/admin/team-leaders` · `/admin/sales-payouts` · `/admin/settings` · `/admin/juristic-check`
+The post-launch [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) batches — coded + verified + on `dave`, awaiting ภูม applying migrations `0058`-`0072` to prod before the `dave→main` deploy:
 
-### 🟢 ~~Stub modules~~ — actually shipped (re-audited 2026-05-16 evening)
+- **U1 wire-the-flow** — container unify (`0059`/`0066`) · container→order status propagation · arrival→billing gate (`lib/forwarder/billing-gate.ts`) · freight-chain auto-draft/auto-convert · order auto-close · **refund money path** (`0058` `refund_requests` + customer self-serve `/refunds` + admin queue)
+- **U2** — PCS→Pacred customer migration (`0067` + `/admin/migration/pcs-customers`) · per-container cost basis + AP/disbursement ledger (`0069` + `/admin/accounting/container-costs` + `/disbursements` + `lib/cost/container-margin.ts`) · freight WHT gate · cargo_sacks / กระสอบรวม (`0068` + `lib/warehouse/sacks.ts`)
+- **U4** — admin supervisory layer (`0070` — audit-log export · notification delivery log · cron-health panel · staff RBAC console · 8-entity global search `/admin/search`) · customer credit line / pay-later (`0071` — `credit_limit_thb` + outstanding view + pay-credit action + `/wallet` credit panel)
+- **C-1 fix** (`0072`) — `wallet_tx_insert_self_serve` RLS amount-sign guard (core-audit P1)
+- **~700 new test assertions** — เดฟ wrote 11 test files covering the new validators (refund · commission · customs-declaration · freight-shipment · accounting-period · broadcast · billing-gate · booking-calc · notify-templates · short-url · admin-config · thai-tax-id)
 
-Per [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) re-audit, the following were marked "stub" but are now functionally **complete**:
-- ✅ `/admin/accounting` — 7 tabs (summary/forwarder/yuan/shop/topup/withdraw/refund) + CSV + monthly closing
-- ✅ `/admin/reports` — 5 tabs (forwarder/shop/yuan/sales/payment) + CSV + status breakdown
-- ✅ `/admin/barcode` — intake/prepare/driver workflows
-- 🟡 `/admin/rates` — basic done; **Phase D shipping rates table** (port `tb_rate_g_*`) remains as LP-1
-- 🔴 Phase I 9 new services (1, 5-13 in §4) — landing pages + backend modules (separate roadmap)
+### 🟡 In-flight / follow-up
 
-### 🔴 Critical blockers (block production beta — updated 2026-05-16 evening with audit findings)
+- **`dave→main` deploy** — gated on ภูม recreating dev Supabase + applying `0058`-`0072` to prod (the deleted dev project `gnortvyazfmocvcbvfbs` must be restored — prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
+- **U1/U2 code-review follow-ups** — [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md): P0-1 + P1-1 ✅ fixed by เดฟ; P1-2..P2-7 = ภูม follow-up before running the U2-1 backfill.
+- **U1-7 MOMO JMF sync** — ⛔ blocked: the on-record MOMO API host/format is wrong (datanew L-0 — real = `api.momocargo.com:8080` REST); needs ก๊อต to clear the API docs first.
+- **U2-4 PEAK** · **U3 ecosystem tools** (NetBay · Customs Trader Portal · ship-tracking · fuel calc) · **U4-3 tier-2 tail** — later UPGRADE_PLAN phases, partner-scheduled.
+- 🔴 Phase I — 9 new ecosystem services (1, 5-13 in §4) — landing pages + backend modules, post-revenue-stable roadmap.
 
-| Owner | Blocker | Unblocks |
-|---|---|---|
-| ก๊อต | T-G4 GTM ID + Clarity ID signup | Ads conversion tracking |
-| ก๊อต | T-G5 Sentry DSN + Upstash + hCaptcha | Production error visibility + DoS prevention + bot filter |
-| ก๊อต | T-G2 MOMO endpoint inventory call | Container tracking customer view |
-| Pacred owner | T-G3 bundle: bank/PromptPay/tax-ID/legal name/LIFF ID | wallet payments + tax invoice + receipts |
-| ภูม | T-P1 admin workflow buttons (cargo path) | ✅ DONE (shipped 2026-05-16) |
-| ภูม | T-P2 container migration + customer view | "Where's my container?" feature (T-D2 schemas ✅; UI pending) |
-| ภูม | U1-3 admin "rebind tracking → container" UI | closes daily "ในระบบไม่ขึ้น" requests (chat audit L-2) |
-| ภูม | U1-4 admin "manual tracking entry" UI | closes daily SQL escalations |
-| **เดฟ + ภูม** | **U1-2 OTP SMS balance scaffold** | ✅ **DONE evening-10** — cron route + `checkSmsBalance` + notify template + alert pattern; pending vercel.json entry (Pro plan confirm) + ThaiBulkSMS endpoint confirm |
-| **เดฟ** | **U1-1 `/status` health page** | ✅ **DONE evening-9** — public route, Supabase live ping + 11 service config checks, traffic-light dots, 60s cache, bilingual TH/EN, Footer link |
-| ภูม | U1-5 `received_qty` / `expected_qty` per cargo_shipments | container-split case (chat audit: qty=1 bug) |
-| **เดฟ** | **U2-5 multi-line bulk tracking search** | ✅ **DONE evening-10** — `/admin/forwarders` search bar toggles single↔multi mode (chat W-9 closer) |
-| **เดฟ (cargo loop closure)** | Customer pay-from-wallet (shop + forwarder) | ✅ **DONE evening-4/6** — `payServiceOrderFromWallet` + `payForwarderFromWallet`, idempotent, admin-client-after-ownership-verify pattern |
+### 🆕 R&D / audit evidence base (2026-05-16/17/18)
 
-### 🆕 Verified deficiency audits (2026-05-16)
-
-Four audits produced concrete leak-hole + cleanup + cargo-backlog + V2-completeness task lists:
-
-- [`audit/chat-analysis-2026-05-16.md`](audit/chat-analysis-2026-05-16.md) — 7 LINE groups · 6 months · 10 ranked leak holes · canonical MOMO 9-status enum · workflows team really uses
-- [`audit/legacy-cleanup-2026-05-16.md`](audit/legacy-cleanup-2026-05-16.md) — pcscargo PHP sweep · ~115 dead files · **6 NEW critical security findings** (plaintext password cookie, weak `pass_tam()`, SQLi in `header.php`, hardcoded LINE OAuth, unprotected `api/autorun/`, unsafe upload). §6 "should-port" SUPERSEDED by deep-sweep below.
-- [`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md) — the legacy developer (ไอแต้ม) chat + **10 real China-cargo documents** · decoded cargo/freight ops model (GZE truck / GZS sea · A/M/X/O/Z type taxonomy · Form E / D-O / invoice value-engineering) · problem catalog A–F (withholding tax, status rollback, CBM mismatch, the ไอแต้ม single-point-of-failure)
-- 🆕 [`audit/php-deep-sweep-2026-05-16.md`](audit/php-deep-sweep-2026-05-16.md) — **master gap doc** · เดฟ-led 4-agent deep-sweep against actual PHP source at `/Users/dev/Desktop/pcscargo` (20,331 .php files / 2.2 GB) + verification pass. Found **17 new DB tables** (freight + quotation + commission + receipt) · **12 freight subdirs** previously unexplored · **24 admin polish items**. 5 true Sunday-night blockers identified; rest = Phase I2 V2 long-phase.
-- 🆕 [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) — **chained gap-hunt synthesis** · rolls the 5 source-code gap docs ([`research/gap-customer.md`](research/gap-customer.md) · `gap-admin` · `gap-revenue-flow` · `gap-integrations-tools` · `gap-schema-security`) + the `R-1..R-19` roadmap into **4 problems**: a 🔴 **P0 security keystone** (low-trust `driver`/`warehouse` RLS roles reach every money table, 11 finance pages ungated, no DB audit — fix launch-week), the 🔴 **wallet-leak chain** (freight wallet-pay / stacked pending debits / yuan refund all leak money — fix launch-week), the 🟠 **"islands with no bridges"** flow-wiring workstream, and the consolidated **[PORT_PLAN Part W](PORT_PLAN.md)** backlog.
-
-Master task lists: [`PORT_PLAN.md`](PORT_PLAN.md) **Part U** (T-U1..T-U5) + **Part V** (V-A1…V-F3 cargo-forensics backlog + **V-E6..V-E12** freight expansion + **V-G1..V-G7** admin bulk-ops + **V-H1/H2** commission role models + V-ADM1 admin-UI polish) + **Part W** (W-1..W-8 gap-hunt backlog — see the master strategy above). WHT design = [ADR-0015](decisions/0015-withholding-tax-model.md) (DRAFT — fastlane pre-answered in [`briefs/got.md`](briefs/got.md) tonight).
+The "why" behind UPGRADE_PLAN — decoded legacy systems + gap-hunts + pre-launch audits + post-launch reviews. Index: [`research/_index.md`](research/_index.md). High-leverage:
+- [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) — chained gap-hunt synthesis (the 4-problem framing that UPGRADE_PLAN sequences)
+- [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md) — launch-eve decode; corrects the MOMO API surface (DN-1..DN-5)
+- [`research/audit-core-2026-05-18.md`](research/audit-core-2026-05-18.md) — post-launch rigorous core audit (🟢 sound; C-1 P1 → fixed `0072`)
+- [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md) — U1/U2 code review (ownership-split follow-ups)
+- 2026-05-16 audits (chat-analysis · legacy-cleanup · cargo-ops-forensics · php-deep-sweep) — still the canonical legacy decode.
 
 ---
 
-## 10. The flow we want (revenue-ready end state)
+## 10. The cargo loop — DoD (✅ met at launch)
 
-When this checklist hits 100% → Pacred confidently scales Ads:
+The revenue-ready checklist was the launch gate. It is **met** — Pacred is in production and can take cargo customers:
 
-- [x] Customer can sign up (TH OTP works in dev · juristic lookup works) — `OTP_BYPASS=true` in dev; prod awaits ก๊อต DV-3 ThaiBulkSMS keys
-- [x] Customer can top up wallet (slip upload working; PromptPay awaits Pacred owner Bundle 1)
-- [x] Customer can create service-import order (forwarder rate engine · uploads work) — full flow shipped
-- [x] **Customer can pay from wallet self-service** (BOTH service-order + service-import) — closed by `payServiceOrderFromWallet` (evening-4) + `payForwarderFromWallet` (evening-6) — no more admin bottleneck per order
-- [x] Customer receives receipt PDF (Pacred legal + tax-ID + bank info) — receipt page + PDF route shipped evening-3
-- [x] Customer can request tax invoice if juristic (per ADR-0006) — `components/tax-invoice-request-panel.tsx` wired into both receipt pages + admin issuance flow shipped (T-P4 G2a-G2f, only G2e-2 credit-note deferred)
-- [x] Customer can see container/shipment status (CT-3 view) — `/shipments` + `/shipments/[code]` with last-sync freshness pill shipped; MOMO auto-sync still pending ก๊อต MOMO-1 (manual admin entry works as fallback)
-- [x] Admin (วิน/พลอย/ภูม) fulfills order via UI (no manual SQL) — `adminMarkServiceOrderPaid` (T-P1) + `adminAssignDriverToForwarder` (T-P1) + bulk approve (T-P3) all shipped
-- [ ] Conversion events flow GTM → GA4 (K-12 active) — code shipped, awaits ก๊อต K-12 GTM_ID signup
-- [ ] No `OTP_BYPASS` / `LINE_PUSH_BYPASS` / `PROMPTPAY_BYPASS` in prod — awaits ก๊อต DV-1..DV-3 + Pacred owner Bundle 1
-- [ ] At least 5 friendly customers completed full loop end-to-end — T-D4 awaits T-D1 smoke (runbook ready evening-4) + Pacred owner bundle
-- [x] **`/status` health page** — closed chat audit L-1 (เว็ปล่ม 24x in PHP); public route `app/[locale]/(public)/status/page.tsx`
-- [x] **Defensive test coverage growing** — `pnpm test:unit` 14 files (+251 new assertions today: phone 28 + bkk-zip 35 + auth-validators 52 + wallet-validators 36 + cart-validators 54 + profile-validators 46)
+- [x] Customer can sign up (TH OTP — `OTP_BYPASS=false` in prod after ThaiBulkSMS signup) · juristic lookup degrades to manual entry
+- [x] Customer can top up wallet (slip upload + PromptPay `0105564077716`)
+- [x] Customer can create service-import order (forwarder rate engine + uploads)
+- [x] Customer can pay from wallet self-service (service-order + service-import) — no admin bottleneck per order
+- [x] Customer receives receipt PDF (Pacred legal + tax-ID + กสิกร bank info)
+- [x] Customer can request tax invoice if juristic (per ADR-0006)
+- [x] Customer can see container/shipment status — `/shipments` + `/shipments/[code]`; MOMO auto-sync pending (manual admin entry is the working fallback)
+- [x] Admin fulfils order via UI (no manual SQL) — mark-paid + assign-driver + bulk-approve
+- [x] Conversion events flow GTM → GA4 (env IDs set)
+- [x] `/status` public health page (closed chat audit L-1 — PHP web outages)
+- [x] Production smoke gate passed before deploy (`next start` + curl, zero 500s)
 
-📋 Full DoD detail → [`PORT_PLAN.md`](PORT_PLAN.md) Part T5
+**Post-launch DoD evolves into the UPGRADE_PLAN.** The next bar is not "can we launch" but "is the flow *true* + *billable* + *measurable*" — that is exactly what U1 (wire-the-flow) + U2 (revenue/margin) deliver. Full post-launch sequence → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
 
 ---
 
-## 11. Skills + agent behavior (NEW — 2026-05-15 night)
+## 11. Skills + agent behavior
 
 Every Claude Code session has a starter skills kit. Skills = playbooks the agent follows when triggered.
 
@@ -295,6 +278,7 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | Skill | When to invoke | Purpose |
 |---|---|---|
 | **phase-verify-loop** | After finishing any phase / batch of work | Assume → check → verify → analyze → fix in iterations until clean |
+| **qa-flow-simulator** | Before a `dave→main` deploy · after a flow-touching merge · the UPGRADE_PLAN §0 functional gate | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
 | **bug-swarm-loop** | When a bug is intermittent / cross-cutting / hard to repro | Spawn parallel agents to hunt, isolate, fix |
 | **audit-kpi-dashboard** | When you need visibility into "how are we doing?" | Generate KPI dashboards from existing data |
 | **test-coverage-writer** | After a function ships untested | Write unit + integration tests up to repo coverage target |
@@ -302,7 +286,9 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | **performance-hunter** | When a page LCP > 3s or a query > 500ms | Find perf bottlenecks systematically |
 | **scholar-immortal** | After learning something new mid-session | Capture to `docs/learnings/<topic>.md` so future agents inherit it |
 | **copyist-unlimited** | When you need N variants of a template | Clone + adapt template files at scale (e.g., 9 landing shells) |
-| **legacy-php-sweep** | When porting a feature from old PHP system | Sweep `D:\xampp\htdocs\pcscargo` for that feature's source + extract logic + write to Next.js |
+| **legacy-php-sweep** | When porting a feature from old PHP system | Sweep the legacy `pcscargo` source for that feature + extract logic + write to Next.js |
+
+10 skills shipped. A pending **11th** — `branch-integrate-loop` (the daily integrate-verify-distribute cycle) — is specced in [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) "How to extend" for ก๊อต to create.
 
 📋 Skills are project assets — ก๊อต iterates on them via skill-creator's eval loop. See [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 
@@ -332,9 +318,9 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 
 | Question | Open this |
 |---|---|
-| งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` (EMERGENCY section at top) |
+| งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` + `UPGRADE_PLAN.md` (post-launch roadmap) |
 | ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs) |
-| สเปกของ feature Y? | `PORT_PLAN.md` (Parts O–V) — search for an ID like `T-P1` / `V-A6` |
+| สเปกของ feature Y? | `UPGRADE_PLAN.md` (U-items) · `PORT_PLAN.md` Parts O–W — search an ID like `U1-3` / `V-A6` / `W-2` |
 | คาร์โก้/เฟรท: ระบบจริงทำงานยังไง + ปัญหาอะไร? | `audit/cargo-ops-forensics-2026-05-16.md` (decoded model + problem catalog A–F) |
 | Schema ของ table Z? | `architecture/container-centric-model.md` or `decisions/0009-erp-schema-sketch.md` |
 | Env var คืออะไร / set ยังไง? | `env.md` |
@@ -350,25 +336,26 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 ## 15. The handshake (when devs join a new session)
 
 ```bash
-# 1. Sync
+# 1. Sync — น้อง pull dave (NOT main — main lags). เดฟ also resyncs to dave.
 git fetch origin
 git checkout <my-branch>       # podeng / Poom / dave
-git merge origin/main          # น้อง pull main; เดฟ pull dave-staging
+git merge origin/dave          # the live integration branch
 
-# 2. Read the only 2 things you really must
+# 2. Read the few things you really must
 cat docs/briefs/<your-name>.md
-cat docs/STRATEGY.md           # this file — for full context once-per-session
+cat docs/STRATEGY.md           # this file — full context once-per-session
+cat docs/UPGRADE_PLAN.md       # the post-launch roadmap — what's next
 
-# 3. (Optional but recommended) check what changed since you last looked
-git log --oneline -20 origin/main
+# 3. (Recommended) check what changed since you last looked
+git log --oneline -20 origin/dave
 cat docs/learnings/_index.md   # any new gotchas captured by other agents?
 
-# 4. Open your priority-1 task from your brief's EMERGENCY section
+# 4. Open your priority-1 task from your brief + the UPGRADE_PLAN
 # 5. Work. Commit local often. Push at save-point.
 ```
 
-That's the loop. ทุกคนทำซ้ำๆ ทุกวัน. เดฟ integrate 1-2× ต่อวัน. ก๊อต approves async + executes signups + ADRs.
+That's the loop. ทุกคนทำซ้ำๆ ทุกวัน. เดฟ integrate 1-2× ต่อวัน (see the `branch-integrate-loop` skill). ก๊อต approves async + gates `dave→main`.
 
 ---
 
-**End of STRATEGY.md.** Updates: ทุกครั้งที่ Part T DoD ขยับ → update §10. ทุกครั้งที่ adopt skill ใหม่ → update §11. ทุกครั้งที่ block หาย → strike-through ใน §9.
+**End of STRATEGY.md.** Updates: ทุกครั้งที่ launch state / UPGRADE_PLAN ขยับ → update §2 + §9. ทุกครั้งที่ adopt skill ใหม่ → update §11. ทุกครั้งที่ block หาย → strike-through ใน §9.

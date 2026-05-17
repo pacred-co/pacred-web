@@ -13,9 +13,7 @@
  */
 
 import { z } from "zod";
-
-// Thai juristic / personal tax IDs are 13 digits.
-const TAX_ID_RE = /^\d{13}$/;
+import { thaiTaxIdSchema } from "./thai-tax-id";
 
 export const requestTaxInvoiceSchema = z
   .object({
@@ -31,10 +29,9 @@ export const requestTaxInvoiceSchema = z
     /** Buyer snapshot — captured at request time. */
     buyer_name:    z.string().trim().min(1, "กรุณากรอกชื่อ/ชื่อบริษัท").max(300),
     buyer_address: z.string().trim().min(5, "กรุณากรอกที่อยู่").max(1000),
-    buyer_tax_id:  z
-      .string()
-      .trim()
-      .regex(TAX_ID_RE, "เลขประจำตัวผู้เสียภาษี ต้อง 13 หลัก (ตัวเลขเท่านั้น)"),
+    // C-4: was a bare 13-digit regex — now format + mod-11 checksum so a
+    // malformed tax id can't be snapshotted into the immutable RD Code-86 row.
+    buyer_tax_id:  thaiTaxIdSchema,
     buyer_branch: z
       .string()
       .trim()

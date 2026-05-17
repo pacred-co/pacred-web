@@ -1,17 +1,19 @@
 # Pacred CI — runs on every PR + every push to dave/main.
 #
 # Goals (per Part S2 K-10):
-#   - Catch lint / typecheck / unit-test regressions before manual review
-#   - Free for public repos / cheap for private; no Vercel build minutes used
-#   - Matches the local `pnpm` invocations exactly so dev + CI parity is high
+#   - Catch lint / typecheck / unit-test / build regressions before manual
+#     review — the automated form of the AGENTS.md §11 pre-deploy gate, so a
+#     break can't reach `main` just because a dev forgot to run `pnpm verify`.
+#   - Free GitHub Actions minutes; matches the local `pnpm` invocations
+#     exactly so dev + CI parity is high.
 #
 # Out of scope this CI:
 #   - `pnpm test` (the full chain) includes a placement integration test that
 #     reads `.env.local` Supabase URL/key — runs locally only. Use `test:unit`
 #     for the env-independent suite that CI exercises here.
-#   - `pnpm build` — left out for speed; Vercel already does build on push.
-#     Add later if it catches build-only regressions (e.g., metadata typing)
-#     that tsc + lint miss.
+#   - The `next start` runtime smoke (curl every route) — needs prod env;
+#     stays a manual pre-deploy step per AGENTS.md §11. `pnpm build` below
+#     still catches build-time + metadata-typing regressions tsc/lint miss.
 
 name: CI
 
@@ -28,9 +30,9 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint + typecheck + unit tests
+    name: Lint + typecheck + unit tests + build
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -67,3 +69,12 @@ jobs:
         # NOTE: scripted as `audit:all` (not `audit`) because `pnpm audit`
         # is a built-in security advisory command that wins the namespace.
         run: pnpm audit:all
+
+      - name: Build
+        # `next build` — catches build-only regressions that lint + tsc miss
+        # (route-config typing, metadata exports, server/client boundary
+        # errors). Runs without `.env.local`: Supabase keys fall back to
+        # placeholders at build time, and no route is statically rendered
+        # in a way that needs a live DB. This is the closest CI gets to the
+        # AGENTS.md §11 deploy gate without a prod environment.
+        run: pnpm build

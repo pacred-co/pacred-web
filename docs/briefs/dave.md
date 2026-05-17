@@ -1,40 +1,30 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-17 evening (T-1 day before launch — see [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for current state)
-Branch: `dave` (working) → merges into `main` via ก๊อต gate · Authority: second-tier owner
+Last reviewed: 2026-05-18 (post-launch — see latest [`runbook/team-status-*.md`](../runbook/) for current state)
+Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Authority: second-tier owner
 
-## 🎯 Current state — READY for Monday launch (snapshot 2026-05-17)
+## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
 
-🟢 All 5 Sunday blockers closed. 39 commits since Sat night main checkpoint. Build green. 1242/1242 md links resolve. **Read [`team-status-2026-05-17.md`](../runbook/team-status-2026-05-17.md) for full snapshot — incl. all decisions locked + propagation.**
+🟢 Pacred launched. The cargo revenue path works end-to-end. U1/U2/U4 batches are shipped on `dave`. The post-launch roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
-**Mon morning checklist (เดฟ):**
-1. DV-3 ThaiBulkSMS signup + flip `OTP_BYPASS=false` in Vercel (~30m)
-2. T-D1 smoke test prod per AGENTS.md §11 — `next start` + curl every NEW/CHANGED route (~1h)
-3. Standby LINE + workstation 9am for T-D4 soft launch 10am
-4. Post-launch: monitor Sentry + customer surfaces 48h
-5. CSP-1 ship week 2 (≈ Mon 2026-06-01) per [resolved decision](../decisions/csp-nonce-migration-plan.md#6-resolved-decisions-locked-2026-05-16-night-by-กอต--เดฟ--ลูกพี่)
-
-**Post-MOMO-1 call (ลูกพี่ runs call):** parse audio + notes → fill [`integrations/momo-jmf.md`](../integrations/momo-jmf.md) → ping ภูม for CT-5 + CT-6 wire
+**เดฟ now (integrator + post-launch driver):**
+1. **`dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0072` to prod. The push is a 1-command fast-forward, staged + all-green — fires the moment ภูม confirms. See [`runbook/poom-handoff-2026-05-18.md`](../runbook/poom-handoff-2026-05-18.md).
+2. **U1-8 monitoring env** — flip Sentry / GTM / Clarity / hCaptcha / Upstash in Vercel per [`runbook/launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md).
+3. **Integration cycle** — keep merging ภูม/ปอน pushes into `dave`, verify, distribute back (the `branch-integrate-loop` pattern).
+4. **Re-run `qa-flow-simulator`** functional QA once ภูม posts the new dev Supabase ref (blocked until then).
+5. **Monitor** Sentry + `admin_audit_log` + Clarity for first-customer issues; CSP-1 nonce migration week 2 (≈ Mon 2026-06-01).
 
 ---
 
-## 🔥 EMERGENCY (read FIRST — overrides normal priority)
+## 🚀 Post-launch focus (read FIRST)
 
-บริษัทเผาเงิน. พี่ป๊อปเครียดมาก. คุณคือ integrator — ทำให้ภูม + ปอน + ก๊อต ส่งของได้ + path ไป revenue คุย flow ได้.
+The emergency cargo sprint is over — Pacred is in production. คุณคือ integrator: keep ภูม + ปอน + ก๊อต shipping cleanly, drive the post-launch UPGRADE roadmap, watch production.
 
-**เดฟ P0 (do these in this order — Part T2 + deep-sweep blockers):**
-1. 🆕 **B1 OTP UI for prod** — `app/[locale]/(auth)/register/page.tsx` hardcodes `otp: "bypass"` on lines 244 + 415; no `OtpInput` component. With `OTP_BYPASS=false` registration silently fails. Build 2-step register + OtpInput form. **Sunday-night blocker** (~2-3h). Source: [`docs/audit/php-deep-sweep-2026-05-16.md`](../audit/php-deep-sweep-2026-05-16.md) §3 B1
-2. **Migration apply prod Supabase** (0023..0043) — ~30m, pre-req for T-D1
-3. **T-D1 Cargo flow end-to-end smoke test** — signup → topup → service-order → admin paid → receipt issues. Find every gap. Fill or assign to ภูม (~4h test + 2h fix)
-4. **DV-2 LIFF app create** + `NEXT_PUBLIC_LIFF_ID` set in Vercel (~30m)
-5. **DV-3 ThaiBulkSMS signup** + `OTP_BYPASS=false` flip (~30m)
-6. **T-D2 Backend specs for ภูม** — G2 tax invoice schema ✅ + container ✅ done; next freight specs (V-E6/E7/E8/E9) post-Monday
-7. **T-D3 L-22 GTM verify** (after ก๊อต K-12) — events flow into GTM Preview Mode → GA4 → reports ก๊อต sees
-8. **T-D4 Internal soft-launch coordination** — pick 5 friendly customers (พี่ป๊อป's network) for first real transactions (Mon)
+**The lens:** does this make the product more **true** / **billable** / **measurable**? — and never code an UPGRADE_PLAN item before its §0 gate is green.
 
-**Defer:** DV-7/DV-8 backlog polish until revenue path live. Landing pivot Phase 2 only when ก๊อต K-12 lands (otherwise no data). Freight side (V-E6..V-E12) = Phase I2 long-phase post-Monday.
+**Sequenced post-launch work** → [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — §0 gate → U1 wire-the-flow (✅ shipped) → U2 revenue/margin (✅ shipped) → U3 ecosystem tools → U4 supervisory (✅ shipped). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V + Part W.
 
-Read [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part T for the full per-role emergency table + T1 critical path + T5 revenue-ready DoD checklist.
+**Defer:** Phase I (9 new ecosystem services) until revenue is stable. U3 tools are partner-scheduled.
 
 ---
 

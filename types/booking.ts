@@ -38,6 +38,28 @@ export interface CalcResult {
   note: string;
 }
 
+/**
+ * The slice of a calculated booking quote carried from the public
+ * `BookingCalculator` into the protected order flow (G-F-2). Built per-mode
+ * in `BookingCalculator` and passed to `ResultBox` → `QuoteCTA` → the
+ * `/start-order` query string → the order-form pre-fill.
+ */
+export interface QuoteCarry {
+  mode: TabMode;
+  /** Calculated total (THB). 0 when the calc returned no priceable result. */
+  price: number;
+  weightKg?: number;
+  volumeCbm?: number;
+  /** sea modes only — incoterm. */
+  term?: Term;
+  /** FCL only — container size. */
+  size?: FclSize;
+  /** truck only — share-truck vs full-truck. */
+  sub?: TruckSub;
+  /** the service-import transport_type the mode resolves to. */
+  transport?: "ship" | "truck" | "air";
+}
+
 export interface LCLForm {
   origin: string;
   originLabel: string;

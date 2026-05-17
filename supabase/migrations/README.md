@@ -75,7 +75,17 @@
 | 60 | [0062_rls_role_pin_money_pii.sql](0062_rls_role_pin_money_pii.sql) | role-pin every money/PII/order/pricing `*_admin_all` RLS policy to explicit role arrays + wallet_transactions DB-level audit trigger — W-1 / gap-schema-security S-1 keystone (closes the driver/warehouse direct-PostgREST money-write hole) | **launch fix** |
 | 61 | [0063_wallet_freight_invoice_reference.sql](0063_wallet_freight_invoice_reference.sql) | wallet_transactions reference_type+='freight_invoice' + partial-unique guard on the freight-payment wallet slice — W-3 / gap-schema-security G-3 (freight wallet-pay now writes a real wallet debit instead of a free shipment) | **launch fix** |
 | 62 | [0064_wallet_overdraw_guard.sql](0064_wallet_overdraw_guard.sql) | wallet_available_balance() fn + wallet_assert_no_overdraw() BEFORE-trigger — hard non-negative floor on customer pending main-bucket debits with FOR UPDATE row-lock — gap-customer H-1 / S-5 aggregate-pending overdraw | **launch fix** |
-| 74 | [0074_yuan_refund_slip.sql](0074_yuan_refund_slip.sql) | yuan_payments += refund_slip_path + refunded_at + refunded_by_admin_id (G-5) — proof-of-refund columns; new adminMarkYuanPaymentRefunded action requires the slip | **Phase C QoL #4** |
+| 63 | [0073_delivery_acknowledgement.sql](0073_delivery_acknowledgement.sql) | forwarders + service_orders += acknowledged_at / acknowledged_note — U4-3a customer self-confirm "ของถึงครบ" after delivery | **Phase B QoL #1** |
+| 64 | [0074_yuan_refund_slip.sql](0074_yuan_refund_slip.sql) | yuan_payments += refund_slip_path + refunded_at + refunded_by_admin_id (G-5) — proof-of-refund columns; new adminMarkYuanPaymentRefunded action requires the slip | **Phase C QoL #4** |
+| 65 | [0075_admin_impersonation.sql](0075_admin_impersonation.sql) | impersonation_sessions — audited view-as-customer tool; super/ops only; HARD write-block during impersonation; 30min auto-expire | **super-tools** |
+| 66 | [0076_business_config.sql](0076_business_config.sql) | business_config (key, value jsonb, value_type, category) — single SoT for editable magic constants (OTP TTL, MIN_DEPOSIT, CASHBACK_PCT, BANK_ACCOUNTS, feature flags) + seed for ~10 known keys | **super-tools** |
+| 67 | [0080_work_items.sql](0080_work_items.sql) | work_items — cross-department work-board / job-assignment spine (polymorphic entity link + assignment + lifecycle) + ensure_work_item() find-or-create helper. Powers `/admin/board` + per-role inbox. Additive overlay — domain tables unchanged. operating-system-analysis §1.4 Tier-2 centrepiece | **Tier 2** |
+
+> 🔢 **Numbering note — `0080` is a เดฟ-reserved block.** It deliberately skips
+> the `0077`-`0079` range. ภูม's active sequence used `0073`-`0076` for the
+> Phase B + C + super-tools batch (2026-05-18). Tier-2 + later เดฟ-side
+> migrations continue from `0080`. All idempotent + additive — apply in
+> ascending order, zero data migration.
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in

@@ -9,9 +9,11 @@
  */
 
 import { createHash, randomInt } from "crypto";
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSms } from "@/lib/sms/gateway";
 import { normalizePhone } from "@/lib/utils/phone";
+import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
@@ -59,7 +61,15 @@ export async function requestOtp(
   const phone = normalizePhone(phoneRaw);
   const admin = createAdminClient();
 
-  // Rate limit
+  // C-5 — IP rate-limit the OTP SEND. The per-phone cap below stops one
+  // number being spammed; it does NOT stop a script cycling distinct phone
+  // numbers from one IP to drain the paid ThaiBulkSMS balance. This IP
+  // ceiling closes that abuse path (each send = one real SMS).
+  const ip = getClientIpFromHeaders(await headers());
+  const ipBlocked = await checkRateLimit("otpRequest", ip);
+  if (ipBlocked) return { ok: false, error: "rate_limit" };
+
+  // Per-phone rate limit — 3/hour/phone counted from the otp_codes table.
   const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString();
   const { count } = await admin
     .from("otp_codes")
