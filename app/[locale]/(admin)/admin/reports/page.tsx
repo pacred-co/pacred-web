@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
@@ -105,6 +106,13 @@ export default async function AdminReportsPage({
 }: {
   searchParams: Promise<SP>;
 }) {
+  // W-1 (gap-admin H-1): page-level role gate. This report hub exposes
+  // bank names / account numbers / customer phone / all revenue via
+  // createAdminClient (RLS-bypass) — every child report page already
+  // gates on these roles; this index page was the missed one. Office
+  // roles only; super implicit.
+  await requireAdmin(["ops", "accounting", "sales_admin"]);
+
   const sp       = await searchParams;
   const tab      = sp.tab ?? "forwarder";
   const dateFrom = sp.date_from;

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
 
@@ -10,6 +11,13 @@ type TabKey =
   | "payment" | "inactiveCustomers";
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
+  // proves "some admin" — driver/warehouse roles legitimately reach
+  // floor-ops pages, but this dashboard exposes company-wide revenue +
+  // total wallet balance + pending payouts via createAdminClient
+  // (RLS-bypass). Office roles only; super implicit.
+  await requireAdmin(["ops", "accounting", "sales_admin"]);
+
   const sp = await searchParams;
   const admin = createAdminClient();
 
