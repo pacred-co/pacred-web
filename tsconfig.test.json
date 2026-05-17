@@ -1,0 +1,11 @@
+{
+  "//": "Test-only tsconfig — used by `pnpm tsx --tsconfig tsconfig.test.json` for unit tests that import a module which itself does `import \"server-only\"`. It extends the project tsconfig and only adds a `paths` mapping that resolves the build-time `server-only` marker (not an installed npm package) to an empty local stub, so `tsx` can load the real module graph. The Next.js build still uses the plain tsconfig.json — this file is never referenced by `next build`.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./lib/forwarder/billing-gate.test.server-only-shim.ts"],
+      "client-only": ["./lib/forwarder/billing-gate.test.server-only-shim.ts"]
+    }
+  }
+}
