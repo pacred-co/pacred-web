@@ -1,10 +1,17 @@
-import type { CalcResult } from "@/types/booking";
+import type { CalcResult, QuoteCarry } from "@/types/booking";
+import { QuoteCTA } from "./QuoteCTA";
 
 interface ResultBoxProps {
   result: CalcResult;
+  /**
+   * G-F-2 — when present, renders the "เปิดออเดอร์ราคานี้" CTA bridging this
+   * priced quote into the protected order flow. Omitted for modes with no
+   * self-serve order flow, leaving the existing phone/LINE escalation only.
+   */
+  quote?: QuoteCarry;
 }
 
-export function ResultBox({ result }: ResultBoxProps) {
+export function ResultBox({ result, quote }: ResultBoxProps) {
   const hasAmount = result.amount > 0;
 
   return (
@@ -42,6 +49,11 @@ export function ResultBox({ result }: ResultBoxProps) {
           )}
         </div>
       )}
+
+      {/* G-F-2 — bridge the priced quote into the buy flow. Only when there
+          is a real number to act on (a 0-amount "special product, contact
+          us" result keeps the phone/LINE path as the only escalation). */}
+      {hasAmount && quote && <QuoteCTA quote={quote} />}
     </div>
   );
 }

@@ -296,7 +296,17 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
                   </div>
                 </div>
               </div>
-              {lclResult && <ResultBox result={lclResult} />}
+              {lclResult && (
+                <ResultBox
+                  result={lclResult}
+                  quote={{
+                    mode: "sea", transport: "ship", term: lclTerm,
+                    price: lclResult.amount,
+                    weightKg: Number(lclForm.weight) || undefined,
+                    volumeCbm: Number(lclForm.cbm) || undefined,
+                  }}
+                />
+              )}
               <PanelFooter hint={tLcl("hint")} calcLabel={tLcl("calcLabel")}
                 tel={tel} callPrefix={callPrefix} contactLabel={contactLabel}
                 onCalc={doCalcLCL} onModal={() => setModalOpen(true)} />
@@ -331,7 +341,17 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
                   <input type="date" className={ctrl()} value={fclForm.date} onChange={e => setFclForm(f => ({ ...f, date: e.target.value }))} />
                 </div>
               </div>
-              {fclResult && <ResultBox result={fclResult} />}
+              {fclResult && (
+                <ResultBox
+                  result={fclResult}
+                  quote={{
+                    mode: "sea", transport: "ship", term: fclTerm, size: fclSize,
+                    price: fclResult.amount,
+                    weightKg: Number(fclForm.weight) || undefined,
+                    volumeCbm: Number(fclForm.cbm) || undefined,
+                  }}
+                />
+              )}
               <PanelFooter hint={tFcl("hint")} calcLabel={tFcl("calcLabel")}
                 tel={tel} callPrefix={callPrefix} contactLabel={contactLabel}
                 onCalc={doCalcFCL} onModal={() => setModalOpen(true)} />
@@ -363,7 +383,17 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
                   <input type="date" className={ctrl()} value={truckForm.date} onChange={e => setTruckForm(f => ({ ...f, date: e.target.value }))} />
                 </div>
               </div>
-              {truckResult && <ResultBox result={truckResult} />}
+              {truckResult && (
+                <ResultBox
+                  result={truckResult}
+                  quote={{
+                    mode: "truck", transport: "truck", sub: truckSub,
+                    price: truckResult.amount,
+                    weightKg: Number(truckForm.weight) || undefined,
+                    volumeCbm: Number(truckForm.cbm) || undefined,
+                  }}
+                />
+              )}
               <PanelFooter hint={tTruck("hint")} calcLabel={tTruck("calcLabel")}
                 tel={tel} callPrefix={callPrefix} contactLabel={contactLabel}
                 onCalc={doCalcTruck} onModal={() => setModalOpen(true)} />
@@ -399,7 +429,16 @@ export function BookingCalculator({ landing }: { landing?: TabMode } = {}) {
                   </div>
                 </div>
               </div>
-              {airResult && <ResultBox result={airResult} />}
+              {airResult && (
+                <ResultBox
+                  result={airResult}
+                  quote={{
+                    mode: "air", transport: "air",
+                    price: airResult.amount,
+                    weightKg: Number(airForm.weight) || undefined,
+                  }}
+                />
+              )}
               <PanelFooter hint={tAir("hint")} calcLabel={tAir("calcLabel")}
                 tel={tel} callPrefix={callPrefix} contactLabel={contactLabel}
                 onCalc={doCalcAir} onModal={() => setModalOpen(true)} />

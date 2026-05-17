@@ -24,8 +24,20 @@ type DefaultAddress = {
   note: string | null;
 };
 
+/**
+ * G-F-2 — a booking-calculator quote handed off via `/start-order`. Pre-fills
+ * the freight classification + weight so a visitor who priced a shipment on
+ * the public calculator lands here with their numbers already entered.
+ */
+export type QuotePrefill = {
+  transport_type?: "ship" | "truck" | "air";
+  weight_kg?: number;
+  volume_cbm?: number;
+};
+
 type Props = {
   defaultAddress: DefaultAddress | null;
+  quotePrefill?: QuotePrefill | null;
 };
 
 type Form = {
@@ -62,15 +74,19 @@ type Form = {
   note_user: string;
 };
 
-export function ForwarderForm({ defaultAddress }: Props) {
+export function ForwarderForm({ defaultAddress, quotePrefill }: Props) {
   const t = useTranslations("forwarder");
   const router = useRouter();
 
+  // G-F-2 — when a booking-calculator quote was handed off, seed the
+  // classification + weight from it. Box dimensions aren't part of the
+  // public calculator, so the customer still completes those here; the
+  // price preview activates as soon as weight or dimensions are present.
   const initial: Form = {
     source_warehouse: "guangzhou",
-    transport_type:   "truck",
+    transport_type:   quotePrefill?.transport_type ?? "truck",
     product_type:     "general",
-    rate_basis:       "auto",
+    rate_basis:       quotePrefill?.weight_kg ? "kg" : "auto",
     ship_by:          "",
     pay_method:       "origin",
     ship_first_name:    defaultAddress?.first_name ?? "",
@@ -84,7 +100,7 @@ export function ForwarderForm({ defaultAddress }: Props) {
     ship_postal_code:   defaultAddress?.postal_code ?? "",
     ship_note:          defaultAddress?.note ?? "",
     box_count: "1",
-    weight_kg: "",
+    weight_kg: quotePrefill?.weight_kg ? String(quotePrefill.weight_kg) : "",
     width_cm: "", length_cm: "", height_cm: "",
     crate: false,
     qc:    false,

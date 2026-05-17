@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect, Fragment } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
@@ -41,6 +42,17 @@ const ERR: Record<string, string> = {
   invalid_mime: "รับเฉพาะ PDF / JPG / PNG",
   not_signed_in: "เซสชันหมดอายุ กรุณา login ใหม่",
 };
+
+/**
+ * Open-redirect guard for the `?next=` post-signup destination — used when a
+ * guest is routed here from the booking calculator's "เปิดออเดอร์ราคานี้"
+ * CTA. Only an internal absolute path is honoured.
+ */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
 
 const SERVICES: { id: ServiceId; label: string; sub?: string; emoji: string }[] = [
   { id: "import",  label: "นำเข้าสินค้า",       sub: "รถ/เรือ/แอร์", emoji: "📦" },
@@ -215,6 +227,7 @@ export default function RegisterPage() {
 /* ─────────────────────────── PERSONAL FORM ─────────────────────────── */
 function PersonalForm() {
   const router = useRouter();
+  const nextUrl = safeNext(useSearchParams().get("next"));
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName]   = useState("");
   const [phone, setPhone]         = useState("");
@@ -256,7 +269,11 @@ function PersonalForm() {
     });
     if (res.ok) {
       trackSignUp("personal");
-      router.replace("/");
+      // Return to a pending `?next=` (booking-calculator CTA) if present.
+      // The protected layout still re-routes to /complete-profile when the
+      // new profile needs it — so an order quote only survives for a
+      // ready-to-order account, which is the intended behaviour.
+      router.replace(nextUrl ?? "/");
       router.refresh();
     } else {
       setError(ERR[res.error] ?? res.error);
@@ -389,6 +406,7 @@ function PersonalForm() {
 /* ─────────────────────────── JURISTIC FORM ─────────────────────────── */
 function JuristicForm() {
   const router = useRouter();
+  const nextUrl = safeNext(useSearchParams().get("next"));
   const [step, setStep] = useState<JuristicStep>(1);
 
   /* step 1 */
@@ -592,7 +610,8 @@ function JuristicForm() {
       const done = await completeJuristicRegistration();
       if (done.ok) {
         trackSignUp("juristic");
-        router.replace("/");
+        // Return to a pending `?next=` (booking-calculator CTA) if present.
+        router.replace(nextUrl ?? "/");
         router.refresh();
       } else setError(ERR[done.error] ?? done.error);
     });
