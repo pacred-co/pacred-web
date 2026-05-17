@@ -20,6 +20,13 @@ import {
   type ShipmentDetailData, type PartyData, type InvoiceData, type LineItemData,
   type PaymentPanelData, type PaymentLedgerRow,
 } from "./shipment-detail-client";
+import { DeclarationCreateButton } from "./declaration-create-button";
+import {
+  CUSTOMS_DECLARATION_STATUS_LABEL,
+  CUSTOMS_DECLARATION_TYPE_LABEL,
+  type CustomsDeclarationStatus,
+  type CustomsDeclarationType,
+} from "@/lib/validators/customs-declaration";
 
 /**
  * V-E1 — /admin/freight/shipments/[id]
@@ -42,6 +49,14 @@ const STATUS_BADGE: Record<FreightShipmentStatus, string> = {
 const INV_STATUS_BADGE: Record<FreightInvoiceStatus, string> = {
   draft:     "bg-gray-50 text-gray-600 border-gray-200",
   issued:    "bg-green-50 text-green-700 border-green-200",
+  cancelled: "bg-red-50 text-red-700 border-red-200",
+};
+
+const CD_STATUS_BADGE: Record<CustomsDeclarationStatus, string> = {
+  draft:     "bg-gray-50 text-gray-600 border-gray-200",
+  submitted: "bg-blue-50 text-blue-700 border-blue-200",
+  accepted:  "bg-amber-50 text-amber-700 border-amber-200",
+  released:  "bg-green-50 text-green-700 border-green-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
 };
 
@@ -235,6 +250,32 @@ export default async function AdminFreightShipmentDetailPage({
     invoicesAll.find((i) => i.id === activeInvoice?.id)?.commercial_value_thb ?? 0,
   );
 
+  // V-E11 — customs declarations for this shipment (all rows, list newest
+  // first; non-cancelled active row controls the "create" CTA visibility).
+  type CdRow = {
+    id:                       string;
+    declaration_no:           string | null;
+    status:                   CustomsDeclarationStatus;
+    declaration_type:         CustomsDeclarationType;
+    customs_office:           string | null;
+    customs_control_no:       string | null;
+    total_declared_value_thb: number | null;
+    total_duty_thb:           number | null;
+    total_vat_thb:            number | null;
+    submitted_at:             string | null;
+    created_at:               string;
+  };
+  const { data: cdRowsRaw } = await admin
+    .from("customs_declarations")
+    .select(`
+      id, declaration_no, status, declaration_type, customs_office, customs_control_no,
+      total_declared_value_thb, total_duty_thb, total_vat_thb, submitted_at, created_at
+    `)
+    .eq("freight_shipment_id", id)
+    .order("created_at", { ascending: false });
+  const cdRows = (cdRowsRaw ?? []) as CdRow[];
+  const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
+
   // Audit.
   const { data: auditRaw } = await admin
     .from("admin_audit_log")
@@ -369,6 +410,47 @@ export default async function AdminFreightShipmentDetailPage({
         whtEntry={whtEntry}
         whtSuggestedGross={whtSuggestedGross}
       />
+
+      {/* V-E11 — Customs declaration (ใบขนสินค้า) panel */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-bold text-sm">📋 ใบขนสินค้า (V-E11)</h2>
+          {!activeCd && header.status !== "cancelled" && (
+            <DeclarationCreateButton
+              shipmentId={header.id}
+              allowedToCreate={isSuperOrAccounting}
+            />
+          )}
+        </div>
+        {cdRows.length === 0 ? (
+          <p className="text-xs text-muted">
+            ยังไม่มีใบขนสินค้าสำหรับงานนี้{!isSuperOrAccounting && " — ต้องเป็น super หรือ accounting จึงจะสร้างได้"}
+          </p>
+        ) : (
+          <ul className="space-y-1.5 text-xs">
+            {cdRows.map((cd) => (
+              <li key={cd.id} className="flex items-baseline gap-2 flex-wrap">
+                <Link href={`/admin/freight/declarations/${cd.id}`} className="font-mono text-primary-600 hover:underline">
+                  {cd.declaration_no ?? "(ร่าง)"}
+                </Link>
+                <span className="text-muted">·</span>
+                <span>{CUSTOMS_DECLARATION_TYPE_LABEL[cd.declaration_type]}</span>
+                <span className={`inline-block rounded-full border px-1.5 py-0.5 text-[10px] ${CD_STATUS_BADGE[cd.status]}`}>
+                  {CUSTOMS_DECLARATION_STATUS_LABEL[cd.status]}
+                </span>
+                {cd.customs_control_no && (
+                  <span className="font-mono text-[10px] text-muted">ศุลฯ #{cd.customs_control_no}</span>
+                )}
+                <span className="text-[10px] text-muted">
+                  {cd.submitted_at
+                    ? `ยื่น ${new Date(cd.submitted_at).toLocaleDateString("th-TH")}`
+                    : `สร้าง ${new Date(cd.created_at).toLocaleDateString("th-TH")}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Audit timeline */}
       {audit.length > 0 && (
