@@ -450,6 +450,63 @@ export async function adminMarkQuoteAccepted(
     if (!res.ok) return res;
 
     await logAdminAction(adminId, "freight_quote.mark_accepted", "freight_quote", input.id, {});
+
+    // U1-4 auto-chain: auto-convert into a freight_shipments row if the quote
+    // has a profile_id and hasn't been converted yet. Best-effort — parent
+    // flip already committed; failure here (e.g. cold quote without profile_id,
+    // or transient DB error) must not block accept. Race-safe: re-reads
+    // converted_to_shipment_id, and the UNIQUE index on source_quote_id
+    // (migration 0050) means concurrent converts collapse to one shipment.
+    try {
+      const { data: quoteRow } = await admin
+        .from("freight_quotes")
+        .select("profile_id, converted_to_shipment_id")
+        .eq("id", input.id)
+        .maybeSingle<{ profile_id: string | null; converted_to_shipment_id: string | null }>();
+
+      if (quoteRow && !quoteRow.converted_to_shipment_id && quoteRow.profile_id) {
+        const convertRes = await adminConvertQuoteToShipment({ id: input.id });
+        if (convertRes.ok) {
+          await logAdminAction(
+            adminId,
+            "freight_quote.auto_convert_on_accept",
+            "freight_quote",
+            input.id,
+            { result: "converted", freight_shipment_id: convertRes.data?.freight_shipment_id ?? null },
+          );
+        } else {
+          await logAdminAction(
+            adminId,
+            "freight_quote.auto_convert_on_accept",
+            "freight_quote",
+            input.id,
+            { result: "failed", error: convertRes.error },
+          );
+        }
+      } else {
+        // Cold quote (no profile_id) or already converted — admin can still
+        // convert manually later (after attaching a profile) via the convert button.
+        await logAdminAction(
+          adminId,
+          "freight_quote.auto_convert_on_accept",
+          "freight_quote",
+          input.id,
+          {
+            result: quoteRow?.converted_to_shipment_id ? "skipped_already_converted" : "skipped_no_profile",
+            freight_shipment_id: quoteRow?.converted_to_shipment_id ?? null,
+          },
+        );
+      }
+    } catch (e) {
+      await logAdminAction(
+        adminId,
+        "freight_quote.auto_convert_on_accept",
+        "freight_quote",
+        input.id,
+        { result: "exception", error: e instanceof Error ? e.message : String(e) },
+      );
+    }
+
     revalidateOne(input.id);
     return { ok: true };
   });
