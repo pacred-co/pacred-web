@@ -4,9 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 
-// Slide order (per ปอน 2026-05-18): ภาพทีมงาน Pacred (office) is the hero
-// (left big), DBD นิติบุคคล + สมาคมตัวแทนออกของ fill the right column.
-// Collage layout (1 big + 2 small) replaces the prior single-active carousel.
+// Slide order (per ปอน 2026-05-18, refined later same day):
+//   1 (big left)  — ภาพทีมงาน Pacred ที่ออฟฟิศ
+//   2 (middle)    — หนังสือรับรองสมาคมตัวแทนออกของฯ
+//   3 (right)     — หนังสือรับรองนิติบุคคล DBD
+// All 3 cells share full collage height (3-col grid, single row) so the
+// certs read as tall portrait thumbnails matching the team photo height.
 // Each cell opens a full-screen lightbox on click.
 const SLIDES = [
   {
@@ -17,17 +20,17 @@ const SLIDES = [
     fit: "cover" as const,
   },
   {
-    src: "/images/aboutus/rubrong.png",
-    alt: "หนังสือรับรองนิติบุคคล กรมพัฒนาธุรกิจการค้า — Pacred Shipping",
-    caption: "หนังสือรับรองนิติบุคคล",
-    sub: "DBD · ขึ้นทะเบียนถูกต้อง",
-    fit: "contain" as const,
-  },
-  {
     src: "/images/aboutus/samakom.png",
     alt: "หนังสือรับรองสมาคมตัวแทนออกของรับอนุญาตไทย — Pacred Shipping",
     caption: "สมาคมตัวแทนออกของฯ",
     sub: "Shipping License ถูกกฎหมาย",
+    fit: "contain" as const,
+  },
+  {
+    src: "/images/aboutus/rubrong.png",
+    alt: "หนังสือรับรองนิติบุคคล กรมพัฒนาธุรกิจการค้า — Pacred Shipping",
+    caption: "หนังสือรับรองนิติบุคคล",
+    sub: "DBD · ขึ้นทะเบียนถูกต้อง",
     fit: "contain" as const,
   },
 ];
@@ -52,10 +55,10 @@ function Cell({ i, big, onOpen }: CellProps) {
         src={s.src}
         alt={s.alt}
         fill
-        sizes={big ? "(max-width: 1024px) 65vw, 320px" : "(max-width: 1024px) 33vw, 160px"}
+        sizes={big ? "(max-width: 1024px) 50vw, 480px" : "(max-width: 1024px) 25vw, 240px"}
         quality={92}
         className={`transition-transform duration-500 group-hover:scale-[1.04] ${
-          s.fit === "contain" ? "object-contain p-2 md:p-3" : "object-cover"
+          s.fit === "contain" ? "object-contain p-1" : "object-cover"
         }`}
         priority={i === 0}
       />
@@ -125,16 +128,10 @@ export function CertsSlideshow() {
 
   return (
     <>
-      <div className="grid grid-cols-[2fr_1fr] grid-rows-2 gap-1.5 md:gap-2.5 aspect-[5/6] md:aspect-[16/10] w-full max-w-[340px] md:max-w-[860px] mx-auto">
-        <div className="row-span-2 min-h-0">
-          <Cell i={0} big onOpen={open} />
-        </div>
-        <div className="min-h-0">
-          <Cell i={1} onOpen={open} />
-        </div>
-        <div className="min-h-0">
-          <Cell i={2} onOpen={open} />
-        </div>
+      <div className="grid grid-cols-[2fr_1fr_1fr] gap-1.5 md:gap-2.5 aspect-[4/3] md:aspect-[5/2] w-full max-w-[360px] md:max-w-[1000px] mx-auto">
+        <Cell i={0} big onOpen={open} />
+        <Cell i={1} onOpen={open} />
+        <Cell i={2} onOpen={open} />
       </div>
 
       {active && (
