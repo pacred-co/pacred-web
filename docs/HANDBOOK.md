@@ -108,6 +108,7 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 | [`conventions.md`](conventions.md) | Code style + commit format + i18n + DB rules | ทุกคน |
 | [`env.md`](env.md) | Every env var explained + production checklist (17 sections covering Supabase / OTP / SMS / China search / PromptPay / LINE+LIFF / Sentry / Upstash / hCaptcha / **MOMO JMF**) | เดฟ + ภูม + ก๊อต |
 | [`pacred-info.md`](pacred-info.md) | Company info SOT — addresses, phones, emails, LINE OA, sales reps | ทุกคน — when touching contact UI |
+| [`glossary.md`](glossary.md) | WHT / 50-ทวิ / Form-E / D/O / CBM / ใบกำกับภาษี / ใบขนสินค้า / GZE-GZS / CBX-EK + code formats + role workspaces + forbidden legacy patterns | ทุกคน — when a term ใหม่ |
 | [`HANDBOOK.md`](HANDBOOK.md) | ไฟล์นี้ — entry/index |
 
 ### 📋 Work tracking (living docs — เดฟ updates)

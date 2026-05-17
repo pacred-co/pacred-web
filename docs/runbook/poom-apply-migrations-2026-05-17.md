@@ -14,13 +14,14 @@ on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
 > 🟢 **Status (2026-05-18 early morning, updated):** 0044-0066 + 0068 applied by ภูม.
-> **4 new migrations queued for application:**
+> **5 new migrations queued for application — apply in number order:**
 > - `0067_pcs_customer_migration.sql` (U2-1) — **hotfixed** in commit `80533ab` (was: `relation max_staging_num does not exist` — dollar-quote conflict with `$` regex anchor). Pull latest + re-run.
 > - `0069_container_costs_disbursements.sql` (U2-2 cost basis + AP ledger)
 > - `0070_supervisory_layer.sql` (U4-1 cron-health + notification delivery log)
 > - `0071_customer_credit_line.sql` (U4-2 customer credit line)
+> - **`0072_wallet_self_serve_amount_sign_guard.sql` (C-1 launch-week P1)** — wallet RLS amount-sign exploit fix; close the +50000 sign-flip hole per `docs/research/audit-core-2026-05-18.md` §3
 >
-> Apply 0067 → 0069 → 0070 → 0071 in that order. All idempotent + zero data migration.
+> Apply 0067 → 0069 → 0070 → 0071 → 0072 in that order. All idempotent + zero data migration.
 
 | # | File | Adds | Feature | Review |
 |---|---|---|---|---|
