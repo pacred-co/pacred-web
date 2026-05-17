@@ -46,7 +46,20 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  return buildPageMetadata({ locale, path: PATH, namespace: NS });
+  const base = await buildPageMetadata({ locale, path: PATH, namespace: NS });
+  // Per ปอน 2026-05-18 — page title must read exactly
+  // "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping"
+  // (overrides the root `%s | Pacred` template). Keep the i18n
+  // `seo.services.customsClearance.title` string as-is for JSON-LD
+  // `name` + OG/Twitter title — only the <title> tag is forced.
+  const absoluteTitle =
+    locale === "en"
+      ? "Shipping & Customs Clearance | Pacred Shipping"
+      : "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping";
+  return {
+    ...base,
+    title: { absolute: absoluteTitle },
+  };
 }
 
 // ────────────────────────── Content arrays ──────────────────────────
@@ -77,6 +90,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "เคลียร์ของด่วน 1 ชั่วโมง",
       "เร่งด่วน",
       "เปิดตรวจสินค้า",
+      "เคลียร์ของ Air Cargo",
+      "เคลียร์ของ Air Freight",
+      "Cargo Terminal สุวรรณภูมิ",
+      "BFS สุวรรณภูมิ",
+      "Trade Lane Air Import",
+      "Customs Air Cargo Bangkok",
+      "เคลียร์ของส่งทางอากาศ",
+      "เคลียร์ของจาก DHL สุวรรณภูมิ",
+      "เคลียร์ของจาก FedEx สุวรรณภูมิ",
+      "เคลียร์ของจาก UPS สุวรรณภูมิ",
+      "เคลียร์ของจาก TNT สุวรรณภูมิ",
     ],
   },
   {
@@ -91,6 +115,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "LCL · FCL",
       "Sea Freight Import",
       "โลจิสติกส์คลังสินค้า",
+      "เคลียร์ของท่าเรือคลองเตย",
+      "เคลียร์ของท่าเรือแหลมฉบัง",
+      "เคลียร์ของท่าเรือกรุงเทพ",
+      "ICD ลาดกระบัง",
+      "Cross-dock Port คลองเตย",
+      "Customs Bangkok Port",
+      "Bangkok Container Yard",
+      "ตู้คอนเทนเนอร์ติดด่าน",
+      "Container ติดศุลกากร",
+      "Demurrage / Detention",
+      "ค่าฝากตู้คอนเทนเนอร์",
     ],
   },
   {
@@ -100,6 +135,16 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "เคลียร์พัสดุติดค้าง",
       "นำเข้าทางไปรษณีย์",
       "พัสดุต่างประเทศติดศุลกากร",
+      "ไปรษณีย์หลักสี่ติดด่าน",
+      "Thailand Post Customs",
+      "เคลียร์พัสดุ EMS ต่างประเทศ",
+      "เคลียร์พัสดุ DHL eCommerce",
+      "เคลียร์พัสดุ Amazon",
+      "เคลียร์ของจาก eBay",
+      "เคลียร์ของจาก AliExpress",
+      "ภาษีพัสดุติดด่าน",
+      "พัสดุติด อย.",
+      "พัสดุติด มอก.",
     ],
   },
   {
@@ -110,6 +155,17 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "ขนส่งข้ามแดน",
       "Truck Transport",
       "เคลียร์ของทั่วประเทศ",
+      "ด่านนครพนม",
+      "ด่านอรัญประเทศ",
+      "ด่านแม่สาย",
+      "ด่านสะเดา",
+      "ด่านปาดังเบซาร์",
+      "ด่านหนองคาย",
+      "ขนส่งจีน-ไทย",
+      "ขนส่งลาว-ไทย",
+      "Cross-border Trucking",
+      "DDP จีน-ไทย",
+      "นำเข้าผ่านด่านชายแดน",
     ],
   },
   {
@@ -122,19 +178,53 @@ const TAG_GROUPS: { title: string; items: string[] }[] = [
       "หน่วยงานราชการ",
       "เคลียร์ของนำเข้า",
       "เคลียร์ของด่วน",
+      "พิกัดอัตราศุลกากร",
+      "HS Code ผิด",
+      "ภาษีเกินจริง",
+      "ตีราคาสินค้าสูง",
+      "เอกสารไม่ครบ",
+      "ใบขนสินค้าผิด",
+      "ติด อย.",
+      "ติด มอก.",
+      "ติด สมอ.",
+      "ติด กสทช.",
+      "ติดกรมเกษตร",
+      "ติดกรมประมง",
+      "ติดกรมปศุสัตว์",
+      "อายัดของ",
+      "ของรอเปิดตรวจ",
     ],
   },
   {
-    title: "ขั้นตอน / Door-to-Door",
+    title: "คำถามที่พบบ่อย",
     items: [
-      "ตรวจเอกสารนำเข้า",
-      "เตรียมเอกสารศุลกากร",
-      "ขั้นตอนนำเข้า",
-      "ปลดสินค้า",
-      "เคลียร์จบใน 1 ชั่วโมง",
-      "รับของภายใน 1 วัน",
-      "ขนส่งต่อเนื่อง",
-      "Door to Door Delivery",
+      "เคลียร์ของใช้เวลากี่วัน",
+      "เคลียร์ของเร็วสุดกี่ชั่วโมง",
+      "ค่าบริการเคลียร์ของกี่บาท",
+      "เคลียร์ของเสียค่าใช้จ่ายอะไรบ้าง",
+      "ภาษีนำเข้าคำนวณยังไง",
+      "Form E ลดภาษีได้กี่บาท",
+      "ของติดด่านทำยังไง",
+      "DHL ติดด่านต้องทำยังไง",
+      "FedEx ติดด่านทำยังไง",
+      "นำเข้าจากจีนต้องใช้เอกสารอะไร",
+      "นำเข้าจากญี่ปุ่นต้องทำยังไง",
+      "นำเข้าจากเกาหลีติด มอก.",
+      "บริษัทรับเคลียร์ของที่ไหนดี",
+      "ตัวแทนออกของคืออะไร",
+      "Shipping License คืออะไร",
+      "ใครเคลียร์ของให้ได้บ้าง",
+      "เคลียร์ของผ่านศุลกากรราคาเท่าไหร่",
+      "นำเข้าครั้งแรกต้องรู้อะไรบ้าง",
+      "นำเข้าสินค้าต้องลงทะเบียนที่ไหน",
+      "ค่า YY กรมศุลกากรกี่บาท",
+      "Form E ASEAN-China คืออะไร",
+      "Form D AFTA ใช้ยังไง",
+      "ใบขนสินค้าขาเข้าต้องยื่นที่ไหน",
+      "Bill of Lading คืออะไร",
+      "Air Waybill ต่างจาก B/L ยังไง",
+      "Invoice + Packing List กรอกยังไง",
+      "Door to Door Delivery มีบริการอะไรบ้าง",
     ],
   },
 ];
@@ -247,14 +337,15 @@ export default async function CustomsClearancePage({
                     aria-hidden
                     className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
                   />
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน
-                    {/* Transport icons — desktop inline only; mobile hides
-                        them so the title wraps cleanly at 2 lines max */}
-                    <span className="hidden md:inline-flex items-center gap-0.5">
-                      <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/iconwhite/box.png"   alt="" width={24} height={24} aria-hidden className="w-5 h-5 md:w-6 md:h-6 object-contain" />
+                  <span className="inline">
+                    บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน{" "}
+                    {/* Transport icons — inline so they flow with the title
+                        text. On mobile they slide onto the end of the wrap
+                        line; on desktop they sit right after "ทุกด่าน". */}
+                    <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+                      <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/box.png"   alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
                     </span>
                   </span>
                 </h3>
