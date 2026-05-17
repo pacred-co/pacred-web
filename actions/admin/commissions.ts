@@ -244,18 +244,12 @@ export async function adminRejectWithdrawal(
 
     const rejectedAt = new Date().toISOString();
 
-    // Release accruals + delete join rows BEFORE flipping status (so the
-    // earner sees the accruals back on the unpaid list immediately).
-    await admin
-      .from("commission_accruals")
-      .update({ withdrawal_item_id: null })
-      .in("withdrawal_item_id", await getItemIds(admin, d.id));
-
-    await admin
-      .from("commission_withdrawal_items")
-      .delete()
-      .eq("commission_withdrawal_id", d.id);
-
+    // AUDIT-FOLLOWUP (Agent F MED #1): flip status FIRST so we never end up
+    // in a state where items are gone but the withdrawal header is still
+    // pending (race-window between deletes and the failed status update).
+    // After status='rejected' commits, the join cleanup is safe — even if
+    // it fails, an admin can replay it idempotently; the canonical state
+    // (status) is correct.
     const { error: updErr } = await admin
       .from("commission_withdrawals")
       .update({
@@ -265,8 +259,28 @@ export async function adminRejectWithdrawal(
         rejected_reason:      d.rejected_reason,
       })
       .eq("id", d.id)
-      .eq("status", "pending");
+      .eq("status", "pending");                                      // optimistic
     if (updErr) return { ok: false, error: `update_failed: ${updErr.message}` };
+
+    // Release accruals + delete join rows AFTER successful status flip.
+    // Failures here log only — admin can re-run from /admin/commissions
+    // via "Reapply reject cleanup" follow-up (V-E8.1).
+    try {
+      await admin
+        .from("commission_accruals")
+        .update({ withdrawal_item_id: null })
+        .in("withdrawal_item_id", await getItemIds(admin, d.id));
+      await admin
+        .from("commission_withdrawal_items")
+        .delete()
+        .eq("commission_withdrawal_id", d.id);
+    } catch (cleanupErr) {
+      // Status is already rejected; just log + carry on.
+      await logAdminAction(adminId, "commission_withdrawal.reject_cleanup_failed", "commission_withdrawal", d.id, {
+        withdrawal_no: row.withdrawal_no,
+        error:         (cleanupErr as Error).message ?? "unknown",
+      });
+    }
 
     await logAdminAction(adminId, "commission_withdrawal.reject", "commission_withdrawal", d.id, {
       withdrawal_no:   row.withdrawal_no,

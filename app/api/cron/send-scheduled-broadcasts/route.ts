@@ -99,24 +99,37 @@ export async function GET(request: Request) {
     }
 
     // Resolve audience to profile_ids.
+    // AUDIT-FOLLOWUP (Agent F LOW #4) — page through profiles so audience
+    // isn't truncated past 1000-row PostgREST cap. Mirror action's logic.
     let targetIds: string[] = [];
     try {
       if (bc.audience === "specific_ids") {
         targetIds = bc.audience_ids ?? [];
       } else {
-        let query = admin
-          .from("profiles")
-          .select("id")
-          .eq("status", "active")
-          .limit(100000);
-        if (bc.audience === "juristic_only") {
-          query = query.eq("account_type", "juristic");
-        } else if (bc.audience === "personal_only") {
-          query = query.eq("account_type", "personal");
+        const PAGE = 1000;
+        const GLOBAL_CAP = 1_000_000;
+        let from = 0;
+        while (from < GLOBAL_CAP) {
+          let query = admin
+            .from("profiles")
+            .select("id")
+            .eq("status", "active")
+            .order("id", { ascending: true })
+            .range(from, from + PAGE - 1);
+          if (bc.audience === "juristic_only") {
+            query = query.eq("account_type", "juristic");
+          } else if (bc.audience === "personal_only") {
+            query = query.eq("account_type", "personal");
+          }
+          const { data: page, error: profErr } = await query;
+          if (profErr) throw profErr;
+          if (!page || page.length === 0) break;
+          for (const p of page as Array<{ id: string }>) {
+            targetIds.push(p.id);
+          }
+          if (page.length < PAGE) break;
+          from += PAGE;
         }
-        const { data: profiles, error: profErr } = await query;
-        if (profErr) throw profErr;
-        targetIds = (profiles ?? []).map((p: { id: string }) => p.id);
       }
     } catch (e) {
       // Audience resolve failed — roll back to scheduled for retry next tick.
