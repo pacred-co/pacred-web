@@ -9,7 +9,17 @@ import {
   type FreightShipmentStatus, type FreightTransportMode,
   type FreightInvoiceStatus,
 } from "@/lib/validators/freight-shipment";
-import { ShipmentDetailClient, type ShipmentDetailData, type PartyData, type InvoiceData, type LineItemData } from "./shipment-detail-client";
+import {
+  computeInvoicePaymentStatus,
+  freightInvoiceTotalThb,
+  roundThb,
+  FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
+} from "@/lib/validators/freight-payment";
+import {
+  ShipmentDetailClient,
+  type ShipmentDetailData, type PartyData, type InvoiceData, type LineItemData,
+  type PaymentPanelData, type PaymentLedgerRow,
+} from "./shipment-detail-client";
 
 /**
  * V-E1 — /admin/freight/shipments/[id]
@@ -112,12 +122,35 @@ export default async function AdminFreightShipmentDetailPage({
   const parties = (partiesRaw ?? []) as PartyData[];
 
   // Invoice (latest non-cancelled, or first if all cancelled).
+  // payment_status + value-block figures (V-E7) come along so the payment
+  // panel can show the receipt total without a second round-trip.
   const { data: invoicesRaw } = await admin
     .from("freight_invoices")
-    .select("id, status, invoice_no, issued_at, cancelled_at, cancellation_reason, notes")
+    .select(`
+      id, status, invoice_no, issued_at, cancelled_at, cancellation_reason, notes,
+      payment_status, fully_paid_at,
+      commercial_value_thb, duty_thb, vat_thb
+    `)
     .eq("freight_shipment_id", id)
     .order("created_at", { ascending: false });
-  const invoices = (invoicesRaw ?? []) as InvoiceData[];
+  type InvoiceRaw = InvoiceData & {
+    commercial_value_thb: number | null;
+    duty_thb:             number | null;
+    vat_thb:              number | null;
+  };
+  const invoicesAll = (invoicesRaw ?? []) as InvoiceRaw[];
+  const invoices: InvoiceData[] = invoicesAll.map((i) => ({
+    id:                  i.id,
+    status:              i.status,
+    invoice_no:          i.invoice_no,
+    issued_at:           i.issued_at,
+    cancelled_at:        i.cancelled_at,
+    cancellation_reason: i.cancellation_reason,
+    notes:               i.notes,
+    payment_status:      i.payment_status ?? "unpaid",
+    fully_paid_at:       i.fully_paid_at ?? null,
+  }));
+  const activeRaw     = invoicesAll.find((i) => i.status !== "cancelled") ?? null;
   const activeInvoice = invoices.find((i) => i.status !== "cancelled") ?? null;
 
   // Lines (for active invoice only).
@@ -129,6 +162,37 @@ export default async function AdminFreightShipmentDetailPage({
       .eq("freight_invoice_id", activeInvoice.id)
       .order("position", { ascending: true });
     lines = (linesRaw ?? []) as LineItemData[];
+  }
+
+  // Payment ledger (V-E7) — only meaningful once the active invoice is issued.
+  let paymentPanel: PaymentPanelData | null = null;
+  if (activeRaw && activeRaw.status === "issued") {
+    const { data: paymentsRaw } = await admin
+      .from("freight_invoice_payments")
+      .select("id, method, amount_thb, paid_at, slip_storage_path, bank_ref, status, void_reason, recorded_by_admin_id, notes, created_at")
+      .eq("freight_invoice_id", activeRaw.id)
+      .order("paid_at", { ascending: false });
+    const payments = ((paymentsRaw ?? []) as PaymentLedgerRow[]).map((p) => ({
+      ...p,
+      amount_thb: Number(p.amount_thb),
+    }));
+    const paidThb = roundThb(
+      payments.filter((p) => p.status === "recorded").reduce((s, p) => s + p.amount_thb, 0),
+    );
+    const totalThb = freightInvoiceTotalThb({
+      commercial_value_thb: activeRaw.commercial_value_thb,
+      duty_thb:             activeRaw.duty_thb,
+      vat_thb:              activeRaw.vat_thb,
+    });
+    paymentPanel = {
+      invoiceId:       activeRaw.id,
+      invoiceNo:       activeRaw.invoice_no,
+      payments,
+      paidThb,
+      totalThb,
+      outstandingThb:  roundThb(Math.max(0, totalThb - paidThb)),
+      paymentStatus:   computeInvoicePaymentStatus(paidThb, totalThb),
+    };
   }
 
   // Customer.
@@ -265,13 +329,14 @@ export default async function AdminFreightShipmentDetailPage({
         </p>
       </section>
 
-      {/* Parties + Invoice + Lines + Actions (client-managed) */}
+      {/* Parties + Invoice + Lines + Payments + Actions (client-managed) */}
       <ShipmentDetailClient
         data={detailData}
         parties={parties}
         activeInvoice={activeInvoice}
         lines={lines}
         allInvoices={invoices}
+        paymentPanel={paymentPanel}
       />
 
       {/* Audit timeline */}
@@ -296,6 +361,7 @@ export default async function AdminFreightShipmentDetailPage({
         💡 invoice status: {invoices.map((i) => (
           <span key={i.id} className={`mr-1 inline-block rounded-full border px-1.5 py-0.5 ${INV_STATUS_BADGE[i.status]}`}>
             {i.invoice_no ?? "(no #)"} · {FREIGHT_INVOICE_STATUS_LABEL[i.status]}
+            {i.status === "issued" && ` · ${FREIGHT_INVOICE_PAYMENT_STATUS_LABEL[i.payment_status]}`}
           </span>
         ))}
       </p>

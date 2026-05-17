@@ -1937,6 +1937,26 @@
     "warehouseThailandDesc": "ฮับปลายทาง อ้อมน้อย กระจายต่อทั่วประเทศ",
     "warehouseViewAll": "ดูเครือข่ายโกดังทั้งหมด"
   },
+  "freightReceipt": {
+    "title": "ใบเสร็จ / ใบแจ้งหนี้ขนส่ง",
+    "downloadPdf": "ดาวน์โหลดใบเสร็จ PDF",
+    "totalDue": "ยอดรวมที่ต้องชำระ",
+    "paid": "ชำระแล้ว",
+    "outstanding": "คงค้างชำระ",
+    "paymentHistory": "ประวัติการชำระเงิน",
+    "noPayments": "ยังไม่มีการบันทึกการชำระเงิน",
+    "paidAt": "วันที่ชำระ",
+    "method": "วิธีชำระ",
+    "amount": "จำนวนเงิน",
+    "bankRef": "เลขอ้างอิงธนาคาร",
+    "statusUnpaid": "ยังไม่ชำระ",
+    "statusPartial": "ชำระบางส่วน",
+    "statusPaid": "ชำระครบแล้ว",
+    "statusOverpaid": "ชำระเกิน",
+    "methodCash": "เงินสด",
+    "methodBankTransfer": "โอนผ่านธนาคาร",
+    "methodWallet": "ตัดจาก Wallet"
+  },
   "seo": {
     "root": {
       "title": "Pacred — นำเข้า ส่งออก ชิปปิ้ง เคลียร์ศุลกากร ครบวงจร",

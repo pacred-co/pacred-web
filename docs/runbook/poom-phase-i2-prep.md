@@ -117,20 +117,28 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 **Test list:** see playbook section **HH**
 **Next sequence:** V-E7 receipt + payment (~15-20h) — all prereqs (V-A6 ✅ + V-E10 ✅ + V-E1 ✅) cleared.
 
-### V-E7 — Receipt + payment tracking
-**Blocker:** V-E1 (freight_invoices) + V-A6 WHT (ADR-0015) + V-E10 (QA gate)
+### V-E7 — Receipt + payment tracking ✅ V1 SHIPPED 2026-05-17 (เดฟ)
+**Blocker:** ✅ ALL CLEAR (V-E1 0050/0051 shipped + V-A6 0044 shipped)
 **Spec:** [`port-specs/freight-receipt-and-payment.md`](../port-specs/freight-receipt-and-payment.md)
-**Migration:** ~`0052_freight_invoice_payments.sql` + `next_freight_invoice_serial()` SECURITY DEFINER fn
-**New entities:** `freight_invoice_payments` (partial-pay ledger)
-**Code touch:**
-- `actions/admin/freight-invoices.ts` (new) — create invoice (with QA-pass gate) · record payment · issue receipt PDF
-- `components/pdf/freight-receipt.tsx` (new) — RD Code 86 compliant
-- `/admin/freight/invoices/*` pages
-**Effort:** ~15-20h
-**Pre-implementation check:**
-- [ ] V-E10 QA gate live (server-side reject `qa_not_passed`)
-- [ ] V-A6 WHT live (wht_* fields populated on invoice issuance)
-- [ ] `next_freight_invoice_serial()` fn deployed (mirror migration 0034 `next_tax_invoice_serial`)
+**Migration:** ✅ `0052_freight_invoice_payments.sql` shipped — needs `db push` on dev+prod
+**V1 shipped:**
+- ✅ Migration 0052 — `freight_invoice_payments` (partial-pay ledger) + `freight_invoices.payment_status` + `fully_paid_at` columns + RLS + storage bucket `freight-payment-slips`
+- ✅ `lib/validators/freight-payment.ts` — Zod schemas + 3 enums + `computeInvoicePaymentStatus` + `freightInvoiceTotalThb` + `roundThb`
+- ✅ `actions/admin/freight-invoice-payments.ts` — 5 actions (recordFreightPayment / uploadFreightPaymentSlip / voidFreightPayment / listFreightPayments / getFreightReceiptGate)
+- ✅ `components/pdf/freight-receipt.tsx` — RD Code 86 receipt (invoice ↔ receipt title switch, RECEIVED stamp, CANCELLED watermark)
+- ✅ `app/api/freight-receipt/[id]/route.tsx` — RLS-scoped on-the-fly PDF render
+- ✅ Payment panel on `/admin/freight/shipments/[id]` (ledger + record-payment form + void + receipt download)
+- ✅ `freightReceipt` i18n namespace (TH+EN parity) + `lib/validators/freight-payment.test.ts`
+**V1 design decisions (beyond pre-locked):**
+- **payment_status vs status split** — 0051's `freight_invoices.status` is the DOCUMENT lifecycle (draft/issued/cancelled); V-E7 added a SEPARATE `payment_status` column (unpaid/partial/paid/overpaid) recomputed from the ledger. The two axes are independent.
+- **Receipt total = landed cost** — `freight_invoices` has no single total column; the payable THB total is computed as `commercial_value_thb + duty_thb + vat_thb` (ADR-0016 landed-cost block). `freightInvoiceTotalThb` helper.
+- **WHT gate = defensive no-op** — `withholding_tax_entries` (0044) has no freight FK, so `getFreightReceiptGate` always allows; it's the single choke-point V-A6.1 will wire.
+- **Recompute in the action** — payment_status + fully_paid_at recomputed in the server action after every insert/void (F-11 pattern, no trigger).
+**V1 deferred (= V-E7.1):**
+- Customer-side freight receipt portal (`/(protected)/freight/invoices`)
+- `wallet` method auto-debit (needs `wallet_transactions.reference_type` enum extension)
+- V-A6.1 — add `freight_invoice_id` to `withholding_tax_entries` + wire the WHT cert gate
+**Follow-up:** V-A6.1 (freight↔WHT linkage) — see WHT gate note above.
 
 ### V-E8 + V-H1 + V-H2 — Commission withdrawal (one combined batch)
 **Blocker:** ✅ ALL CLEAR (ADR-0015 WHT locked + E-5 interpreter role ack-approved 2026-05-17)
@@ -211,16 +219,17 @@ V-E1 commercial invoice           → V-E3/E4 Form E + D/O (same freight_shipmen
 | `0049` | **wallet_order_payment_unique** (G9 / F-11 fix) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 53c11f8) — needs `db push` on dev+prod before public launch 2pm |
 | `0050` | **freight_shipments + freight_parties** (V-E1 part 1) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
 | `0051` | **freight_invoices + freight_invoice_lines** (V-E1 part 2) | ภูม | ✅ **SHIPPED 2026-05-17** (commit 6478efe) — needs `db push` |
-| `0052` | freight_invoice_payments (V-E7) | ภูม | ⬜ next — dep 0051 + V-E10 QA-pass gate |
+| `0052` | **freight_invoice_payments** (V-E7) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` on dev+prod |
 | `0053` | commissions (4 tables + interpreter role) (V-E8/H1/H2) | ภูม | ⬜ dep 0044 + E-5 interpreter role ack |
 | `0054` | accounting_periods (V-E9) | ภูม | ⬜ post-launch |
 | `0055`-`0059` | *(reserved headroom for ภูม's freight block — fill sequentially)* | ภูม | — |
 | `0060` | **member_code_3digit** (PR00001→PR001) | เดฟ | ✅ **SHIPPED 2026-05-17** — needs `db push` |
 
-> ⚠️ **9 migrations (`0044`-`0051` + `0060`) shipped to git but NOT yet applied
+> ⚠️ **10 migrations (`0044`-`0052` + `0060`) shipped to git but NOT yet applied
 > to Supabase.** ภูม applies them on dev + prod — `supabase db push` (or paste
 > each into the SQL Editor in ascending number order). `0050`/`0051` reference
-> `0045`/`0048`, so number order satisfies every dependency.
+> `0045`/`0048` and `0052` references `0051`, so number order satisfies every
+> dependency.
 
 **Note:** `0044`-`0059` block = ภูม (freight/commission stack). `0060`
 (member_code) = เดฟ — deliberately numbered clear of ภูม's block so the two devs
