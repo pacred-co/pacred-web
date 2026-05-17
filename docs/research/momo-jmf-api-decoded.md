@@ -1,6 +1,18 @@
 # MOMO JMF — API + flows decoded (R&D)
 
-**Status:** R&D decode (2026-05-17, เดฟ-requested). Source-of-truth for the Pacred-native MOMO integration.
+> ⚠️ **SUPERSEDED ON THE API SURFACE (2026-05-17 night).** The API host +
+> endpoint format decoded in this doc are **WRONG** — reconstructed from a
+> data-less Angular SPA shell (see §0 below). On launch eve the warehouse owner
+> posted the **real** surface: base **`https://api.momocargo.com:8080`** · REST
+> paths (`GET /api/func/get/import/track/{range}` · `GET /api/func/get/container/closed/{range}`
+> · `GET /api/sack/get/info/{code}`) · date param `YYYY-MM-DD+YYYY-MM-DD`.
+> Correct decode + evidence → [`legacy-chat-datanew-2026-05-17.md`](legacy-chat-datanew-2026-05-17.md)
+> §0 / DN-1 (L-0). The state-machine / wallet-flow / data-field analysis below
+> may still be directionally useful, but the `?api=` query-routing and the
+> `api-cn.alilogisticshub.com` host are **not real** — do not build the sync
+> client from them. Full re-decode → [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) U1-7.
+
+**Status:** ⚠️ SUPERSEDED on the API surface (see banner above). R&D decode (2026-05-17, เดฟ-requested).
 **Scope:** Decode the MOMO partner system — API, order state machine, wallet flows, payment-transport, data fields — so `lib/integrations/momo-jmf/` can be built native (not the legacy "borrow" pattern).
 **Read with:** [`momo-jmf.md`](../integrations/momo-jmf.md) (current state) · [`momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) (open questions) · [`../audit/chat-analysis-2026-05-16.md`](../audit/chat-analysis-2026-05-16.md) §"MOMO canonical status enum".
 

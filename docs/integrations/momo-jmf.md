@@ -1,5 +1,16 @@
 # MOMO JMF — Thailand warehouse cargo container partner
 
+> ⚠️ **API SURFACE CORRECTION (2026-05-17 night).** The MOMO API host/endpoints
+> implied in this doc + decoded in [`../research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md)
+> are **WRONG**. On launch eve the warehouse owner posted the **real** surface:
+> base **`https://api.momocargo.com:8080`** · REST paths
+> (`GET /api/func/get/import/track/{range}` · `GET /api/func/get/container/closed/{range}`
+> · `GET /api/sack/get/info/{code}`) · date param `YYYY-MM-DD+YYYY-MM-DD`.
+> Evidence + decode → [`../research/legacy-chat-datanew-2026-05-17.md`](../research/legacy-chat-datanew-2026-05-17.md)
+> §0 / DN-1 (L-0). **Do not build the sync client from the old `?api=` /
+> `api-cn.alilogisticshub.com` surface** — re-decode is [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)
+> U1-7. Not launch-blocking — MOMO sync is post-launch.
+
 **Status:** Token received 2026-05-16; integration spec pending dev-call with MOMO + reverse-engineering of legacy cargo-thai payload pattern
 **Owner:** ก๊อต (per Track K — partner/tool selection); ภูม implements when spec is locked
 **Read first:** [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) for the data model this integration writes into
