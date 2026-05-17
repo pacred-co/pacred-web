@@ -83,7 +83,7 @@ export function Footer() {
   ];
 
   return (
-    <footer id="contact" className="bg-white dark:bg-surface border-t border-border">
+    <footer id="contact" className="bg-surface dark:bg-surface border-t border-border">
       <div className="mx-auto w-full max-w-[1140px] px-[16px] md:px-[20px]">
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-8 py-6 md:py-14">
