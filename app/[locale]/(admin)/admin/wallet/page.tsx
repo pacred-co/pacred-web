@@ -67,7 +67,13 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>👛</div>
+            <p className="text-sm font-medium text-foreground">ไม่มีรายการ wallet ตามตัวกรองนี้</p>
+            <p className="text-xs text-muted max-w-md mx-auto">
+              ลองล้าง/เปลี่ยน kind หรือ status ด้านบน เพื่อดูทุก deposit / withdraw / order_payment / refund ของลูกค้า
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -122,7 +128,22 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>{r.status}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <WalletTxActions id={r.id} status={r.status} kind={r.kind} slipUrl={r.slip_url} />
+                      <WalletTxActions
+                        id={r.id}
+                        status={r.status}
+                        kind={r.kind}
+                        slipUrl={r.slip_url}
+                        amount={Number(r.amount)}
+                        bank_name={r.bank_name}
+                        account_name={r.account_name}
+                        account_number={r.account_number}
+                        note={r.note}
+                        slip_transferred_at={(r as { slip_transferred_at: string | null }).slip_transferred_at ?? null}
+                        created_at={r.created_at}
+                        member_code={r.profile?.member_code ?? null}
+                        customer_name={`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || "—"}
+                        phone={r.profile?.phone ?? null}
+                      />
                     </td>
                   </tr>
                 ))}

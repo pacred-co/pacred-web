@@ -260,6 +260,246 @@ export async function adminBulkApproveYuanPayments(
 }
 
 // ────────────────────────────────────────────────────────────
+// Phase C QoL #4 (G-5 fix): mark yuan_payment as refunded WITH slip.
+// ────────────────────────────────────────────────────────────
+//
+// Per `docs/research/gap-schema-security.md` G-5 — the legacy
+// adminUpdateYuanPayment refund branch lets admins flip status →
+// 'refunded' without ANY evidence the money moved back. Migration
+// 0074 added refund_slip_path + refunded_at + refunded_by_admin_id.
+// This action is the slip-enforcing entry point; the slip storage
+// path must be non-empty, both timestamps + admin id get stamped
+// atomically, the wallet debit (if paid_via_wallet) gets reversed
+// the same way adminUpdateYuanPayment does, and a notification is
+// fired to the customer.
+//
+// Status-transition guard is the SAME allow-list adminUpdateYuanPayment
+// uses (only completed → refunded · pending → refunded · processing →
+// refunded — never failed→refunded, never refunded→anything).
+//
+// uploadYuanRefundSlip (below) handles the actual file upload — the
+// UI uploads first, then passes the returned path here.
+
+const markRefundedSchema = z.object({
+  id:                z.string().uuid(),
+  refund_slip_path:  z.string().trim().min(1, "ต้องแนบสลิปการคืนเงิน").max(500),
+  note:              z.string().trim().max(1000).optional(),
+});
+export type AdminMarkYuanPaymentRefundedInput = z.infer<typeof markRefundedSchema>;
+
+export async function adminMarkYuanPaymentRefunded(
+  input: AdminMarkYuanPaymentRefundedInput,
+): Promise<AdminActionResult<{ refunded_at: string }>> {
+  const parsed = markRefundedSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin<{ refunded_at: string }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: existing } = await admin
+      .from("yuan_payments")
+      .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet, refund_slip_path")
+      .eq("id", d.id)
+      .maybeSingle<{
+        id: string; profile_id: string; status: string;
+        yuan_amount: number; thb_amount: number;
+        paid_via_wallet: boolean; refund_slip_path: string | null;
+      }>();
+    if (!existing) return { ok: false, error: "not_found" };
+
+    if (!isYuanTransitionAllowed(existing.status, "refunded")) {
+      return {
+        ok: false,
+        error: `เปลี่ยนสถานะ ${STATUS_LABEL[existing.status] ?? existing.status} → คืนเงินแล้ว ไม่ได้ — สถานะนี้ห้ามคืน (เลือก refund ได้เฉพาะ pending / processing / completed)`,
+      };
+    }
+
+    const refundedAt = new Date().toISOString();
+    const update: Record<string, unknown> = {
+      status:               "refunded",
+      refund_slip_path:     d.refund_slip_path,
+      refunded_at:          refundedAt,
+      refunded_by_admin_id: adminId,
+      admin_id_update:      adminId,
+    };
+
+    const { error: updErr } = await admin
+      .from("yuan_payments")
+      .update(update)
+      .eq("id", existing.id);
+    if (updErr) return { ok: false, error: updErr.message };
+
+    // Reverse the wallet debit (same logic as adminUpdateYuanPayment's
+    // refund branch — covers both pending + completed debits per H-2).
+    if (existing.paid_via_wallet) {
+      const { error: reverseErr } = await admin
+        .from("wallet_transactions")
+        .update({ status: "cancelled", admin_id_update: adminId })
+        .eq("reference_type", "yuan_payment")
+        .eq("reference_id", existing.id)
+        .in("status", ["pending", "completed"]);
+      if (reverseErr) {
+        return {
+          ok: false,
+          error: `payment marked refunded but wallet debit reversal failed (debit for ${existing.id} stands): ${reverseErr.message}`,
+        };
+      }
+    }
+
+    await logAdminAction(adminId, "yuan_payment.mark_refunded", "yuan_payment", existing.id, {
+      before:              { status: existing.status, refund_slip_path: existing.refund_slip_path },
+      after:               { status: "refunded", refund_slip_path: d.refund_slip_path, refunded_at: refundedAt },
+      paid_via_wallet:     existing.paid_via_wallet,
+      note:                d.note ?? null,
+    });
+
+    void sendNotification(existing.profile_id, {
+      category:       "yuan_payment",
+      severity:       "warning",
+      title:          "ฝากโอนหยวน — คืนเงินแล้ว",
+      body:           `¥${Number(existing.yuan_amount).toFixed(2)} = ฿${Number(existing.thb_amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}${d.note ? ` — ${d.note}` : ""}`,
+      link_href:      "/service-payment",
+      reference_type: "yuan_payment",
+      reference_id:   existing.id,
+    });
+
+    revalidatePath("/admin/yuan-payments");
+    revalidatePath(`/admin/yuan-payments/${existing.id}`);
+    return { ok: true, data: { refunded_at: refundedAt } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// Upload helper for the refund slip — mirrors uploadCommissionSlip.
+// ────────────────────────────────────────────────────────────
+// Caller passes a File from the admin form. Writes to 'slips' bucket
+// under yuan-refunds/{yuan_payment_id}/{timestamp}.{ext}, then returns
+// the path so the caller passes it to adminMarkYuanPaymentRefunded.
+// Audit-logged on success.
+
+export async function uploadYuanRefundSlip(
+  yuanPaymentId: string,
+  file: File,
+): Promise<AdminActionResult<{ storage_path: string }>> {
+  if (!yuanPaymentId || typeof yuanPaymentId !== "string") {
+    return { ok: false, error: "invalid_input" };
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "no_file" };
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    return { ok: false, error: "file_too_large" };
+  }
+  const mime = (file.type ?? "").toLowerCase();
+  const validMimes = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+  if (mime && !validMimes.includes(mime)) {
+    return { ok: false, error: "invalid_mime_type" };
+  }
+
+  return withAdmin<{ storage_path: string }>(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: row } = await admin
+      .from("yuan_payments")
+      .select("id, status")
+      .eq("id", yuanPaymentId)
+      .maybeSingle<{ id: string; status: string }>();
+    if (!row) return { ok: false, error: "not_found" };
+    // Slip is meaningful for non-final states (we may upload before the
+    // actual refund-status flip in the same admin click). Accept any
+    // non-failed status — adminMarkYuanPaymentRefunded re-checks the
+    // transition allow-list at flip time.
+    if (row.status === "failed") {
+      return { ok: false, error: "ห้ามอัพโหลดสลิป refund บนรายการที่ failed (ไม่มีเงินที่ต้องคืน)" };
+    }
+
+    const ext   = inferExtension(file);
+    const stamp = String(Date.now());
+    const path  = `yuan-refunds/${row.id}/${stamp}${ext}`;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const { error: uploadErr } = await admin.storage
+      .from("slips")
+      .upload(path, bytes, {
+        contentType: mime || "application/octet-stream",
+        upsert:      false,
+      });
+    if (uploadErr) {
+      return { ok: false, error: `upload_failed: ${uploadErr.message}` };
+    }
+
+    await logAdminAction(adminId, "yuan_payment.refund_slip_upload", "yuan_payment", row.id, {
+      storage_path: path,
+      filename:     file.name,
+      size_bytes:   file.size,
+    });
+
+    return { ok: true, data: { storage_path: path } };
+  });
+}
+
+function inferExtension(file: File): string {
+  const name = (file.name ?? "").toLowerCase();
+  if (name.endsWith(".pdf"))                            return ".pdf";
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg"))  return ".jpg";
+  if (name.endsWith(".png"))                            return ".png";
+  const t = (file.type ?? "").toLowerCase();
+  if (t.includes("pdf"))                                return ".pdf";
+  if (t.includes("jpeg") || t.includes("jpg"))          return ".jpg";
+  if (t.includes("png"))                                return ".png";
+  return ".bin";
+}
+
+// ────────────────────────────────────────────────────────────
+// Signed-URL helper for any yuan_payment slip (customer slip OR
+// refund slip OR id-doc). Used by the refund-button UI to preview
+// the slip the admin just uploaded.
+// ────────────────────────────────────────────────────────────
+
+const yuanSlipSignedSchema = z.object({
+  id:   z.string().uuid(),
+  kind: z.enum(["customer", "id_doc", "refund"]),
+});
+
+export async function adminGetYuanPaymentSlipSignedUrl(
+  input: z.infer<typeof yuanSlipSignedSchema>,
+): Promise<AdminActionResult<{ url: string | null; mime: string | null }>> {
+  const parsed = yuanSlipSignedSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin<{ url: string | null; mime: string | null }>(
+    ["super", "accounting"],
+    async () => {
+      const admin = createAdminClient();
+      const { data: row } = await admin
+        .from("yuan_payments")
+        .select("id, slip_url, id_doc_url, refund_slip_path")
+        .eq("id", parsed.data.id)
+        .maybeSingle<{ id: string; slip_url: string | null; id_doc_url: string | null; refund_slip_path: string | null }>();
+      if (!row) return { ok: false, error: "not_found" };
+
+      const path =
+        parsed.data.kind === "refund"   ? row.refund_slip_path :
+        parsed.data.kind === "id_doc"   ? row.id_doc_url :
+        row.slip_url;
+      if (!path) return { ok: true, data: { url: null, mime: null } };
+
+      const { data: signed, error: sErr } = await admin.storage
+        .from("slips")
+        .createSignedUrl(path, 60 * 60);
+      if (sErr) return { ok: false, error: sErr.message };
+
+      const ext = (path.split(".").pop() ?? "").toLowerCase();
+      const mimeType = ext === "pdf" ? "application/pdf"
+                     : ext === "png" ? "image/png"
+                     : (ext === "jpg" || ext === "jpeg") ? "image/jpeg"
+                     : null;
+      return { ok: true, data: { url: signed?.signedUrl ?? null, mime: mimeType } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // V-A1: set yuan_payments.slip_transferred_at (admin edit)
 // ────────────────────────────────────────────────────────────
 

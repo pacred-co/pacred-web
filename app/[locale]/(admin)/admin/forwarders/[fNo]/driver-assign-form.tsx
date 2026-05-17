@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminAssignDriverToForwarder } from "@/actions/admin/forwarder-drivers";
+import { DriverCombobox } from "./driver-combobox";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -132,17 +133,18 @@ export function DriverAssignForm({
         <form onSubmit={onSubmit} className="space-y-3 pt-2 border-t border-border">
           <p className="text-xs font-medium text-muted">มอบหมายให้คนขับใหม่</p>
           <label className="block space-y-1">
-            <span className="text-xs font-medium">Member code คนขับ <span className="text-red-500">*</span></span>
-            <input
+            <span className="text-xs font-medium">เลือกคนขับ <span className="text-red-500">*</span></span>
+            {/* Phase C QoL #2 — fuzzy driver search.
+                Combobox emits the resolved member_code, which the
+                existing adminAssignDriverToForwarder action expects.
+                Labels show "{member_code} · {name} · {phone}" so staff
+                don't have to memorise PR codes. */}
+            <DriverCombobox
               value={memberCode}
-              onChange={(e) => setMemberCode(e.target.value)}
-              className={inputCls}
-              placeholder="เช่น PR001"
-              pattern="^[Pp][Rr]\d{3,}$"
-              required
+              onChange={(code) => setMemberCode(code)}
               disabled={pending}
             />
-            <span className="text-[11px] text-muted">รูปแบบ PR + อย่างน้อย 3 หลัก (เช่น PR001) — ดู member_code จากหน้า /admin/customers</span>
+            <span className="text-[11px] text-muted">เฉพาะ profile ที่มี role driver + active เท่านั้น</span>
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-medium">หมายเหตุ (optional)</span>

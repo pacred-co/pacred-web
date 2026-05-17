@@ -229,6 +229,115 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
 }
 
 // ────────────────────────────────────────────────────────────
+// Fuzzy search for sales-admin reps (Phase C QoL #1).
+// Drives the transfer-rep combobox in
+// /admin/customers/[id]/transfer-rep — replaces the legacy UUID-paste
+// flow. Admin types name / member_code / phone fragment → debounced
+// 300ms client call → top 10 matches returned. Match is case-insensitive
+// against profiles.member_code, first_name, last_name, phone, company_name
+// + admin_contact_extras.display_name. Only `super` + `sales_admin` rows
+// with is_active=true are returned (you can't transfer a customer to a
+// non-rep). Returns a shape compatible with the existing dropdown
+// `{ profile_id, display }` so the rest of the form doesn't change.
+// ────────────────────────────────────────────────────────────
+const searchAdminsSchema = z.object({
+  q:     z.string().trim().min(1, "ระบุคำค้น").max(80),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+export type SearchAdminsInput = z.infer<typeof searchAdminsSchema>;
+export type AdminSearchHit = {
+  profile_id:  string;
+  member_code: string | null;
+  name:        string;
+  phone:       string | null;
+  role:        string;
+  display:     string;
+};
+
+export async function searchAdminsByQuery(
+  input: SearchAdminsInput,
+): Promise<AdminActionResult<{ hits: AdminSearchHit[] }>> {
+  const parsed = searchAdminsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { q } = parsed.data;
+  const limit = parsed.data.limit ?? 10;
+
+  return withAdmin<{ hits: AdminSearchHit[] }>(["super", "sales_admin"], async () => {
+    const admin = createAdminClient();
+
+    // PostgREST `or` over the joined profiles row uses the `profiles.<col>.op.val`
+    // path. Escape literal commas / parens in the user input so it can't break
+    // out of the filter expression (ILIKE special chars are fine inside the value).
+    const safeQ = q.replace(/[(),]/g, " ");
+    const pattern = `%${safeQ}%`;
+
+    const { data, error } = await admin
+      .from("admins")
+      .select(`
+        profile_id, role,
+        profile:profiles!profile_id ( member_code, first_name, last_name, phone, company_name ),
+        contact:admin_contact_extras!profile_id ( display_name, direct_phone )
+      `)
+      .in("role", ["sales_admin", "super"])
+      .eq("is_active", true)
+      .or(
+        [
+          `member_code.ilike.${pattern}`,
+          `first_name.ilike.${pattern}`,
+          `last_name.ilike.${pattern}`,
+          `phone.ilike.${pattern}`,
+          `company_name.ilike.${pattern}`,
+        ].join(","),
+        { referencedTable: "profiles" },
+      )
+      .limit(limit * 2);                            // over-fetch so the join filter still yields ≥limit
+    if (error) return { ok: false, error: error.message };
+
+    type ProfileShape = {
+      member_code: string | null; first_name: string | null; last_name: string | null;
+      phone: string | null; company_name: string | null;
+    };
+    type ContactShape = { display_name: string | null; direct_phone: string | null };
+    type Row = {
+      profile_id: string; role: string;
+      profile:    ProfileShape | ProfileShape[] | null;
+      contact:    ContactShape | ContactShape[] | null;
+    };
+
+    // De-dupe (a profile can hold multiple roles — `super` + `sales_admin`
+    // would surface twice from the IN clause). First role wins; we don't
+    // pretend to rank by role here.
+    const seen = new Set<string>();
+    const hits: AdminSearchHit[] = [];
+    for (const r of (data ?? []) as Row[]) {
+      if (seen.has(r.profile_id)) continue;
+      const prof    = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+      const contact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
+      // The OR filter is on profiles.* — null-profile rows (deleted profile)
+      // shouldn't match anyway, but skip defensively.
+      if (!prof) continue;
+
+      const fallbackName = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim();
+      const name = contact?.display_name ?? (fallbackName || "—");
+      const phone = contact?.direct_phone ?? prof.phone ?? null;
+
+      seen.add(r.profile_id);
+      hits.push({
+        profile_id:  r.profile_id,
+        member_code: prof.member_code,
+        name,
+        phone,
+        role:        r.role,
+        display:     `${name} · ${prof.member_code ?? "—"} · ${phone ?? "—"}`,
+      });
+      if (hits.length >= limit) break;
+    }
+
+    return { ok: true, data: { hits } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
 // Bulk transfer sales rep across many customers in one shot.
 // Ports legacy transferSalesCustomers.php — used when a rep leaves
 // or for portfolio rebalancing between reps. Complements the per-customer

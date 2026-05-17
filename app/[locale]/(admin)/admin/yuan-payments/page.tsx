@@ -29,6 +29,7 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
     .select(`
       id, channel, recipient_detail, yuan_amount, exchange_rate, thb_amount,
       paid_via_wallet, slip_url, id_doc_url, status, created_at, slip_transferred_at,
+      refund_slip_path, refunded_at,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone )
     `)
     .order("created_at", { ascending: false })
@@ -114,14 +115,32 @@ export default async function AdminYuanPaymentsPage({ searchParams }: { searchPa
                           {r.id_doc_url  && <SlipLink path={r.id_doc_url} label="บัตร ปชช." />}
                         </>
                       )}
+                      {/* Phase C QoL #4 — surface that a refund slip is on file. */}
+                      {(r as { refund_slip_path: string | null }).refund_slip_path && (
+                        <SlipLink path={(r as { refund_slip_path: string }).refund_slip_path} label="คืน" />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
+                      {(r as { refunded_at: string | null }).refunded_at && (
+                        <div className="mt-1 text-[9px] text-muted">
+                          คืน {new Date((r as { refunded_at: string }).refunded_at).toLocaleDateString("th-TH")}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <YuanPaymentActions id={r.id} status={r.status} />
+                      <YuanPaymentActions
+                        id={r.id}
+                        status={r.status}
+                        yuan_amount={Number(r.yuan_amount)}
+                        thb_amount={Number(r.thb_amount)}
+                        member_code={r.profile?.member_code ?? null}
+                        customer_name={`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || "—"}
+                        phone={r.profile?.phone ?? null}
+                        paid_via_wallet={r.paid_via_wallet}
+                      />
                     </td>
                   </tr>
                 ))}

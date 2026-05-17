@@ -14,13 +14,18 @@ export default async function TransferRepPage({
   // Customer + current rep + stats (mirrors PHP transferSalesCustomers
   // home.php aggregates: shop count/total, forwarder count/total + last
   // date, payment count/total). Done in parallel — none depend on each other.
+  //
+  // Phase C QoL #1 — the full reps list was previously loaded here to
+  // populate a <select>. The combobox in transfer-rep-form fetches via
+  // searchAdminsByQuery on-demand, so we no longer pre-fetch every rep.
+  // We do still need the CURRENT rep's display label so the page can
+  // render "เซลล์ปัจจุบัน" — that's a single targeted lookup.
   const [
     { data: profile },
     { data: shopAgg },
     { data: forwarderAgg },
     { data: forwarderLast },
     { data: yuanAgg },
-    { data: repProfiles },
   ] = await Promise.all([
     admin
       .from("profiles")
@@ -52,15 +57,6 @@ export default async function TransferRepPage({
       .select("thb_amount")
       .eq("profile_id", id)
       .eq("status", "completed"),
-    admin
-      .from("admins")
-      .select(
-        `profile_id, role,
-         profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
-         contact:admin_contact_extras!profile_id ( display_name, direct_phone )`,
-      )
-      .in("role", ["sales_admin", "super"])
-      .eq("is_active", true),
   ]);
 
   if (!profile) notFound();
@@ -88,31 +84,36 @@ export default async function TransferRepPage({
     ? p.company_name
     : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
 
-  // Reps dropdown — same shape as the existing AssignRepForm uses.
-  type RepRow = {
-    profile_id: string;
-    profile:    { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }
-              | { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null }[] | null;
-    contact:    { display_name: string | null; direct_phone: string | null }
-              | { display_name: string | null; direct_phone: string | null }[] | null;
-  };
-  const seen = new Set<string>();
-  const reps: { profile_id: string; display: string }[] = [];
-  for (const r of (repProfiles ?? []) as RepRow[]) {
-    if (seen.has(r.profile_id)) continue;
-    seen.add(r.profile_id);
-    const prof    = Array.isArray(r.profile) ? r.profile[0] : r.profile;
-    const contact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
-    const name    = contact?.display_name ?? `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() ?? "—";
-    const phone   = contact?.direct_phone ?? prof?.phone ?? "—";
-    reps.push({
-      profile_id: r.profile_id,
-      display:    `${name} · ${prof?.member_code ?? ""} · ${phone}`,
-    });
+  // Resolve the CURRENT rep's display label (combobox no longer pre-fetches
+  // the full reps list — see comment in the Promise.all above).
+  type RepProfile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
+  type RepContact = { display_name: string | null; direct_phone: string | null };
+  let currentRepDisplay: string | null = null;
+  if (p.sales_admin_id) {
+    const { data: repRow } = await admin
+      .from("admins")
+      .select(
+        `profile_id, role,
+         profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
+         contact:admin_contact_extras!profile_id ( display_name, direct_phone )`,
+      )
+      .eq("profile_id", p.sales_admin_id)
+      .in("role", ["sales_admin", "super"])
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle<{
+        profile_id: string; role: string;
+        profile: RepProfile | RepProfile[] | null;
+        contact: RepContact | RepContact[] | null;
+      }>();
+    if (repRow) {
+      const prof    = Array.isArray(repRow.profile) ? repRow.profile[0] : repRow.profile;
+      const contact = Array.isArray(repRow.contact) ? repRow.contact[0] : repRow.contact;
+      const name    = contact?.display_name ?? `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() ?? "—";
+      const phone   = contact?.direct_phone ?? prof?.phone ?? "—";
+      currentRepDisplay = `${name} · ${prof?.member_code ?? ""} · ${phone}`;
+    }
   }
-  const currentRep = p.sales_admin_id
-    ? reps.find((r) => r.profile_id === p.sales_admin_id) ?? null
-    : null;
 
   return (
     <main className="p-6 lg:p-8 space-y-6 max-w-4xl mx-auto">
@@ -148,7 +149,7 @@ export default async function TransferRepPage({
           <Field label="เบอร์"              value={p.phone ?? "—"} />
           <Field label="ลูกค้าใหม่เมื่อ"    value={new Date(p.created_at).toLocaleDateString("th-TH")} />
           <Field label="รายการฝากนำเข้าล่าสุด" value={forwarderLastDate ? new Date(forwarderLastDate).toLocaleDateString("th-TH") : "—"} />
-          <Field label="เซลล์ปัจจุบัน"      value={currentRep?.display ?? "— ไม่มีเซลล์ที่ดูแล —"} />
+          <Field label="เซลล์ปัจจุบัน"      value={currentRepDisplay ?? "— ไม่มีเซลล์ที่ดูแล —"} />
         </dl>
       </section>
 
@@ -156,8 +157,7 @@ export default async function TransferRepPage({
       <TransferRepForm
         customerId={p.id}
         currentRepId={p.sales_admin_id}
-        currentRepDisplay={currentRep?.display ?? null}
-        reps={reps}
+        currentRepDisplay={currentRepDisplay}
       />
     </main>
   );

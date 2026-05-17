@@ -4,44 +4,48 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminTransferSalesRep } from "@/actions/admin/admins";
+import { RepCombobox } from "./rep-combobox";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
-type Rep = { profile_id: string; display: string };
+// Phase C QoL #1: combobox replaces the dropdown. The page no longer needs
+// to pre-fetch every sales-rep — staff types name/member_code/phone and
+// hits `searchAdminsByQuery` for the top 10. The "ปล่อยลูกค้า (ไม่มีเซลล์
+// ดูแล)" option moves to a small radio toggle, since the combobox can't
+// represent "I want this to be NULL".
 
 export function TransferRepForm({
   customerId,
   currentRepId,
   currentRepDisplay,
-  reps,
 }: {
   customerId:        string;
   currentRepId:      string | null;
   currentRepDisplay: string | null;
-  reps:              Rep[];
 }) {
   const router = useRouter();
-  const [newRepId, setNewRepId] = useState<string>("");
+  const [mode, setMode]       = useState<"assign" | "unassign">("assign");
+  const [newRepId, setNewRepId]       = useState<string>("");
+  const [newRepDisplay, setNewRepDisplay] = useState<string | null>(null);
   const [reason,   setReason]   = useState<string>("");
   const [confirm,  setConfirm]  = useState<boolean>(false);
   const [error,    setError]    = useState<string | null>(null);
   const [done,     setDone]     = useState<boolean>(false);
   const [pending,  startTransition] = useTransition();
 
-  // Filter the dropdown so admins can't "transfer to the same rep" by accident.
-  const targetReps = reps.filter((r) => r.profile_id !== currentRepId);
+  // Exclude the current rep from the search results so admins can't
+  // "transfer to the same rep" by accident.
+  const excludeIds = currentRepId ? [currentRepId] : [];
 
-  // Display the chosen new rep (or "ปล่อยลูกค้า" if unassigning)
-  const newRep = newRepId === "" ? null : reps.find((r) => r.profile_id === newRepId) ?? null;
-  const newRepLabel = newRepId === "__unassign__"
+  const summaryToLabel = mode === "unassign"
     ? "— ปล่อยลูกค้า (ไม่มีเซลล์ดูแล) —"
-    : (newRep?.display ?? "—");
+    : (newRepDisplay ?? "—");
 
   function submit() {
     setError(null);
-    if (!newRepId) {
-      setError("กรุณาเลือกเซลล์ปลายทาง");
+    if (mode === "assign" && !newRepId) {
+      setError("กรุณาเลือกเซลล์ปลายทาง (พิมพ์เพื่อค้น)");
       return;
     }
     if (reason.trim().length < 3) {
@@ -55,7 +59,7 @@ export function TransferRepForm({
     startTransition(async () => {
       const res = await adminTransferSalesRep({
         customer_id:        customerId,
-        new_sales_admin_id: newRepId === "__unassign__" ? null : newRepId,
+        new_sales_admin_id: mode === "unassign" ? null : newRepId,
         reason:             reason.trim(),
       });
       if (res.ok) {
@@ -82,7 +86,9 @@ export function TransferRepForm({
             type="button"
             onClick={() => {
               setDone(false);
+              setMode("assign");
               setNewRepId("");
+              setNewRepDisplay(null);
               setReason("");
               setConfirm(false);
             }}
@@ -104,25 +110,52 @@ export function TransferRepForm({
         </div>
       )}
 
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">
-          เซลล์ปลายทาง <span className="text-red-600">*</span>
-        </span>
-        <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className={inputCls}>
-          <option value="">— เลือกเซลล์ปลายทาง —</option>
-          <option value="__unassign__">— ปล่อยลูกค้า (ไม่มีเซลล์ดูแล) —</option>
-          {targetReps.map((r) => (
-            <option key={r.profile_id} value={r.profile_id}>
-              {r.display}
-            </option>
-          ))}
-        </select>
-        {targetReps.length === 0 && (
-          <span className="block text-xs text-muted">
-            ไม่พบเซลล์อื่นที่ active — ต้องเพิ่ม role &quot;sales_admin&quot; ก่อน
-          </span>
-        )}
-      </label>
+      {/* Mode toggle: pick a new rep or unassign */}
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">รูปแบบการโอน</legend>
+        <div className="flex flex-wrap gap-2">
+          <label className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm cursor-pointer ${
+            mode === "assign" ? "border-primary-500 bg-white" : "border-border bg-white/60"
+          }`}>
+            <input
+              type="radio"
+              name="mode"
+              value="assign"
+              checked={mode === "assign"}
+              onChange={() => setMode("assign")}
+            />
+            <span>เลือกเซลล์ใหม่</span>
+          </label>
+          <label className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm cursor-pointer ${
+            mode === "unassign" ? "border-primary-500 bg-white" : "border-border bg-white/60"
+          }`}>
+            <input
+              type="radio"
+              name="mode"
+              value="unassign"
+              checked={mode === "unassign"}
+              onChange={() => { setMode("unassign"); setNewRepId(""); setNewRepDisplay(null); }}
+            />
+            <span>ปล่อยลูกค้า (ไม่มีเซลล์ดูแล)</span>
+          </label>
+        </div>
+      </fieldset>
+
+      {/* Rep combobox — only shown in assign mode */}
+      {mode === "assign" && (
+        <div className="space-y-1 text-sm">
+          <label className="block font-medium">
+            เซลล์ปลายทาง <span className="text-red-600">*</span>
+          </label>
+          <RepCombobox
+            value={newRepId}
+            onChange={(id, display) => { setNewRepId(id); setNewRepDisplay(display); }}
+            excludeIds={excludeIds}
+            selectedLabel={newRepDisplay}
+            disabled={pending}
+          />
+        </div>
+      )}
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium">
@@ -142,7 +175,7 @@ export function TransferRepForm({
       </label>
 
       {/* Preview */}
-      {newRepId && (
+      {(mode === "unassign" || newRepId) && (
         <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 text-sm space-y-1">
           <div className="text-xs uppercase tracking-wider text-muted">สรุปการโอน</div>
           <div className="flex flex-wrap items-center gap-2">
@@ -151,7 +184,7 @@ export function TransferRepForm({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted">ไป:</span>
-            <span className="font-medium text-primary-700">{newRepLabel}</span>
+            <span className="font-medium text-primary-700">{summaryToLabel}</span>
           </div>
         </div>
       )}
@@ -166,7 +199,7 @@ export function TransferRepForm({
       <Button
         type="button"
         onClick={submit}
-        disabled={pending || !newRepId || reason.trim().length < 3 || !confirm}
+        disabled={pending || (mode === "assign" && !newRepId) || reason.trim().length < 3 || !confirm}
         fullWidth
       >
         {pending ? "กำลังโอน..." : "โอนเซลล์"}

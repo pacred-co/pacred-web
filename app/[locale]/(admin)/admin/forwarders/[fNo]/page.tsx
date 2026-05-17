@@ -40,6 +40,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
       tracking_chn, tracking_th, cabinet_number, partner_warehouse, note_admin, note_user, detail,
       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note,
       bill_to_name_override,
+      acknowledged_at, acknowledged_note,
       created_at, date_arrived_thailand, date_delivered,
       profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
     `)
@@ -221,6 +222,19 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
                   </li>
                 ))}
               </ul>
+            </Section>
+          )}
+
+          {(f as { acknowledged_at: string | null }).acknowledged_at && (
+            <Section title="✅ ลูกค้ายืนยันรับสินค้าแล้ว (U4-3a)">
+              <p className="text-xs text-muted">
+                {new Date((f as { acknowledged_at: string }).acknowledged_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+              </p>
+              {(f as { acknowledged_note: string | null }).acknowledged_note && (
+                <p className="mt-1 text-sm whitespace-pre-wrap">
+                  <span className="text-muted text-xs">โน้ตจากลูกค้า:</span> {(f as { acknowledged_note: string }).acknowledged_note}
+                </p>
+              )}
             </Section>
           )}
 

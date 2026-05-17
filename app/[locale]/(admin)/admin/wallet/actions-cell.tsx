@@ -4,60 +4,101 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateWalletTransaction } from "@/actions/admin/wallet";
+import { SlipReviewModal } from "./slip-review-modal";
 
-export function WalletTxActions({ id, status, kind, slipUrl }: { id: string; status: string; kind: string; slipUrl?: string | null }) {
+type Props = {
+  id: string;
+  status: string;
+  kind: string;
+  slipUrl?: string | null;
+  // Phase C QoL #3 — extra fields the slip-review modal needs.
+  amount: number;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  note: string | null;
+  slip_transferred_at: string | null;
+  created_at: string;
+  member_code: string | null;
+  customer_name: string;
+  phone: string | null;
+};
+
+export function WalletTxActions(props: Props) {
+  const {
+    id, status, kind, slipUrl, amount, bank_name, account_name,
+    account_number, note, slip_transferred_at, created_at,
+    member_code, customer_name, phone,
+  } = props;
+
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
-  const [note, setNote] = useState("");
-  const [showSlip, setShowSlip] = useState(false);
+  const [rejectNote, setRejectNote] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   function set(newStatus: "completed" | "failed" | "cancelled") {
     setErr(null);
-    if ((newStatus === "failed" || newStatus === "cancelled") && !note.trim()) {
+    if ((newStatus === "failed" || newStatus === "cancelled") && !rejectNote.trim()) {
       setErr("กรุณาระบุเหตุผลใน note");
       return;
     }
     startTransition(async () => {
-      const res = await adminUpdateWalletTransaction({ id, status: newStatus, note: note || undefined });
+      const res = await adminUpdateWalletTransaction({ id, status: newStatus, note: rejectNote || undefined });
       if (res.ok) router.refresh();
       else setErr(res.error);
     });
   }
 
   const label = kind === "deposit" ? "เติม" : kind === "withdraw" ? "ถอน" : kind;
+  // Phase C QoL #3 — the rich slip-vs-amount modal is gated to deposits
+  // (the one workflow it was designed to speed up). Other kinds still
+  // get the legacy inline approve/cancel buttons below.
+  const showReviewModal = kind === "deposit" && status === "pending";
 
   return (
     <div className="space-y-1 min-w-[160px]">
-      {/* Slip preview */}
-      {slipUrl && (
-        <div>
-          <button
+      {/* Phase C QoL #3 — open full slip-review modal for deposits */}
+      {showReviewModal && (
+        <>
+          <Button
+            size="sm"
             type="button"
-            onClick={() => setShowSlip((v) => !v)}
-            className="text-[10px] text-primary-500 hover:underline"
+            onClick={() => setReviewOpen(true)}
+            disabled={pending}
+            fullWidth
           >
-            {showSlip ? "ซ่อนสลิป" : "📷 ดูสลิป"}
-          </button>
-          {showSlip && (
-            <div className="mt-1 rounded-lg border border-border overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase URL; admin preview only */}
-              <img
-                src={slipUrl}
-                alt="slip"
-                className="max-h-48 w-full object-contain bg-surface-alt"
-              />
-            </div>
-          )}
-        </div>
+            🔍 ตรวจสลิป + อนุมัติ
+          </Button>
+          <SlipReviewModal
+            open={reviewOpen}
+            onClose={() => setReviewOpen(false)}
+            tx={{
+              id,
+              amount,
+              bank_name,
+              account_name,
+              account_number,
+              note,
+              slip_url: slipUrl ?? null,
+              slip_transferred_at,
+              created_at,
+              member_code,
+              customer_name,
+              phone,
+            }}
+          />
+        </>
       )}
 
-      {status === "pending" && (
+      {/* Withdraw rows + non-deposit pending rows: keep the legacy inline
+          approve/cancel pair (the rich modal is deposit-specific). */}
+      {!showReviewModal && status === "pending" && (
         <>
           {err && <div className="text-[10px] text-red-700">{err}</div>}
           <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
             placeholder="หมายเหตุ (เหตุผลถ้าปฏิเสธ)"
             className="w-full text-[10px] rounded border border-border px-1 py-0.5"
           />

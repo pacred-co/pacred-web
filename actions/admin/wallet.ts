@@ -83,6 +83,59 @@ export async function adminUpdateWalletTransaction(input: AdminUpdateWalletTxInp
 }
 
 // ────────────────────────────────────────────────────────────
+// Phase C QoL #3 — signed-URL helper for the deposit slip modal.
+// ────────────────────────────────────────────────────────────
+// The `slips` bucket is private + storage RLS lets only the owner read.
+// Admins need a short-lived signed URL to preview the customer slip
+// when verifying the deposit against the typed amount. This helper
+// authenticates (super/accounting) + returns a 1h signed URL only;
+// no mutation, no audit log (signed URLs leak nothing extra given the
+// admin already has bypass access via the service role).
+//
+// Returns `null` instead of erroring on missing path so callers can
+// render "no slip uploaded" gracefully.
+
+const slipSignedUrlSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export async function adminGetWalletTxSlipSignedUrl(
+  input: z.infer<typeof slipSignedUrlSchema>,
+): Promise<AdminActionResult<{ url: string | null; mime: string | null }>> {
+  const parsed = slipSignedUrlSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
+  return withAdmin<{ url: string | null; mime: string | null }>(
+    ["super", "accounting"],
+    async () => {
+      const admin = createAdminClient();
+      const { data: row } = await admin
+        .from("wallet_transactions")
+        .select("id, slip_url")
+        .eq("id", parsed.data.id)
+        .maybeSingle<{ id: string; slip_url: string | null }>();
+      if (!row) return { ok: false, error: "not_found" };
+      if (!row.slip_url) return { ok: true, data: { url: null, mime: null } };
+
+      const { data: signed, error: sErr } = await admin.storage
+        .from("slips")
+        .createSignedUrl(row.slip_url, 60 * 60);
+      if (sErr) return { ok: false, error: sErr.message };
+
+      // Best-effort MIME inference from the path extension so the modal
+      // knows whether to render <img> or <embed type="application/pdf">.
+      const ext = (row.slip_url.split(".").pop() ?? "").toLowerCase();
+      const mime = ext === "pdf" ? "application/pdf"
+                 : ext === "png" ? "image/png"
+                 : (ext === "jpg" || ext === "jpeg") ? "image/jpeg"
+                 : null;
+
+      return { ok: true, data: { url: signed?.signedUrl ?? null, mime } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // T-P3: BULK approve pending deposits (cargo revenue path)
 // ────────────────────────────────────────────────────────────
 //

@@ -4,13 +4,29 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminUpdateYuanPayment } from "@/actions/admin/yuan-payments";
+import { YuanRefundModal } from "./refund-modal";
 
-export function YuanPaymentActions({ id, status }: { id: string; status: string }) {
+type Props = {
+  id:     string;
+  status: string;
+  // Phase C QoL #4 — refund modal needs these fields to render the
+  // customer/amount summary + decide whether to warn about wallet reversal.
+  yuan_amount?:   number;
+  thb_amount?:    number;
+  member_code?:   string | null;
+  customer_name?: string;
+  phone?:         string | null;
+  paid_via_wallet?: boolean;
+};
+
+export function YuanPaymentActions(props: Props) {
+  const { id, status } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
 
-  function set(newStatus: "processing" | "completed" | "failed" | "refunded") {
+  function set(newStatus: "processing" | "completed" | "failed") {
     setErr(null);
     startTransition(async () => {
       const res = await adminUpdateYuanPayment({ id, status: newStatus });
@@ -18,6 +34,8 @@ export function YuanPaymentActions({ id, status }: { id: string; status: string 
       else setErr(res.error);
     });
   }
+
+  const canRefund = status === "pending" || status === "processing" || status === "completed";
 
   return (
     <div className="space-y-1">
@@ -35,10 +53,38 @@ export function YuanPaymentActions({ id, status }: { id: string; status: string 
             <Button size="sm" variant="outline" type="button" onClick={() => set("failed")} disabled={pending}>ล้มเหลว</Button>
           </>
         )}
-        {(status === "completed" || status === "failed") && (
-          <Button size="sm" variant="outline" type="button" onClick={() => set("refunded")} disabled={pending}>คืนเงิน</Button>
+        {/* Phase C QoL #4 — refund now requires a slip. Opens a modal
+            instead of a one-click status flip. Available on any non-
+            terminal, non-failed status (matches isYuanTransitionAllowed). */}
+        {canRefund && (
+          <Button
+            size="sm"
+            variant="outline"
+            type="button"
+            onClick={() => setRefundOpen(true)}
+            disabled={pending}
+          >
+            คืนเงิน + แนบสลิป
+          </Button>
         )}
       </div>
+
+      {canRefund && (
+        <YuanRefundModal
+          open={refundOpen}
+          onClose={() => setRefundOpen(false)}
+          yuanPayment={{
+            id,
+            yuan_amount:   Number(props.yuan_amount ?? 0),
+            thb_amount:    Number(props.thb_amount ?? 0),
+            member_code:   props.member_code ?? null,
+            customer_name: props.customer_name ?? "—",
+            phone:         props.phone ?? null,
+            paid_via_wallet: props.paid_via_wallet ?? false,
+            status,
+          }}
+        />
+      )}
     </div>
   );
 }

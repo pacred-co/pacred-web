@@ -6,6 +6,101 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 
+// ────────────────────────────────────────────────────────────
+// Phase C QoL #2 — fuzzy driver search.
+// ────────────────────────────────────────────────────────────
+// The old "type member_code in a textbox" form was hostile to ops staff
+// who don't have the PR-code memorised. This server action backs a
+// combobox: type fragment of member_code / name / phone → returns top 10
+// `{driver_no=member_code, name, phone, profile_id}` hits, each labelled
+// `{member_code} · {name} · {phone}` for the dropdown.
+//
+// Driver eligibility: the schema doesn't carry a `role='driver'` flag
+// on profiles — drivers are identified by holding the `driver` admin
+// role in the admins table. We filter on that to avoid surfacing
+// regular customers (who'd cause a NOT-a-driver assignment).
+
+const searchDriversSchema = z.object({
+  q:     z.string().trim().min(1, "ระบุคำค้น").max(80),
+  limit: z.number().int().min(1).max(50).optional(),
+});
+export type SearchDriversInput = z.infer<typeof searchDriversSchema>;
+export type DriverSearchHit = {
+  profile_id:  string;
+  member_code: string | null;
+  name:        string;
+  phone:       string | null;
+  display:     string;
+};
+
+export async function searchDriversByQuery(
+  input: SearchDriversInput,
+): Promise<AdminActionResult<{ hits: DriverSearchHit[] }>> {
+  const parsed = searchDriversSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { q } = parsed.data;
+  const limit = parsed.data.limit ?? 10;
+
+  return withAdmin<{ hits: DriverSearchHit[] }>(["ops", "super"], async () => {
+    const admin = createAdminClient();
+
+    // Defensive escape — strip commas/parens so the OR filter can't be broken out of.
+    const safeQ = q.replace(/[(),]/g, " ");
+    const pattern = `%${safeQ}%`;
+
+    const { data, error } = await admin
+      .from("admins")
+      .select(`
+        profile_id, role,
+        profile:profiles!profile_id ( member_code, first_name, last_name, phone )
+      `)
+      .eq("role", "driver")
+      .eq("is_active", true)
+      .or(
+        [
+          `member_code.ilike.${pattern}`,
+          `first_name.ilike.${pattern}`,
+          `last_name.ilike.${pattern}`,
+          `phone.ilike.${pattern}`,
+        ].join(","),
+        { referencedTable: "profiles" },
+      )
+      .limit(limit * 2);
+    if (error) return { ok: false, error: error.message };
+
+    type ProfileShape = {
+      member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null;
+    };
+    type Row = {
+      profile_id: string; role: string;
+      profile:    ProfileShape | ProfileShape[] | null;
+    };
+
+    const seen = new Set<string>();
+    const hits: DriverSearchHit[] = [];
+    for (const r of (data ?? []) as Row[]) {
+      if (seen.has(r.profile_id)) continue;
+      const prof = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+      if (!prof) continue;
+
+      const name  = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim() || "—";
+      const phone = prof.phone ?? null;
+
+      seen.add(r.profile_id);
+      hits.push({
+        profile_id:  r.profile_id,
+        member_code: prof.member_code,
+        name,
+        phone,
+        display:     `${prof.member_code ?? "—"} · ${name} · ${phone ?? "—"}`,
+      });
+      if (hits.length >= limit) break;
+    }
+
+    return { ok: true, data: { hits } };
+  });
+}
+
 /**
  * Admin actions on forwarder_driver assignments (P-18 + T-P1 cargo revenue path).
  * Admins can:
