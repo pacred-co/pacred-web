@@ -182,24 +182,42 @@ export async function adminSendBroadcastNow(
     if (bc.audience === "specific_ids") {
       targetIds = bc.audience_ids ?? [];
     } else {
-      // Query profiles by audience filter.
-      let query = admin
-        .from("profiles")
-        .select("id")
-        .eq("status", "active")                                        // skip suspended/incomplete
-        .limit(100000);
-      if (bc.audience === "juristic_only") {
-        query = query.eq("account_type", "juristic");
-      } else if (bc.audience === "personal_only") {
-        query = query.eq("account_type", "personal");
+      // AUDIT-FOLLOWUP (Agent F LOW #4) — page through profiles so the
+      // audience isn't silently truncated past 100k customers. Supabase
+      // PostgREST has a hard 1000-row cap per request even with
+      // .limit(100000) — we MUST use .range() to walk past it.
+      const PAGE = 1000;
+      let from = 0;
+      // Defensive global cap — if Pacred ever has >1M active customers
+      // we'd want chunked notification writes anyway (current chunk=1000
+      // means 1M rows would be 1000 chunks — safer to add a separate
+      // batch-job worker at that scale; raise here when needed).
+      const GLOBAL_CAP = 1_000_000;
+      while (from < GLOBAL_CAP) {
+        let query = admin
+          .from("profiles")
+          .select("id")
+          .eq("status", "active")                                        // skip suspended/incomplete
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (bc.audience === "juristic_only") {
+          query = query.eq("account_type", "juristic");
+        } else if (bc.audience === "personal_only") {
+          query = query.eq("account_type", "personal");
+        }
+        const { data: page, error: profErr } = await query;
+        if (profErr) {
+          // Roll back to draft so admin can retry.
+          await admin.from("broadcasts").update({ status: "draft" }).eq("id", d.id);
+          return { ok: false, error: `audience_resolve_failed: ${profErr.message}` };
+        }
+        if (!page || page.length === 0) break;
+        for (const p of page as Array<{ id: string }>) {
+          targetIds.push(p.id);
+        }
+        if (page.length < PAGE) break;                                  // last page
+        from += PAGE;
       }
-      const { data: profiles, error: profErr } = await query;
-      if (profErr) {
-        // Roll back to draft so admin can retry.
-        await admin.from("broadcasts").update({ status: "draft" }).eq("id", d.id);
-        return { ok: false, error: `audience_resolve_failed: ${profErr.message}` };
-      }
-      targetIds = (profiles ?? []).map((p: { id: string }) => p.id);
     }
 
     if (targetIds.length === 0) {

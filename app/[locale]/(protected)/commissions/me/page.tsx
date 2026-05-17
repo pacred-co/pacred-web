@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { getAdminRoles } from "@/lib/auth/require-admin";
@@ -67,10 +67,14 @@ export default async function MyCommissionsPage() {
     redirect("/dashboard");
   }
 
-  const admin = createAdminClient();
+  // AUDIT-FOLLOWUP (Agent F LOW #3) — use RLS-scoped client. The
+  // commission_accruals RLS already enforces earner_admin_id = auth.uid()
+  // for the staff role, so the explicit `.eq("earner_admin_id", user.id)`
+  // filter below becomes defense-in-depth.
+  const supabase = await createClient();
 
   // ── Unpaid accruals (own) ──
-  const { data: accrualsRaw } = await admin
+  const { data: accrualsRaw } = await supabase
     .from("commission_accruals")
     .select("id, role_kind, source_kind, source_ref, base_thb, accrued_amount_thb, accrued_at")
     .eq("earner_admin_id", user.id)
@@ -94,7 +98,7 @@ export default async function MyCommissionsPage() {
   }
 
   // ── Withdrawals (own) ──
-  const { data: withdrawalsRaw } = await admin
+  const { data: withdrawalsRaw } = await supabase
     .from("commission_withdrawals")
     .select("id, withdrawal_no, status, title, gross_thb, net_thb, requested_at, paid_at")
     .eq("earner_admin_id", user.id)
@@ -219,7 +223,7 @@ export default async function MyCommissionsPage() {
                 {withdrawals.map((w) => (
                   <tr key={w.id} className="border-t border-border">
                     <td className="px-3 py-2">
-                      <Link href={`/admin/commissions/${w.id}`} className="font-mono text-xs text-primary-600 hover:underline">
+                      <Link href={`/commissions/me/${w.id}`} className="font-mono text-xs text-primary-600 hover:underline">
                         {w.withdrawal_no}
                       </Link>
                     </td>

@@ -18,6 +18,7 @@ import {
   Truck,
   User,
   Wallet,
+  Coins,
 } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
 
@@ -115,6 +116,10 @@ const MENU: MenuItem[] = [
     ],
   },
   { href: "/shipments", labelKey: "shipments", Icon: Truck },
+  // V-E8.1 — staff commission portal (entry visible to all customers; the
+  // page itself redirects non-eligible roles to /dashboard, per
+  // /commissions/me/page.tsx role gate)
+  { href: "/commissions/me", labelKey: "commissionsMe", Icon: Coins },
   { href: "/addresses", labelKey: "addresses", Icon: MapPin },
   { href: "/profile", labelKey: "profile", Icon: User },
   { href: "/notifications", labelKey: "notifications", Icon: Bell, badgeKey: "notifications" },

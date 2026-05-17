@@ -41,8 +41,9 @@ const items: NavItem[] = [
   { href: "/admin/reports/user-sales-history",    label: "ประวัติยอด/ลูกค้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
 
   // Freight stack (V-E6+)
-  { href: "/admin/freight/quotes",    label: "ใบเสนอราคา (V-E6)",   icon: <Receipt className="w-5 h-5" />,  roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
-  { href: "/admin/freight/shipments", label: "งาน + invoice (V-E1)", icon: <Package className="w-5 h-5" />, roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
+  { href: "/admin/freight/quotes",       label: "ใบเสนอราคา (V-E6)",     icon: <Receipt className="w-5 h-5" />,        roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
+  { href: "/admin/freight/shipments",    label: "งาน + invoice (V-E1)",  icon: <Package className="w-5 h-5" />,        roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
+  { href: "/admin/freight/declarations", label: "ใบขนสินค้า (V-E11)",    icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting"],                     group: "Freight" },
 
   // V-G3 — admin broadcasts (super + sales_admin)
   { href: "/admin/broadcasts",        label: "Broadcasts (V-G3)",   icon: <BellRing className="w-5 h-5" />, roles: ["super","sales_admin"], group: "การสื่อสาร" },
@@ -66,6 +67,7 @@ const items: NavItem[] = [
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/commissions",      label: "ค่าคอม + Payouts (V-E8)", icon: <BadgePercent className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
+  { href: "/admin/accounting/periods", label: "ปิดงวด (V-E9)",       icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting","ops"], group: "การเงิน" },
 
   // Customer & sales
   { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
