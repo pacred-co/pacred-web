@@ -3,7 +3,7 @@
 > **CANONICAL** — single source of truth for roles, branches, and merge policy.
 > ทุกไฟล์ MD ที่กล่าวถึง team/role/branch ต้อง link มาที่นี่ ห้าม duplicate
 
-Last updated: 2026-05-13
+Last updated: 2026-05-18
 
 ---
 
@@ -416,6 +416,8 @@ Every push from dave→main must satisfy:
 - [ ] If Part T task progressed → tick off in `docs/PORT_PLAN.md` Part T2 table
 
 ### 10.5 Emergency cadence override (Cargo Revenue Sprint 2026-05-15+)
+
+> ⏸️ **HISTORICAL / INACTIVE** — the Cargo Revenue Sprint emergency ended at the **2026-05-17 production launch**. Normal save-point cadence (§3.0 + §10.1) applies now. Kept below for reference; do not follow it unless a new emergency is explicitly declared.
 
 During emergency:
 - น้อง push to own branch **end of each work block** (not just end of day) — เดฟ has more chances to integrate
