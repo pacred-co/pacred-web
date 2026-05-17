@@ -52,9 +52,11 @@ This repo (`pacred-web`) is **V2 owner-pleaser**. V3 lives in a separate future 
 
 Commit local freely. Push only when: end of session · before sleep · machine change · location change · big batch done. Per [memory: push_frequency_strict] + [`docs/team.md`](docs/team.md) §3.0. Vercel build cost + push churn distracts the team.
 
-## 6. Customer-visible surfaces have a voice
+## 6. Customer-visible surfaces have a voice — and a phone
 
-Slogan: **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Mobile-first. Copy ตรงเป้า ไม่อ้อม. Every service has a landing page (even if backend not ready → use "ติดต่อทีม" CTA fallback). Don't ship dry copy.
+Slogan: **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Copy ตรงเป้า ไม่อ้อม. Every service has a landing page (even if backend not ready → use "ติดต่อทีม" CTA fallback). Don't ship dry copy.
+
+**Mobile-first is non-negotiable.** Most Pacred customers arrive on phones — so every customer-visible change must be designed and checked at a phone viewport (360px Android / 390px iPhone) FIRST, then scaled up to desktop. Build desktop-first and the mobile layout goes wrong. Before pushing any customer surface, verify at 360 + 390px: no horizontal scroll, tap targets ≥ 44px, body text ≥ 16px, primary CTA thumb-reachable. The concrete rules + Tailwind patterns + pitfalls live in [`docs/conventions.md`](docs/conventions.md) §11 and the [`docs/mobile-first-playbook.md`](docs/mobile-first-playbook.md).
 
 ## 7. Constants live in `components/seo/site.ts`
 
