@@ -17,7 +17,9 @@ import { createClient } from "@/lib/supabase/server";
 
 // 'warehouse' + 'driver' added by migration 0033 — extended admins.role
 // CHECK constraint to support warehouse spine + driver scan flows.
-export type AdminRole = "super" | "ops" | "accounting" | "sales_admin" | "warehouse" | "driver";
+// 'interpreter' added by migration 0054 — V-H1 ล่ามจีน commission portal
+// (ADR-0015 Q3 + Phase I2 RBAC ack 2026-05-17 / E-5 resolution).
+export type AdminRole = "super" | "ops" | "accounting" | "sales_admin" | "warehouse" | "driver" | "interpreter";
 
 export async function requireAdmin(requiredRoles?: AdminRole[]): Promise<{
   user: { id: string; email: string | null };

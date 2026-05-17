@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
-  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload,
+  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -44,6 +44,9 @@ const items: NavItem[] = [
   { href: "/admin/freight/quotes",    label: "ใบเสนอราคา (V-E6)",   icon: <Receipt className="w-5 h-5" />,  roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
   { href: "/admin/freight/shipments", label: "งาน + invoice (V-E1)", icon: <Package className="w-5 h-5" />, roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
 
+  // V-G3 — admin broadcasts (super + sales_admin)
+  { href: "/admin/broadcasts",        label: "Broadcasts (V-G3)",   icon: <BellRing className="w-5 h-5" />, roles: ["super","sales_admin"], group: "การสื่อสาร" },
+
   // Operations
   { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
   { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
@@ -62,6 +65,7 @@ const items: NavItem[] = [
   { href: "/admin/tax-invoices",     label: "ใบกำกับภาษี",     icon: <Receipt className="w-5 h-5" />,         roles: ["accounting"], group: "การเงิน" },
   { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
   { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
+  { href: "/admin/commissions",      label: "ค่าคอม + Payouts (V-E8)", icon: <BadgePercent className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
 
   // Customer & sales
   { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
