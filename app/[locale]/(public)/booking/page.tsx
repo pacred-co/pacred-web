@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { NavBar } from "@/components/sections/navbar";
+import { SearchBar } from "@/components/sections/search-bar";
+import { Footer } from "@/components/sections/footer";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
@@ -33,9 +36,12 @@ export default async function BookingPage({
           typedLocale,
         )}
       />
+      <NavBar />
+      <SearchBar />
       <main>
         <BookingCalculator />
       </main>
+      <Footer />
     </>
   );
 }
