@@ -87,6 +87,9 @@ function mockClient(rows: RowSet): SupabaseClient {
   } as unknown as SupabaseClient;
 }
 
+// All cases run inside main() — tsx transforms a .test.ts as CJS, which
+// rejects top-level await; an async wrapper is the repo test convention.
+async function main() {
 // ────────────────────────────────────────────────────────────
 section("empty container");
 // ────────────────────────────────────────────────────────────
@@ -260,6 +263,14 @@ section("error propagation");
   assertEq("ok=false on disbursements error", res.ok, false);
 }
 
+}
 // ────────────────────────────────────────────────────────────
-console.log(`\n  ${pass} pass · ${fail} fail`);
-if (fail > 0) process.exit(1);
+main()
+  .then(() => {
+    console.log(`\n  ${pass} pass · ${fail} fail`);
+    if (fail > 0) process.exit(1);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

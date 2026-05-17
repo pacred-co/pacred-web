@@ -61,6 +61,8 @@
 | [`audit-system-2026-05-17.md`](audit-system-2026-05-17.md) | Pre-launch whole-system audit of `pacred-web` — build/verify green, 155 routes smoked, 1 contained 502, GO verdict | 2026-05-17 |
 | [`prelaunch-verification-2026-05-17.md`](prelaunch-verification-2026-05-17.md) | Pre-launch code-level verification audit — traced all 5 launch-critical paths (auth · wallet/money · admin RLS · order/forwarder · tax/WHT); confirmed W-1/W-3/S-3/S-4 + migrations 0062/0063/0064/0053 landed correctly line-by-line; 🟢 GO, 3 non-blocker findings F-1..F-3 | 2026-05-17 |
 | [`qa-flow-run-2026-05-17.md`](qa-flow-run-2026-05-17.md) | First functional QA pass (post-launch, `qa-flow-simulator` skill) — 3 pass / 0 fail / 8 blocked; 0 code defects; dev Supabase `gnortvyazfmocvcbvfbs` found DELETED (blocks local QA); **production Supabase `yzljakczhwrpbxflnmco` probed + verified ALIVE** — launch confirmed fine | 2026-05-17 |
+| [`review-u1-u2-2026-05-18.md`](review-u1-u2-2026-05-18.md) | Read-only code review of ภูม's U1 + U2 batches (refund money path · billing-gate · container unify · freight chain · PCS migration · cargo_sacks · migrations 0058/0059/0066/0067/0068) — 1 P0 (refund has no amount cap / no paid-status check) + 5 P1 + 7 P2; 🟡 ship-with-follow-up, P0-1 + P1-1 block next prod deploy | 2026-05-18 |
+| [`audit-core-2026-05-18.md`](audit-core-2026-05-18.md) | Read-only rigorous audit of the CORE launch code (everything before U1/U2) — auth · wallet · order/forwarder pay · freight 0050-0057 · tax/WHT · W-1 RLS. All prior P0s (P0-1/P0-2/S-1/G-3/F-2/F-3) confirmed FIXED line-by-line; 1 NEW P1 (`wallet_tx_insert_self_serve` has no amount-sign check) + 4 P2; 🟢 core sound | 2026-05-18 |
 
 ## Cross-references
 

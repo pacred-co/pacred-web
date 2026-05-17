@@ -20,7 +20,6 @@ import {
   Briefcase,
   ShieldAlert,
 } from "lucide-react";
-import { LineIcon } from "@/components/icons/social-icons";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NavBar } from "@/components/sections/navbar";
@@ -55,11 +54,11 @@ export async function generateMetadata({
 type Step = { num: string; icon: typeof FileCheck2; title: string; desc: string };
 
 const STEPS: Step[] = [
-  { num: "01", icon: FileCheck2,    title: "ส่งเอกสารพื้นฐาน",       desc: "Invoice + Packing List (+ AWB / B/L หากมี)" },
-  { num: "02", icon: MessageCircle, title: "ทักผ่าน LINE / Email / โทร", desc: "Forward อีเมล DHL/FedEx หรือถ่ายภาพให้ทีมเลย" },
-  { num: "03", icon: Calculator,    title: "ประเมินราคา",            desc: "แจ้งค่าบริการ + แนวทางเคลียร์ โปร่งใส 100%" },
-  { num: "04", icon: Stamp,         title: "เริ่มเคลียร์",            desc: "ดำเนินการตามขั้นตอนศุลกากรครบทุกขั้น" },
-  { num: "05", icon: PackageSearch, title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดรับ/จัดส่งทั่วประเทศ Door to Door" },
+  { num: "01", icon: FileCheck2,    title: "ส่งเอกสารพื้นฐาน",       desc: "แค่ Invoice กับ Packing List ก็เริ่มได้ มี AWB / B/L แนบมาด้วยจะยิ่งไว" },
+  { num: "02", icon: MessageCircle, title: "ทักผ่าน LINE / Email / โทร", desc: "Forward เมลจาก DHL/FedEx มาก็ได้ หรือถ่ายรูปใบส่งของส่งทีมก็ได้" },
+  { num: "03", icon: Calculator,    title: "ประเมินราคา",            desc: "เคาะค่าบริการ + วางแผนเคลียร์ให้ฟัง ไม่มีค่าใช้จ่ายแอบซ่อน" },
+  { num: "04", icon: Stamp,         title: "เริ่มเคลียร์",            desc: "ทีมเดินเรื่องที่ด่านครบทุกขั้น คุณรอที่ออฟฟิศได้สบายใจ" },
+  { num: "05", icon: PackageSearch, title: "ปลดสินค้า + จัดส่งต่อ",   desc: "นัดส่งถึงประตูทั่วไทย หรือมารับเองที่ด่านก็ได้ตามสะดวก" },
 ];
 
 // Tag groups — each group renders as a sub-section of chips under the
@@ -216,7 +215,7 @@ export default async function CustomsClearancePage({
             </h1>
 
             <h2 className="mt-1.5 md:mt-2 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px] md:max-w-none md:whitespace-nowrap">
-              เคลียร์ภาษีนำเข้า · เคลียร์ของติดด่าน · เคลียร์พิธีการศุลกากร — <span className="text-primary-600/80 font-semibold">ราคาเริ่มต้น 2,800 บาท</span> ทักไลน์ปรึกษาเคลียร์ฟรี 24 ชม.
+              รับเคลียร์ทุกเรื่องที่ด่าน — ทั้งภาษีนำเข้า ของติดด่าน และพิธีการศุลกากร <span className="text-primary-600/80 font-semibold">เริ่มเพียง 2,800 บาท</span> ทักไลน์ปรึกษาฟรีตลอด 24 ชม.
             </h2>
 
             {/* ─── Detailed service list — moved here per ปอน 2026-05-16 ─── */}
@@ -241,19 +240,19 @@ export default async function CustomsClearancePage({
               </h3>
 
               <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed md:whitespace-nowrap">
-                สุวรรณภูมิ / ดอนเมือง / ไปรษณีย์หลักสี่ / คลองเตย / แหลมฉบัง / ลาดกระบัง (ICD) / ด่านชายแดน
+                รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
               </p>
 
               <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
-                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: "เคลียร์สินค้านำเข้า–ส่งออก Air Cargo / Sea Freight / Truck ครบทุกช่องทาง" },
-                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "ลงทะเบียนผู้นำเข้า–ส่งออก จับคู่ (YY) กรมศุลกากร ภายใน 30 นาที" },
-                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: "ดูแลเอกสารครบ — AWB / B/L / D/O / INVOICE + PACKING / ใบขนสินค้า / ใบเสร็จภาษี / ใบอนุญาตนำเข้า" },
-                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "แก้ปัญหาสินค้าติดด่าน ติดศุลกากร ภาษีเกิน พิกัดศุลกากรไม่ตรง เอกสารไม่ครบ หรือไม่มีใบอนุญาต" },
-                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "เคลียร์ใบอนุญาต อย. / มอก. / สมอ. / กสทช. / กรมเกษตร / กรมประมง / หน่วยงานราชการอื่นๆ" },
-                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: "ผู้เชี่ยวชาญด้านเคลียร์พิธีการศุลกากร Shipping มากกว่า 15 ปี" },
-                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "ได้รับใบอนุญาตตัวแทนออกของ (Shipping License) ถูกต้องตามกฎหมาย" },
-                  { icon: "/images/hero-section/icon-draf/people.png",          text: "ดูแลครบ ได้ใบขนสินค้า ชำระภาษีและอากรถูกต้อง หมดปัญหา กรมศุล ตำรวจ สรรพากร 100%" },
+                  { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
+                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
+                  { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   text: "เอกสารครบมือทุกใบ — AWB, B/L, D/O, Invoice + Packing, ใบขนสินค้า, ใบเสร็จภาษี และใบอนุญาตนำเข้า" },
+                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "เคยติดด่านมาก่อน? เราแก้ให้ตั้งแต่ภาษีเกิน พิกัดผิด เอกสารขาด ไปจนใบอนุญาตยังไม่ครบ" },
+                  { icon: "/images/hero-section/icon-draf/customclearance.png", text: "วิ่งใบอนุญาตให้ทุกหน่วย — อย., มอก., สมอ., กสทช., กรมเกษตร, กรมประมง และอื่นๆ" },
+                  { icon: "/images/hero-section/icon-draf/pcs-sales.png",       text: "ทีมเดินงานหน้าด่านจริงมามากกว่า 15 ปี รู้จักเจ้าหน้าที่ทุกตัวคน" },
+                  { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "มีใบอนุญาตตัวแทนออกของ (Shipping License) ของจริง ไม่ใช่นายหน้าหากิน" },
+                  { icon: "/images/hero-section/icon-draf/people.png",          text: "ทุกอย่างถูกกฎหมาย ใบขนพร้อม ภาษีอากรครบ ไม่ต้องกลัวกรมศุล ตำรวจ หรือสรรพากรย้อนหลัง" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-start gap-3">
                     <Image src={item.icon} alt="" width={32} height={32} aria-hidden className="w-6 h-6 md:w-8 md:h-8 shrink-0 mt-0.5 object-contain" />
@@ -297,7 +296,7 @@ export default async function CustomsClearancePage({
               เคลียร์ของง่าย ๆ — <span className="text-primary-600">ครบจบใน 5 ขั้นตอน</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ติดต่อง่าย ทักไลน์ปรึกษาฟรี · เคลียร์ของได้ทันที — ไม่ต้องเดา ไม่ต้องวิ่งเอกสารหลายรอบ
+              ทักมาก่อนได้เลย — ปรึกษาฟรี ไม่ต้องเดาเอง ไม่ต้องวิ่งยื่นเอกสารหลายรอบ ทีมจัดให้จบในคุยเดียว
             </p>
 
             <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
@@ -426,7 +425,7 @@ export default async function CustomsClearancePage({
               ทำไม <span className="text-primary-600">เคลียร์ของต้องเลือก Pacred Shipping</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              บริการครบ · ราคาโปร่งใส · ติดต่อง่าย — ทีมเคลียร์ของหน้างานจริง 15+ ปี เคลียร์ทุกด่านในไทย
+              บริการครบจบที่เดียว ราคาบอกตรง คุยง่าย — ทีมหน้าด่านตัวจริงที่อยู่กับลูกค้ามากว่า 15 ปี รู้จักทุกด่านในไทย
             </p>
 
             <div className="mt-6 md:mt-8 flex flex-col gap-6 md:gap-8 items-stretch">
@@ -442,14 +441,14 @@ export default async function CustomsClearancePage({
                 </h3>
                 <ul className="flex flex-col gap-y-2.5 md:gap-y-3 text-[13px] md:text-[15px] leading-[1.55] text-foreground/90">
                   {[
-                    { icon: "/images/hero-section/icon-draf/ptrack.png",          title: "เคลียร์ด่วน ภายใน 1 ชั่วโมง",  desc: "เอกสารพร้อม ปล่อยสินค้าออกด่วน · ไม่ค้างคืน ลดค่าฝากเก็บ" },
-                    { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: "ราคาโปร่งใส ไม่มีบวกแอบ",   desc: "แจ้งทุกค่าใช้จ่ายเป็นใบเดียว · ภาษี + ค่าพิธีการ + ค่ารถ ครบจบ" },
-                    { icon: "/images/hero-section/icon-draf/people.png",          title: "ทีมหน้างานจริง ทุกด่าน",      desc: "สุวรรณภูมิ / คลองเตย / แหลมฉบัง / ICD / มุกดาหาร / นครพนม / อรัญ" },
-                    { icon: "/images/hero-section/icon-draf/customclearance.png", title: "แก้ปัญหาที่คนอื่นทำไม่ได้",   desc: "ติดด่าน · HS Code ไม่ตรง · ภาษีเกิน · ไม่มีใบอนุญาต อย./มอก." },
-                    { icon: "/images/hero-section/icon-draf/checklistred.png",    title: "มีใบอนุญาตจริง ไม่ใช่นายหน้า", desc: "Shipping License · ทะเบียนกรมศุล · DBD · ภพ.20 ครบตามกฎหมาย" },
-                    { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: "ประสบการณ์ 15+ ปี",            desc: "เคลียร์มาแล้วทุกประเภทสินค้า · ทุก Term · ทุก Port ในไทย" },
-                    { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: "รองรับสินค้าควบคุม",            desc: "ยา · เครื่องสำอาง · อิเล็กทรอนิกส์ · เครื่องจักร · เคมีภัณฑ์" },
-                    { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: "Tracking real-time",            desc: "อัปเดตสถานะให้ติดตามได้ทุกขั้นตอน · ตอบไว 24 ชม." },
+                    { icon: "/images/hero-section/icon-draf/ptrack.png",          title: "เคลียร์ด่วน ภายใน 1 ชั่วโมง",  desc: "ของได้ออกจากด่านในวันเดียว ไม่ต้องนอนค้างให้เสียค่าฝากเก็บเพิ่ม" },
+                    { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: "ราคาโปร่งใส ไม่มีบวกแอบ",   desc: "ภาษี ค่าพิธีการ ค่ารถ — รวบในใบเดียวอ่านเข้าใจง่าย ไม่มีค่าใช้จ่ายงอกทีหลัง" },
+                    { icon: "/images/hero-section/icon-draf/people.png",          title: "ทีมหน้างานจริง ทุกด่าน",      desc: "มีคนประจำที่สุวรรณภูมิ คลองเตย แหลมฉบัง ICD มุกดาหาร นครพนม และอรัญฯ" },
+                    { icon: "/images/hero-section/icon-draf/customclearance.png", title: "แก้ปัญหาที่คนอื่นทำไม่ได้",   desc: "ของติดด่าน, HS Code ผิด, ภาษีเกินจริง หรือใบอนุญาต อย./มอก. ยังไม่ครบ เราเข้าไปคุยให้" },
+                    { icon: "/images/hero-section/icon-draf/checklistred.png",    title: "มีใบอนุญาตจริง ไม่ใช่นายหน้า", desc: "Shipping License, ทะเบียนกรมศุล, DBD และ ภพ.20 ครบทุกใบ ตรวจสอบได้" },
+                    { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: "ประสบการณ์ 15+ ปี",            desc: "ผ่านสินค้าเกือบทุกประเภท ทุก Term และทุก Port ในไทย" },
+                    { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: "รองรับสินค้าควบคุม",            desc: "ยา เครื่องสำอาง อิเล็กทรอนิกส์ เครื่องจักร และเคมีภัณฑ์ เอาอยู่หมด" },
+                    { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: "Tracking real-time",            desc: "อัปเดตสถานะทุกขั้นตอน ทักทีมได้ตลอด 24 ชม. ไม่ต้องลุ้น" },
                   ].map((item) => (
                     <li key={item.title} className="flex items-start gap-2.5 md:gap-3">
                       <Image src={item.icon} alt="" width={28} height={28} aria-hidden className="w-6 h-6 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain" />
@@ -559,7 +558,7 @@ export default async function CustomsClearancePage({
 
         {/* ─── Pacred guarantee banner — per ปอน 2026-05-17 v3
              • SLIM style เหมือน Add-LINE banner สีเขียวข้างบน — แต่ Pacred red theme
-             • Headline: "เคลียร์ชิปแน่ แค่ 2,800 บาท ของแท้ต้อง Pacred Shipping"
+             • Headline: "ของติดด่าน? แค่ 2,800 บาท เคลียร์ไวกับ Pacred Shipping"
                - Pacred Shipping = white pill + red text (highlight)
              • Partner logos (FedEx/DHL/TNT/UPS) เป็น sub-strip กดได้แยก
              • visit02 photo ขวา (slim, self-stretch)
@@ -604,7 +603,7 @@ export default async function CustomsClearancePage({
                   <div className="min-w-0 py-3 md:py-3">
                     {/* Desktop headline */}
                     <p className="hidden md:flex flex-wrap items-center gap-x-2 gap-y-1 text-[30px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      <span>เคลียร์ชิปแน่ แค่ <span className="text-yellow-300">2,800 บาท</span> ของแท้ต้อง</span>
+                      <span>ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ</span>
                       <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
                         Pacred Shipping
                       </span>
@@ -613,7 +612,7 @@ export default async function CustomsClearancePage({
 
                     {/* Mobile headline */}
                     <p className="md:hidden text-[18px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      เคลียร์ชิปแน่ แค่ <span className="text-yellow-300">2,800 บาท</span> ของแท้ต้อง
+                      ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ
                     </p>
                     <p className="md:hidden mt-1 inline-flex items-center gap-1.5">
                       <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-primary-600 text-[14px] font-black tracking-tight shadow-[0_3px_8px_rgba(0,0,0,0.25)]">
@@ -676,59 +675,40 @@ export default async function CustomsClearancePage({
               </div>
             </div>
 
-            {/* 2 CTA buttons — สมัคร + ปรึกษาไลน์ */}
+            {/* 2 CTA image banners — สมัคร + ปรึกษาไลน์ (per ปอน 2026-05-18) */}
             <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2 md:gap-4">
               <Link
                 href="/register"
-                className="group relative overflow-hidden rounded-2xl border border-primary-200 bg-white shadow-[0_8px_22px_-10px_rgba(179,0,0,0.18)] hover:shadow-[0_14px_30px_-8px_rgba(179,0,0,0.30)] hover:-translate-y-0.5 transition-all duration-300"
+                aria-label="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
-                <div className="flex items-center gap-2 md:gap-4 px-2.5 md:px-5 py-2.5 md:py-4">
-                  <span className="inline-flex w-9 h-9 md:w-12 md:h-12 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_5px_12px_rgba(179,0,0,0.20)] border border-primary-100">
-                    <Image
-                      src="/images/hero-section/icon/customer-mock.png"
-                      alt=""
-                      width={32}
-                      height={32}
-                      aria-hidden
-                      className="w-6 h-6 md:w-8 md:h-8 object-contain"
-                    />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug truncate">
-                      สมัครสมาชิกฟรี
-                    </p>
-                    <p className="mt-0.5 text-[10.5px] md:text-[12.5px] font-bold text-primary-600 inline-flex items-center gap-0.5 md:gap-1">
-                      <ChevronRight className="w-3 h-3" strokeWidth={3} />
-                      คลิ๊กเลย !
-                    </p>
-                  </div>
-                </div>
+                <Image
+                  src="/images/cta/samak.png"
+                  alt="สมัครสมาชิกฟรี — คลิ๊กเลย"
+                  width={534}
+                  height={200}
+                  sizes="(max-width: 768px) 45vw, 540px"
+                  quality={92}
+                  className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02]"
+                />
               </Link>
 
               <TrackedExternalLink
                 href={LINE_URL}
                 cta="line_consult"
                 surface="customs_guarantee_cta"
-                className="group relative overflow-hidden rounded-2xl border border-green-200 bg-white shadow-[0_8px_22px_-10px_rgba(6,199,85,0.20)] hover:shadow-[0_14px_30px_-8px_rgba(6,199,85,0.35)] hover:-translate-y-0.5 transition-all duration-300"
+                aria-label="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
-                <div className="flex items-center gap-2 md:gap-4 px-2.5 md:px-5 py-2.5 md:py-4">
-                  <span
-                    className="inline-flex w-9 h-9 md:w-12 md:h-12 shrink-0 items-center justify-center rounded-full text-white shadow-[0_5px_12px_rgba(6,199,85,0.30)]"
-                    style={{ background: "linear-gradient(135deg, #00B900 0%, #06C755 100%)" }}
-                  >
-                    <LineIcon className="w-5 h-5 md:w-7 md:h-7" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] md:text-[14.5px] font-black text-[#111827] dark:text-white leading-snug inline-flex items-center gap-1 md:gap-1.5 truncate">
-                      <MessageCircle className="w-3 h-3 md:w-4 md:h-4 text-[#06C755] shrink-0" strokeWidth={2.6} />
-                      ปรึกษานำเข้าฟรี
-                    </p>
-                    <p className="mt-0.5 text-[10.5px] md:text-[12.5px] font-bold text-[#06C755] inline-flex items-center gap-0.5 md:gap-1">
-                      <ChevronRight className="w-3 h-3" strokeWidth={3} />
-                      คลิ๊กเลย !
-                    </p>
-                  </div>
-                </div>
+                <Image
+                  src="/images/cta/pruksa.png"
+                  alt="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
+                  width={534}
+                  height={200}
+                  sizes="(max-width: 768px) 45vw, 540px"
+                  quality={92}
+                  className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02]"
+                />
               </TrackedExternalLink>
             </div>
           </div>
@@ -748,21 +728,21 @@ export default async function CustomsClearancePage({
               เปิดประสบการณ์ <span className="text-primary-600">เคลียร์ของและภาษีนำเข้า</span> กับ Pacred Shipping
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการ Shipping และ <strong className="text-primary-600 font-black">เคลียร์ภาษีนำเข้าแบบครบวงจร</strong> เคลียร์ของติดด่าน เคลียร์พิธีการศุลกากร ทั้งทางอากาศและทางเรือ ดูแลครบจบในที่เดียว — ราคาชัดเจน ติดต่อง่าย ด้วยทีมเคลียร์ของมืออาชีพประสบการณ์ <strong className="text-primary-600 font-black">15 ปี</strong> ในวงการ
+              Pacred Shipping ดูแลเรื่องนำเข้า–ส่งออกครบในที่เดียว — ทั้ง <strong className="text-primary-600 font-black">เคลียร์ภาษีนำเข้า</strong> ของติดด่าน และพิธีการศุลกากร ขนทางอากาศหรือทางเรือก็ได้ บอกราคาตรง คุยง่าย ด้วยทีมที่อยู่หน้าด่านจริงมา <strong className="text-primary-600 font-black">15 ปี</strong>
             </p>
 
             {/* Service bullets — CheckCircle2 + bolded keyword */}
             <ul className="mt-6 md:mt-8 flex flex-col gap-y-3 md:gap-y-3.5">
               {[
-                <>รับจัดการ <strong className="font-black text-foreground">ภาษีศุลกากร ภาษีสนามบินสุวรรณภูมิ และดอนเมือง</strong></>,
-                <>เคลียร์สินค้า <strong className="font-black text-foreground">ติดด่านศุลกากร สนามบิน ท่าเรือคลองเตย ท่าเรือกรุงเทพ และท่าทั่วประเทศ</strong></>,
-                <>ให้บริการ <strong className="font-black text-foreground">Booking Flights / Air Freight / Sea Freight / Customs Clearance</strong></>,
-                <>ดูแลสินค้าจากทุกบริษัทขนส่ง เช่น <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, Air Cargo</strong> และอื่น ๆ</>,
-                <>เคลียร์สินค้าติดหน่วยงานราชการ เช่น <strong className="font-black text-foreground">มอก., สมอ., กสทช., กรมเกษตร, ประมง</strong></>,
-                <>ประสบการณ์ตรงกว่า <strong className="font-black text-foreground">15 ปี</strong> เชี่ยวชาญด้าน <strong className="font-black text-foreground">กฎหมายศุลกากร, พิกัดอัตราศุลกากร, การใช้สิทธิภาษี, การคืนภาษี</strong></>,
-                <>เคลียร์สินค้าได้ <strong className="font-black text-foreground">ทุกประเภท ไม่มีขั้นต่ำ ไม่ผิดกฎหมาย</strong></>,
-                <>ติดต่อประสานงานกับ <strong className="font-black text-foreground">เจ้าหน้าที่กรมศุลกากรโดยตรง</strong></>,
-                <>มีบริการเสริม <strong className="font-black text-foreground">ทำประกันสินค้า ทุกประเภท</strong></>,
+                <>ดูแล <strong className="font-black text-foreground">ภาษีศุลกากรพร้อมภาษีสนามบินทั้งสุวรรณภูมิและดอนเมือง</strong> ในใบเดียว</>,
+                <>รับเคสติดด่านทุกที่ — <strong className="font-black text-foreground">สนามบิน ท่าเรือคลองเตย ท่าเรือกรุงเทพ</strong> ลามไปท่าอื่นทั่วประเทศ</>,
+                <>จองพื้นที่ขนส่งให้ — <strong className="font-black text-foreground">Booking Flights, Air Freight, Sea Freight, Customs Clearance</strong> ครบใน flow เดียว</>,
+                <>รับงานจากทุกขนส่งหลัก เช่น <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, Air Cargo</strong> และอื่นๆ ที่ลูกค้าใช้</>,
+                <>วิ่งเรื่องเมื่อสินค้าโดนติดที่หน่วยงานราชการ เช่น <strong className="font-black text-foreground">มอก., สมอ., กสทช., กรมเกษตร, กรมประมง</strong></>,
+                <><strong className="font-black text-foreground">หน้าด่านจริง 15+ ปี</strong> ถนัด <strong className="font-black text-foreground">กฎหมายศุลกากร พิกัดอัตรา การใช้สิทธิภาษี และการขอคืนภาษี</strong></>,
+                <>เคลียร์ได้ <strong className="font-black text-foreground">ทุกประเภทสินค้า ไม่มีขั้นต่ำ</strong> ขอแค่ถูกกฎหมายเท่านั้น</>,
+                <>คุยตรงกับ <strong className="font-black text-foreground">เจ้าหน้าที่กรมศุลฯ</strong> ลดขั้นตอนรอผ่านคนกลาง</>,
+                <>อยากเพิ่ม <strong className="font-black text-foreground">ประกันสินค้า</strong>? ทำให้ได้ทุกประเภท บอกทีมตอนปรึกษาได้เลย</>,
               ].map((node, idx) => (
                 <li key={idx} className="flex items-start gap-2.5 md:gap-3">
                   <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-primary-600 shrink-0 mt-[3px] md:mt-[4px]" strokeWidth={2.6} />
@@ -782,21 +762,21 @@ export default async function CustomsClearancePage({
               ปัญหา <span className="text-primary-600">เคลียร์ของติดด่าน</span> ที่เรารับจัดการให้
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              ทุกปัญหา เคลียร์ของ–เคลียร์ภาษี–เคลียร์พิธีการศุลกากร ที่ลูกค้าเจอ ทีม Pacred Shipping เคลียร์ให้ถึงรากของปัญหา ไม่ใช่แค่ส่งต่อ
+              ทุกเคสที่ลูกค้าเจอ — ของติดด่าน ภาษีค้าง พิธีการพัง — ทีม Pacred Shipping ลงไปแก้ที่ต้นเรื่อง ไม่ใช่แค่รับมาแล้วส่งต่อให้คนอื่นทำ
             </p>
 
             <ul className="mt-6 md:mt-8 flex flex-col gap-y-2.5 md:gap-y-3">
               {[
-                <>ปัญหาเกี่ยวกับ <strong className="font-black text-foreground">พิกัดอัตราศุลกากร</strong> – สินค้าถูกตีพิกัดผิด เสียภาษีเกินจริง</>,
-                <>ปัญหาเกี่ยวกับ <strong className="font-black text-foreground">งานใบอนุญาตนำเข้า</strong> – เช่น สินค้าที่ต้องขอ มอก., สมอ., กสทช. ฯลฯ</>,
-                <>ปัญหา <strong className="font-black text-foreground">เอกสารผิด / เอกสารไม่ครบ</strong> – แก้ไขใบ Invoice, Packing List, B/L และเอกสารอื่น ๆ</>,
-                <>การใช้ <strong className="font-black text-foreground">ฟอร์มภาษีพิเศษ</strong> เช่น Form E, Form D, Form AI ฯลฯ เพื่อลดหย่อนภาษีนำเข้า</>,
-                <>ปัญหาเกี่ยวกับ <strong className="font-black text-foreground">ราคาสินค้า</strong> – สินค้าถูกตีราคาสูงเกินจริง หรือเอกสารราคาไม่ตรง</>,
-                <>การนำเข้า <strong className="font-black text-foreground">สัตว์มีชีวิต / สัตว์เลี้ยง</strong> – เช่น แมว สุนัข พร้อมดูแลการขอใบอนุญาตจากกรมปศุสัตว์</>,
-                <>การนำเข้า <strong className="font-black text-foreground">อาหาร ผลไม้ ของสด</strong> – เคลียร์ด่านอาหาร กักกันพืช และเอกสารนำเข้า</>,
-                <>การนำเข้า <strong className="font-black text-foreground">เสื้อผ้า เครื่องแต่งกาย</strong> – ทั้งเชิงพาณิชย์และของใช้ส่วนตัว</>,
-                <>การนำเข้า <strong className="font-black text-foreground">เครื่องประดับ ของใช้ส่วนตัว</strong> – ประเมินมูลค่าและจัดการพิธีการให้ถูกต้อง</>,
-                <>รับเคลียร์สินค้าลงคลังสุวรรณภูมิ – เช่น <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, BFS</strong> และคลังอื่น ๆ</>,
+                <><strong className="font-black text-foreground">พิกัดอัตราศุลกากร</strong> — สินค้าถูกตีพิกัดผิด ทำให้จ่ายภาษีแพงกว่าที่ควร เรารับเข้าไปคุย</>,
+                <><strong className="font-black text-foreground">ใบอนุญาตนำเข้า</strong> — เคสที่ต้องขอ มอก., สมอ., กสทช. หรือใบอื่นที่ยังไม่ครบมือ</>,
+                <><strong className="font-black text-foreground">เอกสารผิด / เอกสารไม่ครบ</strong> — แก้ Invoice, Packing List, B/L หรือใบใดก็ตามที่ทำให้สินค้าติด</>,
+                <>ใช้สิทธิ์ <strong className="font-black text-foreground">ฟอร์มภาษีพิเศษ</strong> เช่น Form E, Form D, Form AI ฯลฯ ช่วยลดต้นทุนภาษีนำเข้า</>,
+                <><strong className="font-black text-foreground">ราคาสินค้าโดนตีสูงเกินจริง</strong> หรือเอกสารราคาไม่ตรงกัน เราคุยกับเจ้าหน้าที่ให้</>,
+                <>นำเข้า <strong className="font-black text-foreground">สัตว์เลี้ยง</strong> — แมว สุนัข พร้อมขอใบอนุญาตจากกรมปศุสัตว์ให้</>,
+                <>นำเข้า <strong className="font-black text-foreground">อาหาร ผลไม้ ของสด</strong> — ผ่านด่านอาหาร–กักกันพืช พร้อมเอกสารครบชุด</>,
+                <>นำเข้า <strong className="font-black text-foreground">เสื้อผ้า เครื่องแต่งกาย</strong> — ทั้งล็อตขายและของใช้ส่วนตัวที่สั่งมาเอง</>,
+                <>นำเข้า <strong className="font-black text-foreground">เครื่องประดับ ของใช้ส่วนตัว</strong> — ประเมินมูลค่าและทำพิธีการให้เรียบร้อย ไม่มีปัญหาตามมา</>,
+                <>เคลียร์ของลงคลังสุวรรณภูมิ — <strong className="font-black text-foreground">DHL, FedEx, UPS, TNT, BFS</strong> และคลังอื่นที่ลูกค้าฝากไว้</>,
               ].map((node, idx) => (
                 <li key={idx} className="flex items-start gap-2.5 md:gap-3">
                   <span aria-hidden className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary-600 mt-[8px] md:mt-[11px] shrink-0 rounded-[2px]" />
@@ -814,11 +794,11 @@ export default async function CustomsClearancePage({
                 CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
               </div>
               <h3 className="text-[20px] md:text-[28px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white">
-                มั่นใจ เคลียร์ของได้แน่ เมื่อเลือก<br className="md:hidden" />
-                {" "}<span className="text-primary-600">Pacred Shipping</span>
+                มั่นใจ เคลียร์ของได้แน่<br className="md:hidden" />
+                {" "}เมื่อเลือก <span className="text-primary-600">Pacred Shipping</span>
               </h3>
               <p className="mt-2.5 md:mt-3 text-[14px] md:text-[16px] leading-[1.65] font-medium text-muted max-w-[820px] mx-auto">
-                เคียงข้างคุณทุกขั้นตอน <strong className="text-primary-600 font-black">บริการครบ · ราคาชัด · ติดต่อง่าย</strong> เคลียร์ของได้รวดเร็ว คุ้มค่า และเป็นมืออาชีพอย่างแท้จริง — ทักไลน์ปรึกษาเคลียร์ฟรี 24 ชม.
+                อยู่ข้างคุณทุกขั้นตอน — <strong className="text-primary-600 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong> ของออกจากด่านเร็ว คุ้มค่าจริง ทักไลน์ปรึกษาฟรีตลอด 24 ชม. ทีมตอบไว
               </p>
             </div>
           </div>
@@ -838,7 +818,7 @@ export default async function CustomsClearancePage({
               บริการ <span className="text-primary-600">เคลียร์ของติดด่าน</span> ครอบคลุมทุก Port
             </h2>
             <p className="mt-2 md:mt-3 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              กดแท็กที่เกี่ยวข้องเพื่ออ่านบทความเชิงลึก หรือเลือกหัวข้ออื่นจากหน้า <Link href="/knowledge" className="text-primary-600 hover:text-primary-700 font-bold underline-offset-4 hover:underline">สาระน่ารู้</Link>
+              กดแท็กดูบทความเจาะลึก หรืออ่านเรื่องอื่นได้ที่หน้า <Link href="/knowledge" className="text-primary-600 hover:text-primary-700 font-bold underline-offset-4 hover:underline">สาระน่ารู้</Link>
             </p>
 
             {/* Tabs + content panel — Trip.com style (per ปอน 2026-05-17) */}
