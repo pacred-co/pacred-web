@@ -64,6 +64,12 @@
 | [`review-u1-u2-2026-05-18.md`](review-u1-u2-2026-05-18.md) | Read-only code review of ภูม's U1 + U2 batches (refund money path · billing-gate · container unify · freight chain · PCS migration · cargo_sacks · migrations 0058/0059/0066/0067/0068) — 1 P0 (refund has no amount cap / no paid-status check) + 5 P1 + 7 P2; 🟡 ship-with-follow-up, P0-1 + P1-1 block next prod deploy | 2026-05-18 |
 | [`audit-core-2026-05-18.md`](audit-core-2026-05-18.md) | Read-only rigorous audit of the CORE launch code (everything before U1/U2) — auth · wallet · order/forwarder pay · freight 0050-0057 · tax/WHT · W-1 RLS. All prior P0s (P0-1/P0-2/S-1/G-3/F-2/F-3) confirmed FIXED line-by-line; 1 NEW P1 (`wallet_tx_insert_self_serve` has no amount-sign check) + 4 P2; 🟢 core sound | 2026-05-18 |
 
+### Dev-experience research (tooling — recommend only)
+
+| Doc | Topic | Date |
+|---|---|---|
+| [`frontend-tooling-2026-05-18.md`](frontend-tooling-2026-05-18.md) | Frontend dev-experience research for ปอน — ranked tooling/technique recommendations (data-driven landing template · component preview workbench · responsive testing · image optimization · i18n key workflow · Tailwind v4 aids); highest-leverage = the data-driven landing-page template; RECOMMEND-only, nothing installed | 2026-05-18 |
+
 ## Cross-references
 
 - 📋 Task scheduling → [`../PORT_PLAN.md`](../PORT_PLAN.md) Part V (cargo backlog) + Part W (gap-hunt backlog)

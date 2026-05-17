@@ -45,6 +45,12 @@ export const RATE_LIMITS = {
    *  missing IP-level ceiling so a 6-digit OTP can't be brute-forced across
    *  successive rows, and gives one IP-level lockout signal. */
   otpVerify:     { limit: 10, windowMs: 3_600_000 },   // 10 / hour
+  /** OTP-SEND per IP — C-5. `requestOtp` already caps 3/hour/phone off the
+   *  `otp_codes` table, but a script cycling distinct phone numbers bypasses
+   *  that per-identifier cap and drains the paid ThaiBulkSMS balance (each
+   *  send = one real SMS). This IP ceiling bounds that abuse. Sized above the
+   *  per-phone cap so a household behind one NAT can still do a few signups. */
+  otpRequest:    { limit: 12, windowMs: 3_600_000 },   // 12 / hour
   /** Contact form per IP — anti-spam. */
   contact:       { limit: 5,  windowMs: 3_600_000 },   // 5 / hour
   /** Generic API endpoint default (calls without their own bucket). */

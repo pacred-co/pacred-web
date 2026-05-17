@@ -54,13 +54,13 @@ console.log("  (a) requestTaxInvoiceSchema — accepts valid input");
     order_id:      "F260516001",
     buyer_name:    "บริษัท ตัวอย่าง จำกัด",
     buyer_address: "123 ถนนสุขุมวิท แขวงคลองตัน",
-    buyer_tax_id:  "0105560123459",
+    buyer_tax_id:  "0105564077716",
     buyer_branch:  "สำนักงานใหญ่",
   });
   assert("forwarder happy path parses",            ok.order_type === "forwarder");
   assert("trims buyer_name (spaces)",              requestTaxInvoiceSchema.parse({
     order_type: "forwarder", order_id: "F1", buyer_name: "  ABC Co  ", buyer_address: "Bangkok 12345",
-    buyer_tax_id: "0105560123459",
+    buyer_tax_id: "0105564077716",
   }).buyer_name === "ABC Co");
 
   // Service order happy path
@@ -69,7 +69,7 @@ console.log("  (a) requestTaxInvoiceSchema — accepts valid input");
     order_id:      "ONS260516-1",
     buyer_name:    "Personal Buyer",
     buyer_address: "456 Sukhumvit Rd, Bangkok 10110",
-    buyer_tax_id:  "1234567890123",
+    buyer_tax_id:  "1101700230708",
   });
   assert("service_order happy path parses",        so.order_type === "service_order");
   assert("buyer_branch defaults to 'สำนักงานใหญ่'", so.buyer_branch === "สำนักงานใหญ่");
@@ -92,12 +92,12 @@ console.log("  (b) buyer_tax_id — 13-digit RegEx");
   assertThrows("rejects empty string",    () => requestTaxInvoiceSchema.parse({ ...base, buyer_tax_id: "" }), "13 หลัก");
 
   // Trims surrounding whitespace before validation
-  const trimmed = requestTaxInvoiceSchema.parse({ ...base, buyer_tax_id: "  0105560123459  " });
-  assert("trims surrounding whitespace before validation",  trimmed.buyer_tax_id === "0105560123459");
+  const trimmed = requestTaxInvoiceSchema.parse({ ...base, buyer_tax_id: "  0105564077716  " });
+  assert("trims surrounding whitespace before validation",  trimmed.buyer_tax_id === "0105564077716");
 
   // Accepts well-formed
-  const ok = requestTaxInvoiceSchema.parse({ ...base, buyer_tax_id: "0105560123459" });
-  assert("accepts canonical 13-digit",     ok.buyer_tax_id === "0105560123459");
+  const ok = requestTaxInvoiceSchema.parse({ ...base, buyer_tax_id: "0105564077716" });
+  assert("accepts canonical 13-digit",     ok.buyer_tax_id === "0105564077716");
 }
 
 // ────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ console.log("  (c) buyer field constraints");
 {
   const base = {
     order_type: "forwarder" as const, order_id: "F1",
-    buyer_tax_id: "0105560123459",
+    buyer_tax_id: "0105564077716",
   };
 
   // buyer_name min 1 (after trim)
@@ -136,7 +136,7 @@ console.log("  (c) buyer field constraints");
 console.log("  (d) order_type enum");
 {
   const base = {
-    order_id: "F1", buyer_name: "Co", buyer_address: "Bangkok 12345", buyer_tax_id: "0105560123459",
+    order_id: "F1", buyer_name: "Co", buyer_address: "Bangkok 12345", buyer_tax_id: "0105564077716",
   };
   assertThrows("rejects bogus order_type",         () => requestTaxInvoiceSchema.parse({ ...base, order_type: "yuan_payment" }));
   assertThrows("rejects null order_type",          () => requestTaxInvoiceSchema.parse({ ...base, order_type: null }));
