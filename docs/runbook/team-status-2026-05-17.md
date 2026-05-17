@@ -20,7 +20,7 @@ Newest batch — all on `dave` / `Poom` / `podeng` @ `48e472e` · `pnpm verify` 
 6. **🚀 [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — the post-launch upgrade roadmap (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). Consolidates Master Strategy §5 + Part W + the tools agenda + datanew. **§0 rule: no upgrade item is *coded* until ภูม's migrations are applied + a live post-launch functional verification passes.**
 7. **🧪 production smoke gate** — `next start` + curl 48 routes (public / protected / admin / dynamic `[param]`) → **0 × 500**; S-4 admin-redirect verified at runtime (all 16 `/admin/*` routes → 307).
 
-⚠️ **Migration count is now 14** — `0044`-`0052` + `0060` + `0061` + `0062` + `0063` + `0064`. ภูม applies all 14 to Supabase dev → prod; runbook [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md) updated (verify queries through (9)). **Ordering matters:** the W-3/0064 code expects schema `0062`-`0064` in the DB — apply the migrations **before** the `dave→main` deploy, else freight wallet-pay + the overdraw floor break.
+⚠️ **Migration count is now 15** — `0044`-`0053` + `0060`-`0064` (ภูม shipped `0053` freight-WHT — V-E3/E4 PDFs + U2-3 gate — integrated into dave `897e209`). ภูม applies all 15 to Supabase dev → prod; runbook [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md) updated (verify queries through (9)). **Ordering matters:** the W-3/0064 code expects schema `0062`-`0064` in the DB — apply the migrations **before** the `dave→main` deploy, else freight wallet-pay + the overdraw floor break.
 
 > 🔬 **Not yet verified — "every function works end-to-end".** The smoke gate is a route-500 check, not a functional test, and the 14 migrations are not yet in Supabase. Per [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) §0, a live functional verification (walk the 6-step billing flow + place an order + wallet pay + admin mark-paid + an overdraw rejection) is the gate before any post-launch upgrade work begins.
 
@@ -38,7 +38,7 @@ Latest batch on top of everything below:
 6. **🕐 Vercel cron audit** — found `/api/cron/sms-balance-check` had a route handler + auth guard but no `vercel.json` schedule (the OTP-credit-low alert would never fire). Wired as cron #6 (`0 23 * * *` = 06:00 ICT). 6 route handlers ↔ 6 schedules now match 1:1. Pacred is on Vercel Pro (100-cron ceiling) — fully within limit. [`vercel-cron-plan.md`](vercel-cron-plan.md).
 7. **🎨 ปอน landing batch merged** — customs-clearance landing refresh + `[port]` detail pages · `/line` redirect route + GTM tracking on every LINE CTA · ad-landing polish (20 components). **T-D1 production smoke gate re-run post-merge** → 🟢 35 routes (public + auth + admin + dynamic `[param]`), **zero 500s**.
 
-⚠️ **14 migrations (`0044`-`0052` + `0060`-`0064`) are in git but NOT yet applied to Supabase** — เดฟ/agent reviewed all 14 SQL files 2026-05-17 (sound · idempotent · no bugs). **ภูม owns applying them to dev + prod** — apply straight from `supabase/migrations/` in ascending number order; steps + verify block in [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
+⚠️ **15 migrations (`0044`-`0053` + `0060`-`0064`) are in git but NOT yet applied to Supabase** — เดฟ/agent reviewed all 15 SQL files 2026-05-17 (sound · idempotent · no bugs). **ภูม owns applying them to dev + prod** — apply straight from `supabase/migrations/` in ascending number order; steps + verify block in [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 
 ---
 
@@ -220,7 +220,7 @@ All 5 Sunday-night blockers (B1-B5) closed or ✅ cleared. 3/5 T-G3 owner items 
 - Brief: [`briefs/dave.md`](../briefs/dave.md)
 
 ### ภูม (Backend / Customer Portal / Admin / Cargo Port)
-- 🔴 **FIRST next session — apply all 14 migrations (`0044`-`0052` + `0060`-`0064`) to Supabase dev + prod.** ภูม owns this (no zip hand-off — apply straight from `supabase/migrations/` in ascending number order). `0049` + `0061`-`0064` (money/security guards) before public launch 2pm. Steps + verify block (queries through (9)) → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
+- 🔴 **FIRST next session — apply all 15 migrations (`0044`-`0053` + `0060`-`0064`) to Supabase dev + prod.** ภูม owns this (no zip hand-off — apply straight from `supabase/migrations/` in ascending number order). `0049` + `0061`-`0064` (money/security guards) before public launch 2pm. Steps + verify block (queries through (9)) → [`poom-apply-migrations-2026-05-17.md`](poom-apply-migrations-2026-05-17.md).
 - ✅ Phase-I2 shipped autonomously 2026-05-17: V-A6 WHT (`0044`) · V-E10 QA (`0045`) · V-G5 org_contacts (`0046`) · V-G4 TOS (`0047`) · V-E6 quotation (`0048`) · V-G6 4 reports · F-11 wallet guard (`0049`) · V-E1 freight shipments+invoices (`0050`/`0051`) · overnight C1-C4 (V-E1.1 PDFs · V-A6.1 customer WHT upload · V-G4.1 TOS gate · V-G5.1 helper)
 - ✅ **V-E7 freight receipt/payment (`0052`) — shipped by เดฟ** (autonomous worktree agent, merged into dave). Phase-I2 = 5/8.
 - 🚀 Next Phase-I2 (post-launch, keep autonomous): V-E3/E4 Form E + D/O → V-E8/H1/H2 commission (`0053`, interpreter role inline) → V-E9 closing (`0054`). Next free migration number = **`0053`**.

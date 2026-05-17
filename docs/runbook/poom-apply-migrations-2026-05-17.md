@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**14 migrations** are in git but **not yet applied to Supabase**. ภูม applies them
+**15 migrations** are in git but **not yet applied to Supabase** (ภูม added `0053` freight-WHT after the first 14). ภูม applies them
 on **dev first**, verifies, then **production** — `supabase db push`, or paste
 each file into the SQL Editor **in ascending number order**.
 
@@ -24,6 +24,7 @@ each file into the SQL Editor **in ascending number order**.
 | 0050 | `0050_freight_shipments.sql` | `freight_shipments` + `freight_parties` + `freight_job_seq` + QA FK backfill | V-E1 spine | ✅ |
 | 0051 | `0051_freight_invoices.sql` | `freight_invoices` + `freight_invoice_lines` + `freight_invoice_seq` | V-E1 CI | ✅ |
 | 0052 | `0052_freight_invoice_payments.sql` | `freight_invoice_payments` ledger + `freight_invoices.payment_status` + `freight-payment-slips` bucket | V-E7 receipt/payment | ✅ |
+| 0053 | `0053_freight_invoice_wht.sql` | `withholding_tax_entries.freight_invoice_id` + 3-way parent XOR + per-freight-invoice unique/lookup indexes | U2-3 freight WHT gate (G-4) | ✅ |
 | 0060 | `0060_member_code_3digit.sql` | `generate_member_code()` rewrite + `profiles` backfill | member_code `PR00001`→`PR001` | ✅ |
 | 0061 | `0061_money_idempotency_guards.sql` | `cost_adjustment` kind + 3 partial-unique guards (forwarder main-payment · freight payment · tax invoice) | money P0-1/P1-2/P1-4 fix | ✅ |
 | 0062 | `0062_rls_role_pin_money_pii.sql` | role-pins ~24 `*_admin_all` RLS policies to explicit role arrays + `audit_wallet_transaction()` trigger | W-1 S-1 security keystone | ✅ |
@@ -32,7 +33,7 @@ each file into the SQL Editor **in ascending number order**.
 
 ---
 
-## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 14 PASS
+## ✅ SQL review result (เดฟ/agent, 2026-05-17) — all 15 PASS
 
 - **Idempotent** — every file is `create table if not exists` / `create or
   replace` / `create [unique] index if not exists` / `drop+recreate`
@@ -73,7 +74,7 @@ existing `profiles.member_code` (`PR00001`→`PR001`) — running *number* prese
 only zero-padding changes; `member_code_seq` untouched.
 
 ### 3. tell the team
-Post: "migrations 0044-0052 + 0060 + 0061 + 0062 + 0063 + 0064 applied to dev + prod ✅".
+Post: "migrations 0044-0053 + 0060-0064 applied to dev + prod ✅".
 เดฟ flips the status in [`team-status-2026-05-17.md`](team-status-2026-05-17.md).
 
 ---
