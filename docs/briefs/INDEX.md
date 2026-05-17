@@ -7,13 +7,13 @@
 > ทุก agent ใช้ Claude Code Windows — ทำงาน async. การอ่าน brief ให้ตรงกัน
 > = ทุกคนทำงานไปในทิศทางเดียวกัน
 
-> 🔥 **EMERGENCY MODE ACTIVE (2026-05-15)** — company burning runway,
-> cargo system must go live + receive customers ASAP. Each brief now has
-> an EMERGENCY section at the top that overrides normal priority. See
-> [`../PORT_PLAN.md`](../PORT_PLAN.md) **Part T** for the master cargo
-> revenue sprint plan.
+> 🚀 **POST-LAUNCH (production live since 2026-05-17)** — the emergency
+> cargo sprint is behind us. Current work is sequenced in
+> [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) (the post-launch roadmap).
+> Each brief still opens with its role's current pickup list — read
+> your brief, then the UPGRADE_PLAN U-item table for your role.
 
-Last reviewed: 2026-05-15 (emergency revision)
+Last reviewed: 2026-05-18 (post-launch revision)
 
 ---
 
@@ -107,17 +107,19 @@ This pattern is now **mandatory** per [`/CLAUDE.md`](../../CLAUDE.md) "Read brie
 | Doc | Purpose |
 |---|---|
 | [`../STRATEGY.md`](../STRATEGY.md) | **Master strategic single-read** — all briefs/ADRs/plans condensed (use as session warm-up) |
-| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 9 playbooks for repeatable patterns |
+| [`../UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) | **Post-launch roadmap** — the current execution doc (U1-U4 + §0 deploy gate) |
+| [`../../.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) | Skills kit — 10 playbooks for repeatable patterns |
 | [`../learnings/_index.md`](../learnings/_index.md) | Compounding learnings — scan at session start |
 | [`../HANDBOOK.md`](../HANDBOOK.md) | Master index — start of everything |
 | [`../team.md`](../team.md) | Role + branch + workflow rules |
 | [`../conventions.md`](../conventions.md) | Code style + commit format |
 | [`../env.md`](../env.md) | Every env var explained + production checklist |
-| [`../PORT_PLAN.md`](../PORT_PLAN.md) | Current sprint + active hand-off batches (Parts O–S) |
+| [`../PORT_PLAN.md`](../PORT_PLAN.md) | Sprint history + cargo/gap-hunt backlogs (Parts O–W) |
 | [`../sprints/archive-a-to-n.md`](../sprints/archive-a-to-n.md) | Historic survey + earlier sprint plans (Parts A–N) |
 | [`../architecture/container-centric-model.md`](../architecture/container-centric-model.md) | Warehouse + container + shipment data spine |
 | [`../integrations/momo-jmf.md`](../integrations/momo-jmf.md) | MOMO partner API spec |
-| [`../decisions/`](../decisions/) | ADRs 0001–0010 (locked decisions) |
+| [`../decisions/`](../decisions/) | ADRs (locked decisions — 0001..0016 + V3 drafts) |
+| [`../research/_index.md`](../research/_index.md) | R&D / gap-hunt / audit evidence base behind the UPGRADE_PLAN |
 | [`../audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) | Pre-launch security posture audit |
 | [`../audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) | Deep legacy PHP audit |
-| [`../runbook/`](../runbook/) | Operational runbooks (PCS scrub / OTP rotation / Vercel cron) |
+| [`../runbook/`](../runbook/) | Operational runbooks (PCS scrub / OTP rotation / Vercel cron / launch monitoring) |

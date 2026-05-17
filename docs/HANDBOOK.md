@@ -2,17 +2,17 @@
 
 > Entry point for everyone on the team — start here.
 
-Last updated: 2026-05-15 (emergency revision — cargo revenue sprint)
+Last updated: 2026-05-18 (post-launch revision)
 
 ---
 
-## 🔥 EMERGENCY MODE ACTIVE (2026-05-15)
+## 🚀 POST-LAUNCH (production live since 2026-05-17)
 
-**Company is burning runway.** Cargo system must go live + receive customers ASAP. Every priority decision passes the lens: *"งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?"*
+**Pacred is in production.** The cargo revenue path works end-to-end and the emergency "เผาเงิน" sprint is behind us. Current focus = stabilise + deepen the launched product.
 
-📋 Master plan: [`PORT_PLAN.md`](PORT_PLAN.md) **Part T** — per-role T1..T5 emergency pickups + critical path to first revenue + "borrow first, switch later" API plan + revenue-ready DoD checklist.
+📋 Current roadmap: [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — the post-launch execution sequence (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). U1/U2/U4 batches have shipped on `dave`; the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod Supabase.
 
-Each role brief has an **EMERGENCY** section at the top that overrides normal priority during this sprint.
+Decision lens (post-launch): does this make the product more **true** · **billable** · **measurable**? — and never code an UPGRADE_PLAN item before its §0 gate is green.
 
 ---
 
@@ -67,11 +67,11 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 ```
 
 **Need help:**
-- งานของฉันคืออะไร → YOUR brief at [`briefs/<your-name>.md`](briefs/) (emergency section ทับ priority ปกติ)
-- 🔥 cargo revenue sprint progress? → [`PORT_PLAN.md`](PORT_PLAN.md) Part T (per-role T-* tasks + DoD checklist)
+- งานของฉันคืออะไร → YOUR brief at [`briefs/<your-name>.md`](briefs/) + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (post-launch roadmap)
+- 🚀 post-launch progress / what's next? → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) (U-items) + [`STRATEGY.md`](STRATEGY.md) §9 (shipped vs pending)
 - Daily integration cycle (pull/push cadence, review checklist) → [`team.md`](team.md) §10
 - ค่า env เอาจากไหน → ถามเดฟ (ดู [`env.md`](env.md) ก่อน — มี value sample ครบแล้วถ้าไม่ใช่ secret)
-- 🚨 มี blocker / urgent? → [`PORT_PLAN.md`](PORT_PLAN.md) Part Q (production blockers) + Part S (เดฟ↔ก๊อต hand-off)
+- 🚨 มี blocker / urgent? → latest `runbook/team-status-*.md` + [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) §0 (the deploy gate)
 - เขียน code ยังไง → [`conventions.md`](conventions.md)
 - Architecture → [`architecture.md`](architecture.md) + [`architecture/container-centric-model.md`](architecture/container-centric-model.md)
 - ที่อยู่ / เบอร์ Pacred / LINE OA IDs → [`pacred-info.md`](pacred-info.md)
@@ -85,8 +85,9 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 | File | คืออะไร |
 |---|---|
-| [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~600-line read. Open every session for full context. |
-| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 9 starter skills — playbooks the agent follows when triggered (verify-loop · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep) |
+| [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~400-line read. Open every session for full context. |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **Post-launch roadmap** — the current execution doc (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 tools → U4 supervisory). Start here for "what's next". |
+| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 10 starter skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep) |
 | [`learnings/_index.md`](learnings/_index.md) | Compounding knowledge corpus — every dev / agent adds new gotchas via `scholar-immortal` skill. 1-min scan each session. |
 
 ### 🧑‍💻 Role briefs (force-read — open YOUR file first)
@@ -115,7 +116,8 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 
 | File | คืออะไร |
 |---|---|
-| [`PORT_PLAN.md`](PORT_PLAN.md) | Current sprints + hand-off batches — Parts O (per-role assignments) · P (snapshot) · Q (production blockers) · R (vendor cutoff) · S (เดฟ↔ก๊อต async hand-off). ~1435 lines, under 2000-line agent ceiling. |
+| [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **The current execution doc** — post-launch roadmap (U1-U4 + the §0 deploy gate) |
+| [`PORT_PLAN.md`](PORT_PLAN.md) | Sprint history + cargo/gap-hunt backlogs — Parts O–W (Part V = cargo-forensics, Part W = gap-hunt). ~1825 lines — watch the 2000-line cap; archive oldest Parts before adding. |
 | [`sprints/archive-a-to-n.md`](sprints/archive-a-to-n.md) | Historic survey + earlier sprint plans (Parts A–N — moved out for size, kept for reference) |
 | [`architecture.md`](architecture.md) | System architecture — diagrams, DB schema, auth flow, security |
 | [`architecture/container-centric-model.md`](architecture/container-centric-model.md) | **NEW** warehouse / container / shipment data spine — 4 tables, RLS, status enums, CT-1..CT-8 implementation |
@@ -216,41 +218,32 @@ git push origin <my-branch>
 
 ---
 
-## 🎯 Current state (2026-05-15 — emergency)
+## 🎯 Current state (2026-05-18 — post-launch)
 
-- **Active phase:** 🔥 **Cargo Revenue Sprint** (Part T). Brief-driven async execution but priorities are revenue-first. ทุกคนเริ่ม session ด้วยเปิด brief → emergency section → ทำงาน T-* tasks → push at save-points.
-- **Branch state:** `main` = ก๊อต-approved (production) · `dave` = เดฟ-merged (staging — Poom + podeng consolidated) · `Poom` + `podeng` = น้อง working branches.
-- **Production readiness:** ~88% customer · ~98% admin HR / ~50% admin ops · ~85% infra · ~85% SEO/landing (analytics substrate live)
+- **Active phase:** 🚀 **Post-launch UPGRADE** ([`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)). Production launched 2026-05-17; the cargo revenue path works end-to-end. Brief-driven async execution — start each session with your brief → UPGRADE_PLAN → work U-items → push at save-points.
+- **Branch state:** `main` = production (live, 19 launch-week migrations on prod) · `dave` = integration, **30+ commits ahead of `main`** (carries the shipped U1/U2/U4 batches) · `Poom` + `podeng` = น้อง working branches, synced to `dave`.
+- **Production readiness:** launched — customer portal + 60+ admin routes + cargo loop all live. The bar is now "is the flow *true* / *billable* / *measurable*" — see [`STRATEGY.md`](STRATEGY.md) §9 for the full shipped-vs-pending snapshot.
 - **Recent landmarks (latest first):**
-  - **2026-05-15 evening (ปอน landed):** Customs page v2 banner+breadcrumb+new copy · shared section tweaks (ContactSales reusable + mobile swipe + shorter SalesCarousel) · mobile FloatingTabs center call FAB
-  - **2026-05-15 (DNA + emergency):** Company DNA embed across CLAUDE.md/AGENTS.md/site.ts (tax-ID `0105564077716` + slogan + 7 dept emails + sales/docs footer pair) · PORT_PLAN Part T cargo revenue sprint · brand-cleanup gate doc · daily integration cycle §10 in team.md
-  - 6 role briefs (`docs/briefs/`) + container-centric model (`docs/architecture/`) + MOMO JMF spec (`docs/integrations/`) + V2/V3 strategy ADR-0010 + PORT_PLAN split (Parts A–N archived)
-  - L-22 GTM + L-23 Clarity + L-24 cookie A/B substrate shipped (silent until ก๊อต K-12/K-13 lands env vars)
-  - 9 conversion events + 13 CTA surfaces + first live experiment `home_hero_cta` telemetry
-  - OWASP Top-10 desk audit + PCS scrub sweep + OTP dual-pepper rotation support
-  - Sentry SDK (D-11) + Upstash rate-limit (D-12) + hCaptcha (D-13) wired — awaiting creds from ก๊อต
-  - Cron jobs (5) + CRON_SECRET hardening + footer i18n + LINE_OA constants centralized
-  - Migrations 0028–0032 + Track A integration tests (P-28..P-31) consolidated
-  - MOMO JMF partner token captured in 5 worktrees + `.env.example`; endpoint inventory TBD (ก๊อต MOMO-1..MOMO-3)
-- **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo, employee masterpiece). V3 wishlist appends to `docs/v3-wishlist.md` (TBD) — don't refactor V2 into V3 mid-flight.
-- **🔥 Revenue path blockers (block customer-receiving cargo system — Part T):**
-  - **ก๊อต:** T-G1 API borrow audit · T-G3 owner-call bundle (bank/PromptPay/tax-ID) · T-G4 GTM + Clarity · T-G5 Sentry/Upstash/hCaptcha · T-G2 MOMO endpoints
-  - **ภูม:** T-P1 admin workflow buttons · T-P2 container model + customer view · T-P3 wallet bulk-approve · T-P4 tax invoice flow · T-P5 stub accounting page
-  - **ปอน:** T-N1 SEO audit (why pacred.co not indexed?) · T-N2 ad-landing quality · T-N3 funnel CTA wiring · T-N4 Phase I landing shells · T-N5 mobile QA
-  - **เดฟ:** T-D1 cargo flow smoke test · T-D2 backend specs for ภูม · T-D3 GTM verify post-K-12 · T-D4 soft-launch 5 friendly customers
-- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) — emergency section at top overrides normal priority. Don't re-derive from PORT_PLAN.
+  - **Post-launch U4** — admin supervisory layer (audit-log export · notification log · cron-health · staff RBAC console · global search) + customer credit line / pay-later (`0071`)
+  - **Post-launch U2** — PCS→Pacred customer migration (`0067`) · per-container cost + AP/disbursement ledger (`0069`) · cargo_sacks (`0068`) · freight WHT gate
+  - **Post-launch U1** — container unify (`0059`) · container→order status propagation · arrival→billing gate · freight-chain wiring · refund money path (`0058`)
+  - **Launch (2026-05-17)** — W-1 security keystone (`0062`) · W-3 wallet-integrity (`0063`) · `0064` overdraw-guard · S-3/S-4/S-7 · production smoke gate passed → `dave→main` deployed
+  - **~700 new test assertions** across 11 test files covering the new validators
+- **Next `dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0072` to prod. See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
+- **V2 vs V3 strategy (ADR-0010 locked):** This repo (`pacred-web`) = **V2 owner-pleaser**. Future ERP rebuild = **V3 `pacred-DPX`** (separate repo). V3 wishlist appends to `docs/v3-wishlist.md` — don't refactor V2 into V3 mid-flight.
+- **Each role's next pickup:** see your brief at [`briefs/<your-name>.md`](briefs/) + the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) U-item table for your role.
 
 ---
 
 ## ⚠️ Things that bite
 
-1. **EMERGENCY mode active** — revenue-first lens. ถ้างานไม่ unblock cargo revenue path → defer. See [`PORT_PLAN.md`](PORT_PLAN.md) Part T.
+1. **Post-launch — `dave→main` is gated.** Any new `supabase/migrations/*` must be applied to **prod** Supabase before the deploy, else the new routes 500. See [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) §0.
 2. **Skipping your brief = wandering session.** Open [`briefs/<your-name>.md`](briefs/) FIRST. CLAUDE.md top section enforces this.
 3. **Next.js 16** has breaking changes from training data — read [`/AGENTS.md`](/AGENTS.md) before writing any code
-4. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — must be `false` in prod (see [`env.md`](env.md) §3)
-5. **`LINE_PUSH_BYPASS=true`** is default — notifications only log to console; LINE creds set 2026-05-14 but bypass stays true in dev (see [`env.md`](env.md) §7)
-6. **China-search vendor cutoff (Track G)** — `lib/china-search` wired but vendor (ไอแต้ม) being cut. DON'T set `PACRED_TAMIT_*` in Vercel prod until ก๊อต ADR-0003 R1 lands replacement. Code degrades to demo mode when env unset — intended interim.
-7. **MOMO JMF token in `.env.local`** — captured 2026-05-16, but `MOMO_JMF_BASE_URL` + endpoint inventory still TBD (ก๊อต MOMO-1). Don't write integration code referencing endpoints until inventory locks.
+4. **`OTP_BYPASS=true`** in dev makes registration skip phone verification — `false` in prod (flipped at launch after ThaiBulkSMS signup). See [`env.md`](env.md) §3.
+5. **`LINE_PUSH_BYPASS=true`** is the dev default — notifications only log to console; LINE creds + LIFF are set, bypass stays true in dev. See [`env.md`](env.md) §7.
+6. **China-search vendor cutoff** — `lib/china-search` wired but the legacy vendor is being cut. Code degrades to demo mode when env unset — intended interim until ก๊อต ADR-0003 R1 lands a replacement (deferred T+30d).
+7. **MOMO JMF API surface is wrong on record** — the decoded `?api=` endpoints are stale; the real surface is `api.momocargo.com:8080` REST (datanew L-0). U1-7 MOMO sync is blocked until ก๊อต corrects the API docs. Don't write integration code against the old endpoints.
 8. **Middleware file** is `proxy.ts` not `middleware.ts` (Next 16 rename)
 9. **i18n key missing** crashes the page — always add both th + en. Audit script: `pnpm audit:i18n`
 10. **Don't use `profiles.role`** — use `is_admin()` SECURITY DEFINER function or query `admins` table (per [`decisions/0002-admin-architecture.md`](decisions/0002-admin-architecture.md))

@@ -17,27 +17,27 @@
 
 ---
 
-# 🔥 EMERGENCY STATE — Cargo Revenue Sprint (2026-05-15)
+# 🚀 POST-LAUNCH STATE — Production live (launched 2026-05-17)
 
-บริษัทกำลังเผาเงินตัวเอง. Google Ads ยิงไม่ติด · Search หา pacred.co ไม่เจอ · FB Ads มี inquiry คาร์โก้เข้าแต่ระบบยังไม่พร้อมรับ → ลูกค้า drop + เสียชื่อ. พี่ป๊อปเครียดมาก.
+Pacred **launched to production 2026-05-17** — `main` is live + verified healthy on a separate prod Supabase project. The cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The emergency "เผาเงิน" framing is behind us — runway is no longer the daily lens; **stabilising + deepening the launched product** is.
 
-**Goal:** ระบบ cargo (port from PHP) → live + รับลูกค้าได้ ASAP → revenue → stop burn → fund continued dev.
+**Current phase:** post-launch **UPGRADE** roadmap — `docs/UPGRADE_PLAN.md` (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). U1 (refund money path · container unify · freight-chain wiring) + U2 (PCS customer migration · per-container cost ledger · cargo_sacks) + U4 (staff RBAC console · customer credit line) have **shipped on `dave`**; the `dave→main` deploy is gated on ภูม applying migrations `0058`-`0072` to prod Supabase.
 
-**Decision lens (every task):** "งานนี้ส่งผลให้รับลูกค้า cargo ได้เร็วขึ้นไหม?" ใช่ → P0. ไม่ → defer.
+**Decision lens (every task):** still revenue-aware — "does this make the product more *true*, *billable*, or *measurable*?" — but no longer crisis-mode. Plan work properly; don't ship half-built to chase a deadline.
 
-📋 **Plan:** [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) **Part T** — per-role T1..T5 emergency pickups + "borrow first, switch later" API plan + revenue-ready DoD checklist.
+📋 **Roadmap:** [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch execution sequence. [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V/W = the cargo + gap-hunt backlog it draws from.
 
-**Anti-patterns during emergency (don't do):**
-- V3 architecture redesign mid-burn (V3 = pacred-DPX repo, not here)
-- Wide refactor cleanup without revenue tie-in
-- Wait for "perfect" UX — ship "good enough" + iterate post-revenue
-- Scrub PCS/TTP/ไอแต้ม **before** ก๊อต API switchover (would break revenue path)
+**Anti-patterns (still hold post-launch):**
+- V3 architecture redesign in this repo (V3 = `pacred-DPX`, separate repo — append ideas to `docs/v3-wishlist.md`)
+- Wide refactor cleanup with no product tie-in
+- Coding an UPGRADE_PLAN item before its §0 gate is green (migrations applied + live functional verify)
+- Scrub PCS/TTP/ไอแต้ม **before** ก๊อต API switchover (would break the revenue path)
 
 ---
 
 # 🛑 STOP — Read your role brief FIRST (force-read every Claude Code session)
 
-ทุก dev ใช้ Claude Code Windows ทำงาน async บน worktree ของตัวเอง. ก่อนแตะ code หรือตอบคำถาม — **เปิด brief ของคุณก่อน**:
+ทุก dev ใช้ Claude Code ทำงาน async บน worktree ของตัวเอง. ก่อนแตะ code หรือตอบคำถาม — **เปิด brief ของคุณก่อน**:
 
 | ถ้าคุณคือ… | เปิดไฟล์นี้ก่อนทุกอย่าง | คุณจะรู้ทันที |
 |---|---|---|
@@ -84,7 +84,8 @@
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
 
 **Living docs (เดฟ updates):**
-- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — current sprints + hand-off batches (Parts O–V; Part V = cargo-forensics backlog; ~1740 lines)
+- 🚀 [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — **the post-launch roadmap** (§0 gate → U1 wire-the-flow → U2 revenue/margin → U3 ecosystem tools → U4 supervisory). This is the current execution doc — start here for "what's next".
+- 📋 [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) — sprint history + cargo/gap-hunt backlogs (Parts O–W; Part V = cargo-forensics, Part W = gap-hunt; ~1825 lines — watch the 2000-line cap)
 - 📚 [`docs/sprints/archive-a-to-n.md`](docs/sprints/archive-a-to-n.md) — historic survey (Parts A–N — moved out to keep PORT_PLAN under 2000-line agent ceiling)
 - 🏗 [`docs/architecture.md`](docs/architecture.md) — system diagrams + DB schema + auth + security
 - 🏗 [`docs/architecture/container-centric-model.md`](docs/architecture/container-centric-model.md) — **NEW** warehouse/container/shipment spine (4 tables, RLS, status enums, CT-1..CT-8 implementation)
@@ -116,12 +117,12 @@
 
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-16
+Last updated: 2026-05-18 (post-launch)
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
-> Marketing site + landing pages + (incoming) member portal
+> Marketing site + landing pages + customer member portal + admin back-office — **live in production since 2026-05-17**.
 
-> 🎯 **Live state** — ดูที่ [`docs/HANDBOOK.md`](docs/HANDBOOK.md) §"Current state" + [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part P (latest snapshot). โน้ตด้านล่าง section "Auth & Backend State" เป็น Phase 1-5 historic — ปัจจุบัน Sprint 6.5/7+ มีหน้า /service-order, /service-import, /service-payment, /wallet, /sales, /notifications, /admin/* ทำงานแล้ว
+> 🎯 **Live state** — ดูที่ [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point) + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (post-launch roadmap). โน้ตด้านล่าง section "Auth & Backend State" เป็น Phase 1-5 historic foundation — the full customer portal, 60+ admin routes, U1/U2/U4 features ทำงานแล้ว; current state lives in STRATEGY.md §9.
 
 ## Stack
 - Next.js **16.2.6** (App Router) — **โปรดอ่าน AGENTS.md: เวอร์ชันนี้มี breaking changes จาก training data**
@@ -159,7 +160,7 @@ Last updated: 2026-05-16
 - `app/[locale]/(admin)/admin/*` — admin back-office — `requireAdmin()` gate per [ADR-0002](docs/decisions/0002-admin-architecture.md)
 - `actions/` — Server Actions (`actions/auth.ts`, `actions/wallet.ts`, etc.); admin variants in `actions/admin/*`
 - `lib/` — `supabase/{client,server,admin}.ts` · `auth/*` · `sms/gateway.ts` · `notifications/*` · `validators/*` (Zod) · `pdf/*` · `forwarder/calc-price.ts`
-- `supabase/migrations/` — 0001..0043+ numbered migrations; see [`supabase/migrations/README.md`](supabase/migrations/README.md)
+- `supabase/migrations/` — 0001..0072+ numbered migrations (`0065` is an intentional unused gap); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
 - `proxy.ts` (NOT `middleware.ts` — Next 16 rename) at repo root
 
 ## Auth & Backend State (Phase 1-5 ✅ done)
@@ -176,9 +177,9 @@ Last updated: 2026-05-16
 
 ### Pages live + current state
 
-📊 **Live state snapshot** is in [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point) + [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part P. The lists below were Phase 1-5 historic — **current state lives in those docs, not here**.
+📊 **Live state snapshot** is in [`docs/STRATEGY.md`](docs/STRATEGY.md) §9 (shipped vs pending — updated each save-point). The lists below were Phase 1-5 historic — **current state lives in STRATEGY.md §9, not here**.
 
-Sprint 6.5/7+ adds (~88% customer / ~98% HR / ~50% admin-ops): `/service-order` · `/service-import` · `/service-payment` · `/wallet` (+deposit/+history/+withdraw) · `/sales` · `/notifications` · `/shipments` (+[code]) · `/admin/*` (60+ routes) · tax-invoice flow ครบ · pay-from-wallet self-serve · 14 admin reports + dashboards.
+Shipped + in production: customer portal (`/service-order` · `/service-import` · `/service-payment` · `/wallet` +deposit/+history/+withdraw · `/refunds` · `/sales` · `/notifications` · `/shipments` +[code]) · `/admin/*` (60+ routes incl. accounting/container-costs · disbursements · refunds · migration/pcs-customers · search · system/crons · system/notifications) · tax-invoice flow · pay-from-wallet self-serve · customer credit line · staff RBAC console. **Post-launch U1/U2/U4 features shipped on `dave`** — see STRATEGY.md §9 + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md).
 
 ## Architecture & Roadmap
 
@@ -195,8 +196,8 @@ Sprint 6.5/7+ adds (~88% customer / ~98% HR / ~50% admin-ops): `/service-order` 
 - ADR-0007 GTM + Clarity + cookie A/B
 - ADR-0010 V2 (owner-pleaser) vs V3 (employee masterpiece, `pacred-dpx`)
 - ADR-0014 customer self-service state transitions (admin-client-after-ownership-verify)
-- ADR-0015/0016 (DRAFT — WHT + freight value model; fastlane pre-answered in [`briefs/got.md`](docs/briefs/got.md))
-- ADR-0011/0012/0013 (DRAFT — V3 RBAC granular + ERP shell + V2→V3 migration)
+- ADR-0015/0016 ✅ Accepted 2026-05-16 (WHT model + freight value model)
+- ADR-0011/0012/0013 (DRAFT — V3 RBAC granular + ERP shell + V2→V3 migration; deferred T+30d)
 
 🌱 **Infra stack:** Vercel + Supabase Cloud · `proxy.ts` middleware · ThaiBulkSMS OTP (`OTP_BYPASS` flag) · `member_code` = `PR001` running — **PR + minimum 3 digits**, overflow-safe past PR999 (Postgres trigger `generate_member_code`, migration `0060`; **NO compat with PHP `PCS<num>`** — Pacred is new company).
 
