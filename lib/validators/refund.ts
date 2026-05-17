@@ -101,3 +101,92 @@ export const markRefundPaidSchema = z.object({
   id: z.string().uuid(),
 });
 export type MarkRefundPaidInput = z.infer<typeof markRefundPaidSchema>;
+
+// ────────────────────────────────────────────────────────────
+// P0-1 — refund money-safety guards (cross-table; live in the
+// action layer, but the decision math + status sets are pure
+// and unit-testable so they sit here next to the schemas).
+// Per [docs/research/review-u1-u2-2026-05-18.md] P0-1.
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Parent statuses that mean "the customer never paid a baht against
+ * this parent". A refund created against a parent in one of these
+ * statuses has nothing to refund — creation is rejected.
+ *
+ *  - forwarder      : 'pending_payment' (all later statuses follow a
+ *                     wallet import_payment debit; 'cancelled' is terminal)
+ *  - service_order  : 'pending' / 'awaiting_payment' (paid begins at 'ordered')
+ *  - yuan_payment   : 'pending' (the THB is collected once it moves to
+ *                     'processing'; 'failed'/'refunded' are terminal)
+ *
+ * 'manual' has no parent and is not represented here.
+ */
+export const NEVER_PAID_PARENT_STATUSES: Record<CustomerRefundSource, readonly string[]> = {
+  forwarder:     ["pending_payment"],
+  service_order: ["pending", "awaiting_payment"],
+  yuan_payment:  ["pending"],
+};
+
+/**
+ * True when a parent in `parentStatus` has never collected money — so a
+ * refund must not be created against it. Unknown sources / statuses are
+ * treated as paid (return false) — the caller's own existence + amount
+ * guards still apply; this helper only blocks the clear never-paid case.
+ */
+export function isNeverPaidParentStatus(
+  source:       string,
+  parentStatus: string,
+): boolean {
+  const set = NEVER_PAID_PARENT_STATUSES[source as CustomerRefundSource];
+  return set ? set.includes(parentStatus) : false;
+}
+
+/** Outcome of the mark-paid amount-ceiling check. */
+export type RefundCeilingCheck =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+/**
+ * P0-1 ceiling guard — pure arithmetic, no IO. The action layer resolves
+ * the three inputs from the DB; this decides whether the refund may be paid.
+ *
+ *   collected           — THB the customer actually paid against the parent
+ *   priorPaidRefunds    — sum of already-`paid` refund_requests for the same parent
+ *   thisRefundAmount    — the amount this mark-paid would credit
+ *
+ * Reject when `priorPaidRefunds + thisRefundAmount` exceeds `collected`.
+ * Defensive against NaN / negative inputs (treats them as a violation).
+ */
+export function checkRefundCeiling(
+  collected:        number,
+  priorPaidRefunds: number,
+  thisRefundAmount: number,
+): RefundCeilingCheck {
+  if (
+    !Number.isFinite(collected) ||
+    !Number.isFinite(priorPaidRefunds) ||
+    !Number.isFinite(thisRefundAmount)
+  ) {
+    return { ok: false, reason: "refund_ceiling_check_bad_input" };
+  }
+  if (collected < 0 || priorPaidRefunds < 0 || thisRefundAmount <= 0) {
+    return { ok: false, reason: "refund_ceiling_check_bad_input" };
+  }
+  // Round to 2dp before comparing — THB money columns are numeric(12,2);
+  // float sums (e.g. 0.1 + 0.2) must not trip the guard by an epsilon.
+  const used  = Math.round((priorPaidRefunds + thisRefundAmount) * 100) / 100;
+  const limit = Math.round(collected * 100) / 100;
+  if (used > limit) {
+    return {
+      ok: false,
+      reason:
+        `refund_exceeds_collected — ขอคืน ฿${thisRefundAmount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}` +
+        (priorPaidRefunds > 0
+          ? ` + คืนไปแล้ว ฿${priorPaidRefunds.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`
+          : "") +
+        ` เกินยอดที่ลูกค้าชำระจริง ฿${collected.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+    };
+  }
+  return { ok: true };
+}
