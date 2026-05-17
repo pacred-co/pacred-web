@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import {
   getContainerByCode,
   listShipmentsByContainer,
@@ -13,6 +13,7 @@ import { ScanEventForm } from "./scan-form";
 import { ShipmentRowControls } from "./shipment-row-controls";
 import { ManualShipmentForm } from "./manual-shipment-form";
 import { CloseAtForm } from "./close-at-form";
+import { CostMarginPanel } from "./cost-margin-panel";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -78,10 +79,14 @@ export default async function AdminContainerDetailPage({
 }: {
   params: Promise<{ code: string }>;
 }) {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  const { roles } = await requireAdmin(["super", "ops", "warehouse"]);
 
   const { code } = await params;
   const admin = createAdminClient();
+
+  // U2-2: Cost & margin panel is finance-territory — only super + accounting.
+  // Ops/warehouse don't see the cost side per ADR-0005 K-7 + W-1 keystone.
+  const canSeeCost = hasRole(roles, ["super", "accounting"]);
 
   const containerRes = await getContainerByCode(admin, code);
   if (!containerRes.ok) {
@@ -304,6 +309,18 @@ export default async function AdminContainerDetailPage({
               </ul>
             )}
           </div>
+
+          {/* U2-2: Cost & margin (super + accounting only) */}
+          {canSeeCost && (
+            <CostMarginPanel
+              admin={admin}
+              containerId={container.id}
+              containerCode={container.code}
+              transportMode={container.transport_mode}
+              origin={container.origin}
+              destination={container.destination}
+            />
+          )}
 
           {/* Status history audit */}
           {history.length > 0 && (

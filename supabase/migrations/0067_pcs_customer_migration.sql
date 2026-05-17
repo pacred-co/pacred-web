@@ -138,7 +138,13 @@ comment on table public.pcs_legacy_customers_staging is
 -- (sequence is fine as-is for native signups; the next migration run
 -- will re-offset once staging is populated).
 
-do $$
+-- NOTE on dollar-quoting: `$$` would clash with the `$` end-anchor in
+-- the POSIX regexes below (`^PCS[0-9]+$`). Use a tagged dollar quote
+-- `$pcsmig$ ... $pcsmig$` so the lexer never confuses a regex `$` with
+-- a closing quote. Also use `[0-9]` (POSIX class) over `\d` — Postgres
+-- supports both but `[0-9]` is portable across older planners.
+
+do $pcsmig$
 declare
   max_staging_num    int := 0;
   max_migrated_num   int := 0;
@@ -151,21 +157,21 @@ begin
   select coalesce(max((regexp_replace(legacy_user_id, '^PCS', ''))::int), 0)
     into max_staging_num
     from public.pcs_legacy_customers_staging
-    where legacy_user_id ~ '^PCS\d+$';
+    where legacy_user_id ~ '^PCS[0-9]+$';
 
   -- Highest already-migrated PR<n> in profiles (from earlier run)
   select coalesce(max((regexp_replace(legacy_pcs_user_id, '^PCS', ''))::int), 0)
     into max_migrated_num
     from public.profiles
     where legacy_pcs_user_id is not null
-      and legacy_pcs_user_id ~ '^PCS\d+$';
+      and legacy_pcs_user_id ~ '^PCS[0-9]+$';
 
   -- Highest native PR<n> already issued — make sure we don''t REGRESS
   -- the sequence below where native signups currently are.
   select coalesce(max((substring(member_code from 3))::int), 0)
     into max_native_num
     from public.profiles
-    where member_code ~ '^PR\d+$'
+    where member_code ~ '^PR[0-9]+$'
       and (migrated_from_pcs is null or migrated_from_pcs = false);
 
   current_seq_value := (select last_value from public.member_code_seq);
@@ -176,14 +182,15 @@ begin
   if target_seq_value > current_seq_value then
     perform setval('public.member_code_seq', target_seq_value, true);
     raise notice
-      'U2-1: member_code_seq offset to % (max_staging=% max_migrated=% max_native=% + buffer=%). Next signup → PR%.',
+      'U2-1: member_code_seq offset to % (max_staging=% max_migrated=% max_native=% + buffer=%). Next signup -> PR%.',
       target_seq_value, max_staging_num, max_migrated_num, max_native_num, buffer, target_seq_value + 1;
   else
     raise notice
-      'U2-1: member_code_seq already at % — no offset needed (max_staging=% max_migrated=% max_native=% + buffer=%, target=%).',
+      'U2-1: member_code_seq already at % - no offset needed (max_staging=% max_migrated=% max_native=% + buffer=%, target=%).',
       current_seq_value, max_staging_num, max_migrated_num, max_native_num, buffer, target_seq_value;
   end if;
-end$$;
+end
+$pcsmig$;
 
 -- ── 5) Reporting view — easy verify queries ────────────────────────
 
@@ -196,17 +203,17 @@ select
   (select last_value from public.member_code_seq)                                          as member_code_seq_current,
   (select coalesce(max((regexp_replace(legacy_user_id, '^PCS', ''))::int), 0)
      from public.pcs_legacy_customers_staging
-     where legacy_user_id ~ '^PCS\d+$')                                                    as max_legacy_num_in_staging,
+     where legacy_user_id ~ '^PCS[0-9]+$')                                                 as max_legacy_num_in_staging,
   (select coalesce(max((substring(member_code from 3))::int), 0)
      from public.profiles
-     where member_code ~ '^PR\d+$')                                                        as max_member_code_num;
+     where member_code ~ '^PR[0-9]+$')                                                     as max_member_code_num;
 
 comment on view public.v_pcs_migration_status is
   'U2-1: one-row dashboard for PCS→Pacred migration. Used by /admin/migration/pcs-customers + the runbook verify step.';
 
 -- ── 6) Verify counts (raise notice for psql output) ────────────────
 
-do $$
+do $pcsmig_v$
 declare
   staging_rows int;
   migrated_rows int;
@@ -216,4 +223,5 @@ begin
   raise notice
     'U2-1: migration applied. Staging=% rows. Already-migrated=% rows. Run adminBackfillPcsAuthUsers() after populating staging.',
     staging_rows, migrated_rows;
-end$$;
+end
+$pcsmig_v$;

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import { instrumentCron } from "@/lib/cron/instrument";
 
 /**
  * GET /api/cron/expire-driver-assignments
@@ -9,59 +9,52 @@ import { logger } from "@/lib/logger";
  * assignment timestamp is older than 17 hours → flip to status=3
  * (expired). Driver lost the chance to accept; admin can re-assign.
  *
- * Mirrors driver-half of legacy pcs-admin/api/autorun/check-apprentice/.
+ * Schedule: "0 * * * *" = every hour.
  *
- * Schedule via vercel.json: "0 * * * *" = every hour. Hourly resolution
- * is fine — drivers get an extra few minutes past the strict 17h cutoff
- * but never more than 60 min.
- *
- * Authentication: same pattern as /api/cron/auto-cancel-orders.
- *
- * DECISION (ภูม, per §6): no admin_audit_log — same reasoning as
- * P-17 expire-probation cron (see that route's header).
- *
- * Idempotent: only flips status=1 (already-expired/accepted/completed
- * rows ignored).
+ * U4-1: wrapped in instrumentCron — response shape preserved.
  */
 export async function GET(request: Request) {
-  const isProd     = process.env.NODE_ENV === "production";
-  const vercelCron = request.headers.get("x-vercel-cron") === "1";
-  const authHeader = request.headers.get("authorization");
-  const secret     = process.env.CRON_SECRET;
-  const bearerOk   = !!secret && authHeader === `Bearer ${secret}`;
+  return instrumentCron({
+    cronPath: "/api/cron/expire-driver-assignments",
+    request,
+    handler: async () => {
+      const supabase = createAdminClient();
+      const cutoffIso = new Date(Date.now() - 17 * 60 * 60 * 1000).toISOString();
 
-  if (isProd && !vercelCron && !bearerOk) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+      const { data: expired, error: updErr } = await supabase
+        .from("forwarder_driver")
+        .update({ status: 3 })
+        .eq("status", 1)
+        .lt("fd_date", cutoffIso)
+        .select("id");
 
-  const supabase = createAdminClient();
-  // 17 hours in milliseconds. Computed in JS rather than via SQL
-  // `interval '17 hours'` to keep the route portable + testable.
-  const cutoffIso = new Date(Date.now() - 17 * 60 * 60 * 1000).toISOString();
+      if (updErr) {
+        return {
+          status:     "failure" as const,
+          error:      updErr.message,
+          payload:    { ok: false, stage: "update", error: updErr.message },
+          httpStatus: 500,
+        };
+      }
 
-  const { data: expired, error: updErr } = await supabase
-    .from("forwarder_driver")
-    .update({ status: 3 })
-    .eq("status", 1)
-    .lt("fd_date", cutoffIso)
-    .select("id");
+      const expiredCount = (expired ?? []).length;
 
-  if (updErr) {
-    return NextResponse.json({ ok: false, stage: "update", error: updErr.message }, { status: 500 });
-  }
+      if (expiredCount > 0) {
+        logger.info("cron.expire-driver-assignments", "expired stale assignments", {
+          cutoffIso,
+          expiredCount,
+        });
+      }
 
-  const expiredCount = (expired ?? []).length;
-
-  if (expiredCount > 0) {
-    logger.info("cron.expire-driver-assignments", "expired stale assignments", {
-      cutoffIso,
-      expiredCount,
-    });
-  }
-
-  return NextResponse.json({
-    ok:      true,
-    cutoff:  cutoffIso,
-    expired: expiredCount,
+      return {
+        status:  "success" as const,
+        summary: { cutoff: cutoffIso, expired: expiredCount },
+        payload: {
+          ok:      true,
+          cutoff:  cutoffIso,
+          expired: expiredCount,
+        },
+      };
+    },
   });
 }

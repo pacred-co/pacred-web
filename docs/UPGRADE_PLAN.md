@@ -94,7 +94,7 @@ Pay-Later gating (depends on U1-7).
 | id | item | why | source | effort | status |
 |---|---|---|---|---|---|
 | **U2-1** | **PCS→Pacred customer migration** — backfill legacy customers, re-stamp `PCS<n>` → `PR<n>`; **offset `member_code_seq`** so a migrated `PR1234` never collides with a fresh-signup `PR001` | datanew **L-2** — a launch-week job; the sequence offset is the one technical trap | datanew L-2 · migration `0060` | M | ⏳ pending |
-| **U2-2** | **Per-container cost basis + AP/disbursement ledger** — `container_costs` carrier-rate-card table + the disbursement ledger (legacy `tb_cost_container` + `tb_bill`) | Pacred has zero cost side today → no margin, no "billed below cost" flag, no commission-on-profit | Part W W-8 · R-7 · gap-schema-security G-1/G-2 | L | ⏳ pending |
+| **U2-2** | **Per-container cost basis + AP/disbursement ledger** — `container_costs` carrier-rate-card table + the disbursement ledger (legacy `tb_cost_container` + `tb_bill`) | Pacred has zero cost side today → no margin, no "billed below cost" flag, no commission-on-profit | Part W W-8 · R-7 · gap-schema-security G-1/G-2 | L | ✅ shipped 2026-05-18 (commit `5d9a653`: migration `0069` with `container_costs` carrier rate card + `container_disbursements` AP ledger + RLS; `lib/cost/container-margin.ts` with `computeContainerMargin()` + unit tests; `/admin/accounting/container-costs` + `/admin/accounting/disbursements` CRUD UI; cost & margin panel on container detail page) |
 | **U2-3** | **Freight WHT gate** — add `freight_invoice_id` to `withholding_tax_entries`, un-stub `getFreightReceiptGate()` | juristic freight customers withhold tax like cargo customers — the "no cert → no receipt" control does not exist for freight today | Part W W-8 · gap-schema-security G-4 · Part V V-A6.1 | S | ✅ shipped 2026-05-17 (commit `6681657`: `getFreightReceiptGate` queries `withholding_tax_entries.freight_invoice_id`; blocks when `cert_status='pending'`; fails OPEN on transient DB errors) |
 | **U2-4** | **PEAK accounting integration** — sync issued invoices / receipts to PEAK | tools agenda — closes the books loop; removes manual re-keying | tools agenda | L | ⏳ pending |
 | **U2-5** | **"sack" entity** — model the `CBX…-EK…` sack the legacy ops use; missing from the Pacred schema | datanew **L-4** — surfaces in IT-team chat container handling | datanew L-4 | M | ✅ shipped 2026-05-17 (migration `0068`: `cargo_sacks` + `cargo_sack_seq` + `next_sack_code()` daily-reset + `cargo_shipments.cargo_sack_id` FK + RLS customer-via-shipment-ownership + `lib/warehouse/sacks.ts` with `upsertSackByCode` MOMO entry-point + `reconcileSack` outside-vs-inside CBM gap helper) |
@@ -124,11 +124,11 @@ Pay-Later gating (depends on U1-7).
 
 ## §4 — Phase U4 · Supervisory layer & customer depth
 
-| id | item | why | source |
-|---|---|---|---|
-| **U4-1** | **Admin supervisory layer** — audit-log search/filter/export · staff RBAC / `super`-review console · notification delivery log · global search · cron-health panel | the back-office can *do* things but not *oversee* them | Part W W-6 |
-| **U4-2** | **Customer credit line** (เครดิตสินค้า / pay-later) — `profiles.credit_limit` + a credit-charge ledger kind + an outstanding-credit view + a "pay my credit" action; lights up the dead `wallet.credit_balance` UI | a real revenue feature legacy customers expect | Part W W-7 |
-| **U4-3** | **Tier-2 tail** — customer delivery-acknowledgement · yuan tax-invoice · wallet-tx lifecycle UX · admin view-as-customer · export hub · editable business config · audit retention · `tax_id` verification gate | the polish backlog | Part W §4.2 items 9+ · gap-customer / gap-admin |
+| id | item | why | source | status |
+|---|---|---|---|---|
+| **U4-1** | **Admin supervisory layer** — audit-log search/filter/export · staff RBAC / `super`-review console · notification delivery log · global search · cron-health panel | the back-office can *do* things but not *oversee* them | Part W W-6 | 🟢 3 of 5 sub-items shipped 2026-05-18: ✅ audit-log search/filter/**export** (`f13173e`: CSV API + date filters) · ✅ notification delivery log (`64a0493`: `/admin/system/notifications` + `notifications.delivery_status` column) · ✅ cron-health panel (`64a0493`: `/admin/system/crons` + `cron_invocations` + all 7 crons instrumented). Pending: staff RBAC console · global search |
+| **U4-2** | **Customer credit line** (เครดิตสินค้า / pay-later) — `profiles.credit_limit` + a credit-charge ledger kind + an outstanding-credit view + a "pay my credit" action; lights up the dead `wallet.credit_balance` UI | a real revenue feature legacy customers expect | Part W W-7 | ⏳ pending |
+| **U4-3** | **Tier-2 tail** — customer delivery-acknowledgement · yuan tax-invoice · wallet-tx lifecycle UX · admin view-as-customer · export hub · editable business config · audit retention · `tax_id` verification gate | the polish backlog | Part W §4.2 items 9+ · gap-customer / gap-admin | ⏳ pending |
 
 ---
 

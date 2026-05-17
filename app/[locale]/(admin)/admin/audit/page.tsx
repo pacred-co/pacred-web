@@ -26,6 +26,8 @@ type SP = {
   action?:      string;    // prefix match e.g. "rate_general" matches insert/update/delete
   target_type?: string;
   target_id?:   string;
+  from?:        string;    // YYYY-MM-DD — created_at >=
+  to?:          string;    // YYYY-MM-DD — created_at <= (end-of-day)
   limit?:       string;
 };
 
@@ -67,6 +69,13 @@ export default async function AdminAuditPage({
   if (sp.action)        q = q.like("action", `${sp.action.trim()}%`);
   if (sp.target_type)   q = q.eq("target_type", sp.target_type.trim());
   if (sp.target_id)     q = q.eq("target_id", sp.target_id.trim());
+  if (sp.from)          q = q.gte("created_at", sp.from.trim());
+  if (sp.to) {
+    // End-of-day inclusive — pad if it's a bare date.
+    const toS = sp.to.trim();
+    const padded = /^\d{4}-\d{2}-\d{2}$/.test(toS) ? `${toS}T23:59:59` : toS;
+    q = q.lte("created_at", padded);
+  }
 
   const { data } = await q;
   const rows = ((data ?? []) as Row[]).map((r) => ({ ...r, _admin: normAdmin(r.admin) }));
@@ -95,7 +104,7 @@ export default async function AdminAuditPage({
       </div>
 
       {/* Filter form */}
-      <form action="/admin/audit" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+      <form action="/admin/audit" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
           <span className="text-[10px] text-muted">แอดมิน (member_code)</span>
           <input name="admin" defaultValue={sp.admin ?? ""} placeholder="PR001" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
@@ -112,7 +121,34 @@ export default async function AdminAuditPage({
           <span className="text-[10px] text-muted">target_id</span>
           <input name="target_id" defaultValue={sp.target_id ?? ""} placeholder="UUID หรือ slug" className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
         </label>
-        <button type="submit" className="self-end rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">กรอง</button>
+        <label className="space-y-1">
+          <span className="text-[10px] text-muted">ตั้งแต่ (from)</span>
+          <input type="date" name="from" defaultValue={sp.from ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] text-muted">ถึง (to)</span>
+          <input type="date" name="to" defaultValue={sp.to ?? ""} className="w-full rounded-lg border border-border bg-surface-alt/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-500/40" />
+        </label>
+        <div className="flex flex-col gap-1.5 self-end">
+          <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600">กรอง</button>
+          <a
+            href={`/api/admin/audit/export?${new URLSearchParams(
+              Object.entries({
+                admin: sp.admin ?? "",
+                action: sp.action ?? "",
+                target_type: sp.target_type ?? "",
+                target_id: sp.target_id ?? "",
+                from: sp.from ?? "",
+                to: sp.to ?? "",
+                limit: "10000",
+              }).filter(([, v]) => v !== "") as [string, string][],
+            ).toString()}`}
+            className="rounded-lg border border-border bg-white text-foreground px-4 py-2 text-xs font-medium hover:bg-surface-alt text-center"
+            download
+          >
+            ⬇ CSV (≤10k)
+          </a>
+        </div>
       </form>
 
       {/* Quick action-prefix chips from current page */}
