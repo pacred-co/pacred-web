@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   MapPin,
   Package,
+  Ship,
   ShoppingCart,
   TrendingUp,
   Truck,
@@ -103,6 +104,14 @@ const MENU: MenuItem[] = [
       { href: "/wallet/history", labelKey: "walletHistory" },
       { href: "/wallet/withdraw", labelKey: "walletWithdraw" },
       { href: "/wallet/deposit", labelKey: "walletDeposit" },
+    ],
+  },
+  {
+    labelKey: "freight",
+    Icon: Ship,
+    children: [
+      { href: "/freight", labelKey: "freightHub" },
+      { href: "/freight/shipments", labelKey: "freightShipments" },
     ],
   },
   { href: "/shipments", labelKey: "shipments", Icon: Truck },
