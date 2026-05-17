@@ -1,127 +1,118 @@
-import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
+import { instrumentCron } from "@/lib/cron/instrument";
 
 /**
  * GET /api/cron/refresh-active-customers
  *
  * Sweeps profiles whose recent activity warrants `is_active=true` and
  * flips the flag. Mirrors legacy
- * pcs-admin/api/autorun/update-active-customers/index.php which
- * filtered tb_users.userActive based on order/forwarder/payment activity.
+ * pcs-admin/api/autorun/update-active-customers/index.php.
  *
- * P-16 verified + shipped (ภูม, 2026-05-14):
- *   ✅ activity rules ported from PHP (3 streams)
- *   ✅ idempotent — only flips false→true (never demotes)
- *   ✅ forwarder exclusion list refined — added 'cancelled' to skip list
- *      (scaffold only had 'pending_payment'; 'cancelled' shipments
- *      shouldn't count as active activity either)
- *   ✅ DECISION D-18 (per Sprint 6 P-16 recommendation): KEEP BOTH —
- *      this cron flips is_active flag (cheap, daily) and P-13's
- *      /admin/customers/recently-active dashboard reads profiles +
- *      aggregates wallet streams directly (real-time, doesn't depend
- *      on the flag). No overlap. No duplication. Different concerns —
- *      cron supports future is_active=true filters across the app;
- *      dashboard provides admin's lifetime-revenue view.
- *
- * Schedule via vercel.json: daily 01:00 UTC = 08:00 ICT (already set).
- *
- * Authentication: same pattern as /api/cron/auto-cancel-orders.
- *
- * Legacy rules (from update-active-customers/index.php):
- *   - service_orders past status 2 (hStatus 3/4/5) →
- *     status IN ('ordered','awaiting_chn_dispatch','completed')
- *     equivalently NOT IN ('pending','awaiting_payment','cancelled')
- *   - forwarders past 'pending_payment' AND not 'cancelled'
- *     (enum: pending_payment, shipped_china, in_transit,
- *      arrived_thailand, out_for_delivery, delivered, cancelled)
- *   - yuan_payments status='completed'
+ * U4-1: wrapped in instrumentCron — response shape preserved.
  *
  * @see C:\xampp\htdocs\pcscargo\member\pcs-admin\api\autorun\update-active-customers\index.php
  */
 export async function GET(request: Request) {
-  const isProd     = process.env.NODE_ENV === "production";
-  const vercelCron = request.headers.get("x-vercel-cron") === "1";
-  const authHeader = request.headers.get("authorization");
-  const secret     = process.env.CRON_SECRET;
-  const bearerOk   = !!secret && authHeader === `Bearer ${secret}`;
+  return instrumentCron({
+    cronPath: "/api/cron/refresh-active-customers",
+    request,
+    handler: async () => {
+      const supabase = createAdminClient();
+      const profileIds = new Set<string>();
 
-  if (isProd && !vercelCron && !bearerOk) {
-    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
+      // Stream 1 — service-order activity (paid or beyond)
+      const { data: orderRows, error: orderErr } = await supabase
+        .from("service_orders")
+        .select("profile_id")
+        .not("status", "in", "(pending,awaiting_payment,cancelled)");
 
-  const supabase = createAdminClient();
-  const profileIds = new Set<string>();
+      if (orderErr) {
+        return {
+          status:     "failure" as const,
+          error:      orderErr.message,
+          payload:    { ok: false, stage: "service_orders", error: orderErr.message },
+          httpStatus: 500,
+        };
+      }
+      for (const row of orderRows ?? []) {
+        if (row.profile_id) profileIds.add(row.profile_id);
+      }
 
-  // Stream 1 — service-order activity (paid or beyond)
-  const { data: orderRows, error: orderErr } = await supabase
-    .from("service_orders")
-    .select("profile_id")
-    .not("status", "in", "(pending,awaiting_payment,cancelled)");
+      // Stream 2 — forwarder activity
+      const { data: fwdRows, error: fwdErr } = await supabase
+        .from("forwarders")
+        .select("profile_id")
+        .not("status", "in", "(pending_payment,cancelled)");
 
-  if (orderErr) {
-    return NextResponse.json({ ok: false, stage: "service_orders", error: orderErr.message }, { status: 500 });
-  }
-  for (const row of orderRows ?? []) {
-    if (row.profile_id) profileIds.add(row.profile_id);
-  }
+      if (fwdErr) {
+        return {
+          status:     "failure" as const,
+          error:      fwdErr.message,
+          payload:    { ok: false, stage: "forwarders", error: fwdErr.message },
+          httpStatus: 500,
+        };
+      }
+      for (const row of fwdRows ?? []) {
+        if (row.profile_id) profileIds.add(row.profile_id);
+      }
 
-  // Stream 2 — forwarder activity (any status that means "money moved
-  // and shipment is happening"). Verified vs 0010_forwarder.sql enum:
-  //   pending_payment, shipped_china, in_transit, arrived_thailand,
-  //   out_for_delivery, delivered, cancelled
-  // Excluded: 'pending_payment' (unpaid initial) + 'cancelled' (no
-  // longer active). The 5 in-between states all count.
-  const { data: fwdRows, error: fwdErr } = await supabase
-    .from("forwarders")
-    .select("profile_id")
-    .not("status", "in", "(pending_payment,cancelled)");
+      // Stream 3 — yuan_payments completed
+      const { data: payRows, error: payErr } = await supabase
+        .from("yuan_payments")
+        .select("profile_id")
+        .eq("status", "completed");
 
-  if (fwdErr) {
-    return NextResponse.json({ ok: false, stage: "forwarders", error: fwdErr.message }, { status: 500 });
-  }
-  for (const row of fwdRows ?? []) {
-    if (row.profile_id) profileIds.add(row.profile_id);
-  }
+      if (payErr) {
+        return {
+          status:     "failure" as const,
+          error:      payErr.message,
+          payload:    { ok: false, stage: "yuan_payments", error: payErr.message },
+          httpStatus: 500,
+        };
+      }
+      for (const row of payRows ?? []) {
+        if (row.profile_id) profileIds.add(row.profile_id);
+      }
 
-  // Stream 3 — yuan_payments completed
-  const { data: payRows, error: payErr } = await supabase
-    .from("yuan_payments")
-    .select("profile_id")
-    .eq("status", "completed");
+      if (profileIds.size === 0) {
+        return {
+          status:  "success" as const,
+          summary: { scanned: 0, flipped: 0 },
+          payload: { ok: true, scanned: 0, flipped: 0 },
+        };
+      }
 
-  if (payErr) {
-    return NextResponse.json({ ok: false, stage: "yuan_payments", error: payErr.message }, { status: 500 });
-  }
-  for (const row of payRows ?? []) {
-    if (row.profile_id) profileIds.add(row.profile_id);
-  }
+      const { data: flipped, error: updErr } = await supabase
+        .from("profiles")
+        .update({ is_active: true })
+        .in("id", [...profileIds])
+        .eq("is_active", false)
+        .select("id");
 
-  if (profileIds.size === 0) {
-    return NextResponse.json({ ok: true, scanned: 0, flipped: 0 });
-  }
+      if (updErr) {
+        return {
+          status:     "failure" as const,
+          error:      updErr.message,
+          payload:    { ok: false, stage: "update", error: updErr.message },
+          httpStatus: 500,
+        };
+      }
 
-  // Only flip false→true. Don't touch already-active rows (saves write
-  // load + keeps audit clean). RLS-bypassed via admin client.
-  const { data: flipped, error: updErr } = await supabase
-    .from("profiles")
-    .update({ is_active: true })
-    .in("id", [...profileIds])
-    .eq("is_active", false)
-    .select("id");
+      logger.info("cron.refresh-active-customers", "swept", {
+        scanned: profileIds.size,
+        flipped: (flipped ?? []).length,
+      });
 
-  if (updErr) {
-    return NextResponse.json({ ok: false, stage: "update", error: updErr.message }, { status: 500 });
-  }
-
-  logger.info("cron.refresh-active-customers", "swept", {
-    scanned: profileIds.size,
-    flipped: (flipped ?? []).length,
-  });
-
-  return NextResponse.json({
-    ok:      true,
-    scanned: profileIds.size,
-    flipped: (flipped ?? []).length,
+      return {
+        status:  "success" as const,
+        summary: { scanned: profileIds.size, flipped: (flipped ?? []).length },
+        payload: {
+          ok:      true,
+          scanned: profileIds.size,
+          flipped: (flipped ?? []).length,
+        },
+      };
+    },
   });
 }
