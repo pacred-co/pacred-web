@@ -78,7 +78,7 @@
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
 
 **🛠 Skills kit (playbooks the agent follows when triggered):**
-- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 9 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 10 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator
 
 **📚 Learnings (compounding knowledge — read before re-debugging):**
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill

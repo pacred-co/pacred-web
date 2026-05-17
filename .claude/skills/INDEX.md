@@ -4,11 +4,11 @@
 
 > **How they fit into Pacred's workflow:** The role briefs say WHAT to work on. ADRs say WHAT was decided. Skills say HOW to execute repeatable patterns — bug hunts, audits, refactors, ports, knowledge capture — without the agent reinventing the approach each time.
 
-Last reviewed: 2026-05-15 (seed set — handed off to ก๊อต for iteration)
+Last reviewed: 2026-05-17 (+qa-flow-simulator — agent-driven end-to-end flow verification, the UPGRADE_PLAN §0 gate)
 
 ---
 
-## The starter set (9 skills — all `.claude/skills/<name>/SKILL.md`)
+## The starter set (10 skills — all `.claude/skills/<name>/SKILL.md`)
 
 | Skill | Trigger keywords / context | One-line purpose |
 |---|---|---|
@@ -21,6 +21,7 @@ Last reviewed: 2026-05-15 (seed set — handed off to ก๊อต for iteration
 | **scholar-immortal** | "I learned X today" · "this gotcha bit me" · end of any session | Capture learning to `docs/learnings/<topic>.md` for future agents |
 | **copyist-unlimited** | "9 landing pages" · "N variants of this template" · "scaffold X for each service" | Clone + adapt templates at scale |
 | **legacy-php-sweep** | "port the X feature from old PHP" · "find how PHP did Y" | Sweep `D:\xampp\htdocs\pcscargo` for feature source + extract logic |
+| **qa-flow-simulator** | "run test cases" · "did the flow actually work" · "functional verification" · "§0 gate" · before a dave→main deploy | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
 
 ---
 
