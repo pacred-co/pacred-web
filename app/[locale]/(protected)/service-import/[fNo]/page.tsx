@@ -126,7 +126,7 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
               <li>นำสินค้าไปส่งที่โกดัง <span className="font-semibold">{f.source_warehouse === "yiwu" ? "อี้อู" : "กวางโจว"}</span> (ดูที่อยู่เต็มที่ปุ่มขวาบน)</li>
               <li>แจ้งโกดัง: ส่งให้บริษัท Pacred · ใส่ mark <span className="font-mono font-bold">{f.f_no}</span> ทุกกล่อง</li>
               <li>ถ่ายรูปใบรับของจากโกดัง ส่งเข้า LINE OA Pacred (ตัวช่วยติดตาม)</li>
-              <li>รอ Pacred update status ใน order นี้ — เห็นใน "ติดตาม" หน้านี้</li>
+              <li>รอ Pacred update status ใน order นี้ — เห็นใน “ติดตาม” หน้านี้</li>
             </ol>
           </div>
         )}

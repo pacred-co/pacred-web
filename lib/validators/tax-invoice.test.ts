@@ -138,10 +138,11 @@ console.log("  (d) order_type enum");
   const base = {
     order_id: "F1", buyer_name: "Co", buyer_address: "Bangkok 12345", buyer_tax_id: "0105564077716",
   };
-  assertThrows("rejects bogus order_type",         () => requestTaxInvoiceSchema.parse({ ...base, order_type: "yuan_payment" }));
+  assertThrows("rejects bogus order_type",         () => requestTaxInvoiceSchema.parse({ ...base, order_type: "not_a_real_type" }));
   assertThrows("rejects null order_type",          () => requestTaxInvoiceSchema.parse({ ...base, order_type: null }));
   assert("accepts 'forwarder'",                    requestTaxInvoiceSchema.parse({ ...base, order_type: "forwarder" }).order_type === "forwarder");
   assert("accepts 'service_order'",                requestTaxInvoiceSchema.parse({ ...base, order_type: "service_order" }).order_type === "service_order");
+  assert("accepts 'yuan_payment'",                 requestTaxInvoiceSchema.parse({ ...base, order_type: "yuan_payment" }).order_type === "yuan_payment");
 }
 
 // ────────────────────────────────────────────────────────────
