@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ArrowLeftRight,
   Banknote,
   Bell,
   ChevronDown,
@@ -120,6 +121,9 @@ const MENU: MenuItem[] = [
   // page itself redirects non-eligible roles to /dashboard, per
   // /commissions/me/page.tsx role gate)
   { href: "/commissions/me", labelKey: "commissionsMe", Icon: Coins },
+  // U1-6 — customer-facing refund request hub (self-service "ขอเงินคืน"
+  // entry + history; admin queue at /admin/refunds for back-office)
+  { href: "/refunds", labelKey: "refunds", Icon: ArrowLeftRight },
   { href: "/addresses", labelKey: "addresses", Icon: MapPin },
   { href: "/profile", labelKey: "profile", Icon: User },
   { href: "/notifications", labelKey: "notifications", Icon: Bell, badgeKey: "notifications" },
