@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -20,9 +21,23 @@ const ERROR_MESSAGES: Record<string, string> = {
 const INPUT_BASE =
   "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
 
+/**
+ * Open-redirect guard for the `?next=` post-login destination. Only an
+ * internal absolute path (e.g. `/service-import/add?from=booking`) is
+ * honoured — anything protocol-relative (`//evil.com`) or absolute-URL is
+ * rejected and falls back to the default landing.
+ */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function LoginPage() {
   const t = useTranslations("login");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextUrl = safeNext(searchParams.get("next"));
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -41,7 +56,11 @@ export default function LoginPage() {
             ? "member_code"
             : "phone";
         trackLogin(method);
-        router.replace(res.data?.isAdmin ? "/admin" : "/");
+        // Admins always land in the back-office. A regular user with a
+        // pending `?next=` (e.g. routed here from the booking calculator's
+        // "เปิดออเดอร์ราคานี้" CTA) returns to that destination.
+        const dest = res.data?.isAdmin ? "/admin" : (nextUrl ?? "/");
+        router.replace(dest);
         router.refresh();
       } else {
         setError(ERROR_MESSAGES[res.error] ?? res.error);
@@ -214,11 +233,12 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Sign up link */}
+          {/* Sign up link — forward `?next=` so a guest who registers
+              instead of logging in still returns to their destination. */}
           <p className="mt-7 text-center text-sm text-muted">
             {t("noAccount")}{" "}
             <Link
-              href="/register"
+              href={nextUrl ? { pathname: "/register", query: { next: nextUrl } } : "/register"}
               className="font-semibold text-primary-600 hover:text-primary-700"
             >
               {t("registerLink")}

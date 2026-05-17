@@ -853,6 +853,7 @@
     "listEmpty": "No imports yet.",
     "addTitle": "New import",
     "addSubtitle": "Enter dimensions + details, the price is calculated live.",
+    "quotePrefillNotice": "We've pre-filled the transport type and weight from your calculation — add the box dimensions for an exact price.",
     "backToList": "Back",
     "box": "boxes",
     "colFNo": "No.",
@@ -1338,6 +1339,10 @@
     "contactQuote": "Urgent contact / Request a quote",
     "alertWeightCbm": "Please enter CBM or weight",
     "alertAirSize": "Please enter the weight or box dimensions",
+    "openOrder": {
+      "cta": "Open an order at this price",
+      "hint": "Sign in to open an order — we've filled in your calculated figures"
+    },
     "tabSeaTitle": "Sea freight",
     "tabSeaSub": "LCL / FCL",
     "tabTruckTitle": "Truck freight",
