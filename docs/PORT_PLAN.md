@@ -3,6 +3,10 @@
 > **เป้าหมาย:** Port ระบบ PHP `pcs-cargo` ทั้งระบบ (customer + admin) → Next.js + Supabase
 > **กติกา:** อ่านเอกสารนี้ครั้งเดียวจบ — **ไม่ต้องกลับไปดูไฟล์ PHP ต้นฉบับอีก**
 > **วันที่:** 2026-05-13 · **เวอร์ชัน:** 1.0
+>
+> 🚀 **Post-launch?** This is the *launch* plan. The post-launch upgrade
+> roadmap (the §0 verification gate · wire-the-flow · revenue/margin · ecosystem
+> tools · supervisory layer) lives in → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
 
 ---
 
