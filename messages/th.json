@@ -381,7 +381,8 @@
     "submit": "เข้าสู่ระบบ",
     "orContinueWith": "หรือเข้าสู่ระบบด้วย",
     "noAccount": "ยังไม่มีบัญชี?",
-    "registerLink": "สมัครสมาชิก"
+    "registerLink": "สมัครสมาชิก",
+    "comingSoon": "เร็วๆ นี้"
   },
   "register": {
     "title": "สมัครสมาชิก",

@@ -515,6 +515,12 @@ export async function updatePasswordAfterRecovery(
 export async function signInWithOAuth(
   provider: "google" | "facebook",
 ): Promise<ActionResult<{ url: string }>> {
+  // Social login is gated behind NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED. The login
+  // page hides the buttons when off; this enforces the same gate server-side
+  // so a direct server-action call can't bypass it.
+  if (process.env.NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED !== "true") {
+    return { ok: false, error: "oauth_disabled" };
+  }
   const supabase = await createClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 

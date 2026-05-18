@@ -21,6 +21,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 const INPUT_BASE =
   "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
 
+// Social login (Google / Facebook / LINE) is gated behind one build-time flag.
+// Default off — legacy PCS had password-only login and the D1 faithful port
+// keeps it that way until Phase C. Set NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED=true to
+// re-enable; the signInWithOAuth server action enforces the same gate.
+const SOCIAL_LOGIN_ENABLED = process.env.NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED === "true";
+
 /**
  * Open-redirect guard for the `?next=` post-login destination. Only an
  * internal absolute path (e.g. `/service-import/add?from=booking`) is
@@ -203,35 +209,62 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Social */}
-          <div className="grid grid-cols-3 gap-2.5">
-            <button
-              type="button"
-              onClick={() => handleOAuth("google")}
-              disabled={pending}
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <GoogleIcon className="h-[18px] w-[18px] shrink-0" /> Google
-            </button>
-            <button
-              type="button"
-              onClick={handleLineLogin}
-              disabled={pending}
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ color: "#00B900" }}
-            >
-              <LineIcon className="h-[18px] w-[18px] shrink-0" /> LINE
-            </button>
-            <button
-              type="button"
-              onClick={() => handleOAuth("facebook")}
-              disabled={pending}
-              className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ color: "#1877F2" }}
-            >
-              <FacebookIcon className="h-[18px] w-[18px] shrink-0" /> Facebook
-            </button>
-          </div>
+          {/* Social — gated behind NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED. Off by
+              default: legacy PCS had password-only login and the D1 faithful
+              port keeps it that way until Phase C. When off, the providers
+              render greyed-out under a COMING SOON badge. */}
+          {SOCIAL_LOGIN_ENABLED ? (
+            <div className="grid grid-cols-3 gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleOAuth("google")}
+                disabled={pending}
+                className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <GoogleIcon className="h-[18px] w-[18px] shrink-0" /> Google
+              </button>
+              <button
+                type="button"
+                onClick={handleLineLogin}
+                disabled={pending}
+                className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ color: "#00B900" }}
+              >
+                <LineIcon className="h-[18px] w-[18px] shrink-0" /> LINE
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOAuth("facebook")}
+                disabled={pending}
+                className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold transition hover:-translate-y-0.5 hover:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ color: "#1877F2" }}
+              >
+                <FacebookIcon className="h-[18px] w-[18px] shrink-0" /> Facebook
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <div
+                aria-hidden
+                className="grid grid-cols-3 gap-2.5 select-none opacity-55"
+              >
+                <div className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-muted">
+                  <GoogleIcon className="h-[18px] w-[18px] shrink-0 grayscale" /> Google
+                </div>
+                <div className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-muted">
+                  <LineIcon className="h-[18px] w-[18px] shrink-0 grayscale" /> LINE
+                </div>
+                <div className="flex items-center justify-center gap-2 rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-3 py-3 text-[13px] font-semibold text-muted">
+                  <FacebookIcon className="h-[18px] w-[18px] shrink-0 grayscale" /> Facebook
+                </div>
+              </div>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="rounded-full bg-foreground/90 px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow">
+                  {t("comingSoon")}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Sign up link — forward `?next=` so a guest who registers
               instead of logging in still returns to their destination. */}

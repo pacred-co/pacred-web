@@ -381,7 +381,8 @@
     "submit": "Sign In",
     "orContinueWith": "Or sign in with",
     "noAccount": "Don't have an account?",
-    "registerLink": "Sign up"
+    "registerLink": "Sign up",
+    "comingSoon": "COMING SOON"
   },
   "register": {
     "title": "Create Account",

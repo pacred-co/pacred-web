@@ -35,6 +35,16 @@ Last updated: 2026-05-13 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](P
 
 Used by: OAuth callbacks (Supabase needs absolute URL), notification deep-links (Resend email body), schema.org structured data.
 
+### Social login toggle ⚪
+
+| Var | Dev | Prod |
+|---|---|---|
+| `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` | `false` | `false` |
+
+One flag gating **all** social sign-in (Google · Facebook · LINE) on `/login`. Default (unset, or any value ≠ `"true"`) → the three provider buttons render greyed-out under a **COMING SOON** badge and the `signInWithOAuth` server action refuses (`oauth_disabled`). Set `"true"` to enable.
+
+Off by default because legacy PCS had password-only login — the D1 faithful port ([ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)) defers social login to Phase C. `NEXT_PUBLIC_`-prefixed → inlined at build time; flipping it requires a redeploy.
+
 ---
 
 ## 3. OTP (phone verification) 🟢
