@@ -8,9 +8,11 @@ import { TosVersionsManager, type TosVersionRow } from "./tos-versions-manager";
  *
  * Super-only admin UI for creating + activating TOS versions.
  *
- * V1 = backend management surface only. The customer-side gate
- * (actions/tos.ts::acceptCurrentTos) keeps reading CURRENT_TOS_VERSION
- * from lib/tos.ts. V-G4.1 migrates the gate to read DB.
+ * V-G4.1 ✅ — the customer-side gate (/(protected)/layout.tsx →
+ * getActiveTosVersion) now reads the active row from this table.  An
+ * `is_active` flip + a populated body_md goes live immediately at the
+ * next protected-route render.  The lib/tos.ts CURRENT_TOS_VERSION
+ * constant remains as a defensive fallback for DB-unreachable cases.
  */
 
 export const dynamic = "force-dynamic";
@@ -50,8 +52,8 @@ export default async function AdminTosVersionsPage() {
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการเวอร์ชัน TOS (ข้อตกลงและเงื่อนไข)</h1>
         <p className="text-xs text-muted mt-1">
-          เพิ่ม/แก้/เปิดใช้เวอร์ชัน TOS. <strong>V1:</strong> หน้านี้เป็น backend management เท่านั้น — gate ที่บังคับลูกค้ายอมรับ
-          ยังอ่านจาก <code className="font-mono text-[10px]">lib/tos.ts::CURRENT_TOS_VERSION</code> (V-G4.1 จะย้ายมาอ่านจาก DB).
+          เพิ่ม/แก้/เปิดใช้เวอร์ชัน TOS. <strong>Active = 1 row</strong> ที่ <code className="font-mono text-[10px]">is_active=true</code> —
+          หน้า protected ของลูกค้าจะแสดง gate บังคับยอมรับเวอร์ชันนี้ทันทีในการ load หน้าครั้งถัดไป (V-G4.1 ✅).
         </p>
         <p className="text-xs mt-2">
           <Link href="/admin/settings" className="text-primary-600 hover:underline">← กลับหน้าตั้งค่า</Link>
