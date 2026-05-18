@@ -32,29 +32,55 @@ legacy system ("workstream B") is tracked separately.
 
 ## 3. Approach
 
-`pcsc_main.sql` (MySQL dump) → local MySQL → Python converter → PostgreSQL
-COPY files → dry-run load + reconcile → (review) → production. Reading from a
-live local MySQL — rather than text-munging the 898 MB dump — gives clean
+`pcsc_main.sql` (MySQL dump) → local MySQL → pgloader (MySQL→PostgreSQL) →
+local PostgreSQL → PCS→PR rebrand → `pg_dump` → migrations `0081`-`0083` +
+a data file → dry-run load + reconcile → (review) → production. Reading from
+a live local MySQL — rather than text-munging the 898 MB dump — gives clean
 values and free row-count reconciliation.
 
-## 4. Status — done + dry-run validated
+## 4. Status — pipeline validated · `0081`-`0083` committed
 
-- ✅ **Schema** — 117 tables ported MySQL→PostgreSQL (faithful: legacy
-  names / types / even typos kept; `tb_` prefix → no collision with Pacred's
-  own tables).
-- ✅ **Converter** — 3,780,238 rows → COPY format; 2,288,128 `PCS→PR`
-  transforms; zero-dates → NULL; NUL bytes stripped; encoding handled.
-- ✅ **Dry-run** — into a throwaway PostgreSQL 17.10: all 117 tables load
-  clean and every table's row count reconciles MySQL ↔ PostgreSQL exactly
-  (0 load failures · 0 mismatches).
+**2026-05-19 — re-run end-to-end on Mac (เดฟ + Claude), pgloader pipeline**,
+against the `2026-05-18-1358` dump. The three migrations are authored +
+committed to `dave`:
+
+- ✅ **Schema → `0081`-`0083`** — `0081_pcs_legacy_schema.sql` (117 tables +
+  PKs + RLS), `0082_pcs_legacy_indexes.sql` (18 unique indexes + sequence
+  resync), `0083_pcs_legacy_member_seq.sql` (`next_pr_member_code()`).
+  Faithful: legacy table names kept verbatim; `tb_`/`tas_` → no collision
+  with Pacred's own tables.
+- ✅ **Conversion** — pgloader MySQL→PostgreSQL: **3,780,238 rows, 0 load
+  failures**; zero-dates → NULL; NUL bytes handled; UTF-8 (Thai) intact.
+- ✅ **PCS→PR rebrand** — **2,297,341** `userid`/`useridmain` values
+  rebranded `PCS<n>`→`PR<n>`. Case-normalised: MySQL's collation is
+  case-insensitive, so mixed-case codes (`pcs1791`, `Pcscargo`) fold to one
+  canonical uppercase form — else PostgreSQL (case-sensitive) breaks the
+  joins. `PW`/`JET`/`FCL`/`AIGA` left verbatim. (The earlier Windows
+  Python-converter run reported 2,288,128 on an earlier snapshot — the delta
+  is normal customer activity between exports, §6.1.)
+- ✅ **Dry-run** — `0081` → data → `0082` → `0083` applied to a fresh
+  PostgreSQL 17.10: all 117 tables reconcile MySQL ↔ PostgreSQL exactly
+  (3,780,238 rows · 0 mismatches); cross-table `userid` joins, sequence
+  resync, `next_pr_member_code()`, Thai text, the 8,898 `userpass` hashes —
+  all verified.
 - ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` (`passTam` /
-  `verifyLegacyPassword`) — verified against 7 real hashes + 5 vectors.
-- ✅ **New-customer numbering** — `member-code-gapfill.sql`: fills the lowest
-  vacant `PR<n>` first, then increments past max (เดฟ rule).
+  `verifyLegacyPassword`) — the 79-char `d+b+c` hash matches every migrated
+  `tb_users.userpass` row.
+- ⏳ **dev-Supabase load** — the one remaining step (§6): needs the
+  dev-Supabase Postgres connection string — a dashboard secret, NOT the
+  REST API keys in `.env.local`. DDL + bulk COPY cannot go through the
+  service-role REST key; a real Postgres connection is required.
 
-**Issues the dry-run caught + fixed:** (1) legacy `datetime NOT NULL` columns
-hold `0000-00-00` → temporal columns made nullable. (2) NUL bytes (`\x00`) in
-some `keysearch` values → stripped (PostgreSQL text cannot store NUL).
+**Judgement calls in this run** (flag if any need revisiting):
+(1) **RLS enabled** on all 117 tables, no policies — Supabase exposes
+`public` to `anon`, and these tables hold PII + `tb_users.userpass`; locked
+to `service_role` is the secure default, Phase B adds policies.
+(2) Identifiers **lowercased** (PostgreSQL-idiomatic).
+(3) The rebrand **case-normalises** member codes (see above).
+
+**Issues handled:** legacy `datetime NOT NULL` columns hold `0000-00-00` →
+temporal columns made nullable; NUL bytes (`\x00`) in text → stripped
+(PostgreSQL text cannot store NUL).
 
 ## 5. Artifacts
 
@@ -71,6 +97,12 @@ git repo** (the converted data is customer PII and must NOT be committed):
 | `data/` | 117 COPY files — **customer PII, never commit** |
 
 In the repo (no PII): `lib/auth/pcs-legacy-password.ts` + its test.
+
+**2026-05-19 Mac re-run** — artifacts in `/tmp/pcs-migration/` (outside the
+repo): `pcs.load` (pgloader config), `assemble.py` (builds the migration
+files), `pcs-legacy-data.sql` (the ~785 MB rebranded data file — **customer
+PII, never commit**; this is what loads into Supabase in §6.4). The schema
+itself is now **in the repo** — `supabase/migrations/0081`-`0083` (no PII).
 
 ## 6. Production-load runbook (run when เดฟ gives the go)
 
@@ -150,10 +182,13 @@ applied until Phase B ships, per Q5 in
 (§8) — the feature it backs is dead. Owner was: ภูม. DB-1 being done
 unblocks any `dave→main` deploy.
 
-**DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migrations
-**`0081`-`0083`** (schema · indexes · member-seq — Q1) + the data load. Gated
-on แต้ม's final dump, เดฟ's go, and ก๊อต's
-production-load gate. The `tb_*` namespace does NOT collide with the rebuilt
+**DB-2 — This legacy port** (§1-§8). 🟡 **IN PROGRESS (2026-05-19).** The
+117-table legacy schema is authored + committed as migrations
+**`0081`-`0083`** (schema · indexes · member-seq) and dry-run-validated (§4).
+Remaining: load the 3.78M-row data into **dev** Supabase (pending the
+dev-Supabase Postgres connection string) + verify legacy login; then —
+separately, gated on แต้ม's final cutover dump + ก๊อต's production gate —
+the **prod** load. The `tb_*` namespace does NOT collide with the rebuilt
 schema, so DB-1 and DB-2 are independent — the legacy port does not wait on
 the backlog, and vice versa.
 
