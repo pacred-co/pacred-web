@@ -9,6 +9,8 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 > ⚠️ **PIVOT — pause the pre-D1 backlog.** The booking-flow detail page (**BK-1**), the customer-intel behavior-tracking, the frontend-tooling landing template are all **Phase C now** — deferred, *not cancelled*, re-sequenced after the faithful port. Your new work is **Phase B frontend**: rework the customer-facing UI to match the legacy PCS Cargo look + flow.
 
+> ✅ **Phase-A data load — DONE (2026-05-19 · เดฟ + Claude).** The legacy data — ~8,898 customers + their orders / wallets / shipments — is migrated into Supabase **dev + prod** behind the 117-table `tb_*` schema (`PCS`→`PR` rebranded). **Phase-B frontend is fully GO** — your pickup below stands. ภูม reworks the customer-portal *backend* onto `tb_*` in parallel — coordinate the data contract (the legacy `tb_*` status values are the canonical vocabulary for pickup #2).
+
 **ปอน now — pickup list (Phase-B frontend, priority order):**
 
 1. **Rework the customer-facing UI to match the legacy PCS Cargo look + flow — TOP priority (Phase B).** The rebuilt Pacred portal navigation diverged from the legacy system — e.g. the legacy customer home is a **9-icon launcher** (a grid of service tiles), the rebuilt app uses a nested sidebar. Rework the customer surfaces (`/dashboard`, `/service-order`, `/service-import`, `/service-payment`, `/wallet`, `/shipments` etc.) so the layout, navigation, and screen-to-screen flow **match what the ~8,898 existing customers already know** — goal: zero retraining.
