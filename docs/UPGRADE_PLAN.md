@@ -82,7 +82,7 @@ it is the "ปิดดีล / กดซื้อ" surface the owner's #1 lens 
 | 3 | **Internal org-chat** — shipment/job-scoped work-comms | IC-1 | ภูม | rides on the shipped `0080` work-board | [`internal-chat-system`](research/internal-chat-system-2026-05-18.md) |
 | 4 | **Disbursement** (เบิก-จ่าย) | stage 1 | ภูม | after IC-1 | [`disbursement-system`](research/disbursement-system-2026-05-18.md) |
 | 5 | **China-ops** (ปิดตู้) | stage 1 | ภูม | **volume-gated** — build once own-container volume justifies it | [`china-ops-container-closing`](research/china-ops-container-closing-2026-05-18.md) |
-| 6 | **Platform observability** (รายงานสถานะ Platform) | IO-1 | เดฟ | the monitoring lane | [`platform-observability-system`](research/platform-observability-system-2026-05-18.md) |
+| 6 | **Platform observability** (รายงานสถานะ Platform) | **IO-1 ✅ shipped** | เดฟ | IO-2/3/4 next | [`platform-observability-system`](research/platform-observability-system-2026-05-18.md) |
 
 - **Build order** — the **booking flow (BK-1)** leads: ปอน builds the
   Trip.com-style detail page, ภูม the `bookings` tables + the R-3/R-5 wiring.
@@ -93,11 +93,12 @@ it is the "ปิดดีล / กดซื้อ" surface the owner's #1 lens 
 - Per-system stages (BK-2/3, IC-2…, IO-2/3/4, disbursement + china-ops
   stages) live in the design docs — not duplicated here.
 
-> **Status note (2026-05-18).** R-1 ✅ deployed (`899ff18` live in prod);
-> ภูม's wave-2 polish batch (delivery-ack · yuan tax-invoice · super-tools ·
-> view-as-customer · business-config — migrations `0073`-`0076`) + ปอน's
-> mobile-nav / customs-landing work are integrated on `dave`. Phase 2 builds
-> can start now.
+> **Status note (2026-05-18).** R-1 ✅ deployed. ภูม's wave-2 batch
+> (migrations `0073`-`0076`) + ปอน's frontend + **เดฟ's platform-observability
+> IO-1** (auto-incident capture + `/admin/incidents` triage — migration
+> `0077`) are all integrated on `dave`. ⚠️ Migration `0077` must be applied
+> to prod to *activate* IO-1 — until then `/admin/incidents` shows an empty
+> queue (degrades cleanly, no error). Phase 2 booking + customer-intel start now.
 
 ---
 
@@ -154,7 +155,7 @@ it is the "ปิดดีล / กดซื้อ" surface the owner's #1 lens 
 | Owner | Next work |
 |---|---|
 | **ก๊อต** | R-2 Tier-0 dashboard (env vars · GSC · Google Business · Meta) · clear the MOMO API docs · production watch *(R-1 deploy ✅ done)* |
-| **เดฟ** | ✅ integrated the team's pushes this round · coordinate the **booking-flow** + **customer-intelligence** builds · BUILD platform-observability IO-1 · run the follow-up `dave→main` deploy (carries `0073`-`0076`) · monitor |
+| **เดฟ** | ✅ platform-observability **IO-1 shipped** · ✅ integrated the team's pushes · coordinate the **booking-flow** + **customer-intelligence** builds · BUILD IO-2 next · monitor |
 | **ภูม** | BUILD the **booking-flow backend** — `bookings` tables + R-3/R-5 wiring + work_item hand-off (**top priority**) · then internal-chat IC-1 → disbursement → china-ops · the LINE-webhook customer-intel backend · U1/U2 review follow-ups |
 | **ปอน** | BUILD the **booking-flow detail page** — the Trip.com-style page (**top priority**) · web behavior-tracking instrumentation · mobile-first hardening · frontend tooling · SEO audit |
 
