@@ -77,6 +77,7 @@ const items: NavItem[] = [
   { href: "/admin/accounting/periods", label: "ปิดงวด (V-E9)",       icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting","ops"], group: "การเงิน" },
   { href: "/admin/accounting/disbursements", label: "AP ledger / สมุดจ่าย (U2-2)", icon: <Wallet className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
   { href: "/admin/accounting/container-costs", label: "Rate cards (U2-2)",   icon: <Receipt className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
+  { href: "/admin/accounting/container-payments", label: "ค่าตู้สินค้า (tb_cnt)", icon: <Receipt className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
   { href: "/admin/refunds",            label: "คืนเงิน (U1-6)",        icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["super","accounting","ops","sales_admin"], group: "การเงิน" },
 
   // Customer & sales
