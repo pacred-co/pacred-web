@@ -9,10 +9,11 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 **ปอน now — pickup list (priority order):**
 
-1. **Frontend tooling** — implement the recommendations in [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md): the data-driven landing template (one source-of-truth template that scales the per-service landings — fits the `copyist-unlimited` pattern).
-2. **Mobile-first hardening** — most Pacred customers arrive on phones. Harden the customer surfaces at the 360/390px viewport per [`docs/conventions.md`](../conventions.md) §11 + [`docs/mobile-first-playbook.md`](../mobile-first-playbook.md) + the `mobile-first-verify` skill.
-3. **Polish the new surfaces** — `/contact` (now rendering `ContactForm` live), `/start-order`, and the `QuoteCTA` calculator→buy component. These are freshly shipped on `dave`; make them on-voice + mobile-first.
-4. **SEO audit** — per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md): cut Google Ads waste (~3h).
+1. **BUILD the booking-flow detail page — TOP priority** — the real "เปิดออเดอร์ / กดซื้อ" surface, Trip.com-style: a booking detail page per service/route + a sticky itemized quotation panel + live-recompute option selectors + an auth gate. Design → [`research/booking-flow-system-2026-05-18.md`](../research/booking-flow-system-2026-05-18.md); start with the **BK-1** MVP. ภูม builds the backend in parallel.
+2. **Web behavior-tracking instrumentation** — the front-end capture for the customer-intelligence system (clicks · scroll depth · exit · last-button-before-exit). Design → [`research/customer-intelligence-system-2026-05-18.md`](../research/customer-intelligence-system-2026-05-18.md).
+3. **Mobile-first hardening** — most Pacred customers arrive on phones. Harden the customer surfaces at the 360/390px viewport per [`docs/conventions.md`](../conventions.md) §11 + [`docs/mobile-first-playbook.md`](../mobile-first-playbook.md) + the `mobile-first-verify` skill.
+4. **Frontend tooling** — the data-driven landing template per [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) (fits the `copyist-unlimited` pattern).
+5. **Polish the new surfaces + SEO audit** — `/contact` · `/start-order` · `QuoteCTA` on-voice + mobile-first; SEO per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md).
 
 **Ongoing (self-directed, fit around the pickup list):**
 - **i18n polish** — namespace-normalize (`page.section.element`) + EN translation review; watch `pnpm audit:i18n` for new untranslated keys.

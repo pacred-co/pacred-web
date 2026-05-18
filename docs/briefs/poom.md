@@ -9,14 +9,17 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 **ภูม now — pickup list (priority order):**
 
-1. **Apply migrations `0058`-`0080` to prod Supabase** — this is the gate that unblocks the `dave→main` deploy (`0080` = `work_items`). Also recreate the deleted dev project `gnortvyazfmocvcbvfbs` (prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](../runbook/poom-handoff-2026-05-18.md).
-2. **Then BUILD the Tier-3 owner systems, in order:**
+> ✅ Migrations applied — ภูม confirmed `0058`-`0080` are on prod Supabase; the `dave→main` deploy (`899ff18`) is live. ภูม's wave-2 polish batch (delivery-ack · yuan tax-invoice · super-tools · view-as-customer · business-config — migrations `0073`-`0076`) is integrated on `dave`.
+
+1. **BUILD the booking-flow backend — TOP priority** — the customer-acquisition revenue surface. `bookings` / `booking_options` / `booking_rates` tables + the `work_item` hand-off (`entity_type='booking'`) + the R-3 lead-inbox / R-5 quote-calculator wiring. Design → [`research/booking-flow-system-2026-05-18.md`](../research/booking-flow-system-2026-05-18.md) (the **BK-1** MVP); ปอน builds the detail page in parallel.
+2. **BUILD the Tier-3 systems, in order:**
    - **Internal org-chat IC-1** — the shipment/job-scoped work-comms MVP; rides on the shipped `0080` work-board. Design → [`research/internal-chat-system-2026-05-18.md`](../research/internal-chat-system-2026-05-18.md).
    - **Disbursement system (เบิก-จ่าย)** — `disbursement_requests` + lines + allocations + fund + outbound `wht_certificates`, money-OUT fail-closed safeguards. Design → [`research/disbursement-system-2026-05-18.md`](../research/disbursement-system-2026-05-18.md).
-   - **China-ops / container-closing (ปิดตู้)** — `cn_warehouse` role + portal + close-sack/close-container ceremony. **Volume-gated** — build only once the cargo queue is large enough to consolidate own containers. Design → [`research/china-ops-container-closing-2026-05-18.md`](../research/china-ops-container-closing-2026-05-18.md).
-3. **U1/U2 review follow-ups** — P1-2..P2-7 from [`research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md) (P0-1 + P1-1 already fixed by เดฟ); clear these before running the U2-1 backfill. Includes the U4 / work-item-hook follow-ups.
+   - **China-ops / container-closing (ปิดตู้)** — `cn_warehouse` role + portal + close-sack/close-container ceremony. **Volume-gated**. Design → [`research/china-ops-container-closing-2026-05-18.md`](../research/china-ops-container-closing-2026-05-18.md).
+3. **The LINE-webhook customer-intel backend** — webhook ingestion + the customer-360 store + the in-admin chat preview. Design → [`research/customer-intelligence-system-2026-05-18.md`](../research/customer-intelligence-system-2026-05-18.md).
+4. **U1/U2 review follow-ups** — P1-2..P2-7 from [`research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md); + the U2-1 PCS-customer backfill.
 
-**Migration numbering:** ภูม owns `0073`-`0079` + `0081`+ — **`0080` is taken** (work_items, shipped on `dave`). Start the internal-chat migration at `0073`. The platform-observability migration is เดฟ-lane — เดฟ coordinates a number with ภูม at build time.
+**Migration numbering:** taken — `0073`-`0076` (ภูม wave-2) + `0080` (work_items). Free — `0077`-`0079` + `0081`+. The platform-observability migration is เดฟ-lane (เดฟ coordinates a number with ภูม).
 
 **Carried-over backlog (not a current pickup):** the Phase I2 freight expansion (V-E6..V-E12 quotation / receipt / commission / monthly-closing / QA-QC / customs-declaration / role-dashboards) + the V-G admin bulk-ops bundle live in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** with per-task specs in [`docs/port-specs/`](../port-specs/). They are V2 long-phase work the [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) sequences — pick up after the Tier-3 systems.
 

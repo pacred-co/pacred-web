@@ -59,7 +59,7 @@ routes live. Prod deploys `314a528` + `4ef2ee6`.
 
 | Stage | What | Owner | Gate |
 |---|---|---|---|
-| **R-1** | **`dave→main` deploy** — carry all of Phase 0's `dave` work to production. A staged, all-green, smoke-gated fast-forward. | เดฟ (gate: ก๊อต) | ภูม applies the post-launch migrations (`0058`-`0080`, per [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md)) to prod Supabase |
+| **R-1** ✅ | **`dave→main` deploy** — ✅ DONE 2026-05-18 (`4ef2ee6→899ff18`, 31 commits; `pnpm build` + `next start` route smoke + prod-DB probe all green). ภูม confirmed migrations `0058`-`0080` applied to prod. *`dave` has since advanced (wave-2 + booking/customer-intel) — a follow-up deploy carries ภูม's new `0073`-`0076`.* | เดฟ | ✅ cleared |
 | **R-2** | **Tier-0 dashboard** — the conversion-visibility unblock: flip the monitoring env vars in Vercel (Sentry · GTM/GA4 · Clarity · hCaptcha · Upstash — all code-wired + env-gated), verify Google Search Console + submit the sitemap, claim Google Business Profile, set up Meta Business Suite. | ก๊อต + เดฟ | checklist → [`runbook/launch-monitoring-golive-2026-05-17.md`](runbook/launch-monitoring-golive-2026-05-17.md) |
 
 > R-2 absorbs the old "U1-8 launch-monitoring env" item — the code is ready;
@@ -68,30 +68,36 @@ routes live. Prod deploys `314a528` + `4ef2ee6`.
 
 ---
 
-## Phase 2 — 🎯 TIER-3: the four owner systems (the bulk of forward V2)
+## Phase 2 — 🎯 The forward build queue (the bulk of forward V2)
 
-Four systems the owner (พี่ป๊อป) named — each fully designed in
-[`research/`](research/_index.md). Built in stages, MVP-first.
+Six systems — four the owner (พี่ป๊อป) named + two designed for the
+customer-acquisition push. Each fully designed in [`research/`](research/_index.md).
+Built in stages, MVP-first. **The booking flow is the top revenue priority** —
+it is the "ปิดดีล / กดซื้อ" surface the owner's #1 lens depends on.
 
-| # | System | MVP stage | Owner | Sequencing | Design doc |
+| # | System | MVP stage | Owner | Note | Design doc |
 |---|---|---|---|---|---|
-| 1 | **Internal org-chat** — shipment/job-scoped work-comms | IC-1 | ภูม | rides on the shipped `0080` work-board | [`internal-chat-system`](research/internal-chat-system-2026-05-18.md) |
-| 2 | **Disbursement** (เบิก-จ่าย) | stage 1 | ภูม | after IC-1 | [`disbursement-system`](research/disbursement-system-2026-05-18.md) |
-| 3 | **China-ops** (ปิดตู้) | stage 1 | ภูม | **volume-gated** — build once own-container volume justifies it | [`china-ops-container-closing`](research/china-ops-container-closing-2026-05-18.md) |
-| 4 | **Platform observability** (รายงานสถานะ Platform) | IO-1 | เดฟ | parallel — a different lane, non-colliding with ภูม | [`platform-observability-system`](research/platform-observability-system-2026-05-18.md) |
+| 1 | **Booking flow** — the real "เปิดออเดอร์ / กดซื้อ" surface (Trip.com-style) | BK-1 | ปอน + ภูม | **top revenue priority** | [`booking-flow-system`](research/booking-flow-system-2026-05-18.md) |
+| 2 | **Customer intelligence** — LINE webhook + customer-360 + web behavior tracking | stage 1 | เดฟ + ภูม | sibling of platform-observability | [`customer-intelligence-system`](research/customer-intelligence-system-2026-05-18.md) |
+| 3 | **Internal org-chat** — shipment/job-scoped work-comms | IC-1 | ภูม | rides on the shipped `0080` work-board | [`internal-chat-system`](research/internal-chat-system-2026-05-18.md) |
+| 4 | **Disbursement** (เบิก-จ่าย) | stage 1 | ภูม | after IC-1 | [`disbursement-system`](research/disbursement-system-2026-05-18.md) |
+| 5 | **China-ops** (ปิดตู้) | stage 1 | ภูม | **volume-gated** — build once own-container volume justifies it | [`china-ops-container-closing`](research/china-ops-container-closing-2026-05-18.md) |
+| 6 | **Platform observability** (รายงานสถานะ Platform) | IO-1 | เดฟ | the monitoring lane | [`platform-observability-system`](research/platform-observability-system-2026-05-18.md) |
 
-- **Build order** — ภูม: IC-1 → disbursement → china-ops. เดฟ: IO-1 in parallel
-  (the monitoring lane).
-- **Migration numbers** — assigned at build time, in build order; not
-  pre-allocated. `0080` is the last taken. ภูม owns `0073`-`0079` + `0081`+; the
-  platform-observability migration coordinates a number with ภูม.
-- Per-system stages (IC-2…, IO-2/3/4, disbursement + china-ops stages) live in
-  the design docs — not duplicated here.
+- **Build order** — the **booking flow (BK-1)** leads: ปอน builds the
+  Trip.com-style detail page, ภูม the `bookings` tables + the R-3/R-5 wiring.
+  In parallel — ภูม: internal-chat IC-1 → disbursement → china-ops; เดฟ:
+  platform-observability IO-1 + coordinates customer-intelligence.
+- **Migration numbers** — assigned at build time, in build order. Taken:
+  `0073`-`0076` (ภูม wave-2) + `0080` (work_items). Free: `0077`-`0079` + `0081`+.
+- Per-system stages (BK-2/3, IC-2…, IO-2/3/4, disbursement + china-ops
+  stages) live in the design docs — not duplicated here.
 
-> **Status note (2026-05-18 morning).** Phase 0 + Phase 1 R-2 code-side
-> are complete; R-1 deploy waits on ภูม applying migrations `0058`-`0080`
-> to prod Supabase (already applied to dev — verified). Phase 2 builds
-> start once R-1 is live + observability dashboards from R-2 are emitting.
+> **Status note (2026-05-18).** R-1 ✅ deployed (`899ff18` live in prod);
+> ภูม's wave-2 polish batch (delivery-ack · yuan tax-invoice · super-tools ·
+> view-as-customer · business-config — migrations `0073`-`0076`) + ปอน's
+> mobile-nav / customs-landing work are integrated on `dave`. Phase 2 builds
+> can start now.
 
 ---
 
@@ -147,10 +153,10 @@ Four systems the owner (พี่ป๊อป) named — each fully designed in
 
 | Owner | Next work |
 |---|---|
-| **ก๊อต** | Phase 1 R-2 Tier-0 dashboard (env vars · GSC · Google Business · Meta) · gate the `dave→main` deploy · clear the MOMO API docs · production watch |
-| **เดฟ** | Phase 1 R-1 `dave→main` deploy (once ภูม clears the migration gate) · integrate the team's pushes · Phase 2 — BUILD platform-observability IO-1 · monitor post-deploy |
-| **ภูม** | Phase 1 — apply migrations `0058`-`0080` to prod (unblocks R-1) · Phase 2 — BUILD: internal-chat IC-1 → disbursement → china-ops (volume-gated) · U1/U2 review follow-ups |
-| **ปอน** | Frontend tooling (data-driven landing template) · **mobile-first hardening** of the customer surfaces · polish `/contact` + `/start-order` + `QuoteCTA` · SEO audit |
+| **ก๊อต** | R-2 Tier-0 dashboard (env vars · GSC · Google Business · Meta) · clear the MOMO API docs · production watch *(R-1 deploy ✅ done)* |
+| **เดฟ** | ✅ integrated the team's pushes this round · coordinate the **booking-flow** + **customer-intelligence** builds · BUILD platform-observability IO-1 · run the follow-up `dave→main` deploy (carries `0073`-`0076`) · monitor |
+| **ภูม** | BUILD the **booking-flow backend** — `bookings` tables + R-3/R-5 wiring + work_item hand-off (**top priority**) · then internal-chat IC-1 → disbursement → china-ops · the LINE-webhook customer-intel backend · U1/U2 review follow-ups |
+| **ปอน** | BUILD the **booking-flow detail page** — the Trip.com-style page (**top priority**) · web behavior-tracking instrumentation · mobile-first hardening · frontend tooling · SEO audit |
 
 ---
 
@@ -158,12 +164,12 @@ Four systems the owner (พี่ป๊อป) named — each fully designed in
 
 - 📘 Entry point → [`HANDBOOK.md`](HANDBOOK.md) · master single-read → [`STRATEGY.md`](STRATEGY.md)
 - 📋 Backlogs → [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo) + Part W (gap-hunt)
-- 🔬 Research that seeded the phases → [`research/_index.md`](research/_index.md) — esp. [`capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) + the 4 owner-system design docs
+- 🔬 Research that seeded the phases → [`research/_index.md`](research/_index.md) — esp. [`capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) + the 6 system design docs
 - 🗄 The migration gate → [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md)
 - 🧭 V3 (separate repo — NOT this plan) → [ADR-0010](decisions/0010-v2-v3-version-strategy.md)
 
 ---
 
 **End — `UPGRADE_PLAN.md`.** Phase 0 ✅ foundation → Phase 1 🚀 release →
-Phase 2 🎯 the four owner systems → Phase 3 🔭 future. Mobile-first + the
-quality gate apply across all of them.
+Phase 2 🎯 the forward build queue (6 systems) → Phase 3 🔭 future.
+Mobile-first + the quality gate apply across all of them.
