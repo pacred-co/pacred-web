@@ -10,6 +10,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 > AGENTS.md is loaded into every Claude Code session via `@AGENTS.md` at the top of `CLAUDE.md`. Keep this file narrow: rules that change *how* agents behave, not project facts (facts live in CLAUDE.md / docs/).
 
+## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
+
+On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:
+
+- **Phase A — Data migration** — port `pcsc_main` (117 tables) into Supabase, `PCS<n>` → `PR<n>`. *Pipeline built · dry-run validated · pending the production load.*
+- **Phase B — Workflow fidelity** — rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop match legacy PCS exactly. Goal: **zero retraining** for staff and customers.
+- **Phase C — Pacred enhancements** — layer Pacred's own improvements *only after* the faithful port works. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue are **deferred to Phase C — not cancelled.**
+
+📋 Canonical SOT: **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md)** — read it in full before D1 work. In-flight pre-D1 feature work (e.g. BK-1 booking flow, freight V-E1.1) pauses; the team pivots to Phase B.
+
 ## 1. Session-start handshake (MANDATORY — do BEFORE asking what to work on)
 
 After `git fetch` + branch sync at the top of a session, run this handshake **proactively** — do not wait for the user to ask. Skipping = wandering session + forcing the user to re-explain context they already encoded in docs.
@@ -17,8 +27,9 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 **Step 1 — Read your role brief** ([`docs/briefs/<your-name>.md`](docs/briefs/) — routing in [`docs/briefs/INDEX.md`](docs/briefs/INDEX.md)).
 
 **Step 2 — Scan canonical context** (parallel reads):
+- [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1, the current direction (see §0)
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~370 lines)
-- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the post-launch roadmap (the phase/stage plan + work-split)
+- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the roadmap (being rewritten as the D1 phase plan + work-split)
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since last session (immortal-scholar — `.claude/skills/scholar-immortal/`)
 - Your brief's "Force-read" cross-links (relevant ADRs, runbooks)
 
@@ -32,13 +43,15 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 
 **Triggers:** any session that starts with sync ("ต่อที่ทำงาน", "เปิดมาใหม่", new worktree, machine change, fresh Claude Code window). Per memory `session_start_handshake`.
 
-## 2. Revenue-first lens (post-launch — still applies, no longer crisis)
+## 2. Faithfulness-first lens (D1 — supersedes the revenue-first framing for Phase A/B)
 
-Pacred **launched 2026-05-17**. The emergency "เผาเงิน" framing is over — but the lens stays: prefer work that makes the product more **true** (the flow actually closes), **billable** (revenue is captured, not silently lost), or **measurable** (you can see what's happening). De-prioritise V3 prep, broad refactors, and nice-to-haves that don't move one of those three.
+Under D1 the decision lens shifts: Phase A/B work is about making Pacred **be** the working PCS system. For every task ask — **does this make the port more faithful, and the system usable with zero retraining for staff and customers?** Prefer work that closes the gap between Pacred and legacy PCS; de-prioritise anything that adds Pacred-original behaviour (that's Phase C). When porting, **match the legacy PCS workflow exactly** — don't "improve" menus, statuses, or the logic-loop mid-port; faithful first, enhance later.
 
-Difference from emergency mode: **plan work properly now.** Don't ship half-built to chase a deadline; don't skip the quality gate to "save time". Crisis-mode shortcuts are no longer the right call.
+The old revenue lens (more **true** / **billable** / **measurable**) still holds underneath — a faithful PCS port *is* the billable revenue path — but during Phase A/B "faithful + zero-retraining" is the tie-breaker.
 
-📋 Post-launch work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) (Phase 0 foundation → Phase 1 release → Phase 2 the four owner systems → Phase 3 future). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
+**Plan work properly.** Don't ship half-built to chase a deadline; don't skip the quality gate to "save time".
+
+📋 D1 work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — being rewritten as the D1 phase plan (Phase A migration → Phase B workflow fidelity → Phase C enhancements). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
 
 ## 3. Don't preempt brand cleanup
 
@@ -46,7 +59,7 @@ Pacred is splitting from **PCS CARGO + TTP + ไอแต้ม**. References to
 
 ## 4. V2 ≠ V3 — don't refactor mid-flight
 
-This repo (`pacred-web`) is **V2 owner-pleaser**. V3 lives in a separate future repo (`pacred-DPX`) per [ADR-0010](docs/decisions/0010-v2-v3-version-strategy.md). When tempted to refactor toward your ideal architecture, append to `docs/v3-wishlist.md` instead. Don't ship V3 redesigns into V2.
+This repo (`pacred-web`) is **V2**. [ADR-0017](docs/decisions/0017-pacred-faithful-pcs-port.md) supersedes [ADR-0010](docs/decisions/0010-v2-v3-version-strategy.md)'s "V2 = rebuilt owner-pleaser" framing — **V2 is now the faithful PCS port** (D1, see §0). V3 (`pacred-DPX`, separate future repo) is **unaffected** by D1. When tempted to refactor toward your ideal V3 architecture, append to `docs/v3-wishlist.md` instead. Don't ship V3 redesigns into V2.
 
 ## 5. Push at save-points only
 

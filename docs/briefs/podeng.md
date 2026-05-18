@@ -3,42 +3,41 @@
 Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
 
-## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
+## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18) — PIVOT YOUR WORK
 
-🟢 Pacred launched. The canonical forward roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — read it first; the post-launch capability synthesis [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) seeded it and its §"Work split" table is ปอน's pickup list.
+🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. Read [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) in full — it is the canonical D1 source of truth and supersedes the capability-roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
-**ปอน now — pickup list (priority order):**
+> ⚠️ **PIVOT — pause the pre-D1 backlog.** The booking-flow detail page (**BK-1**), the customer-intel behavior-tracking, the frontend-tooling landing template are all **Phase C now** — deferred, *not cancelled*, re-sequenced after the faithful port. Your new work is **Phase B frontend**: rework the customer-facing UI to match the legacy PCS Cargo look + flow.
 
-1. **BUILD the booking-flow detail page — TOP priority** — the real "เปิดออเดอร์ / กดซื้อ" surface, Trip.com-style: a booking detail page per service/route + a sticky itemized quotation panel + live-recompute option selectors + an auth gate. Design → [`research/booking-flow-system-2026-05-18.md`](../research/booking-flow-system-2026-05-18.md); start with the **BK-1** MVP. ภูม builds the backend in parallel.
-2. **Web behavior-tracking instrumentation** — the front-end capture for the customer-intelligence system (clicks · scroll depth · exit · last-button-before-exit). Design → [`research/customer-intelligence-system-2026-05-18.md`](../research/customer-intelligence-system-2026-05-18.md).
-3. **Mobile-first hardening** — most Pacred customers arrive on phones. Harden the customer surfaces at the 360/390px viewport per [`docs/conventions.md`](../conventions.md) §11 + [`docs/mobile-first-playbook.md`](../mobile-first-playbook.md) + the `mobile-first-verify` skill.
-4. **Frontend tooling** — the data-driven landing template per [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) (fits the `copyist-unlimited` pattern).
-5. **Polish the new surfaces + SEO audit** — `/contact` · `/start-order` · `QuoteCTA` on-voice + mobile-first; SEO per [`podeng-seo-and-ad-landing-playbook.md`](podeng-seo-and-ad-landing-playbook.md).
+**ปอน now — pickup list (Phase-B frontend, priority order):**
+
+1. **Rework the customer-facing UI to match the legacy PCS Cargo look + flow — TOP priority (Phase B).** The rebuilt Pacred portal navigation diverged from the legacy system — e.g. the legacy customer home is a **9-icon launcher** (a grid of service tiles), the rebuilt app uses a nested sidebar. Rework the customer surfaces (`/dashboard`, `/service-order`, `/service-import`, `/service-payment`, `/wallet`, `/shipments` etc.) so the layout, navigation, and screen-to-screen flow **match what the ~8,898 existing customers already know** — goal: zero retraining.
+2. **Reconcile the divergent status vocabularies** — the rebuilt app's job/order statuses don't line up with the legacy PCS status words customers recognise. Map the rebuilt status labels onto the legacy PCS vocabulary across every customer-visible surface. Coordinate with ภูม — the legacy `tb_*` schema carries the canonical status values.
+3. **Match the legacy PCS visual language** — work through the legacy-vs-Pacred gap map (`docs/research/` — `PACRED-GAP-ANALYSIS.md` + `gap-customer.md`) and bring the customer screens in line with the legacy look so it reads as the same system, rebranded.
 
 **Ongoing (self-directed, fit around the pickup list):**
-- **i18n polish** — namespace-normalize (`page.section.element`) + EN translation review; watch `pnpm audit:i18n` for new untranslated keys.
-- **Marketing + SEO research** — competitor analysis (top-5 Thai cargo/shipping), keyword research, customer-painpoint synthesis; once the Tier-0 analytics dashboard is live, the GA4 funnel report + Clarity heatmaps feed the conversion read.
-- **A/B experiments** — the cookie-based substrate (`lib/experiments.ts` + `ExperimentBeacon`) is shipped; flip an experiment `active` and read `experiment_exposure` × conversion once GA4 is on.
+- **i18n parity** — keep TH + EN in sync as you rework screens; watch `pnpm audit:i18n` for new untranslated keys.
+- **Mobile-first** — every reworked customer surface must still be checked at 360/390px per [`docs/conventions.md`](../conventions.md) §11 + the `mobile-first-verify` skill (most Pacred customers arrive on phones — fidelity to legacy must not break mobile).
 
-**Deferred:** Phase I ecosystem-service landings (services #1, #5-13 — `customs-broker-matching`, `tax-refund`, `tax-invoice`, `shipping-document`, `export`, `fumigation`, `consignment`, `bill-payment`, `logistics`) — build after revenue is stable; block on the Pacred-owner copy direction per service.
+**Deferred to Phase C:** the booking-flow detail page, the customer-intel behavior-tracking instrumentation, the frontend-tooling landing template, the public-marketing/SEO push, A/B experiments, and the Phase I ecosystem-service landings — all re-sequenced after the faithful port. Public marketing landing pages already shipped stay live; the *new* marketing/SEO build work waits.
 
 ---
 
-## 🚀 Post-launch focus (read FIRST)
+## 🚀 D1 focus (read FIRST)
 
-Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ปอน is still the visibility lever** — landing rank + quality score decide whether ad budget converts. The lens stays: more **true** / **billable** / **measurable**. Plan work properly; don't ship half-built.
+The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). **ปอน owns Phase-B frontend** — the customer-facing UI must look and flow like the legacy PCS system so the ~8,898 existing customers need *zero* retraining.
 
-**Voice (every customer surface):** Slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**. Mobile-first. Copy ตรงเป้า ไม่อ้อมค้อม. CTA visible.
+**The lens for D1:** fidelity to the legacy PCS system, not your design instinct. When the legacy UI does something you'd design differently — reproduce the legacy way; Phase C is when Pacred's own polish layers on top. The voice still holds (slogan **"เร็ว ไว ไม่มีคำว่าทำไม่ได้"**, mobile-first, CTA visible) — but the *layout + flow* now follow the legacy system.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — THE canonical forward roadmap (post-launch phase/stage plan)
-2. [`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — the post-launch roadmap synthesis + work-split · [`research/frontend-tooling-2026-05-18.md`](../research/frontend-tooling-2026-05-18.md) — your tooling spec
-3. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
-4. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style — mobile-first) + §12 (Performance/SEO)
-5. [`docs/decisions/0007-analytics-and-ab-testing.md`](../decisions/0007-analytics-and-ab-testing.md) — GTM + Clarity + A/B substrate
+1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
+2. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + [`gap-customer.md`](../research/gap-customer.md) — the legacy-vs-Pacred gap map, your Phase-B rework input
+3. [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — the Phase-A migration runbook (context for the `tb_*` schema behind the reworked screens)
+4. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
+5. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style — mobile-first) + §12 (Performance/SEO)
 6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT — every contact UI element imports from `components/seo/site.ts`
 
 ---
@@ -80,14 +79,17 @@ Translation: owner critiques landing the most → เดฟ helps with structura
 - **Service landings** — the cargo-revenue pages (`import-china`, `-fcl`, `-lcl`, `china-shopping`, `customs-clearance-shipping-suvarnabhumi`) are **full content pages** — intent-keyword H1, FAQ schema, trust strip, phone+LINE CTAs (no longer stubs)
 - **Tier-0/Tier-1 surfaces** (shipped on `dave`) — `/contact` renders `ContactForm` live · `/start-order` + the `QuoteCTA` calculator→buy bridge
 
-### 🟡 Pending / ongoing
+### 🟡 Pending / ongoing (D1 Phase B)
 
-- Frontend-tooling landing template — pickup #1
-- Mobile-first hardening of the customer surfaces — pickup #2
-- Polish of `/contact` + `/start-order` + `QuoteCTA` — pickup #3
-- SEO audit (Ads-waste cut) — pickup #4
-- i18n namespace normalize + EN polish · marketing/SEO research · A/B experiments — see the "Ongoing" list in §"Current state"
-- Phase I ecosystem-service landings — deferred (post-revenue-stable; block on owner copy direction)
+- Rework the customer-facing UI to match the legacy PCS Cargo look + flow (9-icon launcher home, etc.) — pickup #1
+- Reconcile the divergent status vocabularies onto the legacy PCS words — pickup #2
+- Match the legacy PCS visual language across the customer screens — pickup #3
+- i18n parity + mobile-first checks as you rework — see the "Ongoing" list in §"Current state"
+- ⚠️ The Phase-1-5 rebuilt customer surfaces below shipped against the rejected rebuild — under D1 they are reworked to the legacy PCS look + flow (kept here as a reference inventory of what exists)
+
+### Deferred to Phase C (was pending pre-D1)
+
+- Frontend-tooling landing template · booking-flow detail page · customer-intel behavior-tracking · SEO audit · A/B experiments · Phase I ecosystem-service landings — all re-sequenced after the faithful port
 
 ---
 
@@ -112,12 +114,12 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| เดฟ hasn't confirmed a structural decision | Do i18n polish (self-directed) OR marketing/SEO research |
-| Pacred owner hasn't given copy direction for Phase I landings | Build the page shell with placeholder copy + flag to เดฟ |
-| Tier-0 analytics dashboard not yet live → no GA4/Clarity data | Spend time on competitor analysis or keyword research |
+| The legacy PCS look for a screen is unclear from the gap docs | Move to a different customer surface's rework; flag the gap to เดฟ |
+| ภูม hasn't confirmed the legacy `tb_*` status values for a surface | Rework the layout/navigation of another screen; reconcile statuses once ภูม posts the values |
+| เดฟ hasn't broken out the Phase-B frontend work-split | Work the gap map directly — inventory which customer screens diverge from the legacy system |
 | Owner critique comes in mid-task | Park current → handle owner critique → resume |
 
-**Note back to เดฟ when:** you need design-system changes (new theme tokens, new typography scale), backend support (admin endpoint exposure for landing data), or you've hit a structural decision you can't make alone.
+**Note back to เดฟ when:** the legacy PCS look/flow for a screen is ambiguous, you need a structural call on reconciling the rebuilt UI with the legacy layout, or you need ภูม's `tb_*` data contract.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Purpose:** ทุกคน (เดฟ · ก๊อต · ปอน · ภูม · พี่ป๊อป) เปิดไฟล์เดียวจบ → เข้าใจ where we are, where we go, how each piece fits. ทุก brief / ADR / plan ย่อยลง 1 เอกสาร master นี้ + cross-link ลึกต่อ.
 
-Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
+Last reviewed: 2026-05-18 (direction pivot D1 — faithful PCS Cargo port)
 Living doc — update each save-point. **Keep under 800 lines** (single-read budget).
 
 ---
@@ -18,23 +18,30 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 **Vision:** ทำให้ใครก็ตาม (แม้ไม่รู้อะไรเลย) นำเข้า-ส่งออกได้ ง่ายๆ แค่ปลายนิ้ว. Full-loop service — เปิดประตูทุก service ลูกค้าต้องการในระบบเดียว, ลูกค้าไม่ต้องไปจ้างเจ้าอื่น.
 
 📋 Full DNA + addresses + 7 emails + sales reps → [`pacred-info.md`](pacred-info.md)
-📋 V2 vs V3 strategy → [ADR-0010](decisions/0010-v2-v3-version-strategy.md) — *this repo = V2 owner-pleaser; V3 = future `pacred-DPX` employee masterpiece*
+📋 Current direction → [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md) — *this repo (V2) = a **faithful port of the legacy PCS Cargo system** (D1); V3 = future `pacred-DPX` employee masterpiece (ADR-0010)*
 
 ---
 
-## 2. Current state (2026-05-18) — 🚀 POST-LAUNCH
+## 2. Current state (2026-05-18) — 🔀 DIRECTION PIVOT "D1"
 
-**Pacred launched to production 2026-05-17.** `main` is live + verified healthy. The emergency "เผาเงิน" sprint is behind us — the cargo revenue path (signup → wallet → service-order → admin-paid → receipt) works end-to-end. The lens shifts from *survive* to *stabilise + deepen*.
+**On 2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app.** Its UI *and* its workflow logic-loop look nothing like the legacy **PCS Cargo** system the business actually runs — and ~8,898 existing customers + every operating role would face a full retraining. The decision (**D1**, [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)):
 
-**Where we are:**
-- 🟢 **`main`** — production, live. 19 launch-week migrations (`0044`-`0064`) applied to prod Supabase. Two deploys done: `314a528` (launch) + `4ef2ee6` (U1/U2/U4 + a P0 refund-money-loss fix).
-- 🟡 **`dave`** — integration branch, well ahead of `main`. Carries the shipped post-launch U1/U2/U4 batches **plus the Tier 0/1/2 capability batches**. The `dave→main` deploy is gated on ภูม applying migrations `0058`-`0080` to prod.
-- **The canonical forward roadmap is [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md)** — the single phase/stage plan for what's next. The 3-tier **capability** synthesis ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md): Tier 0 connect → Tier 1 buy-bridge → Tier 2 internal OS → Tier 3 owner systems) is the 2026-05-18 analysis that seeded it. The earlier U1-U4 sequence has all shipped.
+> **Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** Not a reinterpretation, a faithful port.
 
-**Decision lens (post-launch):**
-> Does this make the product more **true** (the flow actually closes), **billable** (revenue captured, not lost), or **measurable**? — and never ship a stage before the quality gate is green.
+This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch-era code (customer portal · 60+ admin routes · Tier 0/1/2) still exists, but the direction under it has changed — see §9.
 
-**Full post-launch plan:** [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) — THE canonical forward roadmap. Seeded by [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) (the Tier 0/1/2/3 synthesis). Backlogs they draw from: [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt).
+**Three phases (D1):**
+- **Phase A — Data migration.** Port the legacy `pcsc_main` (117 tables · ~8,898 customers · 3.78M rows) into Pacred's PostgreSQL/Supabase. `PCS<n>` → `PR<n>` keeping the exact running number; custom auth so customers sign in with their *existing* password (no reset).
+  *Status: 🟡 pipeline built · **dry-run validated** — 117/117 tables load clean, every row count reconciles MySQL ↔ PostgreSQL (0 failures · 0 mismatches) · **pending the production load** (gated on เดฟ's go + a fresh cutover dump from แต้ม).* Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
+- **Phase B — Workflow fidelity.** Rework the Pacred app — customer portal + admin back-office — so its menus, job statuses, container (ตู้) flow, and end-to-end logic-loop **match the legacy PCS system exactly**.
+  *Status: 🔴 not started — this is the bulk of the forward work.* ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.
+- **Phase C — Pacred enhancements.** *Only after* the faithful port works, layer Pacred's own improvements. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue (booking flow · customer-intelligence · internal-chat · disbursement · china-ops · platform-observability) are **deferred here — re-sequenced, not cancelled.**
+  *Status: ⏸️ deferred.*
+
+**Decision lens (D1):**
+> Does this change make Pacred a **more faithful** port of the legacy PCS Cargo system — so staff and the ~8,898 existing customers need **zero retraining**? Phase B fidelity beats new capability. Don't ship a Phase-C enhancement before the faithful port works; never ship a stage before the quality gate is green.
+
+**Canonical D1 docs:** [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md) (the decision + work-split) · [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) (Phase A) · the legacy-vs-Pacred workflow gap map in [`research/`](research/_index.md) (Phase B input). [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) and the Tier 0/1/2/3 capability synthesis now describe **Phase-C** work.
 
 ---
 
@@ -162,6 +169,7 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 | ADR | Title | Status | When to consult |
 |---|---|---|---|
+| [0017](decisions/0017-pacred-faithful-pcs-port.md) | **Pacred = faithful PCS Cargo port (D1)** — supersedes ADR-0010's V2 framing | ✅ accepted (owner) | **The current direction — read first.** Any Phase A/B/C scoping decision |
 | [0001](decisions/0001-line-notify-replacement.md) | LINE Notify → Messaging API | ✅ locked | When wiring LINE push notifications |
 | [0002](decisions/0002-admin-architecture.md) | Admin RBAC (`is_admin()` SECURITY DEFINER + `admins` table) | ✅ locked | Every admin route or action |
 | [0003](decisions/0003-china-search-vendor-cutoff.md) | China-search vendor cutoff — Option F (TAM interim) | ✅ locked | Touching `lib/china-search/` |
@@ -171,7 +179,7 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 | [0007](decisions/0007-analytics-and-ab-testing.md) | GTM + Clarity + cookie A/B | ✅ locked | Adding analytics events / experiments |
 | [0008](decisions/0008-dpx-erp-phase-2.md) | DPX ERP Phase 2 (V3 territory) | ✅ draft | V3 architecture discussions |
 | [0009](decisions/0009-erp-schema-sketch.md) | ERP schema sketch (M1..M14) | ✅ draft | New admin module schema |
-| [0010](decisions/0010-v2-v3-version-strategy.md) | V2 (owner-pleaser) vs V3 (employee masterpiece) | ✅ locked | When tempted to refactor mid-flight |
+| [0010](decisions/0010-v2-v3-version-strategy.md) | V2 vs V3 version strategy — *V2's "rebuilt owner-pleaser" def superseded by ADR-0017; V3 (`pacred-DPX`) unaffected* | 🟡 partly superseded | When tempted to refactor mid-flight; V3 split |
 | [0014](decisions/0014-customer-self-service-state-transitions.md) | Customer self-service state transitions (verify-then-admin-client) | ✅ locked | Any customer-initiated state-machine action |
 | [0015](decisions/0015-withholding-tax-model.md) | Withholding-tax (หัก ณ ที่จ่าย) model | 🟡 DRAFT — ก๊อต to lock | V-A6 · juristic payments · receipt gating |
 | [0016](decisions/0016-freight-value-model.md) | Freight value model (commercial vs declared value · VAT plan) | 🟡 DRAFT — ก๊อต to lock | V-E2 · freight (FCL/LCL) invoicing |
@@ -185,94 +193,67 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 ---
 
-## 9. What's shipped vs pending (post-launch snapshot)
+## 9. What's shipped vs pending (D1 snapshot)
 
-### 🟢 Shipped + in production (`main` — live since 2026-05-17)
+**Read this section through the D1 lens (§2).** The rebuilt-Pacred app *was* launched to production 2026-05-17 and that code still exists — but on 2026-05-18 the owner rejected the rebuilt direction. So "shipped" below means **"code that exists"**, not "the agreed direction". Under D1 the forward work is **Phase A → B → C**, and most of the rebuilt feature set will be reworked in Phase B to match the legacy PCS workflow.
 
-**Foundation:**
-- Next.js 16 + Supabase auth/RLS + OAuth Google/FB · `proxy.ts` middleware + locale routing
-- `pnpm verify` umbrella (lint + tsc + test:unit + audit:all) + CI workflow
+### 🟦 Phase A — Data migration (the live forward workstream — 🟡 dry-run validated)
 
-**Customer portal:**
-- /login, /register (personal + juristic 3-step + OTP), /dashboard, /addresses, /forgot-password
-- /service-order (+ /add /cart /[hNo]), /service-import (+ /add /[fNo] /receipt /receipts)
-- /service-payment (+ /add), /wallet (deposit/withdraw/history, soft-degrade), /notifications, /liff/link, /shipments (+/[code])
-- Pay-from-wallet self-serve (shop + forwarder) · receipt PDF · tax-invoice request flow
+Port the legacy `pcsc_main` MySQL DB into Pacred's PostgreSQL/Supabase. Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
 
-**Admin back-office (60+ routes):**
-- HR full: org-chart, employees, recruitment, attendance, leaves, training, policies, audit
-- Dashboard, customers, admins (RBAC grant/revoke), drivers, csv-imports, hs-codes, containers
-- /admin/accounting (7 tabs + CSV + monthly closing) · /admin/reports (5 tabs) · /admin/barcode (intake/prepare/driver)
-- Track A integration tests (OTP / wallet ledger / signup / cart cap)
+- ✅ **Schema** — 117 tables ported MySQL→PostgreSQL, faithful (legacy names/types/even typos kept; `tb_` prefix → no collision with Pacred's own tables).
+- ✅ **Converter + dry-run** — 3,780,238 rows → PostgreSQL COPY format; 2,288,128 `PCS→PR` transforms; loaded into a throwaway PostgreSQL 17 — all 117 tables load clean, every row count reconciles MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches).
+- ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` verifies the legacy password hash (7 real hashes + 5 vectors) — migrated customers sign in with their existing password, no reset.
+- ✅ **New-customer numbering** — `member-code-gapfill.sql` fills the lowest vacant `PR<n>` first, then increments past max.
+- 🔴 **Pending the production load** — gated on เดฟ's go + a fresh cutover `pcsc_main` dump from แต้ม. Open items: customer upload files (`images/users` etc — held by แต้ม) · 8 special userIDs (`PCSTT`/`PW`/…) · the `PR1`–`PR5` first-signup numbering confirm. Artifacts live **outside the repo** (`C:\Users\Admin\Desktop\pcs-migration-work\` — converted data is customer PII).
+- This supersedes the pre-D1 customers-only migration (`0067` · `u2-1-pcs-customer-migration.md` · `actions/admin/pcs-migration.ts`).
 
-**Launch-week security + money hardening (all on `main`):**
-- W-1 keystone (`0062`) — RLS role-pin on ~24 admin-write policies + `wallet_transactions` DB audit trigger; `requireAdmin([role])` on 18 finance/PII pages
-- W-3 (`0063`) — freight wallet-pay writes a real debit; yuan status-transition guard
-- `0064` overdraw-guard — non-negative wallet floor with row-lock; `lib/wallet/balance.ts` available-balance helper
-- S-3/S-4/S-7 — password-reset/phone-change IP rate-limit · edge `/admin/**` redirect · static guard test on `admins`
-- F-2 — `/admin` dashboard + `/admin/reports` hub role-gated
+### 🟧 Phase B — Workflow fidelity (🔴 not started — the bulk of forward work)
 
-**Infrastructure:**
-- Analytics — GTM + Clarity + cookie A/B (env IDs set by ก๊อต) · 9 conversion events + 13 CTA surfaces
-- Sentry SDK · Upstash rate-limit · hCaptcha — wired + graceful-degrade (see [`runbook/launch-monitoring-golive-2026-05-17.md`](runbook/launch-monitoring-golive-2026-05-17.md))
-- LINE Messaging API + LIFF · 6 cron jobs (incl. SMS-balance alert) + CRON_SECRET hardening
-- `member_code` = `PR001` running (PR + min-3-digit, migration `0060`)
+Rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop **match the legacy PCS system exactly** — zero retraining for staff or the ~8,898 customers. ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow. Phase-B input = the legacy-vs-Pacred workflow gap map in [`research/`](research/_index.md) + the cargo-ops decode ([`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md)).
 
-**Landing:** Home (15+ sections) · SEO bundle · customs-clearance landing + `[port]` detail pages · `/line` redirect + GTM on every LINE CTA · ad-landing polish
+### ⏸️ Phase C — Pacred enhancements (deferred — re-sequenced, not cancelled)
 
-### 🟢 Shipped on `dave` — post-launch U1/U2/U4 + Tier 0/1/2 (NOT yet on `main` — gated on migration apply)
+Layered **only after** the faithful port works. This is where the *entire pre-D1 forward roadmap now lives* — [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) and the Tier 0/1/2/3 capability synthesis describe Phase-C work:
+- Tier 0 connect (`ContactForm` on `/contact`) · Tier 1 buy-bridge (`/start-order` + `QuoteCTA` + `/admin/kpi`) · Tier 2 internal OS (`work_items` board — `/admin/board` + `/admin/inbox`).
+- The 4 designed owner systems: internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ · platform-observability.
+- The Phase-2 build queue: booking flow · customer-intelligence.
 
-The post-launch batches — coded + verified + on `dave`, awaiting ภูม applying migrations `0058`-`0080` to prod before the `dave→main` deploy:
+### 🟢 Rebuilt-Pacred code that exists (pre-D1 — direction changed, code retained)
 
-**U1-U4 (the [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) sequence):**
-- **U1 wire-the-flow** — container unify (`0059`/`0066`) · container→order status propagation · arrival→billing gate (`lib/forwarder/billing-gate.ts`) · freight-chain auto-draft/auto-convert · order auto-close · **refund money path** (`0058` `refund_requests` + customer self-serve `/refunds` + admin queue)
-- **U2** — PCS→Pacred customer migration (`0067` + `/admin/migration/pcs-customers`) · per-container cost basis + AP/disbursement ledger (`0069` + `/admin/accounting/container-costs` + `/disbursements` + `lib/cost/container-margin.ts`) · freight WHT gate · cargo_sacks / กระสอบรวม (`0068` + `lib/warehouse/sacks.ts`)
-- **U4** — admin supervisory layer (`0070` — audit-log export · notification delivery log · cron-health panel · staff RBAC console · 8-entity global search `/admin/search`) · customer credit line / pay-later (`0071` — `credit_limit_thb` + outstanding view + pay-credit action + `/wallet` credit panel)
-- **C-1 fix** (`0072`) — `wallet_tx_insert_self_serve` RLS amount-sign guard (core-audit P1)
-- **~700 new test assertions** — เดฟ wrote 11 test files covering the new validators (refund · commission · customs-declaration · freight-shipment · accounting-period · broadcast · billing-gate · booking-calc · notify-templates · short-url · admin-config · thai-tax-id)
+The rebuilt app launched 2026-05-17 and its code is intact; under D1 most of it gets **reworked in Phase B** to the legacy workflow rather than extended. The rebuilt `profiles` schema coexists with the ported `tb_*` schema during the transition, then retires.
 
-**Tier 0/1/2 (the [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) synthesis):**
-- **Tier 0 connect** — `ContactForm` rendered live on `/contact` (`b90806b`) — the lead-capture funnel is joined at stage one. Remaining Tier-0 = dashboard clicks (analytics env vars in Vercel · GSC + submit sitemap · Google Business Profile · Meta Business Suite — ก๊อต/เดฟ).
-- **Tier 1 buy-bridge** — `/start-order` page + `QuoteCTA` component (the calculator→buy "เปิดออเดอร์ราคานี้" bridge) · `.github/workflows/ci.yml` gained a `pnpm build` step · `/admin/kpi` executive dashboard (`bcd752c`).
-- **Tier 2 internal OS** — cross-department `work_items` work-board: migration `0080_work_items.sql` + `/admin/board` + `/admin/inbox` + `actions/admin/work-items.ts` + `lib/validators/work-item.ts` (`bcd752c`). MOMO sync + per-department workspaces remain specced → [`port-specs/operating-system-tier2.md`](port-specs/operating-system-tier2.md).
-- **Tier 3 designed (not built)** — 4 owner-requested systems: internal org-chat · disbursement/เบิก-จ่าย · China-ops/ปิดตู้ · platform-observability (รายงานสถานะ Platform / KPI / auto-incident) — design docs in [`research/`](research/_index.md) (`internal-chat-system-` · `disbursement-system-` · `china-ops-container-closing-` · `platform-observability-system-2026-05-18.md`).
-
-### 🟡 In-flight / follow-up
-
-- **`dave→main` deploy** — gated on ภูม recreating dev Supabase + applying `0058`-`0080` to prod (the deleted dev project `gnortvyazfmocvcbvfbs` must be restored — prod is a separate healthy project). See [`runbook/poom-handoff-2026-05-18.md`](runbook/poom-handoff-2026-05-18.md).
-- **U1/U2 code-review follow-ups** — [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md): P0-1 + P1-1 ✅ fixed by เดฟ; P1-2..P2-7 = ภูม follow-up before running the U2-1 backfill.
-- **U1-7 MOMO JMF sync** — ⛔ blocked: the on-record MOMO API host/format is wrong (datanew L-0 — real = `api.momocargo.com:8080` REST); needs ก๊อต to clear the API docs first.
-- **U2-4 PEAK** · **U3 ecosystem tools** (NetBay · Customs Trader Portal · ship-tracking · fuel calc) · **U4-3 tier-2 tail** — later UPGRADE_PLAN phases, partner-scheduled.
-- 🔴 Phase I — 9 new ecosystem services (1, 5-13 in §4) — landing pages + backend modules, post-revenue-stable roadmap.
+- **`main`** — the rebuilt app in production. Foundation (Next.js 16 + Supabase auth/RLS + OAuth + `proxy.ts`) · customer portal (`/login` `/register` `/dashboard` `/service-order` `/service-import` `/service-payment` `/wallet` `/notifications` `/shipments`) · 60+ admin routes (HR · ops · `/admin/accounting` · `/admin/reports` · `/admin/barcode`) · launch-week security/money hardening (W-1 keystone `0062` · overdraw-guard `0064`) · analytics + Sentry + LINE Messaging API.
+- **`dave`** — integration branch ahead of `main`, carrying the pre-D1 post-launch batches (U1 wire-the-flow + refund money path · U2 cost ledger + sacks · U4 admin supervisory layer + credit line · Tier 0/1/2) + ~700 test assertions. **The pre-D1 `dave→main` deploy is moot under D1** — that deploy shipped the rebuilt direction; the forward path is Phase A/B, not pushing `dave`. ก๊อต/เดฟ to decide the fate of un-deployed `dave` work (much of it informs Phase C).
 
 ### 🆕 R&D / audit evidence base (2026-05-16/17/18)
 
-The "why" behind UPGRADE_PLAN — decoded legacy systems + gap-hunts + pre-launch audits + post-launch reviews. Index: [`research/_index.md`](research/_index.md). High-leverage:
-- [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) — chained gap-hunt synthesis (the 4-problem framing that UPGRADE_PLAN sequences)
-- [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md) — launch-eve decode; corrects the MOMO API surface (DN-1..DN-5)
-- [`research/audit-core-2026-05-18.md`](research/audit-core-2026-05-18.md) — post-launch rigorous core audit (🟢 sound; C-1 P1 → fixed `0072`)
-- [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md) — U1/U2 code review (ownership-split follow-ups)
-- 2026-05-16 audits (chat-analysis · legacy-cleanup · cargo-ops-forensics · php-deep-sweep) — still the canonical legacy decode.
+Decoded legacy systems + gap-hunts + audits. Under D1 the **legacy-decode docs become primary** (they describe the system Pacred is now porting). Index: [`research/_index.md`](research/_index.md). High-leverage:
+- 2026-05-16 audits — **chat-analysis · legacy-cleanup · cargo-ops-forensics · php-deep-sweep** — the canonical legacy decode; now Phase-B reference for what the faithful port must match.
+- [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md) — launch-eve decode; corrects the MOMO API surface (DN-1..DN-5).
+- [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) · [`research/audit-core-2026-05-18.md`](research/audit-core-2026-05-18.md) · [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md) — pre-D1 syntheses/reviews of the rebuilt app; inform Phase C.
 
 ---
 
-## 10. The cargo loop — DoD (✅ met at launch)
+## 10. D1 Definition-of-Done — the faithful port
 
-The revenue-ready checklist was the launch gate. It is **met** — Pacred is in production and can take cargo customers:
+Under D1 the bar is no longer "did the rebuilt app launch" — it is **"is Pacred a faithful port of the legacy PCS Cargo system, so no one needs retraining?"** DoD per phase:
 
-- [x] Customer can sign up (TH OTP — `OTP_BYPASS=false` in prod after ThaiBulkSMS signup) · juristic lookup degrades to manual entry
-- [x] Customer can top up wallet (slip upload + PromptPay `0105564077716`)
-- [x] Customer can create service-import order (forwarder rate engine + uploads)
-- [x] Customer can pay from wallet self-service (service-order + service-import) — no admin bottleneck per order
-- [x] Customer receives receipt PDF (Pacred legal + tax-ID + กสิกร bank info)
-- [x] Customer can request tax invoice if juristic (per ADR-0006)
-- [x] Customer can see container/shipment status — `/shipments` + `/shipments/[code]`; MOMO auto-sync pending (manual admin entry is the working fallback)
-- [x] Admin fulfils order via UI (no manual SQL) — mark-paid + assign-driver + bulk-approve
-- [x] Conversion events flow GTM → GA4 (env IDs set)
-- [x] `/status` public health page (closed chat audit L-1 — PHP web outages)
-- [x] Production smoke gate passed before deploy (`next start` + curl, zero 500s)
+**Phase A — data migration (🟡 dry-run met, prod pending):**
+- [x] All 117 `pcsc_main` tables ported to PostgreSQL — faithful schema
+- [x] Converter handles all 3.78M rows · `PCS<n>`→`PR<n>` on member-code columns only
+- [x] Dry-run: 117/117 tables load clean · every row count reconciles MySQL ↔ PostgreSQL
+- [x] Auth bridge verifies the legacy password hash — customers sign in, no reset
+- [ ] Production load — fresh cutover dump · `0081` schema migration · data load · prod-side reconcile · customer files into Supabase Storage (gated on เดฟ go + แต้ม)
 
-**Post-launch DoD evolves into the UPGRADE_PLAN.** The next bar is not "can we launch" but "is the flow *true* + *billable* + *measurable*" — that is exactly what U1 (wire-the-flow) + U2 (revenue/margin) deliver. Full post-launch sequence → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
+**Phase B — workflow fidelity (🔴 not started — the forward DoD):**
+- [ ] Customer-portal menus + navigation match the legacy PCS layout
+- [ ] Job statuses + the container (ตู้) flow match the legacy state machine exactly
+- [ ] The end-to-end logic-loop (สั่ง → โอน → นำเข้า → ตู้ → ส่งมอบ) matches legacy behaviour
+- [ ] Admin back-office screens + workflows match what staff use today
+- [ ] A migrated customer + each operating role can do their daily job with **zero retraining**
+
+**Phase C — enhancements:** DoD deferred; the bar reverts to *true / billable / measurable* once the faithful port is live. Phase-C sequence → [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md).
 
 ---
 
@@ -316,9 +297,10 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 
 ## 13. Future routes (track but don't build now)
 
-- **V3 (`pacred-DPX`)** — separate repo, employee masterpiece. Track ideas in `docs/v3-wishlist.md`. Don't refactor V2 into V3 mid-flight. (ADR-0010)
+- **Phase C — Pacred enhancements** — the entire pre-D1 forward roadmap (Tier 0/1/2/3 capability work · the 4 owner systems: internal-chat · disbursement · china-ops · platform-observability · the Phase-2 build queue: booking flow · customer-intelligence). Deferred under [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md) until the Phase A/B faithful port works — re-sequenced, not cancelled. Specs stay in [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) + the Tier synthesis; don't build them now.
+- **V3 (`pacred-DPX`)** — separate repo, employee masterpiece. Track ideas in `docs/v3-wishlist.md`. Don't refactor V2 into V3 mid-flight. (ADR-0010 — its V3 split survives D1.)
 - **Obsidian brain bridge** — eventual long-term memory layer outside the repo. Plan in [`HANDBOOK.md`](HANDBOOK.md) §Obsidian appendix.
-- **Capture every dept's work as data** — Phase III initiative once revenue stable. Goal: KPI dashboard per role per day per metric.
+- **Capture every dept's work as data** — a Phase-C initiative. Goal: KPI dashboard per role per day per metric.
 - **Multi-project skill share** — Pacred-internal skill registry (clone this `.claude/skills/` into other Pacred repos when they're created).
 
 ---
@@ -327,9 +309,11 @@ Future agents (and devs) read these BEFORE searching the web again. Compound kno
 
 | Question | Open this |
 |---|---|
-| งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` + `UPGRADE_PLAN.md` (post-launch roadmap) |
-| ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs) |
-| สเปกของ feature Y? | `UPGRADE_PLAN.md` (the phase/stage plan) · `PORT_PLAN.md` Parts O–W — search an ID like `U1-3` / `V-A6` / `W-2` |
+| ทิศทางตอนนี้คืออะไร (D1)? | `decisions/0017-pacred-faithful-pcs-port.md` + this doc §2 |
+| งานของฉันคืออะไร (today)? | `briefs/<your-name>.md` + this doc §9 (D1 Phase A/B) |
+| ตัดสินใจ X ยังไง / has someone decided? | `decisions/` (ADRs — start at 0017) |
+| Phase A data migration: status + runbook? | `runbook/pcs-data-migration.md` |
+| สเปกของ Phase-C feature Y? | `UPGRADE_PLAN.md` + the Tier synthesis (Phase-C work) · `PORT_PLAN.md` Parts O–W — search an ID like `U1-3` / `V-A6` / `W-2` |
 | คาร์โก้/เฟรท: ระบบจริงทำงานยังไง + ปัญหาอะไร? | `audit/cargo-ops-forensics-2026-05-16.md` (decoded model + problem catalog A–F) |
 | Schema ของ table Z? | `architecture/container-centric-model.md` or `decisions/0009-erp-schema-sketch.md` |
 | Env var คืออะไร / set ยังไง? | `env.md` |
@@ -352,14 +336,15 @@ git merge origin/dave          # the live integration branch
 
 # 2. Read the few things you really must
 cat docs/briefs/<your-name>.md
-cat docs/STRATEGY.md           # this file — full context once-per-session
-cat docs/UPGRADE_PLAN.md       # the post-launch roadmap — what's next
+cat docs/STRATEGY.md                              # this file — full context once-per-session
+cat docs/decisions/0017-pacred-faithful-pcs-port.md  # D1 — the current direction
+# (UPGRADE_PLAN.md now describes Phase-C work — read for later, not "what's next")
 
 # 3. (Recommended) check what changed since you last looked
 git log --oneline -20 origin/dave
 cat docs/learnings/_index.md   # any new gotchas captured by other agents?
 
-# 4. Open your priority-1 task from your brief + the UPGRADE_PLAN
+# 4. Open your priority-1 task from your brief (D1 Phase A / Phase B work)
 # 5. Work. Commit local often. Push at save-point.
 ```
 
@@ -367,4 +352,4 @@ That's the loop. ทุกคนทำซ้ำๆ ทุกวัน. เดฟ
 
 ---
 
-**End of STRATEGY.md.** Updates: ทุกครั้งที่ launch state / UPGRADE_PLAN ขยับ → update §2 + §9. ทุกครั้งที่ adopt skill ใหม่ → update §11. ทุกครั้งที่ block หาย → strike-through ใน §9.
+**End of STRATEGY.md.** Updates: ทุกครั้งที่ D1 phase state ขยับ (Phase A prod load · Phase B progress) → update §2 + §9 + §10. ทุกครั้งที่ adopt skill ใหม่ → update §11. ทุกครั้งที่ block หาย → strike-through ใน §9.

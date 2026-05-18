@@ -3,52 +3,49 @@
 Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
 
-## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
+## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18) — PIVOT YOUR WORK
 
-🟢 Pacred launched. The canonical forward roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — read it first; the post-launch capability synthesis [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) seeded it and its §"Work split" table is ภูม's pickup list.
+🔴 **The owner rejected the rebuilt Pacred app** — its admin back-office *and* its customer-portal workflow look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. Read [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) in full — it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 / Phase-2-build-queue framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
-**ภูม now — pickup list (priority order):**
+> ⚠️ **PIVOT — pause the pre-D1 backlog.** The booking-flow backend (**BK-1**), the freight expansion (**V-E1.1** / V-E6..V-E12), the Tier-3 systems (internal-chat · disbursement · china-ops) and the customer-intel backend are all **Phase C now** — deferred, *not cancelled*, re-sequenced after the faithful port. Stop building them. Your new work is **Phase B backend**.
 
-> ✅ Migrations applied — ภูม confirmed `0058`-`0080` are on prod Supabase; the `dave→main` deploy (`899ff18`) is live. ภูม's wave-2 polish batch (delivery-ack · yuan tax-invoice · super-tools · view-as-customer · business-config — migrations `0073`-`0076`) is integrated on `dave`.
+**ภูม now — pickup list (Phase-B backend, priority order):**
 
-1. **BUILD the booking-flow backend — TOP priority** — the customer-acquisition revenue surface. `bookings` / `booking_options` / `booking_rates` tables + the `work_item` hand-off (`entity_type='booking'`) + the R-3 lead-inbox / R-5 quote-calculator wiring. Design → [`research/booking-flow-system-2026-05-18.md`](../research/booking-flow-system-2026-05-18.md) (the **BK-1** MVP); ปอน builds the detail page in parallel.
-2. **BUILD the Tier-3 systems, in order:**
-   - **Internal org-chat IC-1** — the shipment/job-scoped work-comms MVP; rides on the shipped `0080` work-board. Design → [`research/internal-chat-system-2026-05-18.md`](../research/internal-chat-system-2026-05-18.md).
-   - **Disbursement system (เบิก-จ่าย)** — `disbursement_requests` + lines + allocations + fund + outbound `wht_certificates`, money-OUT fail-closed safeguards. Design → [`research/disbursement-system-2026-05-18.md`](../research/disbursement-system-2026-05-18.md).
-   - **China-ops / container-closing (ปิดตู้)** — `cn_warehouse` role + portal + close-sack/close-container ceremony. **Volume-gated**. Design → [`research/china-ops-container-closing-2026-05-18.md`](../research/china-ops-container-closing-2026-05-18.md).
-3. **The LINE-webhook customer-intel backend** — webhook ingestion + the customer-360 store + the in-admin chat preview. Design → [`research/customer-intelligence-system-2026-05-18.md`](../research/customer-intelligence-system-2026-05-18.md).
-4. **U1/U2 review follow-ups** — P1-2..P2-7 from [`research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md); + the U2-1 PCS-customer backfill.
+1. **Rework the admin back-office onto the ported legacy schema — TOP priority (Phase B).** Phase A loads the legacy `pcsc_main` (117 tables, faithfully ported as `tb_*` — legacy names/types kept) into prod Supabase. Your job: rework the 60+ admin routes so they **operate on the `tb_*` schema with the legacy PCS admin workflow exactly** — same menus, same job statuses, same container (ตู้) flow, same end-to-end logic-loop. Goal: warehouse / scanner / receiving / shipping / accounting / audit staff need *zero* retraining.
+2. **Rework the customer-portal backend onto the ported schema (Phase B)** — server actions + queries behind `/service-order` · `/service-import` · `/service-payment` · `/wallet` · `/shipments` etc. read/write the `tb_*` tables and follow the legacy PCS customer logic-loop. ปอน reworks the customer-facing UI in parallel — coordinate the data contract.
+3. **Custom legacy auth** — migrated customers sign in with their *existing* PCS password (no reset) via the "เชื่อมต่อบัญชี PCS CARGO" login. The auth bridge `lib/auth/pcs-legacy-password.ts` (`passTam` / `verifyLegacyPassword`) is built + verified — wire it into the login flow.
+4. **The `tb_*` schema migration** — Phase A applies the 117-table legacy schema as a new migration (`0081_pcs_legacy_schema.sql` — confirm the next free number). The `tb_*` tables coexist with the rebuilt `profiles`-era tables during the transition; nothing is dropped. The pre-D1 PCS-customer migration (`0067` · `actions/admin/pcs-migration.ts`) is **superseded** — don't extend it.
 
-**Migration numbering:** taken — `0073`-`0076` (ภูม wave-2) + `0080` (work_items). Free — `0077`-`0079` + `0081`+. The platform-observability migration is เดฟ-lane (เดฟ coordinates a number with ภูม).
+**Migration numbering:** taken — `0073`-`0080`. Free — `0081`+ (the Phase-A legacy-schema migration claims `0081`; coordinate the number with เดฟ).
 
-**Carried-over backlog (not a current pickup):** the Phase I2 freight expansion (V-E6..V-E12 quotation / receipt / commission / monthly-closing / QA-QC / customs-declaration / role-dashboards) + the V-G admin bulk-ops bundle live in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** with per-task specs in [`docs/port-specs/`](../port-specs/). They are V2 long-phase work the [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) sequences — pick up after the Tier-3 systems.
+**Carried-over backlog (Phase C — not a current pickup):** the Tier-3 systems, the booking-flow backend, the Phase I2 freight expansion (V-E6..V-E12) + the V-G admin bulk-ops bundle in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** are all re-sequenced to **Phase C** — *after* the faithful port works. Don't pick them up until D1 Phase B is done.
 
 ---
 
-## 🚀 Post-launch focus (read FIRST)
+## 🚀 D1 focus (read FIRST)
 
-Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. **ภูม is still the single biggest backend lever** — the cargo path + the Tier-3 owner-requested systems are where the product gets deeper. The lens stays: more **true** / **billable** / **measurable** — and never ship a stage before the quality gate is green.
+The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). **ภูม is the single biggest Phase-B lever** — the admin back-office + customer-portal backend must reproduce the legacy PCS workflow exactly so staff and customers need *zero* retraining.
 
-**ภูม post-launch priorities** — see the §"Current state" block above: clear the migration gate first (unblocks `dave→main`), then build internal-chat IC-1 → disbursement → china-ops (volume-gated).
+**The lens for D1:** fidelity to the legacy PCS system, not reinterpretation. When the legacy system does something a way you'd design differently — reproduce the legacy way. Phase C is when Pacred's own improvements layer on top; Phase B is faithful reproduction. Never ship a stage before the quality gate is green.
 
-**Defer:** Phase I (9 new ecosystem services) until revenue is stable. China-ops is volume-gated.
+**ภูม Phase-B priorities** — see the §"Current state" block above: rework the admin back-office onto the `tb_*` schema first, then the customer-portal backend, wire the legacy auth bridge. The pre-D1 Tier-3 / booking-flow / freight backlog is **Phase C**.
+
+**Defer to Phase C:** the Tier-3 systems (internal-chat · disbursement · china-ops), the booking-flow backend, the customer-intel backend, the V-E6..V-E12 freight expansion. Phase I (9 new ecosystem services) stays deferred behind that.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — THE canonical forward roadmap (post-launch phase/stage plan)
-2. [`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — the Tier 0/1/2/3 synthesis + work-split (your pickup list)
-3. [`docs/STRATEGY.md`](../STRATEGY.md) — master strategy single-read
+1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
+2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook — describes the `tb_*` schema your Phase-B backend operates on
+3. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + [`gap-admin.md`](../research/gap-admin.md) + [`gap-customer.md`](../research/gap-customer.md) + [`gap-revenue-flow.md`](../research/gap-revenue-flow.md) — the legacy-vs-Pacred gap map, your Phase-B rework input
 4. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow) + §10 (integration cycle)
-5. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part S3 (ภูม hand-off triggers) + Part V (cargo/freight backlog)
-6. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the warehouse + container + shipment data spine
-7. [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you wire (the on-record API surface is wrong — wait for ก๊อต to clear it)
-8. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0009-erp-schema-sketch.md`](../decisions/0009-erp-schema-sketch.md) + [`0015`](../decisions/0015-withholding-tax-model.md) + [`0016`](../decisions/0016-freight-value-model.md) — schema specs you implement
-9. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
-10. [`.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) — skills kit; **`legacy-php-sweep`** is your bread-and-butter for cargo ports
-11. [`docs/learnings/_index.md`](../learnings/_index.md) — scan for any new gotcha entries since last session
-12. [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) — the decoded cargo/freight ops model behind Part V
+5. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the warehouse + container + shipment data spine (reconcile against the legacy `tb_*` ตู้ model)
+6. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0015`](../decisions/0015-withholding-tax-model.md) + [`0016`](../decisions/0016-freight-value-model.md) — schema specs (reconcile against the legacy workflow under D1)
+7. [`docs/pacred-info.md`](../pacred-info.md) — company DNA (tax ID + legal name for invoice/PDF templates)
+8. [`.claude/skills/INDEX.md`](../../.claude/skills/INDEX.md) — skills kit; **`legacy-php-sweep`** is your bread-and-butter — Phase B is fidelity-porting the legacy PHP workflow
+9. [`docs/learnings/_index.md`](../learnings/_index.md) — scan for any new gotcha entries since last session
+10. [`docs/audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) — the decoded cargo/freight ops model
 
 ## 📂 Legacy reference (your most-touched external source)
 
@@ -95,12 +92,16 @@ Per เดฟ brief 2026-05-16: "**ทำระบบหลังบ้านต
 - **V-ADM1 admin UI polish** — left sidebar white (`bg-white dark:bg-surface`) · shared theme tokens · public red-cloud body background on the `/admin` shell
 - **U1/U2/U4 + Tier 0/1/2** — wire-the-flow · revenue/margin · supervisory layer · `work_items` work-board (`0080` + `/admin/board` + `/admin/inbox`) — shipped on `dave`
 
-### 🟡 In-flight / follow-up
+### 🟡 In-flight / follow-up (D1 Phase B)
 
-- The migration-gate apply (`0058`-`0080` to prod) — pickup #1
-- U1/U2 review follow-ups P1-2..P2-7 — pickup #3
-- MOMO JMF sync — blocked: ก๊อต must clear the wrong-on-record MOMO API host/format first
-- Xendit + K-Biz + K-Shop payment-gateway wire-up — T+30d, per [updated D-7 §5.3](../decisions/d7-payment-gateway-decision-matrix.md) (~16-22h, 3 channels); ลูกพี่ + พี่ป๊อป handle vendor signups in parallel
+- Rework the admin back-office onto the ported `tb_*` schema + legacy PCS workflow — pickup #1
+- Rework the customer-portal backend onto the `tb_*` schema — pickup #2
+- Wire the legacy-password auth bridge into the login flow — pickup #3
+- ⚠️ The Phase-1-5 rebuilt back-office below shipped against the `profiles`-era schema — under D1 it is reworked to the legacy `tb_*` schema + workflow (kept here as a reference inventory of what exists, not as the D1 target)
+
+### Deferred to Phase C (was in-flight pre-D1)
+
+- MOMO JMF sync · Xendit + K-Biz + K-Shop payment-gateway wire-up · the Tier-3 systems · the booking-flow backend — all re-sequenced after the faithful port
 
 ---
 
@@ -110,11 +111,11 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| Can't apply migrations to prod (access issue) | Build internal-chat IC-1 — the design is ready; the migration starts at `0073` |
-| MOMO endpoint inventory (ก๊อต clearing the API docs) | Disbursement system design is MOMO-independent — build it |
-| A locked ADR question on a Tier-3 design | Move to the next Tier-3 system in the order, or take a U1/U2 review follow-up |
+| Phase A not yet loaded → no `tb_*` schema in dev/prod yet | Map the legacy PCS admin workflow from the gap docs + the legacy PHP source — spec the rework before the schema lands |
+| A legacy-workflow ambiguity you can't resolve from the PHP source | Move to a different admin module's rework, or note it back to เดฟ for ก๊อต to settle |
+| Waiting on เดฟ's Phase-B work-split | Sweep the legacy PHP (`legacy-php-sweep`) to inventory the admin/customer logic-loop you'll reproduce |
 
-**Note back to เดฟ + ก๊อต when:** you need a partner API confirmed (MOMO), a new env var, an architectural choice, or an external service.
+**Note back to เดฟ + ก๊อต when:** a legacy-workflow detail is ambiguous, you need an architectural call on the `tb_*` ↔ rebuilt-schema coexistence, a new env var, or an external service.
 
 ---
 

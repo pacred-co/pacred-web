@@ -3,45 +3,46 @@
 Last reviewed: 2026-05-18 (post-launch — see latest [`runbook/team-status-*.md`](../runbook/) for current state)
 Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Authority: second-tier owner
 
-## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
+## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18)
 
-🟢 Pacred launched. The cargo revenue path works end-to-end. U1/U2/U4 **and the Tier 0/1/2 capability batches** are shipped on `dave`. The canonical forward roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — read it first; the post-launch capability synthesis [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) seeded it and its §"Work split" table mirrors the pickup list below.
+🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow logic-loop look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. Not a reinterpretation; a faithful port. Read [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) in full — it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 capability roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
-**เดฟ now — pickup list (integrator + post-launch driver):**
+D1 runs in three phases — **A** data migration · **B** workflow fidelity · **C** Pacred enhancements (the old Tier roadmap + Phase-2 build queue, *deferred not cancelled*, re-sequenced after the faithful port). You drive Phase A and integrate Phase B.
 
-1. **Run the `dave→main` deploy** — gated on ภูม recreating dev Supabase + applying migrations `0058`-`0080` to prod. A staged, all-green 1-command fast-forward — fires the moment ภูม confirms the migration gate. See [`runbook/poom-handoff-2026-05-18.md`](../runbook/poom-handoff-2026-05-18.md).
-2. **Tier-0 dashboard (with ก๊อต)** — flip the monitoring env vars in Vercel (Sentry / GTM / GA4 / Clarity / hCaptcha / Upstash) · verify Google Search Console + submit the sitemap · claim Google Business Profile · set up Meta Business Suite. *The one thing still blocking ad-conversion visibility — this also covers connecting Meta + TikTok pixels via the GTM container.* Checklist → [`runbook/launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md).
-3. **Integration cycle** — keep merging ภูม/ปอน pushes into `dave`, verify, distribute back (the `branch-integrate-loop` skill).
-4. **Platform observability — IO-1 ✅ SHIPPED** (`50729cf`) — auto-incident capture (`error.tsx` / `global-error.tsx` + Server-Action wrapper + Sentry-webhook ingest, *no submit button*) + `platform_incidents` (migration `0077`) + `/admin/incidents` triage queue + the `/my-issues` customer view. ⚠️ migration `0077` must be applied to prod to activate it. **Next: IO-2** (unified event log + per-dept KPI panels) → [`research/platform-observability-system-2026-05-18.md`](../research/platform-observability-system-2026-05-18.md).
-5. **Monitor post-deploy** — Sentry + `admin_audit_log` + Clarity for first-customer issues. Re-run `qa-flow-simulator` functional QA once ภูม posts the new dev Supabase ref (blocked until then). CSP-1 nonce migration ships week 2 (≈ Mon 2026-06-01).
+**เดฟ now — pickup list (Phase-A driver + integrator):**
+
+1. **Drive the data migration to production — TOP priority (Phase A).** The pipeline is built and the dry-run is validated — all 117 `pcsc_main` tables load clean into PostgreSQL and reconcile MySQL ↔ PG exactly (0 failures · 0 mismatches); the legacy-password auth bridge is verified. The production load is gated on **your review + go**. Runbook → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — §6 is the step-by-step prod-load procedure. Before you give the go you need: (a) แต้ม's customer-upload files (`images/users`, `images/shops`, `storage/file`, `storage/slip` — runbook §7, held by แต้ม), (b) a final fresh `pcsc_main` dump at cutover (the 2026-05-18 export will be stale), (c) ก๊อต's production-load gate sign-off. Decide the two open items in runbook §7: the 8 special `PCS<letters>` userIDs and the `PR1`–`PR5` new-customer numbering.
+2. **Coordinate Phase B** — workflow fidelity. Sequence ภูม (Phase-B backend — rework admin + customer-portal backend onto the ported `tb_*` schema + legacy workflow) and ปอน (Phase-B frontend — rework the customer UI to match the legacy PCS look + flow). The legacy-vs-Pacred gap map in [`docs/research/`](../research/_index.md) (`PACRED-GAP-ANALYSIS.md` + the `gap-*.md` set) is their Phase-B input — point them at it and break it into a Phase-B work-split.
+3. **Integrate the team's Phase-B work** — keep merging ภูม/ปอน pushes into `dave`, verify, distribute back (the `branch-integrate-loop` skill).
+4. **Decide the fate of the superseded scaffolding** — the pre-D1 PCS-customer-migration approach (migration `0067_pcs_customer_migration.sql`, the `u2-1-pcs-customer-migration.md` runbook, `actions/admin/pcs-migration.ts`) is replaced by the Phase-A full-system port; the rebuilt `profiles`-era schema coexists with the ported `tb_*` tables during the transition, then retires. Decide when/how it retires.
 
 **Carried-over / ongoing:**
-- **V-F1 legacy-cutover burn-down** — track each legacy dependency removal (China product API · server · SMS) toward the locked legacy-retirement date (week 10, 2026-07-27). F1-* weekly check-ins → [`runbook/legacy-cutover-tracker.md`](../runbook/legacy-cutover-tracker.md).
-- **Production flag verification** — confirm `OTP_BYPASS=false`, `LINE_PUSH_BYPASS=false`, and the first `OTP_PEPPER` quarterly rotation are settled in prod post-launch.
+- **Production watch** — Sentry + `admin_audit_log` + Clarity for issues on the currently-live `main`. CSP-1 nonce migration still scheduled week 2 (≈ Mon 2026-06-01).
+- **Production flag verification** — confirm `OTP_BYPASS=false`, `LINE_PUSH_BYPASS=false` are settled in prod.
 
 ---
 
-## 🚀 Post-launch focus (read FIRST)
+## 🚀 D1 focus (read FIRST)
 
-The emergency cargo sprint is over — Pacred is in production. คุณคือ integrator: keep ภูม + ปอน + ก๊อต shipping cleanly, drive the post-launch roadmap, watch production.
+The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). คุณคือ integrator + Phase-A driver: get the 117-table data migration into production, then sequence and integrate the team's Phase-B workflow-fidelity rework.
 
-**The lens:** does this make the product more **true** / **billable** / **measurable**? — and never ship a stage before the quality gate is green.
+**The lens for D1:** fidelity to the legacy PCS system — staff and customers must need **zero retraining**. Don't reinterpret the legacy workflow; reproduce it. Never ship a stage before the quality gate is green.
 
-**Sequenced post-launch work** → [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) is the canonical forward roadmap. It was seeded by [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — Tier 0 connect (✅ code shipped, dashboard pending) → Tier 1 buy-bridge (✅ shipped) → Tier 2 internal OS (✅ work-board shipped) → Tier 3 owner systems (designed). The earlier U1-U4 sequence has all shipped. The cargo + gap-hunt backlogs they draw from = [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V + Part W.
+**Sequenced D1 work** → [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) is the canonical plan (Phase A → B → C). The Tier 0/1/2/3 capability roadmap and the Phase-2 build queue (booking flow, customer-intelligence, internal-chat, disbursement, china-ops, platform-observability) are **deferred to Phase C** — re-sequenced after the faithful port, not cancelled. `UPGRADE_PLAN.md` is now historic context for Phase C, not the current execution doc.
 
-**Defer:** Phase I (9 new ecosystem services) until revenue is stable. U3 tools + Tier-3 systems are partner-/volume-scheduled.
+**Defer to Phase C:** the entire Tier 0/1/2/3 roadmap + the Phase-2 build queue. Phase I (9 new ecosystem services) stays deferred behind that.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — THE canonical forward roadmap (post-launch phase/stage plan)
-2. [`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — the Tier 0/1/2/3 synthesis + work-split that seeded the roadmap
-3. [`docs/team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency — STRICTER now)
-4. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V/W — the cargo + gap-hunt backlogs the roadmap draws from
-5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor mid-flight)
+1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
+2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook (§6 prod-load procedure, §7 open items you decide)
+3. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + the `gap-*.md` set — the legacy-vs-Pacred gap map, your Phase-B work-split input
+4. [`docs/team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency — STRICTER now)
+5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope (superseded by ADR-0017: V2 is now "faithful PCS port", not "rebuilt owner-pleaser")
 6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
-7. Memory: `pacred_company_dna` + `owner_pop_v2_v3_strategy` + `push_frequency_strict` (load via /memories — not in repo)
+7. Memory: `pacred_company_dna` + `feedback_legacy_port_fidelity` + `push_frequency_strict` (load via /memories — not in repo)
 
 ---
 
@@ -77,9 +78,9 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| ภูม hasn't cleared the migration gate | Tier-0 dashboard work · start platform-observability IO-1 |
-| ภูม hasn't posted the new dev Supabase ref | Build platform-observability IO-1 (no dev-DB dependency for the design/scaffold) |
-| ก๊อต hasn't flipped the monitoring env vars | Integration cycle — consolidate ภูม/ปอน pushes; review staged `dave` |
+| แต้ม hasn't sent the customer-upload files / fresh dump | Coordinate Phase B — break the gap map into a Phase-B work-split for ภูม + ปอน |
+| ก๊อต hasn't given the production-load gate sign-off | Dry-run the prod-load procedure on a throwaway PG; review staged `dave` Phase-B work |
+| Phase B not yet underway | Decide the fate of the superseded pre-D1 migration scaffolding (`0067` · `pcs-migration.ts`) |
 
 **Note back to ก๊อต when:** the Pacred owner sends creds, a partner needs a decision, or a security concern surfaces.
 

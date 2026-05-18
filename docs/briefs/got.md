@@ -3,21 +3,23 @@
 Last reviewed: 2026-05-18 (post-launch — production live since 2026-05-17)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memory `project_authority`)
 
-## 🎯 Current state — POST-LAUNCH (production live since 2026-05-17)
+## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18)
 
-🟢 Pacred launched. All pre-launch P0/P1/P3 cleared. The canonical forward roadmap is [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md) — read it first; the post-launch capability synthesis [`research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) seeded it and its §"Work split" table puts the Tier-0 dashboard on ก๊อต + เดฟ.
+🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. เดฟ has drafted [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) — **Accepted by the owner, pending YOUR ratification**. Read it in full; it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 capability-roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
+
+D1 runs in three phases — **A** data migration (pipeline built + dry-run validated, pending prod load) · **B** workflow fidelity · **C** Pacred enhancements (the old Tier roadmap, *deferred not cancelled*).
 
 **ก๊อต now — pickup list (priority order):**
 
-1. **Tier-0 dashboard (with เดฟ)** — flip the monitoring env vars in Vercel (Sentry / GTM / GA4 / Clarity / hCaptcha / Upstash) · verify Google Search Console + submit the sitemap · claim Google Business Profile · set up Meta Business Suite. *The conversion-visibility unblock — Pacred runs ads today with no conversion tracking.* Checklist → [`runbook/launch-monitoring-golive-2026-05-17.md`](../runbook/launch-monitoring-golive-2026-05-17.md).
-2. **Gate the `dave→main` deploy** — review the staged `dave` integration; fast-forward `main` once ภูม clears the migration gate (`0058`-`0080` on prod Supabase).
-3. **Clear the MOMO API docs** — the on-record MOMO API host/format is wrong; ก๊อต clears it so ภูม can wire the U1-7 sync. See [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) — เดฟ already reverse-engineered the JMF analog + prepared the question list.
-4. **Production watch** — Sentry alert watch (error spike >5/hr → war-room with เดฟ) + any owner escalation from ลูกพี่/พี่ป๊อป.
+1. **Ratify ADR-0017 — TOP priority.** Review [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) and the Phase-A runbook [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md); the ADR is owner-Accepted and waits on your senior ratification. ADR-0017 supersedes [ADR-0010](../decisions/0010-v2-v3-version-strategy.md)'s "V2 = rebuilt owner-pleaser" definition — V2 is now "faithful PCS port"; confirm that change.
+2. **Production-load gate for the data migration.** Phase A loads the legacy `pcsc_main` (117 tables · ~8,898 customers) into prod Supabase — the dry-run reconciled all 117 tables MySQL ↔ PG exactly (0 failures · 0 mismatches). The prod load is gated on เดฟ's review + go; **you are the production-load gate** — review the runbook §6 procedure + §7 open items (the 8 special `PCS<letters>` userIDs, `PR1`–`PR5` numbering) and sign off before the load runs against prod Supabase.
+3. **Clear the JMF / MOMO API spec with แต้ม** — Pacred's on-record JMF API surface is **wrong**; ก๊อต gets the correct spec from แต้ม. See [`research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) + [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) — เดฟ reverse-engineered the JMF analog + prepared the question list. (JMF wiring itself is Phase C, but getting the spec right unblocks it.)
+4. **Production watch** — Sentry alert watch on the currently-live `main` (error spike >5/hr → war-room with เดฟ) + any owner escalation from ลูกพี่/พี่ป๊อป.
 
-**Defer-able items waiting for ก๊อต re-engagement T+30d post-launch:**
-- R1 china-search eval (re-open if >10 "can't add URL" tickets/wk surfacing in Sentry)
-- V3 ADRs (0011 RBAC + 0012 frontend shell + 0013 migration) — revisit after V2 stable + real ops-staff feedback
-- Renovate GitHub App install (config `.github/renovate.json5` already in place — re-open if dep drift accumulates)
+**Defer-able items waiting for ก๊อต re-engagement (now post-Phase-A/B):**
+- R1 china-search eval (re-open if "can't add URL" tickets surface)
+- V3 ADRs (0011 RBAC + 0012 frontend shell + 0013 migration) — revisit after the faithful port is stable
+- The Tier-0 dashboard + the Tier 0/1/2/3 capability roadmap — re-sequenced to **Phase C** (the conversion-visibility / monitoring work waits for the faithful port)
 
 **Scheduled post-launch security work (decided pre-launch, executes on schedule):**
 - **CSP-1 nonce migration** — ship week-2 post-launch (≈ Mon 2026-06-01): Sentry CSP reports + 48h Report-Only soft-launch + zero-violations enforce gate. Plan → [`decisions/csp-nonce-migration-plan.md`](../decisions/csp-nonce-migration-plan.md). ภูม or เดฟ executes Phase 1-4.
@@ -47,21 +49,21 @@ A separate **LINE Login channel "Pacred Login"** (channel ID `2010105778`) was c
 
 ---
 
-## 🚀 Post-launch focus (read FIRST)
+## 🚀 D1 focus (read FIRST)
 
-Pacred launched 2026-05-17 — the emergency "เผาเงิน" framing is over. The lens stays revenue-aware: prefer work that makes the product more **true** / **billable** / **measurable**. Plan work properly now — don't skip the quality gate or ship half-built to chase a deadline.
+The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). The lens for D1: fidelity to the legacy PCS system — staff and customers must need *zero* retraining. Plan work properly; don't skip the quality gate.
 
-**Your job post-launch:** gate `dave→main` deploys · finish the Tier-0 dashboard (the conversion-visibility unblock) · clear partner-API decisions for ภูม · watch production.
+**Your job under D1:** ratify ADR-0017 · gate the production data-load (the 117-table migration into prod Supabase) · clear the JMF API spec with แต้ม · keep gating `dave→main` deploys for the Phase-B work · watch production. The Tier-0 dashboard + the capability roadmap are deferred to Phase C.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/UPGRADE_PLAN.md`](../UPGRADE_PLAN.md)** — THE canonical forward roadmap (post-launch phase/stage plan)
-2. [`docs/research/capability-tools-strategy-2026-05-18.md`](../research/capability-tools-strategy-2026-05-18.md) — the Tier 0/1/2/3 synthesis + work-split that seeded the roadmap
-3. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
-4. [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V/W — the cargo + gap-hunt backlogs the roadmap draws from
-5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules (DON'T refactor V2 → V3 mid-flight)
+1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth — **yours to ratify**
+2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook — review §6 (prod-load procedure) + §7 (open items) for your production-load gate
+3. [`docs/research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) — the JMF/MOMO API decode you clear with แต้ม
+4. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
+5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope (superseded by ADR-0017: V2 = "faithful PCS port")
 6. [`docs/audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) — production hardening status
 7. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
 
@@ -97,11 +99,11 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| Pacred owner not responding | Take a scheduled-security item (CSP-1 plan review / pen-test RFP prep) |
-| Waiting on a MOMO call back | Review the staged `dave` integration ahead of the deploy gate |
-| `dave→main` gate not yet cleared by ภูม | Tier-0 dashboard work (env vars / GSC / Google Business / Meta) |
+| Pacred owner / แต้ม not responding | Ratify ADR-0017 · review the Phase-A migration runbook ahead of the production-load gate |
+| Waiting on แต้ม for the JMF API spec | Review the staged `dave` Phase-B integration ahead of the deploy gate |
+| Phase-A prod load not yet ready (waiting on แต้ม's files / fresh dump) | Take a scheduled-security item (CSP-1 plan review / pen-test RFP prep) |
 
-**Note back to เดฟ when:** you decide a strategic direction, sign up for any external service, or request anything from the Pacred owner.
+**Note back to เดฟ when:** you ratify ADR-0017, sign off the production-load gate, decide a strategic direction, or request anything from the Pacred owner / แต้ม.
 
 ---
 
