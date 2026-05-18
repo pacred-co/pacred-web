@@ -43,8 +43,12 @@
   --muted: #a3a3a3;
 }
 
+/* Use `overflow-x: clip` instead of `hidden` — `hidden` on the root
+   element creates an implicit scroll container that breaks
+   `position: sticky` for nested elements (e.g. NavBar). `clip` prevents
+   horizontal scroll without breaking sticky. */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
 }
 
