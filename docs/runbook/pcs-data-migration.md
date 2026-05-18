@@ -1,7 +1,8 @@
 # PCS Cargo → Pacred — Data Migration Runbook
 
-> **Status (2026-05-18):** pipeline built · **dry-run validated** · NOT yet
-> loaded to production. The production load is gated on เดฟ's review + go.
+> **Status (2026-05-19):** pipeline validated · **business data loaded to
+> dev + prod Supabase** (Option B — 114 of 117 tables; the 3 oversized log
+> tables wait for the Supabase Pro upgrade — see §4).
 >
 > Decision basis: **D1** (เดฟ, 2026-05-18) — Pacred *becomes* the legacy PCS
 > Cargo system, faithfully rebranded `PCS` → `PR`.
@@ -66,10 +67,19 @@ committed to `dave`:
 - ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` (`passTam` /
   `verifyLegacyPassword`) — the 79-char `d+b+c` hash matches every migrated
   `tb_users.userpass` row.
-- ⏳ **dev-Supabase load** — the one remaining step (§6): needs the
-  dev-Supabase Postgres connection string — a dashboard secret, NOT the
-  REST API keys in `.env.local`. DDL + bulk COPY cannot go through the
-  service-role REST key; a real Postgres connection is required.
+- ✅ **Loaded to dev + prod Supabase (2026-05-19 · Option B)** — `0081` →
+  business data → `0082` → `0083` → `0087` applied to **both** the dev
+  (`pprrlabgebrnocthwdmg`) and prod (`yzljakczhwrpbxflnmco`) projects.
+  **114 of 117 tables reconcile MySQL ↔ Supabase exactly**; 8,898 `tb_users`
+  rows with intact 79-char login hashes; prod DB 252 MB.
+- ⏳ **3 log tables pending the Pro upgrade** — Supabase **free tier caps a
+  database at 500 MB**; the full legacy data is **1.02 GB**. The 3 oversized
+  history/log tables — `tb_web_hs` (657 MB) · `tb_history_key` (62 MB) ·
+  `tb_history` (59 MB), 779 MB total — are created **empty**. The 230 MB of
+  business data (114 tables — customers, orders, wallets, ตู้, forwarders,
+  receipts) fits the free tier and is loaded. After the Supabase **Pro**
+  upgrade the 3 log tables + the customer image/file storage (§7) backfill
+  to full fidelity (per เดฟ — "production จริง ต้องอัพครบทั้งหมด").
 
 **Judgement calls in this run** (flag if any need revisiting):
 (1) **RLS enabled** on all 117 tables, no policies — Supabase exposes
@@ -104,7 +114,12 @@ files), `pcs-legacy-data.sql` (the ~785 MB rebranded data file — **customer
 PII, never commit**; this is what loads into Supabase in §6.4). The schema
 itself is now **in the repo** — `supabase/migrations/0081`-`0083` (no PII).
 
-## 6. Production-load runbook (run when เดฟ gives the go)
+## 6. Production-load runbook
+
+> **Done 2026-05-19 (Option B):** steps 3-7 ran against dev + prod with the
+> 2026-05-18 dump — business data only (114 tables, the 3 log tables empty),
+> see §4. The steps below are the FULL procedure for the post-Pro-upgrade
+> load (a fresh cutover dump · the 3 log tables · the customer images).
 
 1. **Fresh dump** — get a final `pcsc_main` export from แต้ม at cutover (the
    2026-05-18 dump will be stale by then). Load into local MySQL.
@@ -182,18 +197,18 @@ applied until Phase B ships, per Q5 in
 (§8) — the feature it backs is dead. Owner was: ภูม. DB-1 being done
 unblocks any `dave→main` deploy.
 
-**DB-2 — This legacy port** (§1-§8). 🟡 **IN PROGRESS (2026-05-19).** The
-117-table legacy schema is authored + committed as migrations
-**`0081`-`0083`** (schema · indexes · member-seq) and dry-run-validated (§4).
-Remaining: load the 3.78M-row data into **dev** Supabase (pending the
-dev-Supabase Postgres connection string) + verify legacy login; then —
-separately, gated on แต้ม's final cutover dump + ก๊อต's production gate —
-the **prod** load. The `tb_*` namespace does NOT collide with the rebuilt
-schema, so DB-1 and DB-2 are independent — the legacy port does not wait on
-the backlog, and vice versa.
+**DB-2 — This legacy port** (§1-§8). 🟢 **Business data LOADED to dev + prod
+(2026-05-19).** Migrations `0081`-`0083` + `0087` applied + the 230 MB of
+business data (114 of 117 tables · 8,898 customers) loaded to both Supabase
+projects; 114/114 business tables reconcile exactly. 🟡 **Remaining:** the 3
+oversized log tables (779 MB) + the customer images — they need the Supabase
+**Pro** upgrade (free tier caps at 500 MB; full data is 1.02 GB). Gated on
+the Pro-upgrade decision (เดฟ + ก๊อต + the owner) + แต้ม's image storage.
+The `tb_*` namespace does NOT collide with the rebuilt schema, so DB-1 and
+DB-2 are independent.
 
-**Numbering.** Migration files `0001`-`0086` exist; `0065` is an intentional
-gap and `0081`-`0083` are reserved for this legacy port (DB-2 — schema +
-follow-ups). ภูม renumbered his booking/credit-note/chat batch to `0084`-`0086`
-(commit `a248696`) to free that block. The next free number for new Phase-B
-work is **`0087`**.
+**Numbering.** Migration files `0001`-`0087` exist (`0065` is an intentional
+gap). `0081`-`0083` = this legacy port (schema · indexes · member-seq);
+`0084`-`0086` = ภูม's booking/credit-note/chat batch (commit `a248696`);
+`0087` = the `v_pcs_migration_status` security-invoker fix. The next free
+number for new Phase-B work is **`0088`**.
