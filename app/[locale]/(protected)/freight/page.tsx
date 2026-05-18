@@ -26,8 +26,9 @@ import {
  * Read-only view of OWN freight quotes (sent+) + OWN freight shipments.
  * RLS scopes both lists to profile_id = auth.uid().
  *
- * Self-accept on quotes deferred to V-E1.2.1 — admin still marks accepted
- * manually for V1.
+ * V-E1.2.1 ✅ — customer self-accept on quotes lives on the per-quote page
+ * (/freight/quotes/[quote_no]) via <AcceptQuoteButton>.  Admin then
+ * converts the accepted quote → freight_shipment manually.
  */
 
 export const dynamic = "force-dynamic";

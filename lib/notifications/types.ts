@@ -8,7 +8,11 @@ export type NotifyCategory =
   | "wallet" | "sales" | "system" | "promo"
   | "sales_digest"
   // IO-1 (0077) — platform-observability incident alerts.
-  | "observability";
+  | "observability"
+  // BK-1 (0079) — booking-flow submit notifications (admin + customer).
+  | "booking"
+  // IC-1 (0083) — internal staff chat: @mention + waiting-for set/cleared.
+  | "work_chat";
 
 export type NotifySeverity = "info" | "success" | "warning" | "error";
 
@@ -17,7 +21,11 @@ export type NotifyReferenceType =
   | "wallet_transaction" | "sales_commission" | "sales_payout"
   | "contact_message"
   // IO-1 (0077) — links an alert back to a platform_incidents row.
-  | "platform_incident";
+  | "platform_incident"
+  // BK-1 (0079) — links a notification back to the bookings row.
+  | "booking"
+  // IC-1 (0083) — links a work_chat notification to the work_items row.
+  | "work_item";
 
 export type NotifyPayload = {
   category:  NotifyCategory;

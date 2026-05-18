@@ -18,7 +18,10 @@ import { TaxInvoice, type TaxInvoiceData } from "@/components/pdf/tax-invoice";
  *     gate adds explicit app-layer check + audit trail).
  *   - Issuance is one-way (pending → issued); the row + PDF + serial are
  *     immutable thereafter (RD Code 86 compliance). Errors use
- *     cancellation + credit-note flow (G2e — TODO).
+ *     cancellation (G2e-1 ✅ — cancelTaxInvoice) + credit-note (G2e-2 ✅ —
+ *     issueCreditNote, R3 / 0082) flow.  Typo correction = cancel + reissue;
+ *     money refund = cancel + credit note (positive amount; PDF renders
+ *     "ใบลดหนี้" header per credit_note prop in the TaxInvoice template).
  *
  * Issuance steps in `issueTaxInvoice`:
  *   1. Read header + lines (admin client — RLS allows super/accounting).
@@ -414,3 +417,262 @@ type WhtRow = {
   net_expected_thb:  number;
   cert_number:       string | null;
 };
+
+// ════════════════════════════════════════════════════════════
+// G2e-2 (R3) — ISSUE CREDIT NOTE (ใบลดหนี้) against a cancelled invoice
+// ════════════════════════════════════════════════════════════
+//
+// When admin needs to refund money on an issued+cancelled invoice (vs
+// the cancel→reissue path for typo correction), they create a credit
+// note that legally reverses the original.
+//
+// Per RD Code 86:
+//   - A credit note is a NEW tax invoice row with `credit_note_for_id`
+//     pointing to the cancelled original.
+//   - Carries its own serial (from next_tax_invoice_serial).
+//   - Line items + financial figures are SNAPSHOTTED from the original
+//     (positive numbers stored — the document type implies credit).
+//   - The PDF renders "ใบลดหนี้ / CREDIT NOTE" header + reason banner
+//     (per the credit_note prop in components/pdf/tax-invoice.tsx).
+//
+// Preconditions enforced server-side:
+//   - Original must exist + status='cancelled' + serial_no set (was issued).
+//   - Original must NOT already have a credit_note_id (one credit note
+//     per invoice; if admin needs another, they cancel + reissue first).
+//   - Role: super OR accounting (same as cancel).
+//
+// On success: original.credit_note_id ← new.id  AND  new.credit_note_for_id ← original.id.
+
+const issueCreditNoteSchema = z.object({
+  /** Original (cancelled, was-issued) tax_invoices.id we are crediting. */
+  originalInvoiceId: z.string().uuid(),
+  /** Customer-facing reason — printed on the PDF reason banner + customer notification. */
+  reason:            z.string().trim().min(3, "กรุณาระบุเหตุผลอย่างน้อย 3 ตัวอักษร").max(500),
+});
+export type IssueCreditNoteInput = z.infer<typeof issueCreditNoteSchema>;
+
+type IssueCreditNoteResult = {
+  credit_note_id:        string;
+  credit_note_serial:    string;
+  pdf_storage_path:      string;
+};
+
+export async function issueCreditNote(
+  input: IssueCreditNoteInput,
+): Promise<AdminActionResult<IssueCreditNoteResult>> {
+  const parsed = issueCreditNoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["super", "accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // ── 1. Read the original (cancelled) tax_invoice ──
+    const { data: original, error: origErr } = await admin
+      .from("tax_invoices")
+      .select(
+        "id, profile_id, status, serial_no, order_h_no, forwarder_f_no, buyer_name, buyer_address, buyer_tax_id, buyer_branch, subtotal_thb, vat_thb, total_thb, vat_mode, payment_method, credit_note_id"
+      )
+      .eq("id", d.originalInvoiceId)
+      .maybeSingle<HeaderRow & { credit_note_id: string | null }>();
+    if (origErr) return { ok: false, error: origErr.message };
+    if (!original) return { ok: false, error: "not_found" };
+
+    if (original.status !== "cancelled") {
+      return { ok: false, error: `original_must_be_cancelled (current: ${original.status})` };
+    }
+    if (!original.serial_no) {
+      return { ok: false, error: "original_was_never_issued (no serial — nothing to credit)" };
+    }
+    if (original.credit_note_id) {
+      return { ok: false, error: "credit_note_already_issued" };
+    }
+
+    // ── 2. Read original line items (snapshot for the credit note) ──
+    const { data: origLinesRaw, error: linesErr } = await admin
+      .from("tax_invoice_lines")
+      .select("position, description, qty, unit_price_thb, amount_thb, vat_thb")
+      .eq("tax_invoice_id", original.id)
+      .order("position", { ascending: true })
+      .returns<LineRow[]>();
+    if (linesErr) return { ok: false, error: linesErr.message };
+    const origLines = origLinesRaw ?? [];
+
+    // ── 3. Reserve serial for the credit note ──
+    const { data: serialNo, error: serialErr } = await admin.rpc("next_tax_invoice_serial");
+    if (serialErr || typeof serialNo !== "string") {
+      return { ok: false, error: `serial_reserve_failed: ${serialErr?.message ?? "rpc"}` };
+    }
+
+    // ── 4. INSERT the credit note row ──
+    //   - All snapshot fields copied from original
+    //   - status='issued' immediately (per CHECK constraint added in 0082)
+    //   - credit_note_for_id = original.id
+    //   - cancellation_reason carries the credit reason for audit
+    //   - Financial figures stored as POSITIVE (document type implies credit)
+    const issuedAt = new Date().toISOString();
+    const { data: newRow, error: insErr } = await admin
+      .from("tax_invoices")
+      .insert({
+        profile_id:          original.profile_id,
+        order_h_no:          original.order_h_no,
+        forwarder_f_no:      original.forwarder_f_no,
+        buyer_name:          original.buyer_name,
+        buyer_address:       original.buyer_address,
+        buyer_tax_id:        original.buyer_tax_id,
+        buyer_branch:        original.buyer_branch,
+        status:              "issued",
+        serial_no:           serialNo,
+        issued_at:           issuedAt,
+        issued_by_admin:     adminId,
+        subtotal_thb:        original.subtotal_thb,
+        vat_thb:             original.vat_thb,
+        total_thb:           original.total_thb,
+        vat_mode:            original.vat_mode,
+        payment_method:      original.payment_method,
+        credit_note_for_id:  original.id,
+        cancellation_reason: d.reason,   // re-purposed: holds the credit reason for audit
+      })
+      .select("id")
+      .single<{ id: string }>();
+    if (insErr || !newRow) {
+      return { ok: false, error: `credit_note_insert_failed: ${insErr?.message ?? "no_row"}` };
+    }
+
+    // ── 5. Clone line items ──
+    if (origLines.length > 0) {
+      const { error: linesInsErr } = await admin
+        .from("tax_invoice_lines")
+        .insert(
+          origLines.map((l) => ({
+            tax_invoice_id: newRow.id,
+            position:       l.position,
+            description:    l.description,
+            qty:             l.qty,
+            unit_price_thb:  l.unit_price_thb,
+            amount_thb:      l.amount_thb,
+            vat_thb:         l.vat_thb,
+          })),
+        );
+      if (linesInsErr) {
+        // Soft-fail: header exists; lines can be re-created from original
+        // via the admin UI if needed.  Log + continue so customer at least
+        // sees the credit note header.
+        await logAdminAction(adminId, "credit_note.lines_clone_failed", "tax_invoice", newRow.id, {
+          original_id: original.id,
+          error: linesInsErr.message,
+        });
+      }
+    }
+
+    // ── 6. Backlink original → credit note ──
+    await admin
+      .from("tax_invoices")
+      .update({ credit_note_id: newRow.id })
+      .eq("id", original.id)
+      .is("credit_note_id", null);  // race-guard against double-issue
+
+    // ── 7. Render PDF + upload ──
+    registerPdfFonts();
+    const pdfData: TaxInvoiceData = {
+      serial_no:    serialNo,
+      status:       "issued",
+      issued_at:    issuedAt,
+      created_at:   issuedAt,
+      buyer_name:    original.buyer_name,
+      buyer_address: original.buyer_address,
+      buyer_tax_id:  original.buyer_tax_id,
+      buyer_branch:  original.buyer_branch,
+      subtotal_thb:  original.subtotal_thb,
+      vat_thb:       original.vat_thb,
+      total_thb:     original.total_thb,
+      vat_mode:      original.vat_mode,
+      payment_method: original.payment_method,
+      lines:          origLines,
+      order_h_no:     original.order_h_no,
+      forwarder_f_no: original.forwarder_f_no,
+      credit_note: {
+        for_serial_no: original.serial_no,
+        reason:        d.reason,
+      },
+    };
+
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await renderToBuffer(<TaxInvoice data={pdfData} />);
+    } catch (e) {
+      // PDF render failed but the row exists.  Log + return success
+      // (admin can regenerate from /api/tax-invoice/[id]).
+      await logAdminAction(adminId, "credit_note.pdf_render_failed", "tax_invoice", newRow.id, {
+        error: (e as Error).message ?? "unknown",
+      });
+      return {
+        ok: true,
+        data: {
+          credit_note_id:     newRow.id,
+          credit_note_serial: serialNo,
+          pdf_storage_path:   "",
+        },
+      };
+    }
+
+    const pdfPath = `${original.profile_id}/${serialNo}.pdf`;
+    const { error: uploadErr } = await admin.storage
+      .from("tax-invoices")
+      .upload(pdfPath, pdfBuffer, {
+        contentType: "application/pdf",
+        upsert:      false,
+      });
+    if (uploadErr) {
+      await logAdminAction(adminId, "credit_note.pdf_upload_failed", "tax_invoice", newRow.id, {
+        error: uploadErr.message,
+      });
+    } else {
+      await admin
+        .from("tax_invoices")
+        .update({ pdf_storage_path: pdfPath })
+        .eq("id", newRow.id);
+    }
+
+    // ── 8. Audit + notify customer ──
+    await logAdminAction(adminId, "tax_invoice.credit_note_issued", "tax_invoice", newRow.id, {
+      original_id:        original.id,
+      original_serial:    original.serial_no,
+      credit_note_serial: serialNo,
+      reason:             d.reason,
+      total_thb:          original.total_thb,
+    });
+
+    const orderRef = original.order_h_no ?? original.forwarder_f_no ?? "";
+    if (orderRef) {
+      void sendNotification(
+        original.profile_id,
+        notify.creditNoteIssued({
+          serialNo:    serialNo,
+          forSerialNo: original.serial_no,
+          totalThb:    original.total_thb,
+          orderRef,
+          reason:      d.reason,
+        }),
+      );
+    }
+
+    // Revalidate paths.
+    revalidatePath("/admin/tax-invoices");
+    revalidatePath(`/admin/tax-invoices/${original.id}`);
+    revalidatePath(`/admin/tax-invoices/${newRow.id}`);
+    if (original.order_h_no)     revalidatePath(`/service-order/${original.order_h_no}/receipt`);
+    if (original.forwarder_f_no) revalidatePath(`/service-import/${original.forwarder_f_no}/receipt`);
+
+    return {
+      ok: true,
+      data: {
+        credit_note_id:     newRow.id,
+        credit_note_serial: serialNo,
+        pdf_storage_path:   uploadErr ? "" : pdfPath,
+      },
+    };
+  });
+}

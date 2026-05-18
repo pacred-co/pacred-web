@@ -30,18 +30,23 @@
 --      the `tb_users` dump via the runbook
 --      (docs/runbook/u2-1-pcs-customer-migration.md). Once empty,
 --      can be dropped manually post-cutover.
---   3. Backfills `profiles` rows from staging — INSERT only for rows
---      not already migrated (keyed off `legacy_pcs_user_id`). Rebuilds
---      the new member_code as 'PR' || lpad(<legacy_number>, 3, '0').
+--   3. (Intentional NO-OP for `profiles` backfill.) profiles.id is FK →
+--      auth.users.id, and auth.users can only be created via the
+--      Supabase admin API (out of reach from a SQL migration). The
+--      companion server action `adminBackfillPcsAuthUsers()`
+--      (actions/admin/pcs-migration.ts) walks staging rows + creates
+--      auth.users via supabase.auth.admin.createUser() + inserts the
+--      matching profiles row with the re-stamped PR<n> member_code.
+--      Customers reset their password (email or phone OTP) on first
+--      login. THIS MIGRATION DOES NOT TOUCH `profiles` ROWS — only
+--      the schema additions in step 1.
 --   4. Offsets `member_code_seq` to `max(legacy_pcs_num) + 100` so the
 --      next fresh signup picks up at max+101 — buffer absorbs any race
 --      with staging rows that arrive after the offset is set.
---   5. DOES NOT touch `auth.users` — that requires the Supabase admin
---      API. The companion server action `adminBackfillPcsAuthUsers()`
---      (actions/admin/pcs-migration.ts) walks staging rows post-
---      migration + creates auth.users via supabase.auth.admin.createUser()
---      + links them to the profiles row by id. Customers reset their
---      password (email or phone OTP) on first login.
+--   5. Provides a reporting view `v_pcs_migration_status` so the
+--      runbook + admin UI can verify backfill progress at a glance —
+--      this view is the source of truth for "did the backfill run?",
+--      NOT the migration's apply-success.
 --
 -- All steps idempotent + additive. Safe to re-run.
 -- ════════════════════════════════════════════════════════════
@@ -100,34 +105,31 @@ create table if not exists public.pcs_legacy_customers_staging (
 );
 
 comment on table public.pcs_legacy_customers_staging is
-  'U2-1: staging buffer for the one-shot PCS → Pacred customer migration. ภูม pre-populates this from a CSV export of legacy `tb_users` (runbook: docs/runbook/u2-1-pcs-customer-migration.md). The DO $$ block below + adminBackfillPcsAuthUsers() server action consume it. Drop manually post-cutover (no FK depends on it).';
+  'U2-1: staging buffer for the one-shot PCS → Pacred customer migration. ภูม pre-populates this from a CSV export of legacy `tb_users` (runbook: docs/runbook/u2-1-pcs-customer-migration.md). The adminBackfillPcsAuthUsers() server action (actions/admin/pcs-migration.ts) consumes it — this migration itself does NOT insert into profiles (see section 3 banner). Drop manually post-cutover (no FK depends on it).';
 
--- ── 3) Idempotent backfill into profiles ───────────────────────────
+-- ── 3) Profiles backfill: INTENTIONALLY NO-OP (see server action) ──
 --
--- For every staging row NOT already backfilled (backfilled_at IS NULL)
--- AND NOT already in profiles (legacy_pcs_user_id NOT IN profiles),
--- this inserts a profiles row WITH the re-stamped member_code.
+-- This migration does NOT insert any rows into `public.profiles`.
 --
--- IMPORTANT: profiles.id is a FK → auth.users.id. We do NOT insert
--- auth.users from a migration (that''s a Supabase admin-API operation).
--- So this block inserts profiles with a placeholder id (gen_random_uuid),
--- which will FAIL the FK unless the auth.users row was created first.
+-- Reason: `profiles.id` is a FK → `auth.users.id`, and `auth.users`
+-- rows can only be created via the Supabase admin API
+-- (`supabase.auth.admin.createUser()`) — there is no SQL path to it.
+-- A migration that tried to INSERT into profiles directly would either
+-- fail the FK (no matching auth row) or require an unsafe placeholder.
 --
--- Approach: SKIP rows where the auth.users row doesn''t yet exist
--- (the server action adminBackfillPcsAuthUsers() handles the chained
--- create — auth.users → profiles in one transaction).
---
--- This block is intentionally a NO-OP today (no rows match the join
--- condition until auth.users entries land) — it''s here so re-running
--- the migration after the server action populated auth.users will
--- catch any orphans (defense in depth).
---
--- The actual customer-creation work happens in:
+-- The customer-creation work happens in the companion server action:
 --   actions/admin/pcs-migration.ts → adminBackfillPcsAuthUsers()
 --
--- which uses the Supabase admin API to create auth.users with a
--- generated random password (the migrated customer resets via email
--- or phone OTP on first login).
+-- which iterates `pcs_legacy_customers_staging` rows, calls
+-- `supabase.auth.admin.createUser()` with a generated random password
+-- (migrated customer resets via email/phone OTP on first login), then
+-- inserts the matching `profiles` row with the re-stamped `PR<n>`
+-- member_code in the same loop iteration.
+--
+-- Verification surface for "did the backfill run": query
+-- `public.v_pcs_migration_status` (created in step 5 below) — NOT the
+-- successful application of this migration. A clean `0067` apply only
+-- proves schema + sequence offset + staging table are in place.
 
 -- ── 4) Sequence offset (THE TRAP) ──────────────────────────────────
 --

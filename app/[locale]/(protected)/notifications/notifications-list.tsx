@@ -25,6 +25,8 @@ const CAT_ICON: Record<NotificationRow["category"], string> = {
   promo:         "🎁",
   sales_digest:  "📊",
   observability: "⚠️",
+  booking:       "📅",
+  work_chat:     "💬",
 };
 
 export function NotificationsList({ initial }: { initial: NotificationRow[] }) {

@@ -23,22 +23,31 @@ import {
   type WorkPriority,
   type WorkAssignableRole,
 } from "@/lib/validators/work-item";
+import {
+  WAITING_REASON_LABEL_TH,
+  WAITING_REASON_BADGE,
+  type WaitingReason,
+} from "@/types/work-item-chat";
 
 export type BoardItem = {
-  id:            string;
-  entity_type:   string;
-  entity_ref:    string;
-  type:          string;
-  title:         string;
-  note:          string | null;
-  status:        WorkStatus;
-  priority:      string;
-  assigned_role: string;
-  assigned_to:   string | null;
-  assignee_name: string | null;
-  due_at:        string | null;
-  domain_href:   string;
-  overdue:       boolean;
+  id:               string;
+  entity_type:      string;
+  entity_ref:       string;
+  type:             string;
+  title:            string;
+  note:             string | null;
+  status:           WorkStatus;
+  priority:         string;
+  assigned_role:    string;
+  assigned_to:      string | null;
+  assignee_name:    string | null;
+  due_at:           string | null;
+  domain_href:      string;
+  overdue:          boolean;
+  /** IC-1 — waiting_for block (null when the job is not blocked). */
+  waiting_reason:   WaitingReason | null;
+  blocked_on_role:  string | null;
+  blocked_on_admin: string | null;
 };
 
 type AdminOption = { profile_id: string; name: string };
@@ -145,6 +154,26 @@ export function WorkItemCard({
           </span>
         )}
       </div>
+
+      {/* IC-1 — waiting_for block badge.  Renders ONLY when the job is
+          stuck (waiting_reason IS NOT NULL).  Non-blocked jobs have no
+          badge so the board stays calm + the red genuinely means stuck. */}
+      {item.waiting_reason && (
+        <div
+          className={`text-[11px] rounded border px-2 py-1 font-medium ${
+            WAITING_REASON_BADGE[item.waiting_reason]
+          }`}
+        >
+          <span className="mr-1">🔴</span>
+          รอ: {WAITING_REASON_LABEL_TH[item.waiting_reason]}
+          {item.blocked_on_role && (
+            <>
+              <span className="mx-1 opacity-70">·</span>
+              บล็อกที่ {WORK_ROLE_LABEL[item.blocked_on_role as WorkAssignableRole] ?? item.blocked_on_role}
+            </>
+          )}
+        </div>
+      )}
 
       {item.note && (
         <p className="text-[11px] text-foreground/70 italic border-l-2 border-border pl-2">{item.note}</p>

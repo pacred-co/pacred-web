@@ -13,6 +13,11 @@ import {
   type WorkAssignableRole,
   type WorkEntityType,
 } from "@/lib/validators/work-item";
+import {
+  WAITING_REASONS,
+  WAITING_REASON_LABEL_TH,
+  type WaitingReason,
+} from "@/types/work-item-chat";
 import { WorkItemCard } from "./work-item-card";
 import { CreateWorkItemPanel } from "./create-work-item";
 
@@ -50,23 +55,27 @@ const STATUS_COLUMN_STYLE: Record<WorkStatus, string> = {
   cancelled:   "border-gray-200 bg-gray-50/40",
 };
 
-type SP = { role?: string; status?: string; overdue?: string };
+type SP = { role?: string; status?: string; overdue?: string; waiting?: string };
 
 type AdminOption = { profile_id: string; name: string };
 
 type WorkRow = {
-  id:            string;
-  entity_type:   string;
-  entity_ref:    string;
-  type:          string;
-  title:         string;
-  note:          string | null;
-  status:        string;
-  priority:      string;
-  assigned_role: string;
-  assigned_to:   string | null;
-  due_at:        string | null;
-  created_at:    string;
+  id:               string;
+  entity_type:      string;
+  entity_ref:       string;
+  type:             string;
+  title:            string;
+  note:             string | null;
+  status:           string;
+  priority:         string;
+  assigned_role:    string;
+  assigned_to:      string | null;
+  due_at:           string | null;
+  created_at:       string;
+  // IC-1 — waiting_for block (added by 0083).
+  waiting_reason:   string | null;
+  blocked_on_role:  string | null;
+  blocked_on_admin: string | null;
 };
 
 export default async function AdminBoardPage({
@@ -86,6 +95,10 @@ export default async function AdminBoardPage({
     (WORK_STATUSES as readonly string[]).includes(sp.status ?? "")
       ? (sp.status as WorkStatus)
       : null;
+  const waitingFilter: WaitingReason | null =
+    (WAITING_REASONS as readonly string[]).includes(sp.waiting ?? "")
+      ? (sp.waiting as WaitingReason)
+      : null;
   const overdueOnly = sp.overdue === "on";
 
   // ── Fetch work items ──────────────────────────────────────────────
@@ -95,14 +108,16 @@ export default async function AdminBoardPage({
     .from("work_items")
     .select(`
       id, entity_type, entity_ref, type, title, note, status, priority,
-      assigned_role, assigned_to, due_at, created_at
+      assigned_role, assigned_to, due_at, created_at,
+      waiting_reason, blocked_on_role, blocked_on_admin
     `)
     .order("created_at", { ascending: false })
     .limit(500);
 
-  if (roleFilter)   q = q.eq("assigned_role", roleFilter);
-  if (statusFilter) q = q.eq("status", statusFilter);
-  else              q = q.in("status", BOARD_COLUMNS);    // default: active only
+  if (roleFilter)    q = q.eq("assigned_role", roleFilter);
+  if (waitingFilter) q = q.eq("waiting_reason", waitingFilter);
+  if (statusFilter)  q = q.eq("status", statusFilter);
+  else               q = q.in("status", BOARD_COLUMNS);    // default: active only
 
   const { data } = await q;
   let rows = (data ?? []) as WorkRow[];
@@ -152,13 +167,24 @@ export default async function AdminBoardPage({
   // ── Global counts — board-wide active state (NOT filtered) ────────
   const { data: allActive } = await admin
     .from("work_items")
-    .select("status, assigned_role, due_at")
+    .select("status, assigned_role, due_at, waiting_reason")
     .in("status", ["open", "in_progress", "blocked"]);
-  const activeRows = (allActive ?? []) as Array<{ status: string; assigned_role: string; due_at: string | null }>;
+  const activeRows = (allActive ?? []) as Array<{
+    status: string; assigned_role: string; due_at: string | null; waiting_reason: string | null;
+  }>;
   const totalActive = activeRows.length;
   const overdueCount = activeRows.filter((r) => isWorkItemOverdue(r.due_at, r.status as WorkStatus)).length;
   const byRole = new Map<string, number>();
   for (const r of activeRows) byRole.set(r.assigned_role, (byRole.get(r.assigned_role) ?? 0) + 1);
+  // IC-1 — per-waiting-reason counts (for the chip badges).
+  const byWaiting = new Map<string, number>();
+  let totalWaiting = 0;
+  for (const r of activeRows) {
+    if (r.waiting_reason) {
+      byWaiting.set(r.waiting_reason, (byWaiting.get(r.waiting_reason) ?? 0) + 1);
+      totalWaiting += 1;
+    }
+  }
 
   // ── Sort each column: priority desc, then oldest-first (FIFO) ─────
   function sortColumn(items: WorkRow[]): WorkRow[] {
@@ -207,14 +233,14 @@ export default async function AdminBoardPage({
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">แผนก:</span>
-          <Chip active={!roleFilter} href={buildHref({ role: null, status: sp.status, overdue: sp.overdue })}>
+          <Chip active={!roleFilter} href={buildHref({ role: null, status: sp.status, overdue: sp.overdue, waiting: sp.waiting })}>
             ทุกแผนก ({totalActive})
           </Chip>
           {WORK_ASSIGNABLE_ROLES.map((r) => (
             <Chip
               key={r}
               active={roleFilter === r}
-              href={buildHref({ role: r, status: sp.status, overdue: sp.overdue })}
+              href={buildHref({ role: r, status: sp.status, overdue: sp.overdue, waiting: sp.waiting })}
             >
               {WORK_ROLE_LABEL[r]} ({byRole.get(r) ?? 0})
             </Chip>
@@ -222,24 +248,40 @@ export default async function AdminBoardPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">สถานะ:</span>
-          <Chip active={!statusFilter} href={buildHref({ role: sp.role, status: null, overdue: sp.overdue })}>
+          <Chip active={!statusFilter} href={buildHref({ role: sp.role, status: null, overdue: sp.overdue, waiting: sp.waiting })}>
             งานที่เปิดอยู่
           </Chip>
           {WORK_STATUSES.map((s) => (
             <Chip
               key={s}
               active={statusFilter === s}
-              href={buildHref({ role: sp.role, status: s, overdue: sp.overdue })}
+              href={buildHref({ role: sp.role, status: s, overdue: sp.overdue, waiting: sp.waiting })}
             >
               {WORK_STATUS_LABEL[s]}
             </Chip>
           ))}
           <Chip
             active={overdueOnly}
-            href={buildHref({ role: sp.role, status: sp.status, overdue: overdueOnly ? null : "on" })}
+            href={buildHref({ role: sp.role, status: sp.status, overdue: overdueOnly ? null : "on", waiting: sp.waiting })}
           >
             ⏰ เกินกำหนดเท่านั้น
           </Chip>
+        </div>
+        {/* IC-1 — waiting_reason filter chips (one per reason + "ทั้งหมด"). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-muted font-semibold">รอ:</span>
+          <Chip active={!waitingFilter} href={buildHref({ role: sp.role, status: sp.status, overdue: sp.overdue, waiting: null })}>
+            ทั้งหมด ({totalWaiting})
+          </Chip>
+          {WAITING_REASONS.map((w) => (
+            <Chip
+              key={w}
+              active={waitingFilter === w}
+              href={buildHref({ role: sp.role, status: sp.status, overdue: sp.overdue, waiting: w })}
+            >
+              {WAITING_REASON_LABEL_TH[w]} ({byWaiting.get(w) ?? 0})
+            </Chip>
+          ))}
         </div>
       </div>
 
@@ -271,20 +313,23 @@ export default async function AdminBoardPage({
                       <WorkItemCard
                         key={r.id}
                         item={{
-                          id:            r.id,
-                          entity_type:   r.entity_type,
-                          entity_ref:    r.entity_ref,
-                          type:          r.type,
-                          title:         r.title,
-                          note:          r.note,
-                          status:        r.status as WorkStatus,
-                          priority:      r.priority,
-                          assigned_role: r.assigned_role,
-                          assigned_to:   r.assigned_to,
-                          assignee_name: r.assigned_to ? nameById.get(r.assigned_to) ?? null : null,
-                          due_at:        r.due_at,
-                          domain_href:   workEntityHref(r.entity_type as WorkEntityType, r.entity_ref),
-                          overdue:       isWorkItemOverdue(r.due_at, r.status as WorkStatus),
+                          id:               r.id,
+                          entity_type:      r.entity_type,
+                          entity_ref:       r.entity_ref,
+                          type:             r.type,
+                          title:            r.title,
+                          note:             r.note,
+                          status:           r.status as WorkStatus,
+                          priority:         r.priority,
+                          assigned_role:    r.assigned_role,
+                          assigned_to:      r.assigned_to,
+                          assignee_name:    r.assigned_to ? nameById.get(r.assigned_to) ?? null : null,
+                          due_at:           r.due_at,
+                          domain_href:      workEntityHref(r.entity_type as WorkEntityType, r.entity_ref),
+                          overdue:          isWorkItemOverdue(r.due_at, r.status as WorkStatus),
+                          waiting_reason:   r.waiting_reason as WaitingReason | null,
+                          blocked_on_role:  r.blocked_on_role,
+                          blocked_on_admin: r.blocked_on_admin,
                         }}
                         adminOptions={adminOptions}
                       />
@@ -306,11 +351,14 @@ export default async function AdminBoardPage({
 
 // ── helpers ───────────────────────────────────────────────────────
 
-function buildHref(p: { role?: string | null; status?: string | null; overdue?: string | null }): string {
+function buildHref(p: {
+  role?: string | null; status?: string | null; overdue?: string | null; waiting?: string | null;
+}): string {
   const qs = new URLSearchParams();
   if (p.role)    qs.set("role", p.role);
   if (p.status)  qs.set("status", p.status);
   if (p.overdue) qs.set("overdue", p.overdue);
+  if (p.waiting) qs.set("waiting", p.waiting);
   const s = qs.toString();
   return s ? `/admin/board?${s}` : "/admin/board";
 }

@@ -5,22 +5,30 @@ import {
   WORK_STATUS_LABEL,
   WORK_ROLE_LABEL,
   WORK_PRIORITY_WEIGHT,
+  WORK_ENTITY_LABEL,
   workEntityHref,
   isWorkItemOverdue,
   type WorkStatus,
   type WorkAssignableRole,
   type WorkEntityType,
 } from "@/lib/validators/work-item";
+import { type WaitingReason } from "@/types/work-item-chat";
 import { WorkItemCard } from "../work-item-card";
 
 /**
- * 0080 — per-role "งานของฉัน" (my inbox).
+ * 0080 + IC-1 — per-role inbox with two tabs.
  *
- * The §1.4 per-role landing — generalises the /admin/driver-runs
- * "งานของฉัน" pattern to every role. Shows:
- *   - items pinned to ME personally (assigned_to = my profile)
- *   - items routed to a DEPARTMENT I belong to (assigned_role in my
- *     roles) but not yet pinned to a person
+ * `?tab=mine` (default) — งานของฉัน
+ *   - items pinned to ME personally (assigned_to = me)
+ *   - items routed to a DEPARTMENT I belong to (assigned_role ∈ my roles)
+ *     but not yet pinned to a person
+ *
+ * `?tab=waiting` (IC-1 §5.3) — รอฉันจัดการ
+ *   - jobs blocked on my dept (blocked_on_role = my role)
+ *   - jobs blocked on me personally (blocked_on_admin = my profile)
+ *
+ * `?tab=mentions` (IC-1 §5.3) — @mentions
+ *   - unseen @mentions on me (work_item_message_mentions WHERE seen_at IS NULL)
  *
  * Only open / in_progress / blocked items appear — the inbox is a
  * "what needs me" queue, not a history. Done work drops off.
@@ -29,34 +37,51 @@ import { WorkItemCard } from "../work-item-card";
 export const dynamic = "force-dynamic";
 
 type WorkRow = {
-  id:            string;
-  entity_type:   string;
-  entity_ref:    string;
-  type:          string;
-  title:         string;
-  note:          string | null;
-  status:        string;
-  priority:      string;
-  assigned_role: string;
-  assigned_to:   string | null;
-  due_at:        string | null;
-  created_at:    string;
+  id:               string;
+  entity_type:      string;
+  entity_ref:       string;
+  type:             string;
+  title:            string;
+  note:             string | null;
+  status:           string;
+  priority:         string;
+  assigned_role:    string;
+  assigned_to:      string | null;
+  due_at:           string | null;
+  created_at:       string;
+  waiting_reason:   string | null;
+  blocked_on_role:  string | null;
+  blocked_on_admin: string | null;
 };
 
 const ACTIVE: WorkStatus[] = ["open", "in_progress", "blocked"];
 
-export default async function AdminBoardInboxPage() {
+type InboxTab = "mine" | "waiting" | "mentions";
+
+export default async function AdminBoardInboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { user, roles } = await requireAdmin();
+  const sp = await searchParams;
+  const tab: InboxTab =
+    sp.tab === "waiting" ? "waiting" :
+    sp.tab === "mentions" ? "mentions" :
+    "mine";
   const admin = createAdminClient();
+
+  const selectCols = `
+    id, entity_type, entity_ref, type, title, note, status, priority,
+    assigned_role, assigned_to, due_at, created_at,
+    waiting_reason, blocked_on_role, blocked_on_admin
+  `;
 
   // ── Items for ME — assigned_to = me OR assigned_role ∈ my roles ───
   // Two queries (OR across two columns is cleaner as a union).
   const { data: mineRaw } = await admin
     .from("work_items")
-    .select(`
-      id, entity_type, entity_ref, type, title, note, status, priority,
-      assigned_role, assigned_to, due_at, created_at
-    `)
+    .select(selectCols)
     .eq("assigned_to", user.id)
     .in("status", ACTIVE)
     .order("created_at", { ascending: false })
@@ -64,10 +89,7 @@ export default async function AdminBoardInboxPage() {
 
   const { data: deptRaw } = await admin
     .from("work_items")
-    .select(`
-      id, entity_type, entity_ref, type, title, note, status, priority,
-      assigned_role, assigned_to, due_at, created_at
-    `)
+    .select(selectCols)
     .in("assigned_role", roles as WorkAssignableRole[])
     .is("assigned_to", null)
     .in("status", ACTIVE)
@@ -76,6 +98,105 @@ export default async function AdminBoardInboxPage() {
 
   const mine = (mineRaw ?? []) as WorkRow[];
   const dept = (deptRaw ?? []) as WorkRow[];
+
+  // ── IC-1 §5.3 — "Waiting on me" tab data ──────────────────────────
+  // Jobs blocked on my DEPT (blocked_on_role ∈ my roles, waiting_reason
+  // present).  Excludes jobs already pinned to a specific person — those
+  // go in "blocked on me personally".
+  const { data: blockedDeptRaw } = await admin
+    .from("work_items")
+    .select(selectCols)
+    .in("blocked_on_role", roles as WorkAssignableRole[])
+    .not("waiting_reason", "is", null)
+    .is("blocked_on_admin", null)
+    .in("status", ACTIVE)
+    .order("created_at", { ascending: false })
+    .limit(300);
+
+  // Jobs blocked on ME personally (a specific person was named).
+  const { data: blockedMeRaw } = await admin
+    .from("work_items")
+    .select(selectCols)
+    .eq("blocked_on_admin", user.id)
+    .not("waiting_reason", "is", null)
+    .in("status", ACTIVE)
+    .order("created_at", { ascending: false })
+    .limit(300);
+
+  const blockedDept = (blockedDeptRaw ?? []) as WorkRow[];
+  const blockedMe   = (blockedMeRaw   ?? []) as WorkRow[];
+
+  // ── IC-1 §5.3 — @mentions tab data ────────────────────────────────
+  type MentionRaw = {
+    message_id:   string;
+    work_item_id: string;
+    created_at:   string;
+    seen_at:      string | null;
+    message: {
+      body:            string;
+      author_admin_id: string | null;
+      author: { first_name: string | null; last_name: string | null; member_code: string | null }
+            | { first_name: string | null; last_name: string | null; member_code: string | null }[]
+            | null;
+    } | { body: string; author_admin_id: string | null; author: unknown }[] | null;
+    work_item: {
+      title:       string;
+      entity_type: string;
+      entity_ref:  string;
+    } | { title: string; entity_type: string; entity_ref: string }[] | null;
+  };
+  const { data: mentionsRaw } = await admin
+    .from("work_item_message_mentions")
+    .select(`
+      message_id, work_item_id, created_at, seen_at,
+      message:work_item_messages!message_id (
+        body, author_admin_id,
+        author:profiles!author_admin_id ( first_name, last_name, member_code )
+      ),
+      work_item:work_items!work_item_id ( title, entity_type, entity_ref )
+    `)
+    .eq("mentioned_admin_id", user.id)
+    .is("seen_at", null)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  type MentionRow = {
+    messageId:   string;
+    workItemId:  string;
+    bodyExcerpt: string;
+    authorName:  string | null;
+    workItemTitle:  string;
+    workItemEntity: string;
+    workItemHref:   string;
+    createdAt:   string;
+  };
+  const mentions: MentionRow[] = ((mentionsRaw ?? []) as MentionRaw[]).map((m) => {
+    const msg = Array.isArray(m.message) ? m.message[0] ?? null : m.message;
+    const wi  = Array.isArray(m.work_item) ? m.work_item[0] ?? null : m.work_item;
+    let authorName: string | null = null;
+    if (msg && (msg as { author?: unknown }).author) {
+      const auth = (msg as { author: unknown }).author;
+      const a = Array.isArray(auth) ? auth[0] ?? null : auth;
+      if (a) {
+        const ap = a as { first_name: string | null; last_name: string | null; member_code: string | null };
+        authorName = [ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.member_code || null;
+      }
+    }
+    const body = (msg as { body?: string } | null)?.body ?? "";
+    const entityType = (wi as { entity_type?: string } | null)?.entity_type ?? "";
+    const entityRef  = (wi as { entity_ref?: string }  | null)?.entity_ref  ?? "";
+    return {
+      messageId:      m.message_id,
+      workItemId:     m.work_item_id,
+      bodyExcerpt:    body.length > 140 ? body.slice(0, 140) + "…" : body,
+      authorName,
+      workItemTitle:  (wi as { title?: string } | null)?.title ?? "(งาน)",
+      workItemEntity: WORK_ENTITY_LABEL[entityType as WorkEntityType] ?? entityType,
+      workItemHref:   entityType && entityRef
+        ? workEntityHref(entityType as WorkEntityType, entityRef)
+        : "/admin/board",
+      createdAt:      m.created_at,
+    };
+  });
 
   // ── Admin options for the assignee picker (claim → pin to a person) ─
   const { data: adminRows } = await admin
@@ -112,22 +233,27 @@ export default async function AdminBoardInboxPage() {
 
   function toCard(r: WorkRow) {
     return {
-      id:            r.id,
-      entity_type:   r.entity_type,
-      entity_ref:    r.entity_ref,
-      type:          r.type,
-      title:         r.title,
-      note:          r.note,
-      status:        r.status as WorkStatus,
-      priority:      r.priority,
-      assigned_role: r.assigned_role,
-      assigned_to:   r.assigned_to,
-      assignee_name: null as string | null,
-      due_at:        r.due_at,
-      domain_href:   workEntityHref(r.entity_type as WorkEntityType, r.entity_ref),
-      overdue:       isWorkItemOverdue(r.due_at, r.status as WorkStatus),
+      id:               r.id,
+      entity_type:      r.entity_type,
+      entity_ref:       r.entity_ref,
+      type:             r.type,
+      title:            r.title,
+      note:             r.note,
+      status:           r.status as WorkStatus,
+      priority:         r.priority,
+      assigned_role:    r.assigned_role,
+      assigned_to:      r.assigned_to,
+      assignee_name:    null as string | null,
+      due_at:           r.due_at,
+      domain_href:      workEntityHref(r.entity_type as WorkEntityType, r.entity_ref),
+      overdue:          isWorkItemOverdue(r.due_at, r.status as WorkStatus),
+      waiting_reason:   r.waiting_reason as WaitingReason | null,
+      blocked_on_role:  r.blocked_on_role,
+      blocked_on_admin: r.blocked_on_admin,
     };
   }
+
+  const totalWaiting = blockedDept.length + blockedMe.length;
 
   const mineOverdue = mine.filter((r) => isWorkItemOverdue(r.due_at, r.status as WorkStatus)).length;
 
@@ -150,70 +276,223 @@ export default async function AdminBoardInboxPage() {
         </Link>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
-          <p className="text-[11px] text-muted">งานของฉัน</p>
-          <p className="mt-0.5 text-2xl font-black font-mono">{mine.length}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
-          <p className="text-[11px] text-muted">งานของฉันที่เกินกำหนด</p>
-          <p className={`mt-0.5 text-2xl font-black font-mono ${mineOverdue > 0 ? "text-red-700" : "text-green-700"}`}>
-            {mineOverdue}
+      {/* Tab bar — URL state via ?tab= */}
+      <nav className="flex gap-1 border-b border-border" aria-label="inbox tabs">
+        <TabLink active={tab === "mine"}     href="/admin/board/inbox" badge={mine.length + dept.length}>
+          🙋 งานของฉัน
+        </TabLink>
+        <TabLink active={tab === "waiting"}  href="/admin/board/inbox?tab=waiting" badge={totalWaiting}>
+          🔴 รอฉันจัดการ
+        </TabLink>
+        <TabLink active={tab === "mentions"} href="/admin/board/inbox?tab=mentions" badge={mentions.length}>
+          💬 @ฉัน
+        </TabLink>
+      </nav>
+
+      {/* Tab: MINE — งานของฉัน + งานแผนกที่ยังไม่มีคนรับ */}
+      {tab === "mine" && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
+              <p className="text-[11px] text-muted">งานของฉัน</p>
+              <p className="mt-0.5 text-2xl font-black font-mono">{mine.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
+              <p className="text-[11px] text-muted">งานของฉันที่เกินกำหนด</p>
+              <p className={`mt-0.5 text-2xl font-black font-mono ${mineOverdue > 0 ? "text-red-700" : "text-green-700"}`}>
+                {mineOverdue}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
+              <p className="text-[11px] text-muted">งานแผนกที่ยังไม่มีคนรับ</p>
+              <p className="mt-0.5 text-2xl font-black font-mono text-amber-700">{dept.length}</p>
+            </div>
+          </div>
+
+          {/* My items */}
+          <section className="space-y-3">
+            <h2 className="font-bold text-sm flex items-center gap-2">
+              🙋 งานที่มอบหมายให้ฉันโดยตรง
+              <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
+                {mine.length}
+              </span>
+            </h2>
+            {mine.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
+                <p className="text-sm text-muted">ยังไม่มีงานที่มอบหมายให้คุณโดยตรง</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sortRows(mine).map((r) => (
+                  <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Department unclaimed */}
+          <section className="space-y-3">
+            <h2 className="font-bold text-sm flex items-center gap-2">
+              📨 งานของแผนก — รอคนรับ
+              <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
+                {dept.length}
+              </span>
+            </h2>
+            {dept.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
+                <p className="text-sm text-muted">ไม่มีงานแผนกที่รอคนรับ</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sortRows(dept).map((r) => (
+                  <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <p className="text-[11px] text-muted">
+            กล่องงานแสดงเฉพาะงานที่ยังเปิดอยู่ ({ACTIVE.map((s) => WORK_STATUS_LABEL[s]).join(" / ")}) — งานที่เสร็จแล้วจะหายจากกล่องนี้.
+            กด &ldquo;มอบหมาย&rdquo; ที่การ์ดงานแผนก เพื่อรับงานนั้นมาเป็นของคุณ.
           </p>
-        </div>
-        <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
-          <p className="text-[11px] text-muted">งานแผนกที่ยังไม่มีคนรับ</p>
-          <p className="mt-0.5 text-2xl font-black font-mono text-amber-700">{dept.length}</p>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* My items */}
-      <section className="space-y-3">
-        <h2 className="font-bold text-sm flex items-center gap-2">
-          🙋 งานที่มอบหมายให้ฉันโดยตรง
-          <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
-            {mine.length}
-          </span>
-        </h2>
-        {mine.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
-            <p className="text-sm text-muted">ยังไม่มีงานที่มอบหมายให้คุณโดยตรง</p>
+      {/* Tab: WAITING — IC-1 §5.3 — "รอฉันจัดการ" */}
+      {tab === "waiting" && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
+              <p className="text-[11px] text-muted">บล็อกที่แผนกของฉัน</p>
+              <p className="mt-0.5 text-2xl font-black font-mono text-orange-700">{blockedDept.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-3 shadow-sm">
+              <p className="text-[11px] text-muted">บล็อกที่ฉันโดยตรง</p>
+              <p className="mt-0.5 text-2xl font-black font-mono text-red-700">{blockedMe.length}</p>
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sortRows(mine).map((r) => (
-              <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
-            ))}
-          </div>
-        )}
-      </section>
 
-      {/* Department unclaimed */}
-      <section className="space-y-3">
-        <h2 className="font-bold text-sm flex items-center gap-2">
-          📨 งานของแผนก — รอคนรับ
-          <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
-            {dept.length}
-          </span>
-        </h2>
-        {dept.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
-            <p className="text-sm text-muted">ไม่มีงานแผนกที่รอคนรับ</p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sortRows(dept).map((r) => (
-              <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
-            ))}
-          </div>
-        )}
-      </section>
+          {/* Blocked on my dept */}
+          <section className="space-y-3">
+            <h2 className="font-bold text-sm flex items-center gap-2">
+              🔴 งานที่บล็อกแผนกของฉัน
+              <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
+                {blockedDept.length}
+              </span>
+            </h2>
+            {blockedDept.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
+                <p className="text-sm text-muted">ไม่มีงานที่รอแผนกของคุณ</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sortRows(blockedDept).map((r) => (
+                  <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
+                ))}
+              </div>
+            )}
+          </section>
 
-      <p className="text-[11px] text-muted">
-        กล่องงานแสดงเฉพาะงานที่ยังเปิดอยู่ ({ACTIVE.map((s) => WORK_STATUS_LABEL[s]).join(" / ")}) — งานที่เสร็จแล้วจะหายจากกล่องนี้.
-        กด &ldquo;มอบหมาย&rdquo; ที่การ์ดงานแผนก เพื่อรับงานนั้นมาเป็นของคุณ.
-      </p>
+          {/* Blocked on me personally */}
+          <section className="space-y-3">
+            <h2 className="font-bold text-sm flex items-center gap-2">
+              🔴 งานที่บล็อกฉันโดยตรง
+              <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
+                {blockedMe.length}
+              </span>
+            </h2>
+            {blockedMe.length === 0 ? (
+              <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
+                <p className="text-sm text-muted">ไม่มีงานที่บล็อกคุณโดยตรง</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sortRows(blockedMe).map((r) => (
+                  <WorkItemCard key={r.id} item={toCard(r)} adminOptions={adminOptions} />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <p className="text-[11px] text-muted">
+            งานที่นี่กำลังหยุดรอคุณ — กดเข้างาน → ดูเหตุผลใน chat → ตอบหรือ “✅ unblock” เพื่อปลดล็อก.
+          </p>
+        </>
+      )}
+
+      {/* Tab: MENTIONS — IC-1 §5.3 — @ฉัน */}
+      {tab === "mentions" && (
+        <section className="space-y-3">
+          <h2 className="font-bold text-sm flex items-center gap-2">
+            💬 มีคน @ ฉัน
+            <span className="rounded-full bg-surface-alt border border-border px-2 py-0.5 text-[11px] font-mono">
+              {mentions.length}
+            </span>
+          </h2>
+          {mentions.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface p-10 text-center">
+              <p className="text-sm text-muted">ยังไม่มี @ ที่ยังไม่อ่าน</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded-2xl border border-border bg-white dark:bg-surface">
+              {mentions.map((m) => (
+                <li key={m.messageId} className="p-4">
+                  <Link
+                    href={m.workItemHref}
+                    className="block hover:bg-surface-alt -m-4 p-4 rounded-2xl transition-colors min-h-[44px]"
+                  >
+                    <div className="flex items-baseline justify-between flex-wrap gap-2">
+                      <p className="text-sm font-semibold">{m.workItemTitle}</p>
+                      <p className="text-[10px] text-muted">
+                        {new Date(m.createdAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      <span className="rounded bg-primary-50 dark:bg-primary-950/40 px-1.5 py-0.5 text-primary-700 dark:text-primary-300 mr-1">
+                        {m.workItemEntity}
+                      </span>
+                      {m.authorName && <span>โดย {m.authorName}</span>}
+                    </p>
+                    <p className="mt-2 text-sm text-foreground/80 italic">&ldquo;{m.bodyExcerpt}&rdquo;</p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[11px] text-muted">
+            กดเข้างาน → @ ที่ยังไม่อ่านจะถูก mark seen อัตโนมัติ.
+          </p>
+        </section>
+      )}
     </main>
+  );
+}
+
+function TabLink({
+  active, href, badge, children,
+}: {
+  active: boolean; href: string; badge: number; children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors min-h-[44px] ${
+        active
+          ? "border-primary-600 text-primary-600"
+          : "border-transparent text-muted hover:text-foreground hover:border-border"
+      }`}
+    >
+      {children}
+      {badge > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
+            active ? "bg-primary-600 text-white" : "bg-surface-alt border border-border"
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </Link>
   );
 }

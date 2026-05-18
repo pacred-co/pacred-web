@@ -35,7 +35,12 @@
  *
  * Idempotency: line_total = qty × unit_price_usd recomputed server-side.
  * Issuance is one-way (draft → issued); cancel writes a new audit row + UI
- * shows watermarked PDF (PDF generator deferred to V-E1.1).
+ * shows watermarked PDF.  PDF generators SHIPPED via
+ *   /api/freight-invoice/[id]                — Commercial Invoice
+ *   /api/freight-invoice/[id]/packing-list   — Packing List
+ *   /api/freight-invoice/[id]/form-e         — Form E (ASEAN-China FTA)
+ *   /api/freight-invoice/[id]/do-letter      — D/O letter (sea)
+ * Downloads are surfaced as buttons on the admin shipment detail page.
  */
 
 import { revalidatePath } from "next/cache";

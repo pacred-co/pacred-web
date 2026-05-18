@@ -39,8 +39,11 @@ export function QuoteCTA({ quote }: { quote: QuoteCarry }) {
   if (quote.sub) params.set("sub", quote.sub);
   if (quote.transport) params.set("transport", quote.transport);
 
+  // BK-1 — wrapper chrome (px-5/py-4/border-t bg-white) is now owned by
+  // `ResultBox` so this CTA can sit alongside `OpenBookingCTA` in a single
+  // stack. This component renders the primary CTA + its hint only.
   return (
-    <div className="px-5 py-4 bg-white border-t border-gray-200">
+    <div>
       <Link
         href={{ pathname: "/start-order", query: Object.fromEntries(params) }}
         onClick={() =>

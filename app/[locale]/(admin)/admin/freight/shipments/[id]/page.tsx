@@ -21,12 +21,14 @@ import {
   type PaymentPanelData, type PaymentLedgerRow,
 } from "./shipment-detail-client";
 import { DeclarationCreateButton } from "./declaration-create-button";
+import { ValueBlockEditor } from "./value-block-editor";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
   CUSTOMS_DECLARATION_TYPE_LABEL,
   type CustomsDeclarationStatus,
   type CustomsDeclarationType,
 } from "@/lib/validators/customs-declaration";
+import { WorkItemThread } from "@/components/admin/work-item-thread";
 
 /**
  * V-E1 — /admin/freight/shipments/[id]
@@ -96,14 +98,8 @@ type Header = {
   created_at:                  string;
 };
 
-function thb(n: number | null): string {
-  if (n == null) return "—";
-  return "฿" + Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2 });
-}
-function usd(n: number | null): string {
-  if (n == null) return "—";
-  return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2 });
-}
+// (thb / usd display helpers moved into ValueBlockEditor in G3 — page no
+// longer renders the value block inline.)
 
 export default async function AdminFreightShipmentDetailPage({
   params,
@@ -276,6 +272,17 @@ export default async function AdminFreightShipmentDetailPage({
   const cdRows = (cdRowsRaw ?? []) as CdRow[];
   const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
 
+  // IC-1 — find the work_item that indexes this shipment so the thread
+  // panel can render below.  May be null if no work_item exists yet.
+  const { data: workItem } = await admin
+    .from("work_items")
+    .select("id")
+    .eq("entity_type", "freight_shipment")
+    .eq("entity_ref", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
   // Audit.
   const { data: auditRaw } = await admin
     .from("admin_audit_log")
@@ -373,31 +380,27 @@ export default async function AdminFreightShipmentDetailPage({
         </div>
       )}
 
-      {/* Value block (read-only display — edit via separate flow in V-E1.1) */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1 text-xs">
-        <h2 className="font-bold text-sm mb-2">📊 Value block (ADR-0016)</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-1">
-          <p>Commercial value USD: <span className="font-mono">{usd(header.commercial_value_usd)}</span></p>
-          <p>Exchange rate: <span className="font-mono">{header.exchange_rate ?? "—"}</span></p>
-          <p>Rate date: <span className="font-mono">{header.rate_date ?? "—"}</span></p>
-          <p>Commercial THB: <span className="font-mono">{thb(header.commercial_value_thb)}</span></p>
-          <p>Declared customs THB: <span className="font-mono text-amber-700">{thb(header.declared_customs_value_thb)}</span></p>
-          <p>HS code: <span className="font-mono">{header.hs_code ?? "—"}</span></p>
-          <p>Duty: <span className="font-mono">{header.duty_rate_pct ?? "—"}% / {thb(header.duty_thb)}</span></p>
-          <p>VAT base: <span className="font-mono">{thb(header.vat_base_thb)}</span></p>
-          <p>VAT 7%: <span className="font-mono">{thb(header.vat_thb)}</span></p>
-          <p>VAT plan: {header.vat_plan_label ?? "—"}</p>
-          <p>Form E: {header.form_e_applied ? "✓ applied" : "—"}</p>
-        </div>
-        {header.declared_value_basis && (
-          <p className="mt-2 text-amber-800 italic">📝 {header.declared_value_basis}</p>
-        )}
-        <p className="mt-1 text-[10px] text-muted">
-          ⚠️ commercial_value_usd × exchange_rate = commercial_value_thb (frozen at issuance) ·
-          declared_customs_value_thb แก้ได้เฉพาะ super/accounting (ADR-0016 Q3) ·
-          ตอนนี้ <strong>read-only</strong> — แก้ผ่าน update action (V-E1.1 จะมี inline form)
-        </p>
-      </section>
+      {/* G3 (V-E1.1) — value-block inline editor (closes the "read-only"
+          gap; admin can edit + server recomputes derived per ADR-0016). */}
+      <ValueBlockEditor
+        data={{
+          id:                          header.id,
+          commercial_value_thb:        header.commercial_value_thb,
+          duty_thb:                    header.duty_thb,
+          vat_thb:                     header.vat_thb,
+          commercial_value_usd:        header.commercial_value_usd,
+          exchange_rate:               header.exchange_rate,
+          rate_date:                   header.rate_date,
+          declared_customs_value_thb:  header.declared_customs_value_thb,
+          declared_value_basis:        header.declared_value_basis,
+          hs_code:                     header.hs_code,
+          duty_rate_pct:               header.duty_rate_pct,
+          vat_base_thb:                header.vat_base_thb,
+          vat_plan_label:              header.vat_plan_label,
+          form_e_applied:              header.form_e_applied ?? false,
+        }}
+        editable={!["delivered", "cancelled"].includes(header.status)}
+      />
 
       {/* Parties + Invoice + Lines + Payments + WHT + Actions (client-managed) */}
       <ShipmentDetailClient
@@ -478,6 +481,23 @@ export default async function AdminFreightShipmentDetailPage({
           </span>
         ))}
       </p>
+
+      {/* IC-1 — internal per-job chat thread (work_item_messages). */}
+      {workItem ? (
+        <WorkItemThread workItemId={workItem.id} />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
+          <p className="text-sm text-muted">
+            ยังไม่มี work-item สำหรับงานนี้ — สร้างก่อนเริ่มแชท
+          </p>
+          <Link
+            href={`/admin/board?entity_type=freight_shipment&entity_ref=${id}`}
+            className="mt-2 inline-block text-xs text-primary-600 hover:underline"
+          >
+            → ไปสร้างที่กระดานงาน
+          </Link>
+        </div>
+      )}
     </main>
   );
 }

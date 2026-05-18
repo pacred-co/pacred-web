@@ -381,6 +381,23 @@ export default async function CustomsPortDetailPage({
                       ขอใบเสนอราคา ฟรี · ตอบไว 5 นาที
                       <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                     </Link>
+                    {/* BK-1 — "จองออนไลน์" → /book/customs-clearance/[port]
+                        (the considered booking path with itemised estimate
+                        + option selectors). Sibling of the existing
+                        "ขอใบเสนอราคา" CTA per design §3.3 (entry-point
+                        edits). Outline style so the existing primary CTA
+                        stays the visual anchor. */}
+                    <Link
+                      href={{
+                        pathname: `/book/customs-clearance/${port.slug}`,
+                        query: { src: "customs_landing", port: port.slug },
+                      }}
+                      data-cta="book-aside"
+                      className="inline-flex w-full items-center justify-center gap-2 h-11 rounded-xl border-2 border-primary-600 bg-white text-primary-600 font-black text-[13px] md:text-[13.5px] hover:bg-primary-50 transition-colors dark:bg-surface dark:border-primary-500 dark:text-primary-300"
+                    >
+                      จองออนไลน์ · ดูราคาประมาณการครบทุกหัว
+                      <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
+                    </Link>
                     <div className="grid grid-cols-2 gap-2">
                       <a
                         href={LINE_OA.shortUrl}
@@ -457,6 +474,22 @@ export default async function CustomsPortDetailPage({
                   <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
                   ทักไลน์ปรึกษาฟรี
                 </a>
+              </div>
+              {/* BK-1 — third CTA below the row, the "consider + price" path.
+                  Per design §3.3 (entry-point edits) the considered booking
+                  path joins the existing register / LINE CTAs as a sibling. */}
+              <div className="mt-3 max-w-[480px] mx-auto">
+                <Link
+                  href={{
+                    pathname: `/book/customs-clearance/${port.slug}`,
+                    query: { src: "customs_landing_final", port: port.slug },
+                  }}
+                  data-cta="book-final"
+                  className="inline-flex w-full items-center justify-center gap-2 h-11 rounded-xl border-2 border-primary-600 bg-white text-primary-600 font-black text-[13px] md:text-[14px] hover:bg-primary-50 transition-colors dark:bg-surface dark:border-primary-500 dark:text-primary-300"
+                >
+                  จองออนไลน์ · ดูราคาประมาณการครบทุกหัว
+                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
+                </Link>
               </div>
             </div>
           </div>

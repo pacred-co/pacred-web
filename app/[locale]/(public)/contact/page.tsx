@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { type ReactNode } from "react";
-import { Phone, Mail, MessageCircle } from "lucide-react";
+import { Phone, Mail, MessageCircle, Share2 } from "lucide-react";
 import { StubPage } from "@/components/stub-page";
 import { ContactForm } from "@/components/contact-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";
 import { buildPageMetadata } from "@/components/seo/page-meta";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
+import { getOrgContacts } from "@/lib/org-contacts";
 
 const PATH = "/contact";
 
@@ -35,6 +36,25 @@ export default async function Page({
   const { locale } = await params;
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const th = typedLocale === "th";
+
+  // V-G5.1.1 — enrich the hardcoded contacts with admin-managed extras
+  // from `org_contacts` (admin UI: /admin/settings/contacts).  Falls back
+  // to empty arrays on DB error so the page stays robust.
+  const [extraEmails, extraPhones, extraLines, extraSocials] = await Promise.all([
+    getOrgContacts("email"),
+    getOrgContacts("phone"),
+    getOrgContacts("line_oa"),
+    getOrgContacts("social"),
+  ]);
+  // Skip DB rows whose value already matches a hardcoded site.ts entry — avoid duplicate display.
+  const hardEmails = new Set<string>([CONTACT.email, ...CONTACT.emailContactPair, CONTACT.emailSales, CONTACT.emailDocs, CONTACT.emailAcc, CONTACT.emailPricing, CONTACT.emailHr]);
+  const hardPhones = new Set<string>([CONTACT.phone, CONTACT.phoneDisplay, CONTACT.phoneCompany, CONTACT.phoneCompanyDisplay, CONTACT.phoneCs, CONTACT.phoneCsDisplay]);
+  const dbEmails  = extraEmails.filter((r) => !hardEmails.has(r.value));
+  const dbPhones  = extraPhones.filter((r) => !hardPhones.has(r.value));
+  const dbLines   = extraLines;
+  const dbSocials = extraSocials;
+  const hasExtras = dbEmails.length + dbPhones.length + dbLines.length + dbSocials.length > 0;
+
   return (
     <>
       <JsonLd
@@ -102,6 +122,54 @@ export default async function Page({
               value={CONTACT.email}
               href={`mailto:${CONTACT.email}`}
             />
+
+            {/* V-G5.1.1 — admin-managed extras from org_contacts.
+                Appears only when admin has added rows; invisible otherwise. */}
+            {hasExtras && (
+              <div className="mt-4 pt-3 border-t border-border">
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                  {th ? "ช่องทางอื่นๆ" : "More channels"}
+                </p>
+                <div className="space-y-2">
+                  {dbPhones.map((r) => (
+                    <ContactRow
+                      key={r.id}
+                      icon={<Phone className="h-5 w-5" strokeWidth={2.25} />}
+                      label={r.label}
+                      value={r.value}
+                      href={`tel:${r.value.replace(/[\s-]/g, "")}`}
+                    />
+                  ))}
+                  {dbEmails.map((r) => (
+                    <ContactRow
+                      key={r.id}
+                      icon={<Mail className="h-5 w-5" strokeWidth={2.25} />}
+                      label={r.label}
+                      value={r.value}
+                      href={`mailto:${r.value}`}
+                    />
+                  ))}
+                  {dbLines.map((r) => (
+                    <ContactRow
+                      key={r.id}
+                      icon={<MessageCircle className="h-5 w-5" strokeWidth={2.25} />}
+                      label={r.label}
+                      value={r.value}
+                      href={r.value.startsWith("http") ? r.value : `https://line.me/R/ti/p/${encodeURIComponent(r.value)}`}
+                    />
+                  ))}
+                  {dbSocials.map((r) => (
+                    <ContactRow
+                      key={r.id}
+                      icon={<Share2 className="h-5 w-5" strokeWidth={2.25} />}
+                      label={r.label}
+                      value={r.value.replace(/^https?:\/\//, "")}
+                      href={r.value.startsWith("http") ? r.value : `https://${r.value}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </aside>
         </div>
       </StubPage>

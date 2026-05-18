@@ -11,6 +11,7 @@ import {
   type TransportMode,
   type Incoterm,
 } from "@/lib/validators/freight-quote";
+import { AcceptQuoteButton } from "./accept-quote-button";
 
 /**
  * V-E1.2 — /freight/quotes/[quote_no] customer detail view.
@@ -19,7 +20,10 @@ import {
  * (sent, accepted, rejected, expired) — drafts/pending are invisible.
  * Items inherit visibility via the items policy.
  *
- * Self-accept deferred to V-E1.2.1 — customer contacts team to confirm.
+ * V-E1.2.1 ✅ (R1) — customer self-accept via <AcceptQuoteButton> beside
+ * the LINE/phone CTAs.  Calls customerAcceptQuote() → flips sent →
+ * accepted + admin fan-out notification.  Admin then converts to a
+ * freight_shipment manually via /admin/freight/quotes/[id].
  */
 
 export const dynamic = "force-dynamic";
@@ -252,28 +256,38 @@ export default async function CustomerFreightQuoteDetailPage({
           </section>
         )}
 
-        {/* CTA — accept via team (self-accept deferred) */}
+        {/* CTA — V-E1.2.1 customer self-accept (R1) */}
         {isSent && !isExpired && (
-          <div className="rounded-2xl border-2 border-green-300 bg-green-50 dark:bg-green-900/10 p-5">
-            <p className="text-sm font-bold text-green-900">ต้องการตอบรับใบเสนอราคานี้?</p>
-            <p className="text-xs text-green-800 mt-1">
-              ติดต่อทีม Pacred เพื่อยืนยัน — เราจะแปลงเป็นงานขนส่ง (job) ให้ทันที
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a
-                href={LINE_OA.addFriendUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg bg-green-600 text-white px-4 py-2 text-sm font-bold hover:bg-green-700"
-              >
-                <MessageCircle className="w-4 h-4" /> ติดต่อทีมเพื่อตอบรับ
-              </a>
-              <a
-                href={`tel:${CONTACT.phoneCompanyDisplay}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-              >
-                📞 {CONTACT.phoneCompanyDisplay}
-              </a>
+          <div className="rounded-2xl border-2 border-green-300 bg-green-50 dark:bg-green-900/10 p-5 space-y-3">
+            <div>
+              <p className="text-sm font-bold text-green-900 dark:text-green-100">ต้องการตอบรับใบเสนอราคานี้?</p>
+              <p className="text-xs text-green-800 dark:text-green-200 mt-1">
+                กดปุ่ม &quot;ตอบรับใบเสนอราคา&quot; เพื่อยืนยัน — ทีม Pacred จะเริ่มขั้นตอนต่อไปทันที (เปิดงานขนส่ง)
+              </p>
+            </div>
+            <AcceptQuoteButton
+              quoteId={header.id}
+              quoteNo={header.quote_no}
+              total={Number(header.total)}
+            />
+            <div className="pt-2 border-t border-green-200">
+              <p className="text-[11px] text-green-700 dark:text-green-300 mb-2">หรือถ้ายังไม่แน่ใจ ปรึกษาทีมก่อน:</p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={LINE_OA.addFriendUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  <MessageCircle className="w-3 h-3" /> ทักไลน์
+                </a>
+                <a
+                  href={`tel:${CONTACT.phoneCompanyDisplay}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                >
+                  📞 {CONTACT.phoneCompanyDisplay}
+                </a>
+              </div>
             </div>
           </div>
         )}

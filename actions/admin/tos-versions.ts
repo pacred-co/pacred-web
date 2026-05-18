@@ -5,9 +5,11 @@
  *
  * Per port-spec admin-polish-bundle.md §V-G4.
  *
- * V1 = backend management surface only. The customer-side gate
- * (actions/tos.ts::acceptCurrentTos) keeps reading CURRENT_TOS_VERSION
- * from lib/tos.ts. V-G4.1 migrates the gate to read DB.
+ * V-G4.1 ✅ — the customer-side gate (/(protected)/layout.tsx) reads the
+ * active row from this table via getActiveTosVersion().  Mutating
+ * is_active here propagates to the customer gate at the next protected-
+ * route render.  lib/tos.ts CURRENT_TOS_VERSION is a defensive fallback
+ * for DB-unreachable scenarios only.
  *
  * Surface area:
  *   createTosVersion       — admin creates new version (optionally active)

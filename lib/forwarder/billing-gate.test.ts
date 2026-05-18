@@ -22,7 +22,12 @@
  *      (+ container_status echoed back)
  *   6. gated status + container closed → { blocked: false }
  *   7. fail-OPEN on a forwarders read error → { blocked: false }
- *   8. fail-OPEN on a cargo_containers read error → { blocked: false }
+ *      (caller's own not_found guard handles a missing forwarder; a
+ *      hard outage surfaces in the downstream wallet-tx insert)
+ *   8. fail-CLOSED on a cargo_containers read error → blocked
+ *      'db_read_error' (P1-3 fix — billing must NOT proceed on the
+ *      stale order-time CBM estimate when we cannot verify the
+ *      container is `closed`; datanew L-3 ~31% gap)
  *   9. unknown forwarder (no row) → { blocked: false }
  *  10. linked container row vanished → blocked 'no_container_linked'
  *      (data-integrity fail-closed)
@@ -171,9 +176,11 @@ async function main(): Promise<void> {
   }
 
   // ──────────────────────────────────────────────────────────
-  // (g) fail-OPEN on a DB read error
+  // (g) split fail policy on DB read error (P1-3)
+  //     - forwarders read error → fail-OPEN
+  //     - cargo_containers read error → fail-CLOSED with 'db_read_error'
   // ──────────────────────────────────────────────────────────
-  console.log("  (g) fail-OPEN on DB read error");
+  console.log("  (g) split fail policy on DB read error");
   {
     const fwdErr = await getCargoBillingGate(
       makeClient({ forwarders: { data: null, error: { message: "boom" } } }),
@@ -188,7 +195,18 @@ async function main(): Promise<void> {
       }),
       "F26050001",
     );
-    assert("cargo_containers read error → not blocked (fail-open)", contErr.blocked === false);
+    assert(
+      "cargo_containers read error → blocked (fail-closed)",
+      contErr.blocked === true,
+    );
+    assert(
+      "cargo_containers read error → reason db_read_error",
+      contErr.blocked === true && contErr.reason === "db_read_error",
+    );
+    assert(
+      "cargo_containers read error → container_status undefined (no row to read from)",
+      contErr.blocked === true && contErr.container_status === undefined,
+    );
   }
 
   // ──────────────────────────────────────────────────────────

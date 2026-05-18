@@ -336,6 +336,25 @@ export const notify = {
     };
   },
 
+  // G2e-2 (R3) — credit note (ใบลดหนี้) issued against a cancelled invoice
+  creditNoteIssued(opts: {
+    serialNo:          string;   // NEW credit note serial
+    forSerialNo:       string;   // original cancelled invoice serial
+    totalThb:          number;   // credit amount (positive — document type implies credit)
+    orderRef:          string;
+    reason:            string;
+  }): NotifyPayload {
+    return {
+      category:  "payment",
+      severity:  "info",
+      title:     `ออกใบลดหนี้ ${opts.serialNo} (อ้างอิงใบกำกับภาษี ${opts.forSerialNo})`,
+      body:      `${opts.orderRef} · ลดยอด ${thb(opts.totalThb)} · ${opts.reason} — ดาวน์โหลดได้จากหน้าใบเสร็จ`,
+      link_href: opts.orderRef.startsWith("ON")
+        ? `/service-order/${opts.orderRef}/receipt`
+        : `/service-import/${opts.orderRef}/receipt`,
+    };
+  },
+
   // ── QA/QC inspection (V-E10 — ภูม) ──
   // Category 'forwarder' covers cargo_shipments since both forwarder + service-
   // order flows land in cargo_shipments. (A dedicated 'qa' category would

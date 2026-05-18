@@ -10,9 +10,11 @@ import { ContactsManager } from "./contacts-manager";
  * Tabs per kind (domain / email / line_oa / phone / wechat / social / address).
  * Active tab = ?kind=email (default).
  *
- * V1 = backend management only. Customer-side reads still use the constants
- * in components/seo/site.ts; integration is deferred to V-G5.1 (after the
- * owner populates the table on staging + verifies it renders correctly).
+ * V-G5.1.1 ✅ — customer-facing `/contact` page reads these rows via
+ * `getOrgContacts(kind)` and appends them under "ช่องทางอื่นๆ" beneath
+ * the hardcoded site.ts core channels.  Add a row + flip is_active=true
+ * → it appears on /contact at the next render.  (Email/phone values
+ * that duplicate site.ts entries are deduped on the read side.)
  *
  * Per port-spec admin-polish-bundle.md §V-G5.
  */
@@ -72,7 +74,9 @@ export default async function AdminOrgContactsPage({
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">ข้อมูลติดต่อองค์กร</h1>
         <p className="text-xs text-muted mt-1">
-          จัดการอีเมล/เบอร์/LINE/Social/ที่อยู่ของบริษัท. ทุกคนเห็น (รายการที่ active=true) — กระทบ landing/footer/หน้า contact หลัง wire customer-side (V-G5.1).
+          จัดการอีเมล/เบอร์/LINE/Social/ที่อยู่. รายการที่ <code className="font-mono text-[10px]">active=true</code> จะ
+          ไปแสดงที่หน้า <Link href="/contact" className="text-primary-600 hover:underline">/contact</Link> ใต้หัวข้อ
+          &quot;ช่องทางอื่นๆ&quot; ทันที (ค่าที่ซ้ำกับ <code className="font-mono text-[10px]">site.ts</code> ถูก dedupe).
         </p>
       </header>
 

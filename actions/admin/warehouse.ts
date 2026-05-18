@@ -42,82 +42,100 @@ import {
  */
 
 // ────────────────────────────────────────────────────────────
-// U1-2 / U1-5 — Status propagation maps + helpers
+// U1-2 / U1-5 / P1-5 — Status propagation cascade (atomic via RPC)
 // ────────────────────────────────────────────────────────────
 //
 // When admin flips a container's status, we cascade down the spine:
 //   container.status  → cargo_shipments.status
 //   cargo_shipments.status → forwarders.status OR service_orders.status
 //
-// Forward-only: never regress a row already past the target. The order
-// arrays below encode lifecycle progression; idx < idx means "behind",
-// idx > idx means "ahead". A row "ahead" of the proposed target is left
-// untouched (no error, no audit spam).
+// ── Atomicity (P1-5) ──
+// The original cascade was best-effort + non-atomic — a mid-cascade
+// failure left a container 'arrived' while child forwarders stayed
+// 'in_transit', and billing-gate.ts then read divergent state. The
+// fix moves the entire cascade into a single Postgres function
+// (`cascade_container_status` SECURITY DEFINER, migration 0078).
+// All writes (status updates + admin_audit_log rows) happen in one
+// TX: any hop raising rolls back the whole cascade. No partial state.
 //
-// Best-effort: a propagation failure must NOT roll back the parent flip.
-// We catch and log, then continue (mirror of U1-4 pattern in
-// adminMarkFreightDelivered).
+// The forward-only lifecycle, per-status date_* stamping, U1-5
+// auto-close-on-delivery audit event, and admin_id_update fingerprint
+// all live inside the SQL function — see migration 0078 header for
+// the full guarantee. The map constants are co-located there to keep
+// review + the cascade logic in one place.
+//
+// Parent-first / children-atomic shape is intentional: the container
+// status flip + history row land first via dbSetContainerStatus, then
+// this RPC atomically cascades to all children. A failed cascade
+// leaves the container updated (admin can retry); never leaves
+// children half-done.
 
-const SHIPMENT_ORDER: readonly ShipmentStatus[] = [
-  "received_cn",
-  "packed_cn",
-  "sealed_in_container",
-  "in_transit",
-  "arrived_th",
-  "unloaded",
-  "out_for_delivery",
-  "delivered",
-] as const;
-
-const FORWARDER_STATUS_ORDER = [
-  "pending_payment",
-  "shipped_china",
-  "in_transit",
-  "arrived_thailand",
-  "out_for_delivery",
-  "delivered",
-] as const;
-type ForwarderStatus = (typeof FORWARDER_STATUS_ORDER)[number] | "cancelled";
-
-const SERVICE_ORDER_STATUS_ORDER = [
-  "pending",
-  "awaiting_payment",
-  "ordered",
-  "awaiting_chn_dispatch",
-  "completed",
-] as const;
-type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUS_ORDER)[number] | "cancelled";
-
-/** container.status → shipment.status (null = no cascade). */
-const CONTAINER_TO_SHIPMENT: Partial<Record<ContainerStatusSpine, ShipmentStatus>> = {
-  sealed:     "sealed_in_container",
-  in_transit: "in_transit",
-  arrived:    "arrived_th",
-  unloading:  "unloaded",
-  // packing  — no cascade (shipments stay at received_cn / packed_cn during packing phase)
-  // closed   — no cascade (container archival doesn't downgrade shipments)
+/** P1-5: call the atomic cascade RPC. Returns the row-count summary or
+ *  null on failure. On failure, NO child rows were updated (TX rolled
+ *  back). The caller still has its own parent-container update from
+ *  before this call — that is not affected by RPC failure. */
+type CascadeSummary = {
+  shipments_total:              number;
+  shipments_updated:            number;
+  shipments_skipped_ahead:      number;
+  forwarders_updated:           number;
+  forwarders_skipped_ahead:     number;
+  service_orders_updated:       number;
+  service_orders_skipped_ahead: number;
+  auto_closed_orders:           number;
+  cascade_reason:               string;
 };
 
-/** shipment.status → forwarder.status (null = no cascade). */
-const SHIPMENT_TO_FORWARDER: Partial<Record<ShipmentStatus, ForwarderStatus>> = {
+async function cascadeContainerStatus(
+  admin: SupabaseClient,
+  containerId: string,
+  containerStatus: ContainerStatusSpine,
+  adminId: string,
+): Promise<CascadeSummary | null> {
+  const { data, error } = await admin.rpc("cascade_container_status", {
+    p_container_id:     containerId,
+    p_container_status: containerStatus,
+    p_admin_id:         adminId,
+  });
+  if (error) {
+    logger.error("warehouse", "cascade_container_status RPC failed", error, {
+      containerId, containerStatus,
+    });
+    return null;
+  }
+  return data as CascadeSummary;
+}
+
+// ── Single-shipment cascade (used by adminSetShipmentStatus only) ──
+//
+// When admin flips ONE shipment status directly (not via container),
+// the cascade scope is bounded: at most 1 forwarder OR 1 service_order
+// flip. This stays best-effort + non-atomic — far smaller divergence
+// surface than P1-5 (no multi-shipment fan-out). If a single-row
+// cascade ever becomes a problem, lift this into the same RPC.
+
+const SHIPMENT_TO_FORWARDER: Partial<Record<ShipmentStatus, string>> = {
   sealed_in_container: "shipped_china",
   in_transit:          "in_transit",
   arrived_th:          "arrived_thailand",
-  // unloaded         — no cascade (forwarder is still "arrived_thailand")
   out_for_delivery:    "out_for_delivery",
   delivered:           "delivered",
 };
 
-/** shipment.status → service_order.status (only delivered → completed; the
- *  rest of the cargo-side lifecycle is opaque to service_orders, which model
- *  shop-purchase phases, not transport phases). U1-5 hook lives here. */
-const SHIPMENT_TO_SERVICE_ORDER: Partial<Record<ShipmentStatus, ServiceOrderStatus>> = {
+const SHIPMENT_TO_SERVICE_ORDER: Partial<Record<ShipmentStatus, string>> = {
   delivered: "completed",
 };
 
-/** date_* column to stamp when a forwarder enters each status. Matches
- *  actions/admin/forwarders.ts::STATUS_DATE_COL so cascades + manual flips
- *  produce the same row shape. */
+const FORWARDER_STATUS_ORDER = [
+  "pending_payment", "shipped_china", "in_transit",
+  "arrived_thailand", "out_for_delivery", "delivered",
+] as const;
+
+const SERVICE_ORDER_STATUS_ORDER = [
+  "pending", "awaiting_payment", "ordered",
+  "awaiting_chn_dispatch", "completed",
+] as const;
+
 const FORWARDER_DATE_COL: Record<string, string | null> = {
   shipped_china:    "date_shipped_china",
   in_transit:       "date_in_transit",
@@ -126,8 +144,6 @@ const FORWARDER_DATE_COL: Record<string, string | null> = {
   delivered:        "date_delivered",
 };
 
-/** date_* column to stamp when a service_order enters each status. Matches
- *  actions/admin/service-orders.ts::STATUS_DATE_COL. */
 const SERVICE_ORDER_DATE_COL: Record<string, string | null> = {
   awaiting_payment:      "date_awaiting_payment",
   ordered:               "date_ordered",
@@ -135,9 +151,6 @@ const SERVICE_ORDER_DATE_COL: Record<string, string | null> = {
   completed:             "date_completed",
 };
 
-/** Returns true if `current` is at or past `target` in the lifecycle order.
- *  Unknown statuses (e.g. 'cancelled', legacy values) are treated as "ahead"
- *  so we never auto-overwrite them. */
 function isAtOrPast<T extends string>(
   order: readonly T[],
   current: string,
@@ -145,61 +158,11 @@ function isAtOrPast<T extends string>(
 ): boolean {
   const ci = order.indexOf(current as T);
   const ti = order.indexOf(target);
-  if (ci === -1) return true;   // unknown current (e.g. 'cancelled') — don't overwrite
-  if (ti === -1) return false;  // unknown target — defensively let the caller try
+  if (ci === -1) return true;
+  if (ti === -1) return false;
   return ci >= ti;
 }
 
-/** U1-2 hop 1: container → all attached shipments. */
-async function cascadeContainerToShipments(
-  admin: SupabaseClient,
-  containerId: string,
-  containerStatus: ContainerStatusSpine,
-  adminId: string,
-): Promise<void> {
-  const target = CONTAINER_TO_SHIPMENT[containerStatus];
-  if (!target) return;   // packing / closed — no shipment-level change
-
-  try {
-    const { data: ships, error: listErr } = await admin
-      .from("cargo_shipments")
-      .select("id, status, forwarder_f_no, service_order_h_no")
-      .eq("cargo_container_id", containerId)
-      .returns<Array<{ id: string; status: ShipmentStatus; forwarder_f_no: string | null; service_order_h_no: string | null }>>();
-    if (listErr) {
-      logger.error("warehouse", "cascadeContainerToShipments list failed", listErr, { containerId });
-      return;
-    }
-    const rows = ships ?? [];
-
-    for (const ship of rows) {
-      // Forward-only: skip if already at or past target
-      if (isAtOrPast(SHIPMENT_ORDER, ship.status, target)) continue;
-
-      const setRes = await dbSetShipmentStatus(admin, ship.id, target);
-      if (!setRes.ok) {
-        logger.error("warehouse", "cascadeContainerToShipments shipment flip failed", new Error(setRes.error), {
-          containerId, shipmentId: ship.id, from: ship.status, to: target,
-        });
-        continue;
-      }
-
-      await logAdminAction(adminId, "container.cascade_shipment_status", "shipment", ship.id, {
-        cargo_container_id: containerId,
-        container_status:   containerStatus,
-        from_status:        ship.status,
-        to_status:          target,
-      });
-
-      // Hop 2: shipment → forwarder / service_order
-      await cascadeShipmentToOrders(admin, ship.id, target, ship.forwarder_f_no, ship.service_order_h_no, adminId);
-    }
-  } catch (e) {
-    logger.error("warehouse", "cascadeContainerToShipments threw", e, { containerId, containerStatus });
-  }
-}
-
-/** U1-2 hop 2 + U1-5: shipment → linked forwarder / service_order. */
 async function cascadeShipmentToOrders(
   admin: SupabaseClient,
   shipmentId: string,
@@ -208,7 +171,6 @@ async function cascadeShipmentToOrders(
   serviceOrderHNo: string | null,
   adminId: string,
 ): Promise<void> {
-  // ── Forwarder hop ──
   const fwdTarget = SHIPMENT_TO_FORWARDER[shipmentStatus];
   if (fwdTarget && forwarderFNo) {
     try {
@@ -221,10 +183,9 @@ async function cascadeShipmentToOrders(
         logger.error("warehouse", "cascadeShipmentToOrders forwarder lookup failed", fwdErr, { shipmentId, forwarderFNo });
       } else if (fwd && !isAtOrPast(FORWARDER_STATUS_ORDER, fwd.status, fwdTarget as typeof FORWARDER_STATUS_ORDER[number])) {
         const update: Record<string, unknown> = {
-          status:           fwdTarget,
-          admin_id_update:  adminId,
+          status:          fwdTarget,
+          admin_id_update: adminId,
         };
-        // Stamp the matching date_* column (mirrors actions/admin/forwarders.ts STATUS_DATE_COL).
         const dateCol = FORWARDER_DATE_COL[fwdTarget];
         if (dateCol) update[dateCol] = new Date().toISOString();
 
@@ -250,7 +211,6 @@ async function cascadeShipmentToOrders(
     }
   }
 
-  // ── Service-order hop (U1-5 hook on shipment 'delivered' → service_order 'completed') ──
   const soTarget = SHIPMENT_TO_SERVICE_ORDER[shipmentStatus];
   if (soTarget && serviceOrderHNo) {
     try {
@@ -263,8 +223,8 @@ async function cascadeShipmentToOrders(
         logger.error("warehouse", "cascadeShipmentToOrders service_order lookup failed", soErr, { shipmentId, serviceOrderHNo });
       } else if (so && !isAtOrPast(SERVICE_ORDER_STATUS_ORDER, so.status, soTarget as typeof SERVICE_ORDER_STATUS_ORDER[number])) {
         const update: Record<string, unknown> = {
-          status:           soTarget,
-          admin_id_update:  adminId,
+          status:          soTarget,
+          admin_id_update: adminId,
         };
         const dateCol = SERVICE_ORDER_DATE_COL[soTarget];
         if (dateCol) update[dateCol] = new Date().toISOString();
@@ -278,7 +238,6 @@ async function cascadeShipmentToOrders(
             shipmentId, serviceOrderId: so.id, from: so.status, to: soTarget,
           });
         } else {
-          // U1-5: distinct audit event on the delivered → completed auto-close hop
           const action = (shipmentStatus === "delivered" && soTarget === "completed")
             ? "service_order.auto_close_on_delivery"
             : "shipment.cascade_service_order_status";
@@ -411,10 +370,12 @@ export async function adminSetContainerStatus(
       note:      d.note ?? null,
     });
 
-    // U1-2 + U1-5: cascade down the spine — container → shipments → forwarders / service_orders.
-    // Best-effort: parent flip already committed; failures inside cascade log + continue and
-    // must NOT roll back the container status update. Mirrors adminMarkFreightDelivered U1-4.
-    await cascadeContainerToShipments(admin, d.container_id, d.status as ContainerStatusSpine, adminId);
+    // P1-5: atomic cascade down the spine — container → shipments → forwarders / service_orders.
+    // All child writes happen inside a single TX (Postgres function `cascade_container_status`,
+    // migration 0078). A mid-cascade failure rolls back ALL child writes — never leaves
+    // children half-done. The container's own status update (above) is in its own TX and is
+    // unaffected by RPC failure, so an admin can retry the cascade if needed.
+    await cascadeContainerStatus(admin, d.container_id, d.status as ContainerStatusSpine, adminId);
 
     revalidatePath("/admin/warehouse/containers");
     if (res.data.code) {

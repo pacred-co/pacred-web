@@ -8,7 +8,7 @@ import {
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
   MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell,
-  Search, Kanban, Inbox, AlertTriangle,
+  Search, Kanban, Inbox, AlertTriangle, CalendarCheck,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -80,6 +80,7 @@ const items: NavItem[] = [
   { href: "/admin/refunds",            label: "คืนเงิน (U1-6)",        icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["super","accounting","ops","sales_admin"], group: "การเงิน" },
 
   // Customer & sales
+  { href: "/admin/bookings",                  label: "การจอง (BK-1)",     icon: <CalendarCheck className="w-5 h-5" />,   roles: ["super","ops","sales_admin","accounting"], group: "ลูกค้า · ขาย" },
   { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
   { href: "/admin/customers/pending",         label: "รอ Approve",        icon: <Clock className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
   { href: "/admin/customers/recently-active", label: "Active ล่าสุด",      icon: <Activity className="w-5 h-5" />,        roles: ["sales_admin","accounting"], group: "ลูกค้า · ขาย" },

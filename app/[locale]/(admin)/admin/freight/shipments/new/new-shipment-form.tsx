@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateFreightShipment } from "@/actions/admin/freight-shipments";
+import { CustomerPicker } from "@/components/admin/customer-picker";
 import {
   FREIGHT_TRANSPORT_MODES, FREIGHT_TRANSPORT_MODE_LABEL,
   INCOTERMS,
@@ -61,19 +62,15 @@ export function NewShipmentForm() {
     >
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
         <h2 className="font-bold text-sm">ลูกค้า</h2>
-        <Field label="Customer profile UUID" required>
-          <input
-            type="text"
+        <Field label="ลูกค้า" required>
+          <CustomerPicker
             value={profileId}
-            onChange={(e) => setProfileId(e.target.value)}
-            placeholder="หา UUID จาก /admin/customers (member_code → profile)"
-            className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono"
+            onChange={(id) => setProfileId(id)}
+            placeholder="ค้นหา PR / ชื่อ / เบอร์ / อีเมล / บริษัท"
             required
+            disabled={pending}
           />
         </Field>
-        <p className="text-[10px] text-muted">
-          (V-E1.1 จะมี customer-picker dropdown — ตอนนี้ paste UUID ตรงๆ)
-        </p>
       </section>
 
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
