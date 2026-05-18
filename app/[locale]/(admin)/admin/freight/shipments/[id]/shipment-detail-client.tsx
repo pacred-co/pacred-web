@@ -319,7 +319,7 @@ function InvoicePanel({
           <span className="ml-2 text-[10px] font-normal text-muted">{FREIGHT_INVOICE_STATUS_LABEL[inv.status]}</span>
         </h2>
         <div className="flex items-center gap-2">
-          {/* V-E1.1 PDF downloads — works for draft too (uses live shipment fallback) */}
+          {/* PDF downloads (V-E1) — work for draft too (live shipment fallback) */}
           <a
             href={`/api/freight-invoice/${inv.id}`}
             target="_blank"

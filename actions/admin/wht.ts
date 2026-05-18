@@ -439,8 +439,10 @@ function revalidateParent(
   } else {
     // U2-3 — freight_invoice id; the freight invoice lives on the parent
     // freight_shipments detail page (no dedicated /admin/freight/invoices/[id]).
-    // V-E1.1 customer freight portal not yet shipped — skip customer revalidate.
+    // Customer freight portal IS shipped at /(protected)/freight/{quotes,shipments}
+    // — also revalidate that surface so WHT changes propagate.
     revalidatePath("/admin/freight/shipments");
+    revalidatePath("/freight/shipments");
     // Specific shipment id is the parent of the invoice; broad invalidate is
     // safer than computing FK chain here.
   }
