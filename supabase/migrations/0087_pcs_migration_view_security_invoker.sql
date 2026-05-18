@@ -1,0 +1,25 @@
+-- ════════════════════════════════════════════════════════════
+-- 0087 · v_pcs_migration_status — SECURITY DEFINER → INVOKER
+-- ════════════════════════════════════════════════════════════
+-- Supabase Security Advisor flags public.v_pcs_migration_status as
+-- CRITICAL ("Security Definer View"): the view (a one-row reporting
+-- dashboard created by migration 0067, the pre-D1 PCS-customer
+-- migration) runs with the view OWNER's privileges, so a query through
+-- it enforces the owner's RLS, not the caller's — an RLS bypass.
+--
+-- Fix: security_invoker = on (PostgreSQL 15+) — the view now runs with
+-- the QUERYING user's privileges + RLS. Non-destructive: the view and
+-- its sole consumer (/admin/migration/pcs-customers via
+-- actions/admin/pcs-migration.ts) keep working; admin reads go through
+-- the service-role client, which is unaffected.
+--
+-- NOTE — D1 context: migration 0067's whole PCS-customer-migration
+-- feature (the pcs_legacy_customers_staging table, this view,
+-- actions/admin/pcs-migration.ts, the /admin/migration/pcs-customers
+-- page) is SUPERSEDED by the D1 faithful port (runbook
+-- docs/runbook/pcs-data-migration.md §8 — D1 replaces it with the
+-- 117-table tb_* load). Fully removing that dead feature is a separate
+-- เดฟ decision; THIS migration only closes the security finding.
+-- ════════════════════════════════════════════════════════════
+
+alter view if exists public.v_pcs_migration_status set (security_invoker = on);
