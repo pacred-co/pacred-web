@@ -275,3 +275,34 @@ export interface SubmitBookingResult {
   bookingId: string;
   bookingNo: string;
 }
+
+// ── BK-1.5 (G1) — booking-attachment document types ──
+/**
+ * The 6 document slot kinds the review-step file uploader accepts.
+ * Match the `booking_*` values added to `documents.doc_type` CHECK in
+ * migration 0081_booking_documents.sql.
+ */
+export type BookingDocKind =
+  | "booking_invoice"          // ใบกำกับสินค้า / commercial invoice
+  | "booking_packing_list"     // ใบรายการบรรจุภัณฑ์ / packing list
+  | "booking_certificate"      // ใบรับรอง (Form E, CO etc.)
+  | "booking_vat_paw20"        // ภพ.20 (VAT registration certificate)
+  | "booking_national_id"      // บัตรประชาชน
+  | "booking_passport";        // หนังสือเดินทาง
+
+/**
+ * A booking attachment row as the UI consumes it.  `signedUrl` is a
+ * short-lived Supabase storage signed URL (~1 hr) — re-fetch via
+ * listBookingDocuments() if it expires.
+ */
+export interface BookingDocument {
+  id: string;
+  bookingId: string;
+  kind: BookingDocKind;
+  storagePath: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string;
+  /** Short-lived signed URL (~1h) for download/preview.  Re-list to refresh. */
+  signedUrl: string | null;
+}

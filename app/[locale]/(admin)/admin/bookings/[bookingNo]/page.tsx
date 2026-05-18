@@ -5,6 +5,18 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranslations } from "next-intl/server";
 import { getServiceConfig } from "@/lib/booking/service-config";
 import type { BookingStatus } from "@/lib/validators/booking";
+import { listBookingDocuments } from "@/actions/bookings";
+import type { BookingDocKind } from "@/types/booking";
+import { BookingActionPanel } from "./booking-action-panel";
+
+const DOC_KIND_LABEL_TH: Record<BookingDocKind, string> = {
+  booking_invoice:       "ใบกำกับสินค้า",
+  booking_packing_list:  "Packing List",
+  booking_certificate:   "Certificate / Form E",
+  booking_vat_paw20:     "ภพ.20",
+  booking_national_id:   "บัตรประชาชน",
+  booking_passport:      "พาสปอร์ต",
+};
 
 /**
  * BK-1 — /admin/bookings/[bookingNo] detail page.
@@ -177,6 +189,12 @@ export default async function AdminBookingDetailPage({
 
   const pickupHasPin = row.pickup_lat != null && row.pickup_lng != null;
   const dropoffHasPin = row.dropoff_lat != null && row.dropoff_lng != null;
+
+  // BK-1.5 (G1) — booking attachments (uses listBookingDocuments — admin
+  // role auth covers cross-customer reads via the documents_admin_read
+  // policy added in migration 0081).
+  const docsRes = await listBookingDocuments(row.id);
+  const bookingDocs = docsRes.ok ? docsRes.data.documents : [];
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
@@ -375,26 +393,65 @@ export default async function AdminBookingDetailPage({
         </section>
       )}
 
-      {/* Action panel — read-only in BK-1; transitions land in BK-2.
-          TODO BK-2 admin transitions — wire to actions/admin/bookings.ts
-          (markContacted / createFreightQuoteFromBooking / markWon / markLost
-          / cancel) once the action layer ships. The form stubs below are
-          intentionally commented so the desk knows the surface is coming. */}
-      <section className="rounded-2xl border border-primary-200 bg-primary-50/30 p-5 space-y-2">
-        <h2 className="font-bold text-sm">{t("actionsTitle")}</h2>
-        <p className="text-xs text-muted">{t("actionsTodo")}</p>
-        {/* TODO BK-2 admin transitions
-        <form action={markContactedAction}>
-          <input type="hidden" name="bookingId" value={row.id} />
-          <button type="submit" className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700">
-            Mark contacted
-          </button>
-        </form>
-        <form action={createFreightQuoteFromBookingAction}>...</form>
-        <form action={markWonAction}>...</form>
-        <form action={markLostAction}>...</form>
-        */}
-      </section>
+      {/* BK-1.5 (G1) — booking attachments (uploaded by the customer
+          at the review step; admin sees them here, download via 1-hr
+          signed URLs). */}
+      {bookingDocs.length > 0 ? (
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
+          <h2 className="font-bold text-sm">เอกสารแนบ ({bookingDocs.length})</h2>
+          <ul className="space-y-2">
+            {bookingDocs.map((doc) => {
+              const fileName = doc.storagePath.split("/").pop() ?? doc.storagePath;
+              const cleanName = fileName.replace(/^[a-z_]+-\d+-/, "");
+              const sizeKb = doc.sizeBytes ? Math.round(doc.sizeBytes / 1024) : null;
+              return (
+                <li
+                  key={doc.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-alt/30 px-3 py-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">
+                      {DOC_KIND_LABEL_TH[doc.kind]} <span className="text-muted font-normal">— {cleanName}</span>
+                    </p>
+                    <p className="text-[10px] text-muted">
+                      {doc.mimeType ?? "unknown"}
+                      {sizeKb !== null && ` · ${sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`}`}
+                      {" · "}อัปโหลด {new Date(doc.uploadedAt).toLocaleString("th-TH")}
+                    </p>
+                  </div>
+                  {doc.signedUrl && (
+                    <a
+                      href={doc.signedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 inline-flex items-center justify-center min-h-[36px] rounded-md border border-primary-300 bg-white px-3 text-xs font-bold text-primary-600 hover:bg-primary-50"
+                    >
+                      ดาวน์โหลด
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[10px] text-muted">
+            ลิงก์มีอายุ ~1 ชั่วโมง · refresh หน้าเพื่อสร้างลิงก์ใหม่
+          </p>
+        </section>
+      ) : (
+        row.booking_no && (
+          <section className="rounded-2xl border border-dashed border-border bg-surface-alt/20 p-4">
+            <p className="text-xs text-muted">ลูกค้ายังไม่ได้แนบเอกสาร</p>
+          </section>
+        )
+      )}
+
+      {/* G2 · BK-2 — admin transition panel (status-aware buttons). */}
+      <BookingActionPanel
+        bookingId={row.id}
+        bookingNo={row.booking_no}
+        status={row.status}
+        freightQuoteId={row.freight_quote_id}
+      />
     </main>
   );
 }

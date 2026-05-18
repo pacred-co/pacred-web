@@ -56,6 +56,8 @@ import {
 } from "@/lib/validators/booking";
 import { getServiceConfig } from "@/lib/booking/service-config";
 import type {
+  BookingDocKind,
+  BookingDocument,
   BookingOptionState,
   CreateBookingDraftInput,
   QuoteLine,
@@ -775,4 +777,326 @@ export async function getBookingDraftRoute(
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "not_found" };
   return { ok: true, data };
+}
+
+// ════════════════════════════════════════════════════════════
+// BK-1.5 (G1) — booking attachment upload / list / remove
+// ════════════════════════════════════════════════════════════
+// Per design [docs/research/booking-flow-system-2026-05-18.md] §6.2:
+//   "a booking's uploads are documents rows tagged with the booking_id,
+//    RLS owner-only."
+//
+// Storage layout under the existing private bucket `member-docs`:
+//   member-docs/{user_id}/booking/{booking_id}/{kind}-{ts}-{filename}
+//
+// All 3 actions are auth-required (uploads happen at the REVIEW step —
+// after the auth gate has bound profile_id).  This keeps the design
+// simpler than the "anon-uploads-into-temp-prefix + re-key on submit"
+// pattern §6.2 mentions as an option.
+
+const VALID_DOC_KINDS: readonly BookingDocKind[] = [
+  "booking_invoice",
+  "booking_packing_list",
+  "booking_certificate",
+  "booking_vat_paw20",
+  "booking_national_id",
+  "booking_passport",
+] as const;
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME_PREFIXES = ["image/", "application/pdf"] as const;
+const ALLOWED_MIME_EXACT = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const SIGNED_URL_TTL_SECS = 60 * 60; // 1 hour
+
+function isAllowedMime(mime: string | null | undefined): boolean {
+  if (!mime) return false;
+  if (ALLOWED_MIME_EXACT.has(mime)) return true;
+  return ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p));
+}
+
+function sanitiseFilename(name: string): string {
+  // Strip path components + restrict to a safe set.  Storage key has its
+  // own server-controlled prefix so this is defence-in-depth.
+  return name
+    .replace(/[\\/]/g, "_")
+    .replace(/[^A-Za-z0-9._-]/g, "_")
+    .slice(0, 100);
+}
+
+/**
+ * Upload a single file as a booking attachment.  Auth-required.
+ *
+ * Verifies the customer owns the booking before writing storage / inserting
+ * the documents row — the RLS floor covers it too, but the early ownership
+ * check gives a clearer error than RLS denial.
+ */
+export async function uploadBookingDocument(
+  bookingId: string,
+  kind: BookingDocKind,
+  file: File,
+): Promise<ActionResult<BookingDocument>> {
+  // 1) Auth
+  const { profile } = await requireAuth();
+  if (!profile) return { ok: false, error: "auth_required" };
+
+  // 2) Input validation
+  if (!bookingId || typeof bookingId !== "string") {
+    return { ok: false, error: "invalid_booking_id" };
+  }
+  if (!VALID_DOC_KINDS.includes(kind)) {
+    return { ok: false, error: "invalid_doc_kind" };
+  }
+  if (!file || typeof file !== "object" || typeof file.arrayBuffer !== "function") {
+    return { ok: false, error: "no_file" };
+  }
+  if (file.size <= 0) return { ok: false, error: "empty_file" };
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { ok: false, error: `file_too_large_max_${MAX_UPLOAD_BYTES}` };
+  }
+  if (!isAllowedMime(file.type)) {
+    return { ok: false, error: `unsupported_mime:${file.type || "unknown"}` };
+  }
+
+  // 3) Ownership check on the booking
+  const admin = createAdminClient();
+  const { data: booking, error: bookingErr } = await admin
+    .from("bookings")
+    .select("id, profile_id, booking_no, status")
+    .eq("id", bookingId)
+    .maybeSingle<{ id: string; profile_id: string | null; booking_no: string | null; status: string }>();
+  if (bookingErr) return { ok: false, error: `booking_read_failed: ${bookingErr.message}` };
+  if (!booking) return { ok: false, error: "booking_not_found" };
+  if (booking.profile_id !== profile.id) {
+    return { ok: false, error: "forbidden_not_owner" };
+  }
+  // Terminal bookings shouldn't get new attachments.
+  if (booking.status === "won" || booking.status === "lost" || booking.status === "cancelled") {
+    return { ok: false, error: `booking_terminal:${booking.status}` };
+  }
+
+  // 4) Build the storage key + upload
+  const safeName = sanitiseFilename(file.name || "file");
+  const ts = Date.now();
+  const storagePath = `${profile.id}/booking/${booking.id}/${kind}-${ts}-${safeName}`;
+
+  const supabase = await createClient();
+  const bytes = await file.arrayBuffer();
+  const { error: upErr } = await supabase.storage
+    .from("member-docs")
+    .upload(storagePath, bytes, {
+      contentType: file.type,
+      upsert: false,
+    });
+  if (upErr) return { ok: false, error: `upload_failed: ${upErr.message}` };
+
+  // 5) Insert the documents row (admin client — we already verified ownership)
+  const { data: inserted, error: insErr } = await admin
+    .from("documents")
+    .insert({
+      profile_id:   profile.id,
+      booking_id:   booking.id,
+      doc_type:     kind,
+      storage_path: storagePath,
+      mime_type:    file.type,
+      size_bytes:   file.size,
+    })
+    .select("id, doc_type, storage_path, mime_type, size_bytes, uploaded_at")
+    .single<{
+      id: string;
+      doc_type: BookingDocKind;
+      storage_path: string;
+      mime_type: string | null;
+      size_bytes: number | null;
+      uploaded_at: string;
+    }>();
+  if (insErr || !inserted) {
+    // Best-effort: orphan storage cleanup (the insert failed so the
+    // file would otherwise hang around).
+    try {
+      await supabase.storage.from("member-docs").remove([storagePath]);
+    } catch {
+      logger.warn("booking", "orphan storage cleanup failed", {
+        bookingId: redactId(booking.id),
+        storagePath,
+      });
+    }
+    return { ok: false, error: `db_insert_failed: ${insErr?.message ?? "unknown"}` };
+  }
+
+  // 6) Sign a download URL for the caller
+  const { data: signed } = await supabase.storage
+    .from("member-docs")
+    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECS);
+
+  // 7) Revalidate the customer + admin views that show docs
+  if (booking.booking_no) {
+    revalidatePath(`/bookings/${booking.booking_no}`);
+    revalidatePath(`/admin/bookings/${booking.booking_no}`);
+  }
+
+  return {
+    ok: true,
+    data: {
+      id:          inserted.id,
+      bookingId:   booking.id,
+      kind:        inserted.doc_type,
+      storagePath: inserted.storage_path,
+      mimeType:    inserted.mime_type,
+      sizeBytes:   inserted.size_bytes,
+      uploadedAt:  inserted.uploaded_at,
+      signedUrl:   signed?.signedUrl ?? null,
+    },
+  };
+}
+
+/**
+ * Remove a booking attachment (storage file + DB row).  Auth-required.
+ */
+export async function removeBookingDocument(
+  documentId: string,
+): Promise<ActionResult<{ removed: true }>> {
+  const { profile } = await requireAuth();
+  if (!profile) return { ok: false, error: "auth_required" };
+
+  if (!documentId || typeof documentId !== "string") {
+    return { ok: false, error: "invalid_document_id" };
+  }
+
+  const admin = createAdminClient();
+  const { data: doc, error: readErr } = await admin
+    .from("documents")
+    .select("id, profile_id, booking_id, storage_path")
+    .eq("id", documentId)
+    .maybeSingle<{
+      id: string;
+      profile_id: string;
+      booking_id: string | null;
+      storage_path: string;
+    }>();
+  if (readErr) return { ok: false, error: `read_failed: ${readErr.message}` };
+  if (!doc) return { ok: false, error: "not_found" };
+  if (doc.profile_id !== profile.id) {
+    return { ok: false, error: "forbidden_not_owner" };
+  }
+  if (!doc.booking_id) {
+    // Not a booking attachment — refuse (juristic docs are managed elsewhere).
+    return { ok: false, error: "not_a_booking_document" };
+  }
+
+  // Best-effort storage delete first (DB row is the canonical record;
+  // a dangling storage object is worse than a dangling DB row).
+  const supabase = await createClient();
+  const { error: storageErr } = await supabase.storage
+    .from("member-docs")
+    .remove([doc.storage_path]);
+  if (storageErr) {
+    logger.warn("booking", "storage delete failed (continuing)", {
+      docId: redactId(doc.id),
+      error: storageErr.message,
+    });
+  }
+
+  const { error: delErr } = await admin
+    .from("documents")
+    .delete()
+    .eq("id", doc.id);
+  if (delErr) return { ok: false, error: `db_delete_failed: ${delErr.message}` };
+
+  // Revalidate the surfaces.
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("booking_no")
+    .eq("id", doc.booking_id)
+    .maybeSingle<{ booking_no: string | null }>();
+  if (booking?.booking_no) {
+    revalidatePath(`/bookings/${booking.booking_no}`);
+    revalidatePath(`/admin/bookings/${booking.booking_no}`);
+  }
+
+  return { ok: true, data: { removed: true } };
+}
+
+/**
+ * List all attachments for a booking.  Auth-required.
+ *
+ * Admins see attachments for ANY booking; customers see attachments for own
+ * bookings only — explicit ownership check up front + admin role lookup
+ * (so callers don't need to branch).  Returns each document with a
+ * freshly-signed download URL.
+ */
+export async function listBookingDocuments(
+  bookingId: string,
+): Promise<ActionResult<{ documents: BookingDocument[] }>> {
+  const { profile } = await requireAuth();
+  if (!profile) return { ok: false, error: "auth_required" };
+
+  if (!bookingId || typeof bookingId !== "string") {
+    return { ok: false, error: "invalid_booking_id" };
+  }
+
+  const admin = createAdminClient();
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("profile_id")
+    .eq("id", bookingId)
+    .maybeSingle<{ profile_id: string | null }>();
+  if (!booking) return { ok: false, error: "booking_not_found" };
+
+  const isOwner = booking.profile_id === profile.id;
+  let isAdmin = false;
+  if (!isOwner) {
+    const { data: adminRow } = await admin
+      .from("admins")
+      .select("role")
+      .eq("profile_id", profile.id)
+      .maybeSingle<{ role: string }>();
+    isAdmin = !!adminRow && ["super", "ops", "sales_admin", "accounting"].includes(adminRow.role);
+  }
+  if (!isOwner && !isAdmin) return { ok: false, error: "forbidden" };
+
+  const { data: docs, error: listErr } = await admin
+    .from("documents")
+    .select("id, booking_id, doc_type, storage_path, mime_type, size_bytes, uploaded_at")
+    .eq("booking_id", bookingId)
+    .order("uploaded_at", { ascending: true })
+    .returns<Array<{
+      id: string;
+      booking_id: string;
+      doc_type: BookingDocKind;
+      storage_path: string;
+      mime_type: string | null;
+      size_bytes: number | null;
+      uploaded_at: string;
+    }>>();
+  if (listErr) return { ok: false, error: `list_failed: ${listErr.message}` };
+
+  // Sign each storage path via the admin storage client (avoids needing
+  // user-bound auth on the storage layer; admin policies are unrestricted).
+  const documents: BookingDocument[] = await Promise.all(
+    (docs ?? []).map(async (d) => {
+      const { data: signed } = await admin.storage
+        .from("member-docs")
+        .createSignedUrl(d.storage_path, SIGNED_URL_TTL_SECS);
+      return {
+        id:          d.id,
+        bookingId:   d.booking_id,
+        kind:        d.doc_type,
+        storagePath: d.storage_path,
+        mimeType:    d.mime_type,
+        sizeBytes:   d.size_bytes,
+        uploadedAt:  d.uploaded_at,
+        signedUrl:   signed?.signedUrl ?? null,
+      };
+    }),
+  );
+
+  return { ok: true, data: { documents } };
 }

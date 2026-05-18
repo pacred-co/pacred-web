@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Loader2, Phone, User, MessageSquare } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { submitBooking } from "@/actions/bookings";
+import { BookingDocUploader } from "@/components/booking/BookingDocUploader";
 
 /**
  * BK-1.11 — the review-step contact block + "ยืนยันการจอง" submit.
@@ -88,10 +89,16 @@ export function ReviewForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4"
-    >
+    <div className="space-y-4">
+      {/* BK-1.5 (G1) — attach documents BEFORE submit (uploads are
+          decoupled from submit; each upload is its own server action
+          → file is linked to the booking the moment it's chosen). */}
+      <BookingDocUploader bookingId={bookingId} />
+
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4"
+      >
       <div>
         {/* i18n-key: booking.review.contact.title */}
         <h3 className="text-sm font-bold text-foreground">ข้อมูลติดต่อกลับ</h3>
@@ -178,7 +185,8 @@ export function ReviewForm({
       <p className="text-center text-[11px] leading-snug text-muted">
         เมื่อยืนยัน — ทีมขายจะติดต่อกลับเร็วๆ นี้เพื่อยืนยันราคาจริง · ไม่มีการชำระเงินทันที
       </p>
-    </form>
+      </form>
+    </div>
   );
 }
 

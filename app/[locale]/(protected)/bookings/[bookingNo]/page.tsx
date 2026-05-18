@@ -1,11 +1,20 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { MessageCircle, Phone, ChevronLeft } from "lucide-react";
-import { getMyBookingByNo } from "@/actions/bookings";
+import { MessageCircle, Phone, ChevronLeft, FileText, Download } from "lucide-react";
+import { getMyBookingByNo, listBookingDocuments } from "@/actions/bookings";
 import { getServiceConfig } from "@/lib/booking/service-config";
 import { createClient } from "@/lib/supabase/server";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
-import type { QuoteLine } from "@/types/booking";
+import type { BookingDocKind, QuoteLine } from "@/types/booking";
+
+const DOC_LABEL_TH: Record<BookingDocKind, string> = {
+  booking_invoice:       "ใบกำกับสินค้า",
+  booking_packing_list:  "Packing List",
+  booking_certificate:   "Certificate / Form E",
+  booking_vat_paw20:     "ภพ.20",
+  booking_national_id:   "บัตรประชาชน",
+  booking_passport:      "พาสปอร์ต",
+};
 
 /**
  * BK-1.12 — per-booking detail in the customer portal.
@@ -94,6 +103,10 @@ export default async function BookingDetailPage({
   const b = res.data;
   const cfg = getServiceConfig(b.service_slug);
   const serviceTitle = cfg ? cfg.titleTh : b.service_slug;
+
+  // BK-1.5 (G1) — customer's own attachments
+  const docsRes = await listBookingDocuments(b.id);
+  const bookingDocs = docsRes.ok ? docsRes.data.documents : [];
 
   // Children — the picked option line-items (RLS scopes via parent).
   const supabase = await createClient();
@@ -290,6 +303,49 @@ export default async function BookingDetailPage({
           * ราคาเริ่มต้น — ทีมขายจะยืนยันราคาจริงหลังตรวจสินค้า
         </p>
       </section>
+
+      {/* BK-1.5 (G1) — customer's own booking attachments (read-only here;
+          customer edits via the review step before submit). */}
+      {bookingDocs.length > 0 && (
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+          <h3 className="text-sm font-bold text-foreground">
+            เอกสารที่แนบ ({bookingDocs.length})
+          </h3>
+          <ul className="space-y-2">
+            {bookingDocs.map((doc) => {
+              const fileName = doc.storagePath.split("/").pop() ?? doc.storagePath;
+              const cleanName = fileName.replace(/^[a-z_]+-\d+-/, "");
+              return (
+                <li
+                  key={doc.id}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-surface-alt/30 px-3 py-2"
+                >
+                  <FileText className="w-4 h-4 text-primary-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate">
+                      {DOC_LABEL_TH[doc.kind]}
+                    </p>
+                    <p className="text-[11px] text-muted truncate">{cleanName}</p>
+                  </div>
+                  {doc.signedUrl && (
+                    <a
+                      href={doc.signedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 h-8 px-3 rounded-md border border-primary-300 bg-white text-primary-600 hover:bg-primary-50 text-[11px] font-bold"
+                    >
+                      <Download className="w-3 h-3" /> ดู
+                    </a>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[10px] text-muted">
+            ลิงก์มีอายุ ~1 ชั่วโมง · refresh หน้าเพื่อสร้างลิงก์ใหม่
+          </p>
+        </section>
+      )}
 
       {/* Status history placeholder (until BK-2.8 / IC-1 ships booking_events) */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
