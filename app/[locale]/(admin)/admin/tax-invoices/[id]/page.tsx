@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { IssueButton } from "./issue-button";
 import { CancelButton } from "./cancel-button";
+import { CreditNoteButton } from "./credit-note-button";
 import { WhtPanel, type WhtPanelEntry } from "./wht-panel";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
@@ -59,6 +60,10 @@ type Header = {
   pdf_storage_path:    string | null;
   cancelled_at:        string | null;
   cancellation_reason: string | null;
+  /** G2e-2 — when this invoice was cancelled AND a credit note has been issued, points at the credit-note row. */
+  credit_note_id:      string | null;
+  /** G2e-2 — when this row IS a credit note (ใบลดหนี้), points back at the cancelled original. */
+  credit_note_for_id:  string | null;
   issued_at:           string | null;
   created_at:          string;
   profile: {
@@ -99,6 +104,7 @@ export default async function AdminTaxInvoiceDetailPage({
       buyer_name, buyer_address, buyer_tax_id, buyer_branch,
       subtotal_thb, vat_thb, total_thb, vat_mode, payment_method,
       pdf_storage_path, cancelled_at, cancellation_reason, issued_at, created_at,
+      credit_note_id, credit_note_for_id,
       profile:profiles!profile_id ( member_code, first_name, last_name, email, phone )
     `)
     .eq("id", id)
@@ -319,24 +325,73 @@ export default async function AdminTaxInvoiceDetailPage({
       )}
 
       {header.status === "cancelled" && (
-        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-2">
-          <p className="text-sm font-bold">ใบกำกับภาษีถูกยกเลิก</p>
-          {header.cancelled_at && (
-            <p className="text-xs text-muted">
-              ยกเลิกเมื่อ {new Date(header.cancelled_at).toLocaleString("th-TH")}
-            </p>
-          )}
-          {header.cancellation_reason && (
-            <p className="text-xs">เหตุผล: {header.cancellation_reason}</p>
-          )}
+        <section className="rounded-2xl border border-gray-200 bg-gray-50 dark:bg-surface-alt p-5 space-y-3">
+          <div>
+            <p className="text-sm font-bold">ใบกำกับภาษีถูกยกเลิก</p>
+            {header.cancelled_at && (
+              <p className="text-xs text-muted">
+                ยกเลิกเมื่อ {new Date(header.cancelled_at).toLocaleString("th-TH")}
+              </p>
+            )}
+            {header.cancellation_reason && (
+              <p className="text-xs mt-1">เหตุผล: {header.cancellation_reason}</p>
+            )}
+          </div>
           <a
             href={`/api/tax-invoice/${header.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block mt-2 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+            className="inline-block rounded-lg border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
           >
             ดู PDF (มีลายน้ำ CANCELLED) →
           </a>
+
+          {/* G2e-2 (R3) — credit-note issuance for refund cases.
+              Only show when:
+                · was previously issued (has serial_no) AND
+                · no credit note has been issued yet (credit_note_id null) */}
+          {header.serial_no && !header.credit_note_id && (
+            <div className="pt-3 border-t border-gray-300">
+              <CreditNoteButton
+                originalInvoiceId={header.id}
+                originalSerial={header.serial_no}
+                totalThb={Number(header.total_thb)}
+              />
+            </div>
+          )}
+
+          {/* Already credited — link to the credit note */}
+          {header.credit_note_id && (
+            <div className="pt-3 border-t border-gray-300">
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                📝 ออกใบลดหนี้แล้ว —{" "}
+                <Link
+                  href={`/admin/tax-invoices/${header.credit_note_id}`}
+                  className="text-primary-600 hover:underline font-medium"
+                >
+                  ดูใบลดหนี้ →
+                </Link>
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* G2e-2 — when this row IS a credit note, link back to the original */}
+      {header.credit_note_for_id && (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-5 space-y-2">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-100">
+            📝 ใบลดหนี้ (Credit Note)
+          </p>
+          <p className="text-xs text-amber-800 dark:text-amber-200">
+            ใบนี้เป็นใบลดหนี้ที่ออกเพื่อยกเลิกใบกำกับภาษีต้นฉบับ —{" "}
+            <Link
+              href={`/admin/tax-invoices/${header.credit_note_for_id}`}
+              className="text-amber-900 dark:text-amber-100 hover:underline font-medium"
+            >
+              ดูใบกำกับภาษีต้นฉบับ →
+            </Link>
+          </p>
         </section>
       )}
     </main>

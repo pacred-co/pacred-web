@@ -5,12 +5,17 @@
  *
  * Per ADR-0015 (locked 2026-05-16 night).
  *
- * V1 surface area (admin-only, customer self-upload deferred to V1.1):
+ * Admin surface area (see actions/wht.ts:customerUploadWhtCert for the
+ * V-A6.1 ✅ customer self-upload flow — fully wired into
+ * /service-order/[hNo]/receipt + /service-import/[fNo]/receipt +
+ * /freight/shipments/[id] via <CustomerWhtUploadPanel>):
  *   - createWhtEntry        — record a new WHT row against a parent order
  *   - markWhtCertReceived   — admin uploaded the 50 ทวิ cert; flip to received
  *   - waiveWhtCert          — super/accounting only; reason required
  *   - cancelWhtEntry        — created in error (only while cert_status='pending')
  *   - uploadWhtCert         — helper that takes a File and returns the storage path
+ *                             (admin override — still works alongside the
+ *                              customer self-upload path).
  *
  * Receipt + tax-invoice issuance is gated on `cert_status` by the caller
  * (`issueTaxInvoice` in `actions/admin/tax-invoices.tsx`) — this file owns

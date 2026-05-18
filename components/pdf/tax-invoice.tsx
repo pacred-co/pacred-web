@@ -84,6 +84,19 @@ export type TaxInvoiceData = {
     cert_status: "received" | "waived";
     cert_number: string | null;
   } | null;
+
+  /**
+   * G2e-2 (R3) — credit note marker.  When present, this PDF renders as a
+   * ใบลดหนี้ (CREDIT NOTE) instead of a regular tax invoice: the title
+   * changes, a reference line to the original invoice + the reason are
+   * printed, and the financial figures are interpreted as the credit
+   * amount (caller must pass POSITIVE numbers — the document type implies
+   * the negative sign).
+   */
+  credit_note?: {
+    for_serial_no: string;     // serial of the cancelled original invoice
+    reason:        string;     // reason for issuing the credit note
+  } | null;
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -109,6 +122,7 @@ function formatTaxId(id: string): string {
 
 export function TaxInvoice({ data }: { data: TaxInvoiceData }) {
   const isCancelled = data.status === "cancelled";
+  const isCreditNote = !!data.credit_note;
   const issueDate = data.issued_at ?? data.created_at;
   const refLabel = data.order_h_no
     ? `อ้างอิง: ฝากสั่งซื้อ ${data.order_h_no}`
@@ -136,19 +150,48 @@ export function TaxInvoice({ data }: { data: TaxInvoiceData }) {
             </Text>
           </View>
           <View style={styles.receiptMeta}>
-            <Text style={styles.receiptTitle}>ใบกำกับภาษี / ใบเสร็จรับเงิน</Text>
-            <Text style={styles.receiptTitleEn}>TAX INVOICE / RECEIPT</Text>
+            {isCreditNote ? (
+              <>
+                <Text style={styles.receiptTitle}>ใบลดหนี้</Text>
+                <Text style={styles.receiptTitleEn}>CREDIT NOTE</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.receiptTitle}>ใบกำกับภาษี / ใบเสร็จรับเงิน</Text>
+                <Text style={styles.receiptTitleEn}>TAX INVOICE / RECEIPT</Text>
+              </>
+            )}
             <Text style={styles.receiptNo}>
               เลขที่: {data.serial_no ?? "(รอออก)"}
             </Text>
             <Text style={styles.receiptDate}>
               วันที่ {formatDateThaiBE(issueDate)}
             </Text>
-            {data.status === "issued" && (
+            {isCreditNote && data.credit_note && (
+              <Text style={[styles.receiptDate, { marginTop: 2 }]}>
+                อ้างอิงใบกำกับภาษีเลขที่ {data.credit_note.for_serial_no}
+              </Text>
+            )}
+            {!isCreditNote && data.status === "issued" && (
               <Text style={styles.originalCopy}>(ต้นฉบับ / ORIGINAL)</Text>
             )}
           </View>
         </View>
+
+        {/* Credit-note reason banner — only on ใบลดหนี้ */}
+        {isCreditNote && data.credit_note?.reason && (
+          <View style={{
+            marginTop: 6, marginBottom: 4, paddingVertical: 6, paddingHorizontal: 8,
+            backgroundColor: "#FEF3C7", borderLeftWidth: 3, borderLeftColor: COLORS.primary,
+          }}>
+            <Text style={{ fontSize: 9, fontWeight: 700, color: "#92400E" }}>
+              เหตุผลในการลดหนี้:
+            </Text>
+            <Text style={{ fontSize: 9, color: "#92400E", marginTop: 2 }}>
+              {data.credit_note.reason}
+            </Text>
+          </View>
+        )}
 
         {/* Buyer block + ref */}
         <View style={styles.customerBlock}>
