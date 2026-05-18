@@ -2144,5 +2144,142 @@
     "retry": "ลองใหม่อีกครั้ง",
     "home": "กลับหน้าหลัก",
     "ref": "อ้างอิง"
+  },
+  "booking": {
+    "hub": {
+      "title": "จองบริการกับ Pacred",
+      "subtitle": "เลือกบริการที่ต้องการ ดูราคาประมาณการ ทีมขายติดต่อกลับยืนยันราคาจริง"
+    },
+    "detail": {
+      "headline": "จองบริการออนไลน์",
+      "estimateLead": "ราคาประมาณการ — เริ่มต้น ฿{amount}"
+    },
+    "selectors": {
+      "labor": {
+        "label": "แรงงาน",
+        "stepperLabel": "จำนวนคน",
+        "heavyLiftLabel": "เพิ่มค่ายกของหนัก"
+      },
+      "tractor": {
+        "label": "หัวลาก / รถบรรทุก",
+        "options": {
+          "none": "ไม่ต้องใช้",
+          "truck_4w": "รถ 4 ล้อ",
+          "truck_6w": "รถ 6 ล้อ",
+          "truck_10w": "รถ 10 ล้อ",
+          "trailer": "เทรลเลอร์"
+        }
+      },
+      "pin": {
+        "label": "จุดรับ + จุดส่ง",
+        "pickupLabel": "จุดรับสินค้า",
+        "dropoffLabel": "จุดส่งสินค้า",
+        "pinHint": "กดปุ่ม 📍 เพื่อปักหมุดบนแผนที่ หรือกรอกที่อยู่ด้านล่าง"
+      },
+      "docAttach": {
+        "label": "แนบเอกสาร (ไม่บังคับ)",
+        "placeholderHint": "แนบ Invoice / Packing List / Bill of Lading หรือเอกสารอื่นๆ ที่เกี่ยวข้อง"
+      },
+      "docMode": {
+        "label": "การจัดการเอกสาร",
+        "options": {
+          "none": "ไม่ต้องออกเอกสาร",
+          "tax_invoice": "ออกใบกำกับภาษี",
+          "customs_declaration": "ออกใบขนสินค้า"
+        }
+      }
+    },
+    "panel": {
+      "title": "ราคาประมาณการ",
+      "totalLabel": "รวมประมาณการ",
+      "disclaimer": "* ราคาเริ่มต้น — ทีมขายยืนยันราคาจริงหลังตรวจสินค้า",
+      "bookNow": "จองเลย",
+      "consult": "ปรึกษาทีม"
+    },
+    "upgrades": {
+      "title": "อัปเกรดบริการ"
+    },
+    "related": {
+      "title": "บทความที่เกี่ยวข้อง"
+    },
+    "howItWorks": {
+      "title": "การจองทำงานอย่างไร"
+    },
+    "gate": {
+      "prompt": "สมัครก่อนมั้ย?",
+      "subtitle": "บันทึกการจองนี้ไว้ในระบบ ทีมขายติดต่อกลับได้เร็วขึ้น",
+      "signup": "สมัคร / เข้าสู่ระบบ",
+      "continueAsGuest": "ดำเนินการต่อแบบไม่สมัคร"
+    },
+    "review": {
+      "title": "ตรวจสอบการจอง",
+      "contactBlockTitle": "ข้อมูลติดต่อ",
+      "namePlaceholder": "ชื่อ-นามสกุล",
+      "phonePlaceholder": "เบอร์โทร",
+      "linePlaceholder": "LINE ID (ไม่บังคับ)",
+      "notePlaceholder": "รายละเอียดเพิ่มเติม (ไม่บังคับ)",
+      "submit": "ยืนยันการจอง",
+      "back": "← กลับไปแก้ไข"
+    },
+    "confirmation": {
+      "title": "ได้รับการจองแล้ว",
+      "refLabel": "เลขที่จอง",
+      "nextStep": "ทีมขายจะติดต่อกลับเร็วๆ นี้เพื่อยืนยันราคาจริง",
+      "viewAll": "ดูการจองทั้งหมด"
+    },
+    "portal": {
+      "listTitle": "การจองของฉัน",
+      "emptyState": "ยังไม่มีการจอง",
+      "emptyCta": "เริ่มจองบริการแรก"
+    },
+    "status": {
+      "draft": "ร่าง",
+      "submitted": "ส่งแล้ว · รอทีมขาย",
+      "contacted": "ทีมขายติดต่อแล้ว",
+      "quoted": "ออกใบเสนอราคาแล้ว",
+      "won": "ตกลงรับงาน",
+      "lost": "ไม่ตกลง",
+      "cancelled": "ยกเลิก"
+    },
+    "openBooking": {
+      "cta": "เปิดบุ๊กกิ้ง",
+      "hint": "เลือก option + ดูราคาประมาณการแบบละเอียดก่อนจอง"
+    },
+    "landingCta": {
+      "primary": "จองออนไลน์",
+      "subtitle": "ดูราคาประมาณการครบทุกหัว ก่อนทีมขายติดต่อยืนยัน"
+    },
+    "admin": {
+      "listTitle": "การจองทั้งหมด",
+      "subtitle": "workflow: submitted → contacted → quoted → won/lost · ทีมขายรับงานจากที่นี่",
+      "filterAll": "ทั้งหมด",
+      "filterDraft": "ร่าง",
+      "filterSubmitted": "รอติดต่อ",
+      "filterContacted": "ติดต่อแล้ว",
+      "filterQuoted": "ออกใบเสนอ",
+      "filterWon": "ตกลงรับงาน",
+      "filterLost": "ไม่ตกลง",
+      "filterCancelled": "ยกเลิก",
+      "colBookingNo": "เลขที่จอง",
+      "colStatus": "สถานะ",
+      "colService": "บริการ",
+      "colEstimate": "ประมาณการ",
+      "colContact": "ลูกค้า",
+      "colSubmitted": "ส่งเมื่อ",
+      "colCreated": "สร้างเมื่อ",
+      "emptyTitle": "ยังไม่มีการจอง",
+      "emptyHint": "เมื่อลูกค้ายืนยันการจองผ่านเว็บไซต์ จะเข้ามาที่นี่ — ทีมขายติดต่อกลับเพื่อยืนยันราคาจริง",
+      "backToList": "← กลับหน้ารายการ",
+      "detailTitle": "รายละเอียดการจอง",
+      "sectionService": "บริการ + เส้นทาง",
+      "sectionContact": "ข้อมูลติดต่อลูกค้า",
+      "sectionEstimate": "ใบประมาณการ (snapshot)",
+      "sectionOptions": "Option ที่ลูกค้าเลือก",
+      "sectionPin": "จุดรับ / จุดส่ง",
+      "sectionLead": "ที่มาของ lead",
+      "sectionTimeline": "ประวัติสถานะ",
+      "actionsTitle": "การดำเนินการ",
+      "actionsTodo": "เปลี่ยนสถานะ (จะมาใน BK-2 — booking-actions desk)"
+    }
   }
 }

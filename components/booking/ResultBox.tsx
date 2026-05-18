@@ -1,5 +1,6 @@
 import type { CalcResult, QuoteCarry } from "@/types/booking";
 import { QuoteCTA } from "./QuoteCTA";
+import { OpenBookingCTA } from "./OpenBookingCTA";
 
 interface ResultBoxProps {
   result: CalcResult;
@@ -50,10 +51,23 @@ export function ResultBox({ result, quote }: ResultBoxProps) {
         </div>
       )}
 
-      {/* G-F-2 — bridge the priced quote into the buy flow. Only when there
-          is a real number to act on (a 0-amount "special product, contact
-          us" result keeps the phone/LINE path as the only escalation). */}
-      {hasAmount && quote && <QuoteCTA quote={quote} />}
+      {/* G-F-2 + BK-1 — bridge the priced quote into either the fast self-
+          serve order flow (`QuoteCTA` → /start-order, primary) or the
+          considered booking flow (`OpenBookingCTA` → /book/[service],
+          outline secondary). Only renders when there is a real number to
+          act on (a 0-amount "special product, contact us" result keeps the
+          phone/LINE path as the only escalation).
+
+          `QuoteCTA` self-checks its mode set (sea/truck/air/sourcing only)
+          and renders null otherwise; `OpenBookingCTA` works for every mode
+          that maps to a bookable service (incl. customs / remit — exactly
+          the modes that used to dead-end into the phone/LINE modal). */}
+      {hasAmount && quote && (
+        <div className="px-5 py-4 bg-white border-t border-gray-200 space-y-3">
+          <QuoteCTA quote={quote} />
+          <OpenBookingCTA quote={quote} />
+        </div>
+      )}
     </div>
   );
 }

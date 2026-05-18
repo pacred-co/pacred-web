@@ -2144,5 +2144,142 @@
     "retry": "Try again",
     "home": "Back to home",
     "ref": "Reference"
+  },
+  "booking": {
+    "hub": {
+      "title": "Book a Pacred service",
+      "subtitle": "Pick a service, see your estimate, our sales team confirms the real price."
+    },
+    "detail": {
+      "headline": "Book this service online",
+      "estimateLead": "Estimated price — starting at ฿{amount}"
+    },
+    "selectors": {
+      "labor": {
+        "label": "Labor",
+        "stepperLabel": "Workers",
+        "heavyLiftLabel": "Add heavy-lift surcharge"
+      },
+      "tractor": {
+        "label": "Tractor / Truck",
+        "options": {
+          "none": "Not needed",
+          "truck_4w": "4-wheel truck",
+          "truck_6w": "6-wheel truck",
+          "truck_10w": "10-wheel truck",
+          "trailer": "Trailer"
+        }
+      },
+      "pin": {
+        "label": "Pickup + drop-off",
+        "pickupLabel": "Pickup location",
+        "dropoffLabel": "Drop-off location",
+        "pinHint": "Tap 📍 to pin on the map, or type the address below"
+      },
+      "docAttach": {
+        "label": "Attach documents (optional)",
+        "placeholderHint": "Attach Invoice / Packing List / Bill of Lading or other relevant docs"
+      },
+      "docMode": {
+        "label": "Document handling",
+        "options": {
+          "none": "No document required",
+          "tax_invoice": "Issue tax invoice",
+          "customs_declaration": "Issue customs declaration"
+        }
+      }
+    },
+    "panel": {
+      "title": "Estimated price",
+      "totalLabel": "Estimated total",
+      "disclaimer": "* Starting price — sales rep confirms the real price after reviewing the goods",
+      "bookNow": "Book now",
+      "consult": "Consult sales"
+    },
+    "upgrades": {
+      "title": "Service upgrades"
+    },
+    "related": {
+      "title": "Related articles"
+    },
+    "howItWorks": {
+      "title": "How booking works"
+    },
+    "gate": {
+      "prompt": "Sign up first?",
+      "subtitle": "Save this booking in your account — sales team can reach you faster.",
+      "signup": "Sign up / Log in",
+      "continueAsGuest": "Continue as guest"
+    },
+    "review": {
+      "title": "Review your booking",
+      "contactBlockTitle": "Contact details",
+      "namePlaceholder": "Full name",
+      "phonePlaceholder": "Phone number",
+      "linePlaceholder": "LINE ID (optional)",
+      "notePlaceholder": "Additional notes (optional)",
+      "submit": "Confirm booking",
+      "back": "← Back to edit"
+    },
+    "confirmation": {
+      "title": "Booking received",
+      "refLabel": "Booking ref",
+      "nextStep": "Our sales team will reach out shortly to confirm the real price.",
+      "viewAll": "View all bookings"
+    },
+    "portal": {
+      "listTitle": "My bookings",
+      "emptyState": "No bookings yet",
+      "emptyCta": "Start your first booking"
+    },
+    "status": {
+      "draft": "Draft",
+      "submitted": "Submitted · awaiting sales",
+      "contacted": "Sales contacted you",
+      "quoted": "Quoted",
+      "won": "Confirmed",
+      "lost": "Not proceeding",
+      "cancelled": "Cancelled"
+    },
+    "openBooking": {
+      "cta": "Open booking",
+      "hint": "Pick options + see the full estimate before you book"
+    },
+    "landingCta": {
+      "primary": "Book online",
+      "subtitle": "See the full estimate before sales reaches out to confirm"
+    },
+    "admin": {
+      "listTitle": "All bookings",
+      "subtitle": "workflow: submitted → contacted → quoted → won/lost · sales picks up jobs here",
+      "filterAll": "All",
+      "filterDraft": "Draft",
+      "filterSubmitted": "Awaiting contact",
+      "filterContacted": "Contacted",
+      "filterQuoted": "Quoted",
+      "filterWon": "Confirmed",
+      "filterLost": "Not proceeding",
+      "filterCancelled": "Cancelled",
+      "colBookingNo": "Booking #",
+      "colStatus": "Status",
+      "colService": "Service",
+      "colEstimate": "Estimate",
+      "colContact": "Customer",
+      "colSubmitted": "Submitted",
+      "colCreated": "Created",
+      "emptyTitle": "No bookings yet",
+      "emptyHint": "Customer-confirmed bookings land here — sales calls them back to confirm the real price.",
+      "backToList": "← Back to list",
+      "detailTitle": "Booking detail",
+      "sectionService": "Service + route",
+      "sectionContact": "Customer contact",
+      "sectionEstimate": "Estimate snapshot",
+      "sectionOptions": "Options the customer picked",
+      "sectionPin": "Pickup / drop-off",
+      "sectionLead": "Lead source",
+      "sectionTimeline": "Status history",
+      "actionsTitle": "Actions",
+      "actionsTodo": "Status transitions (coming in BK-2 — booking-actions desk)"
+    }
   }
 }

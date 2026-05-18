@@ -130,3 +130,148 @@ export interface RemitForm {
   country: string;
   purpose: string;
 }
+
+// ════════════════════════════════════════════════════════════
+// BK-1 — booking-flow types
+// Design: docs/research/booking-flow-system-2026-05-18.md §4-§6
+// ════════════════════════════════════════════════════════════
+
+/** The 7 lifecycle states a `bookings` row moves through. */
+export type BookingStatus =
+  | "draft"
+  | "submitted"
+  | "contacted"
+  | "quoted"
+  | "won"
+  | "lost"
+  | "cancelled";
+
+/**
+ * The bookable service slugs the booking detail page supports.  Must stay
+ * in lockstep with `lib/booking/service-config.ts` (the per-service
+ * selector manifest) + the `bookings.service_slug` text column.
+ *
+ * Matches the existing service-catalogue + the `BookingCalculator` modes:
+ *   - sea modes (sea_lcl / sea_fcl) → 'import-china-lcl' | 'import-china-fcl'
+ *   - truck mode                    → 'import-china-truck'
+ *   - air mode                      → 'import-china-air'
+ *   - customs mode                  → 'customs-clearance'
+ *   - sourcing mode                 → 'china-shopping'
+ *   - remit mode                    → 'yuan-transfer'
+ *   - export (no calculator mode)   → 'export'
+ */
+export type BookingServiceSlug =
+  | "customs-clearance"
+  | "import-china-lcl"
+  | "import-china-fcl"
+  | "import-china-truck"
+  | "import-china-air"
+  | "china-shopping"
+  | "yuan-transfer"
+  | "export";
+
+/** The 5 selector keys the per-service manifest enables/disables (§4.3). */
+export type BookingSelectorKey =
+  | "labor"
+  | "tractor"
+  | "pin"
+  | "doc_attach"
+  | "doc_mode";
+
+/** Document-handling mode (§4.3 selector #5) — radio, one-of-three. */
+export type BookingDocMode = "none" | "tax_invoice" | "customs_declaration";
+
+/** Tractor / truck-head class (§4.3 selector #2). */
+export type BookingTractorClass =
+  | "none"
+  | "truck_4w"
+  | "truck_6w"
+  | "truck_10w"
+  | "trailer";
+
+/** One line in the quotation receipt (§4.4 — the live itemised total). */
+export interface QuoteLine {
+  /** Stable key — drives React keys + DB write to booking_options.option_key. */
+  key: string;
+  /** TH/EN-resolved label — what the customer sees. */
+  label: string;
+  /** Short detail under the label — '×2 คน' / 'หัวลาก 10 ล้อ'. */
+  detail?: string;
+  /** Quantity (1 for most rows; the labor row is N). */
+  quantity?: number;
+  /** Per-unit rate (snapshot). */
+  unitAmount?: number;
+  /** Line amount in THB. */
+  amount: number;
+}
+
+/** The live quotation receipt — the heart of the booking detail page. */
+export interface QuoteBreakdown {
+  rows: QuoteLine[];
+  total: number;
+  /** Always true for BK-1 — the estimate-honesty rule (§4.7). */
+  isEstimate: true;
+  currency: "THB";
+}
+
+/** A `booking_rates` row as the front-end / actions consume it. */
+export interface BookingRate {
+  id: string;
+  scope: "labor" | "tractor" | "doc" | "upgrade";
+  rateKey: string;
+  serviceSlug: string | null;
+  labelTh: string;
+  labelEn: string;
+  unitAmount: number;
+  active: boolean;
+}
+
+/**
+ * The option-selection state held by the booking detail page.  Sent to
+ * `createDraftBooking` + replayed on the review step (§5.4 — the carry).
+ */
+export interface BookingOptionState {
+  labor: number;                       // 0..N — workers
+  laborHeavyLift: boolean;
+  tractor: BookingTractorClass;
+  pickup: { lat: number | null; lng: number | null; address: string };
+  dropoff: { lat: number | null; lng: number | null; address: string };
+  docMode: BookingDocMode;
+  attachedDocumentIds: string[];       // documents.id refs (member-docs)
+  upgrades: string[];                  // selected upgrade rate_key list
+}
+
+/**
+ * The payload `createDraftBooking()` accepts — service + options + the
+ * front-end-computed estimate snapshot (the server recomputes + validates
+ * before persisting).
+ */
+export interface CreateBookingDraftInput {
+  serviceSlug: BookingServiceSlug;
+  routeSlug?: string;
+  transportMode?: TabMode | null;
+  options: BookingOptionState;
+  /** Base service charge (THB) — from the shipped calc* functions. */
+  baseAmount: number;
+  baseLabel: string;
+  sourceChannel?: string;
+  sourceUrl?: string;
+}
+
+/**
+ * The payload `submitBooking()` accepts on the review step — the draft id
+ * + the customer contact block (pre-filled from the profile, editable).
+ */
+export interface SubmitBookingInput {
+  bookingId: string;
+  contactName: string;
+  contactPhone: string;
+  contactLine?: string;
+  customerNote?: string;
+}
+
+/** What `submitBooking()` returns to the confirmation page. */
+export interface SubmitBookingResult {
+  bookingId: string;
+  bookingNo: string;
+}
