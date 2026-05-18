@@ -59,12 +59,13 @@ export default async function GuangzhouWarehousePage({
             "รับสินค้าเข้าคลังทุกวัน",
           ]}
           shippingMark={[
-            { label: "收货人姓名 (ผู้รับ)", value: "PR ลูกค้า / EK = รถ / SEA = เรือ" },
-            { label: "详细地址 (ที่อยู่)", value: "广州市白云区 江高镇沙溪东路18号66仓 (燕子情创园)" },
+            { label: "地址信息 (พื้นที่)", value: "广东省 / 广州市 / 白云区 / 江高镇" },
+            { label: "详细地址 (ที่อยู่)", value: "广东省广州市白云区江高镇沙溪东路18号3-1号仓库, (PR000/EK) 仓库" },
+            { label: "收货人姓名 (ผู้รับ)", value: "PR000/EK" },
+            { label: "手机号码 (โทร)", value: "+13242858157" },
             { label: "邮政编码 (ไปรษณีย์)", value: "510000" },
-            { label: "手机号码 (โทร)", value: "+13168385163" },
           ]}
-          shippingMarkNote="กรุณานำรหัส PR สมาชิกของท่านไปแทนที่ตำแหน่ง 'PR ลูกค้า' พร้อมระบุ EK (รถ) หรือ SEA (เรือ) ตามรูปแบบขนส่งที่ต้องการ"
+          shippingMarkNote="EK=รถ SEA=เรือ"
           photo="/images/gwanzhou.png"
         />
         <ImportExportBanner />
