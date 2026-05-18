@@ -27,7 +27,9 @@ const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surfac
 export function AddItemForm() {
   const t = useTranslations("serviceOrder");
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("manual");
+  // Legacy PCS (shops.php / cart.php) leads with the paste-a-link search box —
+  // it is the iconic order-entry surface. Default to "url"; "manual" is a fallback.
+  const [mode, setMode] = useState<Mode>("url");
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -39,9 +41,9 @@ export function AddItemForm() {
 
   return (
     <div className="space-y-6">
-      {/* Mode tabs */}
+      {/* Mode tabs — legacy order: link-paste first, keyword, then manual fallback */}
       <div className="flex gap-2 border-b border-border">
-        {(["manual", "url", "keyword"] as const).map((m) => (
+        {(["url", "keyword", "manual"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -60,9 +62,9 @@ export function AddItemForm() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {msg   && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{msg}</div>}
 
-      {mode === "manual"  && <ManualPanel onAdded={() => flash(t("addedToast"))} onError={(e) => flash(e, true)} pending={pending} startTransition={startTransition} router={router} />}
       {mode === "url"     && <UrlPanel    onAdded={() => flash(t("addedToast"))} onError={(e) => flash(e, true)} pending={pending} startTransition={startTransition} router={router} />}
       {mode === "keyword" && <KeywordPanel onAdded={() => flash(t("addedToast"))} onError={(e) => flash(e, true)} pending={pending} startTransition={startTransition} router={router} />}
+      {mode === "manual"  && <ManualPanel onAdded={() => flash(t("addedToast"))} onError={(e) => flash(e, true)} pending={pending} startTransition={startTransition} router={router} />}
     </div>
   );
 }
@@ -180,6 +182,7 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
   router: ReturnType<typeof useRouter>;
 }) {
   const t = useTranslations("serviceOrder");
+  const tp = useTranslations("pcsOrder");
   const [url, setUrl] = useState("");
   const [detail, setDetail] = useState<ChinaProductDetail | null>(null);
   const [yuanRate, setYuanRate] = useState(5);     // fetched live
@@ -325,9 +328,14 @@ function UrlPanel({ onAdded, onError, pending, startTransition, router }: {
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
         <label className="block space-y-1">
           <span className="text-sm font-medium">{t("urlPaste")}</span>
-          <div className="flex gap-2">
-            <input value={url} onChange={(e) => setUrl(e.target.value)} className={inputCls} placeholder="https://detail.1688.com/offer/..." />
-            <Button type="button" onClick={onSearch} disabled={searching}>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className={inputCls}
+              placeholder={tp("searchPlaceholder")}
+            />
+            <Button type="button" onClick={onSearch} disabled={searching} className="shrink-0">
               {searching ? "..." : t("convert")}
             </Button>
           </div>

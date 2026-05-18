@@ -2356,5 +2356,28 @@
     "tileWithdraw": "Withdraw",
     "tileAddress": "Delivery addresses",
     "tileLogout": "Sign out"
+  },
+  "pcsOrder": {
+    "searchPlaceholder": "Search products + paste a 1688 / Taobao link — instant Thai translation",
+    "colOrderNo": "Order No.",
+    "colProduct": "Product",
+    "colPriceThb": "Price (THB)",
+    "colOptions": "Options",
+    "itemCount": "{count} item(s)",
+    "viewDetail": "View details",
+    "pay": "Pay",
+    "payOneHint": "Select one order at a time to pay",
+    "cancelOrder": "Cancel order",
+    "cancelOneConfirm": "Cancel order {hNo}?",
+    "printReceipt": "Print receipt",
+    "printInvoice": "Print invoice",
+    "selectRow": "Select this order",
+    "selectedCount": "{count} selected",
+    "bulkCancel": "Cancel selected orders",
+    "bulkCancelConfirm": "Cancel all {count} selected orders?",
+    "itemCountLabel": "Items:",
+    "payTotalLabel": "Total due:",
+    "emptyFilter": "No orders in this status",
+    "emptyHint": "Start by pasting a product link from 1688 / Taobao / Tmall"
   }
 }
