@@ -195,7 +195,7 @@ export default async function AdminBookingDetailPage({
 
   // BK-1.5 (G1) — booking attachments (uses listBookingDocuments — admin
   // role auth covers cross-customer reads via the documents_admin_read
-  // policy added in migration 0081).
+  // policy added in migration 0084).
   const docsRes = await listBookingDocuments(row.id);
   const bookingDocs = docsRes.ok ? docsRes.data.documents : [];
 

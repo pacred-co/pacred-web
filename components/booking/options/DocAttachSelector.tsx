@@ -21,7 +21,7 @@
 import { Paperclip, FileText, Info } from "lucide-react";
 
 interface DocSlot {
-  /** Stable key — matches a `booking_*` doc_type in migration 0081. */
+  /** Stable key — matches a `booking_*` doc_type in migration 0084. */
   key: string;
   /** i18n-key: booking.selector.doc_attach.slot.<key> */
   labelTh: string;
