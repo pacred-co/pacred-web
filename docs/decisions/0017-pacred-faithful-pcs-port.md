@@ -1,8 +1,9 @@
 # ADR-0017 — Pacred becomes a faithful port of the PCS Cargo system
 
-**Status:** Accepted — owner decision (พี่ป๊อป), confirmed by เดฟ 2026-05-18.
-Pending ก๊อต ratification. Supersedes the "V2 = rebuilt owner-pleaser"
-framing of [ADR-0010](0010-v2-v3-version-strategy.md).
+**Status:** Accepted + ratified 2026-05-18 (เดฟ, on the team's behalf) —
+owner decision (พี่ป๊อป), confirmed by เดฟ 2026-05-18. Supersedes the
+"V2 = rebuilt owner-pleaser" framing of
+[ADR-0010](0010-v2-v3-version-strategy.md).
 
 ## Context
 
@@ -68,7 +69,7 @@ customers already know and use daily.
 | **เดฟ** | Phase A — drive the data migration to production · integrate · coordinate Phase B |
 | **ภูม** | Phase B backend — rework admin + customer-portal backend onto the ported `tb_*` schema + legacy workflow |
 | **ปอน** | Phase B frontend — rework the customer-facing UI to match the legacy PCS look + flow |
-| **ก๊อต** | Ratify this ADR · clear the JMF API spec with แต้ม · production-load gate |
+| **ก๊อต** | ✅ ADR ratified · build the JMF API himself (reverse-engineered) · fetch the customer image/file storage from แต้ม · production-load gate |
 
 ## References
 

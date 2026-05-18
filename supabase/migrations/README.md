@@ -97,22 +97,26 @@
 > additive — zero data migration. `0079`/`0086` likewise reference
 > `work_items` — ascending order satisfies it.
 
-> 🗂 **Post-launch backlog — completeness + apply order.** The migration files
-> present are `0058`-`0080` + `0084`-`0086` (`0065` is an intentional gap;
-> `0081`-`0083` are reserved for the D1 legacy schema — see the next note).
-> The table above does not individually list `0058` `0059` `0066`-`0072`. For
-> reference: `0058` U1-6 refund_requests · `0059` U1-1 container unify
-> (cargo_containers canonical) · `0066` post-U1 audit fixes · `0067` U2-1
-> PCS→Pacred customer migration — **superseded by D1; see
+> 🗂 **Post-launch backlog — DB-1 ✅ COMPLETE (verified 2026-05-18).** The
+> migration files present are `0058`-`0080` + `0084`-`0086` (`0065` is an
+> intentional gap; `0081`-`0083` are reserved for the D1 legacy schema — see
+> the next note). The table above does not individually list `0058` `0059`
+> `0066`-`0072`. For reference: `0058` U1-6 refund_requests · `0059` U1-1
+> container unify (cargo_containers canonical) · `0066` post-U1 audit fixes ·
+> `0067` U2-1 PCS→Pacred customer migration — **superseded by D1; see
 > [pcs-data-migration.md §8](../../docs/runbook/pcs-data-migration.md)** ·
 > `0068` U2-5 cargo_sacks · `0069` U2-2 container_costs + disbursements ·
 > `0070` U4-1 supervisory layer (cron_invocations + delivery log) · `0071`
 > U4-2 customer credit line · `0072` C-1 wallet self-serve amount-sign guard.
 > The authoritative migration set is the `supabase/migrations/` directory.
-> **Apply `0058`-`0080` in ascending order now** (DB-1 — idempotent + additive);
-> `0084`-`0086` (ภูม's Phase-C batch) are **frozen** — apply them with Phase C,
-> not now (decision Q5). Full deploy sequencing — what prod already has, what
-> to apply, in what order → [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
+> **`0058`-`0080` are ALL applied to prod** — confirmed 2026-05-18 by a direct
+> prod-Supabase REST probe (marker tables `refund_requests` 0058 · `cargo_sacks`
+> 0068 · `container_costs` 0069 · `platform_incidents` 0077 · `work_items` 0080
+> all exist on prod). **prod is verified at `0080`.** This includes the
+> launch-integrity money/security guards `0060`-`0064` — there is **NO P0
+> hole**. `0084`-`0086` (ภูม's Phase-C batch) remain **frozen** — NOT on prod;
+> apply them with Phase C, not now (decision Q5). Full deploy sequencing →
+> [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
 
 > 🔢 **`0081`-`0083` are reserved** for the D1 legacy-PCS schema — the 117
 > `tb_*` tables + follow-ups (see

@@ -96,9 +96,17 @@ In the repo (no PII): `lib/auth/pcs-legacy-password.ts` + its test.
 
 ## 7. Open / pending — needs เดฟ or แต้ม
 
+> **แต้ม hand-over (reduced 2026-05-18).** ก๊อต confirmed the **JMF API spec
+> is no longer needed from แต้ม** — ก๊อต reverse-engineers / builds the JMF
+> API himself. The remaining แต้ม dependency is **two items**: (1) the
+> customer image/file storage below, and (2) the final `pcsc_main` cutover
+> dump (§6.1).
+
 - 🔴 **Customer upload files** — `images/users`, `images/shops`,
   `storage/file`, `storage/slip` live on the legacy production server (held
-  by แต้ม). Needed for §6.8; requested via the แต้ม hand-over list.
+  by แต้ม). ก๊อต fetches these from แต้ม → dumped into Pacred so migrated
+  customers keep continuity (their order history + their documents). Needed
+  for §6.8.
 - ✅ **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM`
   (PCS + letters) and `PW` / `JET` / `FCL` / `AIGA` (no PCS prefix).
   **DECIDED (เดฟ 2026-05-18 · Q3):** rewrite the `PCS<letters>` group to
@@ -121,26 +129,26 @@ into the rebuilt `profiles` table via Supabase Auth, with a password reset.
 
 This legacy port is one of **three** prod-DB workstreams. Run them in order:
 
-**DB-0 — Verify what prod already has (do FIRST — it gates the rest).**
-The launch (2026-05-17) shipped on migrations up to ~`0057`; everything
-`0058`+ has accumulated on `dave` unapplied. Confirm the exact applied set
-before planning any deploy — in the prod SQL Editor:
-`select name from supabase_migrations.schema_migrations order by name;`
-Owner: เดฟ. Nothing below sequences correctly without this.
+**DB-0 — Verify what prod already has. ✅ RESOLVED 2026-05-18.**
+A direct prod-Supabase REST probe (project `yzljakczhwrpbxflnmco`) on
+2026-05-18 confirmed migrations `0058`-`0080` are **ALL applied to prod** —
+the marker tables `refund_requests` (0058), `cargo_sacks` (0068),
+`container_costs` (0069), `platform_incidents` (0077), `work_items` (0080)
+all exist on prod. **prod is verified at `0080`.** Owner was: เดฟ.
 
-**DB-1 — Apply the backlog (`0058`-`0080`) to prod (no external blocker).**
-22 idempotent, additive migrations on `dave` (`0065` is an intentional gap).
-`0081`-`0083` are left free for DB-2; `0084`-`0086` (ภูม's Phase-C batch) are
-**frozen** — not applied until Phase B ships, per Q5 in
+**DB-1 — Apply the backlog (`0058`-`0080`) to prod. ✅ DONE
+(verified 2026-05-18).** All 22 idempotent, additive migrations (`0065` is an
+intentional gap) are on prod — confirmed by the DB-0 probe above. This
+includes the launch-integrity money/security guards `0060`-`0064` — the S-1
+RLS keystone (`0062`), the wallet-overdraw floor (`0064`), the
+money-idempotency guards (`0061`/`0063`) — so **prod carries NO open money
+hole; there is no P0 here.** `0081`-`0083` are left free for DB-2;
+`0084`-`0086` (ภูม's Phase-C batch) remain **frozen** — NOT on prod, not
+applied until Phase B ships, per Q5 in
 [poom-d1-open-questions.md](../research/poom-d1-open-questions.md).
-They include the launch-integrity money/security guards `0060`-`0064` — the
-S-1 RLS keystone (`0062`), the wallet-overdraw floor (`0064`), the
-money-idempotency guards (`0061`/`0063`). If DB-0 shows those are not on
-prod, **applying them is P0 regardless of D1** — prod carries open money
-holes until they land. Apply in ascending number order (dependencies resolve
-that way; all idempotent — safe to re-run). `0067_pcs_customer_migration` is
-superseded by this runbook (§8) — harmless to apply, but the feature it backs
-is dead. Owner: ภูม. Completing DB-1 is what unblocks any `dave→main` deploy.
+`0067_pcs_customer_migration` is on prod but superseded by this runbook
+(§8) — the feature it backs is dead. Owner was: ภูม. DB-1 being done
+unblocks any `dave→main` deploy.
 
 **DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migrations
 **`0081`-`0083`** (schema · indexes · member-seq — Q1) + the data load. Gated
