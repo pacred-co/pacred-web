@@ -299,17 +299,13 @@ export default async function CustomsClearancePage({
         <section className="relative pt-1 md:pt-2 pb-1 md:pb-2">
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <h1 className="text-[20px] md:text-[40px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
-              <span className="md:block">บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์ภาษี (สินค้าติดด่าน)</span>{" "}
+              <span className="md:block">บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์ภาษี (<span className="text-primary-600 text-[28px] md:text-[56px]">สินค้าติดด่าน</span>)</span>{" "}
               <span className="md:block md:mt-1">สุวรรณภูมิ คลองเตย แหลมฉบัง <span className="text-primary-600">| Pacred Shipping</span></span>
             </h1>
 
-            <h2 className="mt-1.5 md:mt-2 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px] md:max-w-none md:whitespace-nowrap">
-              รับเคลียร์ทุกเรื่องที่ด่าน — ทั้งภาษีนำเข้า ของติดด่าน และพิธีการศุลกากร <span className="text-primary-600/80 font-semibold">เริ่มเพียง 2,800 บาท</span> ทักไลน์ปรึกษาฟรีตลอด 24 ชม.
-            </h2>
-
-            {/* ─── Service scope banner (red, per ปอน 2026-05-18 v2) ─── */}
+            {/* ─── Service scope banner — tappable LINE link, headline only (per เดฟ 2026-05-18) ─── */}
             <div
-              className="relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.30)]"
+              className="group relative mt-3 md:mt-4 overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.30)] transition-all duration-300 hover:shadow-[0_18px_44px_rgba(179,0,0,0.45)] hover:-translate-y-0.5"
               style={{ background: "linear-gradient(135deg, #d60000 0%, #b30000 45%, #8c0000 100%)" }}
             >
               <span
@@ -326,31 +322,44 @@ export default async function CustomsClearancePage({
                 }}
               />
 
-              <div className="relative px-4 md:px-6 py-4 md:py-5">
-                <h3 className="flex items-start gap-2 text-[14.5px] sm:text-[17px] md:text-[24px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
+              {/* LINE click overlay — covers entire banner */}
+              <TrackedExternalLink
+                href={LINE_URL}
+                cta="line_consult"
+                surface="customs_scope_banner"
+                aria-label="ทักไลน์ Pacred Shipping ปรึกษาเคลียร์ของฟรี"
+                className="absolute inset-0 z-10"
+              >
+                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+              </TrackedExternalLink>
+
+              <div className="relative pointer-events-none px-4 md:px-6 py-4 md:py-5">
+                <h3 className="flex items-start gap-2 text-[18px] sm:text-[22px] md:text-[30px] font-black text-white tracking-tight leading-snug md:whitespace-nowrap [text-shadow:0_2px_6px_rgba(0,0,0,0.4)]">
                   <Image
                     src="/images/iconwhite/silent.png"
                     alt=""
                     width={28}
                     height={28}
                     aria-hidden
-                    className="w-5 h-5 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain"
+                    className="w-6 h-6 md:w-9 md:h-9 shrink-0 mt-0.5 object-contain"
                   />
                   <span className="inline">
-                    บริการชิปปิ้งเคลียร์ของติดด่าน ศุลกากร ครบทุกด่าน{" "}
-                    {/* Transport icons — inline so they flow with the title
-                        text. On mobile they slide onto the end of the wrap
-                        line; on desktop they sit right after "ทุกด่าน". */}
+                    บริการชิปปิ้งเคลียร์ของ
+                    <span className="text-yellow-300 text-[22px] sm:text-[26px] md:text-[36px] [text-shadow:0_2px_8px_rgba(0,0,0,0.55)]">
+                      ติดด่าน
+                    </span>{" "}
+                    ศุลกากร ครบทุกด่าน{" "}
+                    {/* Transport icons — inline so they flow with the title text */}
                     <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
-                      <Image src="/images/iconwhite/plane.png" alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/iconwhite/ship.png"  alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
-                      <Image src="/images/iconwhite/box.png"   alt="" width={24} height={24} aria-hidden className="w-4 h-4 md:w-6 md:h-6 object-contain" />
+                      <Image src="/images/iconwhite/plane.png" alt="" width={28} height={28} aria-hidden className="w-5 h-5 md:w-7 md:h-7 object-contain" />
+                      <Image src="/images/iconwhite/ship.png"  alt="" width={28} height={28} aria-hidden className="w-5 h-5 md:w-7 md:h-7 object-contain" />
+                      <Image src="/images/iconwhite/box.png"   alt="" width={28} height={28} aria-hidden className="w-5 h-5 md:w-7 md:h-7 object-contain" />
                     </span>
                   </span>
                 </h3>
-
-                <p className="mt-2 md:mt-3 text-[11px] sm:text-[13px] md:text-[15px] font-medium md:font-bold text-white/85 md:text-white/95 leading-snug md:leading-relaxed tracking-tight md:tracking-normal md:whitespace-nowrap [text-shadow:0_1px_3px_rgba(0,0,0,0.25)]">
-                  รับงานทุกด่านในไทย — สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
+                {/* Desktop-only subtitle — full list, indented to align with "บริการ" (icon w-9 36px + gap-2 8px) · mobile omitted to keep banner compact */}
+                <p className="hidden md:block mt-2 pl-[44px] text-[13px] font-medium text-white/70 leading-snug tracking-tight whitespace-nowrap">
+                  สุวรรณภูมิ · ดอนเมือง · ไปรษณีย์หลักสี่ · คลองเตย · แหลมฉบัง · ลาดกระบัง (ICD) · ด่านชายแดน
                 </p>
               </div>
             </div>
@@ -487,7 +496,10 @@ export default async function CustomsClearancePage({
                       สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-2 w-7 h-7 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
-                    <p className="hidden md:flex mt-2 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
+                    <p className="hidden md:block mt-1.5 text-[15px] font-semibold text-white/90 leading-snug tracking-tight whitespace-nowrap [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
+                      รับเคลียร์ทุกเรื่อง ทั้งภาษีนำเข้า ของติดด่าน พิธีการศุลกากร เริ่มเพียง 2,800 บาท
+                    </p>
+                    <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>066-125-3007</span>
                       <span className="text-white/60">·</span>
@@ -501,6 +513,9 @@ export default async function CustomsClearancePage({
                     <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
                       ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
+                    </p>
+                    <p className="md:hidden mt-1 text-[11px] font-medium text-white/85 leading-snug tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
+                      พิธีการกรมศุลกากร เริ่มต้น 2,800บาท
                     </p>
                   </div>
 
@@ -516,7 +531,7 @@ export default async function CustomsClearancePage({
 
                   <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
-                      คลิ๊กตรงนี้
+                      คลิ๊กเลย!
                     </span>
                     <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -618,7 +633,10 @@ export default async function CustomsClearancePage({
                       สินค้าติดด่าน? ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-2 w-7 h-7 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
                     </p>
-                    <p className="hidden md:flex mt-2 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
+                    <p className="hidden md:block mt-1.5 text-[15px] font-semibold text-white/90 leading-snug tracking-tight whitespace-nowrap [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
+                      รับเคลียร์ทุกเรื่อง ทั้งภาษีนำเข้า ของติดด่าน พิธีการศุลกากร เริ่มเพียง 2,800 บาท
+                    </p>
+                    <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>066-125-3007</span>
                       <span className="text-white/60">·</span>
@@ -632,6 +650,9 @@ export default async function CustomsClearancePage({
                     <p className="md:hidden mt-1.5 text-[14.5px] font-extrabold text-white leading-snug tracking-tight [text-shadow:0_1px_4px_rgba(1,58,20,0.45)]">
                       ทักไลน์ปรึกษาฟรี รู้ผลใน 1 ชม.
                       <ArrowRight className="inline-block ml-1 w-4 h-4 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
+                    </p>
+                    <p className="md:hidden mt-1 text-[11px] font-medium text-white/85 leading-snug tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.4)]">
+                      พิธีการกรมศุลกากร เริ่มต้น 2,800บาท
                     </p>
                   </div>
 
@@ -647,7 +668,7 @@ export default async function CustomsClearancePage({
 
                   <div className="pointer-events-none absolute top-1 md:top-2 right-2 md:right-4 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[10.5px] md:text-[14px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(1,58,20,0.55)] whitespace-nowrap">
-                      คลิ๊กตรงนี้
+                      คลิ๊กเลย!
                     </span>
                     <MousePointerClick className="mt-0.5 w-3.5 h-3.5 md:w-[18px] md:h-[18px] text-white drop-shadow-[0_1px_2px_rgba(1,58,20,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -680,7 +701,7 @@ export default async function CustomsClearancePage({
                - Pacred Shipping = white pill + red text (highlight)
              • Partner logos (FedEx/DHL/TNT/UPS) เป็น sub-strip กดได้แยก
              • visit02 photo ขวา (slim, self-stretch)
-             • "คลิ๊กตรงนี้" badge มุมขวาบน (rotate -6deg)
+             • "คลิ๊กเลย!" badge มุมขวาบน (rotate -6deg)
              • ทั้งกล่องกดได้ → LINE (overlay anchor + content pointer-events-none) */}
         <section className="relative pt-2 md:pt-4 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
@@ -719,27 +740,42 @@ export default async function CustomsClearancePage({
 
                 <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-3 md:gap-6 pl-4 md:pl-8 pr-2 md:pr-4 min-h-[150px] md:min-h-[180px]">
                   <div className="min-w-0 py-3 md:py-3">
-                    {/* Desktop headline */}
-                    <p className="hidden md:flex flex-wrap items-center gap-x-2 gap-y-1 text-[30px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      <span>ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ</span>
-                      <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
-                        Pacred Shipping
+                    {/* Desktop headline — single-line at lg+ per เดฟ 2026-05-18:
+                        ของติดด่าน? + แค่  ·  2,800 + บาท  ·  Pacred Shipping pill + arrow
+                        ("เคลียร์ไวกับ" dropped to free horizontal space for bigger text) */}
+                    <p className="hidden md:flex flex-wrap lg:flex-nowrap items-center gap-x-3 gap-y-2 tracking-tight lg:whitespace-nowrap">
+                      <span className="inline-flex items-baseline gap-x-2 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
+                        <span className="text-[48px] font-black leading-none whitespace-nowrap">ของติดด่าน?</span>
+                        <span className="text-[18px] font-bold">แค่</span>
                       </span>
-                      <ArrowRight className="inline-block w-7 h-7 align-[-0.15em] transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
+                      <span className="inline-flex items-baseline gap-x-2 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
+                        <span className="text-[72px] font-black leading-none whitespace-nowrap">2,800</span>
+                        <span className="text-[18px] font-bold">บาท</span>
+                      </span>
+                      <span className="inline-flex items-center gap-2 whitespace-nowrap text-white">
+                        <span className="inline-block px-4 py-0.5 rounded-full bg-white text-primary-600 text-[26px] font-black tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
+                          Pacred Shipping
+                        </span>
+                        <ArrowRight className="w-7 h-7 transition-transform group-hover:translate-x-1.5" strokeWidth={2.8} />
+                      </span>
                     </p>
 
-                    {/* Mobile headline */}
-                    <p className="md:hidden text-[18px] font-black text-white leading-[1.1] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
-                      ของติดด่าน? แค่ <span className="text-yellow-300">2,800 บาท</span> เคลียร์ไวกับ
-                    </p>
-                    <p className="md:hidden mt-1 inline-flex items-center gap-1.5">
-                      <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-primary-600 text-[14px] font-black tracking-tight shadow-[0_3px_8px_rgba(0,0,0,0.25)]">
-                        Pacred Shipping
-                      </span>
-                      <ArrowRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
-                    </p>
+                    {/* Mobile headline — minimal 2-row per เดฟ 2026-05-18:
+                        L1: ของติดด่าน? (26px) + แค่ (14px)
+                        L2: 2,800 (48px focal) + บาท (14px) + arrow (clickable affordance) */}
+                    <div className="md:hidden flex flex-col gap-1">
+                      <p className="flex items-baseline gap-1.5 text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
+                        <span className="text-[26px] font-black leading-none tracking-tight whitespace-nowrap">ของติดด่าน?</span>
+                        <span className="text-[14px] font-bold">แค่</span>
+                      </p>
+                      <p className="flex items-baseline gap-1.5 text-yellow-300 [text-shadow:0_3px_8px_rgba(0,0,0,0.55)]">
+                        <span className="text-[48px] font-black leading-none tracking-tight whitespace-nowrap">2,800</span>
+                        <span className="text-[14px] font-bold">บาท</span>
+                        <ArrowRight className="self-center shrink-0 ml-1 w-6 h-6 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
+                      </p>
+                    </div>
 
-                    {/* Partner logos — clickable strip below headline */}
+                    {/* Partner logos — clickable strip below headline (visible on all viewports) */}
                     <div className="mt-2.5 md:mt-3 flex items-center gap-2 md:gap-3 pointer-events-auto relative z-20">
                       {[
                         { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com/th-th/home.html" },
@@ -767,25 +803,35 @@ export default async function CustomsClearancePage({
                     </div>
                   </div>
 
-                  {/* visit02 photo — square 1:1 source (1080×1080), self-stretch slim.
-                      object-contain keeps full body visible, object-bottom anchors
-                      to the banner floor so the head clears the top edge.
-                      `md:mr-6` shifts the desktop photo left so "คลิ๊กตรงนี้"
-                      badge in the top-right corner doesn't overlap the person. */}
-                  <div className="relative w-[130px] md:w-[180px] h-[150px] md:h-[180px] self-stretch shrink-0 md:mr-6">
+                  {/* Visit photo — square 1:1 source (1080×1080). Photo box also 1:1
+                      (150×150 mobile, 180×180 desktop) so object-contain fills cleanly.
+                      `md:mr-6` shifts the desktop photo left so "คลิ๊กเลย!" badge in
+                      the top-right corner doesn't overlap. */}
+                  <div className="relative w-[150px] md:w-[180px] h-[150px] md:h-[180px] shrink-0 md:mr-6">
                     <Image
-                      src="/images/visit/visit03.png"
+                      src="/images/visit/Visit04.png"
                       alt="ทีมเซลล์ Pacred Shipping"
                       fill
-                      sizes="(max-width: 768px) 130px, 180px"
+                      sizes="(max-width: 768px) 150px, 180px"
                       className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.30)]"
                     />
                   </div>
 
-                  {/* คลิ๊กตรงนี้ corner badge */}
+                  {/* Document overlay — desktop only, sits left of พี่ป็อป (clear space, no overlap) per เดฟ 2026-05-18 */}
+                  <div className="hidden md:block pointer-events-none absolute right-[240px] bottom-3 w-[110px] h-[110px] z-10 -rotate-[6deg]">
+                    <Image
+                      src="/images/documenter.png"
+                      alt=""
+                      fill
+                      sizes="110px"
+                      className="object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.4)]"
+                    />
+                  </div>
+
+                  {/* คลิ๊กเลย! corner badge */}
                   <div className="pointer-events-none absolute top-1 md:top-2 right-1 md:right-3 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
                     <span className="text-white text-[11px] md:text-[15px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">
-                      คลิ๊กตรงนี้
+                      คลิ๊กเลย!
                     </span>
                     <MousePointerClick className="mt-0.5 w-4 h-4 md:w-5 md:h-5 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
                   </div>
@@ -801,7 +847,7 @@ export default async function CustomsClearancePage({
                 className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
                 <Image
-                  src="/images/cta/samak.png"
+                  src="/images/cta/samak05.png"
                   alt="สมัครสมาชิกฟรี — คลิ๊กเลย"
                   width={534}
                   height={200}
@@ -819,7 +865,7 @@ export default async function CustomsClearancePage({
                 className="group relative block overflow-hidden rounded-2xl hover:-translate-y-0.5 transition-transform duration-300"
               >
                 <Image
-                  src="/images/cta/pruksa.png"
+                  src="/images/cta/pruksa05.png"
                   alt="ปรึกษานำเข้าฟรี ทางไลน์ — คลิ๊กเลย"
                   width={534}
                   height={200}
