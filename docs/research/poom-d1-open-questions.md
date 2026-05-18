@@ -1,5 +1,12 @@
 # ภูม → เดฟ + ก๊อต — D1 Phase-B open questions
 
+> **✅ ANSWERED 2026-05-18 by เดฟ.** Decisions are inline below (the
+> `✅ DECISION` block under each question) + in the summary table. **Q1 · Q3 ·
+> Q4 · Q5 · Q6 are decided.** **Q2 (auth-bridge posture)** carries เดฟ's lean
+> but **needs ก๊อต's ratification** before B-auth ships. ภูม — you're
+> unblocked: start B-0 + B-auth wiring per these decisions; treat Q2 as
+> provisional until ก๊อต confirms. Ping ก๊อต on LINE for Q2.
+>
 > **Status:** drafted 2026-05-18 by ภูม after syncing dave → Poom.  Each
 > question below BLOCKS a Phase-B sub-task — ภูม needs answers before
 > code can land safely (otherwise it'll conflict with the parallel
@@ -34,6 +41,16 @@
 
 **Who decides:** เดฟ (Phase A owner).
 
+**✅ DECISION (เดฟ · 2026-05-18):** Option **(b) — split into 3**:
+`0081_pcs_legacy_schema.sql` (tables + PKs) · `0082_pcs_legacy_indexes.sql`
+(indexes + FKs + triggers) · `0083_pcs_legacy_member_seq.sql` (member-code
+generator + gapfill). A single 4-5k-line file is unreviewable and slow to
+re-run; the `0081-0083` block was reserved for exactly this. Load order:
+apply `0081` → COPY the data → apply `0082` (indexes build one-shot on the
+loaded data) → apply `0083`. **Your next free slot for new Phase-B
+migrations = `0087`** (`0084-0086` are your renumbered Phase-C batch) —
+draft `0087_status_vocab_reconcile.sql` against that.
+
 ---
 
 ## Q2 — Auth-bridge session creation pattern
@@ -50,6 +67,19 @@
 
 **Who decides:** ก๊อต (auth posture) + เดฟ (Phase-A consistency).
 
+**🟡 DECISION (เดฟ lean · 2026-05-18 — needs ก๊อต ratification):** Option
+**(a), refined to drop the shared-secret smell.** On first legacy login,
+*after* `verifyLegacyPassword` passes, you already hold the customer's
+plaintext password (they just typed it) — provision the Supabase user with
+**that same password**: `admin.createUser({ phone, password: <the plaintext
+just verified>, phone_confirm: true, user_metadata: { legacy_user_id } })`,
+then `signInWithPassword({ phone, password })`. No shared secret; the bridge
+runs **once per customer** (first login only) — every later login is plain
+Supabase auth. **ก๊อต must ratify the posture before B-auth ships** — wire it
+against this pattern but mark it provisional. Identifier note: use the
+`tb_user` phone where present; for phone-less rows fall back to a synthetic
+email and flag the list to เดฟ.
+
 ---
 
 ## Q3 — 8 special userIDs (`PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM` + `PW` / `JET` / `FCL` / `AIGA`)
@@ -64,6 +94,13 @@
 **Why it blocks me:** the legacy lookup pattern `WHERE userID = ?` becomes `WHERE pr_id = ?` (or however we name it) — I need the actual identity-mapping function correct, otherwise migrated customers can't sign in.
 
 **Who decides:** เดฟ.  Suggest: **(c)** for principled mapping with minimal disruption.
+
+**✅ DECISION (เดฟ · 2026-05-18):** Option **(c)** — rewrite the `PCS<letters>`
+group (`PCSTT→PRTT` · `PCSCARGO→PRCARGO` · `PCSARNON→PRARNON` · `PCSFAM→PRFAM`);
+keep the no-prefix group **verbatim** (`PW` · `JET` · `FCL` · `AIGA` —
+partner/operator handles, not numbered customers). The converter then has two
+rewrite rules — `PCS<int>→PR<int>` and `PCS<letters>→PR<letters>` — and touches
+nothing else.
 
 ---
 
@@ -80,6 +117,12 @@
 
 **Who decides:** เดฟ.  Suggest: **(b)** lowest-vacant (matches the brief's wording).
 
+**✅ DECISION (เดฟ · 2026-05-18):** Option **(b) — lowest-vacant.** A new signup
+fills the smallest unused `PR<n>` from `PR1` up — `next_pr_member_code()` /
+`member-code-gapfill.sql` (built for Phase A) already implements exactly this.
+`PR1-PR5` never existed in legacy, so the first post-migration signups land
+there.
+
 ---
 
 ## Q5 — Phase-C migrations (`0084-0086` — my pending work) apply order
@@ -94,6 +137,12 @@
 **Why it blocks me:** affects what I tell ภูม to run when applying migrations in dev/prod.  Also affects whether I keep maintaining the Phase-C code or treat it as frozen.
 
 **Who decides:** เดฟ.  Suggest: **(b)** freeze — keeps Phase B focused; the Phase-C UI surfaces (`/book`, `/admin/board` thread panel, etc.) are not in legacy workflow scope anyway, so customers won't notice they're inert.
+
+**✅ DECISION (เดฟ · 2026-05-18):** Option **(b) — freeze.** `0084-0086` stay in
+the repo but are **NOT applied** to dev/prod until Phase B ships. The DB-1
+backlog ภูม applies is therefore **`0058`-`0080` only** (22 migrations) —
+`pcs-data-migration.md` §9 + `migrations/README.md` updated to match. Apply
+`0084-0086` later, alongside Phase C.
 
 ---
 
@@ -110,18 +159,24 @@
 
 **Who decides:** เดฟ.  Suggest: **(a)** for Phase B (faithful port = faithful), then **(b)** as a Phase-C polish (a clean view layer).
 
+**✅ DECISION (เดฟ · 2026-05-18):** Option **(a) for Phase B** — carry
+`tb_user.userType` 1:1 and read it directly (faithful port = faithful; the
+legacy admin tooling + the B-4 per-role sidebar query `userType` as-is). The
+normalised view mapping to Pacred's `account_type` + `customer_group` + credit
+split is **(b) — a Phase-C polish**, not now.
+
 ---
 
 ## Quick-decision summary table
 
-| Q | What | Suggested | Blocks |
+| Q | What | ✅ Decision (เดฟ · 2026-05-18) | Status |
 |---|---|---|---|
-| Q1 | Phase-A migration filename / split | confirm `0081` single OR tell me final number | next-free slot for Phase-B migrations |
-| Q2 | Auth-bridge session pattern | option (a) createUser+rotate OR (b) magic-link | B-auth wire (`actions/auth.ts:signInWithPassword`) |
-| Q3 | 8 special userIDs | (c) rewrite `PCS<letters>`, keep no-prefix | identity-mapping function in B-0 |
-| Q4 | New-customer numbering | (b) lowest-vacant | INSERT trigger in B-0 / B-auth |
-| Q5 | Phase-C migrations 0084-0086 apply order | (b) freeze until B done | what ภูม applies in dev / prod |
-| Q6 | `userType` segmentation | (a) 1:1 for Phase B, (b) view for Phase C | B-4 per-role sidebars + B-9 segmentation |
+| Q1 | Phase-A migration filename / split | **(b)** split 3 → `0081`/`0082`/`0083`; ภูม's next free = `0087` | ✅ decided |
+| Q2 | Auth-bridge session pattern | **(a) refined** — provision on first login with the customer's own password (no shared secret) | 🟡 เดฟ lean — **needs ก๊อต** |
+| Q3 | 8 special userIDs | **(c)** rewrite `PCS<letters>`, keep the no-prefix group verbatim | ✅ decided |
+| Q4 | New-customer numbering | **(b)** lowest-vacant (`next_pr_member_code()`) | ✅ decided |
+| Q5 | Phase-C migrations `0084-0086` apply order | **(b)** freeze — DB-1 backlog = `0058`-`0080` only | ✅ decided |
+| Q6 | `userType` segmentation | **(a)** 1:1 carry for Phase B; **(b)** view = Phase C | ✅ decided |
 
 ---
 

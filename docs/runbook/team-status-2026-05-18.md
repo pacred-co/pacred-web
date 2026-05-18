@@ -53,6 +53,12 @@ workflow fidelity (rework the app to the legacy PCS loop — *zero retraining*) 
    password-only — D1 defers social login to Phase C. `signInWithOAuth` enforces
    the same gate server-side.
 5. **Prod-DB work sequenced** — see §"Prod-Supabase DB work" below.
+6. **ภูม's 6 Phase-B open questions answered** — เดฟ decided Q1·Q3·Q4·Q5·Q6
+   (migration split into `0081`-`0083` · special-userID + numbering rules ·
+   Phase-C `0084`-`0086` frozen · `userType` 1:1 carry); Q2 (auth-bridge
+   posture) carries เดฟ's lean → ก๊อต ratifies. ภูม is unblocked for B-0 +
+   B-auth. Decisions inline in
+   [`../research/poom-d1-open-questions.md`](../research/poom-d1-open-questions.md).
 
 ---
 
@@ -82,8 +88,9 @@ Three workstreams — full detail in [`pcs-data-migration.md` §9](pcs-data-migr
   (2026-05-17) shipped on migrations up to ~`0057`; everything `0058`+ has
   accumulated on `dave` unapplied. Confirm the exact applied set before planning
   any deploy.
-- **DB-1 — apply the backlog (`0058`-`0080` + `0084`-`0086`) to prod (ภูม).**
-  25 idempotent, additive migrations — includes the launch-integrity money/security guards
+- **DB-1 — apply the backlog (`0058`-`0080`) to prod (ภูม).** 22 idempotent,
+  additive migrations (`0084`-`0086` are ภูม's Phase-C batch — frozen until
+  Phase B ships, per Q5) — includes the launch-integrity money/security guards
   `0060`-`0064` (the S-1 RLS keystone · the wallet-overdraw floor · the
   money-idempotency guards). **If DB-0 shows those are not on prod, applying
   them is P0 regardless of D1.** Apply in ascending number order. Completing
@@ -120,8 +127,8 @@ that block. Next free for new Phase-B work = `0087`.
 - Brief: [`../briefs/dave.md`](../briefs/dave.md)
 
 ### ภูม — Phase B backend
-- 🔴 **FIRST — DB-1:** apply the backlog migrations (`0058`-`0080` +
-  `0084`-`0086`) to prod Supabase (ascending, idempotent — see
+- 🔴 **FIRST — DB-1:** apply the backlog migrations (`0058`-`0080`) to prod
+  Supabase (ascending, idempotent; `0084`-`0086` are frozen for Phase C — see
   [`../../supabase/migrations/README.md`](../../supabase/migrations/README.md)
   + [`pcs-data-migration.md` §9](pcs-data-migration.md)).
 - 🎯 **Phase B backend** — rework the admin back-office + customer-portal
@@ -152,7 +159,7 @@ that block. Next free for new Phase-B work = `0087`.
 | **แต้ม hand-over** — final dump + customer files + JMF spec | ก๊อต ↔ แต้ม | A-4 + A-5 (the prod load) |
 | **DB-0** — prod migration state unknown | เดฟ | a confident `dave→main` deploy |
 | **A-5 production load** | เดฟ go · ก๊อต gate | the big D1 event — needs the final dump |
-| **6 Phase-B open questions** — [`poom-d1-open-questions.md`](../research/poom-d1-open-questions.md) | เดฟ + ก๊อต | ภูม's Phase-B code — answer before the B-stages |
+| **Q2 — auth-bridge posture** — [`poom-d1-open-questions.md`](../research/poom-d1-open-questions.md) | ก๊อต | B-auth ship gate (Q1·Q3·Q4·Q5·Q6 answered 2026-05-18; Q2 carries เดฟ's lean) |
 
 ---
 

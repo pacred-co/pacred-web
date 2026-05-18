@@ -18,6 +18,8 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 **Migration numbering:** files `0001`-`0086` exist (`0065` is a gap). `0081`-`0083` are reserved for the Phase-A legacy schema (you freed them via the `a248696` renumber); your booking/credit-note/chat batch is now `0084`-`0086`. Next free for new Phase-B work = **`0087`**. Full deploy sequencing → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) §9.
 
+**Your 6 Phase-B open questions — ✅ answered** (เดฟ · 2026-05-18) — [`research/poom-d1-open-questions.md`](../research/poom-d1-open-questions.md). Q1·Q3·Q4·Q5·Q6 decided (legacy schema split `0081`-`0083` · special-userID rewrite · lowest-vacant numbering · Phase-C `0084`-`0086` frozen until Phase B · `userType` 1:1 carry). **Q2 (auth-bridge session pattern) carries เดฟ's lean but needs ก๊อต — ping ก๊อต on LINE to ratify before B-auth ships.** You're unblocked for B-0 + B-auth wiring now.
+
 **Carried-over backlog (Phase C — not a current pickup):** the Tier-3 systems, the booking-flow backend, the Phase I2 freight expansion (V-E6..V-E12) + the V-G admin bulk-ops bundle in [`docs/PORT_PLAN.md`](../PORT_PLAN.md) **Part V** are all re-sequenced to **Phase C** — *after* the faithful port works. Don't pick them up until D1 Phase B is done.
 
 ---

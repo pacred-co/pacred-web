@@ -70,7 +70,7 @@ their **existing password — no reset**.
 | **A-2 Converter** | `PCS` → `PR` rebrand on member-code columns (`userID`, `userIDMain`) only; 3,780,238 rows → COPY format; 2,288,128 `PCS→PR` transforms; zero-dates → NULL; NUL bytes stripped; encoding handled. | ✅ **done** | เดฟ |
 | **A-3 Dry-run validated** | Loaded into a throwaway PostgreSQL 17.10 — all 117 tables load clean; every table's row count reconciles MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches). Auth bridge (`lib/auth/pcs-legacy-password.ts`) verified against 7 real hashes + 5 vectors. New-customer member-code gap-fill SQL written. | ✅ **done** | เดฟ |
 | **A-4 Customer-file migration** | Migrate the legacy customer upload folders (`images/users`, `images/shops`, `storage/file`, `storage/slip`) into Supabase Storage. | 🔴 **pending** — the files live on the legacy production server, held by **แต้ม**; requested via the hand-over list. Blocked until แต้ม provides them. | เดฟ + แต้ม |
-| **A-5 Production load** | Fresh final `pcsc_main` dump from แต้ม at cutover → reconvert → apply the 117-table schema as migration `0081_pcs_legacy_schema.sql` → load each COPY file via `psql` → apply the member-code generator → reconcile prod row counts ↔ source MySQL across all 117 tables. | 🔴 **pending** — gated on **เดฟ's go** + a final fresh dump. | เดฟ · gate by ก๊อต |
+| **A-5 Production load** | Fresh final `pcsc_main` dump from แต้ม at cutover → reconvert → apply the 117-table schema as migrations `0081`/`0082`/`0083` (schema · indexes · member-seq) → load each COPY file via `psql` → apply the member-code generator → reconcile prod row counts ↔ source MySQL across all 117 tables. | 🔴 **pending** — gated on **เดฟ's go** + a final fresh dump. | เดฟ · gate by ก๊อต |
 
 **Phase-A open decisions** (carried in the runbook §7 — need เดฟ):
 - **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM` (PCS +
@@ -142,6 +142,13 @@ track (B-4..B-9) can run in parallel once B-0 lands.
 **Sequencing:** B-0 first (foundation), B-auth early. Then the customer track
 (B-1→B-2→B-3, ปอน-led) and the admin track (B-4→…→B-9, ภูม-led) run in
 parallel. A stage is done only when its gap-map item no longer diverges.
+
+> **Phase-B open questions — ✅ answered 2026-05-18.** ภูม's 6 blocking
+> questions (migration split · auth-bridge pattern · special-userID + numbering
+> rules · Phase-C apply order · `userType`) are resolved —
+> [`research/poom-d1-open-questions.md`](research/poom-d1-open-questions.md).
+> B-0 + B-auth are unblocked; Q2 (auth posture) carries เดฟ's lean pending
+> ก๊อต ratification.
 
 **Phase-B owners** (per [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)
 work-split — see the [work-split table](#work-split--who-owns-what-under-d1)):

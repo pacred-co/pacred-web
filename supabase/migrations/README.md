@@ -108,10 +108,11 @@
 > `0068` U2-5 cargo_sacks · `0069` U2-2 container_costs + disbursements ·
 > `0070` U4-1 supervisory layer (cron_invocations + delivery log) · `0071`
 > U4-2 customer credit line · `0072` C-1 wallet self-serve amount-sign guard.
-> The authoritative migration set is the `supabase/migrations/` directory —
-> **apply every file in ascending number order** (all idempotent + additive).
-> Full deploy sequencing — what prod already has, what to apply, in what
-> order → [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
+> The authoritative migration set is the `supabase/migrations/` directory.
+> **Apply `0058`-`0080` in ascending order now** (DB-1 — idempotent + additive);
+> `0084`-`0086` (ภูม's Phase-C batch) are **frozen** — apply them with Phase C,
+> not now (decision Q5). Full deploy sequencing — what prod already has, what
+> to apply, in what order → [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
 
 > 🔢 **`0081`-`0083` are reserved** for the D1 legacy-PCS schema — the 117
 > `tb_*` tables + follow-ups (see

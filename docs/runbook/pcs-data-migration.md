@@ -77,31 +77,36 @@ In the repo (no PII): `lib/auth/pcs-legacy-password.ts` + its test.
 1. **Fresh dump** — get a final `pcsc_main` export from แต้ม at cutover (the
    2026-05-18 dump will be stale by then). Load into local MySQL.
 2. **Convert** — `python convert.py` → regenerates `data/`.
-3. **Schema** — apply `pcs-legacy-schema.draft.sql` to prod Supabase as a new
-   migration **`0081_pcs_legacy_schema.sql`** (ภูม renumbered his booking /
-   credit-note / chat batch up to `0084`-`0086` — commit `a248696` — to free
-   `0081`-`0083` for exactly this; `0082`/`0083` stay open for legacy
-   follow-up migrations if the port needs them — see §9). The 117 `tb_*`
-   tables coexist with Pacred's existing tables; nothing is dropped.
+3. **Schema (`0081`)** — apply `0081_pcs_legacy_schema.sql` (the 117 `tb_*`
+   tables + PKs) to prod Supabase **before** the data load — the bulk COPY
+   runs much faster index-free. The `tb_*` tables coexist with Pacred's
+   existing tables; nothing is dropped. (Per Q1 the legacy schema is split
+   into 3 — `0081` schema · `0082` indexes · `0083` member-seq — see §9.)
 4. **Data** — load each `data/NNN_*.copy.sql` into prod via `psql`.
-5. **Member-code generator** — apply `member-code-gapfill.sql`.
-6. **Reconcile** — prod-PostgreSQL row counts ↔ source MySQL must match all
+5. **Indexes (`0082`)** — apply `0082_pcs_legacy_indexes.sql` (indexes + FKs +
+   triggers) *after* the data is in — one-shot index build + FK validation on
+   the loaded rows.
+6. **Member-code generator (`0083`)** — apply `0083_pcs_legacy_member_seq.sql`
+   — the member-code generator + the lowest-vacant `next_pr_member_code()`
+   gapfill.
+7. **Reconcile** — prod-PostgreSQL row counts ↔ source MySQL must match all
    117 tables before declaring the load done.
-7. **Files** — migrate the customer upload folders into Supabase Storage
+8. **Files** — migrate the customer upload folders into Supabase Storage
    (§7 — pending แต้ม).
 
 ## 7. Open / pending — needs เดฟ or แต้ม
 
 - 🔴 **Customer upload files** — `images/users`, `images/shops`,
   `storage/file`, `storage/slip` live on the legacy production server (held
-  by แต้ม). Needed for §6.7; requested via the แต้ม hand-over list.
-- 🟡 **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM`
+  by แต้ม). Needed for §6.8; requested via the แต้ม hand-over list.
+- ✅ **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM`
   (PCS + letters) and `PW` / `JET` / `FCL` / `AIGA` (no PCS prefix).
-  Currently carried as-is. Decision for เดฟ: rewrite the `PCS<letters>` ones
-  to `PR<letters>`?
-- 🟡 **New-customer numbering** — the lowest vacant numbers are `PR1`–`PR5`,
-  so the next new signups get `PR1`, `PR2`, … (per the fill-vacant rule).
-  Confirm that is intended.
+  **DECIDED (เดฟ 2026-05-18 · Q3):** rewrite the `PCS<letters>` group to
+  `PR<letters>`; keep the no-prefix group verbatim.
+- ✅ **New-customer numbering** — **DECIDED (เดฟ 2026-05-18 · Q4):**
+  lowest-vacant — a new signup fills the smallest unused `PR<n>` from `PR1`
+  up (`next_pr_member_code()`); the first post-migration signups land at
+  `PR1`-`PR5`.
 
 ## 8. Supersedes
 
@@ -123,9 +128,11 @@ before planning any deploy — in the prod SQL Editor:
 `select name from supabase_migrations.schema_migrations order by name;`
 Owner: เดฟ. Nothing below sequences correctly without this.
 
-**DB-1 — Apply the backlog (`0058`-`0080` + `0084`-`0086`) to prod (no
-external blocker).** 25 idempotent, additive migrations on `dave` (`0065` is
-an intentional gap; `0081`-`0083` are deliberately left free for DB-2).
+**DB-1 — Apply the backlog (`0058`-`0080`) to prod (no external blocker).**
+22 idempotent, additive migrations on `dave` (`0065` is an intentional gap).
+`0081`-`0083` are left free for DB-2; `0084`-`0086` (ภูม's Phase-C batch) are
+**frozen** — not applied until Phase B ships, per Q5 in
+[poom-d1-open-questions.md](../research/poom-d1-open-questions.md).
 They include the launch-integrity money/security guards `0060`-`0064` — the
 S-1 RLS keystone (`0062`), the wallet-overdraw floor (`0064`), the
 money-idempotency guards (`0061`/`0063`). If DB-0 shows those are not on
@@ -135,8 +142,9 @@ that way; all idempotent — safe to re-run). `0067_pcs_customer_migration` is
 superseded by this runbook (§8) — harmless to apply, but the feature it backs
 is dead. Owner: ภูม. Completing DB-1 is what unblocks any `dave→main` deploy.
 
-**DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migration
-**`0081`** + the data load. Gated on แต้ม's final dump, เดฟ's go, and ก๊อต's
+**DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migrations
+**`0081`-`0083`** (schema · indexes · member-seq — Q1) + the data load. Gated
+on แต้ม's final dump, เดฟ's go, and ก๊อต's
 production-load gate. The `tb_*` namespace does NOT collide with the rebuilt
 schema, so DB-1 and DB-2 are independent — the legacy port does not wait on
 the backlog, and vice versa.
