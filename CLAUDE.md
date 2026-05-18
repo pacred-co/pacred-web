@@ -172,13 +172,13 @@ Last updated: 2026-05-18 (D1 direction pivot — see [ADR-0017](docs/decisions/0
 - `app/[locale]/(admin)/admin/*` — admin back-office — `requireAdmin()` gate per [ADR-0002](docs/decisions/0002-admin-architecture.md)
 - `actions/` — Server Actions (`actions/auth.ts`, `actions/wallet.ts`, etc.); admin variants in `actions/admin/*`
 - `lib/` — `supabase/{client,server,admin}.ts` · `auth/*` · `sms/gateway.ts` · `notifications/*` · `validators/*` (Zod) · `pdf/*` · `forwarder/calc-price.ts`
-- `supabase/migrations/` — 0001..0080+ numbered migrations (`0065` is an intentional unused gap); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
+- `supabase/migrations/` — 0001..0084 numbered migrations (`0065` is an intentional unused gap; `0084` reserved for the D1 legacy `tb_*` schema — see [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) §9); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
 - `proxy.ts` (NOT `middleware.ts` — Next 16 rename) at repo root
 
 ## Auth & Backend State (Phase 1-5 ✅ done)
 
 ### What works
-- **Supabase Auth** — email/phone + password, OAuth Google/Facebook (LINE = mocked)
+- **Supabase Auth** — email/phone + password. Social login (Google/Facebook OAuth + LINE) is gated OFF by default behind `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` → the buttons render greyed-out "COMING SOON" (legacy PCS was password-only; D1 defers social login to Phase C)
 - **DB** — profiles (auto-gen `PR001` member_code — PR + min-3-digit running no.), documents, otp_codes, orders
 - **Storage** — `member-docs/` private bucket, RLS = owner-only
 - **OTP** — custom via ThaiBulkSMS, hashed (sha256+pepper), TTL 5min, rate-limited 3/hour

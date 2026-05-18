@@ -29,7 +29,7 @@ After `git fetch` + branch sync at the top of a session, run this handshake **pr
 **Step 2 — Scan canonical context** (parallel reads):
 - [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1, the current direction (see §0)
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — master single-read consolidation (~370 lines)
-- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the roadmap (being rewritten as the D1 phase plan + work-split)
+- [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the D1 phase plan (Phase A migration → Phase B workflow fidelity → Phase C) + work-split
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — new entries since last session (immortal-scholar — `.claude/skills/scholar-immortal/`)
 - Your brief's "Force-read" cross-links (relevant ADRs, runbooks)
 
@@ -51,7 +51,7 @@ The old revenue lens (more **true** / **billable** / **measurable**) still holds
 
 **Plan work properly.** Don't ship half-built to chase a deadline; don't skip the quality gate to "save time".
 
-📋 D1 work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — being rewritten as the D1 phase plan (Phase A migration → Phase B workflow fidelity → Phase C enhancements). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
+📋 D1 work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the D1 phase plan (Phase A migration → Phase B workflow fidelity → Phase C enhancements). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
 
 ## 3. Don't preempt brand cleanup
 
