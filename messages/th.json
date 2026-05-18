@@ -2337,5 +2337,239 @@
       "rate_fix": "รอแก้เรท/ราคา",
       "external": "รอหน่วยงานภายนอก"
     }
+  },
+  "pcsAdminNav": {
+    "backToCustomer": "← กลับฝั่งลูกค้า",
+    "role": {
+      "super": "ผู้ดูแลระบบสูงสุด",
+      "ops": "ฝ่ายปฏิบัติการ Cargo",
+      "accounting": "ฝ่ายบัญชี",
+      "salesAdmin": "ฝ่ายขาย Cargo",
+      "warehouse": "ฝ่ายโกดัง",
+      "driver": "พนักงานขับรถ",
+      "interpreter": "ล่ามจีน"
+    },
+    "account": {
+      "profile": "โปรไฟล์ของฉัน",
+      "settings": "ตั้งค่าบัญชีผู้ใช้งาน",
+      "logout": "ออกจากระบบ"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "all": "Dashboard ทั้งหมด",
+      "freight": "Dashboard Freight",
+      "cargo": "Dashboard Cargo"
+    },
+    "hrGroup": {
+      "title": "ฝ่ายทรัพยากรบุคคล"
+    },
+    "hr": {
+      "title": "จัดการทรัพยากรบุคคล",
+      "orgChartImage": "ผังองค์กรแบบภาพ",
+      "orgChartTable": "ผังองค์กรแบบตาราง",
+      "recruitment": "สรรหาบุคคล",
+      "recruitPost": "ลงประกาศรับสมัครงาน",
+      "recruitApplicants": "รายชื่อคนสมัครงาน",
+      "people": "ทรัพยากรบุคคล",
+      "peopleAll": "พนักงานทั้งหมด",
+      "peopleAudit": "บันทึกการแก้ไขข้อมูล",
+      "peoplePolicies": "กฏระเบียบบริษัท",
+      "attendance": "รายงานการเข้าทำงาน",
+      "attendanceBoard": "แดชบอร์ดการเข้างาน",
+      "attendanceLeaves": "บันทึกการลางาน",
+      "training": "การอบรม"
+    },
+    "assets": {
+      "title": "จัดการทรัพย์สินองค์กร",
+      "maintenance": "ซ่อมบำรุง",
+      "purchasing": "จัดซื้อ (ลงเบิกค่าใช้จ่าย)",
+      "stock": "สต๊อกของใช้"
+    },
+    "qa": {
+      "title": "QA & QC",
+      "titleGroup": "QA & QC",
+      "payShopOver1d": "รอชำระสินค้าเกิน 1 วัน",
+      "payFwdOver2d": "รอชำระค่านำเข้าเกิน 2 วัน",
+      "orderCancelled": "รายการยกเลิกออเดอร์",
+      "creditOverdue": "เครดิตเกินกำหนด",
+      "orderOver10min": "สั่งซื้อรอเกิน 10 นาที",
+      "chnShopOver2d": "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",
+      "chnWhOver2d": "รอเข้าโกดังจีนเกิน 2 วัน",
+      "transitOverdue": "กำลังมาไทยเกินกำหนด",
+      "ownerlessGoods": "สินค้าไม่มีเจ้าของ",
+      "prepareOverdue": "เตรียมส่งเกินกำหนด",
+      "newClientNoContact": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",
+      "transferSalesRep": "ย้ายพนักงานขายที่ดูแลลูกค้า"
+    },
+    "wallet": {
+      "title": "กระเป๋าสตางค์",
+      "all": "เป๋าตังทั้งหมด",
+      "payUser": "จ่ายแทนลูกค้า",
+      "history": "ประวัติรายการ",
+      "withdraw": "รายการถอนเงิน",
+      "deposit": "รายการเติมเงิน",
+      "add": "เพิ่มรายการเติมเงิน"
+    },
+    "purchasing": {
+      "title": "บริการฝากสั่งสินค้า",
+      "search": "ค้นหาฝากสั่งซื้อ",
+      "all": "รายการสั่งสินค้าทั้งหมด",
+      "pending": "รอดำเนินการ",
+      "cart": "รถเข็นสินค้า",
+      "cartAdd": "เพิ่มสินค้าในรถเข็น",
+      "note": "หมายเหตุฝากสั่ง"
+    },
+    "barcode": {
+      "title": "สแกนบาร์โค้ด",
+      "searchImport": "ค้นหารายการฝากนำเข้า",
+      "searchPrepare": "ค้นหาสินค้าเตรียมส่ง",
+      "scanFromBox": "สแกนจากหน้ากล่อง",
+      "byScanner": "ด้วยเครื่องสแกน",
+      "byCamera": "ด้วยกล้อง",
+      "recordIntake": "บันทึกสินค้าเข้าโกดัง"
+    },
+    "forwarder": {
+      "title": "บริการฝากนำเข้า",
+      "titleWarehouse": "บริการฝากนำเข้า",
+      "search": "ค้นหารายการนำเข้า",
+      "searchMulti": "ค้นหาแบบหลายรายการ",
+      "list": "รายการนำเข้า",
+      "listAll": "รายการทั้งหมด",
+      "listPrepare": "รายการเตรียมส่ง",
+      "listCredit": "รายการนำเข้าเครดิต",
+      "listAdd": "เพิ่มรายการนำเข้า",
+      "note": "หมายเหตุนำเข้า",
+      "checkCntCost": "เช็คต้นทุนตู้ Sheet",
+      "cntReport": "รายงานตู้สินค้า",
+      "whHistory": "ประวัติเข้าโกดังไทย",
+      "assignDriver": "มอบงานคนขับรถ",
+      "combineBill": "รวมบิลสินค้า"
+    },
+    "payment": {
+      "title": "บริการฝากโอน/ชำระ",
+      "list": "รายการฝากชำระ",
+      "add": "เพิ่มรายการ"
+    },
+    "report": {
+      "title": "ออกรายงาน",
+      "titleSales": "ออกรายงาน",
+      "titleDriver": "ออกรายงาน",
+      "shop": "ฝากสั่งซื้อ",
+      "forwarder": "ฝากนำเข้า",
+      "payment": "ฝากโอน",
+      "salesRep": "ยอดพนักงานขาย",
+      "allUser": "ยอดรวมทุกบริการ",
+      "byCode": "ยอดขายรวมตามรหัส",
+      "driver": "รายงานคนขับรถ",
+      "web": "การเข้าถึงเว็บไซต์"
+    },
+    "accCargo": {
+      "title": "รายงานรับรู้รายได้ Cargo",
+      "inOut": "รายรับ - รายจ่าย",
+      "topup": "รายการเติมเงิน",
+      "shop": "รายงานฝากสั่ง",
+      "forwarder": "ฝากนำเข้าสินค้า",
+      "invoice": "ใบแจ้งหนี้",
+      "receipt": "ประวัติใบเสร็จ",
+      "total": "ยอดทั้งหมด",
+      "payment": "ฝากชำระ/โอนหยวน",
+      "withdraw": "ถอนเงิน โอนโดยตรง",
+      "refund": "คืนเงินเข้า Wallet"
+    },
+    "accFreight": {
+      "title": "ระบบบัญชี Freight",
+      "ledger": "รายการเดินบัญชี",
+      "income": "รายรับ",
+      "quotation": "ใบเสนอราคา",
+      "invoice": "ใบแจ้งหนี้",
+      "receipt": "ใบเสร็จ",
+      "wht": "ภาษีหัก ณ ที่จ่าย",
+      "overview": "ภาพรวม",
+      "declarations": "ใบขนสินค้า"
+    },
+    "settingsCargo": {
+      "title": "ตั้งค่าระบบ Cargo",
+      "general": "ทั่วไป",
+      "homeNotice": "ประกาศหน้าแรก",
+      "popup": "Popup ประกาศลูกค้า",
+      "rates": "อัตราค่าขนส่งสินค้า",
+      "rateGeneral": "เรททั่วไป",
+      "rateVip": "เรทลูกค้า VIP",
+      "rateCustomUser": "เรท Custom-user",
+      "rateCustomHs": "เรท Custom-HS",
+      "vipTiers": "ประเภทสมาชิก VIP"
+    },
+    "userCargo": {
+      "title": "ระบบจัดการลูกค้า",
+      "searchTop": "ค้นหารหัสสมาชิก",
+      "search": "ค้นหารหัสสมาชิก",
+      "all": "สมาชิกทั้งหมด",
+      "general": "สมาชิกทั่วไป",
+      "vip": "สมาชิก VIP",
+      "svip": "สมาชิก SVIP",
+      "corporate": "สมาชิกนิติบุคคล",
+      "credit": "สมาชิกเครดิต",
+      "comparison": "สมาชิกคิดค่าเทียบ",
+      "pending": "รอ Approve",
+      "recentlyActive": "Active ล่าสุด",
+      "transferRep": "โอนทีมขาย",
+      "teamLeaders": "ทีมขาย"
+    },
+    "manageCustomers": {
+      "title": "จัดการลูกค้า",
+      "titleSales": "ระบบจัดการลูกค้า",
+      "cargo": "ลูกค้า PCS Cargo",
+      "freight": "ลูกค้า PCS Freight",
+      "freightAll": "ลูกค้า Freight ทั้งหมด"
+    },
+    "withdrawal": {
+      "title": "รายการเบิกเงิน",
+      "titleSales": "รายการเบิกเงิน",
+      "cargo": "PCS Cargo",
+      "freight": "PCS Freight",
+      "shopGoods": "เบิกเงินค่าสินค้า",
+      "cntCost": "ค่าตู้สินค้า",
+      "thaiFreight": "ค่าขนส่งไทย",
+      "agentCustomer": "รายงานลูกค้าตัวแทน",
+      "salesBonus": "โบนัสเซลล์",
+      "interpreterBonus": "โบนัสล่ามจีน",
+      "driver": "พนักงานขับรถ",
+      "forwarderComm": "ค่าคอม Forwarder"
+    },
+    "learning": {
+      "regulations": "กฏระเบียบและสัญญา",
+      "training": "การอบรม",
+      "businessPlan": "Business Plan",
+      "culture": "วัฒนธรรมองค์กร",
+      "jobFlow": "ผังงาน Job งาน",
+      "newsfeed": "ข่าวสารภายในองค์กร",
+      "tos": "เงื่อนไขการให้บริการลูกค้า"
+    },
+    "extension": {
+      "juristicCheck": "เช็คข้อมูลลูกค้านิติบุคคล",
+      "thaiTransport": "เช็คข้อมูลขนส่งไทย",
+      "meetingRoom": "จองห้องประชุม",
+      "history": "ประวัติการทำรายการ",
+      "incidents": "แจ้งเตือนระบบ (Incident)"
+    },
+    "warehouse": {
+      "containers": "ตู้คอนเทนเนอร์",
+      "bulletin": "บุลเลตินตู้รายวัน",
+      "qaInspect": "ตรวจสอบคุณภาพ (QA)"
+    },
+    "driver": {
+      "toDeliver": "งานที่ต้องส่ง",
+      "history": "ประวัติงาน",
+      "barcode": "สแกนบาร์โค้ด"
+    },
+    "interpreter": {
+      "commissions": "ค่าคอมมิชชั่นล่าม"
+    },
+    "broadcasts": {
+      "title": "Broadcasts ประกาศ"
+    },
+    "bookings": {
+      "title": "การจอง"
+    }
   }
 }

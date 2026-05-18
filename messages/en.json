@@ -2337,5 +2337,239 @@
       "rate_fix": "Waiting on rate fix",
       "external": "Waiting on external party"
     }
+  },
+  "pcsAdminNav": {
+    "backToCustomer": "← Back to customer site",
+    "role": {
+      "super": "Super Admin",
+      "ops": "Cargo Operations",
+      "accounting": "Accounting",
+      "salesAdmin": "Cargo Sales",
+      "warehouse": "Warehouse",
+      "driver": "Driver",
+      "interpreter": "Interpreter"
+    },
+    "account": {
+      "profile": "My profile",
+      "settings": "Account settings",
+      "logout": "Log out"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "all": "Dashboard All",
+      "freight": "Dashboard Freight",
+      "cargo": "Dashboard Cargo"
+    },
+    "hrGroup": {
+      "title": "Human Resources"
+    },
+    "hr": {
+      "title": "Manage HR",
+      "orgChartImage": "Org chart (visual)",
+      "orgChartTable": "Org chart (table)",
+      "recruitment": "Recruitment",
+      "recruitPost": "Post a job opening",
+      "recruitApplicants": "Applicants",
+      "people": "People",
+      "peopleAll": "All employees",
+      "peopleAudit": "Edit audit log",
+      "peoplePolicies": "Company policies",
+      "attendance": "Attendance report",
+      "attendanceBoard": "Attendance dashboard",
+      "attendanceLeaves": "Leave records",
+      "training": "Training"
+    },
+    "assets": {
+      "title": "Manage corporate assets",
+      "maintenance": "Maintenance",
+      "purchasing": "Purchasing (expense claims)",
+      "stock": "Supplies stock"
+    },
+    "qa": {
+      "title": "QA & QC",
+      "titleGroup": "QA & QC",
+      "payShopOver1d": "Shop payment overdue 1 day",
+      "payFwdOver2d": "Import payment overdue 2 days",
+      "orderCancelled": "Cancelled orders",
+      "creditOverdue": "Credit overdue",
+      "orderOver10min": "Orders pending over 10 min",
+      "chnShopOver2d": "Awaiting CN shop dispatch 2 days",
+      "chnWhOver2d": "Awaiting CN warehouse 2 days",
+      "transitOverdue": "In transit overdue",
+      "ownerlessGoods": "Ownerless goods",
+      "prepareOverdue": "Prep-to-ship overdue",
+      "newClientNoContact": "New client no contact 2 days",
+      "transferSalesRep": "Transfer sales rep"
+    },
+    "wallet": {
+      "title": "Wallet",
+      "all": "All wallets",
+      "payUser": "Pay on behalf of customer",
+      "history": "Transaction history",
+      "withdraw": "Withdrawals",
+      "deposit": "Top-ups",
+      "add": "Add a top-up"
+    },
+    "purchasing": {
+      "title": "Shop-order service",
+      "search": "Search shop orders",
+      "all": "All shop orders",
+      "pending": "Pending",
+      "cart": "Cart",
+      "cartAdd": "Add item to cart",
+      "note": "Shop-order notes"
+    },
+    "barcode": {
+      "title": "Barcode scan",
+      "searchImport": "Search import items",
+      "searchPrepare": "Search prep-to-ship items",
+      "scanFromBox": "Scan from box face",
+      "byScanner": "By scanner device",
+      "byCamera": "By camera",
+      "recordIntake": "Record warehouse intake"
+    },
+    "forwarder": {
+      "title": "Import service",
+      "titleWarehouse": "Import service",
+      "search": "Search import items",
+      "searchMulti": "Multi-item search",
+      "list": "Import list",
+      "listAll": "All items",
+      "listPrepare": "Prep-to-ship items",
+      "listCredit": "Credit imports",
+      "listAdd": "Add an import item",
+      "note": "Import notes",
+      "checkCntCost": "Container cost-check sheet",
+      "cntReport": "Container report",
+      "whHistory": "TH warehouse intake history",
+      "assignDriver": "Assign driver jobs",
+      "combineBill": "Combine bills"
+    },
+    "payment": {
+      "title": "Yuan transfer service",
+      "list": "Transfer requests",
+      "add": "Add a request"
+    },
+    "report": {
+      "title": "Reports",
+      "titleSales": "Reports",
+      "titleDriver": "Reports",
+      "shop": "Shop orders",
+      "forwarder": "Imports",
+      "payment": "Yuan transfers",
+      "salesRep": "Sales-rep totals",
+      "allUser": "All-service totals",
+      "byCode": "Totals by customer code",
+      "driver": "Driver report",
+      "web": "Website access"
+    },
+    "accCargo": {
+      "title": "Cargo revenue recognition",
+      "inOut": "Income - expenses",
+      "topup": "Top-ups",
+      "shop": "Shop-order report",
+      "forwarder": "Import goods",
+      "invoice": "Invoices",
+      "receipt": "Receipt history",
+      "total": "All totals",
+      "payment": "Yuan transfer / payment",
+      "withdraw": "Withdrawals / direct transfer",
+      "refund": "Refund to wallet"
+    },
+    "accFreight": {
+      "title": "Freight accounting",
+      "ledger": "Account ledger",
+      "income": "Income",
+      "quotation": "Quotations",
+      "invoice": "Invoices",
+      "receipt": "Receipts",
+      "wht": "Withholding tax",
+      "overview": "Overview",
+      "declarations": "Customs declarations"
+    },
+    "settingsCargo": {
+      "title": "Cargo system settings",
+      "general": "General",
+      "homeNotice": "Home-page notice",
+      "popup": "Customer popup",
+      "rates": "Shipping rates",
+      "rateGeneral": "General rates",
+      "rateVip": "VIP customer rates",
+      "rateCustomUser": "Custom-user rates",
+      "rateCustomHs": "Custom-HS rates",
+      "vipTiers": "VIP membership tiers"
+    },
+    "userCargo": {
+      "title": "Customer management",
+      "searchTop": "Search member code",
+      "search": "Search member code",
+      "all": "All members",
+      "general": "General members",
+      "vip": "VIP members",
+      "svip": "SVIP members",
+      "corporate": "Juristic members",
+      "credit": "Credit members",
+      "comparison": "Comparison-rate members",
+      "pending": "Awaiting approval",
+      "recentlyActive": "Recently active",
+      "transferRep": "Transfer sales team",
+      "teamLeaders": "Sales team"
+    },
+    "manageCustomers": {
+      "title": "Manage customers",
+      "titleSales": "Customer management",
+      "cargo": "PCS Cargo customers",
+      "freight": "PCS Freight customers",
+      "freightAll": "All Freight customers"
+    },
+    "withdrawal": {
+      "title": "Disbursement requests",
+      "titleSales": "Disbursement requests",
+      "cargo": "PCS Cargo",
+      "freight": "PCS Freight",
+      "shopGoods": "Goods-cost disbursement",
+      "cntCost": "Container cost",
+      "thaiFreight": "TH freight cost",
+      "agentCustomer": "Agent-customer report",
+      "salesBonus": "Sales bonus",
+      "interpreterBonus": "Interpreter bonus",
+      "driver": "Drivers",
+      "forwarderComm": "Forwarder commission"
+    },
+    "learning": {
+      "regulations": "Regulations & contracts",
+      "training": "Training",
+      "businessPlan": "Business Plan",
+      "culture": "Company culture",
+      "jobFlow": "Job flowchart",
+      "newsfeed": "Internal newsfeed",
+      "tos": "Customer terms of service"
+    },
+    "extension": {
+      "juristicCheck": "Juristic customer check",
+      "thaiTransport": "TH transport check",
+      "meetingRoom": "Meeting-room booking",
+      "history": "Transaction history",
+      "incidents": "System incidents"
+    },
+    "warehouse": {
+      "containers": "Containers",
+      "bulletin": "Daily container bulletin",
+      "qaInspect": "QA inspections"
+    },
+    "driver": {
+      "toDeliver": "Jobs to deliver",
+      "history": "Job history",
+      "barcode": "Barcode scan"
+    },
+    "interpreter": {
+      "commissions": "Interpreter commissions"
+    },
+    "broadcasts": {
+      "title": "Broadcasts"
+    },
+    "bookings": {
+      "title": "Bookings"
+    }
   }
 }
