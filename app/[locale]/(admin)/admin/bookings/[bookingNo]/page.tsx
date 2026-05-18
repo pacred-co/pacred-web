@@ -25,7 +25,9 @@ const DOC_KIND_LABEL_TH: Record<BookingDocKind, string> = {
  * the list to see what the customer picked, where the lead came from, and
  * the estimate-receipt snapshot. Per design §6.5 the next step (status
  * transitions / linking to a freight_quote / spawning shipments) lands in
- * BK-2 — for now the action panel is a placeholder stub.
+ * BK-2 (G2) ✅ — the action panel now drives 5 status transitions
+ * (markContacted / markQuoted / markWon / markLost / cancel) via
+ * actions/admin/bookings.ts.
  *
  * `bookingNo` accepts either the BKYYMMDD-NNNN booking_no OR (for drafts
  * with no booking_no yet) the uuid id. The lookup tries booking_no first.
