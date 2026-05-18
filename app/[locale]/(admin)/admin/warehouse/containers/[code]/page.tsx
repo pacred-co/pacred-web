@@ -15,6 +15,7 @@ import { ManualShipmentForm } from "./manual-shipment-form";
 import { CloseAtForm } from "./close-at-form";
 import { CostMarginPanel } from "./cost-margin-panel";
 import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
+import { WorkItemThread } from "@/components/admin/work-item-thread";
 
 /**
  * /admin/warehouse/containers/[code] — detail view (T-P2 / CT-4).
@@ -131,6 +132,18 @@ export default async function AdminContainerDetailPage({
     .limit(20);
   type H = { id: string; from_status: string | null; to_status: string; note: string | null; changed_at: string; source: string };
   const history = (historyRaw ?? []) as H[];
+
+  // IC-1 — find the work_item that indexes this container so the thread
+  // can hang off it.  May be null if no work_item has been opened yet
+  // (e.g. legacy container imported before the work_items spine landed).
+  const { data: workItem } = await admin
+    .from("work_items")
+    .select("id")
+    .eq("entity_type", "cargo_container")
+    .eq("entity_ref", container.code ?? code)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
 
   const statusBadge = STATUS_BADGE[container.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
   const statusLabel = STATUS_LABEL[container.status] ?? container.status;
@@ -362,6 +375,23 @@ export default async function AdminContainerDetailPage({
           />
         </aside>
       </div>
+
+      {/* IC-1 — internal per-job chat thread (one row in work_item_messages). */}
+      {workItem ? (
+        <WorkItemThread workItemId={workItem.id} />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
+          <p className="text-sm text-muted">
+            ยังไม่มี work-item สำหรับงานนี้ — สร้างก่อนเริ่มแชท
+          </p>
+          <Link
+            href={`/admin/board?entity_type=cargo_container&entity_ref=${encodeURIComponent(container.code ?? code)}`}
+            className="mt-2 inline-block text-xs text-primary-600 hover:underline"
+          >
+            → ไปสร้างที่กระดานงาน
+          </Link>
+        </div>
+      )}
     </main>
   );
 }

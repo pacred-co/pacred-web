@@ -28,6 +28,7 @@ import {
   type CustomsDeclarationStatus,
   type CustomsDeclarationType,
 } from "@/lib/validators/customs-declaration";
+import { WorkItemThread } from "@/components/admin/work-item-thread";
 
 /**
  * V-E1 — /admin/freight/shipments/[id]
@@ -271,6 +272,17 @@ export default async function AdminFreightShipmentDetailPage({
   const cdRows = (cdRowsRaw ?? []) as CdRow[];
   const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
 
+  // IC-1 — find the work_item that indexes this shipment so the thread
+  // panel can render below.  May be null if no work_item exists yet.
+  const { data: workItem } = await admin
+    .from("work_items")
+    .select("id")
+    .eq("entity_type", "freight_shipment")
+    .eq("entity_ref", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
   // Audit.
   const { data: auditRaw } = await admin
     .from("admin_audit_log")
@@ -469,6 +481,23 @@ export default async function AdminFreightShipmentDetailPage({
           </span>
         ))}
       </p>
+
+      {/* IC-1 — internal per-job chat thread (work_item_messages). */}
+      {workItem ? (
+        <WorkItemThread workItemId={workItem.id} />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
+          <p className="text-sm text-muted">
+            ยังไม่มี work-item สำหรับงานนี้ — สร้างก่อนเริ่มแชท
+          </p>
+          <Link
+            href={`/admin/board?entity_type=freight_shipment&entity_ref=${id}`}
+            className="mt-2 inline-block text-xs text-primary-600 hover:underline"
+          >
+            → ไปสร้างที่กระดานงาน
+          </Link>
+        </div>
+      )}
     </main>
   );
 }

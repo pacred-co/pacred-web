@@ -61,6 +61,22 @@ export default async function AdminContactMessagesPage({
     return acc;
   }, {});
 
+  // IC-1 — batch-fetch the work_item id per contact_message so each row
+  // can flag "has a chat thread" (work-item detail page surfaces the
+  // <WorkItemThread> — no per-row contact-message detail page exists yet).
+  const contactIds = rows.map((r) => r.id);
+  const workItemByContact = new Map<string, string>();
+  if (contactIds.length > 0) {
+    const { data: wiRaw } = await admin
+      .from("work_items")
+      .select("id, entity_ref")
+      .eq("entity_type", "contact_message")
+      .in("entity_ref", contactIds);
+    for (const w of (wiRaw ?? []) as Array<{ id: string; entity_ref: string }>) {
+      if (!workItemByContact.has(w.entity_ref)) workItemByContact.set(w.entity_ref, w.id);
+    }
+  }
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
@@ -160,6 +176,11 @@ export default async function AdminContactMessagesPage({
                     </td>
                     <td className="px-4 py-3">
                       <ContactMessageActions id={r.id} status={r.status} />
+                      {workItemByContact.has(r.id) && (
+                        <p className="mt-1 text-[10px] text-primary-600 font-medium" title="งานนี้มี internal chat thread — เปิดจากกระดานงานหรือหน้ารายละเอียดที่เชื่อมโยง">
+                          💬 มีแชทภายใน
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}

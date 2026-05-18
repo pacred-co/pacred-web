@@ -2281,5 +2281,60 @@
       "actionsTitle": "การดำเนินการ",
       "actionsTodo": "เปลี่ยนสถานะ (จะมาใน BK-2 — booking-actions desk)"
     }
+  },
+  "work_chat": {
+    "thread": {
+      "title": "แชทภายในของงานนี้",
+      "empty": "ยังไม่มีข้อความ — เริ่มสนทนาเลย",
+      "loading": "กำลังโหลดแชท..."
+    },
+    "composer": {
+      "placeholder": "พิมพ์ข้อความ... @ เพื่อ mention เพื่อน",
+      "send": "ส่ง",
+      "markWaiting": "⚑ ทำเครื่องหมายว่ารอ",
+      "cancelWaiting": "ยกเลิก"
+    },
+    "waiting": {
+      "label": "สถานะรอ",
+      "reason": "รออะไร",
+      "blockedRole": "บล็อกที่แผนก",
+      "blockedAdmin": "บล็อกที่บุคคล",
+      "note": "รายละเอียด (พิมพ์ทำไมต้องรอ)",
+      "confirm": "ยืนยันทำเครื่องหมายรอ",
+      "clearBtn": "✅ ปลดล็อก (unblock)",
+      "clearNotePlaceholder": "หมายเหตุการปลดล็อก (เช่น 'ได้รับเอกสารแล้ว')"
+    },
+    "system": {
+      "stageChanged": "เปลี่ยนสถานะ",
+      "assigned": "มอบหมาย",
+      "unblocked": "ปลดล็อกแล้ว"
+    },
+    "delete": {
+      "confirm": "ลบข้อความนี้?",
+      "deletedMarker": "(ลบแล้ว)"
+    },
+    "inbox": {
+      "tabMine": "งานของฉัน",
+      "tabWaiting": "รอฉันจัดการ",
+      "tabMentions": "@ ฉัน",
+      "blockedDeptSection": "งานที่บล็อกแผนกของฉัน",
+      "blockedMeSection": "งานที่บล็อกฉันโดยตรง",
+      "mentionsSection": "มีคน @ ฉัน",
+      "empty": "ยังไม่มีงานในกล่องนี้"
+    },
+    "board": {
+      "filterAll": "ทั้งหมด",
+      "filterChip": "รอ"
+    },
+    "waitingReason": {
+      "confirm": "รอเฟิม / อนุมัติ",
+      "disbursement": "รอเบิกจ่าย",
+      "billing": "รอวางบิล",
+      "follow_up": "รอตามลูกค้า/คู่ค้า",
+      "document": "รอเอกสาร",
+      "payment": "รอลูกค้าชำระ",
+      "rate_fix": "รอแก้เรท/ราคา",
+      "external": "รอหน่วยงานภายนอก"
+    }
   }
 }

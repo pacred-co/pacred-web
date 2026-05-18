@@ -2281,5 +2281,60 @@
       "actionsTitle": "Actions",
       "actionsTodo": "Status transitions (coming in BK-2 — booking-actions desk)"
     }
+  },
+  "work_chat": {
+    "thread": {
+      "title": "Internal chat for this job",
+      "empty": "No messages yet — start the thread.",
+      "loading": "Loading chat..."
+    },
+    "composer": {
+      "placeholder": "Type a message... @ to mention a teammate",
+      "send": "Send",
+      "markWaiting": "⚑ Mark as waiting",
+      "cancelWaiting": "Cancel"
+    },
+    "waiting": {
+      "label": "Waiting state",
+      "reason": "What's it waiting on",
+      "blockedRole": "Blocked on department",
+      "blockedAdmin": "Blocked on person",
+      "note": "Details (why is it waiting)",
+      "confirm": "Confirm waiting",
+      "clearBtn": "✅ Mark unblocked",
+      "clearNotePlaceholder": "Unblock note (e.g. 'document received')"
+    },
+    "system": {
+      "stageChanged": "Stage changed",
+      "assigned": "Assigned",
+      "unblocked": "Unblocked"
+    },
+    "delete": {
+      "confirm": "Delete this message?",
+      "deletedMarker": "(deleted)"
+    },
+    "inbox": {
+      "tabMine": "My work",
+      "tabWaiting": "Waiting on me",
+      "tabMentions": "@ Me",
+      "blockedDeptSection": "Jobs blocked on my department",
+      "blockedMeSection": "Jobs blocked on me personally",
+      "mentionsSection": "Mentions of me",
+      "empty": "Nothing here yet"
+    },
+    "board": {
+      "filterAll": "All",
+      "filterChip": "Waiting"
+    },
+    "waitingReason": {
+      "confirm": "Waiting on confirmation",
+      "disbursement": "Waiting on disbursement",
+      "billing": "Waiting on billing",
+      "follow_up": "Waiting on follow-up",
+      "document": "Waiting on document",
+      "payment": "Waiting on customer payment",
+      "rate_fix": "Waiting on rate fix",
+      "external": "Waiting on external party"
+    }
   }
 }

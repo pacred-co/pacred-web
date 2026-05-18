@@ -8,6 +8,7 @@ import type { BookingStatus } from "@/lib/validators/booking";
 import { listBookingDocuments } from "@/actions/bookings";
 import type { BookingDocKind } from "@/types/booking";
 import { BookingActionPanel } from "./booking-action-panel";
+import { WorkItemThread } from "@/components/admin/work-item-thread";
 
 const DOC_KIND_LABEL_TH: Record<BookingDocKind, string> = {
   booking_invoice:       "ใบกำกับสินค้า",
@@ -197,6 +198,19 @@ export default async function AdminBookingDetailPage({
   // policy added in migration 0081).
   const docsRes = await listBookingDocuments(row.id);
   const bookingDocs = docsRes.ok ? docsRes.data.documents : [];
+
+  // IC-1 — find the work_item that indexes this booking so the thread
+  // panel can render below.  May be null until bookings are added to the
+  // work_items entity_type CHECK constraint (a future migration) — the
+  // placeholder explains the gap.
+  const { data: workItem } = await admin
+    .from("work_items")
+    .select("id")
+    .eq("entity_type", "booking")
+    .eq("entity_ref", row.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
@@ -454,6 +468,23 @@ export default async function AdminBookingDetailPage({
         status={row.status}
         freightQuoteId={row.freight_quote_id}
       />
+
+      {/* IC-1 — internal per-job chat thread (work_item_messages). */}
+      {workItem ? (
+        <WorkItemThread workItemId={workItem.id} />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-surface-alt/30 p-4 text-center">
+          <p className="text-sm text-muted">
+            ยังไม่มี work-item สำหรับงานนี้ — สร้างก่อนเริ่มแชท
+          </p>
+          <Link
+            href="/admin/board"
+            className="mt-2 inline-block text-xs text-primary-600 hover:underline"
+          >
+            → ไปสร้างที่กระดานงาน
+          </Link>
+        </div>
+      )}
     </main>
   );
 }
