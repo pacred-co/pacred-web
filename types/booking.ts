@@ -280,7 +280,7 @@ export interface SubmitBookingResult {
 /**
  * The 6 document slot kinds the review-step file uploader accepts.
  * Match the `booking_*` values added to `documents.doc_type` CHECK in
- * migration 0081_booking_documents.sql.
+ * migration 0084_booking_documents.sql.
  */
 export type BookingDocKind =
   | "booking_invoice"          // ใบกำกับสินค้า / commercial invoice

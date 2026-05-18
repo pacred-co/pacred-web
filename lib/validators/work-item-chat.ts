@@ -2,7 +2,7 @@
  * IC-1 — Zod schemas + helpers for the per-job internal chat thread.
  *
  * Pairs with:
- *   - migration 0083_work_item_messages.sql   (table + RLS + CHECK)
+ *   - migration 0086_work_item_messages.sql   (table + RLS + CHECK)
  *   - types/work-item-chat.ts                  (TS contract)
  *   - actions/admin/work-item-messages.ts      (the 6 Server Actions)
  *

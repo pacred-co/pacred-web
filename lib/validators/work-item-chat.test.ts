@@ -1,6 +1,6 @@
 /**
  * IC-1 — Zod schema + parseMentionHandles unit tests for the per-job
- * internal chat thread (0083_work_item_messages).
+ * internal chat thread (0086_work_item_messages).
  *
  * Covers:
  *   (a) postMessageSchema  — body bounds, uuid guard, mention list bounds

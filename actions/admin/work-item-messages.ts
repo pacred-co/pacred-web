@@ -5,7 +5,7 @@
  * thread surface for the cross-department work-board.
  *
  * Pairs with:
- *   - migration  0083_work_item_messages.sql       (table + RLS + CHECK)
+ *   - migration  0086_work_item_messages.sql       (table + RLS + CHECK)
  *   - validators lib/validators/work-item-chat.ts  (Zod + parseMentionHandles)
  *   - types      types/work-item-chat.ts           (TS contract)
  *

@@ -11,7 +11,7 @@ export type NotifyCategory =
   | "observability"
   // BK-1 (0079) — booking-flow submit notifications (admin + customer).
   | "booking"
-  // IC-1 (0083) — internal staff chat: @mention + waiting-for set/cleared.
+  // IC-1 (0086) — internal staff chat: @mention + waiting-for set/cleared.
   | "work_chat";
 
 export type NotifySeverity = "info" | "success" | "warning" | "error";
@@ -24,7 +24,7 @@ export type NotifyReferenceType =
   | "platform_incident"
   // BK-1 (0079) — links a notification back to the bookings row.
   | "booking"
-  // IC-1 (0083) — links a work_chat notification to the work_items row.
+  // IC-1 (0086) — links a work_chat notification to the work_items row.
   | "work_item";
 
 export type NotifyPayload = {
