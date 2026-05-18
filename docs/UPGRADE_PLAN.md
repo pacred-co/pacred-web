@@ -115,33 +115,33 @@ the system everyone already knows.
 - **End-to-end logic-loop** — the full quote → order → pay → ship → bill →
   close cycle behaves the way the legacy system behaves at every step.
 
-### Stage breakdown — TODO (gap-map-driven)
+### Stage breakdown (gap-map-driven)
 
-> **Phase B is not yet broken into stages.** It needs a **gap-map-driven
-> breakdown**: walk the legacy-vs-Pacred workflow gap map, group the divergences
-> into shippable stages, assign owners, and slot them here. That breakdown is
-> the first Phase-B task once Phase A clears (or runs in parallel — it needs no
-> prod data).
->
-> **Phase-B input — the legacy-vs-Pacred gap map** lives in
-> [`docs/research/`](research/_index.md). The most directly relevant docs are
-> the workflow gap-hunts that already compare Pacred's code against the legacy
-> PCS member portal + admin:
-> - [`research/gap-customer.md`](research/gap-customer.md) — customer-side
->   walk vs the PCS legacy member portal.
-> - [`research/gap-admin.md`](research/gap-admin.md) — admin/back-office walk
->   vs the PCS legacy admin (~85 modules).
-> - [`research/gap-revenue-flow.md`](research/gap-revenue-flow.md) — the
->   quote → order → billed → closed loop and its missing edges.
-> - [`research/PACRED-GAP-ANALYSIS.md`](research/PACRED-GAP-ANALYSIS.md) +
->   [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) —
->   the syntheses; note these predate D1 and frame gaps as *enhancements* —
->   under D1, re-read them as **fidelity gaps to close**, not new capability.
-> - The legacy decode docs (`legacy-chat-*.md`, `cargo-ops-forensics`, the PHP
->   deep-sweep audits) — evidence for how PCS actually behaves.
->
-> When the breakdown is written, the stages land here as `B-1`, `B-2`, … with
-> owners and gates, the same shape as Phase A.
+Derived from the legacy-vs-Pacred workflow gap map —
+[`research/d1-phase-b-gap-map.md`](research/d1-phase-b-gap-map.md), the
+**canonical Phase-B input** (the pre-D1 hunts `gap-customer.md` /
+`gap-admin.md` / `gap-revenue-flow.md` + the `legacy-chat-*` decode docs are
+supporting evidence — re-read as *fidelity gaps to close*, not enhancements).
+Stages are shippable increments; the customer track (B-1..B-3) and the admin
+track (B-4..B-9) can run in parallel once B-0 lands.
+
+| Stage | What | Gap | Owner |
+|---|---|---|---|
+| **B-0 Data foundation** | The app's data layer (`lib/supabase/*`, server actions, queries) re-pointed at the ported `tb_*` 117-table schema. Prerequisite for every B-stage backend. *Needs the `tb_*` schema in a reachable dev Supabase — coordinate with Phase A.* | — | ภูม + เดฟ |
+| **B-auth Legacy login** | Wire `verifyLegacyPassword` into a "เชื่อมต่อบัญชี PCS CARGO" login — migrated customers sign in with their existing PCS password, no reset. | §4 | ภูม |
+| **B-1 Customer home** | Restore the 9-icon launchpad home (ref `member/menu.php`) — wallet card + sales-rep card + the icon grid; retire the nested sidebar as the landing surface. | §1 | ปอน + ภูม |
+| **B-2 Customer status model** | Reconcile the three divergent status vocabularies onto the legacy set; restore the tab-per-status order / forwarder list views. | §2·§4 | ภูม + ปอน |
+| **B-3 Customer service flows** | shop-order · forwarder-import · payment · wallet flows reworked to the legacy logic-loop. | §4 | ภูม + ปอน |
+| **B-4 Admin RBAC menu** | Per-role hand-built admin sidebars + live-count badges — replace the flat 7-role array. | §1 | ภูม |
+| **B-5 Forwarder status workflow** | Restore the legacy ship→arrive→**then**-pay forwarder status order + the truck load/unload sub-states. | §2 | ภูม |
+| **B-6 Container payment ledger** | Rebuild the `tb_cnt` per-container payment-slip ledger (slip image · paid/unpaid badge · the `tb_cnt_pay_*` fan-out). | §3 | ภูม |
+| **B-7 Warehouse + scanner** | Barcode scan-to-auto-status-flip · shelf-location capture · green/orange + audio feedback · the 8-variant scan family. | §4 | ภูม |
+| **B-8 Accounting** | รวมบิล multi-order bill consolidation · the container-payment screen · รับรู้รายได้ income recognition. | §4 | ภูม |
+| **B-9 QA + missing modules** | The `tb_check_forwarder` QA-check queue · note queues · Learning centre · Extension tools · member segmentation. | §4·§6 | ภูม |
+
+**Sequencing:** B-0 first (foundation), B-auth early. Then the customer track
+(B-1→B-2→B-3, ปอน-led) and the admin track (B-4→…→B-9, ภูม-led) run in
+parallel. A stage is done only when its gap-map item no longer diverges.
 
 **Phase-B owners** (per [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)
 work-split — see the [work-split table](#work-split--who-owns-what-under-d1)):
@@ -282,7 +282,7 @@ roles re-task under D1 — see the updated briefs in [`docs/briefs/`](briefs/).
 
 **End — `UPGRADE_PLAN.md`.** The D1 phase plan: Phase A 🗄 data migration
 (nearly done — A-4 files + A-5 prod load pending) → Phase B 🎯 workflow fidelity
-(the bulk of forward work — needs a gap-map-driven stage breakdown) → Phase C
+(the bulk of forward work — 10 gap-driven stages, B-0..B-9) → Phase C
 🔭 Pacred enhancements (Tier 0/1/2/3 + the six systems — deferred, sequenced
 after the faithful port). Mobile-first + the quality gate apply across all of
 them.
