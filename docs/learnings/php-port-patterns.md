@@ -41,3 +41,54 @@ Three legacy-data gotchas — each fails a Postgres `COPY`, none caught by `buil
 **Also:** spawned sub-agents could NOT do network downloads (WebFetch/PowerShell/Bash network egress denied); the main session can (`pip install`, `Invoke-WebRequest` work). Do fetch/download work from the main session, not a sub-agent.
 
 **Full migration runbook:** [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md).
+
+---
+
+## 2026-05-19 — MySQL → PostgreSQL via pgloader: 5 more gotchas (เดฟ/Claude)
+
+**Context:** the D1 migration re-run end-to-end on a Mac with **pgloader**
+(vs the 2026-05-18 Python converter — both reach the same validated result:
+3,780,238 rows, 117/117 tables reconcile). Toolchain via Homebrew: `mysql` +
+`postgresql@17` + `pgloader`. pgloader is the faster path — one command does
+schema + data + indexes + sequence reset (~29 s for 3.78 M rows).
+
+**1. pgloader connects to MySQL 9.x fine — no `caching_sha2_password` workaround.**
+A common worry: MySQL 8.4+/9.x dropped `mysql_native_password` and an old
+MySQL driver can't speak `caching_sha2_password`. Not true for pgloader
+3.6.10 — it connects to MySQL 9.6 over TCP with no extra config. Don't waste
+time creating native-password users (MySQL 9.x removed that plugin anyway).
+
+**2. One pgloader CAST rule kills the zero-date NOT-NULL trap.**
+The 2026-05-18 gotcha #2 (legacy `datetime NOT NULL` holds `0000-00-00`) is
+solved declaratively in the `.load` file:
+`CAST type datetime to timestamp drop not null using zero-dates-to-null`.
+The `drop not null` is the essential half — without it the zeroed value
+maps to NULL then fails the NOT NULL constraint. NUL bytes: pgloader's
+batch loader absorbed them with 0 rejects (no manual strip needed).
+
+**3. MySQL's default collation is case-INSENSITIVE — PostgreSQL is not.**
+Legacy `utf8mb3_general_ci` means `'pcs1791' = 'PCS1791' = 'Pcscargo'` all
+join/compare EQUAL; the legacy PHP relied on this unknowingly. PostgreSQL
+`text`/`varchar` is case-SENSITIVE. So any identifier-like column used in
+joins (here the `userid` member code) MUST be **case-normalised** in the
+port — else joins that silently worked in MySQL silently break in PG. The
+PCS→PR rebrand folds every code to one canonical case:
+`'PR' || substring(upper(userid) from 4) WHERE upper(userid) LIKE 'PCS%'`.
+Check the source for case-collision dupes FIRST (`GROUP BY upper(col)
+HAVING count(*)>1`) — a collision would fail a PK/unique UPDATE.
+
+**4. `notnull` / `isnull` are PostgreSQL postfix operators — never bare aliases.**
+`SELECT count(*) FILTER (WHERE x IS NOT NULL) notnull FROM t` does NOT alias
+the count — PG parses it as `(count(...)) NOTNULL` (i.e. `IS NOT NULL`) → a
+**boolean**. Symptom: the column returns `t`/`f`, and a UNION with an int
+literal fails `UNION types boolean and integer cannot be matched`. Fix: any
+other alias (`nn`) or quote it (`AS "notnull"`).
+
+**5. A Supabase data load needs the Postgres password — the API keys can't.**
+The `anon` / `service_role` / `sb_publishable_*` keys authenticate to
+**PostgREST** (the REST layer) — CRUD on existing tables, RLS-gated. They
+CANNOT run DDL (`CREATE TABLE`) or a bulk `COPY`. A schema+data migration
+needs a real Postgres connection —
+`postgresql://postgres:<DB-PASSWORD>@db.<ref>.supabase.co:5432/postgres` —
+and the DB password is a separate dashboard secret (Project Settings →
+Database), NOT any API key. Plan the migration around obtaining it.
