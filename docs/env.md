@@ -3,7 +3,7 @@
 > **CANONICAL** — single source of truth for every env var Pacred reads.
 > Template file: [`/.env.example`](/.env.example) · Copy to `.env.local` (gitignored)
 
-Last updated: 2026-05-13 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](PORT_PLAN.md) Part N4
+Last updated: 2026-05-18 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](PORT_PLAN.md) Part N4
 
 ---
 
@@ -12,6 +12,75 @@ Last updated: 2026-05-13 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](P
 - 🟢 **Required for app to boot** — without these, Pacred crashes
 - 🟡 **Required for production** — silently degrades (demo/bypass mode) without these
 - ⚪ **Optional / future** — not blocking
+
+---
+
+## 📋 Complete `.env.local` inventory — machine-move / fresh-setup checklist
+
+Every variable a working `.env.local` carries (**36**, as of 2026-05-18).
+Setting up a new machine → recreate all of these. The "where to get it",
+dev/prod values, and degrade behaviour live in the numbered section (§ column).
+**Values live only in `.env.local` (gitignored) + Vercel — never in this doc.**
+Fastest path on a new machine: `vercel env pull` (§16) pulls every var that's
+set in Vercel straight into a fresh `.env.local`.
+
+**🟢 Required to boot (8) — set these first**
+
+| Var | Purpose | § |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | 1 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key (client) | 1 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role — server-only | 1 |
+| `NEXT_PUBLIC_SITE_URL` | absolute site URL — OAuth + deep-links | 2 |
+| `OTP_BYPASS` | dev `true` skips SMS; prod `false` | 3 |
+| `OTP_PEPPER` | OTP hash pepper (random 32-char) | 3 |
+| `PROMPTPAY_ID` | wallet-deposit QR — hard-fails if unset | 6 |
+| `CRON_SECRET` | protects the `/api/cron/*` routes | 9 |
+
+**🟡 Production / degrades gracefully without it (26)**
+
+| Var | Purpose | § |
+|---|---|---|
+| `SMS_PROVIDER` | SMS gateway selector (`thaibulksms`) | 4 |
+| `THAIBULKSMS_API_KEY` | ThaiBulkSMS API key | 4 |
+| `THAIBULKSMS_API_SECRET` | ThaiBulkSMS API secret | 4 |
+| `THAIBULKSMS_SENDER` | SMS sender name (`Pacred`) | 4 |
+| `SMS_LOW_THRESHOLD` | SMS-credit low-balance alert threshold | 4 |
+| `PACRED_TAMIT_DETAIL_URL` | China product-detail API | 5 |
+| `PACRED_TAMIT_CACHE_URL` | China short-URL cache API | 5 |
+| `PACRED_AKUCARGO_API_URL` | China keyword-search API | 5 |
+| `PACRED_LAONET_API_URL` | China image-search API | 5 |
+| `PACRED_LAONET_KEY` | Laonet API key (email-as-key) | 5 |
+| `LINE_PUSH_BYPASS` | dev `true` = push skipped | 7 |
+| `LINE_CHANNEL_ID` | LINE Messaging API channel ID | 7 |
+| `LINE_CHANNEL_SECRET` | LINE webhook signature secret | 7 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE push access token | 7 |
+| `NEXT_PUBLIC_LIFF_ID` | LIFF link page (`/liff/link`) | 7 |
+| `RESEND_API_KEY` | email-fallback API key | 8 |
+| `RESEND_FROM` | email "from" header | 8 |
+| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key (client) | 12 |
+| `HCAPTCHA_SECRET_KEY` | hCaptcha secret (server) | 12 |
+| `UPSTASH_REDIS_REST_URL` | rate-limit Redis REST URL | 13 |
+| `UPSTASH_REDIS_REST_TOKEN` | rate-limit Redis REST token | 13 |
+| `SENTRY_DSN` | Sentry server DSN | 14 |
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry browser DSN | 14 |
+| `NEXT_PUBLIC_GTM_ID` | Google Tag Manager container | 17 |
+| `NEXT_PUBLIC_CLARITY_ID` | Microsoft Clarity project | 18 |
+| `MOMO_JMF_TOKEN` | MOMO cargo container-sync JWT | 19 |
+
+**⚪ Optional / auto-provided (2)**
+
+| Var | Purpose | § |
+|---|---|---|
+| `NEXT_PUBLIC_YUAN_RATE` | yuan-rate fallback (DB value preferred) | 10 |
+| `VERCEL_GIT_COMMIT_SHA` | Vercel-injected build SHA — do NOT set locally | 9.5 |
+
+> **Also documented but not in the current `.env.local`** (optional / future —
+> set only when the feature is wired): `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` (§2) ·
+> `LINE_LOGIN_CLIENT_ID` / `LINE_LOGIN_CLIENT_SECRET` (§11) · `SENTRY_ENV` /
+> `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` (§14) ·
+> `MOMO_JMF_BASE_URL` / `MOMO_JMF_WEBHOOK_SECRET` (§19) · `OTP_PEPPER_NEXT`
+> (pepper-rotation window only).
 
 ---
 
