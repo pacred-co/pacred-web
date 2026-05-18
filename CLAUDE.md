@@ -172,7 +172,7 @@ Last updated: 2026-05-18 (D1 direction pivot — see [ADR-0017](docs/decisions/0
 - `app/[locale]/(admin)/admin/*` — admin back-office — `requireAdmin()` gate per [ADR-0002](docs/decisions/0002-admin-architecture.md)
 - `actions/` — Server Actions (`actions/auth.ts`, `actions/wallet.ts`, etc.); admin variants in `actions/admin/*`
 - `lib/` — `supabase/{client,server,admin}.ts` · `auth/*` · `sms/gateway.ts` · `notifications/*` · `validators/*` (Zod) · `pdf/*` · `forwarder/calc-price.ts`
-- `supabase/migrations/` — 0001..0084 numbered migrations (`0065` is an intentional unused gap; `0084` reserved for the D1 legacy `tb_*` schema — see [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) §9); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
+- `supabase/migrations/` — 0001..0086 numbered migrations (`0065` is an intentional unused gap; `0081`-`0083` reserved for the D1 legacy `tb_*` schema — see [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) §9); see [`supabase/migrations/README.md`](supabase/migrations/README.md)
 - `proxy.ts` (NOT `middleware.ts` — Next 16 rename) at repo root
 
 ## Auth & Backend State (Phase 1-5 ✅ done)

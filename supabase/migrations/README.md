@@ -83,9 +83,9 @@
 | 68 | [0080_work_items.sql](0080_work_items.sql) | work_items — cross-department work-board / job-assignment spine (polymorphic entity link + assignment + lifecycle) + ensure_work_item() find-or-create helper. Powers `/admin/board` + per-role inbox. Additive overlay — domain tables unchanged. operating-system-analysis §1.4 Tier-2 centrepiece | **Tier 2** |
 | 69 | [0078_warehouse_cascade_rpc.sql](0078_warehouse_cascade_rpc.sql) | cascade_container_status() SECURITY DEFINER function — atomic container → shipment → forwarder/service_order status cascade in one TX (closes the P1-5 best-effort cascade hole; mid-cascade failure rolls back all child writes). Replaces the non-atomic loops in actions/admin/warehouse.ts. Returns counter jsonb for "N of M updated" UI. service_role-only grant. | **P1-5 fix** |
 | 70 | [0079_bookings.sql](0079_bookings.sql) | bookings + booking_options + booking_rates + booking_no serial + work_items.entity_type `booking` — BK-1 thin booking-intake layer (feeds the 0080 work-board + freight_quotes) | **BK-1** |
-| 71 | [0081_booking_documents.sql](0081_booking_documents.sql) | documents.booking_id link + doc_type CHECK extended for the booking-flow attach-documents selector (closes BK-1 audit gap G1) | **BK-1.5 G1** |
-| 72 | [0082_tax_invoices_credit_note_for.sql](0082_tax_invoices_credit_note_for.sql) | tax_invoices.credit_note_for_id — bidirectional credit-note (ใบลดหนี้) link per ADR-0006 §7 / RD Code 86 | **R3 G2e-2** |
-| 73 | [0083_work_item_messages.sql](0083_work_item_messages.sql) | work_item_messages + work_items.waiting_for — IC-1 internal per-job chat + status-visibility layer (pairs with 0080 work-board) | **IC-1 T1** |
+| 71 | [0084_booking_documents.sql](0084_booking_documents.sql) | documents.booking_id link + doc_type CHECK extended for the booking-flow attach-documents selector (closes BK-1 audit gap G1). *Renumbered from 0081 — commit `a248696`.* | **BK-1.5 G1** |
+| 72 | [0085_tax_invoices_credit_note_for.sql](0085_tax_invoices_credit_note_for.sql) | tax_invoices.credit_note_for_id — bidirectional credit-note (ใบลดหนี้) link per ADR-0006 §7 / RD Code 86. *Renumbered from 0082.* | **R3 G2e-2** |
+| 73 | [0086_work_item_messages.sql](0086_work_item_messages.sql) | work_item_messages + work_items.waiting_for — IC-1 internal per-job chat + status-visibility layer (pairs with 0080 work-board). *Renumbered from 0083.* | **IC-1 T1** |
 
 > 🔢 **Numbering note — `0077` + `0080` are เดฟ-reserved.** ภูม's active
 > sequence used `0073`-`0076` for the Phase B + C + super-tools batch
@@ -94,11 +94,13 @@
 > ภูม's. **Apply `0077` AFTER `0080`** (or re-run `0077` once `0080` is
 > in) — `0077` extends `work_items.entity_type`, and that ALTER is
 > guarded to no-op if `work_items` does not exist yet. All idempotent +
-> additive — zero data migration. `0079`/`0083` likewise reference
+> additive — zero data migration. `0079`/`0086` likewise reference
 > `work_items` — ascending order satisfies it.
 
-> 🗂 **Post-launch backlog `0058`-`0083` — completeness + apply order.** The
-> table above does not individually list `0058` `0059` `0066`-`0072`. For
+> 🗂 **Post-launch backlog — completeness + apply order.** The migration files
+> present are `0058`-`0080` + `0084`-`0086` (`0065` is an intentional gap;
+> `0081`-`0083` are reserved for the D1 legacy schema — see the next note).
+> The table above does not individually list `0058` `0059` `0066`-`0072`. For
 > reference: `0058` U1-6 refund_requests · `0059` U1-1 container unify
 > (cargo_containers canonical) · `0066` post-U1 audit fixes · `0067` U2-1
 > PCS→Pacred customer migration — **superseded by D1; see
@@ -107,13 +109,15 @@
 > `0070` U4-1 supervisory layer (cron_invocations + delivery log) · `0071`
 > U4-2 customer credit line · `0072` C-1 wallet self-serve amount-sign guard.
 > The authoritative migration set is the `supabase/migrations/` directory —
-> **apply every file `0058`-`0083` in ascending number order** (all idempotent
-> + additive). Full deploy sequencing — what prod already has, what to apply,
-> in what order → [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
+> **apply every file in ascending number order** (all idempotent + additive).
+> Full deploy sequencing — what prod already has, what to apply, in what
+> order → [`pcs-data-migration.md §9`](../../docs/runbook/pcs-data-migration.md).
 
-> 🔢 **`0084` is reserved** for the D1 legacy-PCS schema — the 117 `tb_*`
-> tables (see [pcs-data-migration.md](../../docs/runbook/pcs-data-migration.md)).
-> ภูม's Phase-B backend-rework migrations continue at `0085`+.
+> 🔢 **`0081`-`0083` are reserved** for the D1 legacy-PCS schema — the 117
+> `tb_*` tables + follow-ups (see
+> [pcs-data-migration.md §9](../../docs/runbook/pcs-data-migration.md)). ภูม
+> renumbered his booking/credit-note/chat batch to `0084`-`0086` (commit
+> `a248696`) to free that block. Next free for new Phase-B work = **`0087`**.
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in

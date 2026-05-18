@@ -78,10 +78,11 @@ In the repo (no PII): `lib/auth/pcs-legacy-password.ts` + its test.
    2026-05-18 dump will be stale by then). Load into local MySQL.
 2. **Convert** — `python convert.py` → regenerates `data/`.
 3. **Schema** — apply `pcs-legacy-schema.draft.sql` to prod Supabase as a new
-   migration **`0084_pcs_legacy_schema.sql`** (`0081`-`0083` were claimed by
-   ภูม's booking / credit-note / chat batch after this runbook was first
-   drafted; `0084` is the next free number — see §9). The 117 `tb_*` tables
-   coexist with Pacred's existing tables; nothing is dropped.
+   migration **`0081_pcs_legacy_schema.sql`** (ภูม renumbered his booking /
+   credit-note / chat batch up to `0084`-`0086` — commit `a248696` — to free
+   `0081`-`0083` for exactly this; `0082`/`0083` stay open for legacy
+   follow-up migrations if the port needs them — see §9). The 117 `tb_*`
+   tables coexist with Pacred's existing tables; nothing is dropped.
 4. **Data** — load each `data/NNN_*.copy.sql` into prod via `psql`.
 5. **Member-code generator** — apply `member-code-gapfill.sql`.
 6. **Reconcile** — prod-PostgreSQL row counts ↔ source MySQL must match all
@@ -122,8 +123,9 @@ before planning any deploy — in the prod SQL Editor:
 `select name from supabase_migrations.schema_migrations order by name;`
 Owner: เดฟ. Nothing below sequences correctly without this.
 
-**DB-1 — Apply the backlog `0058`-`0083` to prod (no external blocker).**
-25 idempotent, additive migrations on `dave` (`0065` is an intentional gap).
+**DB-1 — Apply the backlog (`0058`-`0080` + `0084`-`0086`) to prod (no
+external blocker).** 25 idempotent, additive migrations on `dave` (`0065` is
+an intentional gap; `0081`-`0083` are deliberately left free for DB-2).
 They include the launch-integrity money/security guards `0060`-`0064` — the
 S-1 RLS keystone (`0062`), the wallet-overdraw floor (`0064`), the
 money-idempotency guards (`0061`/`0063`). If DB-0 shows those are not on
@@ -134,11 +136,13 @@ superseded by this runbook (§8) — harmless to apply, but the feature it backs
 is dead. Owner: ภูม. Completing DB-1 is what unblocks any `dave→main` deploy.
 
 **DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migration
-**`0084`** + the data load. Gated on แต้ม's final dump, เดฟ's go, and ก๊อต's
+**`0081`** + the data load. Gated on แต้ม's final dump, เดฟ's go, and ก๊อต's
 production-load gate. The `tb_*` namespace does NOT collide with the rebuilt
 schema, so DB-1 and DB-2 are independent — the legacy port does not wait on
 the backlog, and vice versa.
 
-**Numbering.** `0001`-`0083` exist (`0065` is an intentional gap). The legacy
-schema migration takes **`0084`**. ภูม's Phase-B backend-rework migrations
-continue at `0085`+.
+**Numbering.** Migration files `0001`-`0086` exist; `0065` is an intentional
+gap and `0081`-`0083` are reserved for this legacy port (DB-2 — schema +
+follow-ups). ภูม renumbered his booking/credit-note/chat batch to `0084`-`0086`
+(commit `a248696`) to free that block. The next free number for new Phase-B
+work is **`0087`**.

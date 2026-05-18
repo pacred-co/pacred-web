@@ -41,10 +41,12 @@ workflow fidelity (rework the app to the legacy PCS loop — *zero retraining*) 
    Postgres 17.10 reconciled **117/117 tables · 0 load failures · 0 mismatches**.
    Auth bridge `lib/auth/pcs-legacy-password.ts` (`passTam`) verified against 7
    real hashes + 5 vectors. *Pending the production load.*
-3. **Branch consolidation** — ภูม (`Poom`, 10 commits — BK-1 booking · IC-1
-   internal chat · freight R1 self-accept · tax-invoice R2/R3 credit-note) + ปอน
-   (`podeng`) merged into `dave`. `pnpm verify` + `pnpm build` green. Stale agent
-   worktrees cleaned up.
+3. **Branch consolidation** — ภูม (`Poom` — BK-1 booking · IC-1 internal chat ·
+   freight R1 self-accept · tax-invoice R2/R3 credit-note) + ปอน (`podeng`)
+   merged into `dave`. ภูม also renumbered his booking/credit-note/chat
+   migrations `0081`-`0083` → `0084`-`0086` (commit `a248696`) to free
+   `0081`-`0083` for the Phase-A legacy schema — all docs realigned to that.
+   `pnpm verify` + `pnpm build` green; stale agent worktrees cleaned up.
 4. **Social login gated off** — Google / Facebook / LINE on `/login` render
    greyed-out under a **COMING SOON** badge behind one flag,
    `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` (default off). Legacy PCS was
@@ -80,18 +82,19 @@ Three workstreams — full detail in [`pcs-data-migration.md` §9](pcs-data-migr
   (2026-05-17) shipped on migrations up to ~`0057`; everything `0058`+ has
   accumulated on `dave` unapplied. Confirm the exact applied set before planning
   any deploy.
-- **DB-1 — apply the `0058`-`0083` backlog to prod (ภูม).** 25 idempotent,
-  additive migrations — includes the launch-integrity money/security guards
+- **DB-1 — apply the backlog (`0058`-`0080` + `0084`-`0086`) to prod (ภูม).**
+  25 idempotent, additive migrations — includes the launch-integrity money/security guards
   `0060`-`0064` (the S-1 RLS keystone · the wallet-overdraw floor · the
   money-idempotency guards). **If DB-0 shows those are not on prod, applying
   them is P0 regardless of D1.** Apply in ascending number order. Completing
   DB-1 unblocks any `dave→main` deploy.
 - **DB-2 — the D1 legacy port (เดฟ · ก๊อต gate).** The 117-table `tb_*` schema
-  as migration **`0084`** + the data load. Gated on แต้ม's final dump + เดฟ's
+  as migration **`0081`** + the data load. Gated on แต้ม's final dump + เดฟ's
   go + ก๊อต's production-load gate.
 
-`0084` is reserved for the legacy schema (`0081`-`0083` were claimed by ภูม's
-merged booking / credit-note / chat batch).
+`0081`-`0083` are reserved for the legacy schema + follow-ups; ภูม renumbered
+his booking/credit-note/chat batch to `0084`-`0086` (commit `a248696`) to free
+that block. Next free for new Phase-B work = `0087`.
 
 ---
 
@@ -117,8 +120,9 @@ merged booking / credit-note / chat batch).
 - Brief: [`../briefs/dave.md`](../briefs/dave.md)
 
 ### ภูม — Phase B backend
-- 🔴 **FIRST — DB-1:** apply migrations `0058`-`0083` to prod Supabase
-  (ascending, idempotent — see [`../../supabase/migrations/README.md`](../../supabase/migrations/README.md)
+- 🔴 **FIRST — DB-1:** apply the backlog migrations (`0058`-`0080` +
+  `0084`-`0086`) to prod Supabase (ascending, idempotent — see
+  [`../../supabase/migrations/README.md`](../../supabase/migrations/README.md)
   + [`pcs-data-migration.md` §9](pcs-data-migration.md)).
 - 🎯 **Phase B backend** — rework the admin back-office + customer-portal
   backend onto the ported `tb_*` schema + the legacy PCS workflow. Start: `B-0`
@@ -148,6 +152,7 @@ merged booking / credit-note / chat batch).
 | **แต้ม hand-over** — final dump + customer files + JMF spec | ก๊อต ↔ แต้ม | A-4 + A-5 (the prod load) |
 | **DB-0** — prod migration state unknown | เดฟ | a confident `dave→main` deploy |
 | **A-5 production load** | เดฟ go · ก๊อต gate | the big D1 event — needs the final dump |
+| **6 Phase-B open questions** — [`poom-d1-open-questions.md`](../research/poom-d1-open-questions.md) | เดฟ + ก๊อต | ภูม's Phase-B code — answer before the B-stages |
 
 ---
 
