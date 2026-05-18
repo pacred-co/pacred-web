@@ -15,15 +15,16 @@ const SEVERITY_DOT: Record<NotificationRow["severity"], string> = {
 };
 
 const CAT_ICON: Record<NotificationRow["category"], string> = {
-  order:        "🛒",
-  payment:      "💸",
-  forwarder:    "📦",
-  yuan_payment: "💱",
-  wallet:       "👛",
-  sales:        "💰",
-  system:       "🔔",
-  promo:        "🎁",
-  sales_digest: "📊",
+  order:         "🛒",
+  payment:       "💸",
+  forwarder:     "📦",
+  yuan_payment:  "💱",
+  wallet:        "👛",
+  sales:         "💰",
+  system:        "🔔",
+  promo:         "🎁",
+  sales_digest:  "📊",
+  observability: "⚠️",
 };
 
 export function NotificationsList({ initial }: { initial: NotificationRow[] }) {

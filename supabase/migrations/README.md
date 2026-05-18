@@ -79,13 +79,17 @@
 | 64 | [0074_yuan_refund_slip.sql](0074_yuan_refund_slip.sql) | yuan_payments += refund_slip_path + refunded_at + refunded_by_admin_id (G-5) — proof-of-refund columns; new adminMarkYuanPaymentRefunded action requires the slip | **Phase C QoL #4** |
 | 65 | [0075_admin_impersonation.sql](0075_admin_impersonation.sql) | impersonation_sessions — audited view-as-customer tool; super/ops only; HARD write-block during impersonation; 30min auto-expire | **super-tools** |
 | 66 | [0076_business_config.sql](0076_business_config.sql) | business_config (key, value jsonb, value_type, category) — single SoT for editable magic constants (OTP TTL, MIN_DEPOSIT, CASHBACK_PCT, BANK_ACCOUNTS, feature flags) + seed for ~10 known keys | **super-tools** |
-| 67 | [0080_work_items.sql](0080_work_items.sql) | work_items — cross-department work-board / job-assignment spine (polymorphic entity link + assignment + lifecycle) + ensure_work_item() find-or-create helper. Powers `/admin/board` + per-role inbox. Additive overlay — domain tables unchanged. operating-system-analysis §1.4 Tier-2 centrepiece | **Tier 2** |
+| 67 | [0077_platform_incidents.sql](0077_platform_incidents.sql) | platform_incidents — IO-1 auto-incident capture + triage (fingerprint dedup + open→acknowledged→in_progress→resolved/ignored lifecycle the user sees + admin/customer RLS). Also: notifications.category += `observability`, notifications.reference_type += `platform_incident`, work_items.entity_type += `platform_incident`. Powers `/admin/incidents` + the customer "ปัญหาที่ฉันแจ้ง" panel. platform-observability-system §6 | **IO-1** |
+| 68 | [0080_work_items.sql](0080_work_items.sql) | work_items — cross-department work-board / job-assignment spine (polymorphic entity link + assignment + lifecycle) + ensure_work_item() find-or-create helper. Powers `/admin/board` + per-role inbox. Additive overlay — domain tables unchanged. operating-system-analysis §1.4 Tier-2 centrepiece | **Tier 2** |
 
-> 🔢 **Numbering note — `0080` is a เดฟ-reserved block.** It deliberately skips
-> the `0077`-`0079` range. ภูม's active sequence used `0073`-`0076` for the
-> Phase B + C + super-tools batch (2026-05-18). Tier-2 + later เดฟ-side
-> migrations continue from `0080`. All idempotent + additive — apply in
-> ascending order, zero data migration.
+> 🔢 **Numbering note — `0077` + `0080` are เดฟ-reserved.** ภูม's active
+> sequence used `0073`-`0076` for the Phase B + C + super-tools batch
+> (2026-05-18) and continues at `0078`+. `0077` is the เดฟ-side IO-1
+> observability slot; `0080` the Tier-2 work-board. `0078`-`0079` stay
+> ภูม's. **Apply `0077` AFTER `0080`** (or re-run `0077` once `0080` is
+> in) — `0077` extends `work_items.entity_type`, and that ALTER is
+> guarded to no-op if `work_items` does not exist yet. All idempotent +
+> additive — zero data migration.
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in

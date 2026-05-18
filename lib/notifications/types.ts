@@ -6,14 +6,18 @@
 export type NotifyCategory =
   | "order" | "payment" | "forwarder" | "yuan_payment"
   | "wallet" | "sales" | "system" | "promo"
-  | "sales_digest";
+  | "sales_digest"
+  // IO-1 (0077) — platform-observability incident alerts.
+  | "observability";
 
 export type NotifySeverity = "info" | "success" | "warning" | "error";
 
 export type NotifyReferenceType =
   | "service_order" | "forwarder" | "yuan_payment"
   | "wallet_transaction" | "sales_commission" | "sales_payout"
-  | "contact_message";
+  | "contact_message"
+  // IO-1 (0077) — links an alert back to a platform_incidents row.
+  | "platform_incident";
 
 export type NotifyPayload = {
   category:  NotifyCategory;

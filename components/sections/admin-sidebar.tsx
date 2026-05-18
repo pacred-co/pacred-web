@@ -8,7 +8,7 @@ import {
   BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
   BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
   MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell,
-  Search, Kanban, Inbox,
+  Search, Kanban, Inbox, AlertTriangle,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 
@@ -104,6 +104,7 @@ const items: NavItem[] = [
   { href: "/admin/audit",            label: "Audit log",                icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
   { href: "/admin/system/crons",     label: "Cron Health (U4-1)",       icon: <Activity className="w-5 h-5" />,        roles: ["super","ops"], group: "ระบบ" },
   { href: "/admin/system/notifications", label: "Notification log (U4-1)", icon: <Bell className="w-5 h-5" />,         roles: ["super","ops"], group: "ระบบ" },
+  { href: "/admin/incidents",        label: "Incident triage (IO-1)",   icon: <AlertTriangle className="w-5 h-5" />,   roles: ["super","ops","accounting","sales_admin","warehouse","driver","interpreter"], group: "ระบบ" },
   { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
   { href: "/admin/settings/contacts",label: "ข้อมูลติดต่อ (V-G5)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super","accounting","sales_admin"], group: "ระบบ" },
   { href: "/admin/settings/tos-versions", label: "TOS versions (V-G4)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super"], group: "ระบบ" },

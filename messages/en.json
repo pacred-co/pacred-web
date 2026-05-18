@@ -2136,5 +2136,13 @@
       "title": "Privacy Policy",
       "description": "Pacred Shipping respects your privacy — read how we collect and process personal information."
     }
+  },
+  "error": {
+    "title": "Something went wrong",
+    "subtitle": "An unexpected error occurred",
+    "logged": "We've logged this issue and sent it to our team — they're looking into it.",
+    "retry": "Try again",
+    "home": "Back to home",
+    "ref": "Reference"
   }
 }
