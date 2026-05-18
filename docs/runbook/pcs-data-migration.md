@@ -78,9 +78,10 @@ In the repo (no PII): `lib/auth/pcs-legacy-password.ts` + its test.
    2026-05-18 dump will be stale by then). Load into local MySQL.
 2. **Convert** — `python convert.py` → regenerates `data/`.
 3. **Schema** — apply `pcs-legacy-schema.draft.sql` to prod Supabase as a new
-   migration (`0081_pcs_legacy_schema.sql` — confirm the next free number).
-   The 117 `tb_*` tables coexist with Pacred's existing tables; nothing is
-   dropped.
+   migration **`0084_pcs_legacy_schema.sql`** (`0081`-`0083` were claimed by
+   ภูม's booking / credit-note / chat batch after this runbook was first
+   drafted; `0084` is the next free number — see §9). The 117 `tb_*` tables
+   coexist with Pacred's existing tables; nothing is dropped.
 4. **Data** — load each `data/NNN_*.copy.sql` into prod via `psql`.
 5. **Member-code generator** — apply `member-code-gapfill.sql`.
 6. **Reconcile** — prod-PostgreSQL row counts ↔ source MySQL must match all
@@ -109,3 +110,35 @@ runbook, and `actions/admin/pcs-migration.ts` — migrated *customers only*
 into the rebuilt `profiles` table via Supabase Auth, with a password reset.
 **D1 replaces that** with this full-system port (all 117 tables · custom auth
 · no reset). เดฟ to decide the fate of the superseded files.
+
+## 9. The bigger picture — all prod-Supabase DB work, sequenced
+
+This legacy port is one of **three** prod-DB workstreams. Run them in order:
+
+**DB-0 — Verify what prod already has (do FIRST — it gates the rest).**
+The launch (2026-05-17) shipped on migrations up to ~`0057`; everything
+`0058`+ has accumulated on `dave` unapplied. Confirm the exact applied set
+before planning any deploy — in the prod SQL Editor:
+`select name from supabase_migrations.schema_migrations order by name;`
+Owner: เดฟ. Nothing below sequences correctly without this.
+
+**DB-1 — Apply the backlog `0058`-`0083` to prod (no external blocker).**
+25 idempotent, additive migrations on `dave` (`0065` is an intentional gap).
+They include the launch-integrity money/security guards `0060`-`0064` — the
+S-1 RLS keystone (`0062`), the wallet-overdraw floor (`0064`), the
+money-idempotency guards (`0061`/`0063`). If DB-0 shows those are not on
+prod, **applying them is P0 regardless of D1** — prod carries open money
+holes until they land. Apply in ascending number order (dependencies resolve
+that way; all idempotent — safe to re-run). `0067_pcs_customer_migration` is
+superseded by this runbook (§8) — harmless to apply, but the feature it backs
+is dead. Owner: ภูม. Completing DB-1 is what unblocks any `dave→main` deploy.
+
+**DB-2 — This legacy port** (§1-§8) — the 117-table `tb_*` schema as migration
+**`0084`** + the data load. Gated on แต้ม's final dump, เดฟ's go, and ก๊อต's
+production-load gate. The `tb_*` namespace does NOT collide with the rebuilt
+schema, so DB-1 and DB-2 are independent — the legacy port does not wait on
+the backlog, and vice versa.
+
+**Numbering.** `0001`-`0083` exist (`0065` is an intentional gap). The legacy
+schema migration takes **`0084`**. ภูม's Phase-B backend-rework migrations
+continue at `0085`+.
