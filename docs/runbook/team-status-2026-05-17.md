@@ -23,8 +23,8 @@
 
 **`dave` = `ce9f961` — AHEAD of `main`, holds ภูม's U1 work:**
 - ภูม U1 wire-the-flow: container unify · freight chain auto-draft/auto-convert · **refund money path** (`refund_requests` + customer self-serve + admin queue) · post-U1 audit fixes
-- migrations **`0058`/`0059`/`0066`** — NOT on prod yet (ภูม "กำลังรันใหม่")
-- ⚠️ **The next `dave→main` deploy is gated on ภูม applying `0058`/`0059`/`0066` to prod Supabase.** Until then `main` stays at `314a528`.
+- migrations **`0058`/`0059`/`0066`/`0067`/`0068`/`0077`** — ✅ **APPLIED to prod Supabase 2026-05-18 morning** (ภูม at work machine, confirmed in this session). Deploy gate now **CLEARED** — เดฟ can push `dave→main` as 1-command fast-forward to ship U1 + U2 features (refund · PCS migration · cargo_sacks · IO-1 incidents) to customers.
+- ⚠️ ภูม now working through U1/U2 code-review findings in parallel (shadow-clone agents): P1-2 PCS phone/email dedup · P1-3 billing-gate fail-CLOSED · P1-4 `0067` backfill · P1-5 cascade atomicity · C-1 wallet sign-flip RLS migration. See [`../research/review-u1-u2-2026-05-18.md`](../research/review-u1-u2-2026-05-18.md) + [`../research/audit-core-2026-05-18.md`](../research/audit-core-2026-05-18.md).
 
 **Branch state:** `main` `314a528` (prod) · `dave` `ce9f961` (integration, +ภูม U1) · `Poom` + `podeng` synced to `ce9f961`. Other branches (goofy-panini · nervous-nightingale · agent worktrees) — content already integrated, closed.
 

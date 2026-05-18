@@ -75,9 +75,11 @@ export function RunBackfillPanel() {
         {result && (
           <div className="rounded-lg border border-border bg-surface p-3 text-sm space-y-2">
             <p className="font-semibold">Batch result</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 text-xs">
               <Stat label="Attempted" value={result.attempted} />
               <Stat label="Created"   value={result.created}  ok />
+              <Stat label="Merged"    value={result.merged}   ok />
+              <Stat label="Ambiguous" value={result.ambiguous} bad={result.ambiguous > 0} />
               <Stat label="Skipped"   value={result.skipped} />
               <Stat label="Failed"    value={result.failed}   bad={result.failed > 0} />
             </div>

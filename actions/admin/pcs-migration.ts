@@ -75,9 +75,29 @@ export type PcsBackfillResult = {
   attempted:   number;
   created:     number;
   skipped:     number;
+  /** P1-2: matched an existing Pacred profile by phone OR email → linked legacy_pcs_user_id onto it instead of creating duplicate auth.user. */
+  merged:      number;
+  /** P1-2: phone matched one Pacred profile + email matched a DIFFERENT one (or already-claimed by another PCS legacy_id) — needs admin manual merge. */
+  ambiguous:   number;
   failed:      number;
   errors:      Array<{ legacy_user_id: string; reason: string }>;
 };
+
+/**
+ * P1-2 outcome enum surfaced via the staging row's `notes` column as
+ * `outcome:<key>` prefix so admin filter UI can read a stable key.
+ * Old values that previously lived as free-text in `notes` are migrated
+ * to this prefixed form for consistency.
+ */
+export type PcsMigrationOutcome =
+  | "created"
+  | "already_in_profiles"
+  | "merged_with_existing"
+  | "collision_ambiguous"
+  | "skipped_bad_legacy_id"
+  | "skipped_no_contact"
+  | "failed_create_user"
+  | "failed_profile_insert";
 
 // ──────────────────────────────────────────────────────────────────
 // Helpers
@@ -135,6 +155,50 @@ function generateRandomPassword(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+type ProfileMatch = {
+  id:                  string;
+  email:               string | null;
+  phone:               string | null;
+  legacy_pcs_user_id:  string | null;
+  migrated_from_pcs:   boolean | null;
+};
+
+/**
+ * P1-2 — look up existing profiles that would COLLIDE with a fresh
+ * createUser(phone, email) call. Returns both matches separately so the
+ * caller can detect the split-match ambiguity (phone → A, email → B).
+ *
+ * Uses the service-role admin client (caller's responsibility) — RLS
+ * bypass is correct here because the calling action is super-admin
+ * gated and needs full visibility across all profiles.
+ */
+async function findCollidingProfiles(
+  admin: ReturnType<typeof createAdminClient>,
+  normalizedPhone: string | undefined,
+  emailLower:      string | undefined,
+): Promise<{ byPhone: ProfileMatch | null; byEmail: ProfileMatch | null }> {
+  const out: { byPhone: ProfileMatch | null; byEmail: ProfileMatch | null } = {
+    byPhone: null, byEmail: null,
+  };
+  if (normalizedPhone) {
+    const { data } = await admin
+      .from("profiles")
+      .select("id, email, phone, legacy_pcs_user_id, migrated_from_pcs")
+      .eq("phone", normalizedPhone)
+      .maybeSingle<ProfileMatch>();
+    out.byPhone = data ?? null;
+  }
+  if (emailLower) {
+    const { data } = await admin
+      .from("profiles")
+      .select("id, email, phone, legacy_pcs_user_id, migrated_from_pcs")
+      .ilike("email", emailLower)
+      .maybeSingle<ProfileMatch>();
+    out.byEmail = data ?? null;
+  }
+  return out;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -206,6 +270,8 @@ export async function adminBackfillPcsAuthUsers(opts?: {
       attempted: rows.length,
       created:   0,
       skipped:   0,
+      merged:    0,   // P1-2: matched existing profile, linked legacy id onto it
+      ambiguous: 0,   // P1-2: phone↔A + email↔B (or already claimed) — manual merge
       failed:    0,
       errors:    [],
     };
@@ -267,6 +333,55 @@ export async function adminBackfillPcsAuthUsers(opts?: {
         continue;
       }
 
+      // P1-2: detect phone/email collision with an EXISTING Pacred profile
+      // BEFORE calling createUser. With ~9,000 legacy rows a non-trivial chunk
+      // collides with native Pacred signups OR a previous migration run.
+      // Without this, createUser fails on unique-constraint and the row gets
+      // silently marked failed → strands the legacy customer.
+      const normalizedPhone = hasPhone ? normalizePhone(rawPhone!) : undefined;
+      const emailLower      = hasEmail ? rawEmail!.toLowerCase() : undefined;
+
+      const matches = await findCollidingProfiles(admin, normalizedPhone, emailLower);
+      const matchedProfile = matches.byPhone ?? matches.byEmail;
+      const splitMatch     = matches.byPhone && matches.byEmail
+                          && matches.byPhone.id !== matches.byEmail.id;
+      const alreadyClaimed = matchedProfile?.legacy_pcs_user_id
+                          && matchedProfile.legacy_pcs_user_id !== legacyId;
+
+      if (matchedProfile) {
+        // Ambiguous: phone matches A, email matches B → manual merge required
+        if (splitMatch || alreadyClaimed) {
+          result.ambiguous++;
+          if (!dryRun) {
+            await admin.from("pcs_legacy_customers_staging")
+              .update({
+                notes: `outcome:collision_ambiguous · phone_match=${matches.byPhone?.id ?? "—"} email_match=${matches.byEmail?.id ?? "—"} already_claimed=${alreadyClaimed ? matchedProfile.legacy_pcs_user_id : "—"}`,
+              })
+              .eq("legacy_user_id", legacyId);
+          }
+          continue;
+        }
+
+        // Clean single match: link legacy_pcs_user_id onto existing profile
+        // (only if it's NOT already linked, to keep this branch idempotent).
+        result.merged++;
+        if (!dryRun) {
+          await admin.from("profiles")
+            .update({ legacy_pcs_user_id: legacyId, migrated_from_pcs: true })
+            .eq("id", matchedProfile.id)
+            .is("legacy_pcs_user_id", null);   // race-guard: don't overwrite
+
+          await admin.from("pcs_legacy_customers_staging")
+            .update({
+              backfilled_at:          new Date().toISOString(),
+              backfilled_profile_id:  matchedProfile.id,
+              notes:                  `outcome:merged_with_existing · profile_id=${matchedProfile.id}`,
+            })
+            .eq("legacy_user_id", legacyId);
+        }
+        continue;
+      }
+
       if (dryRun) {
         result.created++;
         continue;
@@ -275,7 +390,6 @@ export async function adminBackfillPcsAuthUsers(opts?: {
       // Create the auth.users row. Prefer phone (Thai customers log in
       // by phone) — fall back to email for the ~rare email-only row.
       const password = generateRandomPassword();
-      const normalizedPhone = hasPhone ? normalizePhone(rawPhone!) : undefined;
 
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         phone:          normalizedPhone,
@@ -365,6 +479,8 @@ export async function adminBackfillPcsAuthUsers(opts?: {
       attempted: result.attempted,
       created:   result.created,
       skipped:   result.skipped,
+      merged:    result.merged,
+      ambiguous: result.ambiguous,
       failed:    result.failed,
       first_error: result.errors[0] ?? null,
     });

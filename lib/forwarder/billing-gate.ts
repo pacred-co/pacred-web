@@ -41,13 +41,30 @@
  *        manual close-out, OR use the admin allow_unverified_billing
  *        escape hatch with a recorded reason.
  *
- * ── Fail-OPEN policy on DB error ────────────────────────────────────
- * Mirrors the freight WHT gate (sibling commit 6681657): if either of
- * the two reads (forwarders / cargo_containers) returns an error, we
- * fall through to { blocked: false } and let the underlying wallet-tx
- * insert decide. A real DB outage will surface there with the actual
- * Postgres error, not a synthetic gate-failure message that misleads
- * the operator. The gate's job is correctness when the DB is healthy.
+ * ── Fail policy on DB error ─────────────────────────────────────────
+ * Split — see review-u1-u2-2026-05-18.md P1-3:
+ *
+ *   forwarders read error      → fail-OPEN { blocked: false }
+ *       A hard outage will surface in the caller's wallet-tx insert
+ *       with the real Postgres error; a missing forwarder is the
+ *       caller's own not_found territory, not ours.
+ *
+ *   cargo_containers read error → fail-CLOSED with
+ *       { blocked: true, reason: "db_read_error", container_status: undefined }
+ *
+ *       This is the case U1-3 exists for: forwarder is post-arrival,
+ *       container IS linked, but we cannot verify the container is
+ *       closed → we MUST NOT let a wallet debit through on the stale
+ *       order-time CBM estimate (datanew L-3: ~31% gap, the very bill
+ *       disputes the gate was built to prevent). A transient blip on
+ *       one read is the common-case error, not a hard outage — failing
+ *       open here defeats the gate for the case that matters.
+ *
+ *       Callers MUST distinguish this reason from the other blocking
+ *       reasons and show a transient-error / retry message — NOT a
+ *       permanent "billing blocked, wait for ตู้ปิด" page. The
+ *       container_status will be `undefined` on this branch (we have
+ *       no row to read it from) — use that as a secondary signal.
  */
 
 import "server-only";
@@ -57,7 +74,20 @@ export type CargoBillingGate =
   | { blocked: false }
   | {
       blocked: true;
-      reason: "awaiting_container_close" | "no_container_linked";
+      /**
+       * - `awaiting_container_close` — container linked, not yet `closed`
+       *   (normal post-arrival wait state). Show "wait for ตัดตู้" copy.
+       * - `no_container_linked` — gated status but no `cargo_container_id`,
+       *   OR the linked container row vanished (data-integrity hole).
+       *   Show "staff must link a container" copy.
+       * - `db_read_error` — TRANSIENT — could not read `cargo_containers`
+       *   to verify the close state. Fail-closed by design (U1-3 / P1-3,
+       *   see file header). Callers MUST surface a "ระบบขัดข้อง ลอง
+       *   อีกครั้ง" / retry message — NOT a permanent block — and the
+       *   underlying error should be visible in server logs (Sentry once
+       *   wired). `container_status` is `undefined` on this branch.
+       */
+      reason: "awaiting_container_close" | "no_container_linked" | "db_read_error";
       container_status?: string;
     };
 
@@ -116,8 +146,22 @@ export async function getCargoBillingGate(
     .eq("id", forwarder.cargo_container_id)
     .maybeSingle<{ status: string }>();
 
-  // Fail-OPEN on read error (same rationale as forwarder read above).
-  if (cErr) return { blocked: false };
+  // Fail-CLOSED on cargo_containers read error — see file header
+  // (U1-3 / review-u1-u2-2026-05-18 P1-3). The forwarder is post-arrival
+  // and a container IS linked; we just cannot verify it is `closed`.
+  // Letting the wallet debit through here would bill on the stale order-
+  // time CBM estimate (datanew L-3: ~31% gap) — the exact dispute the
+  // gate exists to prevent. Surface a distinct reason so callers show a
+  // transient/retry message, not a permanent "billing blocked" page.
+  if (cErr) {
+    console.warn("[billing-gate] cargo_containers read failed — failing closed", {
+      f_no:                 fNo,
+      cargo_container_id:   forwarder.cargo_container_id,
+      forwarder_status:     forwarder.status,
+      error:                cErr,
+    });
+    return { blocked: true, reason: "db_read_error" };
+  }
   // Link existed but row vanished — treat as missing link (fail closed
   // because this is a data-integrity issue, not a transient DB error).
   if (!container) return { blocked: true, reason: "no_container_linked" };
