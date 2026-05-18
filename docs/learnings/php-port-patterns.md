@@ -23,3 +23,21 @@ Topics: porting `D:\xampp\htdocs\pcscargo\` → Pacred Next.js. Schema mappings 
 **Verification path:** `grep -rE "receipt_no|receipt_number|receipt_seq" pacred-web/` returns zero application-code hits (matches in docs only). `next_tax_invoice_serial()` is canonical + idempotent.
 
 **If you ever see a `-N`-style suffix appear:** it's a regression. Hunt the codepath, don't add the suffix to schema.
+
+---
+
+## 2026-05-18 — MySQL → PostgreSQL port: three gotchas that fail a COPY load (เดฟ/Claude)
+
+**Context:** the D1 PCS→Pacred data migration — `pcsc_main` (117 tables) MySQL → PostgreSQL. The approach that worked: load the dump into local MySQL (XAMPP MariaDB), then a Python converter reads from the *live* DB (`pymysql`) and writes PostgreSQL `COPY` text-format files. Reading a live DB beats text-munging the 898 MB dump — clean typed values, no MySQL-escape parsing, free row-count reconciliation. A throwaway portable PostgreSQL (EDB binaries zip, `initdb` into a temp folder, no install) is enough for a dry-run.
+
+Three legacy-data gotchas — each fails a Postgres `COPY`, none caught by `build`/`verify`, only at load time:
+
+**1. NUL bytes (`\x00`) in legacy `varchar` data.** Some values carried a stray NUL. PostgreSQL `text`/`varchar` cannot store `\x00`. The symptom is misleading — `ERROR: extra data after last expected column` (the NUL truncates psql's C-string line read and scrambles field parsing), NOT an obvious bad-byte error. Fix: strip `\x00` from every string in the converter.
+
+**2. Legacy `datetime NOT NULL` columns hold `'0000-00-00'`.** MySQL's `NOT NULL` does NOT block the zero-date sentinel. Keeping `NOT NULL` while mapping `0000-00-00` → `NULL` (Postgres has no zero-date) fails with a not-null violation. Fix: every `date`/`time`/`timestamp` column must be NULLABLE in the Postgres port — zero-date ↔ NULL.
+
+**3. When a COPY row-count looks right but psql still rejects the row,** inspect raw bytes (`open(f,'rb')` + `repr`), not decoded text — a naive tab-count per line said the file was clean while gotcha #1 was hiding at the byte level.
+
+**Also:** spawned sub-agents could NOT do network downloads (WebFetch/PowerShell/Bash network egress denied); the main session can (`pip install`, `Invoke-WebRequest` work). Do fetch/download work from the main session, not a sub-agent.
+
+**Full migration runbook:** [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md).

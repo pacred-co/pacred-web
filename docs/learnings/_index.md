@@ -6,7 +6,7 @@
 > **Skill that writes here:** [`.claude/skills/scholar-immortal/`](../../.claude/skills/scholar-immortal/SKILL.md)
 > **Protocol:** read SKILL.md; add a dated entry to the right topic file (or create a new topic file + add to this index).
 
-Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild; supabase-rls-patterns +1 — `wallet.balance` is pending-blind, spend gates must use the available-balance helper; ci-and-deploy-gotchas +1 — a "bug on branch `dave`" can be a stale-worktree phantom, verify against the live `dave` worktree; ci-and-deploy-gotchas +1 — worktree-isolation agents you spawn branch from `origin/main`, brief them to resync to `dave`; ci-and-deploy-gotchas +1 — a `next start` + curl smoke does NOT detect a dead database, public pages degrade + protected pages redirect before the DB call)
+Last reviewed: 2026-05-18 (php-port-patterns +1 — MySQL→PostgreSQL data-migration gotchas: NUL bytes in legacy `varchar` break a Postgres `COPY`; legacy `datetime NOT NULL` columns hold `0000-00-00` so temporal columns must port NULLABLE; convert via a live local MySQL not dump-text-munging. 2026-05-17 — nextjs-16-quirks +1 — a `server-only` module reaching a Client Component transitively breaks `next build` but passes `tsc`/`verify`; ci-and-deploy-gotchas +1 — worktree smoke needs `.env.local` + rebuild; supabase-rls-patterns +1 — `wallet.balance` is pending-blind, spend gates must use the available-balance helper; ci-and-deploy-gotchas +1 — a "bug on branch `dave`" can be a stale-worktree phantom, verify against the live `dave` worktree; ci-and-deploy-gotchas +1 — worktree-isolation agents you spawn branch from `origin/main`, brief them to resync to `dave`; ci-and-deploy-gotchas +1 — a `next start` + curl smoke does NOT detect a dead database, public pages degrade + protected pages redirect before the DB call)
 
 ---
 
@@ -21,7 +21,7 @@ Last reviewed: 2026-05-17 (nextjs-16-quirks +1 — a `server-only` module reachi
 | [`perf-patterns.md`](perf-patterns.md) | Performance wins + measurement | (empty seed) |
 | [`testing-patterns.md`](testing-patterns.md) | Pacred-specific test mocks + harness quirks | 2026-05-16 |
 | [`partner-apis-quirks.md`](partner-apis-quirks.md) | MOMO JMF / TAM / ThaiBulkSMS / LINE behavior · DBD juristic lookup | 2026-05-17: DBD `api/v1` retired (404) + CKAN behind Incapsula WAF — register degrades to manual entry |
-| [`php-port-patterns.md`](php-port-patterns.md) | Legacy `D:\xampp\htdocs\pcscargo` port gotchas | (empty seed) |
+| [`php-port-patterns.md`](php-port-patterns.md) | Legacy `pcscargo` port gotchas · MySQL→PostgreSQL data migration (NUL bytes break COPY · zero-dates vs NOT NULL · live-DB convert) | 2026-05-18 |
 | [`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) | Cargo flow + MOMO 9-status enum + containers schema coexistence + decoded cargo/freight ops model (GZE/GZS · type taxonomy · CBM mismatch · Form E / D-O) | 2026-05-16 |
 
 ---
