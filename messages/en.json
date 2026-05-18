@@ -2337,5 +2337,24 @@
       "rate_fix": "Waiting on rate fix",
       "external": "Waiting on external party"
     }
+  },
+  "pcsHome": {
+    "memberCode": "Member code",
+    "fallbackName": "Customer",
+    "editProfile": "Edit profile",
+    "accountSettings": "Account settings",
+    "walletLabel": "Wallet (THB)",
+    "supervisor": "Your rep",
+    "salesPrefix": "Sales",
+    "tel": "Tel",
+    "tileShop": "Order for me",
+    "tileImport": "Import for me",
+    "tileReceipts": "Import receipt history",
+    "tilePayment": "Pay / transfer",
+    "tileWallet": "Wallet",
+    "tileTopUp": "Top up",
+    "tileWithdraw": "Withdraw",
+    "tileAddress": "Delivery addresses",
+    "tileLogout": "Sign out"
   }
 }
