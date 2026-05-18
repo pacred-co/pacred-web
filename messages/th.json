@@ -2337,5 +2337,28 @@
       "rate_fix": "รอแก้เรท/ราคา",
       "external": "รอหน่วยงานภายนอก"
     }
+  },
+  "pcsOrder": {
+    "searchPlaceholder": "พิมพ์ค้นหาสั่งซื้อสินค้า + วางลิงก์สินค้า 1688 / เถาเปา แปลเป็นไทยทันที",
+    "colOrderNo": "ออเดอร์เลขที่",
+    "colProduct": "ข้อมูลสินค้า",
+    "colPriceThb": "ราคา (บาท)",
+    "colOptions": "ตัวเลือก",
+    "itemCount": "{count} ชิ้น",
+    "viewDetail": "ดูรายละเอียด",
+    "pay": "ชำระเงิน",
+    "payOneHint": "เลือกออเดอร์ทีละรายการเพื่อชำระเงิน",
+    "cancelOrder": "ยกเลิกออเดอร์",
+    "cancelOneConfirm": "ต้องการยกเลิกออเดอร์ {hNo} นี้?",
+    "printReceipt": "พิมพ์ใบเสร็จ",
+    "printInvoice": "พิมพ์ใบแจ้งหนี้",
+    "selectRow": "เลือกออเดอร์นี้",
+    "selectedCount": "เลือก {count} รายการ",
+    "bulkCancel": "ยกเลิกออเดอร์รายการที่เลือก",
+    "bulkCancelConfirm": "ต้องการยกเลิกออเดอร์ที่เลือกทั้ง {count} รายการ?",
+    "itemCountLabel": "จำนวนรายการ :",
+    "payTotalLabel": "ยอดชำระรวม :",
+    "emptyFilter": "ไม่มีรายการในสถานะที่เลือก",
+    "emptyHint": "เริ่มต้นด้วยการวางลิงก์สินค้าจาก 1688 / Taobao / Tmall"
   }
 }
