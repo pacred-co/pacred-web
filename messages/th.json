@@ -2337,5 +2337,24 @@
       "rate_fix": "รอแก้เรท/ราคา",
       "external": "รอหน่วยงานภายนอก"
     }
+  },
+  "pcsHome": {
+    "memberCode": "รหัสสมาชิก",
+    "fallbackName": "ลูกค้า",
+    "editProfile": "แก้ไขข้อมูล",
+    "accountSettings": "ตั้งค่าบัญชีผู้ใช้งาน",
+    "walletLabel": "กระเป๋าสตางค์ (บาท)",
+    "supervisor": "ผู้ดูแล",
+    "salesPrefix": "เซลล์",
+    "tel": "โทร",
+    "tileShop": "ฝากสั่งสินค้า",
+    "tileImport": "ฝากนำเข้าสินค้า",
+    "tileReceipts": "ประวัติใบเสร็จรายการนำเข้า",
+    "tilePayment": "ฝากชำระ/โอน",
+    "tileWallet": "เป๋าตัง",
+    "tileTopUp": "เติมเงิน",
+    "tileWithdraw": "ถอนเงิน",
+    "tileAddress": "ที่อยู่จัดส่งสินค้า",
+    "tileLogout": "ออกจากระบบ"
   }
 }
