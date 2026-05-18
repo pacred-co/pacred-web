@@ -11,6 +11,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { bridgeLegacyLogin } from "@/lib/auth/pcs-legacy-bridge";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { verifyHcaptcha } from "@/lib/hcaptcha";
@@ -67,21 +68,37 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
       .eq("member_code", identifier.toUpperCase())
       .maybeSingle<{ phone: string | null; email: string | null }>();
 
-    if (!profile) return { ok: false, error: "user_not_found" };
-
-    resolvedPhone = profile.phone;
-    resolvedEmail = profile.email;
+    // A migrated PCS customer has no `profiles` row — don't fail here. Leave
+    // the identifier unresolved; the legacy bridge below resolves it against
+    // tb_users.userid.
+    if (profile) {
+      resolvedPhone = profile.phone;
+      resolvedEmail = profile.email;
+    }
   } else {
     resolvedPhone = normalizePhone(identifier);
   }
 
-  const { error } = resolvedPhone
-    ? await supabase.auth.signInWithPassword({ phone: resolvedPhone, password })
-    : resolvedEmail
-      ? await supabase.auth.signInWithPassword({ email: resolvedEmail, password })
-      : { error: { message: "user_not_found" } as { message: string } };
+  // 1. Native Supabase auth — Pacred-native customers, plus migrated customers
+  // who already bridged once (every later login is plain Supabase auth).
+  let nativeOk = false;
+  if (resolvedPhone) {
+    const { error } = await supabase.auth.signInWithPassword({ phone: resolvedPhone, password });
+    nativeOk = !error;
+  } else if (resolvedEmail) {
+    const { error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password });
+    nativeOk = !error;
+  }
 
-  if (error) return { ok: false, error: "invalid_credentials" };
+  // 2. Legacy PCS bridge (B-auth / ADR-0017) — a migrated customer's FIRST
+  // login: verify the legacy passTam hash against tb_users, provision the
+  // Supabase user with the password just typed, and set the session. A safe
+  // no-op (ok:false) when there is no tb_users match — including before the
+  // Phase-A legacy data load. Provisional pending ก๊อต Q2 ratification.
+  if (!nativeOk) {
+    const bridged = await bridgeLegacyLogin(identifier, password);
+    if (!bridged.ok) return { ok: false, error: "invalid_credentials" };
+  }
 
   // Check if admin to return correct redirect target
   // (queries admins table — RBAC approach replaced legacy profiles.role)

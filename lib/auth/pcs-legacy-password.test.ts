@@ -1,15 +1,20 @@
 /**
- * Unit tests for the legacy PCS Cargo password port.
+ * Unit tests for the legacy PCS Cargo sign-in primitives.
  *
  * Reference vectors were computed independently with a Python md5
  * implementation of the legacy `pass_tam` algorithm. The algorithm was also
- * structurally verified against 7 real `tb_users` hashes (userPass +
+ * structurally verified against 7 real `tb_users` hashes (userpass +
  * pcs_logged) — each satisfies  c === md5(b)  and  b === reverse(d).slice(0,15).
  *
  * Pattern matches lib/utils/phone.test.ts (plain tsx + manual assertions).
  */
 import { createHash } from "node:crypto";
-import { passTam, verifyLegacyPassword } from "./pcs-legacy-password";
+import {
+  passTam,
+  verifyLegacyPassword,
+  legacyPhoneCandidates,
+  legacySyntheticEmail,
+} from "./pcs-legacy-password";
 
 let pass = 0;
 let fail = 0;
@@ -66,6 +71,24 @@ assertEq("wrong password rejected", verifyLegacyPassword("wrong-pw", H_TEST123),
 assertEq("empty stored hash rejected", verifyLegacyPassword("test123", ""), false);
 assertEq("empty password verifies its own hash",
   verifyLegacyPassword("", "e7248fce8990089e402b00f89dc8d14dd41d8cd98f00b201ce6859c86638a187c626c344cf3e8e1"), true);
+
+section("legacyPhoneCandidates — every stored form of a Thai number");
+const THAI_FORMS = ["+66812345678", "0812345678", "66812345678"];
+assertEq("local 0… input", legacyPhoneCandidates("0812345678").sort(), [...THAI_FORMS].sort());
+assertEq("E.164 +66… input", legacyPhoneCandidates("+66812345678").sort(), [...THAI_FORMS].sort());
+assertEq("bare 66… input", legacyPhoneCandidates("66812345678").sort(), [...THAI_FORMS].sort());
+assertEq("spaces + dashes ignored", legacyPhoneCandidates("081-234 5678").sort(), [...THAI_FORMS].sort());
+assertEq("no-prefix 9-digit input also yields the as-typed form",
+  legacyPhoneCandidates("812345678").sort(), [...THAI_FORMS, "812345678"].sort());
+assertEq("letter-only handle is not a phone", legacyPhoneCandidates("JET"), []);
+assertEq("bare country code has no national number", legacyPhoneCandidates("66"), []);
+assertEq("empty input", legacyPhoneCandidates(""), []);
+
+section("legacySyntheticEmail — deterministic, lowercased, .invalid TLD");
+assertEq("member code → synthetic address",
+  legacySyntheticEmail("PR1234"), "pcs-legacy-pr1234@users.pacred.invalid");
+assertEq("case + surrounding whitespace normalised",
+  legacySyntheticEmail("  PRtt  "), "pcs-legacy-prtt@users.pacred.invalid");
 
 console.log(`\n  ${pass} pass · ${fail} fail`);
 if (fail > 0) process.exit(1);
