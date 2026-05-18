@@ -5,15 +5,15 @@ Branch: `main` (production gatekeeper) · Authority: second-tier owner (per memo
 
 ## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18)
 
-🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. เดฟ has drafted [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) — **Accepted by the owner, pending YOUR ratification**. Read it in full; it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 capability-roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
+🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) is **Accepted + ratified 2026-05-18** — read it in full; it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 capability-roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
 D1 runs in three phases — **A** data migration (pipeline built + dry-run validated, pending prod load) · **B** workflow fidelity · **C** Pacred enhancements (the old Tier roadmap, *deferred not cancelled*).
 
 **ก๊อต now — pickup list (priority order):**
 
-1. **Ratify ADR-0017 — TOP priority.** Review [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) and the Phase-A runbook [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md); the ADR is owner-Accepted and waits on your senior ratification. ADR-0017 supersedes [ADR-0010](../decisions/0010-v2-v3-version-strategy.md)'s "V2 = rebuilt owner-pleaser" definition — V2 is now "faithful PCS port"; confirm that change.
+1. ✅ **ADR-0017 ratified (2026-05-18).** ADR-0017 is now "Accepted + ratified" — it supersedes [ADR-0010](../decisions/0010-v2-v3-version-strategy.md)'s "V2 = rebuilt owner-pleaser" definition (V2 is now "faithful PCS port"). Nothing left to do here.
 2. **Production-load gate for the data migration.** Phase A loads the legacy `pcsc_main` (117 tables · ~8,898 customers) into prod Supabase — the dry-run reconciled all 117 tables MySQL ↔ PG exactly (0 failures · 0 mismatches). The prod load is gated on เดฟ's review + go; **you are the production-load gate** — review the runbook §6 procedure + §7 open items (the 8 special `PCS<letters>` userIDs, `PR1`–`PR5` numbering) and sign off before the load runs against prod Supabase.
-3. **Clear the JMF / MOMO API spec with แต้ม** — Pacred's on-record JMF API surface is **wrong**; ก๊อต gets the correct spec from แต้ม. See [`research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) + [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) — เดฟ reverse-engineered the JMF analog + prepared the question list. (JMF wiring itself is Phase C, but getting the spec right unblocks it.)
+3. **The แต้ม hand-over + build the JMF API.** Two parts: **(a)** Pacred no longer needs the JMF API spec from แต้ม — **ก๊อต builds the JMF API himself (reverse-engineered)**. เดฟ's decode + analog is in [`research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) + [`integrations/momo-1-call-prep.md`](../integrations/momo-1-call-prep.md) — use it as the build reference. (JMF wiring itself is Phase C.) **(b)** Fetch the **customer image/file storage** from แต้ม (`images/users`, `images/shops`, `storage/file`, `storage/slip`) so migrated customers keep continuity — order history + documents. The final `pcsc_main` cutover dump remains an A-5 input.
 4. **Production watch** — Sentry alert watch on the currently-live `main` (error spike >5/hr → war-room with เดฟ) + any owner escalation from ลูกพี่/พี่ป๊อป.
 
 **Defer-able items waiting for ก๊อต re-engagement (now post-Phase-A/B):**
@@ -53,15 +53,15 @@ A separate **LINE Login channel "Pacred Login"** (channel ID `2010105778`) was c
 
 The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). The lens for D1: fidelity to the legacy PCS system — staff and customers must need *zero* retraining. Plan work properly; don't skip the quality gate.
 
-**Your job under D1:** ratify ADR-0017 · gate the production data-load (the 117-table migration into prod Supabase) · clear the JMF API spec with แต้ม · keep gating `dave→main` deploys for the Phase-B work · watch production. The Tier-0 dashboard + the capability roadmap are deferred to Phase C.
+**Your job under D1:** ~~ratify ADR-0017~~ (✅ done) · gate the production data-load (the 117-table migration into prod Supabase) · **build the JMF API yourself** (reverse-engineered — แต้ม no longer supplies the spec) + fetch the customer image/file storage from แต้ม · keep gating `dave→main` deploys for the Phase-B work · watch production. The Tier-0 dashboard + the capability roadmap are deferred to Phase C.
 
 ---
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth — **yours to ratify**
+1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth — ✅ ratified 2026-05-18
 2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook — review §6 (prod-load procedure) + §7 (open items) for your production-load gate
-3. [`docs/research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) — the JMF/MOMO API decode you clear with แต้ม
+3. [`docs/research/momo-jmf-api-decoded.md`](../research/momo-jmf-api-decoded.md) — the JMF/MOMO API decode — your **build reference** for the JMF API you build yourself
 4. [`docs/team.md`](../team.md) §1 (roles) + §3 (daily workflow) + §5 (pre-merge checklist)
 5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope (superseded by ADR-0017: V2 = "faithful PCS port")
 6. [`docs/audit/owasp-2026-05.md`](../audit/owasp-2026-05.md) — production hardening status
@@ -99,11 +99,11 @@ When you're blocked:
 
 | Blocked on | Alternative work |
 |---|---|
-| Pacred owner / แต้ม not responding | Ratify ADR-0017 · review the Phase-A migration runbook ahead of the production-load gate |
-| Waiting on แต้ม for the JMF API spec | Review the staged `dave` Phase-B integration ahead of the deploy gate |
+| Pacred owner / แต้ม not responding | Review the Phase-A migration runbook ahead of the production-load gate |
+| Waiting on แต้ม for the customer image/file storage | Build the JMF API (reverse-engineered — no spec dependency) · review the staged `dave` Phase-B integration ahead of the deploy gate |
 | Phase-A prod load not yet ready (waiting on แต้ม's files / fresh dump) | Take a scheduled-security item (CSP-1 plan review / pen-test RFP prep) |
 
-**Note back to เดฟ when:** you ratify ADR-0017, sign off the production-load gate, decide a strategic direction, or request anything from the Pacred owner / แต้ม.
+**Note back to เดฟ when:** you sign off the production-load gate, decide a strategic direction, or request anything from the Pacred owner / แต้ม.
 
 ---
 

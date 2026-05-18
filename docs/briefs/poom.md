@@ -9,6 +9,8 @@ Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dav
 
 > ⚠️ **PIVOT — pause the pre-D1 backlog.** The booking-flow backend (**BK-1**), the freight expansion (**V-E1.1** / V-E6..V-E12), the Tier-3 systems (internal-chat · disbursement · china-ops) and the customer-intel backend are all **Phase C now** — deferred, *not cancelled*, re-sequenced after the faithful port. Stop building them. Your new work is **Phase B backend**.
 
+> ✅ **DB-1 done — Phase B is UNBLOCKED, start it directly.** A direct REST probe of prod Supabase on 2026-05-18 confirmed prod is **at `0080`** — the `0058`-`0080` migration backlog (incl. the launch-integrity money/security guards `0060`-`0064`) is **already applied**, no P0 hole. There is **no "apply the backlog first" gate** — start Phase B straight away: **B-0 → B-auth → the admin track B-4..B-9.** (`0084`-`0086` stay frozen for Phase C per Q5; next free for new Phase-B work = `0087`.)
+
 **ภูม now — pickup list (Phase-B backend, priority order):**
 
 1. **Rework the admin back-office onto the ported legacy schema — TOP priority (Phase B).** Phase A loads the legacy `pcsc_main` (117 tables, faithfully ported as `tb_*` — legacy names/types kept) into prod Supabase. Your job: rework the 60+ admin routes so they **operate on the `tb_*` schema with the legacy PCS admin workflow exactly** — same menus, same job statuses, same container (ตู้) flow, same end-to-end logic-loop. Goal: warehouse / scanner / receiving / shipping / accounting / audit staff need *zero* retraining.

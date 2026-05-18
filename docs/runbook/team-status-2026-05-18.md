@@ -52,7 +52,10 @@ workflow fidelity (rework the app to the legacy PCS loop — *zero retraining*) 
    `NEXT_PUBLIC_SOCIAL_LOGIN_ENABLED` (default off). Legacy PCS was
    password-only — D1 defers social login to Phase C. `signInWithOAuth` enforces
    the same gate server-side.
-5. **Prod-DB work sequenced** — see §"Prod-Supabase DB work" below.
+5. **Prod-DB state verified + ADR-0017 ratified** — a direct REST probe of prod
+   Supabase confirmed prod is at `0080` (DB-0 ✅ resolved · DB-1 ✅ done — the
+   `0058`-`0080` backlog is already applied, no P0 hole). ก๊อต ratified ADR-0017
+   (status now "Accepted + ratified"). See §"Prod-Supabase DB work" below.
 6. **ภูม's 6 Phase-B open questions answered** — เดฟ decided Q1·Q3·Q4·Q5·Q6
    (migration split into `0081`-`0083` · special-userID + numbering rules ·
    Phase-C `0084`-`0086` frozen · `userType` 1:1 carry); Q2 (auth-bridge
@@ -82,22 +85,22 @@ pnpm verify
 
 ## 🗄 Prod-Supabase DB work — the sequence
 
-Three workstreams — full detail in [`pcs-data-migration.md` §9](pcs-data-migration.md):
+Full detail in [`pcs-data-migration.md` §9](pcs-data-migration.md):
 
-- **DB-0 — verify the prod migration state (เดฟ · do FIRST).** The launch
-  (2026-05-17) shipped on migrations up to ~`0057`; everything `0058`+ has
-  accumulated on `dave` unapplied. Confirm the exact applied set before planning
-  any deploy.
-- **DB-1 — apply the backlog (`0058`-`0080`) to prod (ภูม).** 22 idempotent,
-  additive migrations (`0084`-`0086` are ภูม's Phase-C batch — frozen until
-  Phase B ships, per Q5) — includes the launch-integrity money/security guards
-  `0060`-`0064` (the S-1 RLS keystone · the wallet-overdraw floor · the
-  money-idempotency guards). **If DB-0 shows those are not on prod, applying
-  them is P0 regardless of D1.** Apply in ascending number order. Completing
-  DB-1 unblocks any `dave→main` deploy.
+- **DB-0 ✅ RESOLVED (เดฟ · 2026-05-18).** A direct REST probe of prod Supabase
+  (`yzljakczhwrpbxflnmco`) confirmed prod is **at `0080`** — the marker tables of
+  every backlog migration exist (`refund_requests`/`0058`, `cargo_sacks`/`0068`,
+  `container_costs`/`0069`, `platform_incidents`/`0077`, `work_items`/`0080`).
+  The launch-integrity money/security guards `0060`-`0064` (the S-1 RLS keystone ·
+  the wallet-overdraw floor · the money-idempotency guards) **are on prod — no P0
+  hole.** การคาดเดาเดิมว่า prod หยุดที่ `~0057` ผิด.
+- **DB-1 ✅ DONE.** The backlog (`0058`-`0080`) is already applied — DB-0's probe
+  proves it. No "apply the backlog first" gate remains; ภูม is unblocked to start
+  Phase B directly. (ภูม applied it earlier on 2026-05-18; his evening save-point
+  doc still saying "`0058`-`0080` unapplied" is **stale** — written before the run.)
 - **DB-2 — the D1 legacy port (เดฟ · ก๊อต gate).** The 117-table `tb_*` schema
-  as migration **`0081`** + the data load. Gated on แต้ม's final dump + เดฟ's
-  go + ก๊อต's production-load gate.
+  as migration **`0081`** + the data load. Gated on แต้ม's final `pcsc_main` dump +
+  เดฟ's go + ก๊อต's production-load gate.
 
 `0081`-`0083` are reserved for the legacy schema + follow-ups; ภูม renumbered
 his booking/credit-note/chat batch to `0084`-`0086` (commit `a248696`) to free
@@ -108,30 +111,33 @@ that block. Next free for new Phase-B work = `0087`.
 ## 📊 Per-role pickup
 
 ### ก๊อต — Senior Advisor / gate
-- 🔴 **Ratify [ADR-0017](../decisions/0017-pacred-faithful-pcs-port.md)** — D1 is
-  "Accepted — pending ก๊อต ratification".
-- 🔴 **The แต้ม hand-over** — 3 must-haves: the final `pcsc_main` dump (at
-  cutover) · the customer upload files (`images/users`, `images/shops`,
-  `storage/file`, `storage/slip`) · the JMF API spec. Clear the JMF spec
-  with แต้ม.
+- ✅ **[ADR-0017](../decisions/0017-pacred-faithful-pcs-port.md) ratified** — D1
+  status is now "Accepted + ratified 2026-05-18".
+- 🔴 **The แต้ม hand-over (reduced).** 2 must-haves left: the final `pcsc_main`
+  dump (at cutover) · the customer image/file storage (`images/users`,
+  `images/shops`, `storage/file`, `storage/slip`) — ก๊อต fetches these so
+  migrated customers keep continuity (order history + documents). **The JMF
+  API spec is no longer needed from แต้ม** — ก๊อต builds the JMF API himself
+  (reverse-engineered).
 - ⏳ The **A-5 production-load gate** — gate the prod load when เดฟ readies it.
 - Brief: [`../briefs/got.md`](../briefs/got.md)
 
 ### เดฟ — Project Lead / Integrator (Phase A)
 - ✅ This batch: D1 docs · migration pipeline + dry-run · branch consolidation ·
   social-login gate · DB-sequencing.
-- 🔴 **DB-0** — verify the prod migration state.
+- ✅ **DB-0 — done.** Direct REST probe confirmed prod is at `0080` — DB-1 (the
+  `0058`-`0080` backlog) is already applied; no P0 security/money hole.
 - ⏳ **A-4** customer-file migration (blocked on แต้ม) · **A-5** production load
   (gated on go + the final dump).
 - ⏳ Coordinate Phase B — own the gap-map-driven stage breakdown.
 - Brief: [`../briefs/dave.md`](../briefs/dave.md)
 
 ### ภูม — Phase B backend
-- 🔴 **FIRST — DB-1:** apply the backlog migrations (`0058`-`0080`) to prod
-  Supabase (ascending, idempotent; `0084`-`0086` are frozen for Phase C — see
-  [`../../supabase/migrations/README.md`](../../supabase/migrations/README.md)
-  + [`pcs-data-migration.md` §9](pcs-data-migration.md)).
-- 🎯 **Phase B backend** — rework the admin back-office + customer-portal
+- ✅ **DB-1 done** — the backlog (`0058`-`0080`) is already applied to prod
+  (DB-0's probe verified prod at `0080`). **No "apply the backlog first" gate
+  remains — ภูม is unblocked for Phase B now.** (`0084`-`0086` stay frozen for
+  Phase C per Q5.)
+- 🎯 **FIRST — Phase B backend.** Rework the admin back-office + customer-portal
   backend onto the ported `tb_*` schema + the legacy PCS workflow. Start: `B-0`
   data foundation → `B-auth` (wire `verifyLegacyPassword` into the
   "เชื่อมต่อบัญชี PCS CARGO" login) → the admin track `B-4`..`B-9`.
@@ -156,10 +162,13 @@ that block. Next free for new Phase-B work = `0087`.
 
 | Blocker | Owner | Gates |
 |---|---|---|
-| **แต้ม hand-over** — final dump + customer files + JMF spec | ก๊อต ↔ แต้ม | A-4 + A-5 (the prod load) |
-| **DB-0** — prod migration state unknown | เดฟ | a confident `dave→main` deploy |
+| **แต้ม hand-over** — final `pcsc_main` dump + the customer image/file storage (ก๊อต fetches) | ก๊อต ↔ แต้ม | A-4 + A-5 (the prod load). *JMF spec no longer needed — ก๊อต builds the JMF API himself.* |
 | **A-5 production load** | เดฟ go · ก๊อต gate | the big D1 event — needs the final dump |
 | **Q2 — auth-bridge posture** — [`poom-d1-open-questions.md`](../research/poom-d1-open-questions.md) | ก๊อต | B-auth ship gate (Q1·Q3·Q4·Q5·Q6 answered 2026-05-18; Q2 carries เดฟ's lean) |
+
+*Resolved 2026-05-18:* **DB-0** — prod verified at `0080` by direct REST probe ·
+**DB-1** — the `0058`-`0080` backlog is already applied (no P0 hole) ·
+**ADR-0017 ratification** — ก๊อต ratified.
 
 ---
 

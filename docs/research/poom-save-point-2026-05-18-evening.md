@@ -1,3 +1,6 @@
+> ## ✅ UPDATE 2026-05-18 (post-save-point)
+> **DB-1 is DONE** — a direct REST probe of prod Supabase confirmed prod is **at `0080`**: the `0058`-`0080` backlog (incl. guards `0060`-`0064`) is already applied. This supersedes §5's "backlog to apply `0058`-`0080`" + the §1 / §4 "P0 — DB-1" lines below. **There is no apply-the-backlog gate — ภูม starts Phase B directly (B-0 → B-auth → B-4..B-9).**
+
 # 🏠 ภูม — Save-point 2026-05-18 evening (going home · resume at home machine)
 
 > **Save snapshot.** ภูม heading home, resuming on a different machine.
