@@ -7,6 +7,12 @@
 > Source: a read-only audit of the legacy PHP (`C:\xampp\htdocs\pcscargo`)
 > vs the current rebuilt Pacred app. Each gap below is a Phase-B rework item.
 > Legacy = `member/` (customer portal) + `member/pcs-admin/` (admin).
+>
+> **🔬 Rigorous per-area detail (2026-05-19 fidelity audit):** this doc is the
+> overview — the screen / button / loop-level gap maps are
+> [`d1-fidelity-customer.md`](d1-fidelity-customer.md) ·
+> [`d1-fidelity-admin.md`](d1-fidelity-admin.md) ·
+> [`d1-fidelity-workflow.md`](d1-fidelity-workflow.md). Build Phase B to those.
 
 ---
 

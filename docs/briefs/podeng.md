@@ -13,7 +13,7 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 
 1. **Rework the customer-facing UI to match the legacy PCS Cargo look + flow — TOP priority (Phase B).** The rebuilt Pacred portal navigation diverged from the legacy system — e.g. the legacy customer home is a **9-icon launcher** (a grid of service tiles), the rebuilt app uses a nested sidebar. Rework the customer surfaces (`/dashboard`, `/service-order`, `/service-import`, `/service-payment`, `/wallet`, `/shipments` etc.) so the layout, navigation, and screen-to-screen flow **match what the ~8,898 existing customers already know** — goal: zero retraining.
 2. **Reconcile the divergent status vocabularies** — the rebuilt app's job/order statuses don't line up with the legacy PCS status words customers recognise. Map the rebuilt status labels onto the legacy PCS vocabulary across every customer-visible surface. Coordinate with ภูม — the legacy `tb_*` schema carries the canonical status values.
-3. **Match the legacy PCS visual language** — work through the legacy-vs-Pacred gap map (`docs/research/` — `PACRED-GAP-ANALYSIS.md` + `gap-customer.md`) and bring the customer screens in line with the legacy look so it reads as the same system, rebranded.
+3. **Match the legacy PCS visual language** — work through [`docs/research/d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) (the rigorous 11-screen customer-portal fidelity gap map — your Phase-B rework spec) + the [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md) overview, and bring every customer screen in line with the legacy look so it reads as the same system, rebranded.
 
 **Ongoing (self-directed, fit around the pickup list):**
 - **i18n parity** — keep TH + EN in sync as you rework screens; watch `pnpm audit:i18n` for new untranslated keys.
@@ -34,7 +34,7 @@ The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful p
 ## 🔒 Force-read before any work
 
 1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
-2. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + [`gap-customer.md`](../research/gap-customer.md) — the legacy-vs-Pacred gap map, your Phase-B rework input
+2. **[`docs/research/d1-fidelity-customer.md`](../research/d1-fidelity-customer.md)** — the rigorous customer-portal fidelity gap map (11 screens, per-element), your **Phase-B rework spec** · overview [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md)
 3. [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — the Phase-A migration runbook (context for the `tb_*` schema behind the reworked screens)
 4. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow)
 5. [`docs/conventions.md`](../conventions.md) §7 (i18n) + §11 (UI/style — mobile-first) + §12 (Performance/SEO)

@@ -42,7 +42,7 @@ The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful p
 
 1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
 2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook — describes the `tb_*` schema your Phase-B backend operates on
-3. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + [`gap-admin.md`](../research/gap-admin.md) + [`gap-customer.md`](../research/gap-customer.md) + [`gap-revenue-flow.md`](../research/gap-revenue-flow.md) — the legacy-vs-Pacred gap map, your Phase-B rework input
+3. **[`docs/research/d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) + [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md)** — the rigorous legacy-PCS-vs-Pacred fidelity gap maps (admin + workflow), your **Phase-B rework spec**. Overview → [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md). Pre-D1 hunts ([`PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + `gap-*.md`) = supporting evidence
 4. [`docs/team.md`](../team.md) §1 (your scope) + §3 (daily flow) + §10 (integration cycle)
 5. [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the warehouse + container + shipment data spine (reconcile against the legacy `tb_*` ตู้ model)
 6. [`docs/decisions/0006-tax-invoice-flow.md`](../decisions/0006-tax-invoice-flow.md) + [`0015`](../decisions/0015-withholding-tax-model.md) + [`0016`](../decisions/0016-freight-value-model.md) — schema specs (reconcile against the legacy workflow under D1)

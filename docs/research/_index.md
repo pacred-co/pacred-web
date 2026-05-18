@@ -88,6 +88,17 @@
 | [`booking-flow-system-2026-05-18.md`](booking-flow-system-2026-05-18.md) | **Booking flow — the real "เปิดออเดอร์ / กดซื้อ" surface** — Trip.com-style: a booking detail page per service/route + a sticky itemized quotation panel + live-recompute option selectors (labor · tractor · pickup/dropoff pins · document handling) + an auth gate that gates *commit* not *exploration*; submit → a `work_item` job to the Sales + Pricing desk. `bookings`/`booking_options`/`booking_rates` tables; feeds ภูม's R-3 lead-inbox + R-5 quote-calculator. Staged BK-1 → BK-2 → BK-3. **Top revenue priority.** | 2026-05-18 |
 | [`customer-intelligence-system-2026-05-18.md`](customer-intelligence-system-2026-05-18.md) | **Customer intelligence — รู้จักลูกค้าทุกอย่าง** — LINE-webhook ingestion (both-sides chat capture + which sales answered + won/lost) + the customer-360 record (channel · OA-add date · first-contact · profile · message count) + an in-admin chat preview + IP-anchored web behavior tracking. Sibling of platform-observability — CONNECT the free rails (LINE webhook · Clarity · GA4 · Meta Pixel) · BUILD the in-house data layer. | 2026-05-18 |
 
+### D1 faithful-port — Phase-B input docs
+
+> The legacy-PCS-vs-Pacred fidelity audit feeding **D1 Phase B** ([ADR-0017](../decisions/0017-pacred-faithful-pcs-port.md)). `d1-phase-b-gap-map.md` is the overview; the 3 `d1-fidelity-*` docs are the rigorous per-area gap maps (screen / button / loop level) — the canonical Phase-B rework spec for ภูม + ปอน.
+
+| Doc | Topic | Date |
+|---|---|---|
+| [`d1-phase-b-gap-map.md`](d1-phase-b-gap-map.md) | **D1 Phase-B gap-map overview** — legacy PCS vs Pacred at menu/workflow level — the entry point to the fidelity audit | 2026-05-18 |
+| [`d1-fidelity-customer.md`](d1-fidelity-customer.md) | **Customer-portal fidelity audit** — 11 screens, per-element gap tables: the missing 9-icon launchpad, login lands on the wrong page, the Taobao/1688 link-paste order entry replaced by a manual form, import pay-point inverted, wallet split 1→3 screens | 2026-05-19 |
+| [`d1-fidelity-admin.md`](d1-fidelity-admin.md) | **Admin back-office fidelity audit** — 14 modules: the per-role sidebar model, missing menu-count badges, forwarder status inverted+truncated, container = a payment-slip ledger in legacy, 6 missing module families | 2026-05-19 |
+| [`d1-fidelity-workflow.md`](d1-fidelity-workflow.md) | **Workflow-loop fidelity audit** — 6 loops: the forwarder pay-point inverted (legacy bills post-arrival = cargo COD), status vocabulary reinterpreted, 3 competing container models, no status-rollback (`fStatus=99`) | 2026-05-19 |
+
 ## Cross-references
 
 - 📋 Task scheduling → [`../PORT_PLAN.md`](../PORT_PLAN.md) Part V (cargo backlog) + Part W (gap-hunt backlog)
