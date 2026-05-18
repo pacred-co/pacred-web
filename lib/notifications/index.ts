@@ -99,7 +99,10 @@ export async function sendNotification(
 }
 
 // ────────────────────────────────────────────────────────────
-// LINE Messaging API push (stub — wire up when token configured)
+// LINE Messaging API push — implementation (env-gated).
+//   ✅ Wired 2026-05-18 — keys from ก๊อต (channel 2009931373, Pacred Shipping OA).
+//   Activates when LINE_PUSH_BYPASS=false AND LINE_CHANNEL_ACCESS_TOKEN set
+//   AND profiles.line_user_id populated (via /liff/link flow).
 // ────────────────────────────────────────────────────────────
 async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise<boolean> {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -132,7 +135,10 @@ async function sendLinePush(lineUserId: string, payload: NotifyPayload): Promise
 }
 
 // ────────────────────────────────────────────────────────────
-// Email fallback (stub — Resend or Supabase mailer)
+// Email fallback — implementation (env-gated).
+//   Activates when RESEND_API_KEY + RESEND_FROM set.  Still waiting
+//   for keys from ก๊อต as of 2026-05-18 — code path is correct,
+//   sendEmail() short-circuits to false silently when no key.
 // ────────────────────────────────────────────────────────────
 async function sendEmail(toEmail: string, payload: NotifyPayload): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
