@@ -72,8 +72,10 @@ import { Link } from "@/i18n/navigation";
  *   - nameProductsType2()         L331-341  — product-type label
  *   - countText()                 L14-..    — UTF-8-aware truncation
  *   - calPriceForwarderSumCompany L1384-1392 — the row net price
- *   - number_format_short()       forwarder-table.php L9-34 — the
- *       K+/M+ short number for the summary row
+ * The legacy `number_format_short()` (forwarder-table.php L9-34) is NOT
+ * transcribed — the summary row's total cells render empty server-side
+ * (the PHP fills them from DataTables footer-callback JS); port it when
+ * that client-side total is wired.
  *
  * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text
  * only. The legacy borrowed-API / `PCS` strings in the address-pickup
@@ -174,23 +176,12 @@ function calPriceForwarderSumCompany(
   return pricePayAll;
 }
 
-// ── Legacy helper: number_format_short($n) ──
-// forwarder-table.php L9-34. K+/M+/B+/T+ short form for the summary
-// row totals (weight, price).
-function numberFormatShort(n: number): string | number {
-  if (n > 0 && n < 1000) {
-    return Math.floor(n);
-  } else if (n >= 1000 && n < 1000000) {
-    return Math.floor(n / 1000) + "K+";
-  } else if (n >= 1000000 && n < 1000000000) {
-    return Math.floor(n / 1000000) + "M+";
-  } else if (n >= 1000000000 && n < 1000000000000) {
-    return Math.floor(n / 1000000000) + "B+";
-  } else if (n >= 1000000000000) {
-    return Math.floor(n / 1000000000000) + "T+";
-  }
-  return 0;
-}
+// NOTE — the legacy forwarder-table.php L9-34 defines a
+// `number_format_short()` helper (K+/M+/B+/T+ short form). It is NOT
+// transcribed: the PHP only ever calls it from the DataTables
+// footer-callback JS to fill the summary row's `.t7/.t8/.t12/.t19`
+// cells, which render empty at server-render time. When that
+// client-side total is wired up, port `number_format_short()` then.
 
 // PHP number_format($n, $decimals) — 1000s-separated, fixed decimals.
 function numberFormat(n: number, decimals: number): string {
@@ -413,16 +404,15 @@ export default async function ForwarderTablePage({
     rows = rows.filter((r) => !arrFIDDriver.has(r.id));
   }
 
-  // forwarder-table.php L1004-1021 — the summary-row running totals.
-  let fAmountAll = 0;
-  let fWeightAll = 0;
-  let fVolumeAll = 0;
-  let fPriceAll = 0;
+  // forwarder-table.php L1008-1021 — the per-row net price. The legacy
+  // also accumulates $fAmountAll / $fWeightAll / $fVolumeAll / $fPriceAll
+  // in this loop, but those totals are NOT printed by the PHP — the
+  // summary row's `.t7/.t8/.t12/.t19` cells render empty and the
+  // DataTables footer-callback JS fills them client-side. So only the
+  // per-row `calPriceForwarderSumCompany()` value (which IS rendered, in
+  // the ราคา column) is kept here.
   const rowNet = new Map<number, number>();
   for (const row of rows) {
-    fAmountAll += row.famount ?? 0;
-    fWeightAll += row.fweight ?? 0;
-    fVolumeAll += row.fvolume ?? 0;
     const net = calPriceForwarderSumCompany(
       row.fpriceupdate ?? 0,
       row.ftotalprice ?? 0,
@@ -435,7 +425,6 @@ export default async function ForwarderTablePage({
       row.fusercompany,
     );
     rowNet.set(row.id, net);
-    fPriceAll += net;
   }
 
   // ── the add-forwarder modal address <select> (L1149-1167) ──
@@ -485,9 +474,6 @@ export default async function ForwarderTablePage({
   // forwarder-table.php prints screen.width-conditional markup; on the
   // server we render the desktop variant (the legacy default for
   // width>=578 — the .nowrap table). DataTables JS init is a follow-up.
-  const sumWeight = fWeightAll > 0 ? numberFormatShort(fWeightAll) : 0;
-  const sumVolume = fVolumeAll > 0 ? numberFormat(fVolumeAll, 0) : 0;
-  const sumPrice = fPriceAll > 0 ? numberFormatShort(fPriceAll) : 0;
 
   return (
     <div className="pcs-legacy">
@@ -811,9 +797,12 @@ export default async function ForwarderTablePage({
                                     </thead>
                                     <tbody>
                                       {/* forwarder-table.php L975-998 — the
-                                          "รวม" summary row. The legacy JS
-                                          fills .t7/.t8/.t12/.t19 after load;
-                                          rendered directly here 1:1. */}
+                                          "รวม" summary row. Every cell is
+                                          rendered EMPTY by the legacy PHP
+                                          (the `.t7/.t8/.t12/.t19` totals are
+                                          filled later by the DataTables
+                                          footer-callback JS, not at server
+                                          render). Transcribed 1:1 — empty. */}
                                       <tr className="bg-color no-sort">
                                         <td className="t1 d-none2 "></td>
                                         <td className="t2 d-none-1200"></td>
@@ -821,12 +810,12 @@ export default async function ForwarderTablePage({
                                         <td className="t4 d-none-1200"></td>
                                         <td className="t5 d-none-578"></td>
                                         <td className="t6 text-right d-none-578">รวม</td>
-                                        <td className="t7 text-right">{fAmountAll}</td>
-                                        <td className="t8 text-right">{sumWeight}</td>
+                                        <td className="t7 text-right"></td>
+                                        <td className="t8 text-right"></td>
                                         <td className="t9 d-none-1200"></td>
                                         <td className="t10 d-none-1200"></td>
                                         <td className="t11 d-none-1200"></td>
-                                        <td className="t12 text-right">{sumVolume}</td>
+                                        <td className="t12 text-right"></td>
                                         <td className="t13 d-none-578"></td>
                                         <td className="t14 d-none-578"></td>
                                         <td className="t15 d-none-578"></td>
@@ -835,7 +824,7 @@ export default async function ForwarderTablePage({
                                         <td className="t15-3 d-none-578"></td>
                                         <td className="t16 d-none-578"></td>
                                         <td className="t17 d-none-578"></td>
-                                        <td className="t19 text-right">{sumPrice}</td>
+                                        <td className="t19 text-right"></td>
                                         <td className="t18"></td>
                                       </tr>
                                       {rows.map((row) => {
@@ -1074,8 +1063,17 @@ export default async function ForwarderTablePage({
               </button>
             </div>
             <div className="modal-body header-from">
-              {/* DEFERRED — create-forwarder Server Action (legacy ?save). */}
-              <form className="form-horizontal" autoComplete="off">
+              {/* TODO(server-action): the legacy `save` POST (forwarder-table.php
+                  L1113 posts to forwarder/) creates a tb_forwarder order. A
+                  Server Component render is a pure read — the submit is
+                  unwired; port it to a "use server" action. The legacy
+                  `method="POST" action="forwarder/"` markup is kept 1:1. */}
+              <form
+                className="form-horizontal"
+                method="POST"
+                action="/service-import"
+                autoComplete="off"
+              >
                 <div className="form-group">
                   <div className="border-bottom-2"></div>
                   <h5 className="text-center">กรอกรายละเอียดนำเข้าสินค้า</h5>
