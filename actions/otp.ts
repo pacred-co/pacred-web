@@ -85,6 +85,17 @@ export async function requestOtp(
   const codeHash = hashCode(code);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
+  // Send the SMS FIRST — only persist the otp_codes row once the send
+  // succeeds. The per-phone rate limit counts otp_codes rows, so inserting
+  // before sending meant a failed send still burned a 3/hour quota slot;
+  // three failed sends silently exhausted the quota and the user then got
+  // no SMS at all. A failed send now leaves no row and no quota consumed.
+  const sms = await sendSms(
+    phone,
+    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 5 นาที)`,
+  );
+  if (!sms.ok) return { ok: false, error: "sms_failed" };
+
   const { error: insertErr } = await admin.from("otp_codes").insert({
     phone,
     code_hash: codeHash,
@@ -92,12 +103,6 @@ export async function requestOtp(
     expires_at: expiresAt,
   });
   if (insertErr) return { ok: false, error: "db_error" };
-
-  const sms = await sendSms(
-    phone,
-    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 5 นาที)`,
-  );
-  if (!sms.ok) return { ok: false, error: "sms_failed" };
 
   return { ok: true };
 }
