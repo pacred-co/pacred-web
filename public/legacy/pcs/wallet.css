@@ -1,0 +1,317 @@
+/* =============================================================
+ * wallet.css — legacy PCS Cargo `member/wallet.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot — see
+ * public/legacy/pcs/menu.css): to be 100% visually identical to
+ * the legacy PHP we do NOT re-implement the look in Tailwind — we
+ * BRING THE LEGACY CSS. This file holds the exact rules wallet.php
+ * renders with, copied verbatim from the legacy stylesheets:
+ *   - assets/css/style.css        (border-wallet · btn-add-wallet ·
+ *                                  tab-wallet · border-success-2 ·
+ *                                  text-no-data · gradients · fonts)
+ *   - assets/css/custom.css       (.content-body.pr110)
+ *   - assets/css/bootstrap.min.css / bootstrap-extended.min.css
+ *                                  (the BS4 grid / card / nav-tabs /
+ *                                   badge subset wallet.php uses)
+ *   - assets/css/palette-gradient.css (bg-gradient-x-warning)
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ * collide with — the rest of the Tailwind app. The page renders the
+ * legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/wallet.css and loaded
+ * with a plain <link rel="stylesheet"> from page.tsx — it must bypass
+ * the app's Tailwind v4 / PostCSS pipeline, which rejects verbatim
+ * legacy CSS. Binary assets (logo.png) live under public/legacy/pcs/.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid + card subset (exact BS4 4.x values) ---- */
+/* wallet.php is Bootstrap-4 markup; values copied from
+ * bootstrap.min.css / bootstrap-extended.min.css. */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-6,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-6 { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .col-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-6  { flex: 0 0 50%;  max-width: 50%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+  .pcs-legacy .offset-md-3 { margin-left: 25%; }
+}
+
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* spacing helpers used by wallet.php (Bootstrap-4 spacing scale) */
+.pcs-legacy .p-1   { padding: 0.25rem !important; }
+.pcs-legacy .pb-0  { padding-bottom: 0 !important; }
+.pcs-legacy .pt-0  { padding-top: 0 !important; }
+.pcs-legacy .pt-1  { padding-top: 0.25rem !important; }
+.pcs-legacy .pt-3  { padding-top: 1rem !important; }
+.pcs-legacy .pl-1  { padding-left: 0.25rem !important; }
+.pcs-legacy .pr-1  { padding-right: 0.25rem !important; }
+.pcs-legacy .mt-1  { margin-top: 0.25rem !important; }
+.pcs-legacy .mb-0  { margin-bottom: 0 !important; }
+.pcs-legacy .mb-1  { margin-bottom: 0.5rem !important; }
+.pcs-legacy .mb-2  { margin-bottom: 1rem !important; }
+.pcs-legacy .m-1   { margin: 0.25rem !important; }
+
+/* display + alignment helpers */
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-white  { color: #fff !important; }
+.pcs-legacy .d-flex { display: flex !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .rounded-circle { border-radius: 50% !important; }
+
+/* Bootstrap-4 media object (used by the wallet card) */
+.pcs-legacy .media { display: flex; align-items: flex-start; }
+.pcs-legacy .media-body { flex: 1; }
+
+/* Bootstrap-4 progress bar (the gold bar under the wallet balance) */
+.pcs-legacy .progress {
+  display: flex;
+  height: 1rem;
+  overflow: hidden;
+  font-size: 0.75rem;
+  background-color: #eceeef;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .progress-sm { height: 0.5rem; }
+.pcs-legacy .progress-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+}
+.pcs-legacy .box-shadow-2 { box-shadow: 0 4px 10px 0 rgba(0, 0, 0, 0.1); }
+
+/* ---- Bootstrap-4 breadcrumb (verbatim BS4 values) ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: #f5f5f5;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item { padding-left: 0.5rem; }
+.pcs-legacy .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  color: #6b6f82;
+  content: "/";
+}
+.pcs-legacy .breadcrumb-item.active { color: #6b6f82; }
+
+/* ---- Bootstrap-4 nav + nav-tabs (verbatim BS4 values) ---- */
+.pcs-legacy .nav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+.pcs-legacy .nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+}
+.pcs-legacy .nav-tabs {
+  border-bottom: 1px solid #babfc7;
+}
+.pcs-legacy .nav-tabs .nav-item {
+  margin-bottom: -1px;
+}
+.pcs-legacy .nav-tabs .nav-link {
+  border: 1px solid transparent;
+  border-top-left-radius: 0.25rem;
+  border-top-right-radius: 0.25rem;
+}
+.pcs-legacy .nav-tabs .nav-item.show .nav-link,
+.pcs-legacy .nav-tabs .nav-link.active {
+  color: #4e5154;
+  background-color: #f4f5fa;
+  border-color: #626e82 #626e82 #f4f5fa;
+}
+/* style.css L390/394 — theme override of the nav-tabs colour */
+.pcs-legacy .nav.nav-tabs .nav-item .nav-link.active {
+  border-color: #cc3333 #cc3333 #fff !important;
+}
+.pcs-legacy .nav-tabs {
+  border-bottom: 1px solid #cc3333 !important;
+}
+/* Bootstrap-4 tab-content / tab-pane */
+.pcs-legacy .tab-content > .tab-pane { display: none; }
+.pcs-legacy .tab-content > .active { display: block; }
+
+/* ---- Bootstrap-4 badge subset (verbatim BS4 values) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: 0.35em 0.4em;
+  font-size: 80%;
+  text-align: center;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.pcs-legacy .badge-pill {
+  padding-right: 0.6em;
+  padding-left: 0.6em;
+  border-radius: 10rem;
+}
+.pcs-legacy .badge-warning { color: #2a2e30; background-color: #ff9149; }
+.pcs-legacy .badge-info    { color: #fff;     background-color: #1e9ff2; }
+.pcs-legacy .badge-danger  { color: #fff;     background-color: #ff4961; }
+.pcs-legacy .badge-success { color: #2a2e30; background-color: #28d094; }
+
+/* ---- Theme: gradient + typography (assets/css/style.css) ---- */
+/* style.css — the red header band gradient */
+.pcs-legacy .bg-gradient-x-danger {
+  background-image: linear-gradient(to right, #E9091F 0%, #E9091F 100%) !important;
+  background-repeat: repeat-x;
+}
+/* style.css L154/L157/L304/L1087 — font helpers */
+.pcs-legacy .font-12   { font-size: 12px; }
+.pcs-legacy .font-13   { font-size: 13px; }
+.pcs-legacy .font-14   { font-size: 14px; }
+.pcs-legacy .font-3rem { font-size: 3rem; }
+/* style.css L315 — padding helper used by the tab icons */
+.pcs-legacy .pr-05 { padding-right: 0.5rem !important; }
+/* style.css colour helpers */
+.pcs-legacy .text-black-1 { color: #464855; }
+.pcs-legacy .text-muted   { color: #6b6f82 !important; }
+.pcs-legacy .text-success { color: #28d094 !important; }
+.pcs-legacy .text-danger  { color: #ff4961 !important; }
+/* style.css L1008 — the Pacred logo on the wallet card */
+.pcs-legacy .logo-wallet { max-width: 60px; }
+/* `warning` is the legacy Bootstrap text colour used on the wallet <h3> */
+.pcs-legacy .warning { color: #FF9149; }
+
+/* heading reset so the legacy <h2>/<h3>/<h4>/<h5> match the theme,
+ * not Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h2 { font-size: 2rem;    font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy ol { margin-top: 0; margin-bottom: 1rem; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy wallet.php layout depends on images being
+ * inline (the logo sits beside the balance in the .media object).
+ * Restore the legacy/browser-default inline rendering inside scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* the gold progress bar under the wallet balance
+ * (core/colors/palette-gradient.css) */
+.pcs-legacy .bg-gradient-x-warning {
+  background-image: linear-gradient(to right, #ff7216 0%, #ffb07c 100%);
+  background-repeat: repeat-x;
+}
+
+/* ---- wallet.php-specific theme rules (assets/css/style.css) ---- */
+/* style.css L298-302 — the wallet balance card outline */
+.pcs-legacy .border-wallet {
+  border: 3px solid #e03400;
+  border-radius: 2rem;
+  box-shadow: 0 2px 18px 1px rgb(50 60 60 / 30%);
+}
+/* style.css L536-546 — the "เติมเงินเข้ากระเป๋า" pill button */
+.pcs-legacy .btn-add-wallet {
+  padding: 0.35em 0.7em;
+  border-radius: 10rem;
+  display: inline-block;
+  text-align: center;
+  border: 0px solid #fff;
+  border-image-source: linear-gradient(45deg, #cc3333, #f15a24);
+  border-image-slice: 1;
+  background: linear-gradient(to right, #cc3333, #f15a24);
+  color: #fff;
+}
+/* style.css L568-571 — the wallet-history row outline */
+.pcs-legacy .border-success-2 {
+  border: 1px solid;
+  border-radius: 1.2rem;
+}
+/* style.css L577-580 — the "คุณยังไม่มีรายการ" empty-state block */
+.pcs-legacy .text-no-data {
+  padding-top: 2rem;
+  min-height: 30vh;
+}
+/* style.css L1011-1013 / L1075-1077 — the wallet tab link colour */
+.pcs-legacy .tab-wallet a { color: #2f3036; }
+.pcs-legacy .tab-wallet a:hover { color: #2f3036 !important; }
+
+/* custom.css L113-115 — the desktop content-body right padding (the
+ * legacy fixed sidebar gutter) */
+.pcs-legacy .content-body.pr110 { padding-right: 100px; }
+
+/* ===== Responsive breakpoints — verbatim from the legacy
+ * stylesheets. ===== */
+
+/* style.css L1015-1023 — wallet tab cells centre at <=578px */
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .tab-sm-center {
+    text-align: center !important;
+    width: 50%;
+  }
+}
+
+/* custom.css L304/L318 — content-body padding drops on small screens */
+@media (max-width: 992px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 15px; }
+}
+
+/* Bootstrap-4 responsive display helpers — wallet.php uses the
+ * `hidden-sm-up` / `hidden-xs-down` pair on the tab labels (icon on
+ * mobile, text on desktop). Values from bootstrap-extended.min.css. */
+.pcs-legacy .hidden-sm-up { display: inline; }
+.pcs-legacy .hidden-xs-down { display: none; }
+@media (min-width: 576px) {
+  .pcs-legacy .hidden-sm-up { display: none; }
+  .pcs-legacy .hidden-xs-down { display: inline; }
+}

@@ -92,3 +92,46 @@ needs a real Postgres connection —
 `postgresql://postgres:<DB-PASSWORD>@db.<ref>.supabase.co:5432/postgres` —
 and the DB password is a separate dashboard secret (Project Settings →
 Database), NOT any API key. Plan the migration around obtaining it.
+
+---
+
+## 2026-05-19 — Legacy PCS `tb_*` schema reference for the D1 port (ภูม research)
+
+**Context:** ภูม's PCS Cargo system research (4 files copied verbatim to
+[`docs/research/pcs-legacy/`](../research/pcs-legacy/_index.md)) decodes the legacy
+MySQL `pcsc_main` schema. The durable business-logic synthesis is in
+[`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) (2026-05-19 entry); the
+**port-mechanics** facts that belong here:
+
+**The legacy customer-facing tables to map (per `PCS_CARGO_COMPLETE_ANALYSIS.md` §5):**
+`tb_user` · `tb_admin` · `tb_address` · `tb_cart` · `tb_shops` · `tb_forwarder` ·
+`tb_forwarder_item` · `tb_forwarder_img` · `tb_payment` · `tb_wallet` · `tb_account_pcs`.
+
+**Port gotchas specific to this schema:**
+
+1. **Status columns are numeric VARCHAR strings, not ints/enums.** `sStatus`,
+   `fStatus`, `pStatus`, `wType`, `userStatus` are all `VARCHAR(1-2)` holding
+   `'0'`-`'9'`. A naive int cast loses the leading-zero / `'0'`=cancelled case.
+   Decide the Pacred target type explicitly (PG enum or smallint) and map.
+
+2. **The forwarder has no status-history table — it has per-status DATETIME
+   columns** `fDateStatus2`…`fDateStatus7` on the header row. A faithful port
+   either replicates those columns OR builds a real history table — but the
+   *legacy data* lives in those wide columns, so the migration must read them.
+
+3. **`tb_wallet.wBalance` is a stored running balance** (balance AFTER each txn),
+   not derived. The ported wallet must keep the same invariant or recompute on
+   migrate — don't assume balance is computed from a sum.
+
+4. **`userID` = `PCS####`** is the legacy member code; Pacred rebrands to `PR###`.
+   The PCS→PR rebrand + case-normalisation rule is already documented in the
+   2026-05-19 pgloader entry above (gotcha #3) — same column.
+
+5. **Code-map columns are tiny VARCHARs** (`sProvider`, `fWarehouseChina`,
+   `fWarehouseName`, `fTransportType`, `fShipBy`, `bankName`) holding `'1'`-`'8'`.
+   The decode tables are in `pacred-domain-knowledge.md` — port the *meaning*,
+   keep the legacy code values for data-migration fidelity.
+
+**Why this matters:** when porting a shopping/forwarder/payment/wallet screen,
+the legacy column names + their numeric-string status values are the contract.
+Reconcile against `docs/research/pcs-legacy/` before designing the Pacred table.

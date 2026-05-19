@@ -20,6 +20,8 @@ On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its
 
 📋 Canonical SOT: **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md)** (the D1 decision) + **[`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md)** (the D1 master phase plan — current state · stages · work-lanes). Read ADR-0017 in full before D1 work. In-flight pre-D1 feature work (e.g. BK-1 booking flow, freight V-E1.1) pauses; the team pivots to Phase B.
 
+**2026-05-19 evening — the faithful-port lane.** Phase B is now executed as a literal **1:1 transcription** of the legacy PHP screens (the owner's "100% sameness FIRST" rule). The work runs on a dedicated branch loop — `Poom-pacred` (ภูม · admin) + `dave-pacred` (เดฟ · customer) → `faithful-port` (production) → `main`; `dave`/`Poom` are FROZEN. The plan + branch model + 4-person work-split → **[`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md)**; the method → **[`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md)**.
+
 ## 1. Session-start handshake (MANDATORY — do BEFORE asking what to work on)
 
 After `git fetch` + branch sync at the top of a session, run this handshake **proactively** — do not wait for the user to ask. Skipping = wandering session + forcing the user to re-explain context they already encoded in docs.

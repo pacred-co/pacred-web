@@ -1,0 +1,312 @@
+/* =============================================================
+ * menu.legacy.css — legacy PCS Cargo `member/menu.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription (pilot screen).
+ *
+ * THE CSS-HANDLING PATTERN (copy this verbatim for every screen):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `menu.php` renders with, copied
+ *   verbatim from the legacy stylesheets:
+ *     - the inline <style> block in menu.php          (lines 10-59)
+ *     - assets/css/style.css                          (theme)
+ *     - assets/css/custom-2023.css                    (sales-rep card)
+ *     - the Bootstrap-4 grid/card subset menu.php uses (exact BS4 values)
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 grid classes (.row, .col-*, .card)
+ *   cannot leak into — or collide with — the rest of the Tailwind app.
+ *   The page renders the legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/menu.css
+ *   and loaded with a plain <link rel="stylesheet"> from page.tsx — it
+ *   must bypass the app's Tailwind v4 / PostCSS pipeline, which rejects
+ *   verbatim legacy CSS. Binary assets (icon PNGs, logo.png) likewise
+ *   live under public/legacy/pcs/, referenced by absolute URL.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid + card subset (exact BS4 4.x values) ---- */
+/* menu.php is Bootstrap-4 markup; these are the only BS4 classes it
+ * uses. Values copied from bootstrap.min.css / bootstrap-extended.min.css. */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-4,
+.pcs-legacy .col-8,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+.pcs-legacy .col-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* spacing helpers used by menu.php (Bootstrap-4 spacing scale) */
+.pcs-legacy .p-0  { padding: 0 !important; }
+.pcs-legacy .pb-0 { padding-bottom: 0 !important; }
+.pcs-legacy .pb-5 { padding-bottom: 3rem !important; }
+.pcs-legacy .pt-1 { padding-top: 0.25rem !important; }
+.pcs-legacy .pr-2 { padding-right: 0.5rem !important; }
+.pcs-legacy .mt-1 { margin-top: 0.25rem !important; }
+.pcs-legacy .mb-0 { margin-bottom: 0 !important; }
+.pcs-legacy .mb-1 { margin-bottom: 0.5rem !important; }
+
+/* display + alignment helpers */
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-white  { color: #fff !important; }
+.pcs-legacy .text-dark   { color: #2f3036 !important; }
+.pcs-legacy .d-flex { display: flex !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .justify-content-center { justify-content: center !important; }
+.pcs-legacy .rounded-circle { border-radius: 50% !important; }
+.pcs-legacy .list-inline { padding-left: 0; list-style: none; margin-bottom: 1rem; }
+.pcs-legacy .list-inline-item { display: inline-block; }
+.pcs-legacy .list-inline-item:not(:last-child) { margin-right: 0.5rem; }
+
+/* Bootstrap-4 media object (used by the wallet card) */
+.pcs-legacy .media { display: flex; align-items: flex-start; }
+.pcs-legacy .media-body { flex: 1; }
+
+/* Bootstrap-4 progress bar (the gold bar under the wallet balance) */
+.pcs-legacy .progress {
+  display: flex;
+  height: 1rem;
+  overflow: hidden;
+  font-size: 0.75rem;
+  background-color: #eceeef;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .progress-sm { height: 0.5rem; }
+.pcs-legacy .progress-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+}
+.pcs-legacy .box-shadow-2 { box-shadow: 0 4px 10px 0 rgba(0, 0, 0, 0.1); }
+
+/* ---- Theme: gradient + typography (assets/css/style.css) ---- */
+/* style.css L83 — the red header band gradient */
+.pcs-legacy .bg-gradient-x-danger {
+  background-image: linear-gradient(to right, #E9091F 0%, #E9091F 100%) !important;
+  background-repeat: repeat-x;
+}
+/* style.css L154 / L304 / L160 — font + colour helpers */
+.pcs-legacy .font-14   { font-size: 14px; }
+.pcs-legacy .font-3rem { font-size: 3rem; }
+.pcs-legacy .text-black-1 { color: #464855; }
+/* style.css L1008 — the Pacred logo on the wallet card */
+.pcs-legacy .logo-wallet { max-width: 60px; }
+/* `warning` is the legacy Bootstrap text colour used on the wallet <h3> */
+.pcs-legacy .warning { color: #FF9149; }
+/* `font-normal` keeps the legacy non-bold label weight */
+.pcs-legacy .font-normal { font-weight: 400; }
+
+/* heading reset so the legacy <h2>/<h3>/<h5> match the theme, not
+ * Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h2 { font-size: 2rem;   font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy menu.php layout depends on images being inline
+ * (centred via text-align on .text-center, icon-above-label stacking).
+ * Restore the legacy/browser-default inline rendering inside the scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* the gold progress bar under the wallet balance
+ * (core/colors/palette-gradient.css L205-207) */
+.pcs-legacy .bg-gradient-x-warning {
+  background-image: linear-gradient(to right, #ff7216 0%, #ffb07c 100%);
+  background-repeat: repeat-x;
+}
+
+/* ---- Sales-rep card (assets/css/custom-2023.css L3-54) ---- */
+/* menu.php renders the sales card INSIDE .card-content, so the
+ * `.card-content .box-sale-main` + `.card-content .box-sale2`
+ * overrides (custom-2023.css L46-54) apply on top of the base rules.
+ * The card is RESPONSIVE across 3 legacy stylesheets — the breakpoint
+ * overrides are reproduced verbatim further down (see @media blocks).
+ * Base = the desktop (>992px) values from custom-2023.css L46-50. */
+.pcs-legacy .box-sale-main {
+  position: relative;
+  margin: 1rem 9rem 0.25rem;   /* .card-content override (L46-50) */
+  height: 120px;
+  top: 120px;
+}
+.pcs-legacy .box-sale-main .col-4 {
+  padding-left: 1.5rem;
+  padding-right: 0;
+  padding-top: 0.25rem;
+}
+.pcs-legacy .box-sale1 {
+  background-color: #E9091F;
+  box-shadow: rgb(0 0 0 / 30%) 4px 3px 13px;
+  border-radius: 1rem;
+  min-height: 80px;
+}
+.pcs-legacy .box-sale2 {
+  background-color: #fff;
+  min-height: 80px;
+  position: relative;
+  border-radius: 1rem;
+  top: -80px;
+  width: 95%;                  /* .card-content override (L52-54) */
+  padding: 0.5rem;
+}
+.pcs-legacy .border-main2 {
+  border: 3px solid #E9091F !important;
+  width: 60px;
+  height: 61px;
+}
+.pcs-legacy .text-sale-crad-top  { font-size: 1.1rem; }
+.pcs-legacy .text-sale-crad-2    { font-size: 1.1rem; color: #E9091F; }
+.pcs-legacy .text-sale-crad-tell { font-size: 1rem; }
+
+/* ---- menu.php inline <style> block (verbatim, lines 10-59) ---- */
+.pcs-legacy .edit-img-profile {
+  position: relative;
+  top: -35px;
+  left: 35px;
+}
+.pcs-legacy .btn-xs {
+  width: 30px;
+  height: 30px;
+  padding: 2px 2px;
+  font-size: 12px;
+}
+.pcs-legacy .col-123 {
+  width: 80%;
+  position: absolute;
+  margin-top: -45px;
+  left: 10%;
+}
+.pcs-legacy .box-wallet {
+  box-shadow: rgb(0 0 0 / 35%) 0px 5px 15px;
+  border-radius: 2rem;
+  background: #fff;
+}
+.pcs-legacy .pcs-icon-menu {
+  padding: 1rem;
+  width: 70px;
+}
+/* Icon cell 9 (logout) is a server-action <form><button> rather than an
+ * <a> like the other 8 cells — strip the default button chrome so it is
+ * visually identical to the anchor cells. menu.php renders all 9 as <a>. */
+.pcs-legacy .pcs-logout-tile {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pcs-legacy .bg-box {
+  border-radius: 0 0 30px 30px;
+  background-image: url(/legacy/pcs/bg.jpg) !important;
+  background-size: cover;
+}
+
+/* the .btn-dark round image-edit button on the avatar */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.pcs-legacy .btn-dark { background-color: #1a1a1a; color: #fff; }
+/* `btn-pure` (theme) — a chromeless transparent button: the two
+ * header-corner icon buttons render as bare icons. */
+.pcs-legacy .btn-pure {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* theme utility classes menu.php uses */
+.pcs-legacy .d-none { display: none !important; }
+.pcs-legacy .border-black { border: 1px solid #000 !important; }
+.pcs-legacy .mb--20 { margin-bottom: -20px; }
+/* The corner-icon text labels carry `d-none d-sm-inline-block d-sm-none`
+ * — a legacy class combo that nets to hidden at every width. The single
+ * `.d-none` rule above already hides them, matching the legacy render. */
+
+/* ===== Responsive breakpoints — verbatim from the 3 legacy
+ * stylesheets. ORDER MATTERS: the legacy header.php loads tablet
+ * (custom-tablet-2023.css) BEFORE mobile (custom-mobile-2023.css),
+ * so at <=576px the mobile rule wins the cascade — reproduced here
+ * by declaring the tablet block first. ===== */
+
+/* custom-tablet-2023.css — @media (max-width: 992px) */
+@media (max-width: 992px) {
+  .pcs-legacy .box-sale-main {
+    top: 120px;
+    height: 120px;
+    margin: 1rem 5.5rem 0.25rem;
+  }
+  .pcs-legacy .box-sale2 { width: 97%; }
+}
+
+/* custom-mobile-2023.css — @media (max-width: 576px) */
+@media (max-width: 576px) {
+  .pcs-legacy .box-sale-main {
+    top: 84px;
+    height: 85px;
+    margin: 1rem 3rem 0.25rem;
+  }
+  .pcs-legacy .box-sale2 { width: 95%; }
+}
+
+/* menu.php inline <style> media query (max-width: 578px, L45-58)
+ * + style.css L1429 mobile font scale-down */
+@media only screen and (max-width: 578px) {
+  .pcs-legacy h2 { font-size: 1.5rem; }
+  .pcs-legacy .font-3rem { font-size: 2rem; }
+}

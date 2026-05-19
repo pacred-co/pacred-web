@@ -1,0 +1,427 @@
+/* =============================================================
+ * address.css — legacy PCS Cargo `member/address.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `address.php` renders with,
+ *   copied verbatim from the legacy stylesheets:
+ *     - the inline <style> block in address.php           (lines 131-144)
+ *     - assets/css/bootstrap.min.css                       (BS4 grid/card/form/btn/table/modal/badge)
+ *     - assets/css/bootstrap-extended.min.css              (card · round · btn-min-width · btn-rounded · btn-circle)
+ *     - assets/css/colors.min.css / components.min.css     (btn-success/-outline-* colours)
+ *     - assets/css/style.css / custom.css                  (.content-body.pr110 · .input-info · .bg-danger2 · .header-from)
+ *     - assets/plugins/datatables/css/dataTables.bootstrap4.css (the DataTable chrome)
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/
+ *   address.css and loaded with a plain <link rel="stylesheet"> from
+ *   page.tsx — it must bypass the app's Tailwind v4 / PostCSS pipeline,
+ *   which rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid (exact bootstrap.min.css values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-6,
+.pcs-legacy .col-8,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-3,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-9,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-6  { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .col-8  { flex: 0 0 66.666667%; max-width: 66.666667%; }
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+
+/* responsive col widths (bootstrap.min.css — min-width: 768px) */
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-3  { flex: 0 0 25%;  max-width: 25%; }
+  .pcs-legacy .col-md-6  { flex: 0 0 50%;  max-width: 50%; }
+  .pcs-legacy .col-md-9  { flex: 0 0 75%;  max-width: 75%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+}
+
+/* ---- Bootstrap-4 card — overridden by bootstrap-extended.min.css ---- */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  /* bootstrap-extended.min.css: card border:none + shadow + radius */
+  border: none;
+  box-shadow: 0 2px 18px 1px rgba(49, 53, 72, .1);
+  border-radius: .45rem;
+  margin-bottom: 1.875rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* ---- spacing + display helpers (Bootstrap-4 spacing scale) ---- */
+.pcs-legacy .p-05 { padding: .5rem !important; }
+.pcs-legacy .p-1  { padding: 1rem !important; }
+.pcs-legacy .mb-1 { margin-bottom: .5rem !important; }
+.pcs-legacy .mt-2 { margin-top: 1.5rem !important; }
+.pcs-legacy .ml--10 { margin-left: -10px; }
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-md-left { text-align: left !important; }
+.pcs-legacy .text-md-right { text-align: right !important; }
+.pcs-legacy .float-md-right { float: right !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .d-none { display: none !important; }
+.pcs-legacy .text-danger { color: #ff4961 !important; }
+.pcs-legacy .text-dark { color: #2f3036 !important; }
+.pcs-legacy .text-white { color: #fff !important; }
+
+@media (max-width: 767px) {
+  .pcs-legacy .text-md-left,
+  .pcs-legacy .text-md-right { text-align: center !important; }
+  .pcs-legacy .float-md-right { float: none !important; }
+}
+
+/* ---- content layout wrappers ---- */
+/* custom.css L113 — the screen's .content-body carries `pr110` */
+.pcs-legacy .content-body.pr110 {
+  padding-right: 100px;
+}
+
+/* ---- typography ---- */
+/* heading reset so the legacy <h3>/<h4>/<h5> match the theme, not
+ * Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. Restore the legacy/browser-default inline rendering. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* ---- Bootstrap-4 table + striped/bordered (exact bootstrap.min.css) ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #6b6f82;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  padding: .75rem 2rem;
+  vertical-align: top;
+  border-top: 1px solid #e3ebf3;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #e3ebf3;
+}
+.pcs-legacy .table-bordered {
+  border: 1px solid #e3ebf3;
+}
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td {
+  border: 1px solid #e3ebf3;
+}
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, .03);
+}
+.pcs-legacy .table.display { width: 100% !important; }
+.pcs-legacy .no-wrap { white-space: nowrap; }
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- DataTables bootstrap4 chrome (dataTables.bootstrap4.css) ----
+ * The legacy screen runs jQuery DataTables on #myTable; without the
+ * plugin the table renders as a plain Bootstrap-4 table — the chrome
+ * rules below keep the static markup visually faithful. */
+.pcs-legacy table.dataTable {
+  clear: both;
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+  max-width: none !important;
+  border-collapse: separate !important;
+}
+.pcs-legacy table.dataTable.no-footer {
+  border-bottom: 1px solid #e3ebf3;
+}
+.pcs-legacy table.dataTable th,
+.pcs-legacy table.dataTable td {
+  box-sizing: content-box;
+}
+
+/* ---- Bootstrap-4 form controls (exact bootstrap.min.css values) ---- */
+.pcs-legacy .form-group { margin-bottom: 1rem; }
+.pcs-legacy .form-control-label {
+  display: inline-block;
+  margin-bottom: .5rem;
+}
+.pcs-legacy .form-control {
+  display: block;
+  width: 100%;
+  /* address.php inline <style> L132-134 override */
+  height: calc(1em + 1.25rem + 2px);
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #4e5154;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #babfc7;
+  border-radius: .25rem;
+  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+.pcs-legacy .form-control:focus {
+  color: #4e5154;
+  background-color: #fff;
+  border-color: #1e9ff2;
+  outline: 0;
+  box-shadow: none;
+}
+.pcs-legacy .form-control::placeholder { color: #babfc7; opacity: 1; }
+/* style.css L218 — the large input variant the edit modal uses */
+.pcs-legacy .form-control-lg {
+  height: calc(1.5rem + 1.5rem + 2px);
+  padding: 1rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .35rem;
+}
+.pcs-legacy textarea.form-control { height: auto; }
+/* style.css — the small grey caption under an input */
+.pcs-legacy .input-info {
+  font-size: .8rem;
+  color: #6b6f82;
+  margin-top: .25rem;
+}
+
+/* ---- Bootstrap-4 buttons (exact bootstrap.min.css values) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  color: #6b6f82;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .25rem;
+  cursor: pointer;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out;
+}
+.pcs-legacy .btn:hover { color: #6b6f82; text-decoration: none; }
+.pcs-legacy .btn:focus { outline: 0; box-shadow: none; }
+.pcs-legacy .btn:disabled { opacity: .65; }
+.pcs-legacy .btn-sm {
+  padding: .5rem .75rem;
+  font-size: .8rem;
+  line-height: 1.5;
+  border-radius: .25rem;
+}
+/* colours.min.css / components.min.css — solid + outline variants */
+.pcs-legacy .btn-success {
+  color: #fff;
+  background-color: #28d094;
+  border-color: #28d094;
+}
+.pcs-legacy .btn-success:hover {
+  background-color: #24b886;
+  border-color: #22ae7f;
+}
+.pcs-legacy .btn-outline-danger { color: #ff4961; border-color: #ff4961; }
+.pcs-legacy .btn-outline-danger:hover {
+  color: #fff;
+  background-color: #ff4961;
+  border-color: #ff4961;
+}
+.pcs-legacy .btn-outline-warning { color: #ff9149; border-color: #ff9149; }
+.pcs-legacy .btn-outline-warning:hover {
+  color: #fff;
+  background-color: #ff9149;
+  border-color: #ff9149;
+}
+.pcs-legacy .btn-outline-info { color: #1e9ff2; border-color: #1e9ff2; }
+.pcs-legacy .btn-outline-info:hover {
+  color: #fff;
+  background-color: #1e9ff2;
+  border-color: #1e9ff2;
+}
+.pcs-legacy .btn-outline-secondary { color: #6b6f82; border-color: #6b6f82; }
+.pcs-legacy .btn-outline-secondary:hover {
+  color: #fff;
+  background-color: #6b6f82;
+  border-color: #6b6f82;
+}
+/* bootstrap-extended.min.css — rounded / circle / min-width / waves */
+.pcs-legacy .round { border-radius: 1.5rem; }
+.pcs-legacy .btn-rounded { border-radius: 10rem; }
+.pcs-legacy .btn-circle {
+  border-radius: 50%;
+  padding: .5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.pcs-legacy .btn-min-width { min-width: 8.5rem; }
+.pcs-legacy .waves-effect { position: relative; overflow: hidden; }
+
+/* ---- Bootstrap-4 modal (the add/edit address modals) ---- */
+.pcs-legacy .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: 0;
+}
+/* .modal.fade with no `.show`/`.in`-driven JS stays hidden — faithful
+ * to the legacy default state (the jQuery `.modal('show')` opens it). */
+.pcs-legacy .modal.fade:not(.show) { display: none; }
+.pcs-legacy .modal-dialog {
+  position: relative;
+  width: auto;
+  margin: .5rem;
+  pointer-events: none;
+}
+@media (min-width: 576px) {
+  .pcs-legacy .modal-dialog {
+    max-width: 500px;
+    margin: 1.75rem auto;
+  }
+}
+.pcs-legacy .modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid rgba(0, 0, 0, .2);
+  border-radius: .3rem;
+  outline: 0;
+}
+.pcs-legacy .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #626e82;
+  border-top-left-radius: .3rem;
+  border-top-right-radius: .3rem;
+}
+.pcs-legacy .modal-title {
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+.pcs-legacy .modal-body {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+.pcs-legacy .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem;
+  border-top: 1px solid #626e82;
+  border-bottom-right-radius: .3rem;
+  border-bottom-left-radius: .3rem;
+}
+.pcs-legacy .modal-footer > * { margin: .25rem; }
+.pcs-legacy .modal .close {
+  float: right;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  opacity: .5;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+/* style.css — the legacy form modal header tint */
+.pcs-legacy .header-from { background-color: #fff; }
+
+/* ---- Bootstrap-4 badge (the cart-count pill etc.) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: .25em .4em;
+  font-size: 75%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: .25rem;
+}
+
+/* ---- style.css — the red info banner above the map ---- */
+.pcs-legacy .bg-danger2 {
+  background-color: #e2856341;
+  border-radius: .35rem;
+}
+
+/* ---- Google Maps container (address.php #map .gmaps) ---- */
+.pcs-legacy .gmaps {
+  width: 100%;
+  height: 350px;
+}
+
+/* ---- address.php inline <style> block (verbatim, lines 131-144) ---- */
+.pcs-legacy .custom-map-control-button {
+  padding: 0.85rem;
+  margin: 0.25rem;
+  background-color: #e2856341;
+  font-size: 1.2rem;
+  cursor: pointer;
+  font-weight: 500 !important;
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+}
+
+/* ---- responsive: custom.css drops the right padding on tablet/mobile ---- */
+@media only screen and (max-width: 768px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
