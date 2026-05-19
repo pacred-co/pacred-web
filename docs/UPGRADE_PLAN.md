@@ -1,87 +1,130 @@
-# 🚀 Pacred Roadmap — D1 phase plan (faithful PCS port)
+# 🚀 Pacred Roadmap — the D1 master phase plan (faithful PCS port)
 
-> **The single canonical forward plan** — phases, stages, and who-owns-what for
-> `pacred-web` under **D1**. Updated each save-point.
+> **The single canonical forward plan** — current state, stages, and
+> who-owns-what for `pacred-web` under **D1**. The doc CLAUDE.md / AGENTS.md /
+> the role briefs point at as "the D1 phase plan." Updated each save-point.
 >
-> **D1 (2026-05-18)** — the owner reviewed the rebuilt-from-scratch Pacred app and
-> **rejected it**: UI *and* logic-loop look nothing like the legacy **PCS Cargo**
-> system the business runs on. The decision: **Pacred *becomes* the legacy PCS
-> Cargo system, faithfully — rebranded `PCS` → `PR`.** A faithful port, not a
-> reinterpretation. Canonical source of truth: [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md).
+> **D1 (2026-05-18)** — the owner reviewed the rebuilt-from-scratch Pacred app
+> and **rejected it**: UI *and* logic-loop look nothing like the legacy **PCS
+> Cargo** system the business runs on. The decision: **Pacred *becomes* the
+> legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** A faithful
+> port, not a reinterpretation. Canonical decision SOT:
+> [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md).
 >
-> **This doc owns the SEQUENCE.** Per-phase detail lives in the runbook / gap-map
-> docs (linked per item) — this plan does not duplicate them. Master single-read:
-> [`STRATEGY.md`](STRATEGY.md).
+> **⚠️ Owner mandate (2026-05-19, verbatim):** *"ต้องเอาของเดิมมา copy ให้ได้
+> ให้เหมือนทั้งหมด 100% ก่อน แล้วเราค่อยพัฒนาให้เหนือยิ่งกว่า"* — copy the
+> original to **100% sameness FIRST**, then improve. The owner scolded the team
+> on 2026-05-19 for screens still diverging from legacy PCS. Faithful first;
+> improvements are Phase C. Every Phase-B port runs through the
+> [`legacy-fidelity-check`](../.claude/skills/legacy-fidelity-check/SKILL.md) skill.
 >
 > **Scope = V2 `pacred-web`.** V3 is a separate repo (`pacred-DPX`,
-> [ADR-0010](decisions/0010-v2-v3-version-strategy.md)) — unaffected by D1, out of
-> scope here; append V3 ideas to `v3-wishlist.md`.
+> [ADR-0010](decisions/0010-v2-v3-version-strategy.md)) — unaffected by D1, out
+> of scope here; append V3 ideas to `v3-wishlist.md`. Master single-read:
+> [`STRATEGY.md`](STRATEGY.md).
 
 ---
 
-## What changed — this plan supersedes the pre-D1 roadmap
+## 0. Master plan at a glance — current state (2026-05-19 night)
 
-The previous `UPGRADE_PLAN.md` was the **pre-D1 roadmap**: Phase 0 foundation →
-Phase 1 release → Phase 2 the six owner systems → Phase 3 future, built around
-the Tier 0/1/2/3 capability synthesis. **D1 supersedes that whole framing.**
+**DIRECTION** — Pacred = a faithful port of legacy PCS Cargo. Owner rule: copy
+the original to 100% sameness FIRST, then improve.
 
-- The rebuilt-from-scratch app is not the deliverable. The deliverable is a
-  **faithful port of PCS Cargo**, rebranded `PCS` → `PR`.
-- The Tier 0/1/2/3 capability work and the six Phase-2 systems are **not
-  cancelled** — they are **deferred to Phase C**, re-sequenced *after* the
-  faithful port works. See [Phase C](#phase-c--pacred-enhancements-deferred).
-- In-flight pre-D1 feature work (e.g. BK-1 booking flow, freight V-E1.1)
-  **pauses**; the team pivots to Phase B.
-- [ADR-0010](decisions/0010-v2-v3-version-strategy.md): "V2 = rebuilt
-  owner-pleaser" is superseded — **V2 is now "faithful PCS port"**.
+**STATE:**
+- **Phase A — data migration** — the legacy `pcsc_main` (117 tables ·
+  ~8,898 customers) **business data is LOADED to dev + prod Supabase**.
+  Migrations `0081`-`0083` + `0087` on `dave`. Remaining = 3 oversized log
+  tables (779 MB) + customer image files — backfill **after** the Supabase Pro
+  upgrade (imminent — แต้ม's image data received).
+- **Phase B — workflow fidelity** — **WAVE 1 done + integrated** on `dave`:
+  customer 9-icon launchpad · customer order flow · admin per-role RBAC
+  sidebar + badges · admin container `tb_cnt` payment ledger · the legacy-auth
+  bridge. Wave 1 is **first-pass — not yet fidelity-verified.**
+- **Phase C — Pacred enhancements** — the Tier 0/1/2/3 roadmap · ads/marketing ·
+  the 8-specialist R&D stream — **deferred** (see the appendix, §6).
+
+**STAGES** — `A-final` → `B-0` → `B-waves` → `C`. Detail in §2–§4 below.
+
+**WORK LANES** (priority order: เดฟ + ก๊อต first, then ปอน + ภูม):
+- **เดฟ** — integrator + Phase-A driver + Phase-B integration + the
+  `dave→main` deploy gate.
+- **ก๊อต** — production gate + the Supabase Pro purchase + the แต้ม
+  handover + the JMF API (Phase C) + production watch.
+- **ปอน** — Phase-B **frontend** — the customer screens.
+- **ภูม** — Phase-B **backend** — admin + customer-portal backend onto `tb_*`.
+
+Full who-owns-what in §5.
 
 ---
 
-## How to read this
+## 1. How to read this
 
-- **Phase** = a band of work. **Stage** = a shippable increment inside a phase.
+- **Phase** = a band of work (A / B / C). **Stage** = a shippable increment
+  inside a phase (`A-final`, `B-0`, a B-wave, …).
 - A stage is DONE only when verified: `pnpm verify` + a production build smoke
   + a [`qa-flow-simulator`](../.claude/skills/qa-flow-simulator/SKILL.md)
-  functional pass (see [AGENTS.md §11](../AGENTS.md)).
+  functional pass (see [AGENTS.md §11](../AGENTS.md)). A Phase-B stage **also**
+  passes the [`legacy-fidelity-check`](../.claude/skills/legacy-fidelity-check/SKILL.md)
+  skill — the executable form of the owner's "copy 100% first" mandate.
 - **Mobile-first is cross-cutting** — every customer-visible stage is built +
   checked at a phone viewport. See [`conventions.md` §11](conventions.md) +
   [`mobile-first-playbook.md`](mobile-first-playbook.md). It is not a phase; it
   applies to all of them.
-- **The three D1 phases run in order: A → B → C.** Phase A is nearly done;
-  Phase B is the bulk of forward work; Phase C is deferred.
+- **The three D1 phases run in order: A → B → C.** Phase A is one stage from
+  done; Phase B is the bulk of forward work; Phase C is deferred.
+
+### What this plan supersedes
+
+The previous `UPGRADE_PLAN.md` was the **pre-D1 roadmap**: Phase 0 foundation →
+Phase 1 release → Phase 2 the six owner systems → Phase 3 future, built around
+the Tier 0/1/2/3 capability synthesis. **D1 supersedes that whole framing** —
+that content is preserved as the clearly-labelled **deferred Phase-C appendix
+(§6)**. The deliverable is now a **faithful port of PCS Cargo**, rebranded
+`PCS` → `PR`. [ADR-0010](decisions/0010-v2-v3-version-strategy.md)'s "V2 =
+rebuilt owner-pleaser" is superseded — **V2 is now "faithful PCS port"**.
 
 ---
 
-## Phase A — 🗄 DATA MIGRATION (legacy `pcsc_main` → Pacred Postgres)
+## 2. Phase A — 🗄 DATA MIGRATION  ·  stage `A-final`
 
 Port the entire legacy MySQL database `pcsc_main` — **117 tables, ~3.78M rows,
 ~8,898 customers** — into Pacred's PostgreSQL / Supabase. `PCS<n>` → `PR<n>`,
-keeping the exact running number. Custom auth so migrated customers sign in with
-their **existing password — no reset**.
+keeping the exact running number. Custom auth so migrated customers sign in
+with their **existing password — no reset**.
 
 > **Runbook (canonical):** [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md)
 > — full approach, artifacts inventory, the production-load procedure, and the
 > open/pending items. This plan tracks the *sequence*; the runbook holds the
 > *how*.
 
-| Stage | What | Status | Owner |
+**Done** — the pipeline (MySQL → pgloader → PostgreSQL → `PCS`→`PR` rebrand →
+migrations) is built and validated; the schema is committed (`0081` 117 tables
++ RLS · `0082` indexes · `0083` `next_pr_member_code()`); the auth bridge
+(`lib/auth/pcs-legacy-password.ts`) is verified against real hashes; and on
+**2026-05-19 the business data was loaded to BOTH the dev and prod Supabase
+projects** — **114 of 117 tables reconcile MySQL ↔ Supabase exactly**
+(~8,898 customers · orders · wallets · ตู้ · forwarders · receipts · the
+79-char `tb_users.userpass` login hashes), prod DB 252 MB. Migrations
+`0081`-`0083` + `0087` are on `dave`.
+
+**Stage `A-final` — the one remaining stage:**
+
+| Item | What | Status | Owner |
 |---|---|---|---|
-| **A-1 Schema port** | 117 tables MySQL → PostgreSQL — faithful (legacy names / types / even typos kept); `tb_` prefix so no collision with Pacred's own tables. | ✅ **done** | เดฟ |
-| **A-2 Converter** | `PCS` → `PR` rebrand on member-code columns (`userID`, `userIDMain`) only; 3,780,238 rows → COPY format; 2,288,128 `PCS→PR` transforms; zero-dates → NULL; NUL bytes stripped; encoding handled. | ✅ **done** | เดฟ |
-| **A-3 Dry-run validated** | Loaded into a throwaway PostgreSQL 17.10 — all 117 tables load clean; every table's row count reconciles MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches). Auth bridge (`lib/auth/pcs-legacy-password.ts`) verified against 7 real hashes + 5 vectors. New-customer member-code gap-fill SQL written. | ✅ **done** | เดฟ |
-| **A-4 Customer-file migration** | Migrate the legacy customer upload folders (`images/users`, `images/shops`, `storage/file`, `storage/slip`) into Supabase Storage. | 🔴 **pending** — the files live on the legacy production server, held by **แต้ม**; requested via the hand-over list. Blocked until แต้ม provides them. | เดฟ + แต้ม |
-| **A-5 Production load** | Fresh final `pcsc_main` dump from แต้ม at cutover → reconvert → apply the 117-table schema as migrations `0081`/`0082`/`0083` (schema · indexes · member-seq) → load each COPY file via `psql` → apply the member-code generator → reconcile prod row counts ↔ source MySQL across all 117 tables. | 🔴 **pending** — gated on **เดฟ's go** + a final fresh dump. | เดฟ · gate by ก๊อต |
+| **Supabase Pro upgrade** | Free tier caps a DB at 500 MB; the full legacy data is 1.02 GB. Upgrade to Pro to fit it. | 🟡 imminent — the purchase | ก๊อต |
+| **3 log tables backfill** | `tb_web_hs` (657 MB) · `tb_history_key` (62 MB) · `tb_history` (59 MB), 779 MB — currently created **empty**. Backfill to full fidelity post-Pro. | 🟡 pending the Pro upgrade | เดฟ |
+| **Customer image/file backfill** | The legacy upload folders (`images/users`, `images/shops`, `storage/file`, `storage/slip`) → Supabase Storage. แต้ม's image data is **received**; load it post-Pro. | 🟡 pending the Pro upgrade | เดฟ + ก๊อต |
+| **Reconcile 117/117** | After the backfill, prod row counts ↔ source MySQL must match **all 117 tables** — declare Phase A done. | 🔴 after the above | เดฟ · gate ก๊อต |
 
-**Phase-A open decisions** (carried in the runbook §7 — need เดฟ):
-- **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM` (PCS +
-  letters) and `PW` / `JET` / `FCL` / `AIGA` (no PCS prefix). Carried as-is.
-  Decide: rewrite the `PCS<letters>` ones to `PR<letters>`?
-- **New-customer numbering** — the lowest vacant numbers are `PR1`–`PR5`, so the
-  fill-vacant rule gives the next signups `PR1`, `PR2`, … Confirm intended.
+**Phase-A open decisions — ✅ all DECIDED** (runbook §7): the 8 special
+userIDs (`PCS<letters>` rewritten to `PR<letters>`; `PW`/`JET`/`FCL`/`AIGA`
+verbatim) and new-customer numbering (lowest-vacant — first signups land
+`PR1`-`PR5`).
 
-**Phase-A exit criteria:** A-4 + A-5 complete · prod row counts reconcile all
-117 tables · migrated customers can sign in with their legacy password · the
-`tb_*` schema coexists cleanly with Pacred's existing tables (nothing dropped).
+**Phase-A exit criteria:** the Pro upgrade done · the 3 log tables + customer
+images backfilled · prod row counts reconcile **all 117 tables** · migrated
+customers can sign in with their legacy password · the `tb_*` schema coexists
+cleanly with Pacred's existing tables (nothing dropped).
 
 > The pre-D1 PCS-customer-migration scaffolding — migration
 > `0067_pcs_customer_migration.sql`, the `u2-1-pcs-customer-migration.md`
@@ -91,17 +134,16 @@ their **existing password — no reset**.
 
 ---
 
-## Phase B — 🎯 WORKFLOW FIDELITY (the bulk of forward work)
+## 3. Phase B — 🎯 WORKFLOW FIDELITY (the bulk of forward work)
 
 Rework the Pacred app — **customer portal + admin back-office** — so its menus,
-job statuses, container (ตู้) flow, and end-to-end logic-loop **match the legacy
-PCS Cargo system exactly**. The goal is the D1 promise: staff and customers
-(~8,898 of them, plus every operating role — warehouse, scanners,
+job statuses, container (ตู้) flow, and end-to-end logic-loop **match the
+legacy PCS Cargo system exactly**. The goal is the D1 promise: staff and
+customers (~8,898 of them, plus every operating role — warehouse, scanners,
 receiving/shipping, accounting, audit) need **zero retraining**.
 
-This is the **bulk of forward work** under D1. It is the phase that makes the
-faithful port real — Phase A moves the data, Phase B makes the app behave like
-the system everyone already knows.
+This is the **bulk of forward work** under D1. Phase A moves the data; Phase B
+makes the app behave like the system everyone already knows.
 
 ### Scope (what "match exactly" covers)
 
@@ -115,53 +157,55 @@ the system everyone already knows.
 - **End-to-end logic-loop** — the full quote → order → pay → ship → bill →
   close cycle behaves the way the legacy system behaves at every step.
 
-### Stage breakdown (gap-map-driven)
+### Stage `B-0` — wave 1: DONE + integrated
 
-Derived from the legacy-vs-Pacred workflow gap map —
-[`research/d1-phase-b-gap-map.md`](research/d1-phase-b-gap-map.md), the
-**canonical Phase-B input** (the pre-D1 hunts `gap-customer.md` /
-`gap-admin.md` / `gap-revenue-flow.md` + the `legacy-chat-*` decode docs are
-supporting evidence — re-read as *fidelity gaps to close*, not enhancements).
-Stages are shippable increments; the customer track (B-1..B-3) and the admin
-track (B-4..B-9) can run in parallel once B-0 lands.
+Phase B opened with **wave 1**, now done and integrated on `dave` (2026-05-19):
 
-| Stage | What | Gap | Owner |
+- Customer **9-icon launchpad** home (`components/sections/pcs-*`).
+- Customer **order flow** reworked toward the legacy logic-loop.
+- Admin **per-role RBAC sidebar + live-count badges** (`lib/admin/sidebar-menu.ts`).
+- Admin **container `tb_cnt` payment ledger** (`actions/admin/pcs-container-payments.ts`).
+- The **legacy-auth bridge** (`lib/auth/pcs-legacy-bridge.ts`) — migrated PCS
+  customers sign in with their existing password.
+
+> ⚠️ **Wave 1 is FIRST-PASS — not yet fidelity-verified.** Before it can be
+> called done it must pass the **`legacy-fidelity-check`** skill against the
+> legacy originals (the owner's "copy 100% first" gate). Re-verifying wave 1 is
+> part of the `B-waves` work below.
+
+### Stage `B-waves` — the remaining rework
+
+Derived from the legacy-vs-Pacred fidelity gap maps —
+[`research/d1-fidelity-customer.md`](research/d1-fidelity-customer.md) ·
+[`research/d1-fidelity-admin.md`](research/d1-fidelity-admin.md) ·
+[`research/d1-fidelity-workflow.md`](research/d1-fidelity-workflow.md)
+(overview: [`research/d1-phase-b-gap-map.md`](research/d1-phase-b-gap-map.md)) —
+the **canonical Phase-B input**. The earlier pre-D1 hunts (`gap-customer.md` /
+`gap-admin.md` / `gap-revenue-flow.md` + the legacy decode docs) are supporting
+evidence, re-read as *fidelity gaps to close*, not enhancements.
+
+The customer track and the admin track run **in parallel**:
+
+| Track / stage | What | Gap | Owner |
 |---|---|---|---|
-| **B-0 Data foundation** | The app's data layer (`lib/supabase/*`, server actions, queries) re-pointed at the ported `tb_*` 117-table schema. Prerequisite for every B-stage backend. *Needs the `tb_*` schema in a reachable dev Supabase — coordinate with Phase A.* | — | ภูม + เดฟ |
-| **B-auth Legacy login** | Wire `verifyLegacyPassword` into a "เชื่อมต่อบัญชี PCS CARGO" login — migrated customers sign in with their existing PCS password, no reset. | §4 | ภูม |
-| **B-1 Customer home** | Restore the 9-icon launchpad home (ref `member/menu.php`) — wallet card + sales-rep card + the icon grid; retire the nested sidebar as the landing surface. | §1 | ปอน + ภูม |
-| **B-2 Customer status model** | Reconcile the three divergent status vocabularies onto the legacy set; restore the tab-per-status order / forwarder list views. | §2·§4 | ภูม + ปอน |
-| **B-3 Customer service flows** | shop-order · forwarder-import · payment · wallet flows reworked to the legacy logic-loop. | §4 | ภูม + ปอน |
-| **B-4 Admin RBAC menu** | Per-role hand-built admin sidebars + live-count badges — replace the flat 7-role array. | §1 | ภูม |
-| **B-5 Forwarder status workflow** | Restore the legacy ship→arrive→**then**-pay forwarder status order + the truck load/unload sub-states. | §2 | ภูม |
-| **B-6 Container payment ledger** | Rebuild the `tb_cnt` per-container payment-slip ledger (slip image · paid/unpaid badge · the `tb_cnt_pay_*` fan-out). | §3 | ภูม |
-| **B-7 Warehouse + scanner** | Barcode scan-to-auto-status-flip · shelf-location capture · green/orange + audio feedback · the 8-variant scan family. | §4 | ภูม |
-| **B-8 Accounting** | รวมบิล multi-order bill consolidation · the container-payment screen · รับรู้รายได้ income recognition. | §4 | ภูม |
-| **B-9 QA + missing modules** | The `tb_check_forwarder` QA-check queue · note queues · Learning centre · Extension tools · member segmentation. | §4·§6 | ภูม |
+| **B-waves customer** | Remaining customer screens — login · register · payment · wallet · address · account · shipment — reworked to the legacy PCS look + logic-loop; the three divergent status vocabularies reconciled onto the legacy set; the tab-per-status order list restored. | §1·§2·§4 | ปอน (frontend) + ภูม (backend) |
+| **B-waves admin** | Forwarder status workflow restored (ship→arrive→**then**-pay + truck load/unload sub-states); the `tb_cnt` ledger fan-out (`tb_cnt_pay_*`); warehouse + the 8-variant barcode-scan family; accounting (รวมบิล bill consolidation · container-payment screen · รับรู้รายได้); the `tb_check_forwarder` QA queue · note queues · Learning centre · Extension tools · member segmentation. | §1·§2·§3·§4·§6 | ภูม (backend) |
+| **B-0 data foundation** | The app's data layer (`lib/supabase/*`, server actions, queries) re-pointed at the ported `tb_*` 117-table schema. Prerequisite for every B-stage backend; the `tb_*` schema is now in dev + prod (Phase A) so this is unblocked. | — | ภูม + เดฟ |
 
-**Sequencing:** B-0 first (foundation), B-auth early. Then the customer track
-(B-1→B-2→B-3, ปอน-led) and the admin track (B-4→…→B-9, ภูม-led) run in
-parallel. A stage is done only when its gap-map item no longer diverges.
+**Sequencing:** the customer track (ปอน-led) and the admin track (ภูม-led) run
+in parallel on the `tb_*` foundation. A stage is done only when its
+fidelity-gap item no longer diverges **and** it passes `legacy-fidelity-check`.
 
-> **Phase-B open questions — ✅ answered 2026-05-18.** ภูม's 6 blocking
-> questions (migration split · auth-bridge pattern · special-userID + numbering
-> rules · Phase-C apply order · `userType`) are resolved —
+> **Phase-B open questions — ✅ answered.** ภูม's 6 blocking questions
+> (migration split · auth-bridge pattern · special-userID + numbering rules ·
+> Phase-C apply order · `userType`) are resolved —
 > [`research/poom-d1-open-questions.md`](research/poom-d1-open-questions.md).
-> B-0 + B-auth are unblocked; Q2 (auth posture) carries เดฟ's lean pending
-> ก๊อต ratification.
-
-**Phase-B owners** (per [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)
-work-split — see the [work-split table](#work-split--who-owns-what-under-d1)):
-- **ภูม** — Phase B *backend*: rework the admin + customer-portal backend onto
-  the ported `tb_*` schema + the legacy workflow.
-- **ปอน** — Phase B *frontend*: rework the customer-facing UI to match the
-  legacy PCS look + flow.
-- **เดฟ** — coordinates Phase B; integrates; carries Phase A to production.
 
 **Phase-B exit criteria:** the customer portal + admin back-office menus,
 statuses, container flow, and logic-loop match the legacy PCS system — verified
-by walking the legacy-vs-Pacred gap map to zero remaining divergences, plus a
-`qa-flow-simulator` pass on the end-to-end cargo loop.
+by walking the fidelity gap maps to zero remaining divergences, every screen
+passing `legacy-fidelity-check`, plus a `qa-flow-simulator` pass on the
+end-to-end cargo loop.
 
 > **Identity guardrail still holds.** The legacy PCS/TTP operation leaned on
 > gray-channel practice (no-document "เหมาภาษี", HS-code / declared-value
@@ -174,19 +218,75 @@ by walking the legacy-vs-Pacred gap map to zero remaining divergences, plus a
 
 ---
 
-## Phase C — 🔭 PACRED ENHANCEMENTS (deferred)
+## 4. Phase C — 🔭 PACRED ENHANCEMENTS  ·  stage `C` (deferred)
 
-**Only after the faithful port works** (Phase A loaded + Phase B fidelity
-verified) does Pacred layer its own improvements on top. Everything below is
-**deferred, not cancelled** — it is re-sequenced *after* the faithful port per
-[ADR-0017](decisions/0017-pacred-faithful-pcs-port.md).
+**Only after the faithful port works** (Phase A reconciled 117/117 + Phase B
+fidelity verified) does Pacred layer its own improvements on top. Stage `C` is
+**deferred, not cancelled** — re-sequenced *after* the faithful port per
+[ADR-0017](decisions/0017-pacred-faithful-pcs-port.md). The full scope is the
+**deferred Phase-C appendix (§6)**.
+
+A genuine improvement idea spotted during Phase B → **record it for Phase C**;
+never ship it inside a port diff (it hides divergence inside a good-looking
+change). The 8-specialist R&D stream's output —
+[`research/r-and-d-2026-05-19/`](research/r-and-d-2026-05-19/_synthesis.md) — is
+the Phase-C idea bank.
+
+---
+
+## 5. Work-split — who owns what under D1
+
+Per [ADR-0017 §Work-split](decisions/0017-pacred-faithful-pcs-port.md) + the
+master plan. Priority order: **เดฟ + ก๊อต first, then ปอน + ภูม.** All four
+roles re-task under D1 — see the updated briefs in [`docs/briefs/`](briefs/).
+
+| Role | D1 work lane |
+|---|---|
+| **เดฟ** | Integrator + **Phase-A driver** (drive `A-final` to 117/117) + **Phase-B integration** (consolidate ปอน + ภูม work into `dave`, verify, distribute) + the **`dave→main` deploy gate**. |
+| **ก๊อต** | **Production gate** + the **Supabase Pro purchase** + the **แต้ม handover** + the **JMF API** (Phase C) + production watch. |
+| **ปอน** | **Phase-B frontend** — rework the customer-facing screens to match the legacy PCS look + flow. |
+| **ภูม** | **Phase-B backend** — rework the admin + customer-portal backend onto the ported `tb_*` schema + the legacy PCS workflow. |
+
+---
+
+## 6. Cross-cutting — applies to every phase
+
+- **Mobile-first** — Pacred's customers arrive mostly on phones. Every
+  customer-visible change is designed + verified at a phone viewport
+  (360 / 390px) FIRST, then scaled up. [`conventions.md` §11](conventions.md) ·
+  [`mobile-first-playbook.md`](mobile-first-playbook.md) · the
+  `mobile-first-verify` skill. The faithful port is no exception — match the
+  legacy *workflow*, but render it mobile-clean.
+- **Quality gate** — no stage ships without `pnpm verify` + a production build
+  smoke + a `qa-flow-simulator` functional pass ([AGENTS.md §11](../AGENTS.md));
+  a Phase-B stage also passes `legacy-fidelity-check`. D1 plans work properly —
+  don't ship half-built to chase a deadline.
+- **Save-point pushes** — commit freely; push at save-points only
+  ([`team.md` §3.0](team.md)).
+- **Pacred-identity guardrail** — port the legacy *operational* loop, never the
+  legacy *compliance shortcuts*. Every money / tax / declaration / customs
+  surface builds the legitimate, document-complete, fully-audited path only.
+  Full statement: [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) §5.5.
+- **Don't preempt brand cleanup** — references to PCS / TTP / ไอแต้ม survive in
+  code because some APIs are still "borrowed" interim; do not scrub them until
+  ก๊อต confirms the matching API switchover ([`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md)).
+  Note D1 changes member codes `PCS<n>` → `PR<n>` in *migrated data* — that is
+  the migration, not the scrub.
+
+---
+
+## 7. Deferred Phase-C appendix — the Tier roadmap + the six systems
+
+> **Everything below is deferred — stage `C`.** It is the pre-D1 roadmap,
+> preserved for Phase-C scope. **Not the current "what's next"** — the current
+> plan is §2–§3 (Phase A `A-final` → Phase B `B-waves`).
 
 ### C.1 — The Tier 0/1/2/3 capability roadmap (deferred)
 
 The pre-D1 capability synthesis
 ([`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md)).
-Note: parts of Tier 0/1/2 were *built* on the rebuilt app pre-D1 — under D1 they
-are revisited *after* Phase B, re-fitted onto the faithful-port app.
+Parts of Tier 0/1/2 were *built* on the rebuilt app pre-D1 — under D1 they are
+revisited *after* Phase B, re-fitted onto the faithful-port app.
 
 - **Tier 0 — lead funnel & conversion visibility** — `ContactForm` on `/contact`;
   the monitoring dashboard go-live (analytics env vars · Google Search Console +
@@ -233,63 +333,28 @@ the faithful port.
 
 ---
 
-## Work-split — who owns what under D1
-
-Per [ADR-0017 §Work-split](decisions/0017-pacred-faithful-pcs-port.md). All four
-roles re-task under D1 — see the updated briefs in [`docs/briefs/`](briefs/).
-
-| Role | D1 work |
-|---|---|
-| **เดฟ** | **Phase A** — drive the data migration to production (A-4 file migration + A-5 prod load) · integrate · **coordinate Phase B** (own the gap-map-driven stage breakdown). |
-| **ภูม** | **Phase B backend** — rework the admin + customer-portal backend onto the ported `tb_*` schema + the legacy PCS workflow. |
-| **ปอน** | **Phase B frontend** — rework the customer-facing UI to match the legacy PCS look + flow. |
-| **ก๊อต** | **Ratify [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)** · clear the JMF API spec with แต้ม · the **production-load gate** (A-5). |
-
----
-
-## Cross-cutting — applies to every phase
-
-- **Mobile-first** — Pacred's customers arrive mostly on phones. Every
-  customer-visible change is designed + verified at a phone viewport
-  (360 / 390px) FIRST, then scaled up. [`conventions.md` §11](conventions.md) ·
-  [`mobile-first-playbook.md`](mobile-first-playbook.md) · the
-  `mobile-first-verify` skill. The faithful port is no exception — match the
-  legacy *workflow*, but render it mobile-clean.
-- **Quality gate** — no stage ships without `pnpm verify` + a production build
-  smoke + a `qa-flow-simulator` functional pass. [AGENTS.md §11](../AGENTS.md).
-  D1 plans work properly — don't ship half-built to chase a deadline.
-- **Save-point pushes** — commit freely; push at save-points only
-  ([`team.md` §3.0](team.md)).
-- **Pacred-identity guardrail** — port the legacy *operational* loop, never the
-  legacy *compliance shortcuts*. Every money / tax / declaration / customs
-  surface builds the legitimate, document-complete, fully-audited path only.
-  Full statement: [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) §5.5.
-- **Don't preempt brand cleanup** — references to PCS / TTP / ไอแต้ม survive in
-  code because some APIs are still "borrowed" interim; do not scrub them until
-  ก๊อต confirms the matching API switchover ([`runbook/pcs-scrub-plan.md`](runbook/pcs-scrub-plan.md)).
-  Note D1 changes member codes `PCS<n>` → `PR<n>` in *migrated data* — that is
-  the migration, not the scrub.
-
----
-
-## Cross-references
+## 8. Cross-references
 
 - 🧭 **D1 decision (canonical SOT)** → [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)
 - 🗄 **Phase-A runbook** → [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md)
-- 🔬 **Phase-B input — legacy-vs-Pacred gap map** → [`research/_index.md`](research/_index.md)
-  — esp. [`gap-customer.md`](research/gap-customer.md), [`gap-admin.md`](research/gap-admin.md),
-  [`gap-revenue-flow.md`](research/gap-revenue-flow.md), and the legacy decode docs
+- 🔬 **Phase-B input — legacy-vs-Pacred fidelity gap maps** →
+  [`research/d1-fidelity-customer.md`](research/d1-fidelity-customer.md) ·
+  [`research/d1-fidelity-admin.md`](research/d1-fidelity-admin.md) ·
+  [`research/d1-fidelity-workflow.md`](research/d1-fidelity-workflow.md) ·
+  overview [`research/d1-phase-b-gap-map.md`](research/d1-phase-b-gap-map.md)
 - 📘 Entry point → [`HANDBOOK.md`](HANDBOOK.md) · master single-read → [`STRATEGY.md`](STRATEGY.md)
 - 🧑‍💻 Role briefs (re-tasked under D1) → [`briefs/INDEX.md`](briefs/INDEX.md)
 - 📋 Legacy port history + backlogs → [`PORT_PLAN.md`](PORT_PLAN.md) Part V (cargo) + Part W (gap-hunt)
-- 🗃 Deferred capability synthesis → [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md)
+- 🗃 Deferred Phase-C capability synthesis → [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md)
+- 🧪 Phase-C idea bank (8-specialist R&D) → [`research/r-and-d-2026-05-19/_synthesis.md`](research/r-and-d-2026-05-19/_synthesis.md)
 - 🧭 V3 (separate repo — NOT this plan, unaffected by D1) → [ADR-0010](decisions/0010-v2-v3-version-strategy.md)
 
 ---
 
-**End — `UPGRADE_PLAN.md`.** The D1 phase plan: Phase A 🗄 data migration
-(nearly done — A-4 files + A-5 prod load pending) → Phase B 🎯 workflow fidelity
-(the bulk of forward work — 10 gap-driven stages, B-0..B-9) → Phase C
-🔭 Pacred enhancements (Tier 0/1/2/3 + the six systems — deferred, sequenced
-after the faithful port). Mobile-first + the quality gate apply across all of
-them.
+**End — `UPGRADE_PLAN.md`.** The D1 master phase plan: Phase A 🗄 data migration
+(stage `A-final` — Pro upgrade → 3 log tables + images backfill → reconcile
+117/117) → Phase B 🎯 workflow fidelity (the bulk of forward work — `B-0`
+wave-1 integrated, `B-waves` customer + admin tracks in parallel) → Phase C
+🔭 Pacred enhancements (Tier 0/1/2/3 + the six systems — deferred, §7).
+Mobile-first + the quality gate ( + `legacy-fidelity-check` for Phase B) apply
+across all of them.

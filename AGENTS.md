@@ -14,11 +14,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:
 
-- **Phase A — Data migration** — port `pcsc_main` (117 tables) into Supabase, `PCS<n>` → `PR<n>`. *Pipeline built · dry-run validated · pending the production load.*
-- **Phase B — Workflow fidelity** — rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop match legacy PCS exactly. Goal: **zero retraining** for staff and customers.
+- **Phase A — Data migration** — port `pcsc_main` (117 tables) into Supabase, `PCS<n>` → `PR<n>`. *Business data **loaded to dev + prod Supabase** (114 of 117 tables · ~8,898 customers reconciled); 3 oversized log tables + customer image files backfill after the Supabase Pro upgrade.*
+- **Phase B — Workflow fidelity** — rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop match legacy PCS exactly. Goal: **zero retraining** for staff and customers. *Wave 1 integrated on `dave`; waves 2+ in progress.*
 - **Phase C — Pacred enhancements** — layer Pacred's own improvements *only after* the faithful port works. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue are **deferred to Phase C — not cancelled.**
 
-📋 Canonical SOT: **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md)** — read it in full before D1 work. In-flight pre-D1 feature work (e.g. BK-1 booking flow, freight V-E1.1) pauses; the team pivots to Phase B.
+📋 Canonical SOT: **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md)** (the D1 decision) + **[`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md)** (the D1 master phase plan — current state · stages · work-lanes). Read ADR-0017 in full before D1 work. In-flight pre-D1 feature work (e.g. BK-1 booking flow, freight V-E1.1) pauses; the team pivots to Phase B.
 
 ## 1. Session-start handshake (MANDATORY — do BEFORE asking what to work on)
 
