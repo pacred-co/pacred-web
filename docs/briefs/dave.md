@@ -1,119 +1,129 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-18 (post-launch — see latest [`runbook/team-status-*.md`](../runbook/) for current state)
+Last reviewed: 2026-05-19 (D1 — Phase A loaded · Phase B wave-1 integrated)
 Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Authority: second-tier owner
 
-## 🎯 Current state — DIRECTION PIVOT "D1" (2026-05-18)
+## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 
-🔴 **The owner rejected the rebuilt Pacred app** — its UI *and* its workflow logic-loop look nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run on daily. **New direction (D1):** Pacred *becomes* the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`. Not a reinterpretation; a faithful port. Read [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) in full — it is the canonical D1 source of truth and supersedes the Tier 0/1/2/3 capability roadmap framing of [`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
+🔴 The owner rejected the rebuilt Pacred app — its UI *and* its workflow look
+nothing like the legacy **PCS Cargo** system that staff + ~8,898 customers run
+on daily. **D1:** Pacred *becomes* the legacy PCS Cargo system, faithfully —
+rebranded `PCS` → `PR`. Owner rule (verbatim): **"copy the original to 100%
+sameness FIRST, then improve."** Canonical SOT →
+[`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)
+— read it in full. It supersedes the Tier 0/1/2/3 framing of
+[`UPGRADE_PLAN.md`](../UPGRADE_PLAN.md).
 
-D1 runs in three phases — **A** data migration · **B** workflow fidelity · **C** Pacred enhancements (the old Tier roadmap + Phase-2 build queue, *deferred not cancelled*, re-sequenced after the faithful port). You drive Phase A and integrate Phase B.
+Three phases: **A** data migration · **B** workflow fidelity · **C** Pacred
+enhancements (the old Tier roadmap, *deferred not cancelled*).
 
-**เดฟ now — pickup list (Phase-A driver + integrator):**
+## 🟢 Where the project is now
 
-1. **Phase A — data migration: ✅ business data LOADED to dev + prod (2026-05-19).** The legacy `pcsc_main` (117 tables) is migrated into both Supabase projects — 117 `tb_*` tables created, **114 business tables loaded** (~8,898 customers · orders · wallets · ตู้ · forwarders · receipts · the `userpass` login hashes), `PCS`→`PR` rebrand applied, RLS on; migrations `0081`-`0083` + `0087` on `dave`. **Remaining (พรุ่งนี้, after the Supabase Pro upgrade):** backfill the 3 oversized log tables (779 MB — free tier caps a DB at 500 MB) + the customer image/file storage (ก๊อต fetches from แต้ม). Runbook → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md). The 8 special `PCS<letters>` userIDs + `PR1`–`PR5` numbering are decided (runbook §7). DB-0/DB-1 confirmed done (prod at `0080`).
-2. **Phase B — workflow fidelity: wave 1 ✅ integrated; drive waves 2+.** Phase B reworks the app to faithfully match legacy PCS. **Wave 1 done + on `dave` (2026-05-19):** customer 9-icon launchpad · customer order flow · admin per-role RBAC sidebar + badges · admin container `tb_cnt` payment ledger · ภูม's legacy-auth bridge. The per-screen Phase-B spec = the fidelity gap maps [`d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) · [`d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) · [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md) (overview [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md)). **Waves 2+:** the remaining customer screens (login · register · payment · wallet · address · account · shipment) + admin modules + the status-vocabulary reconcile. Every Phase-B port runs through the `legacy-fidelity-check` skill — copy 100% first, enhance only in Phase C.
-3. **Integrate the team's Phase-B work** — keep merging ภูม/ปอน pushes into `dave`, verify, distribute back (the `branch-integrate-loop` skill).
-4. **Decide the fate of the superseded scaffolding** — the pre-D1 PCS-customer-migration approach (migration `0067_pcs_customer_migration.sql`, the `u2-1-pcs-customer-migration.md` runbook, `actions/admin/pcs-migration.ts`) is replaced by the Phase-A full-system port; the rebuilt `profiles`-era schema coexists with the ported `tb_*` tables during the transition, then retires. Decide when/how it retires.
+- 🟢 **Phase A** — legacy `pcsc_main` (117 tables · 8,898 customers) business
+  data **LOADED to dev + prod Supabase**; migrations `0081`-`0083` + `0087` on
+  `dave`. *Remaining:* 3 oversized log tables + customer images — backfill
+  after the Supabase Pro upgrade (imminent).
+- 🟢 **Phase B** — **wave 1 done + integrated**: customer 9-icon launchpad ·
+  customer order flow · admin per-role RBAC sidebar + badges · admin container
+  `tb_cnt` payment ledger · ภูม's legacy-auth bridge. Wave 1 is a *first pass* —
+  not yet element-by-element fidelity-verified.
+- ⚪ **Phase C** — deferred (Tier roadmap · ads/marketing · 8-specialist R&D).
 
-**Carried-over / ongoing:**
-- **Production watch** — Sentry + `admin_audit_log` + Clarity for issues on the currently-live `main`. CSP-1 nonce migration still scheduled week 2 (≈ Mon 2026-06-01).
-- **Production flag verification** — confirm `OTP_BYPASS=false`, `LINE_PUSH_BYPASS=false` are settled in prod.
+## 🧭 Your lane — INTEGRATOR + PHASE-A COMPLETION DRIVER (senior)
 
----
+You + ก๊อต are the **senior lane**; ปอน + ภูม execute. You own the integration
+spine and drive Phase A to done. Concretely you:
 
-## 🚀 D1 focus (read FIRST)
+- **Drive Phase A to完成** — the Supabase Pro backfill of the 3 log tables +
+  customer images, then reconcile 117/117 tables prod ↔ legacy.
+- **Integrate Phase B** — consolidate ภูม / ปอน pushes into `dave`, verify,
+  distribute back (the [`branch-integrate-loop`](../../.claude/skills/branch-integrate-loop/SKILL.md) skill).
+- **Spawn the Phase-B wave agents** — execute the fidelity rework via worktree
+  agents that land on `dave`, wave by wave, so the team works one direction.
+- **Hold the `dave → main` deploy gate** with ก๊อต — nothing ships before the
+  quality gate is green.
 
-The owner rejected the rebuild on 2026-05-18 — Pacred pivots to a **faithful port** of the legacy PCS Cargo system (`PCS` → `PR`). คุณคือ integrator + Phase-A driver: get the 117-table data migration into production, then sequence and integrate the team's Phase-B workflow-fidelity rework.
+## 🟡 Your pickup list (priority order)
 
-**The lens for D1:** fidelity to the legacy PCS system — staff and customers must need **zero retraining**. Don't reinterpret the legacy workflow; reproduce it. Never ship a stage before the quality gate is green.
+1. **Phase A — finish it.** After ก๊อต's Supabase Pro upgrade: backfill the 3
+   oversized log tables (`tb_web_hs` · `tb_history_key` · `tb_history`,
+   ~779 MB — free tier capped at 500 MB) + the customer image/file storage
+   (ก๊อต fetches from แต้ม), then reconcile **117/117** tables prod ↔ legacy.
+   Runbook → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md).
+2. **Phase B-0 — fidelity-verify wave 1.** Run the
+   [`legacy-fidelity-check`](../../.claude/skills/legacy-fidelity-check/SKILL.md)
+   skill on wave-1's 4 surfaces (launchpad · order flow · admin RBAC sidebar ·
+   container ledger); close every gap before moving on. Wave 1 was first-pass.
+3. **Phase B waves — sequence + spawn.** Break the fidelity gap maps
+   ([`d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) ·
+   [`d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) ·
+   [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md); overview
+   [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md)) into waves —
+   ปอน takes the customer frontend screens, ภูม the admin/backend. Spawn the
+   wave agents; keep one owner per surface.
+4. **Integrate continuously** — merge ภูม / ปอน pushes into `dave`, verify, push.
+5. **Retire the superseded scaffolding** — the pre-D1 PCS-customer migration
+   (`0067_pcs_customer_migration.sql`, `actions/admin/pcs-migration.ts`, the
+   `u2-1-pcs-customer-migration.md` runbook) is replaced by the Phase-A
+   full-system port. Decide when/how the rebuilt `profiles`-era schema retires.
 
-**Sequenced D1 work** → [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) is the canonical plan (Phase A → B → C). The Tier 0/1/2/3 capability roadmap and the Phase-2 build queue (booking flow, customer-intelligence, internal-chat, disbursement, china-ops, platform-observability) are **deferred to Phase C** — re-sequenced after the faithful port, not cancelled. `UPGRADE_PLAN.md` is now historic context for Phase C, not the current execution doc.
+## ✋ Non-collision rule
 
-**Defer to Phase C:** the entire Tier 0/1/2/3 roadmap + the Phase-2 build queue. Phase I (9 new ecosystem services) stays deferred behind that.
-
----
+ปอน = customer-facing frontend surfaces. ภูม = backend (admin routes + server
+actions + `tb_*` queries). You integrate. **One owner per surface** — anyone
+taking a fresh surface coordinates through you first.
 
 ## 🔒 Force-read before any work
 
-1. **[`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)** — ADR-0017, the canonical D1 source of truth (faithful PCS port, Phase A/B/C)
-2. **[`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)** — the Phase-A migration runbook (§6 prod-load procedure, §7 open items you decide)
-3. [`docs/research/PACRED-GAP-ANALYSIS.md`](../research/PACRED-GAP-ANALYSIS.md) + the `gap-*.md` set — the legacy-vs-Pacred gap map, your Phase-B work-split input
-4. [`docs/team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency — STRICTER now)
-5. [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope (superseded by ADR-0017: V2 is now "faithful PCS port", not "rebuilt owner-pleaser")
-6. [`docs/pacred-info.md`](../pacred-info.md) — company DNA SOT
-7. Memory: `pacred_company_dna` + `feedback_legacy_port_fidelity` + `push_frequency_strict` (load via /memories — not in repo)
-
----
+1. [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)
+   — ADR-0017, the canonical D1 SOT
+2. [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — the
+   Phase-A runbook (the backfill you drive to done)
+3. The fidelity gap maps — [`d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) ·
+   [`d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) ·
+   [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md) — your
+   Phase-B work-split input
+4. [`team.md`](../team.md) §3 (daily workflow) + §3.0 (push frequency)
+5. [`pacred-info.md`](../pacred-info.md) — company DNA SOT
+6. Memory: `pacred_company_dna` · `feedback_faithful_port_priority` ·
+   `push_frequency_strict` (load via /memories)
 
 ## Who you are
 
-**Project Lead + Integrator.** You operate from `dave`. You:
-
-- Consolidate ปอน + ภูม work into `dave` (staging point)
-- Cover landing structure with ปอน (เดฟ + Claude = ปอน's structural assist)
-- Prep work for ภูม — write specs, hand off ADRs from ก๊อต, sequence the backend backlog
-- Hand off advanced / decision-heavy items to ก๊อต (don't do everything yourself)
-- Cover ภูม + ปอน when they're blocked
-- "ปอนจะโดนลูกพี่ บีฟบ่อยสุด" — owner critiques landing the most; structure stays your job
-
-Per เดฟ brief 2026-05-16: "**เตรียมงานให้ภูมิในส่วนที่เดฟทำ แล้วเอาเรื่องขั้นสูงแบ่งให้กอต ทำกับภูมิ ให้ทั้งหมดทุกคนทำงานขนานไปด้วยกันทั้งหมด แล้วเดฟจะมาช่วยวางโครงสร้างหน้าบ้านกับปอนต่อแล้ว ต้อง cover หน้าบ้าน**"
-
----
-
-## 🟢 What shipped (this phase — for reference)
-
-- **Analytics + monitoring scaffolds** — GTM + Clarity + cookie-A/B + 9 conversion events + 13 CTA surfaces · Sentry SDK · Upstash rate-limit (6 actions) · hCaptcha (3 forms + 5 actions) — all wired + graceful-degrade
-- **LINE Messaging API + LIFF** · 6 cron jobs + `CRON_SECRET` hardening · PromptPay soft-degrade · OTP dual-pepper rotation support
-- **Audit tooling** — `pnpm audit:md / env / i18n / all` + `pnpm verify` umbrella in CI
-- **Cargo-ops forensics** — decoded the cargo/freight model → [`audit/cargo-ops-forensics-2026-05-16.md`](../audit/cargo-ops-forensics-2026-05-16.md) + PORT_PLAN Part V backlog
-- **U1-U4 + Tier 0/1/2** — wire-the-flow · revenue/margin · supervisory layer · lead funnel connected · `/start-order` buy-bridge · `work_items` work-board — all integrated + verified on `dave`
-- **~700 new test assertions** — 11 test files covering the new validators
-
----
+**Project Lead + Integrator.** You operate from `dave`. You consolidate ปอน +
+ภูม work into `dave`, drive Phase A to完成, spawn + sequence the Phase-B waves,
+hold the deploy gate with ก๊อต, and cover ปอน + ภูม when blocked. Hand the
+decision-heavy / partner / security items to ก๊อต — don't do everything yourself.
 
 ## Blockers + alternatives
 
-When you're blocked:
-
 | Blocked on | Alternative work |
 |---|---|
-| แต้ม hasn't sent the customer-upload files / fresh dump | Coordinate Phase B — break the gap map into a Phase-B work-split for ภูม + ปอน |
-| ก๊อต hasn't given the production-load gate sign-off | Dry-run the prod-load procedure on a throwaway PG; review staged `dave` Phase-B work |
-| Phase B not yet underway | Decide the fate of the superseded pre-D1 migration scaffolding (`0067` · `pcs-migration.ts`) |
+| ก๊อต's Supabase Pro upgrade not done → can't backfill | Phase B-0: fidelity-verify wave 1; sequence the next wave from the gap maps |
+| Waiting on แต้ม's customer image files | Backfill the 3 log tables once Pro is live; integrate staged `dave` Phase-B work |
+| No teammate push to integrate | Spawn the next Phase-B wave agent; retire the superseded `0067` scaffolding |
 
-**Note back to ก๊อต when:** the Pacred owner sends creds, a partner needs a decision, or a security concern surfaces.
+**Note back to ก๊อต when:** the owner sends creds, a partner needs a decision,
+or a security concern surfaces.
 
----
+## Hand-offs
 
-## Hand-offs IN
+**IN** — ก๊อต ADRs + external creds (you action) · ปอน `podeng` frontend PRs
+(you merge) · ภูม `Poom` backend PRs (you merge) · owner ad-hoc requests (you
+triage). **OUT** — Phase-B wave specs → ปอน + ภูม · merged `dave` → ก๊อต
+reviews + merges to `main`.
 
-- **ก๊อต** ADRs + external creds → you action (activate, redeploy, verify)
-- **ปอน** SEO/landing PRs in `podeng` branch → you merge into `dave`
-- **ภูม** backend feature PRs in `Poom` branch → you merge into `dave`
-- **Pacred owner** ad-hoc requests → you triage + sequence
+## Push discipline (per memory `push_frequency_strict`)
 
-## Hand-offs OUT
-
-- Backend specs → ภูม picks up
-- Landing structure scaffolds → ปอน takes design lead
-- Hard decisions → ก๊อต writes ADR
-- Merged `dave` → ก๊อต reviews + merges to `main`
-
----
-
-## Push discipline (STRICTER now per memory `push_frequency_strict`)
-
-- Commit local freely during the session
-- **Push to `origin/dave` only at save-points** — end of session / before sleep / machine change / big batch done
-- Per Claude Code session: **1 push max** (used to be 1-3/day; now save-points-only)
-- All 4 teammates following the same discipline now
+Commit local freely; **push to `origin/dave` only at save-points** (end of
+session / before sleep / machine change / big batch done). 1 push max per
+session. All 4 teammates follow the same discipline.
 
 ## Cross-links
 
-- [`docs/team.md`](../team.md) §3 — daily flow
-- [`docs/PORT_PLAN.md`](../PORT_PLAN.md) Part V/W — cargo + gap-hunt backlogs
-- [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the warehouse/container/shipment spine
-- [`docs/integrations/momo-jmf.md`](../integrations/momo-jmf.md) — partner integration ก๊อต locks, you scaffold
-- [`docs/decisions/0010-v2-v3-version-strategy.md`](../decisions/0010-v2-v3-version-strategy.md) — V2 scope rules you enforce
-- [`docs/briefs/ops-roles.md`](ops-roles.md) — staff role contexts informing admin design
+- [`decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) — D1 SOT
+- [`team.md`](../team.md) §3 — daily flow
+- [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — Phase-A runbook
+- [`research/d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md) — Phase-B gap map overview
+- [`../../.claude/skills/branch-integrate-loop/SKILL.md`](../../.claude/skills/branch-integrate-loop/SKILL.md) — your integration playbook
+- [`briefs/ops-roles.md`](ops-roles.md) — staff role contexts informing admin design
