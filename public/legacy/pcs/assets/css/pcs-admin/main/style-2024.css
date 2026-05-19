@@ -1,0 +1,96 @@
+.table-hover tbody tr:hover, .table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(202, 188, 191, 0.28);
+}
+.ctt-menu::after {
+    top: 12px !important;
+}
+.content-wrapper {
+    min-height: unset;
+}
+.badge-info2 {
+    background-color: #00c5cc;
+}
+.process-model.pro2 li {
+    width: 12.28% !important;
+}
+.m-b--10 {
+    margin-bottom: -10px;
+}
+.f-s-0 {
+    font-size: 0px;
+}
+.bg-danger3 {
+    background-color: rgba(255, 137, 137, 0.192);
+}
+.main-menu.menu-dark .navigation>li>a {
+    padding: 8px 18px 8px 18px !important;
+}
+.main-menu.menu-dark .navigation>li ul li>a {
+    padding: 8px 18px 8px 54px;
+}
+body.vertical-layout.vertical-menu-modern.menu-expanded .main-menu .navigation li.has-sub .has-sub>a:not(.mm-next):after {
+    top: 8px;
+}
+.daterangepicker .today {
+    background-color: red !important;
+    color: #fff !important;
+}
+.badge-purchasing {
+    color: #fff;
+    background-color: #00DBDE;
+    background-image: linear-gradient(90deg, #00DBDE 0%, #FC00FF 100%);
+}
+.bg-color-recom {
+    background: #35b842;
+    background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+    background: linear-gradient(to right, #27b836, #1f81b3);
+    color: #fff;
+}
+.bg-color-recom:hover {
+    color: #fff;
+    font-size: 1.1rem;
+}
+#recom ol {
+    counter-reset: item;
+}
+#recom li {
+    display: block
+}
+#recom li:before {
+    content: counters(item, ".") " ";
+    counter-increment: item;
+}
+.docs-no{
+    border: 1px solid #9adaff;
+    border-radius: 1rem;
+    display: inline-block;
+    padding: 1rem;
+}
+.body-2024 .form-control-label{
+    font-size: 1.1rem;      
+    color: #000;
+}
+.form-control.select{
+    border: unset;
+    padding: 0rem!important;
+}
+@media only screen and (max-width: 769px) {
+    .nav-footer-pcs {
+        display: flex;
+    }
+}
+@media only screen and (max-width: 600px) {
+    .nav-footer-pcs {
+        display: inline-flex;
+    }
+}
+@media only screen and (max-width: 578px) {
+    .process-model.pro2 li {
+        width: 24.28% !important;
+    }
+}
+@media screen and (max-width: 375px) {
+    .process-model.pro2 li::before {
+        width: 80%;
+    }
+}

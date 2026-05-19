@@ -86,6 +86,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *      `/legacy/pcs/shop-2-300x300.png`.
  */
 
+// Server Components reading cookies/auth under a layout must be dynamic.
+export const dynamic = "force-dynamic";
+
 // cart.php L17 / L76 — cart capacity cap: countFor = 151 - countCart.
 // Kept for parity (the legacy add-flow uses it; the read view does not).
 const CART_CAPACITY = 151;

@@ -1010,6 +1010,10 @@ export default async function ServiceImportPage({
               </button>
             </div>
             <div className="modal-body header-from">
+              {/* TODO(server-action): the legacy `save` POST (forwarder.php
+                  L9-427) INSERTs tb_forwarder + uploads fCover. A Server
+                  Component render is a pure read — the submit is unwired;
+                  port it to a "use server" action that writes tb_forwarder. */}
               <form
                 className="form-horizontal"
                 method="POST"

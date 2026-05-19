@@ -97,6 +97,20 @@ function numberFormat(n: number, decimals = 2): string {
   });
 }
 
+/** MySQL DATE_FORMAT(x,'%d/%m/%Y %T') → 'DD/MM/YYYY HH:MM:SS' —
+ *  printShop.php formats hDate / hDate2 / hDatePayment this way
+ *  (L42-44 / L55-57). The tb_* timestamp is read as a literal
+ *  wall-clock value (no tz shift), exactly like MySQL. */
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function fmtDMYHMS(s: string | null): string {
+  if (!s) return "";
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return "";
+  return `${m[3]}/${m[2]}/${m[1]} ${pad2(Number(m[4]))}:${pad2(Number(m[5]))}:${pad2(Number(m[6]))}`;
+}
+
 /** nameProvider($cProvider) — member/include/function.php L25-34.
  *  Maps the tb_order.cprovider code → the marketplace name. */
 function nameProvider(cProvider: string): string {
@@ -220,7 +234,6 @@ type PrintDoc = {
       items: OrderRow[];
     }[];
   }[];
-  priceShopAll: number;
 };
 
 type SearchParams = {
@@ -416,7 +429,6 @@ export default async function ServiceOrderPrintPage({
       if (!providerOrder.includes(r.cprovider)) providerOrder.push(r.cprovider);
     }
 
-    let priceShopAll = 0;
     const providers: PrintDoc["providers"] = [];
 
     for (const cProvider of providerOrder) {
@@ -438,19 +450,14 @@ export default async function ServiceOrderPrintPage({
       const shops: PrintDoc["providers"][number]["shops"] = [];
       for (const cNameShop of shopOrder) {
         // printShop.php L297 — the rows for this provider+shop, only
-        // cReWallet '' or '2' (faithful WHERE clause).
+        // cReWallet '' or '2' (faithful WHERE clause). The per-row
+        // price math + the running total live in ShopItemRows so the
+        // legacy per-provider total row reproduces 1:1.
         const items = providerRows.filter(
           (r) =>
             r.cnameshop === cNameShop &&
             (r.crewallet === "" || r.crewallet === "2"),
         );
-        for (const it of items) {
-          // priceShop — printShop.php L305: (cAmount*(cPrice*hRate))
-          //   + (cShippingCHN*hRate)
-          priceShopAll +=
-            it.camount * (it.cprice * header.hrate) +
-            it.cshippingchn * header.hrate;
-        }
         shops.push({
           cNameShop,
           cShippingNumber: shopMeta[cNameShop]?.ship ?? "",
@@ -470,11 +477,12 @@ export default async function ServiceOrderPrintPage({
       header,
       corporateNumber,
       fName,
-      dateCreate: header.hdate ?? "",
-      datePay: header.hdate2 ?? "",
-      datePayExp: header.hdatepayment ?? "",
+      // printShop.php L55-57 — the dates are printed via
+      // DATE_FORMAT(...,'%d/%m/%Y %T').
+      dateCreate: fmtDMYHMS(header.hdate),
+      datePay: fmtDMYHMS(header.hdate2),
+      datePayExp: fmtDMYHMS(header.hdatepayment),
       providers,
-      priceShopAll,
     });
   }
 
@@ -666,39 +674,14 @@ export default async function ServiceOrderPrintPage({
               </tr>
             </thead>
 
-            {/* ── Item rows — printShop.php L251-348 ── */}
+            {/* ── Item rows — printShop.php L251-348 ──
+                NB the grand-total row + the receipt thank-you row are
+                emitted INSIDE the provider loop in the legacy (the
+                `}` at L348 closes `for($count)`), so they repeat once
+                per provider with the running cumulative $priceShopAll.
+                `ShopItemRows` reproduces that 1:1. */}
             <tbody>
               <ShopItemRows doc={doc} />
-              {/* printShop.php L335-339 — the grand-total row. */}
-              <tr style={{ background: "#cbcbcb" }} className="p-1">
-                <th colSpan={3} className="text-center p-1">
-                  {convert(doc.priceShopAll)}
-                </th>
-                <th colSpan={3} className="text-right p-1">
-                  ราคารวมทั้งหมด
-                </th>
-                <th colSpan={1} className="p-1">
-                  {numberFormat(doc.priceShopAll)}
-                </th>
-              </tr>
-              {/* printShop.php L340-347 — the receipt-only thank-you
-                  row + the company stamp. */}
-              {doc.isReceipt ? (
-                <tr className="p-1">
-                  <th colSpan={7} className="text-center p-1">
-                    <span>ขอบคุณที่เลือกใช้ PCS Cargo</span>
-                    <br />
-                    {/* stamp.png — legacy PCS asset placeholder
-                        (flagged for ปอน's PR brand swap). */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`${THEME_BASE}/stamp.png`}
-                      style={{ width: "35mm" }}
-                      alt=""
-                    />
-                  </th>
-                </tr>
-              ) : null}
             </tbody>
             <tfoot></tfoot>
           </table>
@@ -710,14 +693,23 @@ export default async function ServiceOrderPrintPage({
 
 /**
  * The provider → shop → item rows of one print document
- * (printShop.php L255-334). The legacy uses a running `$noRow`
- * counter across ALL shops of the order, and a 2-colour zebra
- * (`bg` / `bg-g`) on every item row — reproduced here.
+ * (printShop.php L255-348). The legacy uses a running `$noRow`
+ * counter across ALL shops of the order, a 2-colour zebra
+ * (`bg` / `bg-g`) on every item row, and a running cumulative
+ * `$priceShopAll`. The grand-total row + the receipt-only thank-you
+ * row are emitted INSIDE the `for($count<$no)` provider loop
+ * (printShop.php L335-347, before the `}` that closes that loop at
+ * L348) — so they REPEAT once per provider, each printing the
+ * running total at that point. Reproduced 1:1 here.
  */
 function ShopItemRows({ doc }: { doc: PrintDoc }) {
   // printShop.php L300-303 — $noRow increments per item row across
   // the WHOLE order; the zebra uses (($noRow++)%2)!=0 → 'bg-g'.
   let noRow = 0;
+  // printShop.php L254 — $priceShopAll accumulates across every item
+  // row of every provider/shop; the per-provider total row prints
+  // its RUNNING value (not a per-provider subtotal).
+  let priceShopAll = 0;
   const out: React.ReactElement[] = [];
 
   for (const provider of doc.providers) {
@@ -734,16 +726,22 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
 
     for (const shop of provider.shops) {
       // printShop.php L278-296 — the shop band row. The legacy prints
-      // the shop name + the China-shop order numbers; when
-      // cShippingNumber has no comma it prints one line, else it
-      // splits the (space-stripped) shipping number on commas and
-      // prints one line per entry.
+      // the shop name, then the raw space-stripped shipping number
+      // ($cShippingNumberNew, L283 — an assignment-expression that is
+      // ALSO interpolated into $content), then the China-shop order
+      // numbers: when cTrackingNumber has no comma it prints one line
+      // from cShippingNumber, else it splits the (space-stripped)
+      // shipping number on commas and prints one line per entry.
       const cShippingNumberNew = replaceSpace(shop.cShippingNumber);
-      const hasComma = (shop.cTrackingNumber.match(/,/g) ?? []).length > 0;
+      const hasComma =
+        (shop.cTrackingNumber.match(/,/g) ?? []).length > 0;
       out.push(
         <tr key={`shop-${provider.cProvider}-${shop.cNameShop}`}>
           <td colSpan={7} className="bg-light text-center ">
             <div className="box-shadow2">
+              {/* printShop.php L280 — the legacy `;` terminates the
+                  $content.= statement before `'</span>'`, leaving the
+                  <span> unclosed in the raw output; JSX closes it. */}
               <div>
                 <span style={{ fontSize: "14px" }} lang="zh">
                   ชื่อร้าน : {shop.cNameShop}
@@ -751,6 +749,9 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
               </div>
               <div className="row">
                 <div className="col-12">
+                  {/* printShop.php L283 — the raw $cShippingNumberNew
+                      text printed before the comma branch. */}
+                  {cShippingNumberNew}
                   {!hasComma ? (
                     <span className="text-danger">
                       {" "}
@@ -775,6 +776,11 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
       for (const it of shop.items) {
         noRow += 1;
         const nameBG = noRow % 2 !== 0 ? "bg-g" : "bg";
+        // printShop.php L305-306 — the per-row price + the running sum.
+        const rowTotal =
+          it.camount * (it.cprice * doc.header.hrate) +
+          it.cshippingchn * doc.header.hrate;
+        priceShopAll += rowTotal;
         // printShop.php L307-316 — the cImages URL build + the
         // file_exists() gate. The legacy only renders an <img> for a
         // LOCAL own-Shops file (cProvider==4); the remote Alicdn URLs
@@ -782,9 +788,6 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
         // The own-Shops image tree is not yet ported (Phase A image
         // backfill) — faithful: render no <img> until the asset is
         // copied (see the report's binary-asset list).
-        const rowTotal =
-          it.camount * (it.cprice * doc.header.hrate) +
-          it.cshippingchn * doc.header.hrate;
         out.push(
           <tr
             key={`item-${provider.cProvider}-${shop.cNameShop}-${noRow}`}
@@ -814,6 +817,45 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
           </tr>,
         );
       }
+    }
+
+    // printShop.php L335-347 — INSIDE the provider loop: the grand-
+    // total row (running $priceShopAll) + the receipt-only thank-you
+    // row. They repeat once per provider, exactly as the legacy.
+    out.push(
+      <tr
+        key={`total-${provider.cProvider}`}
+        style={{ background: "#cbcbcb" }}
+        className="p-1"
+      >
+        <th colSpan={3} className="text-center p-1">
+          {convert(priceShopAll)}
+        </th>
+        <th colSpan={3} className="text-right p-1">
+          ราคารวมทั้งหมด
+        </th>
+        <th colSpan={1} className="p-1">
+          {numberFormat(priceShopAll)}
+        </th>
+      </tr>,
+    );
+    if (doc.isReceipt) {
+      out.push(
+        <tr key={`thanks-${provider.cProvider}`} className="p-1">
+          <th colSpan={7} className="text-center p-1">
+            <span>ขอบคุณที่เลือกใช้ PCS Cargo</span>
+            <br />
+            {/* stamp.png — legacy PCS asset placeholder
+                (flagged for ปอน's PR brand swap). */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`${THEME_BASE}/stamp.png`}
+              style={{ width: "35mm" }}
+              alt=""
+            />
+          </th>
+        </tr>,
+      );
     }
   }
 

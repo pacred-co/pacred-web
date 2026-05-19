@@ -1,0 +1,15 @@
+@media (max-width: 576px){
+    .card-content .box-sale-main{
+        top: 84px;
+        height: 85px;
+    }
+    .card-content .box-sale-main {
+        margin: 1rem 3rem 0.25rem;
+    }
+    .card-content .box-sale2 {
+        width: 95%;
+    }
+    .c-rate {
+        font-size: 0.7rem;
+    }    
+}

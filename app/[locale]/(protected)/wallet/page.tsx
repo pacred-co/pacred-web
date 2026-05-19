@@ -75,6 +75,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *     scroll-to-load-more behaviour itself is not reproduced.
  */
 
+// Server Components reading cookies/auth under a layout must be dynamic.
+export const dynamic = "force-dynamic";
+
 // Legacy `nameWallet($type)` — member/include/function.php L156-169.
 // Returns the Thai transaction-type label; `\n` marks a legacy <br/>.
 const NAME_WALLET: Record<string, string> = {

@@ -745,16 +745,19 @@ export default async function ServiceOrderPage({
 }
 
 /**
- * Transcribes the legacy `chProhNo()` helper (function.php L1095+):
+ * Transcribes the legacy `chProhNo()` helper (function.php L1095-1183):
  * renders the promotion badge next to an order number based on the
- * `tb_promotion.promoid` for that order. Branding `PCS` → `PR` kept
- * (the legacy promo links point at the WordPress marketing site —
- * absolute pcscargo.co.th URLs, faithful, not scrubbed).
+ * `tb_promotion.promoid` for that order. The legacy `switch` has cases
+ * 1-77 (no case 53) + a `default:` of empty — reproduced 1:1.
+ *
+ * Branding `PCS` → `PR` kept: the legacy promo links resolve from
+ * `basePath.'../'` = `https://pcscargo.co.th/` — absolute marketing-site
+ * URLs, kept verbatim (interim brand split — runbook §3 gates the
+ * rename; not scrubbed here).
  */
 function ProBadge({ promoId }: { promoId: number | undefined }) {
   if (promoId == null) return null;
-  // function.php L1101-1125 — the promoID → badge map (subset 1-24
-  // covers the promos present in the migrated tb_promotion data).
+  // function.php L1102-1107 — cases 1-6 are PLAIN badges (no link).
   const PLAIN: Record<number, string> = {
     1: "Pro 3.15",
     2: "Pro 4.4",
@@ -763,26 +766,83 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
     5: "Pro 5.15",
     6: "Pro 6.6",
   };
+  // function.php L1108-1177 — cases 7-77 (no 53) are LINKED badges.
+  // basePath.'../' resolves to https://pcscargo.co.th/.
+  const B = "https://pcscargo.co.th/";
   const LINKED: Record<number, { label: string; title: string; href: string }> = {
-    7: { label: "Pro 6.25", title: "เรท 5.39 และ ขนส่ง 5%", href: "https://pcscargo.co.th/โปรโมชัน-6-25" },
-    8: { label: "Pro 7.7", title: "เรท 5.42", href: "https://pcscargo.co.th/โปรโมชัน-7-7" },
-    9: { label: "Pro 7.25", title: "เรท 5.54 และ ขนส่ง 3%", href: "https://pcscargo.co.th/โปรโมชัน-7-25" },
-    10: { label: "Pro 8.8", title: "เรท 5.57", href: "https://pcscargo.co.th/โปรโมชัน-8-8" },
-    11: { label: "Pro 8.25", title: "เรท 5.49 และขนส่ง 3%", href: "https://pcscargo.co.th/โปรโมชัน-8-25" },
-    12: { label: "Pro 9.9", title: "เรท 5.49", href: "https://pcscargo.co.th/โปรโมชัน-9-9" },
-    13: { label: "Pro Survey", title: "เรท 5.49", href: "https://pcscargo.co.th/โปรโมชัน-9-16" },
-    14: { label: "Pro 10.10", title: "เรท 5.48", href: "https://pcscargo.co.th/โปรโมชัน-10-10" },
-    15: { label: "Pro 10.25", title: "เรท 5.49 ขนส่ง 3%", href: "https://pcscargo.co.th/โปรโมชัน-10-25" },
-    16: { label: "Pro 11.11", title: "เรท 5.47 ขนส่ง -11 บาท", href: "https://pcscargo.co.th/โปรโมชัน-11-11" },
-    17: { label: "Pro 11.25", title: "เรท 5.44", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-11-25" },
-    18: { label: "Pro 12.12", title: "เรท 5.22", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-12-12" },
-    19: { label: "Pro Valentine", title: "เรท 5.10", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-วาเลนไทน์" },
-    20: { label: "Pro 3.3", title: "เรท 5.18", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-2023-3-3/" },
-    21: { label: "Pro Songkran", title: "เรท 5.15", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-songkran-2023/" },
-    22: { label: "Pro เลือกตั้ง", title: "เรท 5.18", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-เลือกตั้ง-2566/" },
-    23: { label: "Pro Surveyนี้ โอเคมั๊ย", title: "เรท 5.10", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-survey-นี้-โอเคมั๊ย/" },
-    24: { label: "Pride month 06", title: "เรท 5.06", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-pride-month-2023-06/" },
+    7: { label: "Pro 6.25", title: "เรท 5.39 และ ขนส่ง 5%", href: `${B}โปรโมชัน-6-25` },
+    8: { label: "Pro 7.7", title: "เรท 5.42", href: `${B}โปรโมชัน-7-7` },
+    9: { label: "Pro 7.25", title: "เรท 5.54 และ ขนส่ง 3%", href: `${B}โปรโมชัน-7-25` },
+    10: { label: "Pro 8.8", title: "เรท 5.57", href: `${B}โปรโมชัน-8-8` },
+    11: { label: "Pro 8.25", title: "เรท 5.49 และขนส่ง 3%", href: `${B}โปรโมชัน-8-25` },
+    12: { label: "Pro 9.9", title: "เรท 5.49", href: `${B}โปรโมชัน-9-9` },
+    13: { label: "Pro Survey", title: "เรท 5.49", href: `${B}โปรโมชัน-9-16` },
+    14: { label: "Pro 10.10", title: "เรท 5.48", href: `${B}โปรโมชัน-10-10` },
+    15: { label: "Pro 10.25", title: "เรท 5.49 ขนส่ง 3%", href: `${B}โปรโมชัน-10-25` },
+    16: { label: "Pro 11.11", title: "เรท 5.47 ขนส่ง -11 บาท", href: `${B}โปรโมชัน-11-11` },
+    17: { label: "Pro 11.25", title: "เรท 5.44", href: `${B}โปรโมชัน/โปรโมชัน-11-25` },
+    18: { label: "Pro 12.12", title: "เรท 5.22", href: `${B}โปรโมชัน/โปรโมชัน-12-12` },
+    19: { label: "Pro Valentine", title: "เรท 5.10", href: `${B}โปรโมชัน/โปรโมชัน-วาเลนไทน์` },
+    20: { label: "Pro 3.3", title: "เรท 5.18", href: `${B}โปรโมชัน/โปรโมชัน-2023-3-3/` },
+    21: { label: "Pro Songkran", title: "เรท 5.15", href: `${B}โปรโมชัน/โปรโมชัน-songkran-2023/` },
+    22: { label: "Pro เลือกตั้ง", title: "เรท 5.18", href: `${B}โปรโมชัน/โปรโมชัน-เลือกตั้ง-2566/` },
+    23: { label: "Pro Surveyนี้ โอเคมั๊ย", title: "เรท 5.10", href: `${B}โปรโมชัน/โปรโมชัน-survey-นี้-โอเคมั๊ย/` },
+    24: { label: "Pride month 06", title: "เรท 5.06", href: `${B}โปรโมชัน/โปรโมชัน-pride-month-2023-06/` },
+    25: { label: "Pro 7.7", title: "เรท 5.06", href: `${B}โปรโมชัน/โปรโมชัน-2023-7-7/` },
+    26: { label: "Pro แซงทางโค้ง", title: "เรท 5.05", href: `${B}โปรโมชัน/โปรโมชัน-2023-7-โปรดี/` },
+    27: { label: "Happy Mother’s Day", title: "เรท 5.04", href: `${B}โปรโมชัน/2023-08-happy-mother-day/` },
+    28: { label: "ไม่ต้องทุบกระปุก", title: "เรท 5.04", href: `${B}โปรโมชัน/2023-08-ไม่ต้องทุบกระปุกช้อป/` },
+    29: { label: "3 Year Anniversary", title: "เรท 5.04", href: `${B}โปรโมชัน/pcs-3-year-anniversary/` },
+    30: { label: "Oh! My Ghost", title: "เรท 5.17", href: `${B}โปรโมชัน/pcs-oh-my-ghost-2023/` },
+    31: { label: "ล่าท้าเรทหยวน", title: "เรท 5.15", href: `${B}โปรโมชัน/challeng-yuan-rate-10-2023/` },
+    32: { label: "สุขลันตลิ่ง", title: "เรท 5.14", href: `${B}โปรโมชัน/สุขลันตลิ่ง-2023/` },
+    33: { label: "สุขสันต์วันปีใหม่", title: "เรท 5.15", href: `${B}โปรโมชัน/สุขสันต์วันปีใหม่จาก-pcs-cargo/` },
+    34: { label: "ซินเจียยู่อี่", title: "เรท 5.12", href: `${B}โปรโมชัน/ซินเจียยู่อี่-2024/` },
+    35: { label: "ช้อปฉลองปีมังกร", title: "เรท 5.14", href: `${B}โปรโมชัน/ช้อปฉลองปีมังกร-2024/` },
+    36: { label: "Happy March", title: "เรท 5.17", href: `${B}โปรโมชัน/มีนานี้-สต๊อกสินค้าไว้ร/` },
+    37: { label: "สงกรานต์ 2024", title: "เรท 5.15", href: `${B}โปรโมชัน/สงกรานต์-2024/` },
+    38: { label: "End of month 04/2024", title: "เรท 5.18", href: `${B}โปรโมชัน/endofmonth-04-2024/` },
+    39: { label: "5.5 Double Day/", title: "เรท 5.20", href: `${B}โปรโมชัน/2024-5-5-double-day/` },
+    40: { label: "May Day", title: "เรท 5.22", href: `${B}โปรโมชัน/2024-may-day/` },
+    41: { label: "Late May", title: "เรท 5.20", href: `${B}โปรโมชัน/late-may-2024-05/` },
+    42: { label: "MID YEAR", title: "เรท 5.22", href: `${B}โปรโมชัน/mid-year-2024-06/` },
+    43: { label: "BYE BYE JUNE", title: "เรท 5.22", href: `${B}โปรโมชัน/bye-bye-june-2024/` },
+    44: { label: "LUCK DAY SPACIAL", title: "เรท 5.22", href: `${B}โปรโมชัน/luck-day-spacial-2024/` },
+    45: { label: "JULY JUMBO SALE", title: "เรท 5.20", href: `${B}โปรโมชัน/july-jumbo-sale-7-24/` },
+    46: { label: "8.8 Aug", title: "เรท 5.15", href: `${B}โปรโมชัน/8-8-august-attraction-sale-2024/` },
+    47: { label: "Final Aug", title: "เรท 5.10", href: `${B}โปรโมชัน/final-august-flash-sale-2024/` },
+    48: { label: "9.9 Double Day", title: "เรท 5.05", href: `${B}โปรโมชัน/9-9-double-day/` },
+    49: { label: "October Save", title: "เรท 4.95", href: `${B}โปรโมชัน/2024-10-october-save-เวอร์/` },
+    50: { label: "Fright Night", title: "เรท 4.94", href: `${B}โปรโมชัน/fright-night-special-2024/` },
+    51: { label: "พฤศจิกาพาเซฟ", title: "เรท 4.97", href: `${B}โปรโมชัน/พฤศจิกาพาเซฟ-2024/` },
+    52: { label: "NOVEMBER Super Pro", title: "เรท 5.02", href: `${B}โปรโมชัน/november-super-pro-2024/` },
+    54: { label: "SANTAS SURPRIESALE", title: "เรท 4.93", href: `${B}โปรโมชัน/santas-surprisesale-2024/` },
+    55: { label: "โปรโมชั่นนำเข้าสินค้าจากจีน", title: "เรท 4.89", href: `${B}โปรโมชัน/โปรโมชั่นนำเข้าจีน/` },
+    56: { label: "February Fever Sale", title: "เรท 4.87", href: `${B}โปรโมชัน/february-fever-sale-2025/` },
+    57: { label: "March madness", title: "เรท 4.85", href: `${B}โปรโมชัน/march-madness-2025/` },
+    58: { label: "MEGA YUAN MARCH", title: "เรท 4.87", href: `${B}โปรโมชัน/mega-yuan-march-2025/` },
+    59: { label: "MARCH YUAN DEAL", title: "เรท 4.85", href: `${B}โปรโมชัน/march-yuan-deal-2025/` },
+    60: { label: "นำเข้าสินค้าจากจีน", title: "เรท 4.85", href: `${B}โปรโมชัน/โปรนำเข้าสินค้าจีน-4-2025/` },
+    61: { label: "นำเข้าสินค้าจากจีน", title: "เรท 4.89", href: `${B}โปรโมชัน/โปรนำเข้าสินค้าจีน-5-5-2025/` },
+    62: { label: "นำเข้าสินค้าจากจีน", title: "เรท 4.79", href: `${B}โปรโมชัน/โปรนำเข้าสินค้าจีน-19-5-2025/` },
+    63: { label: "นำเข้าสินค้าจากจีน", title: "เรท 4.77", href: `${B}โปรโมชัน/โปรนำเข้าสินค้าจีน-6-6-2025/` },
+    64: { label: "นำเข้าสินค้าจากจีน", title: "เรท 4.75", href: `${B}โปรโมชัน/โปรโมชันกลางปี-2025/` },
+    65: { label: "โปรโมชัน 7.7", title: "เรท 4.75", href: `${B}โปรโมชัน/โปรโมชัน-2025-7-7/` },
+    66: { label: "โปรโมชัน 8.8", title: "เรท 4.72", href: `${B}โปรโมชัน/นำเข้าจีน082025/` },
+    67: { label: "โปรโมชันกลางเดือน", title: "เรท 4.73", href: `${B}โปรโมชัน/นำเข้าจีน18082025/` },
+    68: { label: "โปรโมชัน 9.9", title: "เรท 4.71", href: `${B}โปรโมชัน/นำเข้าจีน09092025/` },
+    69: { label: "โปรโมชัน 9.22", title: "เรท 4.72", href: `${B}โปรโมชัน/นำเข้าจีน09222025/` },
+    70: { label: "โปรโมชัน 10.10", title: "เรท 4.73", href: `${B}โปรโมชัน/นำเข้าจีน10102025/` },
+    71: { label: "โปรโมชันนำเข้าจีน", title: "เรท 4.79", href: `${B}โปรโมชัน/นำเข้าจีน21102025/` },
+    72: { label: "โปรโมชัน 11.11", title: "เรท 4.79", href: `${B}โปรโมชัน/นำเข้าจีน11112025/` },
+    73: { label: "โปรโมชัน 25.11", title: "เรท 4.78", href: `${B}โปรโมชัน/นำเข้าจีน25112025/` },
+    74: { label: "โปรโมชัน 12.12", title: "เรท 4.78", href: `${B}โปรโมชัน/นำเข้าจีน251212/` },
+    75: { label: "โปรโมชัน 12.17", title: "เรท 4.76", href: `${B}โปรโมชัน/นำเข้าจีน251217/` },
+    76: { label: "โปรโมชัน 1.20", title: "เรท 4.75", href: `${B}โปรโมชัน/นำเข้าจีน260120/` },
+    77: { label: "โปรโมชัน 3.3", title: "เรท 4.70", href: `${B}โปรโมชัน/นำเข้าจีน260303/` },
   };
+  // The legacy prepends a leading space to $text (' <span ...>'); the
+  // JSX caller already inserts a `{" "}` before <ProBadge/>.
   if (PLAIN[promoId]) {
     return <span className="badge badge-vip badge-pill">{PLAIN[promoId]}</span>;
   }
@@ -796,5 +856,6 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
       </a>
     );
   }
+  // function.php L1178-1179 — default: empty.
   return null;
 }
