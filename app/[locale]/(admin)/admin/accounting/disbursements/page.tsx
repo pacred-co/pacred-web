@@ -18,23 +18,27 @@ import { DisbursementRowControls } from "./disbursement-row-controls";
  * explicit gate here prevents the page from loading if RBAC drifts.
  */
 
+// Mirrors the CHECK enum in migration 0069 + 0088 (container_lease added
+// 0088 — D1 Phase-B Wave-A audit, ค่าตู้สินค้า sidebar bucket).
 const KIND_LABEL_TH: Record<string, string> = {
-  freight:      "ค่าระวาง (freight)",
-  customs_duty: "ค่าภาษีศุลกากร",
-  handling:     "ค่า handling / THC",
-  fuel:         "ค่าเชื้อเพลิง (fuel)",
-  storage:      "ค่าเช่า / demurrage",
-  trucking:     "ค่ารถในประเทศ",
-  other:        "อื่นๆ",
+  freight:         "ค่าระวาง (freight)",
+  customs_duty:    "ค่าภาษีศุลกากร",
+  handling:        "ค่า handling / THC",
+  fuel:            "ค่าเชื้อเพลิง (fuel)",
+  storage:         "ค่าเช่า / demurrage",
+  trucking:        "ค่ารถในประเทศ",
+  container_lease: "ค่าตู้สินค้า (container lease)",
+  other:           "อื่นๆ",
 };
 const KIND_BADGE: Record<string, string> = {
-  freight:      "bg-blue-50 text-blue-700 border-blue-200",
-  customs_duty: "bg-red-50 text-red-700 border-red-200",
-  handling:     "bg-amber-50 text-amber-700 border-amber-200",
-  fuel:         "bg-orange-50 text-orange-700 border-orange-200",
-  storage:      "bg-purple-50 text-purple-700 border-purple-200",
-  trucking:     "bg-emerald-50 text-emerald-700 border-emerald-200",
-  other:        "bg-gray-50 text-gray-700 border-gray-200",
+  freight:         "bg-blue-50 text-blue-700 border-blue-200",
+  customs_duty:    "bg-red-50 text-red-700 border-red-200",
+  handling:        "bg-amber-50 text-amber-700 border-amber-200",
+  fuel:            "bg-orange-50 text-orange-700 border-orange-200",
+  storage:         "bg-purple-50 text-purple-700 border-purple-200",
+  trucking:        "bg-emerald-50 text-emerald-700 border-emerald-200",
+  container_lease: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  other:           "bg-gray-50 text-gray-700 border-gray-200",
 };
 
 type SP = {

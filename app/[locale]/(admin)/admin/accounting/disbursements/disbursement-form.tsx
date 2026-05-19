@@ -12,13 +12,14 @@ import { adminCreateDisbursement, type DisbursementKind } from "@/actions/admin/
  */
 
 const KIND_OPTIONS: Array<{ value: DisbursementKind; label: string }> = [
-  { value: "freight",       label: "ค่าระวาง (freight)" },
-  { value: "customs_duty",  label: "ค่าภาษีศุลกากร (customs duty)" },
-  { value: "handling",      label: "ค่า handling / THC" },
-  { value: "fuel",          label: "ค่าเชื้อเพลิง (fuel)" },
-  { value: "storage",       label: "ค่าเช่า / demurrage" },
-  { value: "trucking",      label: "ค่ารถในประเทศ (trucking)" },
-  { value: "other",         label: "อื่นๆ (ระบุใน note)" },
+  { value: "freight",         label: "ค่าระวาง (freight)" },
+  { value: "customs_duty",    label: "ค่าภาษีศุลกากร (customs duty)" },
+  { value: "handling",        label: "ค่า handling / THC" },
+  { value: "fuel",            label: "ค่าเชื้อเพลิง (fuel)" },
+  { value: "storage",         label: "ค่าเช่า / demurrage" },
+  { value: "trucking",        label: "ค่ารถในประเทศ (trucking)" },
+  { value: "container_lease", label: "ค่าตู้สินค้า (container lease)" },
+  { value: "other",           label: "อื่นๆ (ระบุใน note)" },
 ];
 
 const inputCls =
