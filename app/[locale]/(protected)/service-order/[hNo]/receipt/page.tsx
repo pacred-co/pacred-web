@@ -70,15 +70,17 @@ export default async function ShopOrderReceiptPage({
       gross_invoice_thb:  number;
     }>();
 
+  // D1 Phase-B Wave 2: o.status is the legacy tb_header_order.hstatus code.
   // isPaid drives the "ชำระเงินแล้ว" stamp + the THB-paid framing; the doc
   // label can be overridden to ใบแจ้งหนี้ via ?doc=invoice (legacy print=2).
-  const isPaid       = o.status === "completed";
+  // '5' = สำเร็จ (paid/completed).
+  const isPaid       = o.status === "5";
   const showAsInvoice = forceInvoice || !isPaid;
   const docLabel     = showAsInvoice ? "ใบแจ้งหนี้" : "ใบเสร็จรับเงิน";
   // The tax-invoice panel is allowed once the order is paid ('ordered'+),
-  // matching requestTaxInvoice's server gate (awaiting_payment is the only
+  // matching requestTaxInvoice's server gate ('2' รอชำระเงิน is the only
   // ineligible status that reaches this page).
-  const canRequestTaxInvoice = o.status !== "awaiting_payment";
+  const canRequestTaxInvoice = o.status !== "2";
   const rate         = Number(o.yuan_rate_locked ?? 0);
   const subtotalThb  = rate > 0 ? o.subtotal_cny       * rate : 0;
   const domesticThb  = rate > 0 ? o.domestic_china_cny * rate : 0;

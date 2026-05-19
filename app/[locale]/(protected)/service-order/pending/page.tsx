@@ -6,7 +6,8 @@ import { ServiceOrderList } from "../service-order-list";
 
 export default async function ServiceOrderPendingPage() {
   const t = await getTranslations("serviceOrder");
-  const res = await listServiceOrders({ status: ["awaiting_payment", "pending"], limit: 100 });
+  // Legacy hstatus codes: '1' = รอดำเนินการ, '2' = รอชำระเงิน.
+  const res = await listServiceOrders({ status: ["2", "1"], limit: 100 });
   const items = res.ok ? (res.data ?? []) : [];
 
   return (

@@ -65,7 +65,9 @@ function groupItems(items: Item[]): ProviderGroup[] {
 }
 
 export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
-  const isPaid     = data.status === "completed";
+  // D1 Phase-B Wave 2: data.status is the legacy tb_header_order.hstatus
+  // code — '5' = สำเร็จ (paid/completed).
+  const isPaid     = data.status === "5";
   const docTitle   = isPaid ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
   const titleColor = isPaid ? "#16a34a" : COLORS.primary;        // green vs red
 
