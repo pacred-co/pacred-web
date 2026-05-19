@@ -183,3 +183,59 @@ The pilot renders the table statically (markup keeps the
 identical at rest) and exposes the legacy URL filters
 (`?s=`, `?c=`, `?type=`, `?position=`) as `searchParams`. Functional
 sort/filter is a follow-up (likely a small React DataTables shim).
+
+---
+
+## 9. Cross-cutting gotchas (learned in customer batches 1-2)
+
+Hard-won rules — read before transcribing a screen:
+
+1. **Hardcode the Thai text.** The legacy PHP hardcodes Thai; a faithful
+   transcription does the same. Do NOT route strings through next-intl `t()`
+   (the `menu.php` pilot does — it predates this rule; don't copy that part)
+   and do NOT edit `messages/*.json`. Hardcoded Thai is both more faithful AND
+   collision-free across parallel agents.
+
+2. **Internal links — `<Link>`, not `<a href="/…">`.** ESLint
+   `@next/next/no-html-link-for-pages` errors on a raw `<a>` to an in-app
+   route — use `<Link>` from `@/i18n/navigation`. Keep `<a href="#…">` in-page
+   anchors as `<a>`. Legacy links to old WordPress marketing pages
+   (`/freearea`, `/โปรโมชัน/…`) → absolute `https://pcscargo.co.th/…` URLs
+   (faithful, scrub-safe, not flagged). NB the rule over-reports — one bad
+   `<a>` shows as dozens of errors (once per app route); fix the one tag.
+
+3. **Vendor JS is staged globally.** jQuery + Bootstrap-4 + FontAwesome load
+   from the `(protected)` layout (`public/legacy/pcs/vendor/`). Transcribe the
+   legacy `data-toggle` / `data-target` / `.modal` / tab / collapse markup
+   VERBATIM — it works 1:1 at runtime. Do NOT re-implement Bootstrap
+   interactions in React. (This supersedes the §8 "DataTables JS not ported"
+   caveat — the vendor bundle covers it.)
+
+4. **A Server Component render is a PURE READ.** Never reproduce a legacy
+   render-time `INSERT`/`UPDATE` (visit-logs, search-logs, auto-expiry) inside
+   the page — Next.js disallows it and re-renders double-fire. Mutations →
+   Server Actions. Flag every deferred mutation in your report.
+
+5. **Derive UI state during render, not in an effect.** A `useEffect` that
+   calls `setState` trips `react-hooks/set-state-in-effect`. Compute from
+   props / the action result during render.
+
+6. **Missing brand asset → use the legacy PCS asset.** Never ship a broken
+   image. Reference the legacy asset under `/legacy/pcs/…` and flag it for
+   ปอน's brand-asset swap.
+
+7. **Auth-touching screens — Pacred auth is SPLIT.** Supabase Auth is the live
+   credential store; `tb_users` is the legacy-bridge mirror. A literal port of
+   a legacy password write (`UPDATE tb_users.userpass`) desyncs them — the new
+   password won't log the customer in, and native (non-migrated) customers
+   have no `tb_users` row at all. Update Supabase Auth
+   (`admin.auth.admin.updateUserById`) AND best-effort-mirror `tb_users`.
+   "Faithful" = same *behaviour*, not same *code*.
+
+8. **Binary assets.** Spawned agents can't always copy binary files — they
+   LIST the assets (source path → dest); the integrator copies them. CSS and
+   `.tsx` text the agent writes directly.
+
+9. **Resync first.** A spawned worktree agent branches from a stale
+   `origin/main` — it MUST `git fetch origin && git reset --hard
+   origin/<integration-branch>` before working.

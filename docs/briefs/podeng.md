@@ -23,6 +23,15 @@ Branch: `podeng` (working) — push to own branch only; เดฟ merges into `d
 > - [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) — branch state · per-role lanes
 > - [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — the method (with §8 admin-specific pattern · though customer pattern is the canonical one for your lane)
 > - [`.claude/skills/legacy-php-sweep/SKILL.md`](../../.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
+> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — the plan · branch model · the 4-person work-split · status
+>
+> **🎨 YOUR ADDED TASK — the brand-asset swap.** The 1:1 transcription uses the
+> **legacy PCS raster assets** as placeholders wherever a proper `PR` asset does
+> not exist yet — icons, emoji-images, logos, background images — staged under
+> `public/legacy/pcs/`. **Sweep every one and swap to the official Pacred `PR`
+> asset.** Until a `PR` asset exists the legacy one stays (keeps the screen 1:1);
+> your job is to make the list shrink. Flag anything where no `PR` equivalent
+> exists so เดฟ/owner can source it.
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

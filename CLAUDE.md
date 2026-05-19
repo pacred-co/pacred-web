@@ -23,11 +23,19 @@ there until further notice.
 only · zero design decisions. Legacy source on ภูม's machine at
 `C:\Users\Admin\pcscargo\` (187 admin + 42 customer-portal `.php` files).
 
+**Status (2026-05-19 night):** register/login fix shipped to `main` · customer
+portal **7/~24** screens transcribed 1:1 on `dave-pacred` (`menu`→dashboard ·
+china-address · account-settings · search · wallet · addresses · cart) · admin
+pilot done (`admin-table`→`/admin/admins`) · Bootstrap-4 + jQuery + FontAwesome
+vendor JS being staged for 1:1 interactivity. Full status + the 4-person
+work-split → [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md).
+
 **Authoritative SOTs (read in order):**
 1. 🚨 [`docs/research/poom-save-point-2026-05-19-night.md`](docs/research/poom-save-point-2026-05-19-night.md) — the direction-shift save-point · branch state · per-role lanes · PCS→PR table · resume commands
-2. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — the canonical method · 1:1 transcription steps + admin pattern §8
-3. 🧰 [`.claude/skills/legacy-php-sweep/SKILL.md`](.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
-4. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (the `tb_*` table inventory)
+2. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — the plan · branch model · 4-person work-split · status · cross-cutting infra
+3. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — the canonical method · 1:1 transcription steps + admin pattern §8
+4. 🧰 [`.claude/skills/legacy-php-sweep/SKILL.md`](.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
+5. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (the `tb_*` table inventory)
 
 **Pattern references (read before transcribing your first screen):**
 - Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`
