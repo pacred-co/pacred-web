@@ -1,0 +1,150 @@
+/* =============================================================
+ * print-receipt-f.css — legacy PCS Cargo `member/printReceiptF.php`
+ *   (the ฝากนำเข้า / forwarder import RECEIPT PRINT document —
+ *    "ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)")
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription · runbook
+ * docs/runbook/faithful-port-transcription.md.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php / receipt-f-hs.php
+ * / print-shop.css pilots):
+ *
+ *   printReceiptF.php is an mPDF document — PHP builds one
+ *   self-contained HTML string with an INLINE <style> block
+ *   (printReceiptF.php L146-258) and mPDF rasterises it to a PDF.
+ *   There is NO Bootstrap-4 chrome; the print layout uses ONLY the
+ *   rules in that inline block.
+ *
+ *   To be 100% identical to the legacy document we BRING THAT INLINE
+ *   <style> BLOCK VERBATIM. Every rule below is copied byte-for-byte
+ *   from printReceiptF.php L146-258 — the only change is the
+ *   `.pcs-legacy` scope prefix on every selector, so the legacy
+ *   print rules cannot leak into / collide with the Tailwind app.
+ *
+ *   Served as the STATIC asset public/legacy/pcs/print-receipt-f.css
+ *   and loaded with a plain <link rel="stylesheet"> from page.tsx —
+ *   it must bypass the app's Tailwind v4 / PostCSS pipeline, which
+ *   rejects verbatim legacy CSS.
+ *
+ *   The browser's own Ctrl+P / "Save as PDF" replaces mPDF. The
+ *   @page rule pins the legacy paper (printReceiptF.php sets mPDF
+ *   format [210,297] = A4 portrait, L33) + the 4mm print margins
+ *   (AddPageByArray, L467-472).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the document is identical.
+ * ============================================================= */
+
+/* ---- printReceiptF.php L147-152 — the mPDF <body> sizing.
+ *      The legacy font-family is `sarabun` (THSarabunNew, embedded
+ *      by mPDF). The browser cannot embed it the same way, so we
+ *      fall back to a Thai-capable system stack while keeping the
+ *      legacy 20px base + the 210x267mm document box. ---- */
+.pcs-legacy.print-receipt-f {
+  font-family: "Sarabun", "TH Sarabun New", "Leelawadee UI", sans-serif;
+  font-size: 20px;
+  width: 210mm;
+  height: 267mm;
+}
+
+/* ---- printReceiptF.php L153-161 — text-align helpers ---- */
+.pcs-legacy.print-receipt-f .text-left   { text-align: left   !important; }
+.pcs-legacy.print-receipt-f .text-right  { text-align: right  !important; }
+.pcs-legacy.print-receipt-f .text-center { text-align: center !important; }
+
+/* ---- printReceiptF.php L162-167 — .row / .row .col-6 ---- */
+.pcs-legacy.print-receipt-f .row        { display: inline-block; }
+.pcs-legacy.print-receipt-f .row .col-6 { display: inline-block; }
+
+/* ---- printReceiptF.php L168-183 — invoice column halves ---- */
+.pcs-legacy.print-receipt-f .invoice-detail-left  { float: left;  width: 50%; }
+.pcs-legacy.print-receipt-f .invoice-detail-right { float: right; width: 50%; }
+.pcs-legacy.print-receipt-f .invoice-70-left      { float: left;  width: 69.5%; }
+.pcs-legacy.print-receipt-f .invoice-30-right     { float: right; width: 29.5%; }
+
+/* ---- printReceiptF.php L184-204 — heading styles ---- */
+.pcs-legacy.print-receipt-f .h-title {
+  color: #8BC34A;
+  font-size: 1.75em;
+  font-weight: bold;
+}
+.pcs-legacy.print-receipt-f .h-title-danger {
+  color: red;
+  font-size: 1.9em;
+  font-weight: bold;
+}
+.pcs-legacy.print-receipt-f .h-title2 {
+  font-size: 1.2em;
+  font-weight: bold;
+  line-height: 0.5em;
+}
+.pcs-legacy.print-receipt-f .h-title3 {
+  font-size: 0.8em;
+  font-weight: bold;
+  line-height: 0.2em;
+  color: red;
+}
+
+/* ---- printReceiptF.php L205-209 — sub text ---- */
+.pcs-legacy.print-receipt-f .h-sub {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: normal;
+}
+
+/* ---- printReceiptF.php L210-224 — padding + border helpers ---- */
+.pcs-legacy.print-receipt-f .p-2  { padding: 20px; }
+.pcs-legacy.print-receipt-f .p-1  { padding: 10px; }
+.pcs-legacy.print-receipt-f .p-05 { padding: 5px; }
+.pcs-legacy.print-receipt-f .pb-5 { padding-bottom: 15px !important; }
+.pcs-legacy.print-receipt-f .border-2-back { border: 1.5px solid !important; }
+
+/* ---- printReceiptF.php L225-231 — table layout + thead border ---- */
+.pcs-legacy.print-receipt-f table { table-layout: fixed; }
+.pcs-legacy.print-receipt-f thead { border: 1px solid; }
+
+/* ---- printReceiptF.php L232-257 — background + alignment helpers ---- */
+.pcs-legacy.print-receipt-f .bg-g     { background-color: #f2f2f2; }
+.pcs-legacy.print-receipt-f .f-c      { }
+.pcs-legacy.print-receipt-f .bg-2e8   { background-color: #ffe8e8; }
+.pcs-legacy.print-receipt-f .bg-light { background-color: #eff9ff !important; }
+.pcs-legacy.print-receipt-f .v-a-t    { vertical-align: text-top; }
+.pcs-legacy.print-receipt-f .border-top { border-top: 1px solid #c9c9c9 !important; }
+.pcs-legacy.print-receipt-f hr {
+  padding: 0px !important;
+  margin: 0px !important;
+}
+.pcs-legacy.print-receipt-f .float-right { float: right !important; }
+
+/* ---- the legacy markup also uses the `table table-bordered` BS-style
+ *      class names verbatim in the document body. mPDF resolves the
+ *      defaults from its own table engine; reproduced here so the
+ *      browser renders the same bordered table look. ---- */
+.pcs-legacy.print-receipt-f .table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pcs-legacy.print-receipt-f .table-bordered th,
+.pcs-legacy.print-receipt-f .table-bordered td {
+  border: 1px solid #000;
+}
+.pcs-legacy.print-receipt-f .table th,
+.pcs-legacy.print-receipt-f .table td {
+  padding: 2px 4px;
+  vertical-align: top;
+}
+.pcs-legacy.print-receipt-f img { max-width: 100%; }
+.pcs-legacy.print-receipt-f h2 { font-size: 1.5em;  margin: 0.3em 0; font-weight: bold; }
+.pcs-legacy.print-receipt-f h3 { font-size: 1.17em; margin: 0.3em 0; font-weight: bold; }
+
+/* ---- print paper — printReceiptF.php sets mPDF format [210,297]
+ *      (= A4 portrait, L33) and AddPageByArray margins of 4mm
+ *      (L467-472). Reproduce that for the browser's print dialog so
+ *      the saved PDF matches. ---- */
+@page {
+  size: 210mm 297mm;
+  margin: 4mm;
+}
+@media print {
+  .pcs-legacy.print-receipt-f .no-print { display: none !important; }
+}
