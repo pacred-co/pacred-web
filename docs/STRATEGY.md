@@ -2,7 +2,7 @@
 
 > **Purpose:** ทุกคน (เดฟ · ก๊อต · ปอน · ภูม · พี่ป๊อป) เปิดไฟล์เดียวจบ → เข้าใจ where we are, where we go, how each piece fits. ทุก brief / ADR / plan ย่อยลง 1 เอกสาร master นี้ + cross-link ลึกต่อ.
 
-Last reviewed: 2026-05-18 (direction pivot D1 — faithful PCS Cargo port)
+Last reviewed: 2026-05-19 (D1 — Phase A business data loaded · Phase B wave-1 integrated)
 Living doc — update each save-point. **Keep under 800 lines** (single-read budget).
 
 ---
@@ -22,26 +22,26 @@ Living doc — update each save-point. **Keep under 800 lines** (single-read bud
 
 ---
 
-## 2. Current state (2026-05-18) — 🔀 DIRECTION PIVOT "D1"
+## 2. Current state (2026-05-19) — D1: the faithful PCS Cargo port
 
 **On 2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app.** Its UI *and* its workflow logic-loop look nothing like the legacy **PCS Cargo** system the business actually runs — and ~8,898 existing customers + every operating role would face a full retraining. The decision (**D1**, [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md)):
 
-> **Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** Not a reinterpretation, a faithful port.
+> **Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** Not a reinterpretation, a faithful port. The owner's rule: **copy the original to 100% sameness FIRST, then improve.**
 
 This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch-era code (customer portal · 60+ admin routes · Tier 0/1/2) still exists, but the direction under it has changed — see §9.
 
 **Three phases (D1):**
 - **Phase A — Data migration.** Port the legacy `pcsc_main` (117 tables · ~8,898 customers · 3.78M rows) into Pacred's PostgreSQL/Supabase. `PCS<n>` → `PR<n>` keeping the exact running number; custom auth so customers sign in with their *existing* password (no reset).
-  *Status: 🟡 pipeline built · **dry-run validated** — 117/117 tables load clean, every row count reconciles MySQL ↔ PostgreSQL (0 failures · 0 mismatches) · **pending the production load** (gated on เดฟ's go + a fresh cutover dump from แต้ม).* Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
+  *Status: 🟢 **business data loaded to dev + prod Supabase** (2026-05-19) — migrations `0081`-`0083` + `0087` applied; 114 of 117 tables reconcile MySQL ↔ Supabase exactly (8,898 customers · orders · wallets · ตู้); the 3 oversized log tables (779 MB) + customer image files wait for the imminent Supabase **Pro** upgrade (free tier caps at 500 MB).* Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
 - **Phase B — Workflow fidelity.** Rework the Pacred app — customer portal + admin back-office — so its menus, job statuses, container (ตู้) flow, and end-to-end logic-loop **match the legacy PCS system exactly**.
-  *Status: 🔴 not started — this is the bulk of the forward work.* ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.
-- **Phase C — Pacred enhancements.** *Only after* the faithful port works, layer Pacred's own improvements. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue (booking flow · customer-intelligence · internal-chat · disbursement · china-ops · platform-observability) are **deferred here — re-sequenced, not cancelled.**
+  *Status: 🟡 **wave 1 shipped + integrated on `dave`** — the 9-icon launchpad, order flow, admin per-role RBAC sidebar, container `tb_cnt` payment ledger, and the legacy-auth bridge. First-pass — **not yet fidelity-verified** against the legacy original (the `legacy-fidelity-check` gate). Subsequent waves continue: ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.*
+- **Phase C — Pacred enhancements.** *Only after* the faithful port works, layer Pacred's own improvements. The old Tier 0/1/2/3 roadmap + the Phase-2 build queue (booking flow · customer-intelligence · internal-chat · disbursement · china-ops · platform-observability) + the 8-specialist R&D set are **deferred here — re-sequenced, not cancelled.**
   *Status: ⏸️ deferred.*
 
 **Decision lens (D1):**
 > Does this change make Pacred a **more faithful** port of the legacy PCS Cargo system — so staff and the ~8,898 existing customers need **zero retraining**? Phase B fidelity beats new capability. Don't ship a Phase-C enhancement before the faithful port works; never ship a stage before the quality gate is green.
 
-**Canonical D1 docs:** [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md) (the decision + work-split) · [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) (Phase A) · the legacy-vs-Pacred workflow gap map in [`research/`](research/_index.md) (Phase B input). [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) and the Tier 0/1/2/3 capability synthesis now describe **Phase-C** work.
+**Canonical D1 docs:** [ADR-0017](decisions/0017-pacred-faithful-pcs-port.md) (the decision + work-split) · [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) (Phase A) · the legacy-vs-Pacred fidelity audit in [`research/`](research/_index.md) — `d1-phase-b-gap-map.md` + the 3 `d1-fidelity-*` docs (Phase B rework spec). [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) and the Tier 0/1/2/3 capability synthesis now describe **Phase-C** work.
 
 ---
 
@@ -197,20 +197,24 @@ This supersedes the "V2 = rebuilt owner-pleaser" framing of ADR-0010. The launch
 
 **Read this section through the D1 lens (§2).** The rebuilt-Pacred app *was* launched to production 2026-05-17 and that code still exists — but on 2026-05-18 the owner rejected the rebuilt direction. So "shipped" below means **"code that exists"**, not "the agreed direction". Under D1 the forward work is **Phase A → B → C**, and most of the rebuilt feature set will be reworked in Phase B to match the legacy PCS workflow.
 
-### 🟦 Phase A — Data migration (the live forward workstream — 🟡 dry-run validated)
+### 🟦 Phase A — Data migration (🟢 business data loaded to dev + prod)
 
 Port the legacy `pcsc_main` MySQL DB into Pacred's PostgreSQL/Supabase. Runbook: [`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md).
 
-- ✅ **Schema** — 117 tables ported MySQL→PostgreSQL, faithful (legacy names/types/even typos kept; `tb_` prefix → no collision with Pacred's own tables).
-- ✅ **Converter + dry-run** — 3,780,238 rows → PostgreSQL COPY format; 2,288,128 `PCS→PR` transforms; loaded into a throwaway PostgreSQL 17 — all 117 tables load clean, every row count reconciles MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches).
-- ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` verifies the legacy password hash (7 real hashes + 5 vectors) — migrated customers sign in with their existing password, no reset.
-- ✅ **New-customer numbering** — `member-code-gapfill.sql` fills the lowest vacant `PR<n>` first, then increments past max.
-- 🔴 **Pending the production load** — gated on เดฟ's go + a fresh cutover `pcsc_main` dump from แต้ม. Open items: customer upload files (`images/users` etc — held by แต้ม) · 8 special userIDs (`PCSTT`/`PW`/…) · the `PR1`–`PR5` first-signup numbering confirm. Artifacts live **outside the repo** (`C:\Users\Admin\Desktop\pcs-migration-work\` — converted data is customer PII).
+- ✅ **Schema → `0081`-`0083`** — 117 tables ported MySQL→PostgreSQL, faithful (legacy names/types/even typos kept; `tb_` prefix → no collision with Pacred's own tables). Committed to `dave` as `0081` schema · `0082` indexes · `0083` member-seq.
+- ✅ **Converter + dry-run** — 3,780,238 rows via pgloader; 2,297,341 `PCS→PR` member-code transforms (case-normalised — MySQL collation is case-insensitive); dry-run loaded into a throwaway PostgreSQL 17 — all 117 tables reconcile MySQL ↔ PostgreSQL exactly (0 load failures · 0 mismatches).
+- ✅ **Loaded to dev + prod Supabase (2026-05-19 · Option B)** — `0081`-`0083` + `0087` applied to both projects; the 230 MB of business data (114 tables — 8,898 customers · orders · wallets · ตู้ · forwarders · receipts) loaded; 114/114 business tables reconcile exactly; 8,898 `tb_users` rows with intact 79-char login hashes.
+- ✅ **Auth bridge** — `lib/auth/pcs-legacy-password.ts` verifies the legacy password hash — migrated customers sign in with their existing password, no reset.
+- ✅ **New-customer numbering** — `next_pr_member_code()` (`0083`) fills the lowest vacant `PR<n>` first, then increments past max.
+- ⏳ **Remaining — pending the Supabase Pro upgrade** — the 3 oversized history/log tables (`tb_web_hs` · `tb_history_key` · `tb_history`, 779 MB) are created empty; the free tier caps a DB at 500 MB and the full legacy data is 1.02 GB. After the imminent Pro upgrade the 3 log tables + the customer image/file storage (held by แต้ม) backfill to full fidelity. A fresh `pcsc_main` cutover dump from แต้ม reloads at final cutover.
 - This supersedes the pre-D1 customers-only migration (`0067` · `u2-1-pcs-customer-migration.md` · `actions/admin/pcs-migration.ts`).
 
-### 🟧 Phase B — Workflow fidelity (🔴 not started — the bulk of forward work)
+### 🟧 Phase B — Workflow fidelity (🟡 wave 1 shipped + integrated — first-pass)
 
-Rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop **match the legacy PCS system exactly** — zero retraining for staff or the ~8,898 customers. ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow. Phase-B input = the legacy-vs-Pacred workflow gap map in [`research/`](research/_index.md) + the cargo-ops decode ([`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md)).
+Rework the customer portal + admin back-office so menus, job statuses, container (ตู้) flow, and the end-to-end logic-loop **match the legacy PCS system exactly** — zero retraining for staff or the ~8,898 customers. ภูม = backend onto the ported `tb_*` schema; ปอน = the customer-facing UI to the legacy look + flow.
+
+- ✅ **Wave 1 — shipped + integrated on `dave`** — the 9-icon launchpad (`pcs-icon-grid` · `pcs-launchpad-header`), the order flow, the admin per-role RBAC sidebar + menu-count badges, the container `tb_cnt` payment ledger (`/admin/accounting/container-payments`), and the legacy-auth bridge (`pcs-legacy-bridge.ts`). **First-pass — not yet fidelity-verified** against the legacy original; subsequent waves run the `legacy-fidelity-check` gate before shipping.
+- 🟡 **Subsequent waves** — drive off the fidelity audit in [`research/`](research/_index.md): `d1-phase-b-gap-map.md` (overview) + `d1-fidelity-customer.md` / `d1-fidelity-admin.md` / `d1-fidelity-workflow.md` (the per-screen / per-button / per-loop rework spec) + the cargo-ops decode ([`audit/cargo-ops-forensics-2026-05-16.md`](audit/cargo-ops-forensics-2026-05-16.md)).
 
 ### ⏸️ Phase C — Pacred enhancements (deferred — re-sequenced, not cancelled)
 
@@ -226,11 +230,13 @@ The rebuilt app launched 2026-05-17 and its code is intact; under D1 most of it 
 - **`main`** — the rebuilt app in production. Foundation (Next.js 16 + Supabase auth/RLS + OAuth + `proxy.ts`) · customer portal (`/login` `/register` `/dashboard` `/service-order` `/service-import` `/service-payment` `/wallet` `/notifications` `/shipments`) · 60+ admin routes (HR · ops · `/admin/accounting` · `/admin/reports` · `/admin/barcode`) · launch-week security/money hardening (W-1 keystone `0062` · overdraw-guard `0064`) · analytics + Sentry + LINE Messaging API.
 - **`dave`** — integration branch ahead of `main`, carrying the pre-D1 post-launch batches (U1 wire-the-flow + refund money path · U2 cost ledger + sacks · U4 admin supervisory layer + credit line · Tier 0/1/2) + ~700 test assertions. **The pre-D1 `dave→main` deploy is moot under D1** — that deploy shipped the rebuilt direction; the forward path is Phase A/B, not pushing `dave`. ก๊อต/เดฟ to decide the fate of un-deployed `dave` work (much of it informs Phase C).
 
-### 🆕 R&D / audit evidence base (2026-05-16/17/18)
+### 🆕 R&D / audit evidence base (2026-05-16 → 2026-05-19)
 
-Decoded legacy systems + gap-hunts + audits. Under D1 the **legacy-decode docs become primary** (they describe the system Pacred is now porting). Index: [`research/_index.md`](research/_index.md). High-leverage:
-- 2026-05-16 audits — **chat-analysis · legacy-cleanup · cargo-ops-forensics · php-deep-sweep** — the canonical legacy decode; now Phase-B reference for what the faithful port must match.
-- [`research/legacy-chat-datanew-2026-05-17.md`](research/legacy-chat-datanew-2026-05-17.md) — launch-eve decode; corrects the MOMO API surface (DN-1..DN-5).
+Decoded legacy systems + gap-hunts + audits. Under D1 the **legacy-decode + fidelity-audit docs are primary** (they describe the system Pacred is now porting). Index: [`research/_index.md`](research/_index.md). High-leverage:
+- **D1 Phase-B fidelity audit (2026-05-18/19)** — `d1-phase-b-gap-map.md` (overview) + `d1-fidelity-customer.md` / `d1-fidelity-admin.md` / `d1-fidelity-workflow.md` — the rigorous legacy-PCS-vs-Pacred gap maps at screen / button / loop level. **The canonical Phase-B rework spec for ภูม + ปอน.**
+- 2026-05-16 audits — **chat-analysis · legacy-cleanup · cargo-ops-forensics · php-deep-sweep** — the canonical legacy decode; Phase-B reference for what the faithful port must match.
+- [`research/ads-launch-action-plan-2026-05-20.md`](research/ads-launch-action-plan-2026-05-20.md) — consolidates the prior growth/tools/observability docs + reconciles them with D1 (Phase-C ads work — the funnel is built but MEASURE is off).
+- The 8-specialist R&D set ([`research/r-and-d-2026-05-19/`](research/r-and-d-2026-05-19/_synthesis.md)) — mobile-scanning · marketing · customer-portal · admin · devops · backend · billing · tracking — **deferred to Phase C.**
 - [`research/PACRED-MASTER-STRATEGY.md`](research/PACRED-MASTER-STRATEGY.md) · [`research/audit-core-2026-05-18.md`](research/audit-core-2026-05-18.md) · [`research/review-u1-u2-2026-05-18.md`](research/review-u1-u2-2026-05-18.md) — pre-D1 syntheses/reviews of the rebuilt app; inform Phase C.
 
 ---
@@ -239,14 +245,17 @@ Decoded legacy systems + gap-hunts + audits. Under D1 the **legacy-decode docs b
 
 Under D1 the bar is no longer "did the rebuilt app launch" — it is **"is Pacred a faithful port of the legacy PCS Cargo system, so no one needs retraining?"** DoD per phase:
 
-**Phase A — data migration (🟡 dry-run met, prod pending):**
-- [x] All 117 `pcsc_main` tables ported to PostgreSQL — faithful schema
+**Phase A — data migration (🟢 business data loaded · log tables + files pending the Pro upgrade):**
+- [x] All 117 `pcsc_main` tables ported to PostgreSQL — faithful schema (`0081`-`0083`)
 - [x] Converter handles all 3.78M rows · `PCS<n>`→`PR<n>` on member-code columns only
 - [x] Dry-run: 117/117 tables load clean · every row count reconciles MySQL ↔ PostgreSQL
 - [x] Auth bridge verifies the legacy password hash — customers sign in, no reset
-- [ ] Production load — fresh cutover dump · `0081` schema migration · data load · prod-side reconcile · customer files into Supabase Storage (gated on เดฟ go + แต้ม)
+- [x] Business data loaded to dev + prod Supabase — 114/117 tables reconcile · 8,898 customers
+- [ ] Backfill the 3 oversized log tables + customer image files (gated on the Supabase Pro upgrade + แต้ม's image storage); reload from a fresh cutover dump at final cutover
 
-**Phase B — workflow fidelity (🔴 not started — the forward DoD):**
+**Phase B — workflow fidelity (🟡 wave 1 shipped — first-pass, not yet fidelity-verified):**
+- [x] Wave 1 — 9-icon launchpad · order flow · admin RBAC sidebar + badges · `tb_cnt` container ledger · legacy-auth bridge (shipped + integrated on `dave`)
+- [ ] Wave 1 passes the `legacy-fidelity-check` gate (element-by-element vs the legacy original)
 - [ ] Customer-portal menus + navigation match the legacy PCS layout
 - [ ] Job statuses + the container (ตู้) flow match the legacy state machine exactly
 - [ ] The end-to-end logic-loop (สั่ง → โอน → นำเข้า → ตู้ → ส่งมอบ) matches legacy behaviour
