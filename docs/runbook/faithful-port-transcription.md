@@ -117,3 +117,69 @@ is far faster *and* far more faithful than the wave-1 reinterpretation —
 mechanical, parallelisable across agents + the team, and it reuses the
 front-end / auth / data layer already built. The legacy file is the spec, so
 there is no divergence to rework.
+
+---
+
+## 8. Admin transcription pattern (pilot: `admin-table.php`)
+
+The admin back-office (`pcs-admin/**`) is a separate visual world from the
+customer portal: it uses the ThemeForest *"Modern Admin"* Bootstrap-4
+template, NOT the customer red theme. So the admin gets its **own CSS
+bundle** under `public/legacy/pcs/admin/` (parallel to the customer
+`public/legacy/pcs/*.css`):
+
+- `public/legacy/pcs/admin/admin-base.css` — the BS4 + Modern-Admin chrome
+  subset every admin screen uses (grid, card, buttons, badges, tabs, tables,
+  spacing, typography, theme colour helpers · ~470 lines · cites the source
+  legacy file for every block). Loaded by every admin transcription.
+- `public/legacy/pcs/admin/admin-table.css` — page-specific styles for the
+  `admin-table.php` default-view (the inline `<style>` block from
+  `home.php` L7-63 + the DataTables filter widget chrome). Loaded per-page.
+- `public/legacy/pcs/admin/images/` — admin photo assets (defaults to
+  `user.jpg`; per-admin pictures backfilled with the Phase A image upload).
+
+Every admin transcription page:
+1. Wraps the JSX in `<div className="pcs-legacy">` (non-negotiable — the
+   scope-class keeps Bootstrap-4 + Modern-Admin styles from leaking into
+   the rest of the Tailwind app + keeps Tailwind preflight from breaking
+   the legacy markup).
+2. Loads the CSS via `<link rel="stylesheet">` in the page (NOT `import`
+   — Tailwind v4 / PostCSS rejects verbatim legacy CSS, the rule da4cd79
+   set). Two `<link>`s per admin screen: `admin-base.css` (shared) +
+   `<screen>.css` (page-specific).
+3. Keeps the Pacred auth chain — `await requireAdmin([roles?])` at the top
+   of the async page function (per §3 above). The legacy
+   `departmentKey == 'HR' || 'ITDT' || 'CEO'` mutate-gates map onto the V3
+   `super` role.
+4. Sets `export const dynamic = "force-dynamic"`.
+5. Uses `createAdminClient()` for `tb_*` reads (RLS-locked to service_role).
+
+**Sub-page router pattern.** The legacy `admin-table.php` branches on
+`?page=`:
+| Legacy | Pacred route |
+|---|---|
+| (default) home view | `app/[locale]/(admin)/admin/admins/page.tsx` |
+| `?page=add` | `app/[locale]/(admin)/admin/admins/add/page.tsx` (future pilot) |
+| `?page=edit&id=X` | `app/[locale]/(admin)/admin/admins/[id]/edit/page.tsx` (future pilot) |
+| `?page=detail&id=X` | `app/[locale]/(admin)/admin/admins/[id]/page.tsx` (future pilot) |
+Each sub-view becomes a separate Next.js route segment, transcribed as a
+separate pilot. The default-view pilot covers ONLY the list (`home.php`).
+
+**Helper functions.** Legacy admin helpers
+(`pcs-admin/include/function.php`) — `nameCompanyType`, `nameAdminType`,
+`checkRightsName`, `generateBadgeDepartment`, `generateBadgeSection`,
+`diffDateNow`, `checkNULL` — are inlined into the first pilot page that
+uses them (verbatim PHP-equivalent TypeScript, with the legacy source
+line cited). After a few admin pilots show the same helpers repeated,
+lift them into `lib/legacy/admin-helpers.ts`. Don't lift on day 1; let
+the duplication earn the abstraction.
+
+**DataTables JS not ported.** The legacy DataTables init
+(`home.php` L526-585: sortable headers / export-buttons / per-page length /
+fixed header) requires jQuery + DataTables + buttons-html5 + buttons-print
++ jszip + pdfmake + fixedHeader. None are in the Pacred dependency tree.
+The pilot renders the table statically (markup keeps the
+`.dataTables_wrapper / #myTable / .dt-buttons` classes so the CSS looks
+identical at rest) and exposes the legacy URL filters
+(`?s=`, `?c=`, `?type=`, `?position=`) as `searchParams`. Functional
+sort/filter is a follow-up (likely a small React DataTables shim).

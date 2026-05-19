@@ -1,0 +1,468 @@
+/* =============================================================
+ * admin-base.css — legacy PCS Cargo admin (`pcs-admin/**`) base
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — ADMIN pilot.
+ * Paired customer pilot: public/legacy/pcs/menu.css.
+ *
+ * THE CSS-HANDLING PATTERN (mirrors menu.css · search.css · account-settings.css):
+ *
+ *   The legacy admin (member/pcs-admin/include/header.php L186-217)
+ *   loads ~13 stylesheets — Bootstrap-4 + ThemeForest "Modern Admin"
+ *   theme (vendors / bootstrap / bootstrap-extended / colors /
+ *   components / vertical-menu-modern / palette-gradient) + the
+ *   legacy hand-edited overrides (style.css · admin.css ·
+ *   pcs-admin/main/style-2024.css · pcs-group/custom*.css) +
+ *   page-specific datatables / daterangepicker / magnific-popup.
+ *
+ *   The total verbatim bundle is ~800 KB minified and assumes a
+ *   sidebar/topnav chrome we do NOT render in Pacred (V3 sidebar
+ *   stays). What every admin SCREEN actually uses inside its content
+ *   panel is a SUBSET — Bootstrap-4 grid + card + buttons + badges +
+ *   tabs + tables + spacing + Modern-Admin "Prompt" font + the
+ *   theme-extended overrides. That subset is reproduced here verbatim,
+ *   scoped under `.pcs-legacy` so the legacy Bootstrap-4 cannot leak
+ *   into — or collide with — the rest of the Tailwind app.
+ *
+ *   Source-of-truth values (every block below cites which legacy file
+ *   it came from):
+ *     - assets/css/bootstrap.min.css           (BS4 4.0 base)
+ *     - assets/css/bootstrap-extended.min.css  (theme card · breadcrumb · round · btn-min-width)
+ *     - assets/css/colors.min.css              (badge/btn colour palette)
+ *     - assets/css/components.min.css          (Modern-Admin component overrides)
+ *     - assets/css/style.css                   (PCS hand-edited overrides — text-color-main · font-* · pcs-badge*)
+ *     - assets/css/admin.css                   (admin-only overrides — body-new table padding)
+ *     - assets/css/pcs-admin/main/style-2024.css (badge-purchasing · table-hover · body-2024)
+ *     - assets/css/core/colors/palette-gradient.css (bg-gradient-x-*)
+ *
+ *   This file is served as the STATIC asset
+ *   public/legacy/pcs/admin/admin-base.css and loaded with a plain
+ *   <link rel="stylesheet"> from each admin page — it bypasses the
+ *   app's Tailwind v4 / PostCSS pipeline, which rejects verbatim
+ *   legacy CSS (the failure that drove da4cd79).
+ *
+ *   Page-specific styles (admin-table.php's inline <style> block,
+ *   the DataTables filter/length widget chrome) live in a sibling
+ *   file (admin-table.css) loaded per-page.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Typography (style.css L1-6 + assets/fonts feather) ----
+ * The Modern-Admin theme uses the Google "Prompt" Thai font.
+ * The legacy header pulls it from fonts.googleapis.com; restated
+ * here so the admin chrome looks identical without depending on
+ * the per-page <link>. */
+.pcs-legacy {
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+  color: #4e5154;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.pcs-legacy h1, .pcs-legacy h2, .pcs-legacy h3, .pcs-legacy h4,
+.pcs-legacy h5, .pcs-legacy h6 {
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+  margin: 0 0 .5rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #2f3036;
+}
+.pcs-legacy h1 { font-size: 2.5rem; }
+.pcs-legacy h2 { font-size: 2rem; }
+.pcs-legacy h3 { font-size: 1.75rem; }
+.pcs-legacy h4 { font-size: 1.5rem; }
+.pcs-legacy h5 { font-size: 1.25rem; }
+.pcs-legacy h6 { font-size: 1rem; }
+.pcs-legacy a  { color: #1e9ff2; text-decoration: none; background-color: transparent; }
+.pcs-legacy a:hover { color: #1e9ff2; text-decoration: none; }
+.pcs-legacy p { margin: 0 0 1rem; }
+.pcs-legacy ul, .pcs-legacy ol { margin: 0; padding: 0 0 0 1rem; }
+.pcs-legacy ul li, .pcs-legacy ol li, .pcs-legacy dl li { line-height: 2; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy table avatar is centred via wrapping <a>, so
+ * restore the legacy/browser-default inline rendering inside the scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+  max-width: 100%;
+}
+.pcs-legacy hr {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, .1);
+}
+.pcs-legacy small, .pcs-legacy .small { font-size: 80%; font-weight: 400; }
+.pcs-legacy strong, .pcs-legacy b { font-weight: bolder; }
+
+/* ---- Bootstrap-4 grid (exact bootstrap.min.css values) ---- */
+.pcs-legacy .container,
+.pcs-legacy .container-fluid {
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+  margin-right: auto;
+  margin-left: auto;
+}
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-1, .pcs-legacy .col-2, .pcs-legacy .col-3, .pcs-legacy .col-4,
+.pcs-legacy .col-5, .pcs-legacy .col-6, .pcs-legacy .col-7, .pcs-legacy .col-8,
+.pcs-legacy .col-9, .pcs-legacy .col-10, .pcs-legacy .col-11, .pcs-legacy .col-12,
+.pcs-legacy .col-md-1, .pcs-legacy .col-md-2, .pcs-legacy .col-md-3, .pcs-legacy .col-md-4,
+.pcs-legacy .col-md-5, .pcs-legacy .col-md-6, .pcs-legacy .col-md-7, .pcs-legacy .col-md-8,
+.pcs-legacy .col-md-9, .pcs-legacy .col-md-10, .pcs-legacy .col-md-11, .pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+.pcs-legacy .col-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+.pcs-legacy .col-6 { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .col-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+  .pcs-legacy .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+  .pcs-legacy .col-md-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+  .pcs-legacy .text-md-left  { text-align: left !important; }
+  .pcs-legacy .text-md-right { text-align: right !important; }
+}
+
+/* ---- Bootstrap-4 cards (bootstrap.min.css base + bootstrap-extended override) ---- */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  /* bootstrap-extended.min.css: card border:none + shadow + radius */
+  border: none;
+  box-shadow: 0 2px 18px 1px rgba(49, 53, 72, .1);
+  border-radius: .45rem;
+  margin-bottom: 1.875rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* ---- spacing helpers (Bootstrap-4 spacing scale) ---- */
+.pcs-legacy .p-0  { padding: 0 !important; }
+.pcs-legacy .p-1  { padding: 0.25rem !important; }
+.pcs-legacy .p-05 { padding: 0.125rem !important; }
+.pcs-legacy .pt-0 { padding-top: 0 !important; }
+.pcs-legacy .pt-1 { padding-top: 0.25rem !important; }
+.pcs-legacy .pb-0 { padding-bottom: 0 !important; }
+.pcs-legacy .pb-5 { padding-bottom: 3rem !important; }
+.pcs-legacy .pr-2 { padding-right: 0.5rem !important; }
+.pcs-legacy .pl-0 { padding-left: 0 !important; }
+.pcs-legacy .px-2 { padding-right: 0.5rem !important; padding-left: 0.5rem !important; }
+.pcs-legacy .py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+.pcs-legacy .m-0  { margin: 0 !important; }
+.pcs-legacy .m-1  { margin: 0.25rem !important; }
+.pcs-legacy .mt-0 { margin-top: 0 !important; }
+.pcs-legacy .mt-1 { margin-top: 0.25rem !important; }
+.pcs-legacy .mb-0 { margin-bottom: 0 !important; }
+.pcs-legacy .mb-1 { margin-bottom: 0.5rem !important; }
+.pcs-legacy .mr-1 { margin-right: 0.5rem !important; }
+.pcs-legacy .ml-1 { margin-left: 0.5rem !important; }
+
+/* ---- display + alignment helpers (bootstrap.min.css) ---- */
+.pcs-legacy .text-center  { text-align: center !important; }
+.pcs-legacy .text-right   { text-align: right !important; }
+.pcs-legacy .text-left    { text-align: left !important; }
+.pcs-legacy .text-white   { color: #fff !important; }
+.pcs-legacy .text-dark    { color: #2f3036 !important; }
+.pcs-legacy .text-info    { color: #1e9ff2 !important; }
+.pcs-legacy .text-success { color: #28d094 !important; }
+.pcs-legacy .text-warning { color: #ff9149 !important; }
+.pcs-legacy .text-danger  { color: #ff4961 !important; }
+.pcs-legacy .text-muted   { color: #6c757d !important; }
+.pcs-legacy .d-flex       { display: flex !important; }
+.pcs-legacy .d-block      { display: block !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .d-none       { display: none !important; }
+.pcs-legacy .d-inline     { display: inline !important; }
+.pcs-legacy .justify-content-center  { justify-content: center !important; }
+.pcs-legacy .justify-content-between { justify-content: space-between !important; }
+.pcs-legacy .align-items-center      { align-items: center !important; }
+.pcs-legacy .rounded-circle { border-radius: 50% !important; }
+.pcs-legacy .rounded        { border-radius: .25rem !important; }
+.pcs-legacy .float-right    { float: right !important; }
+.pcs-legacy .float-left     { float: left !important; }
+
+/* ---- background utility colours (colors.min.css) ---- */
+.pcs-legacy .bg-white   { background-color: #fff !important; }
+.pcs-legacy .bg-light   { background-color: #babfc7 !important; }
+.pcs-legacy .bg-danger  { background-color: #ff4961 !important; color: #fff !important; }
+.pcs-legacy .bg-warning { background-color: #ff9149 !important; }
+.pcs-legacy .bg-success { background-color: #28d094 !important; }
+.pcs-legacy .bg-info    { background-color: #1e9ff2 !important; }
+.pcs-legacy .bg-primary { background-color: #666ee8 !important; }
+
+/* ---- Bootstrap-4 buttons (exact bootstrap.min.css + bootstrap-extended) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  color: #6b6f82;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .25rem;
+  cursor: pointer;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out;
+}
+.pcs-legacy .btn:hover  { color: #6b6f82; text-decoration: none; }
+.pcs-legacy .btn:focus  { outline: 0; box-shadow: none; }
+.pcs-legacy .btn:disabled { opacity: .65; }
+.pcs-legacy .btn-sm {
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  line-height: 1.25;
+  border-radius: .15rem;
+}
+.pcs-legacy .btn-success { color: #fff; background-color: #28d094; border-color: #28d094; }
+.pcs-legacy .btn-success:hover { background-color: #1eb87f; border-color: #1eb87f; color: #fff; }
+.pcs-legacy .btn-warning { color: #fff; background-color: #ff9149; border-color: #ff9149; }
+.pcs-legacy .btn-warning:hover { background-color: #ff7216; border-color: #ff7216; color: #fff; }
+.pcs-legacy .btn-danger  { color: #fff; background-color: #ff4961; border-color: #ff4961; }
+.pcs-legacy .btn-danger:hover { background-color: #ff1635; border-color: #ff1635; color: #fff; }
+.pcs-legacy .btn-info    { color: #fff; background-color: #1e9ff2; border-color: #1e9ff2; }
+.pcs-legacy .btn-info:hover { background-color: #088ddb; border-color: #088ddb; color: #fff; }
+.pcs-legacy .btn-primary { color: #fff; background-color: #666ee8; border-color: #666ee8; }
+.pcs-legacy .btn-primary:hover { background-color: #444ee2; border-color: #444ee2; color: #fff; }
+/* bootstrap-extended.min.css */
+.pcs-legacy .btn-rounded { border-radius: 10rem; }
+.pcs-legacy .btn-circle  { border-radius: 50%; padding: .5rem; width: 2.7rem; height: 2.7rem; line-height: 1; }
+.pcs-legacy .btn-outline-info { color: #1e9ff2; border-color: #1e9ff2; background-color: transparent; }
+.pcs-legacy .btn-outline-info:hover { color: #fff; background-color: #1e9ff2; }
+
+/* ---- Bootstrap-4 badges (bootstrap.min.css + colors.min.css) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: .25em .4em;
+  font-size: 75%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: .25rem;
+  color: #fff;
+}
+.pcs-legacy .badge-pill {
+  padding-right: .6em;
+  padding-left: .6em;
+  border-radius: 10rem;
+}
+.pcs-legacy .badge-danger    { background-color: #ff4961; color: #fff; }
+.pcs-legacy .badge-warning   { background-color: #ff9149; color: #fff; }
+.pcs-legacy .badge-success   { background-color: #28d094; color: #fff; }
+.pcs-legacy .badge-info      { background-color: #1e9ff2; color: #fff; }
+.pcs-legacy .badge-primary   { background-color: #666ee8; color: #fff; }
+.pcs-legacy .badge-secondary { background-color: #6b6f82; color: #fff; }
+
+/* ---- PCS pcs-badge family (style.css L487-534) ----
+ * Bigger, pill-shaped sibling of Bootstrap badge. Used by the
+ * nav-tabs counters and the credit-balance pill. */
+.pcs-legacy .pcs-badge {
+  display: inline-block;
+  padding: .35em .7em;
+  margin-left: 5px;
+  margin-right: 5px;
+  font-size: 73%;
+  text-align: center;
+  vertical-align: baseline;
+  border-radius: 2px;
+  color: #fff;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+.pcs-legacy .pcs-badge-pill {
+  padding-right: 1.2em;
+  padding-left: 1.2em;
+  border-radius: 10rem !important;
+}
+
+/* ---- Bootstrap-4 tables (bootstrap.min.css + Modern-Admin override) ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  background-color: transparent;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  padding: .5rem .5rem;
+  vertical-align: top;
+  border-top: 1px solid #e3ebf3;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #e3ebf3;
+}
+.pcs-legacy .table-bordered { border: 1px solid #e3ebf3; }
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td { border: 1px solid #e3ebf3; }
+/* style-2024.css L1-3 — striped + hover share the same gentle tint */
+.pcs-legacy .table-hover tbody tr:hover,
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(202, 188, 191, 0.28);
+}
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* admin.css L101-118 — admin tables tighten the cell padding */
+.pcs-legacy .body-new .table td { padding: 0.25rem 0.5rem; }
+.pcs-legacy .body-new .table th { padding: 0.5rem 0.5rem; }
+
+/* ---- Bootstrap-4 nav tabs (bootstrap.min.css + style.css L394-396) ---- */
+.pcs-legacy .nav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+.pcs-legacy .nav-tabs {
+  border-bottom: 1px solid #cc3333 !important;
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+}
+.pcs-legacy .nav-tabs .nav-item { margin-bottom: -1px; }
+.pcs-legacy .nav-tabs .nav-link {
+  display: block;
+  padding: .5rem 1rem;
+  border: 1px solid transparent;
+  border-top-left-radius: .25rem;
+  border-top-right-radius: .25rem;
+  color: #6b6f82;
+  text-decoration: none;
+}
+.pcs-legacy .nav-tabs .nav-link:hover {
+  border-color: transparent transparent #cc3333;
+}
+.pcs-legacy .nav.nav-tabs .nav-item .nav-link.active {
+  color: #cc3333;
+  background-color: #fff;
+  border-color: #cc3333 #cc3333 #fff !important;
+}
+.pcs-legacy .nav-underline .nav-link {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.pcs-legacy .nav-underline .nav-link.active {
+  border-bottom-color: #cc3333;
+}
+.pcs-legacy .no-hover-bg .nav-link:hover { background-color: transparent; }
+/* admin.css L26-28 — admin tab heading reset */
+.pcs-legacy .pcs-tabs h4 { margin-bottom: -0.1rem; }
+
+/* ---- Bootstrap-4 breadcrumb (bootstrap.min.css + bootstrap-extended) ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  font-size: 1rem;
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+  background-color: transparent;
+  padding: 0 0 .75rem;
+  margin-bottom: 1rem;
+  min-height: auto;
+}
+.pcs-legacy .breadcrumb-item.active { color: #6b6f82; }
+.pcs-legacy .breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+  content: "/" !important;
+  padding-right: .5rem;
+  padding-left: .5rem;
+  color: #6b6f82;
+}
+.pcs-legacy .breadcrumb-wrapper { padding-bottom: .5rem; }
+.pcs-legacy .breadcrumbs-top { margin-bottom: .5rem; }
+
+/* ---- list-inline (legacy uses for action-button rows) ---- */
+.pcs-legacy .list-inline { padding-left: 0; list-style: none; margin-bottom: 1rem; }
+.pcs-legacy .list-inline-item { display: inline-block; }
+.pcs-legacy .list-inline-item:not(:last-child) { margin-right: 0.5rem; }
+
+/* ---- content layout wrappers (semantic — no theme rules) ----
+ * These are the wrapper classes the legacy theme uses; in Pacred
+ * the V3 admin sidebar already provides chrome, so they're just
+ * structural pass-throughs. */
+.pcs-legacy .app-content,
+.pcs-legacy .content-wrapper,
+.pcs-legacy .content-body,
+.pcs-legacy .content-header { display: block; }
+.pcs-legacy .content-overlay { display: none; }
+/* style-2024.css L7-9 */
+.pcs-legacy .content-wrapper { min-height: unset; }
+
+/* ---- Theme colour helpers (style.css L386-388) ---- */
+.pcs-legacy .text-color-main {
+  color: #cc3333 !important;
+}
+
+/* ---- Theme font-size helpers (style.css L70-159) ---- */
+.pcs-legacy .font-10 { font-size: 10px; }
+.pcs-legacy .font-12 { font-size: 12px; }
+.pcs-legacy .font-14 { font-size: 14px; }
+.pcs-legacy .font-16 { font-size: 16px; }
+.pcs-legacy .font-18 { font-size: 18px; }
+.pcs-legacy .font-normal { font-weight: 400; }
+.pcs-legacy .text-black-1 { color: #464855; }
+
+/* ---- Theme gradient (style.css L83-86 + palette-gradient.css L205-207) ---- */
+.pcs-legacy .bg-gradient-x-danger {
+  background-image: linear-gradient(to right, #E9091F 0%, #E9091F 100%) !important;
+  background-repeat: repeat-x;
+}
+.pcs-legacy .bg-gradient-x-warning {
+  background-image: linear-gradient(to right, #ff7216 0%, #ffb07c 100%);
+  background-repeat: repeat-x;
+}
+
+/* ---- admin.css L17-22 — admin-only utility background colours ---- */
+.pcs-legacy .bg-w--  { background-color: #ffa59f; }
+.pcs-legacy .bg-w-add { background-color: #91ff75; }
+.pcs-legacy .bg-danger2 { background: linear-gradient(to right, #e2856341, #b84c4f38); }
+/* style-2024.css L22-24 */
+.pcs-legacy .bg-danger3 { background-color: rgba(255, 137, 137, 0.192); }
+
+/* ---- Inline SVG icon utility ----
+ * The legacy theme uses `<i class="ft-plus">`, `<i class="ft-edit">`,
+ * `<i class="ft-trash-2">`, `<i class="icon-lock">` (feather icon
+ * font + simple-line-icons font). Loading those font files would
+ * require ~85 KB extra binary assets. We render inline SVGs of the
+ * same icons in the JSX; this `.pcs-icon` class gives them the
+ * legacy icon sizing inside a button. */
+.pcs-legacy .pcs-icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.125em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

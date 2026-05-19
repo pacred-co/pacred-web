@@ -1,0 +1,132 @@
+/* =============================================================
+ * admin-table.css — legacy PCS Cargo `pcs-admin/admin-table.php`
+ *                   default-view (home.php) page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — ADMIN pilot.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * THE CSS-HANDLING PATTERN (mirrors menu.css · search.css · account-settings.css):
+ *
+ *   This file holds ONLY what `admin-table.php` itself adds on top
+ *   of the admin chrome — its inline <style> block from
+ *   include/pages/admin-table/home.php L7-63 (the DataTables filter
+ *   chrome, the .pcs-sequence numbered list, the .toggle-button
+ *   absolute position, the .bg-color helpers) PLUS the DataTables
+ *   plugin CSS it links (assets/plugins/datatables/css/
+ *   dataTables.bootstrap4.css — the search/length widget chrome).
+ *
+ *   Every selector is scoped under `.pcs-legacy`. The static-asset +
+ *   <link rel="stylesheet"> loading rule (no `import`) applies as in
+ *   the customer pilot — Tailwind v4 / PostCSS rejects verbatim
+ *   legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- home.php L7-63 inline <style> block (verbatim) ---- */
+.pcs-legacy .input-group-addon.input-show-pass {
+  top: 24px;
+  right: 15px;
+}
+.pcs-legacy .toggle-button {
+  position: absolute;
+  right: 15px;
+  top: 8px;
+}
+.pcs-legacy .password-container {
+  position: relative;
+}
+.pcs-legacy .pcs-sequence ol {
+  counter-reset: item;
+}
+.pcs-legacy .pcs-sequence li {
+  display: block;
+}
+.pcs-legacy .pcs-sequence li::before {
+  content: counters(item, ".") " ";
+  counter-increment: item;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  line-height: 1rem;
+}
+/* home.php L33-38 + admin.css L101-118 — tightened table padding for the
+ * data-heavy admin table (same value either source). */
+.pcs-legacy .table td { padding: 0.25rem 0.5rem; }
+.pcs-legacy .table th { padding: 0.5rem 0.5rem; }
+/* home.php L39-50 — the DataTables export-buttons + filter + length
+ * widgets each take 50% so they fit on one row above the table. */
+.pcs-legacy .dt-buttons {
+  width: 50%;
+  display: inline-block;
+}
+.pcs-legacy #myTable_filter {
+  display: inline-block;
+  width: 50%;
+}
+.pcs-legacy #myTable_length {
+  display: inline-block;
+  width: 50%;
+}
+/* home.php L51-62 — the bg-color helpers (used by chip selectors
+ * elsewhere in the admin-table flow). */
+.pcs-legacy .bg-color {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+.pcs-legacy .bg-color-select {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+
+/* ---- DataTables Bootstrap-4 chrome (excerpt from
+ *      assets/plugins/datatables/css/dataTables.bootstrap4.css) ----
+ * The legacy table is decorated by DataTables. The full plugin is
+ * not initialised in Pacred (we render statically — see notes in the
+ * port-spec doc / page.tsx). The page still uses the wrapper
+ * elements (`#myTable_filter`, `#myTable_length`, `.dt-buttons`)
+ * for the search + length widgets; reproduced here so the static
+ * filter chips above the table look identical. */
+.pcs-legacy .dataTables_wrapper {
+  position: relative;
+  clear: both;
+  margin-top: 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_length label,
+.pcs-legacy .dataTables_wrapper .dataTables_filter label {
+  font-weight: 400;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_filter input {
+  margin-left: 0.5em;
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_length select {
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy table.dataTable.no-footer {
+  border-bottom: 1px solid #e3ebf3;
+}
+
+/* ---- Page-specific theming helpers used by the home.php JSX ---- */
+/* admin.css L82-85 — badge groups in cells; gives each badge breathing
+ * room when the cell wraps several department/section pills. */
+.pcs-legacy .badge-group span {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+/* style.css L580-583 — the .action wrapper wraps a row of action
+ * buttons (edit / delete / reset-pass); tighten the spacing so
+ * three round buttons fit in a narrow cell. */
+.pcs-legacy .action button {
+  margin-bottom: 0.2rem;
+}
