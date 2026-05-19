@@ -58,6 +58,7 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       refundsPending,
       bookingsPending,
       incidents,
+      cntUnpaid,
     ] = await Promise.all([
       // ── Wallet ────────────────────────────────────────────────
       admin.from("wallet_transactions").select("id", { count: "exact", head: true })
@@ -112,11 +113,20 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       // ── Incident triage (IO-1) ──────────────────────────────────
       admin.from("platform_incidents").select("id", { count: "exact", head: true })
         .in("status", ["open", "acknowledged"]),
+      // ── ค่าตู้รออนุมัติ (tb_cnt — B-6 shipped) ─────────────────────
+      // cntstatus = '1' = รอจ่ายเงิน (legacy varchar(1)). Wave-1 audit
+      // (docs/research/wave-1-fidelity/audit-b6-container-payments.md)
+      // flagged this badge was hardcoded to 0 — lifted post-audit so
+      // the legacy 'cnt-hs ⑤' unpaid count actually lights.
+      admin.from("tb_cnt").select("id", { count: "exact", head: true })
+        .eq("cntstatus", "1"),
     ]);
 
     const wt = n(walletTopup);
     const ww = n(walletWithdraw);
-    const cnt = 0; // tb_cnt container-payment ledger not yet ported (Phase B §6)
+    // B-6 ledger shipped (Wave 1) — query the live tb_cnt table for the
+    // legacy "ค่าตู้รออนุมัติ" badge instead of the prior hardcoded 0.
+    const cnt = n(cntUnpaid);
     const shopPayout = n(salesPayout); // legacy เบิกค่าสินค้า — folds into sales_payouts
     const sp = n(salesPayout);
     const ip = n(interpreterPayout);
