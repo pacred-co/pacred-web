@@ -53,7 +53,7 @@ inside that scope. Reference — the `menu.php` pilot:
 | Full archive + DB dumps + file exports | `C:\Users\Admin\Desktop\newrealdatapcs\` (`pcscargo.rar`, 3× `pcsc_main.sql`, member/backoffice/wordpress exports) |
 | Admin UI base | the ThemeForest *"Modern Admin — clean Bootstrap 4 dashboard"* template (extracted in `newrealdatapcs/`) — the legacy admin's visual base |
 | Data layer | Supabase `tb_*` tables (Phase A loaded `pcsc_main`). Transcribe each PHP SQL query → the matching `tb_*` query via the service-role admin client. |
-| `tb_*` table/column map | [`../research/wave-1-fidelity/_SYNTHESIS.md`](../research/wave-1-fidelity/_SYNTHESIS.md) §7 |
+| `tb_*` table/column map | `docs/research/wave-1-fidelity/_SYNTHESIS.md` §7 — on the `faithful-port` branch |
 | Status codes ↔ Thai labels | `lib/legacy-status-map.ts` |
 
 **Skip** the dated-backup files (`payment20231213.php`, `20260311wallet.php`,
