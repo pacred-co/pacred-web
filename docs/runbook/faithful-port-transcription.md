@@ -53,7 +53,7 @@ inside that scope. Reference — the `menu.php` pilot:
 | Full archive + DB dumps + file exports | `C:\Users\Admin\Desktop\newrealdatapcs\` (`pcscargo.rar`, 3× `pcsc_main.sql`, member/backoffice/wordpress exports) |
 | Admin UI base | the ThemeForest *"Modern Admin — clean Bootstrap 4 dashboard"* template (extracted in `newrealdatapcs/`) — the legacy admin's visual base |
 | Data layer | Supabase `tb_*` tables (Phase A loaded `pcsc_main`). Transcribe each PHP SQL query → the matching `tb_*` query via the service-role admin client. |
-| `tb_*` table/column map | `docs/research/wave-1-fidelity/_SYNTHESIS.md` §7 — on the `faithful-port` branch |
+| `tb_*` table/column map | [`../research/wave-1-fidelity/_SYNTHESIS.md`](../research/wave-1-fidelity/_SYNTHESIS.md) §7 |
 | Status codes ↔ Thai labels | `lib/legacy-status-map.ts` |
 
 **Skip** the dated-backup files (`payment20231213.php`, `20260311wallet.php`,
@@ -117,3 +117,125 @@ is far faster *and* far more faithful than the wave-1 reinterpretation —
 mechanical, parallelisable across agents + the team, and it reuses the
 front-end / auth / data layer already built. The legacy file is the spec, so
 there is no divergence to rework.
+
+---
+
+## 8. Admin transcription pattern (pilot: `admin-table.php`)
+
+The admin back-office (`pcs-admin/**`) is a separate visual world from the
+customer portal: it uses the ThemeForest *"Modern Admin"* Bootstrap-4
+template, NOT the customer red theme. So the admin gets its **own CSS
+bundle** under `public/legacy/pcs/admin/` (parallel to the customer
+`public/legacy/pcs/*.css`):
+
+- `public/legacy/pcs/admin/admin-base.css` — the BS4 + Modern-Admin chrome
+  subset every admin screen uses (grid, card, buttons, badges, tabs, tables,
+  spacing, typography, theme colour helpers · ~470 lines · cites the source
+  legacy file for every block). Loaded by every admin transcription.
+- `public/legacy/pcs/admin/admin-table.css` — page-specific styles for the
+  `admin-table.php` default-view (the inline `<style>` block from
+  `home.php` L7-63 + the DataTables filter widget chrome). Loaded per-page.
+- `public/legacy/pcs/admin/images/` — admin photo assets (defaults to
+  `user.jpg`; per-admin pictures backfilled with the Phase A image upload).
+
+Every admin transcription page:
+1. Wraps the JSX in `<div className="pcs-legacy">` (non-negotiable — the
+   scope-class keeps Bootstrap-4 + Modern-Admin styles from leaking into
+   the rest of the Tailwind app + keeps Tailwind preflight from breaking
+   the legacy markup).
+2. Loads the CSS via `<link rel="stylesheet">` in the page (NOT `import`
+   — Tailwind v4 / PostCSS rejects verbatim legacy CSS, the rule da4cd79
+   set). Two `<link>`s per admin screen: `admin-base.css` (shared) +
+   `<screen>.css` (page-specific).
+3. Keeps the Pacred auth chain — `await requireAdmin([roles?])` at the top
+   of the async page function (per §3 above). The legacy
+   `departmentKey == 'HR' || 'ITDT' || 'CEO'` mutate-gates map onto the V3
+   `super` role.
+4. Sets `export const dynamic = "force-dynamic"`.
+5. Uses `createAdminClient()` for `tb_*` reads (RLS-locked to service_role).
+
+**Sub-page router pattern.** The legacy `admin-table.php` branches on
+`?page=`:
+| Legacy | Pacred route |
+|---|---|
+| (default) home view | `app/[locale]/(admin)/admin/admins/page.tsx` |
+| `?page=add` | `app/[locale]/(admin)/admin/admins/add/page.tsx` (future pilot) |
+| `?page=edit&id=X` | `app/[locale]/(admin)/admin/admins/[id]/edit/page.tsx` (future pilot) |
+| `?page=detail&id=X` | `app/[locale]/(admin)/admin/admins/[id]/page.tsx` (future pilot) |
+Each sub-view becomes a separate Next.js route segment, transcribed as a
+separate pilot. The default-view pilot covers ONLY the list (`home.php`).
+
+**Helper functions.** Legacy admin helpers
+(`pcs-admin/include/function.php`) — `nameCompanyType`, `nameAdminType`,
+`checkRightsName`, `generateBadgeDepartment`, `generateBadgeSection`,
+`diffDateNow`, `checkNULL` — are inlined into the first pilot page that
+uses them (verbatim PHP-equivalent TypeScript, with the legacy source
+line cited). After a few admin pilots show the same helpers repeated,
+lift them into `lib/legacy/admin-helpers.ts`. Don't lift on day 1; let
+the duplication earn the abstraction.
+
+**DataTables JS not ported.** The legacy DataTables init
+(`home.php` L526-585: sortable headers / export-buttons / per-page length /
+fixed header) requires jQuery + DataTables + buttons-html5 + buttons-print
++ jszip + pdfmake + fixedHeader. None are in the Pacred dependency tree.
+The pilot renders the table statically (markup keeps the
+`.dataTables_wrapper / #myTable / .dt-buttons` classes so the CSS looks
+identical at rest) and exposes the legacy URL filters
+(`?s=`, `?c=`, `?type=`, `?position=`) as `searchParams`. Functional
+sort/filter is a follow-up (likely a small React DataTables shim).
+
+---
+
+## 9. Cross-cutting gotchas (learned in customer batches 1-2)
+
+Hard-won rules — read before transcribing a screen:
+
+1. **Hardcode the Thai text.** The legacy PHP hardcodes Thai; a faithful
+   transcription does the same. Do NOT route strings through next-intl `t()`
+   (the `menu.php` pilot does — it predates this rule; don't copy that part)
+   and do NOT edit `messages/*.json`. Hardcoded Thai is both more faithful AND
+   collision-free across parallel agents.
+
+2. **Internal links — `<Link>`, not `<a href="/…">`.** ESLint
+   `@next/next/no-html-link-for-pages` errors on a raw `<a>` to an in-app
+   route — use `<Link>` from `@/i18n/navigation`. Keep `<a href="#…">` in-page
+   anchors as `<a>`. Legacy links to old WordPress marketing pages
+   (`/freearea`, `/โปรโมชัน/…`) → absolute `https://pcscargo.co.th/…` URLs
+   (faithful, scrub-safe, not flagged). NB the rule over-reports — one bad
+   `<a>` shows as dozens of errors (once per app route); fix the one tag.
+
+3. **Vendor JS is staged globally.** jQuery + Bootstrap-4 + FontAwesome load
+   from the `(protected)` layout (`public/legacy/pcs/vendor/`). Transcribe the
+   legacy `data-toggle` / `data-target` / `.modal` / tab / collapse markup
+   VERBATIM — it works 1:1 at runtime. Do NOT re-implement Bootstrap
+   interactions in React. (This supersedes the §8 "DataTables JS not ported"
+   caveat — the vendor bundle covers it.)
+
+4. **A Server Component render is a PURE READ.** Never reproduce a legacy
+   render-time `INSERT`/`UPDATE` (visit-logs, search-logs, auto-expiry) inside
+   the page — Next.js disallows it and re-renders double-fire. Mutations →
+   Server Actions. Flag every deferred mutation in your report.
+
+5. **Derive UI state during render, not in an effect.** A `useEffect` that
+   calls `setState` trips `react-hooks/set-state-in-effect`. Compute from
+   props / the action result during render.
+
+6. **Missing brand asset → use the legacy PCS asset.** Never ship a broken
+   image. Reference the legacy asset under `/legacy/pcs/…` and flag it for
+   ปอน's brand-asset swap.
+
+7. **Auth-touching screens — Pacred auth is SPLIT.** Supabase Auth is the live
+   credential store; `tb_users` is the legacy-bridge mirror. A literal port of
+   a legacy password write (`UPDATE tb_users.userpass`) desyncs them — the new
+   password won't log the customer in, and native (non-migrated) customers
+   have no `tb_users` row at all. Update Supabase Auth
+   (`admin.auth.admin.updateUserById`) AND best-effort-mirror `tb_users`.
+   "Faithful" = same *behaviour*, not same *code*.
+
+8. **Binary assets.** Spawned agents can't always copy binary files — they
+   LIST the assets (source path → dest); the integrator copies them. CSS and
+   `.tsx` text the agent writes directly.
+
+9. **Resync first.** A spawned worktree agent branches from a stale
+   `origin/main` — it MUST `git fetch origin && git reset --hard
+   origin/<integration-branch>` before working.

@@ -2,8 +2,18 @@
 
 > **Purpose:** ทุกคน (เดฟ · ก๊อต · ปอน · ภูม · พี่ป๊อป) เปิดไฟล์เดียวจบ → เข้าใจ where we are, where we go, how each piece fits. ทุก brief / ADR / plan ย่อยลง 1 เอกสาร master นี้ + cross-link ลึกต่อ.
 
-Last reviewed: 2026-05-19 (D1 — Phase A business data loaded · Phase B wave-1 integrated)
+Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next transcription**)
 Living doc — update each save-point. **Keep under 800 lines** (single-read budget).
+
+> ## 🚨 2026-05-19 EVENING — Direction shift
+>
+> Team pivoted from V3 (`main → dave → Poom` loop) to **literal 1:1 transcription**
+> of legacy PHP → Next.js per owner's "100% sameness FIRST" rule. **New branch
+> loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer) + `podeng`
+> (ปอน) → `faithful-port` → ก๊อต gate → `main`. V3 work preserved + frozen.
+>
+> Full handoff: [`research/poom-save-point-2026-05-19-night.md`](research/poom-save-point-2026-05-19-night.md).
+> Method: [`runbook/faithful-port-transcription.md`](runbook/faithful-port-transcription.md).
 
 ---
 

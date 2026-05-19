@@ -1,7 +1,30 @@
 # ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
 
-Last reviewed: 2026-05-19 (D1 — Phase A loaded · Phase B wave-1 integrated)
-Branch: `Poom` (working) — push to own branch only; เดฟ merges into `dave`
+Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
+Branch: **`Poom-pacred`** (the 1:1 lane) — `Poom` (V3 lane) is FROZEN per direction shift
+
+> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+>
+> The team pivoted from V3 to a **literal 1:1 transcription** of legacy
+> PHP → Next.js per the owner's "100% sameness FIRST" rule. **Your new
+> working branch is `Poom-pacred`** (not `Poom`). Your lane = **admin
+> back-office** = the 187 `pcs-admin/*.php` files. Source on this machine:
+> `C:\Users\Admin\pcscargo\member\pcs-admin\`.
+>
+> Branch loop: `Poom-pacred` → (เดฟ merges) `dave-pacred` → `faithful-port`
+> → ก๊อต gate → `main` (production). V3 work (`Poom` branch, Wave A/B/R1)
+> is preserved + already merged into `faithful-port` — none of today's
+> morning work is lost — but no new commits land on `Poom` until further
+> notice.
+>
+> **READ FIRST when resuming (especially at home machine):**
+> [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md)
+> — branch state · ภูม's lane · admin pilot status · resume commands · PCS→PR table.
+>
+> **Method:** [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — read fully.
+> **Skill:** [`.claude/skills/legacy-php-sweep/SKILL.md`](../../.claude/skills/legacy-php-sweep/SKILL.md).
+> **Pattern reference:** เดฟ's customer pilot at `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`.
+> **Admin pilot reference (your work · 2026-05-19 evening):** `app/[locale]/(admin)/admin/admins/page.tsx` (transcription of `admin-table.php`) + `public/legacy/pcs/admin/admin-base.css` — read these before transcribing the next admin screen.
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

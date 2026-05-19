@@ -254,3 +254,221 @@ pnpm verify       # lint + tsc + test:unit + audit — all exit 0
 **ลุยต่อนะ ภูม 💪** — B-auth + Wave 1 อยู่บน `Poom` หมดแล้ว verify ผ่าน · งานต่อไป
 = `B-0` (re-point `tb_*`) ให้ Wave 1 โชว์ data จริง · พรุ่งนี้ที่บริษัท sync + ตั้ง
 `.env.local` ตาม §6 แล้วลุย review Wave 1 เชิงลึกเทียบ PHP เดิม
+
+---
+
+## 11. 🆕 Session log — 2026-05-19 evening (company machine · post-dave sync)
+
+> Continuation of this save-point's recommended "review Wave 1 vs legacy"
+> step.  ภูม + 4 shadow-clone reviewers did the per-slice fidelity QC pass
+> + an empirical probe of dev Supabase that surfaced a bigger gap than the
+> per-slice audits flagged.  Commits today on `Poom`:
+> `8feb5d6` · `e66a3ab` · `2da9b8f`.
+
+### 11.1 What landed
+1. **Wave-1 fidelity audit (4 parallel shadow-clone reviewers)** —
+   `docs/research/wave-1-fidelity/audit-b{1,3,4,6}-*.md`
+   · B-1 launchpad: 🟢 layout EXCELLENT · 🔴🔴 0 `tb_*` reads
+   · B-3 order flow: 🟢 strong (6 tabs · 151-cap · link-paste) · 🔴 0 `tb_*` reads + 4 sub-gaps
+   · B-4 admin sidebar+badges: 🟢 17 OOP blocks + 7 menus + 6 EN headers · 🔴 14/14 badges hit rebuilt-era
+   · B-6 `tb_cnt` ledger: ✅ THE EXCEPTION — fully faithful end-to-end
+2. **Synthesis + send-back-to-เดฟ brief** — `docs/research/wave-1-fidelity/_SYNTHESIS.md`
+3. **§7 Wave-2-ready swap diffs** (post-audit prep) — concrete before/after `.from()` rewrites for 5+6+14 callsites + identity-bridge note + B-2 status-vocab map
+4. **§8 EMPIRICAL FINDING (critical)** — direct probe of dev Supabase via service-role REST:
+   · `tb_users` rows: **8,898**
+   · `profiles` rows with `member_code LIKE 'PR%'`: **6** (0.067%)
+   · Spot-checked PR169 = 1,956 forwarders in `tb_*`, no `profiles` row
+   · Root cause: B-auth provisions `auth.users` ✅ but NOT a `profiles` row
+   · Wave 2 (updated) = 3-step bundle: `0088_pcs_profiles_backfill.sql` +
+     extend `pcs-legacy-bridge.ts` to bind on first login + §7 swap diffs
+5. **B-6 sticky fix shipped** — `actions/admin/sidebar-counts.ts`: lifted
+   hardcoded `const cnt = 0` to a real `tb_cnt WHERE cntstatus='1'`
+   count query. Legacy "ค่าตู้รออนุมัติ" badge now lights.
+
+### 11.2 Dev-Supabase verification (matters for next setup)
+- All Phase-A tables loaded with real data:
+  `tb_users` 8,898 · `tb_header_order` 21,950 · `tb_forwarder` 47,626 ·
+  `tb_cnt` 958 · `tb_payment` 1,460 · `tb_cart` 15,477 · `tb_admin` 181 ·
+  `reserve_meeting_room` 5 (+ 110 more — full 117 per Phase A)
+- Indexes from `0082` working (UNIQUE lookups by userid OK)
+- Function `next_pr_member_code()` from `0083` returns `"PR1"` (lowest vacant)
+- **`0081`/`0082`/`0083` are SKIP-in-Dashboard** — เดฟ loaded them via
+  psql/pgloader per runbook §5-§6 (canonical path); Supabase Dashboard
+  doesn't track that load, so re-running via Dashboard errors with
+  "relation already exists".  This is expected — the files are
+  reference-of-what-was-loaded.  Skip when applying via Dashboard;
+  the data is there.
+
+### 11.3 Next-actions list (consolidated · what blocks who)
+
+**ภูม non-blocking — can do anytime:**
+- LINE-ping เดฟ with the synthesis link (esp. §8 critical finding) so
+  Wave 2 starts informed
+- LINE-ping ก๊อต for Q2 auth-bridge ratification
+- R&D 8-specialist deep-dive read (`docs/research/r-and-d-2026-05-19/`) ·
+  add cargo-domain notes if relevant
+- Manual smoke-test on `http://localhost:3000` — log in as a migrated
+  PCS customer (B-auth) and visually confirm the ghost-customer symptom
+
+**Waiting on เดฟ:**
+- Wave 2 = `0088_pcs_profiles_backfill.sql` + bridge extension + §7 swap
+- A-4 customer-file migration (still blocked on แต้ม) · A-5 prod load
+- Supabase Pro upgrade (3 oversized log tables waiting)
+
+**Waiting on ก๊อต:**
+- Ratify ADR-0017 (still "pending ratification")
+- Ratify Q2 auth-bridge posture
+- Clear JMF API spec with แต้ม
+
+### 11.4 Branch state at session end
+
+```
+main = dave = Poom = 2da9b8f (= origin/Poom, in-sync, nothing to push)
+```
+
+Commits added this session (all on `Poom` · all pushed):
+- `8feb5d6` — Wave-1 fidelity audit (4 slices + synthesis + B-6 badge fix)
+- `e66a3ab` — _SYNTHESIS.md §7 Wave-2-ready swap diffs
+- `2da9b8f` — _SYNTHESIS.md §8 🔴 ghost-customer empirical finding
+
+---
+
+## 12. 🆕 Session log — 2026-05-19 evening-2 (Wave A sidebar fidelity fix)
+
+> Continuation from §11.  ภูม noticed sidebar items linking to 404s /
+> wrong content / dead `?param=` carriers.  Ran a 4-agent shadow-clone
+> audit + a 4-agent shadow-clone Wave-A fix in the same session.
+> Commits today on `Poom`: `d27cf6c` · `80a6aab` · `a51e338`.
+
+### 12.1 What landed
+
+1. **R&D 8-specialist deep-dive QC notes** (`d27cf6c`) —
+   `docs/research/r-and-d-2026-05-19/_poom-notes-{A,B,C,D,MASTER}.md` ·
+   5 notes through cargo-domain lens: 7 items to RIDE Wave 2 (~10h),
+   3 🔴 cargo-domain misreads (G1 + DN-1 + billing automation), 6
+   items collapse into existing B-stages, 15+ open senior-lane Qs.
+
+2. **Sidebar fidelity audit** (`80a6aab`) —
+   `docs/research/sidebar-fidelity-audit/_MASTER-FIX-PLAN.md` +
+   `01-broken-links.md` + `02-wallet-withdrawal-pattern.md` +
+   `03-mislinks.md` ·
+   118 sidebar items audited, **70 have problems (73%)**:
+   · 15 broken (404 / no `page.tsx`)
+   · ~46 mislinks (page exists but ignores `?kind=`/`?sla=`/`?topic=` etc.)
+   · ~22 label drift (page correct but sidebar wording off)
+   · ~7 inconclusive · ~28 clean
+   · 3-wave fix plan (A ~5-6h · B ~16h · C ~31h) + split-vs-filter rule.
+
+3. **Wave A — 38-item sidebar fidelity fix** (`a51e338`) ·
+   4 shadow-clone agents in parallel · 12 files · +347 -79:
+   - **A-1** stub: `forwarders/container-cost-check/page.tsx`
+   - **A-2** 7 href rewires (customers/forwarders/service-orders search + notes)
+   - **A-3** 6 wallet/disbursement href fixes + migration
+     `0089_disbursement_kind_extend.sql` (`container_lease` enum) +
+     `wallet/deposit` redirect preserves `?kind&status` +
+     `sales-payouts` `?kind=` UI with label-only banner +
+     disbursements form/page kind extension
+   - **A-4** `customers/page.tsx` `?group=` filter (6 branches · chip · ×-clear)
+   - **A-5** 17 of 22 label drifts in `messages/th.json` + `en.json`
+     (5 skipped per audit "Acceptable" notes; #19 flagged as needs-page-rebuild)
+   - Gates: `tsc` exit 0 · `lint` exit 0 · `audit:i18n` 2328=2328 parity
+
+   Migration renumbered `0088` → `0089` to reserve `0088` for เดฟ's
+   planned Wave-2 `0088_pcs_profiles_backfill`.
+
+### 12.2 Wave B partial — B-5 (`?sla=`) + B-6 (`?topic=`) shipped
+
+After Wave A landed, picked the 2 Wave-B items that are **not** gated on
+เดฟ's Wave 2 ghost-customer fix (they touch reports + learning, not
+wallet/customer pages):
+
+- **B-5 — `?sla=` filter** across 5 report pages
+  (`monthly-orders` · `containers-awaiting-th` · `pending-payments` ·
+  `credit-pending` · `customers/recently-active`).  9 sidebar items now
+  show the SLA name in heading + clear-chip + amber banner ("กำลังพัฒนา
+  เงื่อนไขกรอง").  **Label-only** filter on purpose — without legacy PHP
+  source, picking wrong SQL thresholds (what counts as "pending-10min"?)
+  would mis-report numbers worse than today.  Same defensive pattern
+  Wave-A `sales-payouts` used.
+- **B-6 — per-topic routing** on `/admin/learning` (5 topics: job-flow ·
+  business-plan · culture · newsfeed · regulations).  Early-return preserves
+  the 4-card hub for the no-topic case byte-for-byte.
+
+**Wave B remaining (~13h · gated on เดฟ's Wave 2):** B-1/B-2/B-3
+(wallet/pay-user · wallet/add · wallet/history) + B-4 (forwarders/new)
+all touch customer/wallet surfaces and need the ghost-customer
+backfill in flight before they show correct counts.
+
+### 12.3 Open follow-ups
+
+1. 🟡 **Run migration `0089` on dev + prod** via `psql` (Dashboard SKIP
+   rule still applies to schema-altering migrations per §11.2)
+2. 🔵 **Wave B remaining (~13h)** — wait for เดฟ's Wave 2 to land
+   (or be in flight), then build wallet/pay-user + wallet/add +
+   wallet/history + forwarders/new
+3. 🔵 **Wave C (~31h)** — bundle with Phase-B B-7 (barcode 8-mode overlap)
+
+### 12.4 Branch state at session end (evening-2)
+
+```
+main = dave = 2da9b8f
+Poom = <this commit> (4 ahead of dave)
+```
+
+Commits added in evening-2 (all on `Poom` · all pushed):
+- `d27cf6c` — R&D 8-specialist QC notes (5 docs)
+- `80a6aab` — Sidebar fidelity audit (4 docs · 73% mismatch finding)
+- `a51e338` — Wave A — 38-item sidebar fidelity fix (12 files · 4 agents)
+- `<this commit>` — Wave B partial (B-5 `?sla=` + B-6 `?topic=`) · 14 items · 2 agents
+
+**Total today (combining §11 + §12):** 7 commits · 70+ sidebar items
+audited + ~52 fixed · 1 new migration · Wave-2 brief sharpened to a
+3-step bundle.
+
+---
+
+## 13. 🆕 Session log — 2026-05-19 evening-3 (IA restructure proposal)
+
+> ภูม flagged that Wave A/B fixed individual broken links but the
+> sidebar STRUCTURE itself is broken — 3-into-1 duplicates, orphan
+> workspaces, over-nesting (Freight accounting 3-level), Pacred lost
+> legacy's 6 fixed EN section headers. Ran 3-agent audit + synthesis.
+> Commit on `Poom`: `0fff0a4`.
+
+### 13.1 What landed
+- **4 new audit docs** (`docs/research/sidebar-fidelity-audit/`):
+  - `04-workspace-inventory.md` — 129 page.tsx · 16 redirect-stubs
+  - `05-sidebar-map.md` — 268 sidebar items → 74 unique workspaces · 13+13 duplicate clusters · 17 orphans
+  - `06-legacy-menu-structure.md` — legacy 6-section IA tree (fallback to docs · local PHP at `C:\xampp\` not present)
+  - `07-IA-restructure-proposal.md` — synthesis · Option 3 Hybrid · Wave R1-R3 plan · Q1-Q8 decisions table
+
+### 13.2 ภูม decisions (Q1-Q4 answered · Q5-Q8 took defaults)
+- Q1 ✅ EN section headers (ตาม legacy · zero retraining)
+- Q2 ✅ Search dedicated rows กลับมา (hybrid · เก็บ ?focus=search URL)
+- Q3 ✅ แยกบัญชี Cargo + Freight เป็น 2 parents
+- Q4 ✅ ลบ dead orphans ใน R2
+- Q5/Q6/Q7 — defaults per proposal (see 07-IA §7)
+- Q8 — flagged for เดฟ + ก๊อต visibility check (per-role matrix)
+
+### 13.3 Wave R-series plan (ภูม-owned · ~16-20h split)
+- **R1 (~4h):** 6 EN section headers as new top-level grouping · zero workflow impact
+- **R2 (~6h):** delete 10 dead orphans + collapse 13 duplicates + wire `/admin/admins` + bring back search rows + delete /admin/inventory stub
+- **R3 (~8h):** split accounting Cargo/Freight + move ย้ายเซลล์ to QA + expand Extension (5 carrier audits + meeting-room build) + wire 14 missing badges
+
+### 13.4 Handoff to เดฟ
+Brief in `07-IA-restructure-proposal.md` §9.5 — addresses:
+- What's shipped on Poom (4 commits)
+- What R1-R3 will add
+- No file conflicts with Wave 2 ghost-customer fix
+- Ask for ก๊อต/เดฟ 5-min visibility review on per-role matrix before R1
+
+### 13.5 Branch state at session end (evening-3)
+```
+main = dave = 2da9b8f
+Poom = 0fff0a4 (5 ahead of dave)
+```
+
+Commits added in evening-3 (all on `Poom` · all pushed):
+- `0fff0a4` — 4 audit docs + IA restructure proposal (1390 lines)
+
+**Next step:** start Wave R1 (the section headers · ~4h · safest first step)
