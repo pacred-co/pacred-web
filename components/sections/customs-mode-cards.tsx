@@ -26,8 +26,6 @@ const MODES = [
     accent: "from-amber-400/35 to-orange-600/35",
     description:
       "ไม่ว่าจะผ่าน DHL, FedEx, UPS, TNT หรือ Air Cargo เจ้าใดก็ตาม — Pacred พร้อมดูแลตั้งแต่ต้นทาง จนสินค้าถึงมือคุณ",
-    forWhom:
-      "เหมาะสำหรับสินค้าด่วน · มูลค่าสูง · ต้องใช้ใบอนุญาตเฉพาะ — เคลียร์ทันก่อนค่าฝากเก็บขึ้น",
     services: [
       "เตรียม Invoice · Packing List · ใบอนุญาต (อย. / มอก.)",
       "ตรวจสอบพิกัดภาษี (HS Code) แม่นยำ",
@@ -35,8 +33,6 @@ const MODES = [
       "ประสาน Air Cargo + ศุลกากร ผ่านด่านไว",
       "จัดส่งต่อด่วน ทั่วกรุงเทพฯ · ต่างจังหวัด",
     ],
-    goodsExamples:
-      "ตัวอย่างสินค้า · เครื่องสำอาง · อิเล็กทรอนิกส์ · เสื้อผ้าแฟชั่น",
     carriers: [
       { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
       { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com" },
@@ -56,8 +52,6 @@ const MODES = [
     accent: "from-sky-500/35 to-blue-700/35",
     description:
       "ไม่ว่าจะผ่าน สายเรือ Maersk, COSCO, MSC, CMA CGM, Evergreen, ONE, Yang Ming, HMM, OOCL หรือ PIL — Pacred ดูแลตั้งแต่ต้นทาง ถึงปลายทาง ครบวงจร",
-    forWhom:
-      "เหมาะสำหรับสินค้าติดด่านท่าเรือแหลมฉบัง · คลองเตย · ICD ลาดกระบัง · ทั้ง LCL / FCL",
     services: [
       "จัดทำใบขนสินค้าขาเข้า · ขาออก ครบทุกเอกสาร",
       "ประสานสายเรือ · ท่าเรือ · กรมศุลกากร",
@@ -65,8 +59,6 @@ const MODES = [
       "รองรับ LCL / FCL · ทุก Term (CIF / FOB / EXW)",
       "Door-to-Door ส่งต่อถึงปลายทางทั่วประเทศ",
     ],
-    goodsExamples:
-      "เครื่องจักร · วัสดุก่อสร้าง · เคมีภัณฑ์ · สินค้าจำนวนมาก",
     carriers: [
       { name: "COSCO", logo: "/images/partners/coscopartner.png", url: "https://lines.coscoshipping.com" },
       { name: "Maersk", logo: "/images/partners/maerskpartner.png", url: "https://www.maersk.com" },
@@ -86,8 +78,6 @@ const MODES = [
     accent: "from-red-500/35 to-orange-700/35",
     description:
       "เคลียร์สินค้านำเข้าผ่านด่านชายแดนทุกประเทศ — ลาว · จีน · พม่า · มาเลเซีย · กัมพูชา — Pacred ทำงานร่วมกับขนส่งทางบกข้ามแดนทุกเจ้า",
-    forWhom:
-      "เหมาะสำหรับสินค้า Truck Cross-Border · ผ่านด่านมุกดาหาร · นครพนม · หนองคาย · แม่สอด · อรัญประเทศ",
     services: [
       "ขึ้นทะเบียนผู้นำเข้า · ส่งออก · จับคู่ (YY) ภายใน 30 นาที",
       "จัดทำใบขน · ประสานเจ้าหน้าที่ด่านชายแดน",
@@ -95,8 +85,6 @@ const MODES = [
       "ใบอนุญาตเฉพาะ (อย. / มอก. / กรมเกษตร / ปศุสัตว์)",
       "Door-to-Door ส่งจากด่าน ถึงคลังลูกค้า",
     ],
-    goodsExamples:
-      "สินค้าเกษตร · วัสดุก่อสร้าง · ของใช้ในประเทศ · สินค้าทั่วไป",
     carriers: [
       { name: "Thai Cargo", logo: "/images/partners/thaicargo.png", url: "https://www.thaicargo.com" },
       { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
@@ -163,18 +151,9 @@ export function CustomsModeCards() {
                   </div>
                 </div>
 
-                <p className="text-[13px] md:text-[13.5px] leading-[1.6] text-foreground/85 font-medium">
+                <p className="rounded-lg bg-amber-50/60 dark:bg-amber-900/15 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2.5 text-[13px] md:text-[13.5px] leading-[1.6] text-foreground/85 font-medium">
                   {c.description}
                 </p>
-
-                <div className="rounded-lg bg-amber-50/60 dark:bg-amber-900/15 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2">
-                  <div className="text-[10px] md:text-[10.5px] font-black text-amber-700 dark:text-amber-300 tracking-[0.10em] uppercase mb-0.5">
-                    เหมาะสำหรับ
-                  </div>
-                  <p className="text-[12.5px] md:text-[13px] leading-snug text-foreground/90 font-semibold">
-                    {c.forWhom}
-                  </p>
-                </div>
 
                 <ul className="flex flex-col gap-1.5 text-[12.5px] md:text-[13px] leading-snug text-foreground/90">
                   {c.services.map((s) => (
@@ -184,15 +163,6 @@ export function CustomsModeCards() {
                     </li>
                   ))}
                 </ul>
-
-                <div className="rounded-lg bg-foreground/5 dark:bg-foreground/10 px-3 py-2">
-                  <div className="text-[10px] md:text-[10.5px] font-black text-foreground/60 tracking-[0.10em] uppercase mb-0.5">
-                    สินค้าที่เหมาะ
-                  </div>
-                  <p className="text-[12px] md:text-[12.5px] leading-snug text-foreground/75 font-medium">
-                    {c.goodsExamples}
-                  </p>
-                </div>
 
                 <div>
                   <div className="text-[10.5px] md:text-[11px] font-bold text-foreground/60 tracking-[0.10em] uppercase mb-2">
