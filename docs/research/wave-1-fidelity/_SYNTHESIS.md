@@ -119,6 +119,197 @@ provisional). Ping when ready.
 
 ---
 
+## 7. Concrete Wave-2 swap diffs (Wave-2-ready — schemas verified)
+
+ภูม-added 2026-05-19 post-audit: turn the spec into implementation-ready by mapping every Pacred `.from(<rebuilt>)` call in the 3 affected slices to the exact `tb_*` table + column + the key column quirks.  Schemas read from `supabase/migrations/0081_pcs_legacy_schema.sql`; tested in dev Supabase (8,898 rows).
+
+### 7.1 The 7 `tb_*` tables Wave 2 needs (one-shot reference)
+
+| `tb_*` table | What it holds | Join key | Status col + values | Key quirk |
+|---|---|---|---|---|
+| **`tb_users`** | Customer header (8,898 rows) | `userid varchar(10)` PK (e.g. `PR1234`) | `userstatus varchar(1)` · `'1'`=active `'0'`=disabled | `userpass` = legacy `passTam` hash (B-auth bridge consumes) · `useremail` NULL ~94% · phone in `usertel varchar(13)` |
+| **`tb_wallet`** | Wallet balance (1 row per user) | `userid varchar(10)` | n/a | TWO columns: `userid` + `wallettotal numeric(10,2)`.  No history here. |
+| **`tb_wallet_hs`** | Wallet movement history (deposits + withdrawals) | `userid` | `status varchar(1)` · `'1'`=รออนุมัติ `'2'`=อนุมัติแล้ว | `amount` + `date` + `dateslip` — single table for top-up + withdraw |
+| **`tb_header_order`** | Order header (cargo/shop order) | `userid varchar(30)` · row PK = `hno varchar(30)` | `hstatus varchar(1)` · `'1'-'6'` per legacy enum (1=รอดำเนินการ · 2=รอชำระเงิน · 3=สั่งสินค้า · 4=รอร้านจีนจัดส่ง · 5=สำเร็จ · 6=ยกเลิก) | Totals in `htotalpriceuser` (customer-facing) + `htotalpricechn` (China cost) · payment date in `hdatepayment` |
+| **`tb_cart`** | Per-customer cart line items | `userid varchar(30)` | n/a | `cnameshop` = shop name FREE TEXT (default `'pcs'`) — **no `tb_shop` master · the audit's "missing tb_shop" was a false flag — legacy treats shop as free text** |
+| **`tb_order`** | Per-order line items (post cart→order conversion) | `hno varchar(30)` + `userid` | n/a | Mirror of `tb_cart` shape + `hno` FK · split per `cprovider` (1/2/3/4) |
+| **`tb_forwarder`** | Forwarder (import) header | `userid varchar(30)` + `fidorco varchar(30)` | `fstatus varchar(2)` · `'1'-'7'` legacy enum (ship→arrive→THEN-pay) | Sub-states `fstatuscaron / fstatuscaroff varchar(1)` (truck load/unload) · `fcabinetnumber varchar(300)` ↔ `tb_cnt.cntname` (free-text container code · the `tb_cnt_item` link is the legacy way) |
+| **`tb_payment`** | Yuan transfer payment | `userid varchar(10)` | `paystatus varchar(1)` · `'1'`=pending | `payyuan / payrate / paythb` triple · slip in `imagesslip varchar(250)` (filename) |
+
+**Sales rep:** `tb_users.adminidsale varchar(20)` → join to `tb_admin.adminid` for display name.  No separate "sales_rep" table.
+
+### 7.2 B-1 launchpad — concrete swap (5 calls)
+
+`app/[locale]/(protected)/dashboard/page.tsx` + sub-components:
+
+```diff
+-- Wallet card
+- admin.from("wallet").select("balance").eq("profile_id", profile.id)
++ admin.from("tb_wallet").select("wallettotal").eq("userid", profile.member_code)
+  // (member_code = "PR<n>" — matches legacy tb_users.userid)
+
+-- Recent cart (current-cart preview chip)
+- admin.from("cart_items").select("id", { count: "exact", head: true })
+-   .eq("profile_id", profile.id)
++ admin.from("tb_cart").select("id", { count: "exact", head: true })
++   .eq("userid", profile.member_code)
+
+-- Recent orders (latest 3 hno for "ล่าสุด" strip)
+- admin.from("service_orders").select("h_no, status, total_thb, created_at")
+-   .eq("profile_id", profile.id).order("created_at", { ascending: false }).limit(3)
++ admin.from("tb_header_order").select("hno, hstatus, htotalpriceuser, hdate")
++   .eq("userid", profile.member_code).order("hdate", { ascending: false }).limit(3)
+
+-- Recent forwarders (latest 3 for cargo strip)
+- admin.from("forwarders").select("f_no, status, total_thb, created_at")
+-   .eq("profile_id", profile.id).order("created_at", { ascending: false }).limit(3)
++ admin.from("tb_forwarder").select("fidorco, fstatus, fdate, fdatestatus5")
++   .eq("userid", profile.member_code).order("fdate", { ascending: false }).limit(3)
+
+-- Sales rep card
+- admin.from("admin_contact_extras").select("...").eq("profile_id", profile.sales_admin_id)
++ const userRow = await admin.from("tb_users").select("adminidsale").eq("userid", profile.member_code).single();
++ const repRow  = await admin.from("tb_admin").select("adminname, adminphone, adminpicture")
++                  .eq("adminid", userRow.data.adminidsale).single();
+```
+
+### 7.3 B-3 order flow — concrete swap (~6 calls)
+
+`app/[locale]/(protected)/service-order/page.tsx` (list) + `actions/service-order.ts`:
+
+```diff
+-- List query (per-tab)
+- admin.from("service_orders").select("...").eq("profile_id", profile.id)
+-   .eq("status", "pending").order("created_at", { ascending: false })
++ admin.from("tb_header_order").select("hno, hstatus, htotalpriceuser, hcount, hdate")
++   .eq("userid", profile.member_code).eq("hstatus", "1")
++   .order("hdate", { ascending: false })
+  // map status filter: "pending"→"1" · "awaiting_payment"→"2" · "ordered"→"3"
+  // · "awaiting_china_ship"→"4" · "completed"→"5" · "cancelled"→"6"
+
+-- Per-order detail (app/[locale]/(protected)/service-order/[hNo]/page.tsx)
+- admin.from("service_orders").select("...").eq("h_no", hNo).single()
++ admin.from("tb_header_order").select("*").eq("hno", hNo).single()
+- admin.from("service_order_items").select("...").eq("order_h_no", hNo)
++ admin.from("tb_order").select("*").eq("hno", hNo)
+
+-- Cart (app/[locale]/(protected)/service-order/cart/*)
+- admin.from("cart_items").select("...").eq("profile_id", profile.id)
++ admin.from("tb_cart").select("*").eq("userid", profile.member_code)
+  // 151-cap still enforced on tb_cart (already at app + DB layer; verify the
+  // DB trigger lives on tb_cart not cart_items)
+```
+
+### 7.4 B-4 admin sidebar+badges — concrete swap (the 14 hardcoded queries)
+
+`actions/admin/sidebar-counts.ts` Promise.all fan-out:
+
+```diff
+- admin.from("wallet_transactions").select("id", { count:"exact", head:true })
+-   .eq("kind", "deposit").eq("status", "pending")
++ admin.from("tb_wallet_hs").select("id", { count:"exact", head:true })
++   .eq("status", "1").gt("amount", 0)
+  // walletTopup — tb_wallet_hs.status='1' = รออนุมัติ; deposit = amount > 0
+
+- admin.from("wallet_transactions").select("id", { count:"exact", head:true })
+-   .eq("kind", "withdraw").eq("status", "pending")
++ admin.from("tb_wallet_hs").select("id", { count:"exact", head:true })
++   .eq("status", "1").lt("amount", 0)
+  // walletWithdraw — withdraw = amount < 0 (legacy stores negative)
+
+- admin.from("service_orders").select("id", { count:"exact", head:true })
+-   .eq("status", "pending")
++ admin.from("tb_header_order").select("id", { count:"exact", head:true })
++   .eq("hstatus", "1")
+  // shopPending; legacy hstatus=1
+
+- admin.from("service_orders").select("id", { count:"exact", head:true })
+-   .eq("status", "awaiting_payment")
++ admin.from("tb_header_order").select("id", { count:"exact", head:true })
++   .eq("hstatus", "2")
+  // shopAwaitPay
+
+- admin.from("service_orders").select("id", { count:"exact", head:true })
+-   .eq("status", "ordered")
++ admin.from("tb_header_order").select("id", { count:"exact", head:true })
++   .eq("hstatus", "3")
+  // shopOrdered
+
+- admin.from("forwarders").select("id", { count:"exact", head:true })
+-   .eq("status", "arrived_thailand")
++ admin.from("tb_forwarder").select("id", { count:"exact", head:true })
++   .eq("fstatus", "4")
+  // forwarderArrived — legacy fstatus=4 = ถึงไทยแล้ว
+
+- admin.from("forwarders").select("id", { count:"exact", head:true })
+-   .eq("status", "out_for_delivery")
++ admin.from("tb_forwarder").select("id", { count:"exact", head:true })
++   .eq("fstatus", "6")
+  // forwarderDelivery + driverItems — legacy fstatus=6 = เตรียมส่ง
+
+- admin.from("forwarders").select("id", { count:"exact", head:true })
+-   .eq("status", "pending_payment").eq("credit_used", true)
++ admin.from("tb_forwarder").select("id", { count:"exact", head:true })
++   .eq("fstatus", "5").eq("paydeposit", "1")
+  // forwarderCredit — fstatus=5 = รอชำระเงิน; credit-flag in paydeposit='1'
+
+- admin.from("yuan_payments").select("id", { count:"exact", head:true })
+-   .in("status", ["pending", "processing"])
++ admin.from("tb_payment").select("id", { count:"exact", head:true })
++   .in("paystatus", ["1", "2"])
+  // yuanPending; '1'=pending '2'=processing (verify)
+
+- admin.from("profiles").select("id", { count:"exact", head:true })
+-   .eq("account_type", "juristic").eq("status", "incomplete")
++ admin.from("tb_users").select("id", { count:"exact", head:true })
++   .eq("usercompany", "1").eq("useractive", "0")
+  // corporatePending — usercompany='1' = นิติบุคคล; useractive='0' = รอ approve
+
+- admin.from("profiles").select("id", { count:"exact", head:true })
+-   .eq("status", "incomplete")
++ admin.from("tb_users").select("id", { count:"exact", head:true })
++   .eq("useractive", "0")
+  // customerPending
+
+# sales_payouts + commissions + refund_requests + contact_messages stay as-is
+# (those are Pacred-native tables — no legacy equivalent in tb_*).
+# bookings + platform_incidents (BK-1 + IO-1) stay as-is (Phase C).
+# cntUnpaid (just lifted) stays as-is (tb_cnt — already faithful per B-6).
+```
+
+### 7.5 Identity-bridge note (cross-cutting)
+
+The join key in EVERY swap above is `userid` (legacy varchar(10) / varchar(30) — `'PR1234'` style).  Pacred-side, the join field is `profile.member_code` (added pre-D1 for the original 0067 PCS-customer migration — kept post-D1 per ADR-0017 §"Consequences").
+
+**Two integrity asks for Wave 2:**
+1. Confirm `profiles.member_code` is populated for every migrated row (B-auth bridge writes it on first login — verify the bulk-fill is current for the 8,898 ported customers; if not, a one-shot UPDATE before Wave 2 ships).
+2. Add an index `profiles_member_code_idx` if not present (every customer-side query joins through it).
+
+### 7.6 Status-vocab table for B-2 (the bundled re-key)
+
+| Pacred enum string (rebuilt) | `tb_header_order.hstatus` | Thai label (legacy) |
+|---|---|---|
+| `pending` | `'1'` | รอดำเนินการ |
+| `awaiting_payment` | `'2'` | รอชำระเงิน |
+| `ordered` | `'3'` | สั่งสินค้า |
+| `awaiting_china_ship` | `'4'` | รอร้านจีนจัดส่ง |
+| `completed` | `'5'` | สำเร็จ |
+| `cancelled` | `'6'` | ยกเลิก |
+
+| Pacred enum string (rebuilt) | `tb_forwarder.fstatus` | Thai label (legacy) |
+|---|---|---|
+| `awaiting_china_warehouse` | `'1'` | รอสินค้าเข้าโกดังจีน |
+| `at_china_warehouse` | `'2'` | สินค้าถึงโกดังจีน |
+| `in_transit_to_thailand` | `'3'` | กำลังส่งมาไทย |
+| `arrived_thailand` | `'4'` | ถึงไทยแล้ว |
+| `pending_payment` | `'5'` | รอชำระเงิน |
+| `out_for_delivery` | `'6'` | เตรียมส่ง |
+| `delivered` | `'7'` | ส่งแล้ว |
+
+→ Wave 2 (B-2 part) emits a `lib/legacy-status-map.ts` with `toLegacyOrderStatus(rebuilt)` / `fromLegacyOrderStatus(legacy)` + same for forwarder.  Every UI render through this map → labels render in Thai legacy strings regardless of which source the data came from during the rollout.
+
+---
+
 ## 6. Cross-references
 
 - 🧭 D1 ADR → [`../../decisions/0017-pacred-faithful-pcs-port.md`](../../decisions/0017-pacred-faithful-pcs-port.md)
