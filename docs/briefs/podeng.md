@@ -1,7 +1,28 @@
 # ปอน — Frontend / Customer Portal UI / Landing / SEO
 
-Last reviewed: 2026-05-19 (D1 — Phase A loaded · Phase B wave-1 integrated)
-Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave`
+Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
+Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave-pacred` then `faithful-port`
+
+> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+>
+> The team pivoted from V3 to a **literal 1:1 transcription** of legacy
+> PHP → Next.js per the owner's "100% sameness FIRST" rule. **Your lane =
+> customer portal** = ~22 remaining `member/*.php` files (เดฟ did batch-1:
+> `menu.php` · `china-address.php` · `account-settings.php` · `search.php`).
+>
+> Source on this machine (ภูม downloaded): `C:\Users\Admin\pcscargo\member\`.
+> Pattern reference: `app/[locale]/(protected)/dashboard/page.tsx` (เดฟ's
+> menu.php pilot · 668→479 lines after CSS-fix simplification) + the
+> 3 batch-1 customer screens.
+>
+> Branch loop: `podeng` → เดฟ merges into `dave-pacred` → `faithful-port` →
+> ก๊อต gate → `main`. The pre-D1 landing / SEO / marketing-site work is
+> Phase C (deferred) — pause those until the 1:1 port ships.
+>
+> **READ FIRST:**
+> - [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) — branch state · per-role lanes
+> - [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — the method (with §8 admin-specific pattern · though customer pattern is the canonical one for your lane)
+> - [`.claude/skills/legacy-php-sweep/SKILL.md`](../../.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

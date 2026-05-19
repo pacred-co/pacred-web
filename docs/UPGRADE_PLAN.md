@@ -1,5 +1,23 @@
 # 🚀 Pacred Roadmap — the D1 master phase plan (faithful PCS port)
 
+> ## 🚨 2026-05-19 EVENING — Direction shift to 1:1 transcription
+>
+> Team pivoted from V3 (the `main → dave → Poom` loop with Wave A/B/R staging
+> sidebar fixes) to **literal 1:1 transcription** of legacy PHP → Next.js per
+> owner's "100% sameness FIRST" rule. The phases below (A migration · B
+> workflow fidelity · C enhancements) still apply BUT **the work-loop shifted**:
+>
+> **New branch loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer
+> + integrate) + `podeng` (ปอน) → **`faithful-port`** (integration target) →
+> ก๊อต production gate → **`main`** (Vercel auto-deploy). V3 branches
+> (`Poom`/`dave`) are FROZEN — preserved in `faithful-port` via merge, but no
+> new commits land there until further notice.
+>
+> The "Phase-B waves" listed below are now realized via **transcription**
+> rather than the wave-1 reinterpretation pattern. Read:
+> [`research/poom-save-point-2026-05-19-night.md`](research/poom-save-point-2026-05-19-night.md)
+> + [`runbook/faithful-port-transcription.md`](runbook/faithful-port-transcription.md).
+
 > **The single canonical forward plan** — current state, stages, and
 > who-owns-what for `pacred-web` under **D1**. The doc CLAUDE.md / AGENTS.md /
 > the role briefs point at as "the D1 phase plan." Updated each save-point.

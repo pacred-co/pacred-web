@@ -2,6 +2,43 @@
 
 ---
 
+# 🚨 2026-05-19 EVENING — DIRECTION SHIFT (read FIRST)
+
+The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
+sidebar-fidelity work shipped this morning) to a **literal 1:1 transcription**
+of legacy PHP → Next.js per the owner's "100% sameness FIRST" rule.
+
+**New branch loop:**
+- **`Poom-pacred`** (ภูม · admin transcription · 187 `pcs-admin/*.php` files)
+- **`dave-pacred`** (เดฟ · customer transcription + integrates)
+- **`podeng`** (ปอน · customer-portal frontend)
+- → **`faithful-port`** (integration target · เดฟ-owned)
+- → ก๊อต production gate → **`main`** (Vercel auto-deploy)
+
+V3 branches (`Poom`, `dave`) are **FROZEN** — preserved + already merged into
+`faithful-port`, so today's morning work isn't lost — but no new commits land
+there until further notice.
+
+**Method:** 1:1 transcription · same HTML markup · same SQL · `PCS → PR` branding
+only · zero design decisions. Legacy source on ภูม's machine at
+`C:\Users\Admin\pcscargo\` (187 admin + 42 customer-portal `.php` files).
+
+**Authoritative SOTs (read in order):**
+1. 🚨 [`docs/research/poom-save-point-2026-05-19-night.md`](docs/research/poom-save-point-2026-05-19-night.md) — the direction-shift save-point · branch state · per-role lanes · PCS→PR table · resume commands
+2. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — the canonical method · 1:1 transcription steps + admin pattern §8
+3. 🧰 [`.claude/skills/legacy-php-sweep/SKILL.md`](.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
+4. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (the `tb_*` table inventory)
+
+**Pattern references (read before transcribing your first screen):**
+- Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`
+- Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx` + `public/legacy/pcs/admin/admin-base.css`
+
+The D1 phase doc + per-role briefs below are still authoritative for company
+context · the SHIFT only changes the **work-loop** and the **method**, not the
+goal. Goal stays: faithful PCS Cargo port · zero retraining · D1.
+
+---
+
 # 🧬 Pacred DNA (load-bearing — read once, internalise forever)
 
 **Company:** บริษัท แพคเรด (ประเทศไทย) จำกัด · **Pacred (Thailand) Co., Ltd.** · ทะเบียน `0105564077716` · **Slogan: "เร็ว ไว ไม่มีคำว่าทำไม่ได้"** · Owner **พี่ป๊อป Visit** (second-tier: เดฟ + ก๊อต).
