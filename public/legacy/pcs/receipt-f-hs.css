@@ -1,0 +1,313 @@
+/* =============================================================
+ * receipt-f-hs.css — legacy PCS Cargo `member/receipt-f-hs.php`
+ *   ("ประวัติใบเสร็จรายการฝากนำเข้าสินค้า" — import-receipt history)
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php / address.php
+ * pilots):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `receipt-f-hs.php` renders
+ *   with, copied verbatim from the legacy stylesheets:
+ *     - the inline <style> block in receipt-f-hs.php       (lines 8-37)
+ *     - assets/css/bootstrap.min.css                        (BS4 grid/card/form/btn/table/badge)
+ *     - assets/css/bootstrap-extended.min.css               (card · round · btn-rounded · waves)
+ *     - assets/css/colors.min.css / components.min.css      (btn-success / btn-outline-success / badge-warning)
+ *     - assets/css/style.css / custom.css                   (.content-body.pr110 · .card-header · .font-14)
+ *     - assets/plugins/datatables/css/dataTables.bootstrap4.css (the DataTable chrome)
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/
+ *   receipt-f-hs.css and loaded with a plain <link rel="stylesheet">
+ *   from page.tsx — it must bypass the app's Tailwind v4 / PostCSS
+ *   pipeline, which rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid (exact bootstrap.min.css values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+}
+
+/* ---- Bootstrap-4 card — overridden by bootstrap-extended.min.css ---- */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  /* bootstrap-extended.min.css: card border:none + shadow + radius */
+  border: none;
+  box-shadow: 0 2px 18px 1px rgba(49, 53, 72, .1);
+  border-radius: .45rem;
+  margin-bottom: 1.875rem;
+}
+.pcs-legacy .card-header {
+  padding: 1.5rem 1.5rem;
+  margin-bottom: 0;
+  background-color: transparent;
+  border-bottom: 1px solid rgba(0, 0, 0, .125);
+}
+.pcs-legacy .card-header.pb-0 { padding-bottom: 0 !important; }
+
+/* ---- spacing + display helpers (Bootstrap-4 spacing scale) ---- */
+.pcs-legacy .p-05  { padding: .5rem !important; }
+.pcs-legacy .p-1   { padding: 1rem !important; }
+.pcs-legacy .pb-0  { padding-bottom: 0 !important; }
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-danger { color: #ff4961 !important; }
+.pcs-legacy .text-primary { color: #1e9ff2 !important; }
+.pcs-legacy .text-white  { color: #fff !important; }
+.pcs-legacy .font-14 { font-size: 14px !important; }
+.pcs-legacy .cursor-pointer { cursor: pointer; }
+
+/* ---- content layout wrappers ---- */
+/* custom.css L113 — the screen's .content-body carries `pr110` */
+.pcs-legacy .content-body.pr110 {
+  padding-right: 100px;
+}
+
+/* ---- typography ---- */
+/* heading reset so the legacy <h3> matches the theme, not Tailwind
+ * preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. Restore the legacy/browser-default inline rendering. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* ---- Bootstrap-4 table + striped/bordered (exact bootstrap.min.css) ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #6b6f82;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  /* bootstrap.min.css default — overridden by the inline <style> below */
+  padding: .75rem 2rem;
+  vertical-align: top;
+  border-top: 1px solid #e3ebf3;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #e3ebf3;
+}
+.pcs-legacy .table-bordered {
+  border: 1px solid #e3ebf3;
+}
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td {
+  border: 1px solid #e3ebf3;
+}
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, .03);
+}
+.pcs-legacy .table.display { width: 100% !important; }
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- DataTables bootstrap4 chrome (dataTables.bootstrap4.css) ----
+ * The legacy screen runs jQuery DataTables on #myTable; with the
+ * staged vendor bundle the table is enhanced — these chrome rules
+ * keep the markup visually faithful at rest. */
+.pcs-legacy table.dataTable {
+  clear: both;
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+  max-width: none !important;
+  border-collapse: separate !important;
+}
+.pcs-legacy table.dataTable.no-footer {
+  border-bottom: 1px solid #e3ebf3;
+}
+.pcs-legacy table.dataTable th,
+.pcs-legacy table.dataTable td {
+  box-sizing: content-box;
+}
+.pcs-legacy .dataTables_wrapper .dataTables_paginate .paginate_button {
+  box-sizing: border-box;
+  display: inline-block;
+  min-width: 1.5em;
+  padding: .5em 1em;
+  margin-left: 2px;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* ---- Bootstrap-4 form controls (exact bootstrap.min.css values) ---- */
+.pcs-legacy .form-control-label {
+  display: inline-block;
+  margin-bottom: .5rem;
+}
+/* style.css — `.form-control2` is the legacy lighter input variant
+ * used by the date-range picker field on this screen. */
+.pcs-legacy .form-control2 {
+  display: inline-block;
+  width: auto;
+  padding: .5rem .75rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #4e5154;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #babfc7;
+  border-radius: .25rem;
+}
+.pcs-legacy .form-control2:focus {
+  border-color: #1e9ff2;
+  outline: 0;
+}
+
+/* ---- Bootstrap-4 buttons (exact bootstrap.min.css values) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  color: #6b6f82;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .25rem;
+  cursor: pointer;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out;
+}
+.pcs-legacy .btn:hover { color: #6b6f82; text-decoration: none; }
+.pcs-legacy .btn:focus { outline: 0; box-shadow: none; }
+.pcs-legacy .btn:disabled { opacity: .65; }
+.pcs-legacy .btn-sm {
+  padding: .5rem .75rem;
+  font-size: .8rem;
+  line-height: 1.5;
+  border-radius: .25rem;
+}
+/* colours.min.css / components.min.css — solid + outline variants */
+.pcs-legacy .btn-success {
+  color: #fff;
+  background-color: #28d094;
+  border-color: #28d094;
+}
+.pcs-legacy .btn-success:hover {
+  background-color: #24b886;
+  border-color: #22ae7f;
+}
+.pcs-legacy .btn-outline-success { color: #28d094; border-color: #28d094; }
+.pcs-legacy .btn-outline-success:hover {
+  color: #fff;
+  background-color: #28d094;
+  border-color: #28d094;
+}
+/* bootstrap-extended.min.css — rounded / waves / btn-group */
+.pcs-legacy .round { border-radius: 1.5rem; }
+.pcs-legacy .btn-rounded { border-radius: 10rem; }
+.pcs-legacy .waves-effect { position: relative; overflow: hidden; }
+.pcs-legacy .btn-group {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.pcs-legacy .btn-group > .btn { position: relative; flex: 1 1 auto; }
+
+/* ---- Bootstrap-4 badge + pill (the "พิมพ์ใบเสร็จ" pill) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: .25em .4em;
+  font-size: 75%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: .25rem;
+}
+.pcs-legacy .badge-pill {
+  padding-right: .6em;
+  padding-left: .6em;
+  border-radius: 10rem;
+}
+.pcs-legacy .badge-warning {
+  color: #2a2e30;
+  background-color: #ff9149;
+}
+
+/* =============================================================
+ * receipt-f-hs.php inline <style> block — VERBATIM (lines 8-37)
+ * ============================================================= */
+.pcs-legacy .table td {
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .table th {
+  padding: 0.5rem 0.5rem;
+}
+.pcs-legacy .dt-buttons {
+  width: 100%;
+  display: inline-block;
+}
+.pcs-legacy .bg-color {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+.pcs-legacy .bg-color-select {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+.pcs-legacy .bg-color-select .text-primary {
+  color: #fff !important;
+}
+.pcs-legacy .bg-color-select a {
+  color: #fff !important;
+}
+
+/* ---- responsive: custom.css drops the right padding on tablet/mobile ---- */
+@media only screen and (max-width: 768px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
