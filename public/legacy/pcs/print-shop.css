@@ -1,0 +1,139 @@
+/* =============================================================
+ * print-shop.css — legacy PCS Cargo `member/printShop.php`
+ *   (the ฝากสั่งซื้อ / China-shop order PRINT document —
+ *    ใบเสร็จรับเงิน when ?print=1 · ใบแจ้งหนี้ when ?print=2)
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription · runbook
+ * docs/runbook/faithful-port-transcription.md.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php / receipt-f-hs.php
+ * pilots):
+ *
+ *   printShop.php is an mPDF document — PHP builds one self-contained
+ *   HTML string with an INLINE <style> block (printShop.php L101-193)
+ *   and mPDF rasterises it to a PDF. There is NO Bootstrap-4 chrome
+ *   here; the print layout uses ONLY the rules in that inline block.
+ *
+ *   To be 100% identical to the legacy document we BRING THAT INLINE
+ *   <style> BLOCK VERBATIM. Every rule below is copied byte-for-byte
+ *   from printShop.php L101-193 — the only change is the `.pcs-legacy`
+ *   scope prefix on every selector, so the legacy print rules cannot
+ *   leak into / collide with the rest of the Tailwind app.
+ *
+ *   Served as the STATIC asset public/legacy/pcs/print-shop.css and
+ *   loaded with a plain <link rel="stylesheet"> from page.tsx — it
+ *   must bypass the app's Tailwind v4 / PostCSS pipeline, which
+ *   rejects verbatim legacy CSS.
+ *
+ *   The browser's own Ctrl+P / "Save as PDF" replaces mPDF — the
+ *   @page rule below pins the legacy A4-P paper + the print margins
+ *   printShop.php passed to mPDF AddPageByArray (4mm each side).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the document is identical.
+ * ============================================================= */
+
+/* ---- printShop.php L102-107 — the mPDF <body> sizing.
+ *      The legacy font-family is `sarabun` (THSarabunNew, embedded
+ *      by mPDF). The browser cannot embed it the same way, so we
+ *      fall back to a Thai-capable system stack while keeping the
+ *      legacy 20px base + the 210x267mm document box. ---- */
+.pcs-legacy.print-shop {
+  font-family: "Sarabun", "TH Sarabun New", "Leelawadee UI", sans-serif;
+  font-size: 20px;
+  width: 210mm;
+  height: 267mm;
+}
+
+/* ---- printShop.php L108-116 — text-align helpers ---- */
+.pcs-legacy.print-shop .text-left   { text-align: left   !important; }
+.pcs-legacy.print-shop .text-right  { text-align: right  !important; }
+.pcs-legacy.print-shop .text-center { text-align: center !important; }
+
+/* ---- printShop.php L117-122 — .row / .row .col-6 ---- */
+.pcs-legacy.print-shop .row        { display: inline-block; }
+.pcs-legacy.print-shop .row .col-6 { display: inline-block; }
+
+/* ---- printShop.php L123-138 — invoice column halves ---- */
+.pcs-legacy.print-shop .invoice-detail-left  { float: left;  width: 50%; }
+.pcs-legacy.print-shop .invoice-detail-right { float: right; width: 50%; }
+.pcs-legacy.print-shop .invoice-70-left      { float: left;  width: 69.5%; }
+.pcs-legacy.print-shop .invoice-30-right     { float: right; width: 29.5%; }
+
+/* ---- printShop.php L139-148 — heading styles ---- */
+.pcs-legacy.print-shop .h-title {
+  color: #8BC34A;
+  font-size: 1.9em;
+  font-weight: bold;
+}
+.pcs-legacy.print-shop .h-title-danger {
+  color: red;
+  font-size: 1.9em;
+  font-weight: bold;
+}
+.pcs-legacy.print-shop .h-title2 {
+  font-size: 1.2em;
+  font-weight: bold;
+  line-height: 0.5em;
+}
+
+/* ---- printShop.php L154-158 — sub text ---- */
+.pcs-legacy.print-shop .h-sub {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: normal;
+}
+
+/* ---- printShop.php L159-170 — padding + border helpers ---- */
+.pcs-legacy.print-shop .p-2  { padding: 20px; }
+.pcs-legacy.print-shop .p-1  { padding: 10px; }
+.pcs-legacy.print-shop .p-05 { padding: 5px; }
+.pcs-legacy.print-shop .border-2-back { border: 1.5px solid !important; }
+
+/* ---- printShop.php L171-177 — table layout + thead border ---- */
+.pcs-legacy.print-shop table { table-layout: fixed; }
+.pcs-legacy.print-shop thead { border: 1px solid; }
+
+/* ---- printShop.php L178-192 — background helpers ---- */
+.pcs-legacy.print-shop .bg-g     { background-color: #f2f2f2; }
+.pcs-legacy.print-shop .f-c      { }
+.pcs-legacy.print-shop .bg-2e8   { background-color: #ffe8e8; }
+.pcs-legacy.print-shop .bg-light { background-color: #eff9ff !important; }
+.pcs-legacy.print-shop .v-a-t    { vertical-align: text-top; }
+
+/* ---- the legacy markup also uses these Bootstrap-4 grid/util
+ *      class names verbatim in the printShop.php document body
+ *      (col-12 cells, .table). mPDF resolves the BS4 defaults
+ *      from its own table engine; reproduced here so the browser
+ *      renders the same table look. ---- */
+.pcs-legacy.print-shop .table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pcs-legacy.print-shop .table th,
+.pcs-legacy.print-shop .table td {
+  border: 1px solid #000;
+  padding: 4px 6px;
+  vertical-align: top;
+}
+.pcs-legacy.print-shop .col-12 { width: 100%; }
+.pcs-legacy.print-shop img { max-width: 100%; }
+.pcs-legacy.print-shop h1 { font-size: 2em;   margin: 0.4em 0; font-weight: bold; }
+.pcs-legacy.print-shop h3 { font-size: 1.17em; margin: 0.3em 0; font-weight: bold; }
+
+/* ---- box-shadow2 — printShop.php wraps the provider/shop rows in
+ *      <div class="box-shadow2">; mPDF ignores the unknown class
+ *      (no rule shipped in the inline block) — kept as a no-op so
+ *      the markup transcribes 1:1. ---- */
+.pcs-legacy.print-shop .box-shadow2 { }
+
+/* ---- print paper — printShop.php sets mPDF format "A4-P" (L30)
+ *      and AddPageByArray margins of 4mm (L356-361). Reproduce that
+ *      for the browser's print dialog so the saved PDF matches. ---- */
+@page {
+  size: A4 portrait;
+  margin: 4mm;
+}
+@media print {
+  .pcs-legacy.print-shop .no-print { display: none !important; }
+}

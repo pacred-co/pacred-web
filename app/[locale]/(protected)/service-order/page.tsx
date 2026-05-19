@@ -423,10 +423,10 @@ export default async function ServiceOrderPage({
                           {/* shops.php L898-1058 — the order table / empty state */}
                           <div className="p-1 p-m-0">
                             {/* shops.php L899 — <form action="printShop/" method="GET">.
-                                The printShop endpoint is not yet ported; the
-                                form is kept 1:1 (jQuery appends selected-row
-                                ids on submit — that wiring is a follow-up). */}
-                            <form id="frm-example" action="https://pcscargo.co.th/member/printShop/" method="GET">
+                                printShop is now transcribed to the Pacred
+                                route /service-order/print; the form posts
+                                there (method=GET, default-locale path). */}
+                            <form id="frm-example" action="/service-order/print" method="GET">
                               {countStatusAll > 0 ? (
                                 rows.length > 0 ? (
                                   <>
@@ -591,27 +591,33 @@ export default async function ServiceOrderPage({
                                                       </a>
                                                     </>
                                                   )}
+                                                  {/* shops.php L1012 — "พิมพ์ใบเสร็จ"
+                                                      → the transcribed print route
+                                                      (?print=1 = the receipt). */}
                                                   {row.hstatus === "5" && (
-                                                    <a
-                                                      href={`https://pcscargo.co.th/member/printShop/?print=1&id%5B%5D=${row.hno}`}
+                                                    <Link
+                                                      href={`/service-order/print?print=1&id=${row.hno}`}
                                                       target="_blank"
                                                     >
                                                       <p className="btn btn-outline-primary btn-sm btn-rounded">
                                                         {" "}
                                                         พิมพ์ใบเสร็จ
                                                       </p>
-                                                    </a>
+                                                    </Link>
                                                   )}
+                                                  {/* shops.php L1015 — "พิมพ์ใบแจ้งหนี้"
+                                                      → the transcribed print route
+                                                      (?print=2 = the invoice). */}
                                                   {Number(row.hstatus) > 1 && Number(row.hstatus) < 6 && (
-                                                    <a
-                                                      href={`https://pcscargo.co.th/member/printShop/?print=2&id%5B%5D=${row.hno}`}
+                                                    <Link
+                                                      href={`/service-order/print?print=2&id=${row.hno}`}
                                                       target="_blank"
                                                     >
                                                       <p className="btn btn-outline-danger btn-sm btn-rounded">
                                                         {" "}
                                                         พิมพ์ใบแจ้งหนี้
                                                       </p>
-                                                    </a>
+                                                    </Link>
                                                   )}
                                                 </td>
                                               </tr>
