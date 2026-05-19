@@ -61,33 +61,41 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       cntUnpaid,
     ] = await Promise.all([
       // ── Wallet ────────────────────────────────────────────────
-      admin.from("wallet_transactions").select("id", { count: "exact", head: true })
-        .eq("kind", "deposit").eq("status", "pending"),
-      admin.from("wallet_transactions").select("id", { count: "exact", head: true })
-        .eq("kind", "withdraw").eq("status", "pending"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_wallet_hs.
+      // status='1' = รออนุมัติ; deposit = amount > 0, withdraw = amount < 0
+      // (legacy stores withdrawals as a negative amount in the same table).
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
+        .eq("status", "1").gt("amount", 0),
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
+        .eq("status", "1").lt("amount", 0),
       // ── ฝากสั่งสินค้า (shop orders) ─────────────────────────────
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "awaiting_payment"),
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "ordered"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_header_order.
+      // hstatus 1=รอดำเนินการ · 2=รอชำระเงิน · 3=สั่งสินค้า.
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "1"),
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "2"),
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "3"),
       // ── ฝากนำเข้า (forwarders) ──────────────────────────────────
-      // Legacy badgeMenu on ฝากนำเข้า ~ countForwarder6 area
-      // (ถึงไทย / รอชำระ). Pacred: arrived_thailand.
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "arrived_thailand"),
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "out_for_delivery"),
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "pending_payment").eq("credit_used", true),
-      // มอบงานคนขับ — forwarders ready to assign (out_for_delivery is
-      // the closest Pacred analogue of legacy status_driver_item).
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "out_for_delivery"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_forwarder.
+      // fstatus 4=ถึงไทยแล้ว · 5=รอชำระเงิน · 6=เตรียมส่ง.
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "4"),
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "6"),
+      // forwarderCredit — fstatus=5 (รอชำระเงิน); credit-flag = paydeposit='1'.
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "5").eq("paydeposit", "1"),
+      // มอบงานคนขับ — forwarders ready to assign. Legacy fstatus=6 (เตรียมส่ง)
+      // is the same stage as forwarderDelivery (per _SYNTHESIS §7.4).
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "6"),
       // ── ฝากโอน/ชำระ (yuan) ──────────────────────────────────────
-      admin.from("yuan_payments").select("id", { count: "exact", head: true })
-        .in("status", ["pending", "processing"]),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_payment.
+      // paystatus '1'=pending '2'=processing.
+      admin.from("tb_payment").select("id", { count: "exact", head: true })
+        .in("paystatus", ["1", "2"]),
       // ── เบิกเงิน (payouts) ──────────────────────────────────────
       admin.from("sales_payouts").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
@@ -95,12 +103,14 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       admin.from("commissions").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
       // ── ลูกค้า ──────────────────────────────────────────────────
-      // สมาชิกนิติบุคคล รอตรวจ — legacy countComp (corporateStatus=1).
-      admin.from("profiles").select("id", { count: "exact", head: true })
-        .eq("account_type", "juristic").eq("status", "incomplete"),
-      // ลูกค้ารอ approve — accounts not yet activated.
-      admin.from("profiles").select("id", { count: "exact", head: true })
-        .eq("status", "incomplete"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_users.
+      // สมาชิกนิติบุคคล รอตรวจ — usercompany='1' (นิติบุคคล) +
+      // useractive='0' (รอ approve) — legacy countComp.
+      admin.from("tb_users").select("id", { count: "exact", head: true })
+        .eq("usercompany", "1").eq("useractive", "0"),
+      // ลูกค้ารอ approve — useractive='0' = accounts not yet activated.
+      admin.from("tb_users").select("id", { count: "exact", head: true })
+        .eq("useractive", "0"),
       // ── ข้อความติดต่อ (lead funnel) ─────────────────────────────
       admin.from("contact_messages").select("id", { count: "exact", head: true })
         .eq("status", "new"),

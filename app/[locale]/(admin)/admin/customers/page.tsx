@@ -3,30 +3,45 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 
-const STATUS_CFG: Record<string, { label: string; className: string }> = {
+// D1 Wave-2 (_SYNTHESIS §7.1 / §7.4): the admin customer list reads the
+// migrated legacy table `tb_users` (~8,898 PCS customers) — NOT the
+// rebuilt-era `profiles` table (~3 rows). Legacy account state lives in
+// two varchar(1) flags:
+//   useractive  '1'=ใช้งานแล้ว (approved)   · '0'=รอ approve
+//   userstatus  '1'=ใช้งาน                  · '0'=ลบบัญชี (deleted)
+// → derived status: useractive='0' ⇒ incomplete · userstatus='0' ⇒
+//   suspended (deleted) · otherwise active.
+type DerivedStatus = "active" | "incomplete" | "suspended";
+
+function deriveStatus(u: { useractive: string | null; userstatus: string | null }): DerivedStatus {
+  if (u.userstatus === "0") return "suspended";
+  if (u.useractive === "0") return "incomplete";
+  return "active";
+}
+
+const STATUS_CFG: Record<DerivedStatus, { label: string; className: string }> = {
   active:     { label: "ใช้งาน",      className: "bg-green-50 text-green-700 border-green-200" },
   incomplete: { label: "รอ Approve",  className: "bg-amber-50 text-amber-700 border-amber-200" },
   suspended:  { label: "ระงับ",       className: "bg-red-50 text-red-700 border-red-200" },
 };
 
 // Sidebar `?group=` filter (lib/admin/sidebar-menu.ts blockUserCargo) →
-// the DB filter we run + the chip label we render. Six legacy customer
-// segments collapse onto profiles columns:
-//   general → customer_group='PR'   (Pacred default; ~99% of migrated rows)
-//   vip     → customer_group ilike 'VIP'   (case-insensitive vs rates seed)
-//   svip    → customer_group ilike 'SVIP'
-//   corporate → account_type='juristic'
-//   credit    → credit_enabled=true  (0003 column-preserved from PHP port)
-//   comparison → comparison_enabled=true
-// When Wave 2 swaps the read surface to `tb_users.userType`, the same
-// `?group=` switch passes through unchanged (per _SYNTHESIS §7.5).
-const GROUP_CFG: Record<string, { label: string }> = {
+// the DB filter we run + the chip label we render. The legacy `tb_users`
+// table carries three varchar(1) segment flags faithfully:
+//   corporate  → usercompany='1'   (นิติบุคคล)
+//   credit     → usercredit='1'    (สมาชิกเครดิต)
+//   comparison → usercomparison='1' (สมาชิกคิดค่าเทียบ)
+// general/vip/svip have no faithful `tb_users` column (legacy did not
+// store a VIP tier on the customer row) — the chip still renders for
+// continuity but applies no DB filter, the same graceful-degrade
+// pattern recently-active uses for its SLA chip.
+const GROUP_CFG: Record<string, { label: string; col?: string }> = {
   general:    { label: "สมาชิกทั่วไป" },
   vip:        { label: "สมาชิก VIP" },
   svip:       { label: "สมาชิก SVIP" },
-  corporate:  { label: "สมาชิกนิติบุคคล" },
-  credit:     { label: "สมาชิกเครดิต" },
-  comparison: { label: "สมาชิกคิดค่าเทียบ" },
+  corporate:  { label: "สมาชิกนิติบุคคล", col: "usercompany" },
+  credit:     { label: "สมาชิกเครดิต",    col: "usercredit" },
+  comparison: { label: "สมาชิกคิดค่าเทียบ", col: "usercomparison" },
 };
 
 export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string }> }) {
@@ -39,38 +54,58 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  let q = admin.from("profiles")
+  // D1 Wave-2: read legacy tb_users (member-code identity = `userid`).
+  let q = admin.from("tb_users")
     .select(`
-      id, member_code, account_type, status, first_name, last_name, company_name,
-      phone, email, customer_group, created_at,
-      wallet:wallet ( balance, cashback_balance, credit_balance )
+      userid, username, userlastname, usercompany,
+      usertel, useremail, useractive, userstatus, adminidsale, userregistered
     `)
-    .order("created_at", { ascending: false })
+    .order("userregistered", { ascending: false })
     .limit(200);
 
-  if (sp.type === "personal" || sp.type === "juristic") q = q.eq("account_type", sp.type);
+  // `type` filter — usercompany '1' = นิติบุคคล (juristic), else บุคคล.
+  if (sp.type === "personal")  q = q.neq("usercompany", "1");
+  if (sp.type === "juristic")  q = q.eq("usercompany", "1");
 
   // Sidebar `?group=` filter — see GROUP_CFG header comment for the mapping.
   const group = typeof sp.group === "string" && sp.group in GROUP_CFG ? sp.group : null;
-  if (group === "general")    q = q.eq("customer_group", "PR");
-  if (group === "vip")        q = q.ilike("customer_group", "VIP");
-  if (group === "svip")       q = q.ilike("customer_group", "SVIP");
-  if (group === "corporate")  q = q.eq("account_type", "juristic");
-  if (group === "credit")     q = q.eq("credit_enabled", true);
-  if (group === "comparison") q = q.eq("comparison_enabled", true);
+  const groupCol = group ? GROUP_CFG[group].col : undefined;
+  if (groupCol) q = q.eq(groupCol, "1");
 
   if (sp.q) {
-    // Search by member_code OR phone OR name (parallel OR via or() filter)
-    q = q.or(`member_code.ilike.%${sp.q}%,phone.ilike.%${sp.q}%,first_name.ilike.%${sp.q}%,last_name.ilike.%${sp.q}%,company_name.ilike.%${sp.q}%`);
+    // Search by member_code (userid) OR phone OR name (parallel OR via or() filter)
+    const term = sp.q.replace(/[\\%_,]/g, (m) => "\\" + m);
+    q = q.or(`userid.ilike.%${term}%,usertel.ilike.%${term}%,username.ilike.%${term}%,userlastname.ilike.%${term}%`);
   }
 
   const { data } = await q;
-  type WalletShape = { balance: number; cashback_balance: number; credit_balance: number };
-  type Row = NonNullable<typeof data>[number];
-  const rows: (Row & { wallet_row: WalletShape | null })[] = ((data ?? []) as Row[]).map((r) => {
-    const w = (r as Row & { wallet: WalletShape | WalletShape[] | null }).wallet;
-    return { ...r, wallet_row: Array.isArray(w) ? w[0] ?? null : w };
-  });
+  type Row = {
+    userid: string;
+    username: string | null;
+    userlastname: string | null;
+    usercompany: string | null;
+    usertel: string | null;
+    useremail: string | null;
+    useractive: string | null;
+    userstatus: string | null;
+    adminidsale: string | null;
+    userregistered: string | null;
+  };
+  const rows = (data ?? []) as Row[];
+
+  // Wallet balances — legacy tb_wallet keyed by userid (one row/customer,
+  // wallettotal numeric). Batch-fetch for the rows on screen.
+  const userIds = rows.map((r) => r.userid);
+  const walletByUser = new Map<string, number>();
+  if (userIds.length > 0) {
+    const { data: wallets } = await admin
+      .from("tb_wallet")
+      .select("userid, wallettotal")
+      .in("userid", userIds);
+    for (const w of (wallets ?? []) as { userid: string; wallettotal: number | null }[]) {
+      walletByUser.set(w.userid, Number(w.wallettotal ?? 0));
+    }
+  }
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -136,7 +171,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                   <th className="px-4 py-3">ประเภท</th>
                   <th className="px-4 py-3">ชื่อ</th>
                   <th className="px-4 py-3">เบอร์ / อีเมล</th>
-                  <th className="px-4 py-3">กลุ่ม</th>
+                  <th className="px-4 py-3">เซลล์ผู้ดูแล</th>
                   <th className="px-4 py-3">สถานะ</th>
                   <th className="px-4 py-3 text-right">ยอดกระเป๋า</th>
                   <th className="px-4 py-3">สมัครเมื่อ</th>
@@ -144,29 +179,33 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                {rows.map((r) => {
+                  const isJuristic = r.usercompany === "1";
+                  const status = deriveStatus(r);
+                  const fullName = `${r.username ?? ""} ${r.userlastname ?? ""}`.trim() || "—";
+                  return (
+                  <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
                     <td className="px-4 py-3 font-mono text-xs">
-                      <Link href={`/admin/customers/${r.id}`} className="text-primary-600 hover:underline">{r.member_code ?? "—"}</Link>
+                      <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">{r.userid}</Link>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                        r.account_type === "juristic" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"
+                        isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"
                       }`}>
-                        {r.account_type === "juristic" ? "นิติบุคคล" : "บุคคล"}
+                        {isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      {r.account_type === "juristic" && r.company_name ? r.company_name : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"}
+                      {fullName}
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div>{r.phone ?? "—"}</div>
-                      <div className="text-muted">{r.email ?? "—"}</div>
+                      <div>{r.usertel ?? "—"}</div>
+                      <div className="text-muted">{r.useremail ?? "—"}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs font-mono">{r.customer_group}</td>
+                    <td className="px-4 py-3 text-xs font-mono">{r.adminidsale || "—"}</td>
                     <td className="px-4 py-3">
                       {(() => {
-                        const cfg = STATUS_CFG[r.status] ?? { label: r.status, className: "bg-surface text-muted border-border" };
+                        const cfg = STATUS_CFG[status];
                         return (
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}>
                             {cfg.label}
@@ -175,12 +214,15 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                       })()}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-xs">
-                      ฿{Number(r.wallet_row?.balance ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      ฿{(walletByUser.get(r.userid) ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{new Date(r.created_at).toLocaleDateString("th-TH")}</td>
-                    <td className="px-4 py-3"><CustomerRowActions id={r.id} status={r.status} /></td>
+                    <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
+                      {r.userregistered ? new Date(r.userregistered).toLocaleDateString("th-TH") : "—"}
+                    </td>
+                    <td className="px-4 py-3"><CustomerRowActions id={r.userid} status={status} /></td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

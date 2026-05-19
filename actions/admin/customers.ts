@@ -97,33 +97,46 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
   });
 }
 
-/** Set profiles.status = 'active' (lifts both 'incomplete' new sign-ups
- *  and previously suspended accounts). */
+/**
+ * Approve a customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4): re-pointed
+ * from the rebuilt-era `profiles` table to the legacy `tb_users` table.
+ *
+ * `id` is the legacy member code (`tb_users.userid`, e.g. `PR2791`) —
+ * the identifier the re-pointed customer list (page.tsx) passes via
+ * `<CustomerRowActions>`. Approving lifts a pending account by setting
+ * the legacy `useractive` flag to `'1'` (1=ใช้งานแล้ว). A suspended
+ * (deleted) account — `userstatus='0'` — is restored by setting it back
+ * to `'1'`. Both flags are cleared so the derived status becomes active.
+ */
 export async function approveCustomer(id: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const { data: before } = await admin
-      .from("profiles")
-      .select("id, status, member_code")
-      .eq("id", id)
-      .maybeSingle<{ id: string; status: string; member_code: string | null }>();
+      .from("tb_users")
+      .select("userid, useractive, userstatus")
+      .eq("userid", id)
+      .maybeSingle<{ userid: string; useractive: string | null; userstatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    if (before.status === "active") return { ok: true };  // no-op
+    // No-op when already active (useractive='1' and not deleted).
+    if (before.useractive === "1" && before.userstatus !== "0") return { ok: true };
 
     const { error } = await admin
-      .from("profiles")
-      .update({ status: "active" })
-      .eq("id", id);
+      .from("tb_users")
+      .update({ useractive: "1", userstatus: "1" })
+      .eq("userid", id);
     if (error) return { ok: false, error: error.message };
 
-    await logAdminAction(adminId, "customer.approve", "profile", id, {
-      before: { status: before.status },
-      after:  { status: "active" },
+    await logAdminAction(adminId, "customer.approve", "tb_users", id, {
+      before: { useractive: before.useractive, userstatus: before.userstatus },
+      after:  { useractive: "1", userstatus: "1" },
     });
 
-    void sendNotification(id, notify.customerApproved({ memberCode: before.member_code }));
+    // Note: customer notification deferred — migrated tb_users customers
+    // have no `profiles` row yet (the _SYNTHESIS §8 ghost finding;
+    // sendNotification is profiles-keyed). Wave-2 profiles backfill
+    // re-enables the notify side-effect.
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/customers/pending");
@@ -238,32 +251,38 @@ export async function adminConvertToJuristic(
   });
 }
 
-/** Suspend an active customer. */
+/**
+ * Suspend an active customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4):
+ * re-pointed from `profiles` to the legacy `tb_users` table. `id` is the
+ * legacy member code (`tb_users.userid`). Legacy PCS has no distinct
+ * "suspended" state — a disabled account is `userstatus='0'`
+ * (0=ลบบัญชี), which the re-pointed customer list renders as "ระงับ".
+ */
 export async function suspendCustomer(id: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const { data: before } = await admin
-      .from("profiles")
-      .select("id, status")
-      .eq("id", id)
-      .maybeSingle<{ id: string; status: string }>();
+      .from("tb_users")
+      .select("userid, userstatus")
+      .eq("userid", id)
+      .maybeSingle<{ userid: string; userstatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    if (before.status === "suspended") return { ok: true };  // no-op
+    if (before.userstatus === "0") return { ok: true };  // no-op — already disabled
 
     const { error } = await admin
-      .from("profiles")
-      .update({ status: "suspended" })
-      .eq("id", id);
+      .from("tb_users")
+      .update({ userstatus: "0" })
+      .eq("userid", id);
     if (error) return { ok: false, error: error.message };
 
-    await logAdminAction(adminId, "customer.suspend", "profile", id, {
-      before: { status: before.status },
-      after:  { status: "suspended" },
+    await logAdminAction(adminId, "customer.suspend", "tb_users", id, {
+      before: { userstatus: before.userstatus },
+      after:  { userstatus: "0" },
     });
 
-    void sendNotification(id, notify.customerSuspended());
+    // Note: customer notification deferred — see approveCustomer comment.
 
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${id}`);
