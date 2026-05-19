@@ -1,0 +1,59 @@
+@media (max-width: 576px){
+    html body .content .content-wrapper{
+        padding: 0px !important;
+    }
+    .acc .nav-item {
+        padding: 0.5rem 1rem;
+        display: inline-block !important;
+    }
+    .acc .nav.navbar-nav {
+        display: inline-block !important;
+    }
+    .breadcrumb {
+        text-align: center !important;     
+        display: block;  
+    }
+    .breadcrumb li {
+        display: none;        
+    }
+    .breadcrumb li:first-child {
+        display: unset;
+    }
+    .breadcrumb li:last-child {
+        display: unset;
+    }
+    .mb-1.header-navbar{
+        margin-bottom: 0.25rem !important;
+    }
+    .content-body.pt-1{
+        padding:0.5rem 0.75rem 0rem 0.75rem !important;
+    }
+    .pcs-tabs .active {
+        font-weight: 700 !important;
+        font-size: 1rem;
+    }
+    .card-body{
+        padding: 0.75rem;
+    }
+    h3{
+        font-size: 1.5rem;
+        font-weight: 700 !important;
+        color: var(--color-main);
+        text-align: center;
+    }
+    .nav.nav-tabs.nav-underline .nav-item a.nav-link{
+        line-height: 1rem;
+    }
+    .row.align-items-end{
+        text-align: center;
+    }
+    .acc .d-inline-block2.p-1{
+        padding: 0.25rem;
+    }
+    button.btn.btn-outline-success.btn-sm.btn-rounded{
+        margin: 0.5rem !important;
+    }
+    .pl1-5{
+        padding-left:1.5rem !important;
+    }
+}

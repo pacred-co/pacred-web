@@ -1,0 +1,93 @@
+.nav.nav-tabs.nav-linetriangle .nav-item a.nav-link.active {
+    border-bottom: 2px solid rgba(0,0,0,.1);
+    border-bottom-color: #cc3333 !important;
+    color: #cc3333;
+}
+.nav.nav-tabs.nav-linetriangle .nav-item a.nav-link.active:before {
+    border-top-color: #cc3333;
+}
+.nav.nav-tabs.nav-linetriangle .nav-item a.nav-link.active:focus {
+    color: #cc3333;
+}
+@media only screen and (max-width: 578px){
+    .content-wrapper{
+        padding:0.05rem !important;
+    }
+    .row{
+        padding-top: 0.08rem!important;
+    }
+    .row .col-6{
+        padding-left: 0.08rem!important;
+        padding-right: 0.08rem !important;
+        margin-bottom: -7px !important;
+    }
+    .font-large-2 {
+        font-size: 2rem!important;
+    }            
+}
+.nav.nav-tabs.nav-underline .nav-item {
+    border: 1px dashed #cc3333 !important;
+    border-radius: 1rem;
+    margin: 0.1rem;
+}
+.nav.nav-tabs.nav-underline .nav-item.tab-sm-center.active {
+    border: 2.5px solid #cc3333 !important;
+}
+.nav.nav-tabs.nav-underline .nav-item a.nav-link.active {
+    background-color: rgba(255, 137, 137, 0.192) !important;
+}
+.pcs-sm-badge {
+    margin-left: 0px; 
+    margin-right: 0px;
+}
+.nav.nav-tabs.nav-underline .nav-item a.nav-link{
+    padding: 0.35rem 0.35rem;
+    font-size: 13.5px;
+}  
+.lds-ring {
+  display: inline-block;
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+.lds-ring div {
+  box-sizing: border-box;
+  display: block;
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  margin: 8px;
+  border: 8px solid #FBB73C;
+  border-radius: 50%;
+  animation: lds-ring 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  border-color: #FBB73C transparent transparent transparent;
+}
+.lds-ring div:nth-child(1) {
+  animation-delay: -0.45s;
+}
+.lds-ring div:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.lds-ring div:nth-child(3) {
+  animation-delay: -0.15s;
+}
+@keyframes lds-ring {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+.bg-warning-2{
+    background-color: rgb(255, 238, 218);            
+}
+.bg-success-2{
+    background-color: #f5ffe9;            
+}
+.nav.nav-tabs.nav-underline .nav-item a.nav-link {
+    line-height: 1.45rem;
+}
+.table td, .table th {
+  padding: 0.25rem 0.5rem;
+}

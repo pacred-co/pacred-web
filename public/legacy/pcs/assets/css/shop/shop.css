@@ -1,0 +1,184 @@
+.product-count {
+    float: left;
+    width: 6%;
+    padding: 5px;
+}
+
+.product-details {
+    float: left;
+    width: 35%;
+    padding: 5px;
+}
+
+.product-price {
+    float: left;
+    width: 14%;
+    text-align: center;
+    padding: 5px;
+}
+
+.product-quantity {
+    float: left;
+    width: 10%;
+    text-align: center;
+    padding: 5px;
+}
+
+.product-priceCHN {
+    float: left;
+    width: 10%;
+    text-align: center;
+    padding: 5px;
+}
+
+.product-price-update {
+    float: left;
+    width: 10%;
+    text-align: center;
+    padding: 5px;
+}
+
+.product-line-price {
+    float: left;
+    width: 15%;
+    text-align: center;
+    padding: 5px;
+}
+
+
+/* This is used as the traditional .clearfix class */
+
+.group:before,
+.shopping-cart:before,
+.column-labels:before,
+.product:before,
+.totals-item:before,
+.group:after,
+.shopping-cart:after,
+.column-labels:after,
+.product:after,
+.totals-item:after {
+    content: '';
+    display: table;
+}
+
+.group:after,
+.shopping-cart:after,
+.column-labels:after,
+.product:after,
+.totals-item:after {
+    clear: both;
+}
+
+.group,
+.shopping-cart,
+.column-labels,
+.product,
+.totals-item {
+    zoom: 1;
+}
+
+label {
+    font-weight: 600;
+}
+
+
+/* Column headers */
+
+.column-labels label {
+    padding: 5px;
+    margin-bottom: 0;
+}
+
+
+/* Product entries */
+
+.product {
+    margin-bottom: 20px;
+    margin-top: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+}
+
+.product .product-image img {
+    width: 100px;
+}
+
+.product .product-details .product-title {
+    margin-right: 20px;
+}
+
+.product .product-details .product-description {
+    margin: 5px 20px 5px 0;
+    line-height: 1.4em;
+}
+
+
+/* Make adjustments for tablet */
+
+@media screen and (max-width: 650px) {
+    .product-count {
+        float: left;
+        width: 10%;
+    }
+    .shopping-cart {
+        margin: 0;
+        border-top: 1px solid #eee;
+    }
+    .column-labels {
+        display: none;
+    }
+    .product-image img {
+        margin: 0 0 10px 10px;
+    }
+    .product-details {
+        float: none;
+        margin-bottom: 10px;
+        width: auto;
+    }
+    .product-price:before {
+        content: 'ราคาต่อชิ้น :';
+    }
+    .product-quantity:before {
+        content: 'จำนวน :';
+    }
+    .product-quantity {
+        width: 100%;
+        text-align: left;
+    }
+    .product-price {
+        width: 100%;
+        text-align: left;
+    }
+    .product-priceCHN {
+        width: 100%;
+        text-align: left;
+    }
+    .product-price-update {
+        width: 100%;
+        text-align: left;
+    }
+    .border-right {
+        border-right: unset !important;
+    }
+    .border-left {
+        border-left: unset !important;
+    }
+    .product-line-price {
+        float: right;
+        width: 100%;
+        color: #ff5050!important;
+    }
+    .product-line-price:before {
+        content: 'ราคารวม :';
+    }
+    .product-priceCHN:before {
+        content: 'ค่าขนส่งจีน :';
+    }
+    .product-price-update:before {
+        content: 'เพิ่ม/ลด เงิน :';
+    }
+    .product .product-image a {
+        text-align: center;
+    }
+}
