@@ -497,9 +497,13 @@ const menuSuper: MenuSection[] = [
 /**
  * `ops` — Cargo CS / Purchasing operator (legacy Cargo/CSPurchasing).
  * Cargo operational queues, no finance back-office, no HR.
+ *
+ * R1 (sidebar IA restructure): regrouped to legacy section order
+ * (Cargo & Freight → Cargo → Learning → Extension). No item changes.
  */
 const menuOps: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
+  { header: "Cargo & Freight", items: [{ ...blockQA, labelKey: "qa.titleGroup" }] },
   {
     header: "Cargo",
     items: [
@@ -511,7 +515,6 @@ const menuOps: MenuSection[] = [
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3" },
     ],
   },
-  { header: "Cargo & Freight", items: [{ ...blockQA, labelKey: "qa.titleGroup" }] },
   learningSection,
   extensionSection([blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
 ];
@@ -536,13 +539,18 @@ const menuAccounting: MenuSection[] = [
 /**
  * `sales_admin` — Cargo Sales / Sales manager (legacy Cargo/SaleCargo).
  * Customer book + sell pipeline + sales commission, light finance.
+ *
+ * R1 (sidebar IA restructure): regrouped to legacy section headers
+ * (Cargo & Freight → Cargo → Learning → Extension). No item changes —
+ * `manageCustomers.titleSales` + `withdrawal.titleSales` are surfaced
+ * under Cargo & Freight because legacy `OOP/CargoAndFreight/menu-user.php`
+ * + `menu-withdrawal-list.php` live in that section.
  */
 const menuSalesAdmin: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    header: "Cargo",
+    header: "Cargo & Freight",
     items: [
-      blockWallet,
       {
         labelKey: "manageCustomers.titleSales",
         icon: "Users",
@@ -558,8 +566,6 @@ const menuSalesAdmin: MenuSection[] = [
           { labelKey: "userCargo.teamLeaders", href: "/admin/team-leaders",         icon: "Coins" },
         ],
       },
-      blockPurchasing,
-      { ...blockReport, labelKey: "report.titleSales" },
       {
         labelKey: "withdrawal.titleSales",
         icon: "Banknote",
@@ -569,6 +575,14 @@ const menuSalesAdmin: MenuSection[] = [
           { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt" },
         ],
       },
+    ],
+  },
+  {
+    header: "Cargo",
+    items: [
+      blockWallet,
+      blockPurchasing,
+      { ...blockReport, labelKey: "report.titleSales" },
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing" },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending" },
     ],

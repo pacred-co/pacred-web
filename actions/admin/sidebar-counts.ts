@@ -45,9 +45,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending,
       shopAwaitPay,
       shopOrdered,
+      shopNote,
       forwarderArrived,
       forwarderDelivery,
       forwarderCredit,
+      forwarderNote,
+      forwarderWhError,
       driverItems,
       yuanPending,
       salesPayout,
@@ -77,6 +80,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
         .eq("hstatus", "2"),
       admin.from("tb_header_order").select("id", { count: "exact", head: true })
         .eq("hstatus", "3"),
+      // หมายเหตุฝากสั่ง — legacy countNoteShop: tb_header_order WHERE
+      // hnote <> '' AND hstatus NOT IN (5,6). A daily-flow note queue staff
+      // actively work (ภูม sidebar-IA batch · re-pointed to tb_* for Wave-2).
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .neq("hnote", "")
+        .not("hstatus", "in", "(5,6)"),
       // ── ฝากนำเข้า (forwarders) ──────────────────────────────────
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_forwarder.
       // fstatus 4=ถึงไทยแล้ว · 5=รอชำระเงิน · 6=เตรียมส่ง.
@@ -87,8 +96,18 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       // forwarderCredit — fstatus=5 (รอชำระเงิน); credit-flag = paydeposit='1'.
       admin.from("tb_forwarder").select("id", { count: "exact", head: true })
         .eq("fstatus", "5").eq("paydeposit", "1"),
-      // มอบงานคนขับ — forwarders ready to assign. Legacy fstatus=6 (เตรียมส่ง)
-      // is the same stage as forwarderDelivery (per _SYNTHESIS §7.4).
+      // หมายเหตุนำเข้า — legacy countNote: tb_forwarder WHERE fnote <> ''
+      // AND fstatus <> 7 (ภูม sidebar-IA batch · re-pointed to tb_* for Wave-2).
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .not("fnote", "is", null)
+        .neq("fnote", "")
+        .neq("fstatus", "7"),
+      // ประวัติเข้าโกดังไทย error queue — legacy countErrorF4:
+      // tb_forwarder_import2 scan rows whose `fid` (the matched-parcel FK)
+      // is NULL — scanned at the TH warehouse but unpaired to a forwarder.
+      admin.from("tb_forwarder_import2").select("id", { count: "exact", head: true })
+        .is("fid", null),
+      // มอบงานคนขับ — forwarders ready to assign. Legacy fstatus=6 (เตรียมส่ง).
       admin.from("tb_forwarder").select("id", { count: "exact", head: true })
         .eq("fstatus", "6"),
       // ── ฝากโอน/ชำระ (yuan) ──────────────────────────────────────
@@ -148,12 +167,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending:       n(shopPending),
       shopAwaitPay:      n(shopAwaitPay),
       shopOrdered:       n(shopOrdered),
-      shopNote:          0, // หมายเหตุฝากสั่ง — note queue not yet ported (Phase B §5)
+      shopNote:          n(shopNote),
       forwarderArrived:  n(forwarderArrived),
       forwarderDelivery: n(forwarderDelivery),
       forwarderCredit:   n(forwarderCredit),
-      forwarderNote:     0, // หมายเหตุนำเข้า — note queue not yet ported (Phase B §4)
-      forwarderWhError:  0, // ประวัติเข้าโกดังไทย error queue not yet ported
+      forwarderNote:     n(forwarderNote),
+      forwarderWhError:  n(forwarderWhError),
       driverItems:       n(driverItems),
       yuanPending:       n(yuanPending),
       cntDrawMoney:      cnt,
