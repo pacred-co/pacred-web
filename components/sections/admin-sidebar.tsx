@@ -1,138 +1,243 @@
 "use client";
 
+/**
+ * D1 Phase B — admin sidebar, faithful to legacy PCS Cargo.
+ *
+ * The legacy sidebar is NOT one flat array filtered by a role enum. It is a
+ * per-role hand-built menu (the company/department/section triple selects
+ * one of ~22 purpose-built menu files), grouped under fixed EN section
+ * headers (Cargo & Freight / Freight / Cargo / Settings / Learning /
+ * Extension), with a live-count badge on nearly every queue item.
+ *
+ * This component reproduces that shape:
+ *  - menu structure + per-role assembly → `lib/admin/sidebar-menu.ts`
+ *  - live-count badges (legacy badgeMenu)  → `actions/admin/sidebar-counts.ts`
+ *  - nested accordion (legacy menu-accordion) → recursive <MenuRow>
+ *  - avatar + adminID + role badge at top   → <SidebarHeader>
+ *
+ *   Audit source: docs/research/d1-fidelity-admin.md §1
+ */
+
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
-  LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users,
-  BadgePercent, Settings as SettingsIcon, Languages, Menu, X,
-  BarChart3, BookOpen, Building2, ClipboardCheck, UserCog, Clock,
-  MessageSquare, Activity, ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell,
-  Search, Kanban, Inbox, AlertTriangle, CalendarCheck,
+  LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users, User,
+  BadgePercent, Settings, Languages, Menu, X, BarChart3, Building2,
+  ClipboardCheck, UserCog, Clock, MessageSquare, MessageCircle, Activity,
+  ArrowRightLeft, Receipt, Truck, Upload, BellRing, Bell, Search, Kanban,
+  Inbox, AlertTriangle, CalendarCheck, CalendarClock, GraduationCap,
+  FileText, Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins,
+  PackagePlus, PackageCheck, UserPlus, Plus, History, Landmark, Layers,
+  SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
+  Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, ChevronDown,
+  ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
+import {
+  menuForRoles, primaryRole, type BadgeCounts, type MenuItem, type MenuSection,
+} from "@/lib/admin/sidebar-menu";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  roles?: AdminRole[];   // required role(s); empty = any admin
-  group?: string;        // section heading
+// ── Icon-name → component map. Menu items carry icon NAMES (strings) so
+//    `lib/admin/sidebar-menu.ts` stays a plain non-JSX module. ──────────
+const ICONS: Record<string, LucideIcon> = {
+  LayoutDashboard, Package, ShoppingCart, Coins, Wallet, Users, User,
+  BadgePercent, Settings, Languages, BarChart3, Building2, ClipboardCheck,
+  UserCog, Clock, MessageSquare, MessageCircle, Activity, ArrowRightLeft,
+  Receipt, Truck, Upload, BellRing, Bell, Search, Kanban, Inbox,
+  AlertTriangle, CalendarCheck, CalendarClock, GraduationCap, FileText,
+  Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins, PackagePlus,
+  PackageCheck, UserPlus, Plus, History, Landmark, Layers, SlidersHorizontal,
+  Network, ListOrdered, Barcode, ScanLine, Camera, Printer, Calculator,
+  BadgeCheck, ShieldAlert, UserCheck,
 };
 
-const items: NavItem[] = [
-  // Overview
-  { href: "/admin",                  label: "ภาพรวม",          icon: <LayoutDashboard className="w-5 h-5" />, group: "ภาพรวม" },
-  { href: "/admin/kpi",              label: "KPI ภาพรวมธุรกิจ", icon: <Activity className="w-5 h-5" />,        roles: ["ops","accounting","sales_admin"], group: "ภาพรวม" },
-  { href: "/admin/reports",          label: "รายงานรายได้",     icon: <BarChart3 className="w-5 h-5" />,       group: "ภาพรวม" },
-  { href: "/admin/reports/containers-hs", label: "รายงาน HS code",  icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ภาพรวม" },
-  { href: "/admin/accounting",       label: "บัญชี Cargo/Freight", icon: <Wallet className="w-5 h-5" />,    roles: ["accounting"], group: "ภาพรวม" },
+function Icon({ name, active }: { name?: string; active: boolean }) {
+  const Cmp = name ? ICONS[name] : undefined;
+  if (!Cmp) return <span className="w-[18px] h-[18px] shrink-0" />;
+  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-white/55"}`} />;
+}
 
-  // 0080 — cross-department work-board + per-role inbox (operating-system §1.4).
-  // No `roles` restriction: every department needs the shared board (that IS
-  // the cross-department-visibility point). Mutations are super+ops-gated.
-  { href: "/admin/board",            label: "กระดานงานข้ามแผนก",   icon: <Kanban className="w-5 h-5" />,         group: "กระดานงาน" },
-  { href: "/admin/board/inbox",      label: "งานของฉัน (Inbox)",   icon: <Inbox className="w-5 h-5" />,          group: "กระดานงาน" },
+// ── Role badge label (legacy nameAdminType + dept/section). ────────────
+const ROLE_LABEL_KEY: Record<AdminRole, string> = {
+  super:       "role.super",
+  ops:         "role.ops",
+  accounting:  "role.accounting",
+  sales_admin: "role.salesAdmin",
+  warehouse:   "role.warehouse",
+  driver:      "role.driver",
+  interpreter: "role.interpreter",
+};
 
-  // Self-serve reports (V-B1) — staff sees the operational state without dev tickets
-  { href: "/admin/reports/pending-payments",      label: "รอชำระเงิน",        icon: <Receipt className="w-5 h-5" />,    roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
-  { href: "/admin/reports/credit-pending",        label: "เครดิตค้างนำเข้า",  icon: <Receipt className="w-5 h-5" />,    roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
-  { href: "/admin/reports/containers-awaiting-th",label: "ตู้รอเข้าไทย",       icon: <Package className="w-5 h-5" />,    roles: ["ops","warehouse","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
-  { href: "/admin/reports/debtors",               label: "ลูกค้าติดหนี้",      icon: <Wallet className="w-5 h-5" />,     roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
-  { href: "/admin/reports/refunds",               label: "คืนเงิน",            icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["accounting"], group: "รีพอร์ตเฉพาะกิจ" },
-  { href: "/admin/reports/monthly-orders",        label: "ออเดอร์รายเดือน",   icon: <BarChart3 className="w-5 h-5" />,  roles: ["ops","accounting"], group: "รีพอร์ตเฉพาะกิจ" },
+/** Does any descendant href match the current path? Used to auto-open. */
+function subtreeHasActive(item: MenuItem, pathname: string): boolean {
+  if (item.href && hrefMatches(item.href, pathname)) return true;
+  return (item.children ?? []).some((c) => subtreeHasActive(c, pathname));
+}
 
-  // V-G6 analytical reports
-  { href: "/admin/reports/forwarder-volume",      label: "ปริมาณฝากนำเข้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
-  { href: "/admin/reports/sales-by-rep",          label: "ยอด/Sales rep (V-G6)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
-  { href: "/admin/reports/hs-code-revenue",       label: "HS-code revenue (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting"], group: "รีพอร์ตวิเคราะห์" },
-  { href: "/admin/reports/user-sales-history",    label: "ประวัติยอด/ลูกค้า (V-G6)", icon: <BarChart3 className="w-5 h-5" />, roles: ["ops","accounting","sales_admin"], group: "รีพอร์ตวิเคราะห์" },
+/** Path-match ignoring locale prefix + query string. */
+function hrefMatches(href: string, pathname: string): boolean {
+  const base = href.split("?")[0];
+  if (base === "/admin") return pathname === "/admin" || pathname.endsWith("/admin");
+  return pathname === base || pathname.startsWith(base + "/");
+}
 
-  // Freight stack (V-E6+)
-  { href: "/admin/freight/quotes",       label: "ใบเสนอราคา (V-E6)",     icon: <Receipt className="w-5 h-5" />,        roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
-  { href: "/admin/freight/shipments",    label: "งาน + invoice (V-E1)",  icon: <Package className="w-5 h-5" />,        roles: ["super","ops","sales_admin","accounting"], group: "Freight" },
-  { href: "/admin/freight/declarations", label: "ใบขนสินค้า (V-E11)",    icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting"],                     group: "Freight" },
+// ── A red count pill — the legacy badgeMenu($n). ───────────────────────
+function CountBadge({ value }: { value: number }) {
+  if (value <= 0) return null;
+  return (
+    <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary-600 text-white text-[10px] font-bold leading-none">
+      {value > 999 ? "999+" : value}
+    </span>
+  );
+}
 
-  // V-G3 — admin broadcasts (super + sales_admin)
-  { href: "/admin/broadcasts",        label: "Broadcasts (V-G3)",   icon: <BellRing className="w-5 h-5" />, roles: ["super","sales_admin"], group: "การสื่อสาร" },
+// ── One menu row — recursive (handles nested accordion). ───────────────
+function MenuRow({
+  item, depth, counts, pathname, t, onNavigate,
+}: {
+  item: MenuItem;
+  depth: number;
+  counts: BadgeCounts;
+  pathname: string;
+  t: (k: string) => string;
+  onNavigate: () => void;
+}) {
+  const hasChildren = !!item.children?.length;
+  const active = item.href ? hrefMatches(item.href, pathname) : false;
+  const branchActive = subtreeHasActive(item, pathname);
+  const [open, setOpen] = useState(branchActive);
 
-  // Operations
-  { href: "/admin/forwarders",       label: "ฝากนำเข้า",       icon: <Package className="w-5 h-5" />,         roles: ["ops"], group: "ปฏิบัติการ" },
-  { href: "/admin/service-orders",   label: "ฝากสั่ง",          icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
-  { href: "/admin/yuan-payments",    label: "ฝากโอนหยวน",      icon: <Languages className="w-5 h-5" />,       roles: ["accounting"], group: "ปฏิบัติการ" },
-  { href: "/admin/warehouse/containers", label: "ตู้คอนเทนเนอร์",         icon: <Package className="w-5 h-5" />,         roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
-  { href: "/admin/warehouse/bulletin",   label: "บุลเลตินตู้รายวัน",      icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","warehouse","super"], group: "ปฏิบัติการ" },
-  { href: "/admin/barcode",          label: "บาร์โค้ด",         icon: <ShoppingCart className="w-5 h-5" />,    roles: ["ops"], group: "ปฏิบัติการ" },
-  { href: "/admin/drivers",          label: "คนขับส่งของ",       icon: <Truck className="w-5 h-5" />,           roles: ["ops"], group: "ปฏิบัติการ" },
-  { href: "/admin/driver-runs",      label: "งานของฉัน (driver)", icon: <Truck className="w-5 h-5" />,          roles: ["driver","super","ops"], group: "ปฏิบัติการ" },
-  { href: "/admin/carriers",         label: "ขนส่ง (SPX/J&T/...)", icon: <Truck className="w-5 h-5" />,         roles: ["super","ops"], group: "ปฏิบัติการ" },
+  const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
+  // Indentation grows with depth (legacy nested <ul> visual nesting).
+  const padLeft = depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : "pl-10";
+  const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
+    active
+      ? "bg-primary-600 text-white font-semibold"
+      : "text-white/75 hover:bg-white/10 hover:text-white"
+  }`;
 
-  // Finance
-  { href: "/admin/wallet",           label: "กระเป๋าเงิน",     icon: <Wallet className="w-5 h-5" />,          roles: ["accounting"], group: "การเงิน" },
-  { href: "/admin/accounting/reconcile", label: "เช็คความตรง (Reconcile)", icon: <Activity className="w-5 h-5" />, roles: ["accounting","super"], group: "การเงิน" },
-  { href: "/admin/tax-invoices",     label: "ใบกำกับภาษี",     icon: <Receipt className="w-5 h-5" />,         roles: ["accounting"], group: "การเงิน" },
-  { href: "/admin/sales-payouts",    label: "เบิกค่าคอม",      icon: <BadgePercent className="w-5 h-5" />,    roles: ["accounting","sales_admin"], group: "การเงิน" },
-  { href: "/admin/forwarder-sales",  label: "ค่าคอม Forwarder", icon: <Receipt className="w-5 h-5" />,         roles: ["accounting","sales_admin"], group: "การเงิน" },
-  { href: "/admin/commissions",      label: "ค่าคอม + Payouts (V-E8)", icon: <BadgePercent className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
-  { href: "/admin/accounting/periods", label: "ปิดงวด (V-E9)",       icon: <ClipboardCheck className="w-5 h-5" />, roles: ["super","accounting","ops"], group: "การเงิน" },
-  { href: "/admin/accounting/disbursements", label: "AP ledger / สมุดจ่าย (U2-2)", icon: <Wallet className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
-  { href: "/admin/accounting/container-costs", label: "Rate cards (U2-2)",   icon: <Receipt className="w-5 h-5" />, roles: ["super","accounting"], group: "การเงิน" },
-  { href: "/admin/refunds",            label: "คืนเงิน (U1-6)",        icon: <ArrowRightLeft className="w-5 h-5" />, roles: ["super","accounting","ops","sales_admin"], group: "การเงิน" },
+  // Accordion parent (no own href, or a parent with children).
+  if (hasChildren) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`${rowClasses} w-full text-left`}
+          aria-expanded={open}
+        >
+          <Icon name={item.icon} active={active} />
+          <span className="truncate">{t(item.labelKey)}</span>
+          {badgeVal > 0 && <CountBadge value={badgeVal} />}
+          {open
+            ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />
+            : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />}
+        </button>
+        {open && (
+          <ul className="mt-0.5 space-y-0.5">
+            {item.children!.map((child, i) => (
+              <MenuRow
+                key={child.href ?? `${child.labelKey}-${i}`}
+                item={child}
+                depth={depth + 1}
+                counts={counts}
+                pathname={pathname}
+                t={t}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+  }
 
-  // Customer & sales
-  { href: "/admin/bookings",                  label: "การจอง (BK-1)",     icon: <CalendarCheck className="w-5 h-5" />,   roles: ["super","ops","sales_admin","accounting"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/customers",                 label: "ลูกค้า",            icon: <Users className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
-  { href: "/admin/customers/pending",         label: "รอ Approve",        icon: <Clock className="w-5 h-5" />,           group: "ลูกค้า · ขาย" },
-  { href: "/admin/customers/recently-active", label: "Active ล่าสุด",      icon: <Activity className="w-5 h-5" />,        roles: ["sales_admin","accounting"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/customers/transfer-rep",    label: "โอนทีมขาย (กลุ่ม)",   icon: <ArrowRightLeft className="w-5 h-5" />,  roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/juristic-check",            label: "เช็คนิติบุคคล",       icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["ops","accounting"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/contact-messages",          label: "ข้อความติดต่อ",       icon: <MessageSquare className="w-5 h-5" />,   roles: ["ops"], group: "ลูกค้า · ขาย" },
-  { href: "/admin/team-leaders",              label: "ทีมขาย",            icon: <Coins className="w-5 h-5" />,           roles: ["sales_admin"], group: "ลูกค้า · ขาย" },
+  // Leaf link.
+  return (
+    <li>
+      <Link href={item.href ?? "#"} onClick={onNavigate} className={rowClasses}>
+        <Icon name={item.icon} active={active} />
+        <span className="truncate">{t(item.labelKey)}</span>
+        <CountBadge value={badgeVal} />
+      </Link>
+    </li>
+  );
+}
 
-  // Org & HR
-  { href: "/admin/hr",               label: "ทีมงาน (HR)",      icon: <Building2 className="w-5 h-5" />,       roles: ["super"], group: "องค์กร" },
-  { href: "/admin/learning",         label: "ศูนย์เรียนรู้",    icon: <BookOpen className="w-5 h-5" />,        group: "องค์กร" },
+// ── Sidebar header — avatar + adminID + role badge (legacy itop). ──────
+function SidebarHeader({
+  adminLabel, roleKey, t,
+}: {
+  adminLabel: string;
+  roleKey: string | null;
+  t: (k: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = adminLabel.trim().charAt(0).toUpperCase() || "P";
+  return (
+    <div className="px-4 py-4 border-b border-white/10">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-white/5 px-1 py-1 transition-colors"
+        aria-expanded={open}
+      >
+        <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
+          {initial}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-white truncate">{adminLabel}</span>
+          {roleKey && (
+            <span className="block text-[11px] text-white/55 truncate">{t(roleKey)}</span>
+          )}
+        </span>
+        {open
+          ? <ChevronDown className="w-4 h-4 text-white/50 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-0.5">
+          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            <User className="w-4 h-4" />
+            <span>{t("account.profile")}</span>
+          </Link>
+          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            <Settings className="w-4 h-4" />
+            <span>{t("account.settings")}</span>
+          </Link>
+          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+            <ArrowRightLeft className="w-4 h-4" />
+            <span>{t("account.logout")}</span>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
-  // System
-  { href: "/admin/csv-imports",      label: "นำเข้า CSV",     icon: <Upload className="w-5 h-5" />,          roles: ["ops","super"], group: "ระบบ" },
-  { href: "/admin/rates",            label: "ดูอัตราปัจจุบัน",   icon: <BarChart3 className="w-5 h-5" />,       group: "ระบบ" },
-  { href: "/admin/rates/general",    label: "แก้เรท general (LP-1)", icon: <BarChart3 className="w-5 h-5" />,   roles: ["super","accounting"], group: "ระบบ" },
-  { href: "/admin/rates/vip",        label: "แก้เรท VIP (LP-1)",     icon: <BarChart3 className="w-5 h-5" />,   roles: ["super","accounting"], group: "ระบบ" },
-  { href: "/admin/rates/custom-user",label: "แก้เรท Custom-user (LP-1)", icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
-  { href: "/admin/rates/custom-hs",  label: "แก้เรท Custom-HS (LP-1)",   icon: <BarChart3 className="w-5 h-5" />, roles: ["super","accounting"], group: "ระบบ" },
-  { href: "/admin/search",           label: "ค้นหาทุกที่ (U4-1)",        icon: <Search className="w-5 h-5" />,          roles: ["super","ops","accounting","sales_admin"], group: "ระบบ" },
-  { href: "/admin/admins",           label: "จัดการ admin (U4-1 RBAC)", icon: <UserCog className="w-5 h-5" />,         roles: ["super"], group: "ระบบ" },
-  { href: "/admin/audit",            label: "Audit log",                icon: <ClipboardCheck className="w-5 h-5" />,  roles: ["super"], group: "ระบบ" },
-  { href: "/admin/system/crons",     label: "Cron Health (U4-1)",       icon: <Activity className="w-5 h-5" />,        roles: ["super","ops"], group: "ระบบ" },
-  { href: "/admin/system/notifications", label: "Notification log (U4-1)", icon: <Bell className="w-5 h-5" />,         roles: ["super","ops"], group: "ระบบ" },
-  { href: "/admin/incidents",        label: "Incident triage (IO-1)",   icon: <AlertTriangle className="w-5 h-5" />,   roles: ["super","ops","accounting","sales_admin","warehouse","driver","interpreter"], group: "ระบบ" },
-  { href: "/admin/settings",         label: "ตั้งค่าระบบ",     icon: <SettingsIcon className="w-5 h-5" />,    roles: ["super"], group: "ระบบ" },
-  { href: "/admin/settings/contacts",label: "ข้อมูลติดต่อ (V-G5)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super","accounting","sales_admin"], group: "ระบบ" },
-  { href: "/admin/settings/tos-versions", label: "TOS versions (V-G4)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super"], group: "ระบบ" },
-  { href: "/admin/settings/business-config", label: "Business Config (super)", icon: <SettingsIcon className="w-5 h-5" />, roles: ["super"], group: "ระบบ" },
-];
-
-export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
-  const pathname = usePathname();
+export function AdminSidebar({
+  roles,
+  counts = {},
+  adminLabel = "Admin",
+}: {
+  roles: AdminRole[];
+  /** Live-count badges, resolved server-side (getSidebarCounts). */
+  counts?: BadgeCounts;
+  /** The signed-in admin's display name / member code for the header. */
+  adminLabel?: string;
+}) {
+  const pathname = usePathname() ?? "";
+  const t = useTranslations("pcsAdminNav");
   const [openMobile, setOpenMobile] = useState(false);
 
-  const visibleItems = items.filter(
-    (it) => !it.roles || roles.includes("super") || it.roles.some((r) => roles.includes(r)),
-  );
+  // Per-role purpose-built menu — faithful to the legacy per-role .php.
+  const sections: MenuSection[] = menuForRoles(roles);
+  const role = primaryRole(roles);
+  const roleKey = role ? ROLE_LABEL_KEY[role] : null;
 
-  // Group items by their `group` heading while preserving order
-  const grouped: { group: string; items: NavItem[] }[] = [];
-  for (const it of visibleItems) {
-    const key = it.group ?? "อื่นๆ";
-    const last = grouped[grouped.length - 1];
-    if (last && last.group === key) last.items.push(it);
-    else grouped.push({ group: key, items: [it] });
-  }
-
-  function isActive(href: string) {
-    if (href === "/admin") return pathname === "/admin" || pathname?.endsWith("/admin");
-    return pathname?.includes(href);
-  }
+  const closeMobile = () => setOpenMobile(false);
 
   return (
     <>
@@ -146,70 +251,60 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
       </button>
 
       {/*
-        Light-theme sidebar (white default, dark variant per next-themes toggle).
-        Per ภูม + เดฟ confirm 2026-05-16 evening — admin redesign B/W theme support.
+        Dark fixed accordion sidebar — the owner's reference is the legacy
+        PCS dark `menu-fixed menu-dark menu-accordion`
+        (docs/research/d1-fidelity-admin.md §1.3 — "Default to dark to
+        match"). Slate-950 base, primary-600 accents.
       */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-white dark:bg-surface
-          text-foreground
-          border-r border-border
-          shadow-sm
+          bg-slate-950 text-white border-r border-white/10 shadow-xl
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        {/* Brand header — primary-600 accent stripe + role chip */}
-        <div className="px-5 py-5 border-b border-border bg-gradient-to-b from-primary-50/40 to-transparent dark:from-primary-950/30">
+        {/* Brand */}
+        <div className="px-4 pt-4 pb-3 border-b border-white/10">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-lg font-black tracking-tight text-primary-700 dark:text-primary-400">PACRED</h2>
-            <span className="text-[10px] uppercase tracking-widest text-muted">Admin</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {roles.map((r) => (
-              <span
-                key={r}
-                className="rounded-full border border-primary-200 bg-primary-50 dark:bg-primary-950/40 dark:border-primary-900 px-2 py-0.5 text-[10px] font-medium text-primary-700 dark:text-primary-300"
-              >
-                {r}
-              </span>
-            ))}
+            <h2 className="text-lg font-black tracking-tight text-white">PR</h2>
+            <span className="text-[10px] uppercase tracking-widest text-white/45">Admin</span>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
-          {grouped.map((sec) => (
-            <div key={sec.group} className="space-y-0.5">
-              <p className="px-3 pt-1 pb-1.5 text-[10px] uppercase tracking-widest text-muted font-semibold">
-                {sec.group}
-              </p>
-              {sec.items.map((it) => {
-                const active = isActive(it.href);
-                return (
-                  <Link
-                    key={it.href}
-                    href={it.href}
-                    onClick={() => setOpenMobile(false)}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                      active
-                        ? "bg-primary-600 text-white font-semibold shadow-sm"
-                        : "text-foreground/75 hover:bg-surface-alt hover:text-foreground dark:hover:bg-white/5"
-                    }`}
-                  >
-                    <span className={active ? "text-white" : "text-muted"}>{it.icon}</span>
-                    <span>{it.label}</span>
-                  </Link>
-                );
-              })}
+        {/* Avatar + adminID + role badge — legacy itop block */}
+        <SidebarHeader adminLabel={adminLabel} roleKey={roleKey} t={t} />
+
+        {/* Per-role nested-accordion menu, grouped by legacy section headers */}
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3">
+          {sections.map((sec, si) => (
+            <div key={sec.header || `sec-${si}`} className="space-y-0.5">
+              {sec.header && (
+                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-white/35 font-bold">
+                  {sec.header}
+                </p>
+              )}
+              <ul className="space-y-0.5">
+                {sec.items.map((item, ii) => (
+                  <MenuRow
+                    key={item.href ?? `${item.labelKey}-${ii}`}
+                    item={item}
+                    depth={0}
+                    counts={counts}
+                    pathname={pathname}
+                    t={t}
+                    onNavigate={closeMobile}
+                  />
+                ))}
+              </ul>
             </div>
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-border space-y-1 bg-surface-alt/40 dark:bg-white/5">
+        <div className="px-2.5 py-3 border-t border-white/10">
           <Link
             href="/dashboard"
-            onClick={() => setOpenMobile(false)}
-            className="block rounded-lg px-3 py-2 text-xs text-muted hover:bg-surface-alt hover:text-foreground dark:hover:bg-white/10 transition-colors"
+            onClick={closeMobile}
+            className="block rounded-md px-3 py-2 text-xs text-white/55 hover:bg-white/10 hover:text-white transition-colors"
           >
-            ← กลับฝั่งลูกค้า
+            {t("backToCustomer")}
           </Link>
         </div>
       </aside>
@@ -217,7 +312,7 @@ export function AdminSidebar({ roles }: { roles: AdminRole[] }) {
       {/* Mobile overlay */}
       {openMobile && (
         <div
-          onClick={() => setOpenMobile(false)}
+          onClick={closeMobile}
           className="lg:hidden fixed inset-0 z-40 bg-black/50"
         />
       )}
