@@ -1,0 +1,635 @@
+/* =============================================================
+ * search.legacy.css — legacy PCS Cargo `member/search.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `search.php` renders with,
+ *   copied verbatim from the legacy stylesheets:
+ *     - assets/css/shop/shop-2023.css   (the one This-Page CSS file
+ *       search.php links — copied verbatim, in full, below)
+ *     - the Bootstrap-4 grid/card/nav/pagination subset search.php
+ *       uses (exact BS4 4.x values)
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/search.css
+ *   and loaded with a plain <link rel="stylesheet"> from page.tsx — it
+ *   must bypass the app's Tailwind v4 / PostCSS pipeline, which rejects
+ *   verbatim legacy CSS. Binary assets (shop logos) live under
+ *   public/legacy/pcs/, referenced by absolute URL.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ============================================================
+ * PART 1 — assets/css/shop/shop-2023.css (copied VERBATIM,
+ * every rule scoped under .pcs-legacy)
+ * ============================================================ */
+.pcs-legacy .sticky-search {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 999;
+    background: #fff;
+    height: 70px;
+    left: 0;
+}
+
+.pcs-legacy .pt-05 {
+    padding-top: 7px;
+}
+
+.pcs-legacy .loading-pcs {
+    position: absolute;
+    top: 47vh;
+    left: 50%;
+    color: #fff;
+}
+
+.pcs-legacy .owl-carousel .owl-item img {
+    max-height: 250px;
+}
+
+@media only screen and (max-width: 578px) {
+    .pcs-legacy .content-wrapper {
+        padding: 0 !important;
+    }
+
+    .pcs-legacy .row.bg-white {
+        display: none;
+    }
+
+    .pcs-legacy .content-header.row {
+        display: none;
+    }
+
+    .pcs-legacy.fixed-navbar {
+        padding-top: 0rem;
+    }
+
+    .pcs-legacy .main {
+        padding-top: 45px;
+    }
+
+    .pcs-legacy .loading-pcs {
+        left: 30%;
+    }
+
+    .pcs-legacy .ptm-3 {
+        padding-top: 3rem !important;
+    }
+
+    .pcs-legacy .pm05 {
+        padding: 0.5rem 1rem 0rem 1.2rem !important;
+    }
+
+    .pcs-legacy .name-product {
+        padding-top: 0rem !important;
+    }
+
+    .pcs-legacy .owl-carousel .owl-item img {
+        max-height: 169px;
+    }
+}
+
+.pcs-legacy .display-7 {
+    font-size: 2rem;
+}
+
+.pcs-legacy .display-8 {
+    font-size: 1.5rem;
+}
+
+.pcs-legacy video {
+    max-height: 380px;
+}
+
+.pcs-legacy .sku-price::before {
+    content: '';
+}
+
+.pcs-legacy .sku-price::after {
+    content: "¥";
+}
+
+.pcs-legacy .card.border-black {
+    background: #f2f2f2;
+}
+
+.pcs-legacy .item-product {
+    background-color: #fff;
+    border-radius: 15px;
+    box-shadow: 0px 0px 10px 0px rgb(0 0 0 / 30%);
+}
+
+.pcs-legacy .item-product:hover {
+    border-radius: 10px;
+    box-shadow: 1px 1px 5px 1px #cc3333;
+}
+
+.pcs-legacy .col-6.col-md-2.text-center {
+    padding-bottom: 10px;
+    padding-right: 7px;
+    padding-left: 7px;
+}
+
+.pcs-legacy .pImages {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.pcs-legacy .font-12rem {
+    font-size: 1.1rem;
+}
+
+.pcs-legacy .page-item.active .page-link {
+    background-color: #cc3333;
+    border-color: #cc3333;
+}
+
+.pcs-legacy .nav-link img {
+    height: 30px;
+}
+
+.pcs-legacy .item-product img:hover {
+    -webkit-transform: scale(1.05);
+    -ms-transform: scale(1.05);
+    transform: scale(1.05);
+    -webkit-transform-origin: center;
+    -ms-transform-origin: center;
+    transform-origin: center;
+}
+
+.pcs-legacy .item-pro-pre {
+    background-color: #fff;
+    border-radius: 15px;
+    box-shadow: 0px 0px 10px 0px rgb(0 0 0 / 30%);
+}
+
+.pcs-legacy .nav-search .btn-main {
+    padding: 0.7rem 0.9rem 0.92rem 0.53rem !important;
+}
+
+.pcs-legacy .sortable-handler {
+    touch-action: none;
+}
+
+.pcs-legacy .sku-line-price {
+    font-size: 0px;
+}
+
+.pcs-legacy .owl-carousel .owl-item {
+    min-height: unset !important;
+}
+
+.pcs-legacy .load-more-container {
+    background: #fff;
+    min-height: 300px;
+    margin: 20px auto;
+    position: relative;
+}
+
+.pcs-legacy .load-more-container .line-sku:nth-child(1n + 6) {
+    max-height: 0;
+    opacity: 0;
+    transition: 0.1s ease-in;
+}
+
+.pcs-legacy .load-more-container .load-more-btn {
+    width: 120px;
+    line-height: 40px;
+    border-radius: 2px;
+    margin: 0 auto;
+    display: block;
+    cursor: pointer;
+    text-align: center;
+    position: absolute;
+    border: 0px solid #fff;
+    border-image-source: linear-gradient(45deg, #cc3333, #f15a24);
+    border-image-slice: 1;
+    background: linear-gradient(to right, #cc3333, #f15a24);
+    color: #fff;
+    -webkit-border-radius: 1.875rem !important;
+    -moz-border-radius: 1.875rem !important;
+    -ms-border-radius: 1.875rem !important;
+    -o-border-radius: 1.875rem !important;
+    border-radius: 1.875rem !important;
+    bottom: -10px;
+}
+
+.pcs-legacy .load-more-container .load-more-btn:hover {
+    background: #333;
+}
+
+.pcs-legacy .load-more-container .load-more-btn .loaded {
+    display: none;
+}
+
+.pcs-legacy .load-more-container #load-more {
+    display: none;
+}
+
+.pcs-legacy .load-more-container #load-more:checked~.line-sku:nth-child(1n + 5) {
+    max-height: 999px;
+    opacity: 1;
+    transition: 0.2s ease-in;
+}
+
+.pcs-legacy .load-more-container #load-more:checked~.load-more-btn .loaded {
+    display: block;
+}
+
+.pcs-legacy .load-more-container #load-more:checked~.load-more-btn .unloaded {
+    display: none;
+}
+
+.pcs-legacy input[type="file"].upload-images {
+    display: none;
+}
+
+.pcs-legacy .custom-file-upload {
+    border: 1px solid #ccc;
+    display: inline-block;
+    padding: 10px 12px;
+    cursor: pointer;
+    border: 0px solid #fff;
+    border-image-source: linear-gradient(45deg, #f15a24, #c1272d);
+    border-image-slice: 1;
+    background: linear-gradient(to right, #f15a24, #c1272d);
+    color: #fff;
+    width: 35px;
+    border-radius: 3rem;
+    position: absolute;
+    top: 4px;
+    right: 65px;
+}
+
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+    padding: 0.3rem 0.3rem !important;
+}
+
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link.active {
+    border-radius: 0.5rem;
+}
+
+.pcs-legacy .avatar-online img {
+    height: auto !important;
+}
+
+.pcs-legacy .load-more-container .load-more-btn {
+    width: 98px !important;
+    line-height: 26px !important;
+}
+
+/* Animation effect */
+@keyframes placeHolderShimmer {
+    0% {
+        background-position: -400px 0
+    }
+
+    100% {
+        background-position: 400px 0
+    }
+}
+
+.pcs-legacy .pro-preload-effect {
+    animation-duration: 1s;
+    animation-fill-mode: forwards;
+    animation-iteration-count: infinite;
+    animation-name: placeHolderShimmer;
+    animation-timing-function: linear;
+    background: #c2c2c2;
+    background: linear-gradient(to right, #eeeeee 8%, #dddddd 18%, #eeeeee 33%);
+    background-size: 800px 104px;
+    min-height: 12px;
+    display: block;
+    clear: both;
+}
+
+.pcs-legacy .title-pro.pro-preload-effect{
+    display: inline-block;
+    width: 600px;
+    height: 16px;
+}
+.pcs-legacy .nick-pro.pro-preload-effect{
+    display: inline-block;
+    width: 300px;
+    height: 16px;
+}
+.pcs-legacy .procover.pro-preload-effect{
+    height: 360px;
+}
+
+@media (max-width: 992px){
+    .pcs-legacy .title-pro.pro-preload-effect{
+        display: inline-block;
+        width: 400px;
+        height: 16px;
+    }
+    .pcs-legacy .nick-pro.pro-preload-effect{
+        display: inline-block;
+        width: 150px;
+        height: 16px;
+    }
+}
+
+@media (max-width: 576px){
+    .pcs-legacy .title-pro.pro-preload-effect{
+        display: inline-block;
+        width: 240px;
+        height: 16px;
+    }
+    .pcs-legacy .procover.pro-preload-effect{
+        height: 200px;
+    }
+    .pcs-legacy .nick-pro.pro-preload-effect{
+        display: inline-block;
+        width: 100px;
+        height: 16px;
+    }
+}
+
+/* ============================================================
+ * PART 2 — Bootstrap-4 grid + card + nav-tabs + pagination
+ * subset that search.php's markup uses (exact BS4 4.x values).
+ * search.php is Bootstrap-4 markup; the app ships Tailwind, so
+ * the BS4 classes the markup references are provided here,
+ * scoped to .pcs-legacy.
+ * ============================================================ */
+.pcs-legacy .row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -15px;
+    margin-left: -15px;
+}
+.pcs-legacy .col-1,
+.pcs-legacy .col-3,
+.pcs-legacy .col-4,
+.pcs-legacy .col-5,
+.pcs-legacy .col-6,
+.pcs-legacy .col-9,
+.pcs-legacy .col-11,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-2,
+.pcs-legacy .col-md-4,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-8,
+.pcs-legacy .col-md-12 {
+    position: relative;
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+}
+.pcs-legacy .col-1  { flex: 0 0 8.333333%;  max-width: 8.333333%; }
+.pcs-legacy .col-3  { flex: 0 0 25%;        max-width: 25%; }
+.pcs-legacy .col-4  { flex: 0 0 33.333333%; max-width: 33.333333%; }
+.pcs-legacy .col-5  { flex: 0 0 41.666667%; max-width: 41.666667%; }
+.pcs-legacy .col-6  { flex: 0 0 50%;        max-width: 50%; }
+.pcs-legacy .col-9  { flex: 0 0 75%;        max-width: 75%; }
+.pcs-legacy .col-11 { flex: 0 0 91.666667%; max-width: 91.666667%; }
+.pcs-legacy .col-12 { flex: 0 0 100%;       max-width: 100%; }
+
+@media (min-width: 768px) {
+    .pcs-legacy .col-md-2  { flex: 0 0 16.666667%; max-width: 16.666667%; }
+    .pcs-legacy .col-md-4  { flex: 0 0 33.333333%; max-width: 33.333333%; }
+    .pcs-legacy .col-md-6  { flex: 0 0 50%;        max-width: 50%; }
+    .pcs-legacy .col-md-8  { flex: 0 0 66.666667%; max-width: 66.666667%; }
+    .pcs-legacy .col-md-12 { flex: 0 0 100%;       max-width: 100%; }
+    .pcs-legacy .text-md-right { text-align: right !important; }
+}
+
+.pcs-legacy .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: #fff;
+    background-clip: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.45rem;
+    margin-bottom: 1rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+    flex: 1 1 auto;
+    padding: 1.5rem;
+}
+
+/* Bootstrap-4 spacing helpers the markup uses */
+.pcs-legacy .p-1  { padding: 0.25rem !important; }
+.pcs-legacy .p-2  { padding: 0.5rem !important; }
+.pcs-legacy .p-05 { padding: 0.5rem !important; }
+.pcs-legacy .pb-0 { padding-bottom: 0 !important; }
+.pcs-legacy .pb-1 { padding-bottom: 0.25rem !important; }
+.pcs-legacy .pt-1 { padding-top: 0.25rem !important; }
+.pcs-legacy .pl-2 { padding-left: 0.5rem !important; }
+.pcs-legacy .m-1  { margin: 0.25rem !important; }
+.pcs-legacy .mb-0 { margin-bottom: 0 !important; }
+.pcs-legacy .my-lg-0 { margin-top: 0 !important; margin-bottom: 0 !important; }
+.pcs-legacy .pr110 { padding-right: 0; }
+.pcs-legacy .w-100 { width: 100% !important; }
+.pcs-legacy .br-15 { border-radius: 15px; }
+.pcs-legacy .h-100 { height: 100% !important; }
+
+/* Bootstrap-4 text + display helpers */
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-danger { color: #ff586b !important; }
+.pcs-legacy .text-dark   { color: #2a2e30 !important; }
+.pcs-legacy .text-info   { color: #2f8be6 !important; }
+.pcs-legacy .text-pre    { }
+.pcs-legacy .font-12 { font-size: 12px !important; }
+.pcs-legacy .font-14 { font-size: 14px !important; }
+.pcs-legacy .font-18 { font-size: 18px !important; }
+.pcs-legacy .d-flex  { display: flex !important; }
+.pcs-legacy .justify-content-center { justify-content: center !important; }
+.pcs-legacy .align-self-end { align-self: flex-end !important; }
+.pcs-legacy .img-fluid { max-width: 100%; height: auto; }
+.pcs-legacy .notranslate { }
+
+/* Bootstrap-4 nav-tabs (used by the provider tab strip) */
+.pcs-legacy .nav {
+    display: flex;
+    flex-wrap: wrap;
+    padding-left: 0;
+    margin-bottom: 0;
+    list-style: none;
+}
+.pcs-legacy .nav-item { }
+.pcs-legacy .nav-link {
+    display: block;
+    padding: 0.5rem 1rem;
+}
+.pcs-legacy .nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+}
+.pcs-legacy .nav-tabs .nav-link {
+    margin-bottom: -1px;
+    border: 1px solid transparent;
+    border-top-left-radius: 0.25rem;
+    border-top-right-radius: 0.25rem;
+}
+.pcs-legacy .nav-tabs .nav-link.active {
+    color: #4e5154;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+}
+
+/* Bootstrap-4 pagination (used by the page navigation) */
+.pcs-legacy .pagination {
+    display: flex;
+    padding-left: 0;
+    list-style: none;
+    border-radius: 0.25rem;
+}
+.pcs-legacy .page-link {
+    position: relative;
+    display: block;
+    padding: 0.5rem 0.75rem;
+    margin-left: -1px;
+    line-height: 1.25;
+    color: #cc3333;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+}
+.pcs-legacy .page-item:first-child .page-link {
+    margin-left: 0;
+    border-top-left-radius: 0.25rem;
+    border-bottom-left-radius: 0.25rem;
+}
+.pcs-legacy .page-item:last-child .page-link {
+    border-top-right-radius: 0.25rem;
+    border-bottom-right-radius: 0.25rem;
+}
+.pcs-legacy .page-item.active .page-link {
+    z-index: 1;
+    color: #fff;
+}
+
+/* Bootstrap-4 buttons + badges the markup references */
+.pcs-legacy .btn {
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    user-select: none;
+    border: 1px solid transparent;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    line-height: 1.25;
+    border-radius: 0.25rem;
+}
+.pcs-legacy .btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    border-radius: 0.1785rem;
+}
+.pcs-legacy .btn-rounded { border-radius: 1.875rem; }
+.pcs-legacy .btn-main {
+    color: #fff;
+    background: linear-gradient(to right, #cc3333, #f15a24);
+    border: 0;
+}
+.pcs-legacy .btn-outline-warning {
+    color: #ff9149;
+    background-color: transparent;
+    border-color: #ff9149;
+}
+.pcs-legacy .badge {
+    display: inline-block;
+    padding: 0.25em 0.4em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+}
+.pcs-legacy .badge-pill {
+    padding-right: 0.6em;
+    padding-left: 0.6em;
+    border-radius: 10rem;
+}
+.pcs-legacy .badge-info {
+    color: #fff;
+    background-color: #2f8be6;
+}
+
+/* Bootstrap-4 form-control + form-inline (used by the search box) */
+.pcs-legacy .form-control {
+    display: block;
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    line-height: 1.45;
+    color: #6b6f82;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #babfc7;
+    border-radius: 0.25rem;
+}
+.pcs-legacy .form-inline {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+}
+
+/* search.php local helpers (inline classes in the markup) */
+.pcs-legacy .bg-white   { background-color: #fff !important; }
+.pcs-legacy .bg-m-s     { }
+.pcs-legacy .bg-main    { }
+.pcs-legacy .bg-white-m-b1 { }
+.pcs-legacy .price-s    { }
+.pcs-legacy .nav-icon   { font-size: 1.6rem; cursor: pointer; }
+.pcs-legacy .nav-search { position: relative; }
+.pcs-legacy .product-search { }
+.pcs-legacy .name-product {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pcs-legacy .text-color { color: #cc3333; }
+.pcs-legacy .jss.text-pre {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: #cc3333;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-top-left-radius: 10px;
+}
+.pcs-legacy .item-product { position: relative; }
+.pcs-legacy .border-total-product {
+    border: 1px solid #e3e3e3;
+    border-radius: 8px;
+}
+.pcs-legacy .p05  { padding: 0.5rem; }
+.pcs-legacy .pm05 { padding: 0.5rem 1rem; }
+.pcs-legacy .p-m-0   { }
+.pcs-legacy .p-m-05  { }
+.pcs-legacy .p-m-05-1 { }
+.pcs-legacy .p-m-0-pt-05 { }
+.pcs-legacy .pcs-d-pc   { }
+.pcs-legacy .pcs-d-m    { }
+.pcs-legacy .pcs-d-ib-m { display: none; }
+.pcs-legacy .pcs-tabs   { }
+.pcs-legacy .menubar-search { }
+.pcs-legacy .tab-sm-center { }
+
+@media only screen and (max-width: 578px) {
+    .pcs-legacy .pcs-d-pc   { display: none; }
+    .pcs-legacy .pcs-d-ib-m { display: inline-block; }
+}
