@@ -1,86 +1,87 @@
-# 🏠 ภูม — Save-point 2026-05-19 (B-auth shipped + verified · moving to the office machine)
+# 🏠 ภูม — Save-point 2026-05-19 (B-auth shipped · Wave 1 merged + verified · → company machine)
 
-> **Save snapshot.** ภูม resuming on the office computer tomorrow (2026-05-20).
-> This doc = the full Phase-B plan + the resume guide + the handoff to เดฟ.
-> Previous save-point: [`poom-save-point-2026-05-18-evening.md`](poom-save-point-2026-05-18-evening.md).
+> **Save snapshot.** ภูม resuming on the company computer next session.
+> Full Phase-B plan + Wave-1 analysis + resume guide + handoff to เดฟ.
+> Previous: [`poom-save-point-2026-05-18-evening.md`](poom-save-point-2026-05-18-evening.md).
 
 ---
 
 ## 📨 สรุปส่งเดฟ — read this first
 
-**Landed this session (on `Poom`, commit `ade9ed0`, pushed to `origin/Poom`):**
+**`Poom` now = `dave` (incl. Wave 1) + B-auth — merged + verified.** This session:
 
-- **B-auth — the legacy PCS password bridge — is wired into sign-in.** A migrated
-  PCS customer signs in with their **existing** password (no reset): `signIn()`
-  tries native Supabase auth, then falls back to `bridgeLegacyLogin()` — it
-  verifies the legacy `passTam` hash against `tb_users`, provisions the Supabase
-  user with the password just typed (Q2-(a) refined — no shared secret), and
-  sets the session. Runs once per customer; later logins are native.
-- **Verified against the live Phase-A data** — dev Supabase (`pprrlabgebrnocthwdmg`),
-  `tb_users` = 8,898 rows. Every bridge assumption confirmed (§3) — **no code fix
-  needed**. `/login` serves HTTP 200 on the merged build. Static gate green
-  (tsc · lint · test:unit 34/34 · build).
-- Synced `dave` into `Poom` (Phase-A loaded + `0087`).
+- **B-auth shipped** (`ade9ed0`) — the legacy PCS password bridge is wired into
+  `signIn`; verified against the live `tb_users` (8,898 rows) — every assumption
+  holds, **no code fix needed**.
+- **Wave 1 merged + verified** — เดฟ+Claude's 4 Phase-B slices (9-icon launchpad ·
+  customer order-flow · admin RBAC sidebar+badges · `tb_cnt` payment ledger)
+  merged `dave`→`Poom`. The merged tree (Wave 1 + B-auth) passes **`pnpm verify`
+  + `pnpm build`** clean.
+- Save-point doc + this analysis pushed to `origin/Poom`.
 
-**🔴 One decision needed from เดฟ — the B-auth ↔ customer-portal boundary (§4):**
-the bridge provisions the Supabase **`auth.users`** row but deliberately does
-**not** create a Pacred **`profiles`** row. So a bridged customer has a session
-but `getCurrentUserWithProfile()` returns `null` until the customer-portal
-rework lands. **Who owns creating the `profiles` row — the auth-bridge or the
-customer-portal Wave-1 slice?** They collide if both do it. Please rule.
+**🔴 The finding เดฟ needs to see — `B-0` is the missing layer.** Wave 1 delivered
+the legacy **UI / structure** fidelity (the icon grid, per-role sidebar, badge
+mechanism, the `tb_cnt` ledger) — but most slices still **read the rebuilt-era
+schema, not the ported `tb_*`**:
 
-**Also:** Q2 auth posture is still provisional pending ก๊อต ratification.
+- `tb_cnt` payment ledger → ✅ uses the legacy `tb_cnt*` tables faithfully.
+- admin sidebar badge counts (`actions/admin/sidebar-counts.ts`) → counts
+  `service_orders` / `forwarders` / … (rebuilt-era) — **0 `tb_*`**.
+- 9-icon launchpad (`dashboard/page.tsx`) → **0 `tb_*`** refs.
+
+→ A migrated customer logs in (B-auth ✅) but the 9-icon home reads
+`profiles` / `service_orders`, where their data **isn't** — Phase A loaded it
+into `tb_*`. **`B-0` (re-point reads at `tb_*`) is the connective layer that
+makes Wave 1 show the real legacy data.** Recommend `B-0` as the next wave — it
+also resolves the B-auth ↔ `profiles` question (§5).
+
+Q2 auth posture still provisional pending ก๊อต ratification.
 
 ---
 
 ## 1. TL;DR — where we are (2026-05-19)
 
-🟢 **Phase A — DONE.** เดฟ + Claude loaded the legacy `pcsc_main` into Supabase
-**dev + prod** — 117 `tb_*` tables, 114 with data (8,898 customers · orders ·
-wallets · ตู้ · forwarders · receipts · the `userpass` login hashes), `PCS→PR`
-rebrand applied, RLS on. Migrations `0081`-`0083` + `0087` on `dave`. (3 oversized
-log tables wait for the Supabase Pro upgrade.)
+🟢 **Phase A — DONE.** Legacy `pcsc_main` loaded into Supabase dev + prod — 117
+`tb_*` tables, 114 with data (8,898 customers · orders · wallets · ตู้ ·
+forwarders · receipts · the `userpass` login hashes), `PCS→PR` rebrand, RLS on.
+Migrations `0081`-`0083` + `0087`. (3 oversized log tables wait for the Pro upgrade.)
 
-🟢 **B-auth — DONE + verified** (this session — §3).
+🟢 **B-auth — DONE + verified** (§3).
 
-🔱 **Phase-B rework is now เดฟ+Claude agent-wave-driven.** Wave 1 in flight:
-customer 9-icon launchpad · customer order flow · admin per-role RBAC sidebar +
-live-count badges · admin container `tb_cnt` payment ledger. **ภูม's role:** pull
-`dave` often → **review/verify** each landed slice against the legacy PCS system;
-**the auth-bridge stays ภูม's to drive directly**; **ping เดฟ before taking a
-fresh slice** (one owner each). As of this save-point Wave 1 has not landed code
-yet — nothing to review.
+🟢 **Wave 1 — landed on `dave`, merged into `Poom`, verified** (§4) — the first 4
+Phase-B fidelity slices.
+
+🟡 **`B-0` (data foundation — re-point reads at `tb_*`) — NOT done** — and it is
+the gap that makes Wave 1's UI actually show the real legacy data (§4, §5).
+
+🔱 Phase-B is เดฟ+Claude agent-wave-driven. ภูม: pull `dave`, review/verify each
+landed slice; the auth-bridge stays ภูม's; ping เดฟ before taking a fresh slice.
 
 ---
 
-## 2. The full Phase-B plan (D1 · ADR-0017)
+## 2. The Phase-B plan (D1 · ADR-0017)
 
 **D1 = Pacred becomes a faithful port of the legacy PCS Cargo system, `PCS`→`PR`.**
-Three phases:
 
-- **Phase A — data migration.** ✅ Done (above).
+- **Phase A — data migration.** ✅ Done.
 - **Phase B — workflow fidelity.** Rework the app so menus / job statuses /
   container (ตู้) flow / the end-to-end logic-loop match legacy PCS **exactly** —
-  zero retraining for staff + ~8,898 customers. Stage breakdown (`B-0`..`B-9`) in
-  [`poom-phase-b-prep.md`](poom-phase-b-prep.md):
-  - **B-0** data foundation — re-point `lib/supabase` + actions at `tb_*`
+  zero retraining. Stages (`B-0`..`B-9`) in [`poom-phase-b-prep.md`](poom-phase-b-prep.md):
+  - **B-0** data foundation — re-point `lib/supabase` + actions at `tb_*` — 🟡 **next**
   - **B-auth** legacy-password login — ✅ **DONE** (§3)
-  - **B-2** status-vocab reconcile (3 → legacy 1) · **B-3** customer logic-loop
-    (shop-order / forwarder / payment / wallet) · **B-4** per-role admin sidebars
-    + live-count badges · **B-5** ship→arrive→pay forwarder order · **B-6**
-    `tb_cnt` container payment ledger · **B-7** barcode scan family · **B-8**
-    accounting (รวมบิล / container-pay / รับรู้รายได้) · **B-9** QA queue / notes
-    / Learning / Extension / member segmentation
-  - Execution: เดฟ+Claude run these as agent-waves landing on `dave`; ภูม reviews
-    + owns the auth-bridge.
-- **Phase C — Pacred enhancements.** *Only after* the faithful port works. The
-  Tier-0/1/2/3 roadmap, booking flow, freight expansion, internal systems — all
-  deferred here. Append ideas to docs, don't build.
+  - **B-2** status-vocab reconcile · **B-3** customer logic-loop · **B-4** per-role
+    admin sidebars + badges · **B-5** ship→arrive→pay forwarder · **B-6** `tb_cnt`
+    ledger · **B-7** barcode scan family · **B-8** accounting · **B-9** QA / notes /
+    Learning / Extension / segmentation
+  - Wave 1 (§4) delivered the UI for B-1/B-3/B-4/B-6; `B-0` is the data layer.
+- **Phase C — Pacred enhancements.** *Only after* the faithful port works. Tier
+  0-3, booking flow, freight expansion, internal systems — deferred; append to
+  docs, don't build.
 
 **The lens (owner directive, 2026-05-19):** copy the legacy system 100% — every
-button, every function — FIRST. Choose exact legacy reproduction over "the better
-way" every time. Enhancements only after the copy is exact. Do not chase
-far-from-the-customer work; consult before deciding scope.
+button, every function — FIRST; exact legacy reproduction over "the better way"
+every time; enhancements only after. Don't chase far-from-the-customer work;
+consult before deciding scope.
 
 ---
 
@@ -93,55 +94,73 @@ wired into sign-in`.
 - `lib/auth/pcs-legacy-bridge.ts` (new · server-only) — `bridgeLegacyLogin()`:
   look up `tb_users` by phone / member code / email → `verifyLegacyPassword`
   against the `passTam` hash → provision the Supabase user with the password just
-  typed → sign in. Safe no-op (`ok:false`) when `tb_users` is absent.
+  typed → sign in. Safe no-op when `tb_users` is absent.
 - `lib/auth/pcs-legacy-password.ts` — added `legacyPhoneCandidates` +
-  `legacySyntheticEmail` (+ 12 unit tests in its `.test.ts`).
+  `legacySyntheticEmail` (+ 12 unit tests).
 - `actions/auth.ts:signIn` — native Supabase auth first; on failure →
   `bridgeLegacyLogin` fallback.
 
-**Verified:**
-- Static gate — `tsc` · `lint` · `test:unit` (34/34) · `pnpm build` all green.
-- Real-data inspection vs dev `tb_users` (8,898 rows): `usertel` = 10-digit
-  `0xxxxxxxxx` (`legacyPhoneCandidates` covers it) · `userid` = `PR<n>` + the 4
-  no-prefix handles `PW`/`JET`/`FCL`/`AIGA` (handled by the userid fallback) ·
-  `userstatus` 1/0 (active-only check correct) · `useremail` null in ~94%
-  (provision-by-phone is the right default). **No code fix needed.**
-- `/login` → HTTP 200 with the form on the merged build against live data.
+**Verified:** static gate (`tsc` · `lint` · `test:unit` 34/34 · `build`) green ·
+real-data inspection vs dev `tb_users` (8,898 rows): `usertel` = 10-digit
+`0xxxxxxxxx` · `userid` = `PR<n>` + the 4 no-prefix handles `PW`/`JET`/`FCL`/`AIGA`
+· `userstatus` 1/0 · `useremail` null ~94% — all assumptions hold, **no code fix
+needed** · `/login` → HTTP 200 on the merged build.
 
 **Provisional:** Q2 auth posture needs ก๊อต ratification — ping ก๊อต on LINE.
 
-**Note — doc fix for later:** [`poom-phase-b-prep.md`](poom-phase-b-prep.md)
-writes the table as `tb_user`; the real ported table is **`tb_users`** (plural,
-lowercase columns `userid`/`usertel`/`userpass`/`userstatus`).
+**Doc fix for later:** [`poom-phase-b-prep.md`](poom-phase-b-prep.md) writes
+`tb_user`; the real ported table is **`tb_users`** (plural, lowercase columns).
 
 ---
 
-## 4. 🔴 Open question for เดฟ — the B-auth ↔ customer-portal boundary
+## 4. Wave 1 — landed on `dave` (analysis + review notes)
 
-B-auth provisions the Supabase **`auth.users`** row for a migrated customer on
-first login. It deliberately does **not** create a Pacred **`profiles`** row —
-Q2 scoped B-auth to authentication only, and creating a `profiles` row would
-overlap the customer-portal-backend rework (B-0 / a Wave-1 slice). Guessing
-`account_type` or fighting the `member_code` trigger would also risk a wrong row.
+เดฟ+Claude's agent-wave delivered 4 Phase-B slices (8 commits · 4,052 insertions /
+21 files), merged `dave`→`Poom` this session:
 
-**Consequence:** a bridged customer has a valid session, but
-`getCurrentUserWithProfile()` returns `profile: null`, so a protected page that
-reads the profile breaks until the customer-portal rework lands on `tb_*`.
+| Slice | Commit | Delivered | Data source |
+|---|---|---|---|
+| Customer 9-icon launchpad | `4ac5d9d` | `pcs-icon-grid` / `-launchpad-header` / `-sales-rep-card` / `-wallet-card` + `dashboard/page.tsx` — restores the legacy `member/menu.php` icon grid | rebuilt-era (0 `tb_*`) |
+| Customer order-flow fidelity | `8dfd5f3` | `service-order-list` (tab-per-status) + `add-form` + receipt | rebuilt-era |
+| Admin per-role RBAC sidebar + badges | `8a23823` | `admin-sidebar.tsx` + `lib/admin/sidebar-menu.ts` (701) + `actions/admin/sidebar-counts.ts` — per-role menu + live-count pills | counts rebuilt-era |
+| Admin `tb_cnt` payment ledger | `8f6054c` | `actions/admin/pcs-container-payments.ts` (474) + `accounting/container-payments/*` (6 files) | ✅ legacy `tb_cnt*` |
 
-**Decision needed:** does the **auth-bridge** create a minimal `profiles` row on
-first login, or does the **customer-portal Wave-1 slice** own profile-on-`tb_*`?
-If both do it they collide. Per the brief — "ping เดฟ before a fresh slice; note
-back when you need an architectural call on the `tb_*` ↔ rebuilt-schema
-coexistence" — this is exactly that call. ภูม holds the auth-bridge and is ready
-to implement whichever side เดฟ assigns.
+**Verified:** the merged tree (Wave 1 + B-auth) passes `pnpm verify` (lint · tsc ·
+test:unit · audit) + `pnpm build`. i18n parity holds (2327/2327; 10 new keys
+flagged "same value" — all legitimate proper nouns / codes — soft warning only).
+
+**Review finding (for เดฟ + next session):** Wave 1 reproduces the legacy **UI /
+structure** faithfully — but only the `tb_cnt` ledger reads the ported `tb_*`
+data. The 9-icon home, the sidebar badge counts and the order-flow still read the
+**rebuilt-era** tables (`profiles` / `service_orders` / `forwarders` / …), which
+do **not** hold the 8,898 migrated customers' data (Phase A loaded that into
+`tb_*`). **Net: Wave 1 is the faithful skin; `B-0` (re-point reads at `tb_*`) is
+the faithful data underneath.** Until `B-0` lands, a migrated customer logs in via
+B-auth ✅ but the 9-icon home renders empty, and admin badge counts read the
+near-empty rebuilt tables. **Deeper per-slice fidelity QC against the legacy PHP
+is the next-session review task.**
 
 ---
 
-## 5. Resume on the office computer (2026-05-20)
+## 5. 🔴 Open for เดฟ
 
-### 5.1 Sync the code
+1. **`B-0` next.** Re-point `lib/supabase` + the customer/admin actions at `tb_*`
+   ([`poom-phase-b-prep.md`](poom-phase-b-prep.md) §B-0). Without it Wave 1's UI
+   shows rebuilt-era (near-empty) data, not the live 8,898-customer legacy data.
+   Highest-leverage unblocker — recommend it as the next wave.
+2. **The B-auth ↔ `profiles` boundary (folds into `B-0`).** B-auth provisions the
+   Supabase `auth.users` row but not a `profiles` row, so
+   `getCurrentUserWithProfile()` returns null for a bridged customer. `B-0` owns
+   the `tb_*`↔`profiles` identity bridge — whoever does `B-0` creates/maps the
+   profile. ภูม holds the auth-bridge and will wire whatever `B-0` decides.
+
+---
+
+## 6. Resume on the company computer
+
+### 6.1 Sync the code
 ```bash
-cd <pacred-web on the office machine>
+cd <pacred-web on the company machine>
 git fetch origin
 git checkout Poom
 git pull --ff-only origin Poom
@@ -149,20 +168,19 @@ pnpm install
 ```
 If using a Claude worktree there: `git fetch origin && git merge origin/dave`.
 
-### 5.2 `.env.local` — get it onto the office machine
+### 6.2 `.env.local` — get it onto the company machine
 
-`.env.local` is **gitignored** (real secrets — never in git). Recreate it on the
-office machine, fastest path first:
+`.env.local` is **gitignored** (real secrets — never in git). Recreate it,
+fastest path first:
 
-1. **Copy the file directly (recommended)** — before leaving this machine, send
-   `.env.local` to yourself via the Pacred LINE OA self-chat (or USB / drive); on
-   the office machine paste it to the project root.
+1. **Copy the file directly (recommended)** — send `.env.local` to yourself via
+   the Pacred LINE OA self-chat (or USB / drive); paste it to the project root.
 2. **`vercel env pull .env.local`** — pulls what is set in Vercel (note: Vercel
-   carries the prod/preview values; the **dev** Supabase keys below still need
-   the manual copy).
+   carries prod/preview values; the **dev** Supabase keys below still need the
+   manual copy).
 
-**Template** — every var; non-secret values filled, `🔑` = copy the value from
-this machine's `.env.local`:
+**Template** — non-secret values filled; `🔑` = copy the value from a machine
+that already has `.env.local`:
 
 ```
 # Supabase — D1 DEV project (pprrlabgebrnocthwdmg) — Phase-A tb_* data loaded
@@ -199,9 +217,9 @@ NEXT_PUBLIC_YUAN_RATE=5.00
 The remaining catalog vars (`PROMPTPAY_ID` · `RESEND_*` · `CRON_SECRET` ·
 `UPSTASH_*` · `HCAPTCHA_*` · `SENTRY_*` · `GTM`/`Clarity` · `MOMO_JMF_TOKEN`) are
 not in the dev `.env.local` yet — optional for Phase-B dev work. Full catalog +
-"where to get it" → [`../env.md`](../env.md).
+"where to get it" → [`../env.md`](../env.md) (§1 names the D1 dev/prod projects).
 
-### 5.3 Verify it runs
+### 6.3 Verify it runs
 ```bash
 pnpm dev          # → http://localhost:3000
 pnpm verify       # lint + tsc + test:unit + audit — all exit 0
@@ -209,18 +227,19 @@ pnpm verify       # lint + tsc + test:unit + audit — all exit 0
 
 ---
 
-## 6. Branch + migration state
+## 7. Branch + migration state
 
-- `Poom` = `dave` (`080b79e` + เดฟ's `0087` batch) + the B-auth commit `ade9ed0`.
-  Pushed to `origin/Poom`. เดฟ pulls `origin/Poom` to consolidate.
+- `Poom` = `dave` (`2b800fb` — incl. Wave 1) + B-auth (`ade9ed0`) + the save-point
+  docs. Pushed to `origin/Poom`. `origin/main` is unchanged (held production).
+  เดฟ pulls `origin/Poom` to consolidate.
 - Migrations: `0001`-`0087` exist (`0065` is an intentional gap). `0081`-`0083` =
   Phase-A legacy schema · `0084`-`0086` = ภูม's frozen Phase-C batch · `0087` =
-  เดฟ's `v_pcs_migration_status` security-invoker fix. **Next free for new
-  Phase-B work = `0088`.**
+  เดฟ's `v_pcs_migration_status` security-invoker fix. Wave 1 added no migrations.
+  **Next free for new Phase-B work = `0088`.**
 
 ---
 
-## 7. Cross-links
+## 8. Cross-links
 
 - 🧭 D1 ADR → [`../decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md)
 - 🚚 Phase-A runbook → [`../runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md)
@@ -232,4 +251,6 @@ pnpm verify       # lint + tsc + test:unit + audit — all exit 0
 
 ---
 
-**ลุยต่อนะ ภูม 💪** — B-auth ส่งแล้ว + verify กับ data จริงผ่าน · รอเดฟเคลียร์เรื่อง `profiles` row · พรุ่งนี้ที่ออฟฟิศ sync + ตั้ง `.env.local` ตาม §5 แล้วลุย Phase-B review ต่อ
+**ลุยต่อนะ ภูม 💪** — B-auth + Wave 1 อยู่บน `Poom` หมดแล้ว verify ผ่าน · งานต่อไป
+= `B-0` (re-point `tb_*`) ให้ Wave 1 โชว์ data จริง · พรุ่งนี้ที่บริษัท sync + ตั้ง
+`.env.local` ตาม §6 แล้วลุย review Wave 1 เชิงลึกเทียบ PHP เดิม

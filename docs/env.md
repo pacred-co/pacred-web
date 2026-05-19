@@ -3,7 +3,7 @@
 > **CANONICAL** — single source of truth for every env var Pacred reads.
 > Template file: [`/.env.example`](/.env.example) · Copy to `.env.local` (gitignored)
 
-Last updated: 2026-05-18 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](PORT_PLAN.md) Part N4
+Last updated: 2026-05-19 · See also: [`team.md`](team.md) · [`PORT_PLAN.md`](PORT_PLAN.md) Part N4
 
 ---
 
@@ -93,6 +93,8 @@ set in Vercel straight into a fresh `.env.local`.
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page → service_role key | **Server-only**, RLS-bypass for admin operations |
 
 **Critical:** `SUPABASE_SERVICE_ROLE_KEY` must never end up in client bundle. Only used inside `lib/supabase/admin.ts` (`createAdminClient()` is `import "server-only"`).
+
+> **D1 Supabase projects (2026-05-19):** dev = `pprrlabgebrnocthwdmg` · prod = `yzljakczhwrpbxflnmco` — both carry the loaded Phase-A legacy `tb_*` data ([`runbook/pcs-data-migration.md`](runbook/pcs-data-migration.md) §9). Local `.env.local` points at the **dev** project; never point local dev at prod. Fastest fresh-machine setup: copy `.env.local` directly (LINE self-chat / drive) or `vercel env pull` — values are never recorded in this doc (§ inventory note above).
 
 ---
 
