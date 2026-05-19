@@ -245,7 +245,6 @@ function PersonalForm() {
   const [phase, setPhase] = useState<"form" | "otp">("form");
   const [otpCode, setOtpCode] = useState("");
   const [resendIn, setResendIn] = useState(0);
-  const cachedCaptcha = useRef<string | null>(null);
 
   function toggleService(id: ServiceId) {
     setServices((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -257,7 +256,12 @@ function PersonalForm() {
     return () => clearTimeout(t);
   }, [phase, resendIn]);
 
-  async function submitRegister(otp: string, captchaToken: string | null) {
+  async function submitRegister(otp: string) {
+    // hCaptcha tokens are single-use and expire ~2 min. Mint a FRESH token
+    // here at submit time — the token obtained during the OTP-request step
+    // is long stale by the time the user has received the SMS and typed the
+    // code, so reusing it fails verifyHcaptcha server-side (captcha_failed).
+    const captchaToken = (await captchaRef.current?.execute()) ?? null;
     const res = await registerPersonal({
       firstName, lastName, phone, password,
       services,
@@ -286,17 +290,15 @@ function PersonalForm() {
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
-      const captchaToken = (await captchaRef.current?.execute()) ?? null;
-      cachedCaptcha.current = captchaToken;
-
       const req = await requestOtp(phone, "register");
       if (!req.ok) {
         setError(ERR[req.error] ?? req.error);
-        captchaRef.current?.reset();
         return;
       }
       if (req.bypass) {
-        await submitRegister("bypass", captchaToken);
+        // Dev bypass — no SMS round-trip, so submitRegister mints its own
+        // fresh captcha token at submit time (same as the real OTP path).
+        await submitRegister("bypass");
         return;
       }
       setPhase("otp");
@@ -309,7 +311,7 @@ function PersonalForm() {
     if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
     setError(null);
     startTransition(async () => {
-      await submitRegister(otpCode, cachedCaptcha.current);
+      await submitRegister(otpCode);
     });
   }
 
@@ -420,7 +422,6 @@ function JuristicForm() {
   const [step1Phase, setStep1Phase] = useState<"form" | "otp">("form");
   const [otpCode, setOtpCode] = useState("");
   const [resendIn, setResendIn] = useState(0);
-  const cachedCaptcha = useRef<string | null>(null);
 
   /* step 2 */
   const [taxId, setTaxId]               = useState("");
@@ -512,7 +513,11 @@ function JuristicForm() {
     return () => clearTimeout(t);
   }, [step1Phase, resendIn]);
 
-  async function submitStep1(otp: string, captchaToken: string | null) {
+  async function submitStep1(otp: string) {
+    // Mint a FRESH hCaptcha token here at submit time — single-use tokens
+    // expire ~2 min, so the one obtained at OTP-request time is stale by
+    // the time the SMS arrives and the user types the code (captcha_failed).
+    const captchaToken = (await captchaRef.current?.execute()) ?? null;
     const res = await registerJuristicStep1({
       phone, password,
       services,
@@ -533,17 +538,15 @@ function JuristicForm() {
   function nextStep1() {
     setError(null);
     startTransition(async () => {
-      const captchaToken = (await captchaRef.current?.execute()) ?? null;
-      cachedCaptcha.current = captchaToken;
-
       const req = await requestOtp(phone, "register");
       if (!req.ok) {
         setError(ERR[req.error] ?? req.error);
-        captchaRef.current?.reset();
         return;
       }
       if (req.bypass) {
-        await submitStep1("bypass", captchaToken);
+        // Dev bypass — no SMS round-trip, so submitStep1 mints its own
+        // fresh captcha token at submit time (same as the real OTP path).
+        await submitStep1("bypass");
         return;
       }
       setStep1Phase("otp");
@@ -556,7 +559,7 @@ function JuristicForm() {
     if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
     setError(null);
     startTransition(async () => {
-      await submitStep1(otpCode, cachedCaptcha.current);
+      await submitStep1(otpCode);
     });
   }
 
