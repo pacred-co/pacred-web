@@ -66,24 +66,17 @@ import { Link } from "@/i18n/navigation";
  * link, the $arrItem fID links, number_format(rAmount,2), and the
  * print badge (receipt-f-hs.php L99-145).
  *
- * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
- *   A. printReceiptF.php — the legacy receipt-PDF print endpoint
- *      (mPDF / THSarabunNew) is NOT yet ported to Pacred. Per the
- *      runbook, a receipt-print link that targets an un-ported
- *      legacy print endpoint is kept as an absolute
- *      https://pcscargo.co.th/... URL and flagged. Both print links
- *      on this screen (the "เลขที่ใบเสร็จ" cell link + the
- *      "พิมพ์ใบเสร็จ" badge) point there, opened in a new tab —
- *      exactly as the legacy does.
- *   B. The DataTables checkbox-select + the fixed-bottom bulk
- *      "พิมพ์ใบเสร็จ" button (receipt-f-hs.php L98-155 + the page
- *      JS L177-250) — selecting N rows then opening
- *      `printReceiptF.php?type=1&id=<csv>`. The markup is
- *      transcribed VERBATIM (the `#frm-example` form, the hidden
- *      `#arrID` input, the `#myTable` classes, the `#select1`
- *      button) so the staged jQuery + DataTables vendor bundle
- *      enhances it 1:1 at runtime. The bulk-print target is the
- *      same un-ported printReceiptF.php — flagged with (A).
+ * ── Receipt-print endpoint — NOW PORTED ──
+ *   The legacy `printReceiptF.php` receipt-PDF endpoint has since
+ *   been transcribed 1:1 (its sibling `invoiceF.php` →
+ *   `/service-import/receipts/print`). The three print affordances
+ *   on this screen — the "เลขที่ใบเสร็จ" cell link, the "พิมพ์ใบเสร็จ"
+ *   badge, and the fixed-bottom bulk-print form (the
+ *   DataTables-checkbox `#frm-example` form / `#arrID` hidden input /
+ *   `#select1` button, all transcribed VERBATIM so the staged jQuery
+ *   + DataTables vendor bundle enhances them 1:1) — now target that
+ *   in-app route with `?id=<rID csv>` (+ `type` for the bulk form),
+ *   the exact legacy query shape.
  *
  * A Server Component render is a PURE READ — receipt-f-hs.php has no
  * render-time INSERT/UPDATE, so there is nothing to defer.
@@ -95,9 +88,13 @@ import { Link } from "@/i18n/navigation";
 // FontAwesome (`fas`) + Line-Awesome (`la`) icon fonts staged with
 // the global vendor bundle. No binary assets to copy.
 
-// The legacy printReceiptF.php receipt-print endpoint is not yet
-// ported — see FLAG (A). Keep its absolute legacy URL.
-const LEGACY_PRINT_BASE = "https://pcscargo.co.th/member/printReceiptF.php";
+// The legacy printReceiptF.php receipt-print endpoint IS now ported
+// — its sibling `invoiceF.php` was transcribed 1:1 to the in-app
+// route `/service-import/receipts/print` (it reads `?id=<csv>` +
+// `?type=`, exactly the legacy query). The print links + the bulk
+// print form below target it. (This closes the prior FLAG (A) — the
+// receipt-print endpoint is no longer un-ported.)
+const RECEIPT_PRINT_BASE = "/service-import/receipts/print";
 
 type ReceiptRow = {
   id: number;
@@ -246,12 +243,12 @@ export default async function ServiceImportReceiptsPage({
                           DataTables-checkbox table. Markup transcribed
                           VERBATIM so the staged jQuery + DataTables
                           vendor bundle enhances it 1:1. The bulk-print
-                          form action is the un-ported printReceiptF.php
-                          — FLAGGED (A) in the file header. */}
+                          form GETs the now-ported in-app receipt-print
+                          route with the selected `?id=<csv>` + `type`. */}
                       <form
                         className="p-1"
                         id="frm-example"
-                        action={LEGACY_PRINT_BASE}
+                        action={RECEIPT_PRINT_BASE}
                         method="GET"
                       >
                         <input type="hidden" name="id" id="arrID" />
@@ -281,13 +278,13 @@ export default async function ServiceImportReceiptsPage({
                                   </td>
                                   <td>{row.rdate}</td>
                                   <td>
-                                    <a
-                                      href={`${LEGACY_PRINT_BASE}?id=${row.rid}`}
+                                    <Link
+                                      href={`${RECEIPT_PRINT_BASE}?id=${row.rid}`}
                                       target="_blank"
                                       rel="noreferrer"
                                     >
                                       {row.rid}
-                                    </a>
+                                    </Link>
                                   </td>
                                   <td>
                                     {/* receipt-f-hs.php L123-131 — the
@@ -316,15 +313,15 @@ export default async function ServiceImportReceiptsPage({
                                     {numberFormat(Number(row.ramount ?? 0))}
                                   </td>
                                   <td className="text-center">
-                                    <a
-                                      href={`${LEGACY_PRINT_BASE}?id=${row.rid}`}
+                                    <Link
+                                      href={`${RECEIPT_PRINT_BASE}?id=${row.rid}`}
                                       target="_blank"
                                       rel="noreferrer"
                                     >
                                       <span className=" badge badge-warning badge-pill font-14">
                                         พิมพ์ใบเสร็จ
                                       </span>
-                                    </a>
+                                    </Link>
                                   </td>
                                 </tr>
                               );

@@ -1,0 +1,208 @@
+/* =============================================================
+ * invoice-f.css — legacy PCS Cargo `member/invoiceF.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription (the "ใบเสร็จรับเงิน"
+ * forwarder/import receipt — the printable receipt document).
+ *
+ * `invoiceF.php` is a server-side mPDF endpoint: it builds an HTML
+ * string ($bodyHeader + the item rows + $bodyFooter) and pipes it
+ * through mPDF to emit a PDF. The faithful Next.js transcription
+ * reproduces that EXACT HTML as a printable web page (a print view)
+ * — the browser's own print-to-PDF takes mPDF's place.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot — see
+ * public/legacy/pcs/menu.css): the look is NOT re-implemented in
+ * Tailwind — the legacy CSS is BROUGHT VERBATIM. Every rule below
+ * is copied verbatim from the inline <style> block `invoiceF.php`
+ * embeds in its `$bodyHeader` (legacy lines 147-258) — the exact
+ * stylesheet mPDF renders the receipt with.
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules cannot leak into — or collide with — the rest of
+ * the Tailwind app. The print page renders the legacy markup 1:1
+ * inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/invoice-f.css and
+ * loaded with a plain <link rel="stylesheet"> — it must bypass the
+ * app's Tailwind v4 / PostCSS pipeline, which rejects verbatim
+ * legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- invoiceF.php $bodyHeader inline <style> — VERBATIM (L148-257).
+ * The legacy selectors are copied 1:1; only the `.pcs-legacy ` scope
+ * prefix is added so they do not leak app-wide. ---- */
+
+/* L148-153 — the mPDF page body is a fixed A4 sheet. On the web
+ * print view this becomes the printable sheet; `.pcs-receipt-sheet`
+ * is the wrapper that carries it (the legacy <body>). */
+.pcs-legacy .pcs-receipt-sheet {
+  font-family: sarabun, "TH Sarabun New", "Sarabun", sans-serif;
+  font-size: 20px;
+  width: 210mm;
+  min-height: 267mm;
+  margin: 0 auto;
+  background: #fff;
+  color: #000;
+  padding: 4mm;
+  box-sizing: border-box;
+}
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-center { text-align: center !important; }
+/* L163-168 — the legacy mPDF .row / .col-6 (inline-block) */
+.pcs-legacy .row    { display: inline-block; }
+.pcs-legacy .row .col-6 { display: inline-block; }
+/* L169-184 — invoice detail columns */
+.pcs-legacy .invoice-detail-left  { float: left;  width: 50%; }
+.pcs-legacy .invoice-detail-right { float: right; width: 50%; }
+.pcs-legacy .invoice-70-left  { float: left;  width: 69.5%; }
+.pcs-legacy .invoice-30-right { float: right; width: 29.5%; }
+/* L185-205 — receipt headings */
+.pcs-legacy .h-title {
+  color: #8BC34A;
+  font-size: 1.75em;
+  font-weight: bold;
+}
+.pcs-legacy .h-title-danger {
+  color: red;
+  font-size: 1.9em;
+  font-weight: bold;
+}
+.pcs-legacy .h-title2 {
+  font-size: 1.2em;
+  font-weight: bold;
+  line-height: 0.5em;
+}
+.pcs-legacy .h-title3 {
+  font-size: 0.8em;
+  font-weight: bold;
+  line-height: 0.2em;
+  color: red;
+}
+.pcs-legacy .h-sub {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: normal;
+}
+/* L211-222 — padding helpers */
+.pcs-legacy .p-2  { padding: 20px; }
+.pcs-legacy .p-1  { padding: 10px; }
+.pcs-legacy .p-05 { padding: 5px; }
+.pcs-legacy .pb-5 { padding-bottom: 15px !important; }
+/* L223-225 — the boxed border */
+.pcs-legacy .border-2-back { border: 1.5px solid !important; }
+/* L226-232 — tables */
+.pcs-legacy table { table-layout: fixed; }
+.pcs-legacy thead { border: 1px solid; }
+/* L233-244 — background helpers */
+.pcs-legacy .bg-g     { background-color: #f2f2f2; }
+.pcs-legacy .f-c      { }
+.pcs-legacy .bg-2e8   { background-color: #ffe8e8; }
+.pcs-legacy .bg-light { background-color: #eff9ff !important; }
+/* L245-250 — alignment + border */
+.pcs-legacy .v-a-t      { vertical-align: text-top; }
+.pcs-legacy .border-top { border-top: 1px solid #c9c9c9 !important; }
+/* L251-254 — the legacy <hr> reset */
+.pcs-legacy hr {
+  padding: 0px !important;
+  margin: 0px !important;
+}
+/* L255-257 — float helper */
+.pcs-legacy .float-right { float: right !important; }
+
+/* ---- the BS4 `.table` class invoiceF.php uses on its <table>s
+ * (the legacy theme bootstrap.min.css supplies it — the inline
+ * <style> above only sets `table-layout`; the BS4 base gives the
+ * full-width box). Copied from the verbatim BS4 4.x values. ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  /* the legacy receipt cells carry their per-cell inline padding
+   * (p-05) + width; the BS4 base contributes the border behaviour */
+  border-top: 1px solid #dee2e6;
+}
+.pcs-legacy .table-bordered,
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td {
+  border: 1px solid #dee2e6;
+}
+
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * + zeroes heading margins globally. The legacy receipt places its
+ * logo / stamp / signature images inline and uses <h2>/<h3> in the
+ * header. Restore the legacy/browser-default rendering inside the
+ * scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+.pcs-legacy h2 { font-size: 1.5em;  font-weight: bold; margin: 0; }
+.pcs-legacy h3 { font-size: 1.17em; font-weight: bold; margin: 0; }
+.pcs-legacy b  { font-weight: 700; }
+
+/* ---- the print-view chrome — NOT part of the legacy receipt; the
+ * legacy mPDF output IS the file the customer gets. On the web the
+ * customer opens a page, so a slim no-print toolbar gives them the
+ * "print / save as PDF" action. Hidden when actually printing so the
+ * printed sheet is byte-for-byte the legacy receipt. ---- */
+.pcs-legacy .pcs-receipt-toolbar {
+  max-width: 210mm;
+  margin: 12px auto;
+  text-align: right;
+}
+.pcs-legacy .pcs-receipt-toolbar .btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  background-color: #E9091F;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pcs-legacy .pcs-receipt-empty {
+  max-width: 210mm;
+  margin: 40px auto;
+  text-align: center;
+  color: #ff4961;
+  font-size: 20px;
+}
+
+/* the screen background behind the white sheet (a desk-like grey) */
+.pcs-legacy .pcs-receipt-bg {
+  background: #e9ecef;
+  padding: 1px 0 24px;
+  min-height: 100vh;
+}
+
+@media print {
+  /* hide the web-only toolbar; the printed page is the legacy
+   * receipt exactly. */
+  .pcs-legacy .pcs-receipt-toolbar { display: none !important; }
+  .pcs-legacy .pcs-receipt-bg { background: #fff; padding: 0; }
+  .pcs-legacy .pcs-receipt-sheet {
+    margin: 0;
+    width: auto;
+    padding: 4mm;
+  }
+  /* each receipt sheet starts a new printed page (the legacy mPDF
+   * emits one page per receipt / per 13-item block). */
+  .pcs-legacy .pcs-receipt-sheet { page-break-after: always; }
+  .pcs-legacy .pcs-receipt-sheet:last-child { page-break-after: auto; }
+}
+
+/* on narrow screens the fixed 210mm sheet would overflow — allow the
+ * background wrapper to scroll horizontally so the receipt is still
+ * 1:1 (the printed output is unaffected). */
+@media (max-width: 820px) {
+  .pcs-legacy .pcs-receipt-bg { overflow-x: auto; }
+}
