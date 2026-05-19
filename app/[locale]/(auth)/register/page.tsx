@@ -3,11 +3,9 @@
 import { useState, useTransition, useRef, useEffect, Fragment } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare } from "lucide-react";
+import { Eye, EyeOff, User, Lock, Mail, Hash, Building2, Loader2, Phone, MessageSquare, ChevronDown, Check } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
-import { Footer } from "@/components/sections/footer";
-import { FloatingTabs } from "@/components/sections/floating-tabs";
 import {
   registerPersonal,
   registerJuristicStep1,
@@ -23,7 +21,7 @@ import { trackSignUp } from "@/lib/analytics";
 /* ─────────────────────────── TYPES ─────────────────────────── */
 type TabId = "personal" | "juristic";
 type JuristicStep = 1 | 2 | 3;
-type ServiceId = "import" | "export" | "clear" | "customs" | "order" | "payment";
+type ServiceId = "import" | "export" | "customs" | "order" | "payment";
 type SourceId = "line" | "fb" | "google" | "youtube" | "tiktok" | "ig" | "friend" | "ad";
 
 /* ─────────────────────────── CONSTANTS ─────────────────────────── */
@@ -54,13 +52,12 @@ function safeNext(raw: string | null): string | null {
   return raw;
 }
 
-const SERVICES: { id: ServiceId; label: string; sub?: string; emoji: string }[] = [
-  { id: "import",  label: "นำเข้าสินค้า",       sub: "รถ/เรือ/แอร์", emoji: "📦" },
-  { id: "export",  label: "ส่งออกสินค้า",       sub: "รถ/เรือ/แอร์", emoji: "🚢" },
-  { id: "clear",   label: "เคลียร์สินค้าติดด่าน",              emoji: "🚧" },
-  { id: "customs", label: "พิธีการศุลกากร",                    emoji: "📋" },
-  { id: "order",   label: "ฝากสั่งซื้อสินค้า",                emoji: "🛒" },
-  { id: "payment", label: "ฝากโอนชำระสินค้า",                 emoji: "💸" },
+const SERVICES: { id: ServiceId; label: string; sub?: string; icon: string }[] = [
+  { id: "import",  label: "นำเข้าสินค้า",       sub: "รถ/เรือ/แอร์", icon: "/images/home/iconfloating/pcs-forwarder.png" },
+  { id: "export",  label: "ส่งออกสินค้า",       sub: "รถ/เรือ/แอร์", icon: "/images/home/iconfloating/caricon.png" },
+  { id: "customs", label: "พิธีการศุลกากร",                    icon: "/images/home/iconfloating/checklistred.png" },
+  { id: "order",   label: "ฝากสั่งซื้อสินค้า",                icon: "/images/home/iconfloating/pcs-cart.png" },
+  { id: "payment", label: "ฝากโอนชำระสินค้า",                 icon: "/images/home/iconfloating/pcs-payment.png" },
 ];
 
 const SOURCES: { id: SourceId; label: string; icon: React.ReactNode }[] = [
@@ -152,7 +149,7 @@ const SOURCES: { id: SourceId; label: string; icon: React.ReactNode }[] = [
 
 /* ─────────────────────────── INPUT BASE STYLES (matches login/page.tsx) ─────────────────────────── */
 const INPUT_BASE =
-  "w-full rounded-2xl border-[1.5px] border-border bg-white dark:bg-surface px-5 py-[15px] text-[15px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
+  "w-full rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-4 py-[10px] text-[14px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
 
 /* ─────────────────────────── MAIN PAGE ─────────────────────────── */
 export default function RegisterPage() {
@@ -161,31 +158,28 @@ export default function RegisterPage() {
   return (
     <>
       <NavBar />
-      <main className="flex min-h-[calc(100vh-200px)] items-start justify-center bg-background px-4 py-10">
-        <div className="w-full max-w-[540px] rounded-[30px] border border-white/80 bg-white p-8 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-10">
+      <main className="flex items-start justify-center bg-background px-4 py-3">
+        <div className="w-full max-w-[540px] rounded-[24px] border border-white/80 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7">
 
-          {/* Logo — enlarged to 76px (PNG is a 140x140 square). Wrapper height
-              pinned at the old 52px with items-end, so the bigger logo
-              overflows UPWARD into the card's top padding only — the title +
-              tabs + form below keep their exact positions. */}
-          <div className="-mb-1 flex h-[52px] items-end justify-center">
+          {/* Logo */}
+          <div className="-mb-1 flex h-[40px] items-end justify-center">
             <Image
               src="/images/pacred-logo-red.png"
               alt="Pacred"
               width={140}
               height={140}
-              className="h-[76px] w-[76px]"
+              className="h-[52px] w-[52px]"
               priority
             />
           </div>
 
           {/* Title */}
-          <h1 className="mb-2 text-center text-2xl font-bold text-foreground">
+          <h1 className="mb-1 text-center text-xl font-bold text-foreground">
             สมัครสมาชิก
           </h1>
 
           {/* Login link */}
-          <p className="mb-6 text-center text-sm text-muted">
+          <p className="mb-3 text-center text-[12.5px] text-muted">
             มีบัญชีอยู่แล้ว?{" "}
             <Link href="/login" className="font-semibold text-primary-600 hover:text-primary-700 hover:underline">
               เข้าสู่ระบบ
@@ -193,7 +187,7 @@ export default function RegisterPage() {
           </p>
 
           {/* Tabs */}
-          <div className="mb-6 flex gap-1 rounded-2xl bg-surface dark:bg-surface-alt p-1">
+          <div className="mb-3 flex gap-1 rounded-xl bg-surface dark:bg-surface-alt p-1">
             {(["personal", "juristic"] as TabId[]).map((t) => {
               const active = tab === t;
               return (
@@ -201,7 +195,7 @@ export default function RegisterPage() {
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={`flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition ${
+                  className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold transition ${
                     active
                       ? "bg-white text-primary-600 shadow-[0_2px_10px_rgba(0,0,0,0.07)] dark:bg-background"
                       : "text-muted hover:text-foreground"
@@ -218,8 +212,6 @@ export default function RegisterPage() {
           {tab === "personal" ? <PersonalForm /> : <JuristicForm />}
         </div>
       </main>
-      <Footer />
-      <FloatingTabs />
     </>
   );
 }
@@ -343,7 +335,7 @@ function PersonalForm() {
   }
 
   return (
-    <form onSubmit={handleRequestOtp} className="space-y-4">
+    <form onSubmit={handleRequestOtp} className="space-y-2.5">
       {/* Name row */}
       <div className="flex gap-3">
         <FieldWrap label="ชื่อจริง">
@@ -372,15 +364,15 @@ function PersonalForm() {
           placeholder="รหัสผ่าน 6-30 ตัวอักษร" />
       </FieldWrap>
 
-      {/* Services */}
-      <FieldWrap label="บริการที่สนใจ">
-        <ServiceChips selected={services} onToggle={toggleService} />
-      </FieldWrap>
-
-      {/* How know */}
-      <FieldWrap label="รู้จักเราจากช่องทางใด">
-        <SourceChips selected={source} onSelect={setSource} />
-      </FieldWrap>
+      {/* Services + How-know — side by side to keep the form compact */}
+      <div className="flex gap-3">
+        <FieldWrap label="บริการที่สนใจ">
+          <ServiceChips selected={services} onToggle={toggleService} />
+        </FieldWrap>
+        <FieldWrap label="รู้จักเราจากช่องทางใด">
+          <SourceChips selected={source} onSelect={setSource} />
+        </FieldWrap>
+      </div>
 
       {/* Email (optional) */}
       <FieldWrap
@@ -621,7 +613,7 @@ function JuristicForm() {
   }
 
   return (
-    <form onSubmit={handleFinalSubmit} className="space-y-4">
+    <form onSubmit={handleFinalSubmit} className="space-y-2.5">
       <StepIndicator step={step} />
 
       {/* ── STEP 1 — FORM PHASE ── */}
@@ -639,15 +631,16 @@ function JuristicForm() {
               placeholder="รหัสผ่าน 6-30 ตัวอักษร" />
           </FieldWrap>
 
-          <FieldWrap
-            label={<>บริการที่สนใจ <span className="ml-1 text-[11px] font-normal text-muted">(เลือกได้หลายอย่าง)</span></>}
-          >
-            <ServiceChips selected={services} onToggle={toggleService} />
-          </FieldWrap>
-
-          <FieldWrap label="รู้จักเราจากช่องทางใด">
-            <SourceChips selected={source} onSelect={setSource} />
-          </FieldWrap>
+          <div className="flex gap-3">
+            <FieldWrap
+              label={<>บริการที่สนใจ <span className="ml-1 text-[11px] font-normal text-muted">(หลายอย่าง)</span></>}
+            >
+              <ServiceChips selected={services} onToggle={toggleService} />
+            </FieldWrap>
+            <FieldWrap label="รู้จักเราจากช่องทางใด">
+              <SourceChips selected={source} onSelect={setSource} />
+            </FieldWrap>
+          </div>
 
           {error && <ErrorBox msg={error} />}
           <HCaptchaInvisible ref={captchaRef} />
@@ -793,7 +786,7 @@ function JuristicForm() {
 function FieldWrap({ label, children, className = "" }: { label: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <div className={`flex-1 ${className}`}>
-      <label className="mb-1.5 block text-[12.5px] font-semibold text-foreground">{label}</label>
+      <label className="mb-1 block text-[12px] font-semibold text-foreground">{label}</label>
       {children}
     </div>
   );
@@ -851,75 +844,89 @@ function PasswordInput({
   );
 }
 
-/* ── ServiceChips: top 2 big, bottom 4 compact ── */
+/* ── ServiceChips: multi-select dropdown (one input-row tall, expands on click) ── */
 function ServiceChips({ selected, onToggle }: { selected: ServiceId[]; onToggle: (id: ServiceId) => void }) {
-  const top  = SERVICES.slice(0, 2);
-  const rest = SERVICES.slice(2);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const chipClass = (active: boolean) =>
-    `flex flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] text-center transition ${
-      active
-        ? "border-primary-300 bg-primary-50 text-primary-600 shadow-[0_2px_8px_rgba(179,0,0,0.10)] dark:bg-primary-950/30"
-        : "border-border bg-white dark:bg-surface text-muted hover:border-primary-200 hover:text-foreground"
-    }`;
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const summary =
+    selected.length === 0
+      ? "เลือกบริการ"
+      : selected.length === 1
+      ? SERVICES.find((s) => s.id === selected[0])?.label ?? "1 บริการ"
+      : `${selected.length} บริการ`;
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Row 1 — 2 large hero cards */}
-      <div className="grid grid-cols-2 gap-2">
-        {top.map((s) => {
-          const isActive = selected.includes(s.id);
-          return (
-            <button
-              key={s.id} type="button" onClick={() => onToggle(s.id)}
-              className={`${chipClass(isActive)} px-2 py-5 cursor-pointer`}
-            >
-              <span className="text-[28px] leading-none">{s.emoji}</span>
-              <span className="text-[13px] font-semibold leading-tight">{s.label}</span>
-              {s.sub && <span className="text-[10px] font-normal opacity-55">{s.sub}</span>}
-            </button>
-          );
-        })}
-      </div>
-      {/* Row 2 — 4 compact cards */}
-      <div className="grid grid-cols-4 gap-2">
-        {rest.map((s) => {
-          const isActive = selected.includes(s.id);
-          return (
-            <button
-              key={s.id} type="button" onClick={() => onToggle(s.id)}
-              className={`${chipClass(isActive)} px-1 py-2.5 cursor-pointer`}
-            >
-              <span className="text-[20px] leading-none">{s.emoji}</span>
-              <span className="text-[10.5px] font-semibold leading-tight">{s.label}</span>
-            </button>
-          );
-        })}
-      </div>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`${INPUT_BASE} flex items-center justify-between gap-2 pr-9 text-left cursor-pointer ${
+          selected.length === 0 ? "text-muted" : "text-foreground"
+        }`}
+      >
+        <span className="truncate">{summary}</span>
+        <ChevronDown className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-border bg-white dark:bg-surface shadow-[0_8px_24px_rgba(15,23,42,0.12)] p-1.5 max-h-[280px] overflow-y-auto">
+          {SERVICES.map((s) => {
+            const active = selected.includes(s.id);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onToggle(s.id)}
+                className={`w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition cursor-pointer ${
+                  active ? "bg-primary-50 text-primary-700 dark:bg-primary-950/30 dark:text-primary-300" : "hover:bg-surface text-foreground"
+                }`}
+              >
+                <Image src={s.icon} alt="" width={28} height={28} className="h-7 w-7 shrink-0 object-contain" />
+                <span className="flex-1 leading-tight">
+                  {s.label}
+                  {s.sub && <span className="ml-1 text-[11px] font-normal opacity-60">({s.sub})</span>}
+                </span>
+                <span
+                  className={`h-4 w-4 rounded border-[1.5px] flex items-center justify-center shrink-0 ${
+                    active ? "border-primary-500 bg-primary-500 text-white" : "border-border"
+                  }`}
+                >
+                  {active && <Check className="h-3 w-3" strokeWidth={3} />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-/* ── SourceChips: 4 per row → 2 rows for 8 items ── */
+/* ── SourceChips: single-select native dropdown (one input-row tall) ── */
 function SourceChips({ selected, onSelect }: { selected: SourceId | null; onSelect: (id: SourceId) => void }) {
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {SOURCES.map((s) => {
-        const isActive = selected === s.id;
-        return (
-          <button
-            key={s.id} type="button" onClick={() => onSelect(s.id)}
-            className={`flex min-h-[54px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] px-1 py-1.5 text-[11px] leading-snug transition ${
-              isActive
-                ? "border-primary-300 bg-primary-50 font-semibold text-primary-600 shadow-[0_2px_8px_rgba(179,0,0,0.10)] dark:bg-primary-950/30"
-                : "border-border bg-white dark:bg-surface text-muted hover:border-primary-200 hover:text-foreground"
-            }`}
-          >
-            {s.icon}
-            <span>{s.label}</span>
-          </button>
-        );
-      })}
+    <div className="relative">
+      <select
+        value={selected ?? ""}
+        onChange={(e) => onSelect(e.target.value as SourceId)}
+        className={`${INPUT_BASE} appearance-none pr-9 cursor-pointer ${selected ? "text-foreground" : "text-muted"}`}
+      >
+        <option value="" disabled>เลือกช่องทาง</option>
+        {SOURCES.map((s) => (
+          <option key={s.id} value={s.id} className="text-foreground">
+            {s.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
     </div>
   );
 }
@@ -946,7 +953,7 @@ function UploadField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[12.5px] font-semibold text-foreground">{label}</label>
+      <label className="mb-1 block text-[12px] font-semibold text-foreground">{label}</label>
       <label
         className={`relative block cursor-pointer rounded-2xl border-[1.5px] border-dashed px-4 py-4 text-center transition ${
           file
@@ -1067,7 +1074,7 @@ function OtpStep({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <div className="text-center">
         <div className="mb-1 text-3xl">📱</div>
         <div className="text-[15px] font-semibold text-foreground">ยืนยันเบอร์โทรศัพท์</div>

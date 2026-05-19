@@ -31,7 +31,6 @@ export type SignInInput = z.infer<typeof signInSchema>;
 const SERVICE_IDS = [
   "import",
   "export",
-  "clear",
   "customs",
   "order",
   "payment",

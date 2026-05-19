@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
-import { Footer } from "@/components/sections/footer";
 import { GoogleIcon, LineIcon, FacebookIcon } from "@/components/icons/social-icons";
 import { signIn, signInWithOAuth } from "@/actions/auth";
 import { trackLogin, type LoginMethod } from "@/lib/analytics";
@@ -279,7 +278,6 @@ export default function LoginPage() {
           </p>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

@@ -39,13 +39,24 @@ export function FloatingTabs() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Don't render in admin back-office — admin gets its own dedicated
-  // sidebar UI and the customer-facing floating tabs would clutter the
-  // workflow. Pattern matches `/admin` AND `/<locale>/admin`.
-  // Per ภูม + เดฟ confirm 2026-05-16 evening.
-  if (pathname && /^(?:\/[a-z]{2})?\/admin(?:\/|$)/.test(pathname)) {
-    return null;
-  }
+  // Don't render in admin back-office (admin has its own sidebar) or on the
+  // auth flow (login/register/forgot-password) — auth pages are designed to
+  // fit one viewport, so the bottom nav + its 64px body-padding clearance
+  // both need to go away. Pattern matches `/<route>` AND `/<locale>/<route>`.
+  // Per ภูม + เดฟ confirm 2026-05-16 evening; auth-hide per ปอน 2026-05-19.
+  const isHidden =
+    !!pathname &&
+    (/^(?:\/[a-z]{2})?\/admin(?:\/|$)/.test(pathname) ||
+      /^(?:\/[a-z]{2})?\/(?:login|register|forgot-password)(?:\/|$)/.test(pathname));
+
+  // Toggle a body class so globals.css can drop the bottom-padding clearance.
+  useEffect(() => {
+    if (!isHidden) return;
+    document.body.classList.add("no-bottom-tabs");
+    return () => document.body.classList.remove("no-bottom-tabs");
+  }, [isHidden]);
+
+  if (isHidden) return null;
 
   const desktopTabs = [
     { label: t("home"),       icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
