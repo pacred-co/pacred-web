@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import { Phone } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { CONTACT } from "@/components/seo/site";
 
 /**
@@ -13,48 +13,53 @@ import { CONTACT } from "@/components/seo/site";
  * text on the RIGHT — "ผู้ดูแล" label, "เซลล์ <nickname>", and a tappable
  * "Tel : <phone>" link. It sits directly under the wallet card.
  *
- * Data path mirrors the existing `<SalesRepCard>`: profiles.sales_admin_id
- * → the rep's profile + `admin_contact_extras`. Always renders something —
- * falls back to the Pacred care line — so the launchpad slot is never empty
- * (legacy always showed an "ผู้ดูแล" card).
+ * D1 Phase-B Wave 2 (B-0): the rep is looked up against the ported legacy
+ * schema — `tb_users.adminidsale` → `tb_admin.adminid`. Both tables are
+ * RLS-locked to service_role, so the read goes through the admin client;
+ * the join key is `tb_users.userid === profile.member_code`. Always renders
+ * something — falls back to the Pacred care line — so the launchpad slot is
+ * never empty (legacy always showed an "ผู้ดูแล" card).
  */
-export async function PcsSalesRepCard({ profileId }: { profileId: string }) {
+export async function PcsSalesRepCard({ memberCode }: { memberCode: string | null }) {
   const t = await getTranslations("pcsHome");
-  const supabase = await createClient();
-
-  const { data: customer } = await supabase
-    .from("profiles")
-    .select("sales_admin_id")
-    .eq("id", profileId)
-    .maybeSingle<{ sales_admin_id: string | null }>();
+  const admin = createAdminClient();
 
   let displayName = "";
   let phone: string | null = null;
-  let avatarUrl: string | null = null;
+  let avatarFile: string | null = null;
 
-  if (customer?.sales_admin_id) {
-    // sales_admin_id may be a uuid or a member_code — try the matching column.
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}/.test(customer.sales_admin_id);
-    const cols = "id, first_name, last_name, phone, avatar_url";
-    const repQuery = isUuid
-      ? supabase.from("profiles").select(cols).eq("id", customer.sales_admin_id).maybeSingle()
-      : supabase.from("profiles").select(cols).eq("member_code", customer.sales_admin_id).maybeSingle();
-    const { data: rep } = (await repQuery) as {
-      data: { id: string; first_name: string | null; last_name: string | null; phone: string | null; avatar_url: string | null } | null;
-    };
+  if (memberCode) {
+    // 1. Find the customer's assigned sales rep id (legacy tb_users.adminidsale).
+    const { data: userRow } = await admin
+      .from("tb_users")
+      .select("adminidsale")
+      .eq("userid", memberCode)
+      .maybeSingle<{ adminidsale: string | null }>();
 
-    if (rep) {
-      const { data: extras } = await supabase
-        .from("admin_contact_extras")
-        .select("display_name, direct_phone")
-        .eq("profile_id", rep.id)
-        .maybeSingle<{ display_name: string | null; direct_phone: string | null }>();
+    if (userRow?.adminidsale) {
+      // 2. Resolve the rep display name + phone + photo from tb_admin.
+      //    NOTE: the legacy column is `admintel` (varchar(13)) — there is
+      //    no `adminphone` column.
+      const { data: rep } = await admin
+        .from("tb_admin")
+        .select("adminname, adminlastname, adminnickname, admintel, adminpicture")
+        .eq("adminid", userRow.adminidsale)
+        .maybeSingle<{
+          adminname: string | null;
+          adminlastname: string | null;
+          adminnickname: string | null;
+          admintel: string | null;
+          adminpicture: string | null;
+        }>();
 
-      displayName =
-        extras?.display_name ??
-        `${rep.first_name ?? ""} ${rep.last_name ?? ""}`.trim();
-      phone = extras?.direct_phone ?? rep.phone ?? null;
-      avatarUrl = rep.avatar_url;
+      if (rep) {
+        // Legacy "เซลล์ <name>" uses the nickname when set, else first name.
+        displayName =
+          (rep.adminnickname && rep.adminnickname.trim()) ||
+          `${rep.adminname ?? ""} ${rep.adminlastname ?? ""}`.trim();
+        phone = rep.admintel ?? null;
+        avatarFile = rep.adminpicture ?? null;
+      }
     }
   }
 
@@ -69,6 +74,13 @@ export async function PcsSalesRepCard({ profileId }: { profileId: string }) {
     isFallback ? CONTACT.phoneCompanyDisplay : phone ?? CONTACT.phoneCompanyDisplay;
   const telHref = (phone ?? CONTACT.phoneCompany).replace(/[^+0-9]/g, "");
   const initial = (displayName || "?").charAt(0).toUpperCase();
+  // tb_admin.adminpicture stores a bare filename (default 'user.jpg'); only
+  // render an <Image> when it looks like a real uploaded file (an absolute
+  // URL or path). The bare-filename default has no resolvable URL → initial.
+  const avatarUrl =
+    avatarFile && avatarFile !== "user.jpg" && /^(https?:|\/)/.test(avatarFile)
+      ? avatarFile
+      : null;
 
   return (
     <div className="px-4">

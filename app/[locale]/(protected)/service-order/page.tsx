@@ -1,19 +1,27 @@
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
-import { listServiceOrders, type ServiceOrderSummary } from "@/actions/service-order";
+import { listServiceOrders } from "@/actions/service-order";
+import { LEGACY_ORDER_TABS } from "@/lib/legacy-status-map";
 import { ServiceOrderList } from "./service-order-list";
 import { ShoppingCart, Plus, ChevronRight, Home } from "lucide-react";
 
-type StatusFilter = ServiceOrderSummary["status"];
+// D1 Phase-B Wave 2: the 6 status tabs are keyed by the legacy
+// tb_header_order.hstatus codes ('1'-'6') + "all". Labels are the exact
+// legacy PCS Thai strings (from lib/legacy-status-map.ts). The ?q= URL
+// param carries the legacy code, e.g. ?q=2 for รอชำระเงิน.
+const BADGE_TONE: Record<string, "info" | "warning" | "neutral"> = {
+  all: "info",
+  "2": "warning", // รอชำระเงิน
+  "6": "warning", // ยกเลิก
+};
 
-const TAB_DEFS: { key: StatusFilter | "all"; label: string; badgeTone: "info" | "warning" | "neutral" }[] = [
-  { key: "all",                   label: "ทั้งหมด",          badgeTone: "info" },
-  { key: "pending",               label: "รอดำเนินการ",     badgeTone: "neutral" },
-  { key: "awaiting_payment",      label: "รอชำระเงิน",       badgeTone: "warning" },
-  { key: "ordered",               label: "สั่งสินค้า",         badgeTone: "neutral" },
-  { key: "awaiting_chn_dispatch", label: "รอร้านจีนจัดส่ง",  badgeTone: "neutral" },
-  { key: "completed",             label: "สำเร็จ",             badgeTone: "neutral" },
-  { key: "cancelled",             label: "ยกเลิก",            badgeTone: "warning" },
+const TAB_DEFS: { key: string; label: string; badgeTone: "info" | "warning" | "neutral" }[] = [
+  { key: "all", label: "ทั้งหมด", badgeTone: "info" },
+  ...LEGACY_ORDER_TABS.map((tab) => ({
+    key: tab.code,
+    label: tab.thai,
+    badgeTone: BADGE_TONE[tab.code] ?? "neutral",
+  })),
 ];
 
 export default async function ServiceOrderPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -22,7 +30,7 @@ export default async function ServiceOrderPage({ searchParams }: { searchParams:
   const res = await listServiceOrders({ limit: 200 });
   const allItems = res.ok ? (res.data ?? []) : [];
 
-  // Build counter map (group by status)
+  // Build counter map (group by legacy status code)
   const counts = allItems.reduce<Record<string, number>>((acc, o) => {
     acc[o.status] = (acc[o.status] ?? 0) + 1;
     acc.all = (acc.all ?? 0) + 1;

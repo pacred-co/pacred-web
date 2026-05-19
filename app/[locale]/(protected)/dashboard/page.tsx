@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { DashboardBanners } from "@/components/dashboard-banners";
@@ -9,6 +9,7 @@ import { PcsLaunchpadHeader } from "@/components/sections/pcs-launchpad-header";
 import { PcsWalletCard } from "@/components/sections/pcs-wallet-card";
 import { PcsSalesRepCard } from "@/components/sections/pcs-sales-rep-card";
 import { PcsIconGrid } from "@/components/sections/pcs-icon-grid";
+import { legacyOrderStatusThai, legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 
 /**
  * Customer post-login home — the PCS launchpad.
@@ -29,22 +30,25 @@ import { PcsIconGrid } from "@/components/sections/pcs-icon-grid";
  * replace the grid).
  */
 
+// Badge colours keyed by the legacy status codes — tb_forwarder.fstatus '1'-'7'
+// (D1 Phase-B Wave 2: the dashboard reads the ported tb_* schema directly).
 const STATUS_BADGE_F: Record<string, string> = {
-  pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
-  shipped_china:     "bg-blue-50 text-blue-700 border-blue-200",
-  in_transit:        "bg-indigo-50 text-indigo-700 border-indigo-200",
-  arrived_thailand:  "bg-purple-50 text-purple-700 border-purple-200",
-  out_for_delivery:  "bg-orange-50 text-orange-700 border-orange-200",
-  delivered:         "bg-green-50 text-green-700 border-green-200",
-  cancelled:         "bg-gray-50 text-gray-600 border-gray-200",
+  "1": "bg-gray-50 text-gray-600 border-gray-200",     // รอสินค้าเข้าโกดังจีน
+  "2": "bg-cyan-50 text-cyan-700 border-cyan-200",     // สินค้าถึงโกดังจีน
+  "3": "bg-indigo-50 text-indigo-700 border-indigo-200", // กำลังส่งมาไทย
+  "4": "bg-purple-50 text-purple-700 border-purple-200", // ถึงไทยแล้ว
+  "5": "bg-yellow-50 text-yellow-700 border-yellow-200", // รอชำระเงิน
+  "6": "bg-orange-50 text-orange-700 border-orange-200", // เตรียมส่ง
+  "7": "bg-green-50 text-green-700 border-green-200",   // ส่งแล้ว
 };
+// Badge colours keyed by the legacy status codes — tb_header_order.hstatus '1'-'6'.
 const STATUS_BADGE_SO: Record<string, string> = {
-  pending:               "bg-gray-50 text-gray-700 border-gray-200",
-  awaiting_payment:      "bg-yellow-50 text-yellow-700 border-yellow-200",
-  ordered:               "bg-blue-50 text-blue-700 border-blue-200",
-  awaiting_chn_dispatch: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  completed:             "bg-green-50 text-green-700 border-green-200",
-  cancelled:             "bg-red-50 text-red-700 border-red-200",
+  "1": "bg-gray-50 text-gray-700 border-gray-200",     // รอดำเนินการ
+  "2": "bg-yellow-50 text-yellow-700 border-yellow-200", // รอชำระเงิน
+  "3": "bg-blue-50 text-blue-700 border-blue-200",     // สั่งสินค้า
+  "4": "bg-indigo-50 text-indigo-700 border-indigo-200", // รอร้านจีนจัดส่ง
+  "5": "bg-green-50 text-green-700 border-green-200",   // สำเร็จ
+  "6": "bg-red-50 text-red-700 border-red-200",        // ยกเลิก
 };
 
 export default async function DashboardPage() {
@@ -53,7 +57,13 @@ export default async function DashboardPage() {
   const { profile } = data;
 
   const t = await getTranslations("dashboard");
-  const supabase = await createClient();
+
+  // D1 Phase-B Wave 2 (B-0): read the ported legacy PCS schema (tb_*) so the
+  // ~8,898 migrated customers see their real data. tb_* is RLS-locked to
+  // service_role, so reads go through the admin client; the join key is
+  // tb_*.userid === profile.member_code (the customer's "PR<n>" code).
+  const admin = createAdminClient();
+  const memberCode = profile.member_code ?? "";
 
   // Parallel fetch every dashboard stat in one round-trip
   const [
@@ -65,35 +75,35 @@ export default async function DashboardPage() {
     recentForwardersRes,
     recentOrdersRes,
   ] = await Promise.all([
-    supabase.from("wallet").select("balance").eq("profile_id", profile.id).maybeSingle<{
-      balance: number;
+    admin.from("tb_wallet").select("wallettotal").eq("userid", memberCode).maybeSingle<{
+      wallettotal: number;
     }>(),
-    supabase.from("cart_items").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
-    supabase.from("service_orders")
+    admin.from("tb_cart").select("id", { count: "exact", head: true }).eq("userid", memberCode),
+    admin.from("tb_header_order")
       .select("id", { count: "exact", head: true })
-      .eq("profile_id", profile.id)
-      .in("status", ["pending", "awaiting_payment"]),
-    supabase.from("forwarders")
+      .eq("userid", memberCode)
+      .in("hstatus", ["1", "2"]),
+    admin.from("tb_forwarder")
       .select("id", { count: "exact", head: true })
-      .eq("profile_id", profile.id)
-      .eq("status", "pending_payment"),
-    supabase.from("yuan_payments")
+      .eq("userid", memberCode)
+      .eq("fstatus", "5"),
+    admin.from("tb_payment")
       .select("id", { count: "exact", head: true })
-      .eq("profile_id", profile.id)
-      .in("status", ["pending", "processing"]),
-    supabase.from("forwarders")
-      .select("id, f_no, status, weight_kg, volume_cbm, total_price, created_at, tracking_th")
-      .eq("profile_id", profile.id)
-      .order("created_at", { ascending: false })
+      .eq("userid", memberCode)
+      .in("paystatus", ["1", "2"]),
+    admin.from("tb_forwarder")
+      .select("id, fidorco, fstatus, fweight, fvolume, ftotalprice, fdate, ftrackingth")
+      .eq("userid", memberCode)
+      .order("fdate", { ascending: false })
       .limit(5),
-    supabase.from("service_orders")
-      .select("id, h_no, status, title, item_count, total_thb, payment_due_at, created_at")
-      .eq("profile_id", profile.id)
-      .order("created_at", { ascending: false })
+    admin.from("tb_header_order")
+      .select("id, hno, hstatus, htitle, hcount, htotalpriceuser, hdatepayment, hdate")
+      .eq("userid", memberCode)
+      .order("hdate", { ascending: false })
       .limit(5),
   ]);
 
-  const balance = Number(walletRes.data?.balance ?? 0);
+  const balance = Number(walletRes.data?.wallettotal ?? 0);
   const displayName = profile.first_name
     ? `${profile.first_name}${profile.last_name ? " " + profile.last_name : ""}`
     : profile.company_name ?? t("fallbackName");
@@ -109,7 +119,7 @@ export default async function DashboardPage() {
         />
         <PcsWalletCard balance={balance} />
         <div className="mt-4">
-          <PcsSalesRepCard profileId={profile.id} />
+          <PcsSalesRepCard memberCode={profile.member_code} />
         </div>
         <div className="mt-5">
           <PcsIconGrid />
@@ -167,21 +177,21 @@ export default async function DashboardPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-primary-600">{o.h_no}</span>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_SO[o.status]}`}>
-                              {t(`status.${o.status}` as Parameters<typeof t>[0])}
+                            <span className="font-mono text-xs text-primary-600">{o.hno}</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_SO[o.hstatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                              {legacyOrderStatusThai(o.hstatus)}
                             </span>
                           </div>
-                          <p className="truncate text-sm text-foreground">{o.title ?? "—"}</p>
+                          <p className="truncate text-sm text-foreground">{o.htitle ?? "—"}</p>
                           <p className="text-xs text-muted">
-                            {o.item_count} {t("items")} · {new Date(o.created_at).toLocaleDateString("th-TH")}
+                            {o.hcount} {t("items")} · {o.hdate ? new Date(o.hdate).toLocaleDateString("th-TH") : "—"}
                           </p>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-mono text-sm font-bold">฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
-                          {o.status === "awaiting_payment" && o.payment_due_at && (
+                          <p className="font-mono text-sm font-bold">฿{Number(o.htotalpriceuser).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+                          {o.hstatus === "2" && o.hdatepayment && (
                             <p className="text-[10px] text-yellow-700">
-                              {t("payBy", { date: new Date(o.payment_due_at).toLocaleDateString("th-TH") })}
+                              {t("payBy", { date: new Date(o.hdatepayment).toLocaleDateString("th-TH") })}
                             </p>
                           )}
                         </div>
@@ -212,18 +222,18 @@ export default async function DashboardPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-primary-600">{f.f_no}</span>
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_F[f.status]}`}>
-                              {t(`fstatus.${f.status}` as Parameters<typeof t>[0])}
+                            <span className="font-mono text-xs text-primary-600">{f.fidorco}</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_F[f.fstatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                              {legacyForwarderStatusThai(f.fstatus)}
                             </span>
                           </div>
                           <p className="text-xs text-muted">
-                            {Number(f.weight_kg).toFixed(2)} kg · {Number(f.volume_cbm).toFixed(3)} cbm · {new Date(f.created_at).toLocaleDateString("th-TH")}
+                            {Number(f.fweight).toFixed(2)} kg · {Number(f.fvolume).toFixed(3)} cbm · {f.fdate ? new Date(f.fdate).toLocaleDateString("th-TH") : "—"}
                           </p>
-                          {f.tracking_th && <p className="text-[10px] text-muted">TH: {f.tracking_th}</p>}
+                          {f.ftrackingth && f.ftrackingth !== "-" && <p className="text-[10px] text-muted">TH: {f.ftrackingth}</p>}
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="font-mono text-sm font-bold">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+                          <p className="font-mono text-sm font-bold">฿{Number(f.ftotalprice).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
                         </div>
                       </div>
                     </li>

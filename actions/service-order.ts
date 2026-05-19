@@ -11,17 +11,24 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { type LegacyOrderCode } from "@/lib/legacy-status-map";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
 
+/**
+ * Customer shop-order status — the legacy PCS `tb_header_order.hstatus`
+ * single-char code ('1'-'6'). D1 Phase-B Wave 2 (B-0/B-2): the customer
+ * order-flow reads the ported `tb_*` schema directly, so the status flows
+ * through the UI as the legacy code; render Thai via `legacyOrderStatusThai`.
+ */
+export type OrderStatus = LegacyOrderCode;
+
 export type ServiceOrderSummary = {
   id: string;
   h_no: string | null;
-  status:
-    | "pending" | "awaiting_payment" | "ordered"
-    | "awaiting_chn_dispatch" | "completed" | "cancelled";
+  status: OrderStatus;
   title: string | null;
   cover_image_path: string | null;
   item_count: number;
@@ -71,62 +78,234 @@ export type ServiceOrderDetail = ServiceOrderSummary & {
   }>;
 };
 
-const SUMMARY_COLS =
-  "id, h_no, status, title, cover_image_path, item_count, warehouse_china, transport_type, ship_by, yuan_rate_locked, subtotal_cny, total_thb, payment_due_at, date_completed, created_at";
+// ── Legacy tb_header_order row shape (the columns the customer list needs) ──
+type LegacyHeaderRow = {
+  id: number;
+  hno: string | null;
+  hstatus: string;
+  htitle: string | null;
+  hcover: string | null;
+  hcount: number | null;
+  hwarehousechina: string | null;
+  htransporttype: string | null;
+  hshipby: string | null;
+  hrate: number | null;
+  htotalpriceuser: number | null;
+  htotalpricechn: number | null;
+  hdatepayment: string | null;
+  hdate5: string | null;
+  hdate: string | null;
+};
+
+const LEGACY_HEADER_COLS =
+  "id, hno, hstatus, htitle, hcover, hcount, hwarehousechina, htransporttype, hshipby, hrate, htotalpriceuser, htotalpricechn, hdatepayment, hdate5, hdate";
+
+/** tb_header_order.hwarehousechina: '1'=อี้อู, '2'=กวางโจว (legacy comment). */
+function legacyWarehouseToCity(code: string | null): "guangzhou" | "yiwu" | null {
+  if (code === "1") return "yiwu";
+  if (code === "2") return "guangzhou";
+  return null;
+}
+
+/** Map a legacy tb_header_order row → the ServiceOrderSummary shape the UI consumes. */
+function headerRowToSummary(r: LegacyHeaderRow): ServiceOrderSummary {
+  return {
+    id: String(r.id),
+    h_no: r.hno,
+    status: (r.hstatus as OrderStatus) ?? "1",
+    title: r.htitle,
+    cover_image_path: r.hcover && r.hcover.trim() ? r.hcover : null,
+    item_count: Number(r.hcount ?? 0),
+    warehouse_china: legacyWarehouseToCity(r.hwarehousechina),
+    transport_type: r.htransporttype ?? "",
+    ship_by: r.hshipby && r.hshipby.trim() ? r.hshipby : null,
+    yuan_rate_locked: r.hrate != null ? Number(r.hrate) : null,
+    subtotal_cny: 0, // legacy stores THB totals on the header, not a CNY subtotal
+    total_thb: Number(r.htotalpriceuser ?? 0),
+    payment_due_at: r.hdatepayment,
+    date_completed: r.hdate5,
+    created_at: r.hdate ?? new Date(0).toISOString(),
+  };
+}
 
 // ────────────────────────────────────────────────────────────
-// LIST
+// LIST — D1 Phase-B Wave 2 (B-0): reads the ported legacy PCS schema
+// (tb_header_order). tb_* is RLS-locked to service_role, so the read goes
+// through the admin client; the join key is tb_header_order.userid ===
+// profile.member_code. Ownership is enforced by that member_code filter
+// (a logged-in customer can only ever query their own PR<n> rows).
 // ────────────────────────────────────────────────────────────
 export async function listServiceOrders(opts?: {
-  status?: ServiceOrderSummary["status"][];
+  status?: OrderStatus[];
   limit?: number;
 }): Promise<ActionResult<ServiceOrderSummary[]>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  let q = supabase
-    .from("service_orders")
-    .select(SUMMARY_COLS)
-    .order("created_at", { ascending: false })
+  // Resolve the customer's legacy member code (the tb_* join key).
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  const memberCode = profile?.member_code ?? "";
+  if (!memberCode) return { ok: true, data: [] };
+
+  const admin = createAdminClient();
+  let q = admin
+    .from("tb_header_order")
+    .select(LEGACY_HEADER_COLS)
+    .eq("userid", memberCode)
+    .order("hdate", { ascending: false })
     .limit(opts?.limit ?? 100);
 
-  if (opts?.status && opts.status.length) q = q.in("status", opts.status);
+  if (opts?.status && opts.status.length) q = q.in("hstatus", opts.status);
 
   const { data, error } = await q;
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: (data ?? []) as ServiceOrderSummary[] };
+  return {
+    ok: true,
+    data: ((data ?? []) as LegacyHeaderRow[]).map(headerRowToSummary),
+  };
+}
+
+// ── Legacy tb_order line-item row shape ──
+type LegacyOrderItemRow = {
+  id: number;
+  cprovider: string | null;
+  cnameshop: string | null;
+  ctitle: string | null;
+  curl: string | null;
+  cimages: string | null;
+  ccolor: string | null;
+  csize: string | null;
+  cprice: number | null;
+  camount: number | null;
+  cdetails: string | null;
+  ctrackingnumber: string | null;
+  cshippingnumber: string | null;
+  cshippingchn: string | null;
+  cpriceupdate: string | null;
+  crewallet: string | null;
+};
+
+/** Legacy tb_order/tb_cart cprovider code → the Pacred Provider enum.
+ *  Legacy default is '4'. The shop-order Provider union is the source of
+ *  truth for the UI labels; map the known China-source codes onto it. */
+const LEGACY_PROVIDER: Record<string, Provider> = {
+  "1": "1688",
+  "2": "taobao",
+  "3": "tmall",
+  "4": "shop",
+};
+function legacyProvider(code: string | null): Provider {
+  return LEGACY_PROVIDER[code ?? "4"] ?? "shop";
+}
+
+/** Map a legacy tb_order row → a ServiceOrderDetail item. */
+function orderItemRow(r: LegacyOrderItemRow): ServiceOrderDetail["items"][number] {
+  return {
+    id: String(r.id),
+    provider: legacyProvider(r.cprovider),
+    shop_name: r.cnameshop && r.cnameshop !== "pcs" ? r.cnameshop : "",
+    title: r.ctitle,
+    url: r.curl && r.curl.trim() ? r.curl : null,
+    image_path: r.cimages && r.cimages.trim() ? r.cimages : null,
+    color: r.ccolor && r.ccolor.trim() ? r.ccolor : null,
+    size: r.csize && r.csize.trim() ? r.csize : null,
+    price_cny: Number(r.cprice ?? 0),
+    amount: Number(r.camount ?? 0),
+    details: r.cdetails && r.cdetails.trim() ? r.cdetails : null,
+    tracking_number: r.ctrackingnumber && r.ctrackingnumber.trim() ? r.ctrackingnumber : null,
+  };
 }
 
 // ────────────────────────────────────────────────────────────
-// READ ONE (with items)
+// READ ONE (with items) — D1 Phase-B Wave 2 (B-0): reads tb_header_order
+// + tb_order via the admin client. Ownership is verified by matching the
+// legacy userid against the signed-in customer's member_code.
 // ────────────────────────────────────────────────────────────
 export async function getServiceOrder(hNo: string): Promise<ActionResult<ServiceOrderDetail>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: order, error } = await supabase
-    .from("service_orders")
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  const memberCode = profile?.member_code ?? "";
+  if (!memberCode) return { ok: false, error: "not_found" };
+
+  const admin = createAdminClient();
+  const { data: order, error } = await admin
+    .from("tb_header_order")
     .select(
-      `${SUMMARY_COLS}, pay_method, free_shipping, crate, service_fee, domestic_china_cny,
-       ship_first_name, ship_last_name, ship_phone, ship_phone2, ship_address_line,
-       ship_sub_district, ship_district, ship_province, ship_postal_code, ship_note, note_user,
-       acknowledged_at, acknowledged_note`,
+      `${LEGACY_HEADER_COLS}, hshippingchn, hshippingservice, paymethod, crate, hfreeshipping,
+       haddressname, haddresslastname, haddresstel, haddresstel2, haddressno,
+       haddresssubdistrict, haddressdistrict, haddressprovince, haddresszipcode, haddressnote,
+       hnote`,
     )
-    .eq("h_no", hNo)
+    .eq("hno", hNo)
+    .eq("userid", memberCode)            // ownership gate
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
   if (!order) return { ok: false, error: "not_found" };
 
-  const { data: items } = await supabase
-    .from("service_order_items")
-    .select("id, provider, shop_name, title, url, image_path, color, size, price_cny, amount, details, tracking_number")
-    .eq("service_order_id", (order as { id: string }).id)
-    .order("created_at", { ascending: true });
+  const h = order as unknown as LegacyHeaderRow & {
+    hshippingchn: number | null;
+    hshippingservice: number | null;
+    paymethod: string | null;
+    crate: string | null;
+    hfreeshipping: string | null;
+    haddressname: string | null;
+    haddresslastname: string | null;
+    haddresstel: string | null;
+    haddresstel2: string | null;
+    haddressno: string | null;
+    haddresssubdistrict: string | null;
+    haddressdistrict: string | null;
+    haddressprovince: string | null;
+    haddresszipcode: string | null;
+    haddressnote: string | null;
+    hnote: string | null;
+  };
 
-  return { ok: true, data: { ...(order as unknown as Omit<ServiceOrderDetail, "items">), items: (items ?? []) as ServiceOrderDetail["items"] } };
+  const { data: items } = await admin
+    .from("tb_order")
+    .select(
+      "id, cprovider, cnameshop, ctitle, curl, cimages, ccolor, csize, cprice, camount, cdetails, ctrackingnumber, cshippingnumber, cshippingchn, cpriceupdate, crewallet",
+    )
+    .eq("hno", hNo)
+    .order("id", { ascending: true });
+
+  const detail: ServiceOrderDetail = {
+    ...headerRowToSummary(h),
+    pay_method: h.paymethod === "2" ? "destination" : "origin",
+    free_shipping: h.hfreeshipping === "1",
+    crate: h.crate === "1",
+    service_fee: Number(h.hshippingservice ?? 0),
+    domestic_china_cny: Number(h.hshippingchn ?? 0),
+    ship_first_name: h.haddressname && h.haddressname.trim() ? h.haddressname : null,
+    ship_last_name: h.haddresslastname && h.haddresslastname.trim() ? h.haddresslastname : null,
+    ship_phone: h.haddresstel && h.haddresstel.trim() ? h.haddresstel : null,
+    ship_phone2: h.haddresstel2 && h.haddresstel2.trim() ? h.haddresstel2 : null,
+    ship_address_line: h.haddressno && h.haddressno.trim() ? h.haddressno : null,
+    ship_sub_district: h.haddresssubdistrict && h.haddresssubdistrict.trim() ? h.haddresssubdistrict : null,
+    ship_district: h.haddressdistrict && h.haddressdistrict.trim() ? h.haddressdistrict : null,
+    ship_province: h.haddressprovince && h.haddressprovince.trim() ? h.haddressprovince : null,
+    ship_postal_code: h.haddresszipcode && h.haddresszipcode.trim() ? h.haddresszipcode : null,
+    ship_note: h.haddressnote && h.haddressnote.trim() ? h.haddressnote : null,
+    note_user: h.hnote && h.hnote.trim() ? h.hnote : null,
+    acknowledged_at: null,             // not modelled in legacy tb_header_order
+    acknowledged_note: null,
+    items: ((items ?? []) as LegacyOrderItemRow[]).map(orderItemRow),
+  };
+
+  return { ok: true, data: detail };
 }
 
 // ────────────────────────────────────────────────────────────
@@ -135,7 +314,7 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
 export type ShopOrderReceiptData = {
   // header
   h_no:                  string | null;
-  status:                ServiceOrderSummary["status"];
+  status:                OrderStatus;
   created_at:            string;
   date_awaiting_payment: string | null;
   payment_due_at:        string | null;
@@ -200,63 +379,106 @@ export type ShopOrderReceiptData = {
 export async function getServiceOrderForReceipt(
   hNo: string,
 ): Promise<ActionResult<ShopOrderReceiptData>> {
+  // D1 Phase-B Wave 2 (B-0): receipt header + items read the ported legacy
+  // PCS schema (tb_header_order + tb_order) so a migrated customer's receipt
+  // resolves instead of 404-ing. tb_* is RLS-locked to service_role → admin
+  // client; ownership is verified by matching tb_header_order.userid against
+  // the signed-in customer's member_code.
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  // 1. Header (RLS guarantees we only see our own)
-  const { data: order, error: orderErr } = await supabase
-    .from("service_orders")
+  const { data: ownProfile } = await supabase
+    .from("profiles")
+    .select("member_code")
+    .eq("id", user.id)
+    .maybeSingle<{ member_code: string | null }>();
+  const memberCode = ownProfile?.member_code ?? "";
+  if (!memberCode) return { ok: false, error: "not_found" };
+
+  const admin = createAdminClient();
+
+  // 1. Header — ownership-gated by member_code
+  const { data: order, error: orderErr } = await admin
+    .from("tb_header_order")
     .select(
-      `id, h_no, status, created_at, date_awaiting_payment, payment_due_at, date_completed,
-       yuan_rate_locked, subtotal_cny, domestic_china_cny, service_fee, total_thb,
-       free_shipping, crate, warehouse_china, transport_type,
-       bill_to_name_override,
-       ship_first_name, ship_last_name, ship_phone, ship_phone2,
-       ship_address_line, ship_sub_district, ship_district, ship_province, ship_postal_code,
-       profile_id`,
+      `id, hno, hstatus, hdate, hdate2, hdatepayment, hdate5,
+       hrate, htotalpriceuser, hshippingchn, hshippingservice, htotalpricechn,
+       hfreeshipping, crate, hwarehousechina, htransporttype,
+       haddressname, haddresslastname, haddresstel, haddresstel2, haddressno,
+       haddresssubdistrict, haddressdistrict, haddressprovince, haddresszipcode`,
     )
-    .eq("h_no", hNo)
+    .eq("hno", hNo)
+    .eq("userid", memberCode)
     .maybeSingle();
 
   if (orderErr) return { ok: false, error: orderErr.message };
   if (!order)   return { ok: false, error: "not_found" };
 
   const o = order as unknown as {
-    id: string;
-    profile_id: string;
-    status: ServiceOrderSummary["status"];
-  } & Omit<ShopOrderReceiptData, "customer" | "items">;
+    id: number;
+    hno: string | null;
+    hstatus: string;
+    hdate: string | null;
+    hdate2: string | null;
+    hdatepayment: string | null;
+    hdate5: string | null;
+    hrate: number | null;
+    htotalpriceuser: number | null;
+    hshippingchn: number | null;
+    hshippingservice: number | null;
+    htotalpricechn: number | null;
+    hfreeshipping: string | null;
+    crate: string | null;
+    hwarehousechina: string | null;
+    htransporttype: string | null;
+    haddressname: string | null;
+    haddresslastname: string | null;
+    haddresstel: string | null;
+    haddresstel2: string | null;
+    haddressno: string | null;
+    haddresssubdistrict: string | null;
+    haddressdistrict: string | null;
+    haddressprovince: string | null;
+    haddresszipcode: string | null;
+  };
+
+  const status = (o.hstatus as OrderStatus) ?? "1";
 
   // Legacy PHP refused to print receipts on cancelled orders + on pending
-  // (status=1) — we adopt the same rule. Status 2..5 only.
-  if (o.status === "pending" || o.status === "cancelled") {
+  // (hStatus=1) — we adopt the same rule. hStatus 2..5 only.
+  if (status === "1" || status === "6") {
     return { ok: false, error: "receipt_not_available" };
   }
 
-  // 2. Customer (profile + optional corporate)
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("member_code, first_name, last_name, email, phone, account_type")
-    .eq("id", o.profile_id)
+  // 2. Customer — the signed-in customer's own legacy row (tb_users).
+  const { data: legacyUser } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, useremail, usertel, usercompany")
+    .eq("userid", memberCode)
     .maybeSingle<{
-      member_code:  string | null;
-      first_name:   string | null;
-      last_name:    string | null;
-      email:        string | null;
-      phone:        string | null;
-      account_type: "personal" | "juristic" | null;
+      userid:      string | null;
+      username:    string | null;
+      userlastname: string | null;
+      useremail:   string | null;
+      usertel:     string | null;
+      usercompany: string | null;
     }>();
 
+  const accountType: "personal" | "juristic" =
+    legacyUser?.usercompany === "1" ? "juristic" : "personal";
+
+  // Corporate detail (company name / tax id) is a Pacred-native enrichment —
+  // best-effort lookup; the receipt + tax-invoice panel degrade gracefully
+  // when it isn't present for a migrated customer.
   let company_name: string | null    = null;
   let tax_id:       string | null    = null;
   let company_address: string | null = null;
-
-  if (profile?.account_type === "juristic") {
+  if (accountType === "juristic") {
     const { data: corp } = await supabase
       .from("corporate")
       .select("company_name, tax_id, company_address")
-      .eq("profile_id", o.profile_id)
+      .eq("profile_id", user.id)
       .maybeSingle<{
         company_name:    string | null;
         tax_id:          string | null;
@@ -267,67 +489,80 @@ export async function getServiceOrderForReceipt(
     company_address = corp?.company_address ?? null;
   }
 
-  // 3. Items — include per-item china shipping + shipping/tracking numbers
-  const { data: items } = await supabase
-    .from("service_order_items")
+  // 3. Items — exclude refunded lines (legacy crewallet flag = PHP cReWallet).
+  const { data: items } = await admin
+    .from("tb_order")
     .select(
-      "id, provider, shop_name, title, color, size, price_cny, amount, domestic_china_cny, shipping_number, tracking_number",
+      "id, cprovider, cnameshop, ctitle, curl, cimages, ccolor, csize, cprice, camount, cdetails, ctrackingnumber, cshippingnumber, cshippingchn, cpriceupdate, crewallet",
     )
-    .eq("service_order_id", o.id)
-    .eq("re_wallet", false)                       // exclude refunded lines (PHP cReWallet filter)
-    .order("created_at", { ascending: true });
+    .eq("hno", hNo)
+    .order("id", { ascending: true });
+
+  const visibleItems = ((items ?? []) as LegacyOrderItemRow[]).filter(
+    (it) => it.crewallet !== "1",
+  );
+
+  const rate = o.hrate != null ? Number(o.hrate) : 0;
+  // The legacy header carries THB totals; derive the CNY subtotal back out
+  // via the locked rate so the receipt's CNY breakdown still renders.
+  const subtotalCny = visibleItems.reduce(
+    (s, it) => s + Number(it.cprice ?? 0) * Number(it.camount ?? 0),
+    0,
+  );
+  const domesticChnCny =
+    rate > 0 ? Number(o.hshippingchn ?? 0) / rate : 0;
 
   return {
     ok: true,
     data: {
-      h_no:                  o.h_no,
-      status:                o.status,
-      created_at:            o.created_at,
-      date_awaiting_payment: o.date_awaiting_payment,
-      payment_due_at:        o.payment_due_at,
-      date_completed:        o.date_completed,
-      yuan_rate_locked:      o.yuan_rate_locked,
-      subtotal_cny:          Number(o.subtotal_cny),
-      domestic_china_cny:    Number(o.domestic_china_cny),
-      service_fee:           Number(o.service_fee),
-      total_thb:             Number(o.total_thb),
-      free_shipping:         o.free_shipping,
-      crate:                 o.crate,
-      warehouse_china:       o.warehouse_china,
-      transport_type:        o.transport_type,
-      bill_to_name_override: o.bill_to_name_override,        // V-C2
-      ship_first_name:       o.ship_first_name,
-      ship_last_name:        o.ship_last_name,
-      ship_phone:            o.ship_phone,
-      ship_phone2:           o.ship_phone2,
-      ship_address_line:     o.ship_address_line,
-      ship_sub_district:     o.ship_sub_district,
-      ship_district:         o.ship_district,
-      ship_province:         o.ship_province,
-      ship_postal_code:      o.ship_postal_code,
+      h_no:                  o.hno,
+      status,
+      created_at:            o.hdate ?? new Date(0).toISOString(),
+      date_awaiting_payment: o.hdate2,
+      payment_due_at:        o.hdatepayment,
+      date_completed:        o.hdate5,
+      yuan_rate_locked:      rate > 0 ? rate : null,
+      subtotal_cny:          subtotalCny,
+      domestic_china_cny:    domesticChnCny,
+      service_fee:           Number(o.hshippingservice ?? 0),
+      total_thb:             Number(o.htotalpriceuser ?? 0),
+      free_shipping:         o.hfreeshipping === "1",
+      crate:                 o.crate === "1",
+      warehouse_china:       legacyWarehouseToCity(o.hwarehousechina),
+      transport_type:        o.htransporttype ?? "",
+      bill_to_name_override: null,                            // not in legacy schema
+      ship_first_name:       o.haddressname && o.haddressname.trim() ? o.haddressname : null,
+      ship_last_name:        o.haddresslastname && o.haddresslastname.trim() ? o.haddresslastname : null,
+      ship_phone:            o.haddresstel && o.haddresstel.trim() ? o.haddresstel : null,
+      ship_phone2:           o.haddresstel2 && o.haddresstel2.trim() ? o.haddresstel2 : null,
+      ship_address_line:     o.haddressno && o.haddressno.trim() ? o.haddressno : null,
+      ship_sub_district:     o.haddresssubdistrict && o.haddresssubdistrict.trim() ? o.haddresssubdistrict : null,
+      ship_district:         o.haddressdistrict && o.haddressdistrict.trim() ? o.haddressdistrict : null,
+      ship_province:         o.haddressprovince && o.haddressprovince.trim() ? o.haddressprovince : null,
+      ship_postal_code:      o.haddresszipcode && o.haddresszipcode.trim() ? o.haddresszipcode : null,
       customer: {
-        member_code:  profile?.member_code  ?? null,
-        first_name:   profile?.first_name   ?? null,
-        last_name:    profile?.last_name    ?? null,
-        email:        profile?.email        ?? null,
-        phone:        profile?.phone        ?? null,
-        account_type: profile?.account_type ?? null,
+        member_code:  legacyUser?.userid       ?? memberCode,
+        first_name:   legacyUser?.username      ?? null,
+        last_name:    legacyUser?.userlastname  ?? null,
+        email:        legacyUser?.useremail     ?? null,
+        phone:        legacyUser?.usertel       ?? null,
+        account_type: accountType,
         company_name,
         tax_id,
         company_address,
       },
-      items: (items ?? []).map((it) => ({
-        id:                 (it as { id: string }).id,
-        provider:           (it as { provider: Provider }).provider,
-        shop_name:          (it as { shop_name: string }).shop_name,
-        title:              (it as { title: string | null }).title,
-        color:              (it as { color: string | null }).color,
-        size:               (it as { size: string | null }).size,
-        price_cny:          Number((it as { price_cny: number }).price_cny),
-        amount:             Number((it as { amount: number }).amount),
-        domestic_china_cny: Number((it as { domestic_china_cny: number }).domestic_china_cny),
-        shipping_number:    (it as { shipping_number: string | null }).shipping_number,
-        tracking_number:    (it as { tracking_number: string | null }).tracking_number,
+      items: visibleItems.map((it) => ({
+        id:                 String(it.id),
+        provider:           legacyProvider(it.cprovider),
+        shop_name:          it.cnameshop && it.cnameshop !== "pcs" ? it.cnameshop : "",
+        title:              it.ctitle,
+        color:              it.ccolor && it.ccolor.trim() ? it.ccolor : null,
+        size:               it.csize && it.csize.trim() ? it.csize : null,
+        price_cny:          Number(it.cprice ?? 0),
+        amount:             Number(it.camount ?? 0),
+        domestic_china_cny: Number(it.cshippingchn ?? 0),
+        shipping_number:    it.cshippingnumber && it.cshippingnumber.trim() ? it.cshippingnumber : null,
+        tracking_number:    it.ctrackingnumber && it.ctrackingnumber.trim() ? it.ctrackingnumber : null,
       })),
     },
   };
