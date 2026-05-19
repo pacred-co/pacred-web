@@ -1,0 +1,935 @@
+/* =============================================================
+ * cart.legacy.css — legacy PCS Cargo `member/cart.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription (shop-order flow).
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `cart.php` renders with, copied
+ *   verbatim from the legacy stylesheets:
+ *     - assets/css/cart.css                          (the cart screen, 637 LOC)
+ *     - the inline <style> block in cart.php          (lines 120-137)
+ *     - the Bootstrap-4 grid/card/modal subset cart.php uses
+ *     - theme helpers from assets/css/style.css the markup references
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 grid classes cannot leak into —
+ *   or collide with — the rest of the Tailwind app. The page renders
+ *   the legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/cart.css
+ *   and loaded with a plain <link rel="stylesheet"> from page.tsx — it
+ *   must bypass the app's Tailwind v4 / PostCSS pipeline, which rejects
+ *   verbatim legacy CSS. Binary assets (theme images) likewise live
+ *   under public/legacy/pcs/, referenced by absolute URL.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid + card subset (exact BS4 4.x values) ---- */
+/* cart.php is Bootstrap-4 markup; these are the BS4 classes it uses.
+ * Values copied from bootstrap.min.css / bootstrap-extended.min.css. */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-3,
+.pcs-legacy .col-4,
+.pcs-legacy .col-5,
+.pcs-legacy .col-6,
+.pcs-legacy .col-8,
+.pcs-legacy .col-9,
+.pcs-legacy .col-11,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-4,
+.pcs-legacy .col-md-5,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-7,
+.pcs-legacy .col-md-8,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-2 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-3 { flex: 0 0 25%; max-width: 25%; }
+.pcs-legacy .col-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+.pcs-legacy .col-5 { flex: 0 0 41.666667%; max-width: 41.666667%; }
+.pcs-legacy .col-6 { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .col-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+.pcs-legacy .col-9 { flex: 0 0 75%; max-width: 75%; }
+.pcs-legacy .col-11 { flex: 0 0 91.666667%; max-width: 91.666667%; }
+.pcs-legacy .col-12 { flex: 0 0 100%; max-width: 100%; }
+
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-4 { flex: 0 0 33.333333%; max-width: 33.333333%; }
+  .pcs-legacy .col-md-5 { flex: 0 0 41.666667%; max-width: 41.666667%; }
+  .pcs-legacy .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+  .pcs-legacy .col-md-7 { flex: 0 0 58.333333%; max-width: 58.333333%; }
+  .pcs-legacy .col-md-8 { flex: 0 0 66.666667%; max-width: 66.666667%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+}
+@media (min-width: 576px) {
+  .pcs-legacy .col-sm-2 { flex: 0 0 16.666667%; max-width: 16.666667%; }
+}
+
+/* spacing helpers used by cart.php (Bootstrap-4 spacing scale) */
+.pcs-legacy .p-0   { padding: 0 !important; }
+.pcs-legacy .p-05  { padding: 0.5rem !important; }
+.pcs-legacy .p05   { padding: 0.5rem !important; }
+.pcs-legacy .p-1   { padding: 1rem !important; }
+.pcs-legacy .pr-0  { padding-right: 0 !important; }
+.pcs-legacy .pr-1  { padding-right: 1rem !important; }
+.pcs-legacy .pt-1  { padding-top: 1rem !important; }
+.pcs-legacy .pb-0  { padding-bottom: 0 !important; }
+.pcs-legacy .pb-1  { padding-bottom: 1rem !important; }
+.pcs-legacy .m-0   { margin: 0 !important; }
+.pcs-legacy .mb-0  { margin-bottom: 0 !important; }
+.pcs-legacy .mb-1  { margin-bottom: 1rem !important; }
+.pcs-legacy .mb-2  { margin-bottom: 1.5rem !important; }
+.pcs-legacy .mb--5 { margin-bottom: -5px; }
+.pcs-legacy .ml-1  { margin-left: 1rem !important; }
+.pcs-legacy .mt-1  { margin-top: 1rem !important; }
+
+/* display + alignment helpers */
+.pcs-legacy .text-center  { text-align: center !important; }
+.pcs-legacy .text-right   { text-align: right !important; }
+.pcs-legacy .text-left    { text-align: left !important; }
+.pcs-legacy .text-md-right { text-align: right !important; }
+.pcs-legacy .text-white   { color: #fff !important; }
+.pcs-legacy .text-dark    { color: #2f3036 !important; }
+.pcs-legacy .text-danger  { color: #E9091F !important; }
+.pcs-legacy .text-info    { color: #00b5b8 !important; }
+.pcs-legacy .text-color   { color: #E9091F !important; }
+.pcs-legacy .d-flex       { display: flex !important; }
+.pcs-legacy .d-block      { display: block !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .d-none       { display: none !important; }
+.pcs-legacy .justify-content-center { justify-content: center !important; }
+.pcs-legacy .align-self-end { align-self: flex-end !important; }
+.pcs-legacy .float-right  { float: right !important; }
+.pcs-legacy .cursor-pointer { cursor: pointer; }
+.pcs-legacy .rounded-circle { border-radius: 50% !important; }
+.pcs-legacy .img-fluid {
+  max-width: 100%;
+  height: auto;
+}
+.pcs-legacy .bg-white { background-color: #fff !important; }
+.pcs-legacy .bg-light { background-color: #f7f7f7 !important; }
+.pcs-legacy .round { border-radius: 1rem !important; }
+.pcs-legacy .font-12 { font-size: 12px; }
+.pcs-legacy .font-14 { font-size: 14px; }
+.pcs-legacy .font-18 { font-size: 18px; }
+.pcs-legacy .font-1_2rem { font-size: 1.2rem; }
+
+/* Bootstrap-4 form helpers */
+.pcs-legacy .form-control-label { display: inline-block; margin-bottom: 0.5rem; }
+.pcs-legacy .form-horizontal { }
+
+/* Bootstrap-4 buttons (the theme btn base + the cart action variants) */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.pcs-legacy .btn-min-width { min-width: 8rem; }
+.pcs-legacy .btn-main {
+  background-color: #E9091F;
+  border-color: #E9091F;
+  color: #fff;
+}
+.pcs-legacy .btn-outline-danger {
+  color: #E9091F;
+  border-color: #E9091F;
+  background-color: transparent;
+}
+
+/* heading reset so the legacy <h2>/<h3>/<h4>/<h5> match the theme,
+ * not Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h1 { font-size: 2.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h2 { font-size: 2rem;    font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy p  { margin: 0 0 1rem; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+.pcs-legacy b  { font-weight: 700; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy cart.php layout depends on images being inline
+ * (product thumbnails, the provider logos in the row headers). Restore
+ * the legacy/browser-default inline rendering inside the scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+.pcs-legacy input,
+.pcs-legacy button,
+.pcs-legacy select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* box-shadow2 — the legacy theme card-shadow helper used on the row
+ * headers (style.css). */
+.pcs-legacy .box-shadow2 {
+  box-shadow: 0px 2px 4px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* flag-icon — the legacy flag-icon-css sprite is referenced inline
+ * (Thai / China flags next to the address headings). Binary sprite
+ * not copied; keep a neutral inline placeholder so layout holds. */
+.pcs-legacy .flag-icon {
+  display: inline-block;
+  width: 1.33333333em;
+  line-height: 1em;
+  background-size: contain;
+  background-position: 50%;
+  background-repeat: no-repeat;
+}
+
+/* fa — FontAwesome glyphs are referenced inline; the font is not
+ * bundled in this scope, the icon slots simply render empty (the
+ * legacy text labels carry the meaning). Reserve the inline box. */
+.pcs-legacy .fa,
+.pcs-legacy .ft-trash {
+  display: inline-block;
+}
+
+/* ===== cart.css — VERBATIM from member/assets/css/cart.css =====
+ * Every rule below is copied byte-for-byte from the legacy
+ * stylesheet, with each selector prefixed by `.pcs-legacy ` so it
+ * is scoped to the transcribed screen. Bare-element selectors
+ * (`body`, `label`, `thead`, `fieldset`, `table.dataTable…`) are
+ * likewise scoped. Nothing else is changed. */
+
+.pcs-legacy .ele-address-thai{
+    background-color: #fff;
+}
+.pcs-legacy .box-shadow{
+    box-shadow: 0px 3px 4px 3px rgb(49 53 72 / 13%);
+}
+.pcs-legacy .top-address-thai{
+    height: 5px;
+    width: 100%;
+    background-position-x: -30px;
+    background-size: 116px 5px;
+    background-image: repeating-linear-gradient(45deg,#055eac,#1160a5 33px,transparent 0,transparent 41px,#ec1834 0,#ff1131 74px,transparent 0,transparent 82px);
+}
+.pcs-legacy{
+    color: rgb(15, 15, 15) !important;
+}
+.pcs-legacy .box-lastaddress{
+    padding: 4px 6px;
+    margin-left: 1rem;
+    color: #fff;
+    background-color: #ff3e3e;
+    border-radius: 0.5rem;
+    text-transform: capitalize;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+.pcs-legacy .btn-add-address-thai{
+    padding: 4px 6px;
+    color: #fff;
+    background-color: #ff3e3e;
+    border-radius: 0.5rem;
+    text-transform: capitalize;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+
+.pcs-legacy .btn-add-address-thai-new{
+    padding: 4px 6px;
+    color: #ff3e3e;
+    border-color: #ff3e3e;
+    border-radius: 0.5rem;
+    text-transform: capitalize;
+    flex-shrink: 0;
+    font-size: 1.2rem;
+    padding: 5px 7px;
+    border: 0.5px solid;
+    display: inline-block;
+    display: inline-block;
+}
+
+.pcs-legacy .btn-change-address-thai{
+    padding: 4px 6px;
+    margin-left: 0.5rem;
+    color: #fff;
+    background-color: #1160a5;
+    border-radius: 0.5rem;
+    text-transform: capitalize;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    display: inline-block;
+}
+.pcs-legacy label {
+    margin-bottom: 0rem !important;
+}
+.pcs-legacy #add-address input.form-control {
+    height: calc(1em + 1.25rem + 2px);
+}
+.pcs-legacy .custom-map-control-button{
+    padding: 0.85rem;
+    margin:0.25rem;
+    background-color: #e2856341;
+    font-size: 1.2rem;
+    cursor: pointer;
+    font-weight: 500 !important;
+    font-family: "Prompt",Georgia,"Times New Roman",Times,serif;
+}
+
+.pcs-legacy #table-address-thai-user_wrapper .col-md-6{
+    flex: 0 0 75% !important;
+    max-width: 100% !important;
+}
+.pcs-legacy #table-address-thai-user_wrapper.container-fluid {
+    padding-right: 0px !important;
+    padding-left: 0px !important;
+}
+.pcs-legacy thead{
+    display: none;
+}
+.pcs-legacy .mb-05{
+    margin-bottom: 0.5rem!important;
+}
+.pcs-legacy .font-0{
+    font-size: 0px;
+}
+.pcs-legacy table.dataTable tbody tr.selected>* {
+    box-shadow: inset 0 0 0 9999px #E9091F !important;
+    color: white;
+}
+.pcs-legacy table.dataTable>tbody>tr>td.select-checkbox:before, .pcs-legacy table.dataTable>tbody>tr>th.select-checkbox:before {
+    margin-top: 16px !important;
+}
+
+@media only screen and (max-width: 500px){
+    .pcs-legacy html body .content .content-wrapper{
+        padding: 0.25rem 0.25rem 0;
+    }
+}
+
+.pcs-legacy .add-text-all::before {
+    content: "ทั้งหมด ";
+}
+.pcs-legacy .content-body.pr110{
+    padding-right: 100px;
+}
+@media only screen and (max-width: 768px){
+    .pcs-legacy .content-body.pr110{
+        padding-right: 0px;
+    }
+}
+@media only screen and (max-width: 578px){
+    .pcs-legacy .content-wrapper{
+        padding: 0 !important;
+    }
+    .pcs-legacy .content-header-left{
+        margin: 0.5rem!important;
+    }
+    .pcs-legacy .tr1::after{
+        content: " \A คลิกดูเพิ่มเติม";
+        white-space: pre-wrap;
+    }
+    .pcs-legacy table.dataTable.dtr-inline.collapsed>tbody>tr[role="row"]>td:first-child, .pcs-legacy table.dataTable.dtr-inline.collapsed>tbody>tr[role="row"]>th:first-child{
+        padding: 10px;
+    }
+    .pcs-legacy .p-m-0{
+        padding: 0 !important;
+    }
+    .pcs-legacy .dtr-details br {
+        display: none;
+    }
+    .pcs-legacy .row.pt-2.bg-white{
+        padding-top: 0px !important;
+    }
+    .pcs-legacy .content-body.pr110{
+        padding-right: 0px;
+    }
+}
+.pcs-legacy .product-check{
+    float: left;
+    width: 3%;
+}
+.pcs-legacy .product-count {
+    float: left;
+    width: 3%;
+}
+.pcs-legacy .product-image {
+    float: left;
+    width: 8%;
+}
+.pcs-legacy .product-details {
+    float: left;
+    width: 35%;
+}
+.pcs-legacy .product-price {
+    float: left;
+    width: 15%;
+    text-align: right;
+}
+.pcs-legacy .product-quantity {
+    float: left;
+    width: 15%;
+    text-align: center;
+}
+.pcs-legacy .product-removal {
+    float: left;
+    width: 10%;
+    text-align: center;
+}
+.pcs-legacy .product-line-price {
+    float: left;
+    width: 10%;
+    text-align: right;
+}
+/* This is used as the traditional .clearfix class */
+.pcs-legacy .group:before, .pcs-legacy .shopping-cart:before, .pcs-legacy .column-labels:before, .pcs-legacy .product:before, .pcs-legacy .totals-item:before,
+.pcs-legacy .group:after,
+.pcs-legacy .shopping-cart:after,
+.pcs-legacy .column-labels:after,
+.pcs-legacy .product:after,
+.pcs-legacy .totals-item:after {
+    content: '';
+    display: table;
+}
+.pcs-legacy .group:after, .pcs-legacy .shopping-cart:after, .pcs-legacy .column-labels:after, .pcs-legacy .product:after, .pcs-legacy .totals-item:after {
+    clear: both;
+}
+.pcs-legacy .group, .pcs-legacy .shopping-cart, .pcs-legacy .column-labels, .pcs-legacy .product, .pcs-legacy .totals-item {
+    zoom: 1;
+}
+/* Apply clearfix in a few places */
+/* Apply dollar signs */
+.pcs-legacy .product .product-price:before, .pcs-legacy .product .product-line-price:before, .pcs-legacy .totals-value:before {
+    content: '\00A5';
+}
+.pcs-legacy .totals-value2:before {
+    content: '\0E3F';
+}
+
+.pcs-legacy label {
+    font-weight: 600;
+}
+/* Column headers */
+.pcs-legacy .column-labels label {
+    padding: 5px;
+    margin-bottom: 0;
+}
+/* Product entries */
+.pcs-legacy .product {
+    margin-bottom: 5px;
+    margin-top: 5px;
+    padding-bottom: 0px;
+}
+.pcs-legacy .product .product-image {
+    text-align: center;
+}
+.pcs-legacy .product .product-image img {
+    width: 80px;
+}
+.pcs-legacy .product .product-details .product-title {
+    margin-right: 20px;
+}
+.pcs-legacy .product .product-details .product-description {
+    margin: 1px 10px 2px 0;
+    line-height: 1em;
+}
+.pcs-legacy .product .product-quantity input {
+    width: 72px;
+}
+/* Totals section */
+.pcs-legacy .totals .totals-item {
+    float: right;
+    clear: both;
+    width: 100%;
+    margin-bottom: 10px;
+}
+.pcs-legacy .totals .totals-item label {
+    float: left;
+    clear: both;
+    width: 37%;
+    text-align: right;
+}
+.pcs-legacy .totals .totals-item .totals-value {
+    float: right;
+    width: 63%;
+    text-align: right;
+}
+.pcs-legacy .totals-value2 {
+    float: right;
+    text-align: right;
+}
+.pcs-legacy .totals-value4 {
+    float: right;
+    width: 63%;
+    text-align: right;
+}
+.pcs-legacy .totals-value5 {
+    float: right;
+    width: 63%;
+    text-align: right;
+}
+.pcs-legacy .checkout {
+    float: right;
+    border: 0;
+    margin-top: 20px;
+    padding: 6px 25px;
+    background-color: #6b6;
+    color: #fff;
+    font-size: 25px;
+    border-radius: 3px;
+}
+.pcs-legacy .checkout:hover {
+    background-color: #494;
+}
+/* Make adjustments for tablet */
+@media screen and (max-width: 650px) {
+    .pcs-legacy .shopping-cart {
+        margin: 0;
+        padding-top: 0px;
+        border-top: 1px solid #eee;
+    }
+    .pcs-legacy .column-labels {
+        display: none;
+    }
+    .pcs-legacy .product-image {
+        float: right;
+        width: auto;
+    }
+    .pcs-legacy .product-image img {
+        margin: 0 0 10px 10px;
+    }
+    .pcs-legacy .product-details {
+        float: none;
+        margin-bottom: 10px;
+        width: auto;
+    }
+    .pcs-legacy .product-price {
+        clear: both;
+        width: 70px;
+        padding-top: 7px;
+        padding-right: 5px;
+    }
+    .pcs-legacy .product-quantity {
+        width: 120px;
+    }
+    .pcs-legacy .product-quantity input {
+        margin-left: 20px;
+    }
+    .pcs-legacy .product-quantity:before {
+        content: 'x';
+    }
+    .pcs-legacy .product-removal {
+        width: auto;
+    }
+    .pcs-legacy .product-line-price {
+        float: right;
+        width: 70px;
+    }
+}
+/* Make more adjustments for phone */
+@media screen and (max-width: 350px) {
+    .pcs-legacy .product-removal {
+        float: right;
+    }
+    .pcs-legacy .product-line-price {
+        float: right;
+        clear: left;
+        width: auto;
+        margin-top: 10px;
+    }
+    .pcs-legacy .product .product-line-price:before {
+        content: 'Item Total: $';
+    }
+    .pcs-legacy .totals .totals-item label {
+        width: 60%;
+    }
+    .pcs-legacy .totals .totals-item .totals-value {
+        width: 40%;
+    }
+}
+.pcs-legacy .counterTime{
+    background: black;
+    color: #fff;
+    padding: 0.5rem;
+    line-height: 1.5rem;
+}
+.pcs-legacy fieldset label{
+    font-weight: 500 !important;
+}
+
+.pcs-legacy .ele-promotion-cart{
+    background-color: #fff;
+}
+
+.pcs-legacy .ele-addressCHN-cart{
+    background-color: #fff;
+}
+
+.pcs-legacy .title-shipBy{
+    font-size: 1.5rem;
+}
+
+.pcs-legacy .card-promotion {
+    max-height: 130px;
+}
+
+.pcs-legacy .shopping-cart h5{
+    margin-bottom: 0px !important;
+}
+.pcs-legacy .shopping-cart .ele-item-2{
+    margin: 0px !important;
+}
+.pcs-legacy .ele-item-3.column-labels{
+    background: linear-gradient(to right, #ffc9c9 0%, #ffc6b1 100%);
+}
+.pcs-legacy .shopping-cart .product {
+    margin-bottom: 0px !important;
+    margin-top: 0px !important;
+}
+.pcs-legacy .ele-item-2 h5{
+    font-size: 0.9rem;
+}
+.pcs-legacy .ele-promotion-cart .border-main12-de {
+    max-width: 235px;
+    padding: 0rem;
+    border-radius: 1rem;
+}
+.pcs-legacy .ele-promotion-cart .border-main19-de {
+    max-width: 235px;
+    padding: 0rem;
+    border-radius: 1rem;
+}
+.pcs-legacy .ele-promotion-cart .border-main12-de img{
+    box-shadow: 0px 3px 4px 3px rgba(3, 3, 3, 0.5);
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+
+}
+.pcs-legacy .ele-promotion-cart .border-main19-de img{
+    box-shadow: 0px 3px 4px 3px rgba(3, 3, 3, 0.5);
+    border-radius: 1rem;
+    margin-bottom: 1rem;
+
+}
+.pcs-legacy .product-details span{
+    font-size: 0.75rem;
+}
+.pcs-legacy .btn{
+    padding: 0.45rem 0.5rem !important;
+}
+.pcs-legacy .ele-addressCHN-cart label {
+    font-weight: 500 !important;
+    margin-bottom: 0.25rem;
+}
+.pcs-legacy .note-ship{
+    min-height: 90px;
+}
+
+.pcs-legacy .ele-total-price{
+    background-color: #fffefb;
+}
+
+.pcs-legacy #input-12{
+    position: absolute;
+    left: 10%;
+    top: 7%;
+}
+.pcs-legacy fieldset{
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+}
+.pcs-legacy .border-checkbox{
+    box-shadow: 0px 3px 4px 3px rgba(83, 83, 83, 0.342) !important;
+}
+.pcs-legacy fieldset label {
+    width: 100%;
+    text-align: left !important;
+}
+.pcs-legacy .font-0_85rem{
+    font-size: 0.85rem !important;
+}
+.pcs-legacy table.dataTable.no-footer {
+    border-bottom: unset !important;
+}
+.pcs-legacy .table-bordered, .pcs-legacy .table-bordered td, .pcs-legacy .table-bordered th {
+    border: unset !important;
+}
+.pcs-legacy table.dataTable>tbody>tr>td.select-checkbox:before, .pcs-legacy table.dataTable>tbody>tr>td.select-checkbox:after, .pcs-legacy table.dataTable>tbody>tr>th.select-checkbox:before, .pcs-legacy table.dataTable>tbody>tr>th.select-checkbox:after {
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 100% !important;
+    top: 17% !important;
+    left: 40% !important;
+}
+.pcs-legacy table.dataTable>tbody>tr.selected>td.select-checkbox:after, .pcs-legacy table.dataTable>tbody>tr.selected>th.select-checkbox:after {
+    font-size: 33px !important;
+    margin-top: 0px !important;
+}
+
+.pcs-legacy table.dataTable>tbody>tr>td.select-checkbox:before, .pcs-legacy table.dataTable>tbody>tr>th.select-checkbox:before {
+    border: 1px solid rgb(187, 187, 187) !important;
+    background: #fff !important;
+}
+.pcs-legacy table.dataTable>tbody>tr.selected>td.select-checkbox:after, .pcs-legacy table.dataTable>tbody>tr.selected>th.select-checkbox:after {
+    content: "\2713" !important;
+    text-shadow: 1px 1px #fff, -1px -1px #fff, 1px -1px #fff, -1px 1px #fff !important;
+    color: rgb(206, 0, 0) !important;
+    font-weight: 600 !important;
+}
+.pcs-legacy .btn-cart {
+    padding: 0.7rem 0.5rem !important;
+}
+.pcs-legacy .selected .btn-outline-danger{
+    color: #fff;
+    border: 2px #fff solid;
+}
+
+.pcs-legacy .selected .btn-outline-warning, .pcs-legacy .selected .btn-outline-success, .pcs-legacy .selected .btn-outline-info{
+    color: #fff;
+    border: 2px #fff solid;
+}
+.pcs-legacy .totals-value{
+    font-size: 1.2rem;
+}
+.pcs-legacy .totals-value2{
+    font-size: 1.8rem;
+}
+.pcs-legacy .totals-value4{
+    font-size: 1.2rem;
+}
+.pcs-legacy .radio-custom:checked + .radio-custom-label:before {
+    font-size: 20px;
+    content: "\2713" !important;
+    text-shadow: 1px 1px rgb(27, 201, 50), -1px -1px rgb(27, 201, 50), 1px -1px rgb(27, 201, 50), -1px 1px rgb(27, 201, 50) !important;
+    color: rgb(27, 201, 50) !important;
+    font-weight: 600 !important;
+}
+.pcs-legacy #input-12{
+    -moz-appearance:none;
+    -webkit-appearance:none;
+    -o-appearance:none;
+    z-index: 2;
+}
+.pcs-legacy .border-main #input-12::before{
+    font-size: 20px;
+    content: "\2713" !important;
+    text-shadow: 1px 1px rgb(27 201 50), -1px -1px rgb(27 201 50), 1px -1px rgb(27 201 50), -1px 1px rgb(27 201 50) !important;
+    color: rgb(27, 201, 50) !important;
+    font-weight: 600 !important;
+    padding-left: 3px;
+    filter: hue-rotate(95deg);
+}
+.pcs-legacy #input-19 {
+    position: absolute;
+    left: 10%;
+    top: 7%;
+}
+
+.pcs-legacy #input-19{
+    -moz-appearance:none;
+    -webkit-appearance:none;
+    -o-appearance:none;
+    z-index: 2;
+}
+.pcs-legacy .border-main #input-19::before{
+    font-size: 20px;
+    content: "\2713" !important;
+    text-shadow: 1px 1px rgb(27 201 50), -1px -1px rgb(27 201 50), 1px -1px rgb(27 201 50), -1px 1px rgb(27 201 50) !important;
+    color: rgb(27, 201, 50) !important;
+    font-weight: 600 !important;
+    padding-left: 3px;
+    filter: hue-rotate(95deg);
+}
+
+.pcs-legacy .border-main img{
+    filter: opacity(0.7);
+    z-index: 1;
+}
+.pcs-legacy .mb-05{
+    margin-bottom: 0.5rem !important;
+}
+
+.pcs-legacy fieldset{
+    padding: 0.35rem !important;
+}
+.pcs-legacy .txt-area-pro{
+    position: absolute;
+    bottom: 30px;
+    background-color: transparent;
+    border: unset;
+    padding: 0.2rem 2.2rem;
+    font-size: 1.3rem;
+    color: #E9091F;
+}
+.pcs-legacy .txt-area-pro:focus{
+    position: absolute;
+    background-color: transparent;
+    border: unset;
+    box-shadow: unset;
+    color: #E9091F;
+}
+.pcs-legacy .bg-pro-valentine{
+    position: relative;
+}
+.pcs-legacy .btn-form-pro-valentine{
+    max-width: 270px;
+}
+.pcs-legacy #addressIDMain{
+    opacity: 0;
+    width: 0;
+}
+.pcs-legacy .font-1_7rem{
+    font-size: 1.7rem;
+}
+.pcs-legacy .ele-price-cart .col-md-7{
+    padding-left: 0;
+}
+
+.pcs-legacy .col-md-4.summer-pro:before {
+    content: '\0E3F';
+}
+.pcs-legacy .pcs-notify .modal-content .modal-header.pro{
+    max-width: unset !important;
+}
+.pcs-legacy .btn-maomao-valentine{
+    max-width: 270px;
+}
+.pcs-legacy .txt-area-pro1{
+    bottom: 55px !important;
+}
+@media only screen and (max-width: 578px){
+    .pcs-legacy .baecode-import h1, .pcs-legacy h2, .pcs-legacy h3, .pcs-legacy h4, .pcs-legacy h5 {
+        font-size: 1.5rem;
+    }
+    .pcs-legacy .title-shipBy {
+        font-size: 1.35rem !important;
+    }
+    .pcs-legacy .ele-promotion-cart .border-main12-de {
+        max-width: unset !important;
+    }
+    .pcs-legacy .ele-promotion-cart .border-main19-de {
+        max-width: unset !important;
+    }
+    .pcs-legacy .note-ship{
+        min-height: 50px;
+    }
+    .pcs-legacy .btn-form-pro-valentine{
+        max-width: 220px;
+    }
+    .pcs-legacy .btn-maomao-valentine{
+        max-width: 220px;
+    }
+    .pcs-legacy .text-white.font-1_7rem{
+        font-size: 1.3rem;
+    }
+    .pcs-legacy .txt-area-pro {
+        bottom: -15px;
+        padding: 0rem 1.2rem;
+        font-size: 1rem;
+        color: #E9091F;
+    }
+    .pcs-legacy .txt-area-pro1{
+        bottom: -15px !important;
+    }
+    .pcs-legacy .ele-price-cart .col-md-7{
+        padding-right: 0;
+    }
+}
+
+/* ===== cart.php inline <style> block (verbatim, lines 120-137) ===== */
+.pcs-legacy .card-promotion {
+    max-height: 200px !important;
+}
+.pcs-legacy .ele-promotion-cart .border-main19-de {
+    max-width: 340px !important;
+    padding: 0rem;
+    border-radius: 1rem;
+}
+.pcs-legacy .ele-promotion-cart .border-main12-de {
+    max-width: 340px !important;
+    padding: 0rem;
+    border-radius: 1rem;
+}
+.pcs-legacy .ele-promotion-cart .border-main19-de img {
+    box-shadow: 0px 3px 4px 3px rgb(3 3 3 / 10%) !important;
+}
+
+/* ---- BS4 modal subset (the #pro-maomao promotion modal markup) ----
+ * cart.php renders the modal markup inline; legacy keeps it hidden
+ * until the jQuery `.modal("show")` fires (FLAGGED in page.tsx — the
+ * jQuery is not transcribed). Reproduce the hidden default state so
+ * the markup is present 1:1 but does not show. */
+.pcs-legacy .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: 0;
+}
+.pcs-legacy .modal-dialog {
+  position: relative;
+  width: auto;
+  margin: 0.5rem;
+  pointer-events: none;
+}
+.pcs-legacy .modal-sm { max-width: 300px; }
+.pcs-legacy .modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  background-color: #fff;
+  background-clip: padding-box;
+  border-radius: 0.3rem;
+  outline: 0;
+}
+.pcs-legacy .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem;
+}
+.pcs-legacy .modal-body {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+.pcs-legacy .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem;
+}
+.pcs-legacy .close {
+  float: right;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  opacity: 0.5;
+  background: transparent;
+  border: 0;
+}

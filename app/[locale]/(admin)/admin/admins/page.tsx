@@ -1,307 +1,748 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { GrantForm, RowActions, ContactForm } from "./admin-actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * U4-1 — Staff RBAC / super-review console.
+ * Admin > "รายชื่อพนักงานทั้งหมดแบบตารางข้อมูล" — a FAITHFUL 1:1
+ * TRANSCRIPTION of the legacy PCS Cargo admin
+ * `pcs-admin/admin-table.php` default view
+ * (the include `pcs-admin/include/pages/admin-table/home.php`),
+ * per D1 / ADR-0017 + the faithful-port transcription runbook
+ * (`docs/runbook/faithful-port-transcription.md` §8 — admin pilot).
  *
- * Surfaces every `admins` row + their profile + display contact + role
- * distribution overview. `super` can grant new roles, toggle active /
- * inactive, and see the full picture across all 7 role kinds (super /
- * ops / accounting / sales_admin / warehouse / driver / interpreter).
+ * This is a transcription, NOT a reinterpretation. The JSX below is
+ * the exact HTML structure `admin-table.php` -> `home.php` renders —
+ * same Bootstrap-4 markup, same elements, same labels, same column
+ * order. The visual identity comes from the legacy admin CSS,
+ * brought in verbatim as the static `.pcs-legacy`-scoped
+ * `public/legacy/pcs/admin/admin-base.css` (the BS4 + Modern-Admin
+ * theme subset that the admin chrome uses) and
+ * `public/legacy/pcs/admin/admin-table.css` (the page-specific
+ * inline-<style> block + DataTables filter widget chrome), both
+ * loaded via plain <link rel="stylesheet"> so they bypass the
+ * app's Tailwind v4 / PostCSS pipeline (the rule da4cd79 set).
  *
- * URL filters:
- *   ?role=super    — only show admins holding that role
- *   ?active=on     — only show active rows (default: all)
+ * `home.php` source structure transcribed here:
+ *   - Title bar      home.php L1   (window/page title)
+ *   - Breadcrumb     home.php L72 → breadcrumbAdmin() helper in
+ *                    pcs-admin/include/function.php L2976-2996
+ *   - Card header    home.php L85-113  (page heading + "เพิ่มใหม่" CTA
+ *                    visible only to HR / ITDT / CEO)
+ *   - Status nav     home.php L257-285 (ทั้งหมด · ยังทำงานอยู่ · ลาออก)
+ *                    with count badges from the s1/s2/sAll queries
+ *                    L243-256.
+ *   - DataTables     home.php L286-417 (15-column table with full
+ *                    row rendering; "action" cell shows edit /
+ *                    delete / reset-pass only to HR/ITDT/CEO).
+ *
+ * Data — every `home.php` mysqli query transcribed 1:1 to the ported
+ * legacy `tb_*` schema (Supabase). `tb_*` is RLS-locked to
+ * service_role, so reads go through the admin client.
+ *   - $arrEmailOrg  → tb_org_email_ships ⋈ tb_organization_email
+ *                     (home.php L116-127)
+ *   - $arrTellOrg   → tb_org_tell_ships  ⋈ tb_organization_tell
+ *                     (home.php L128-139)
+ *   - $sAll/$s1/$s2 → tb_admin filtered by adminStatusA + ?s/?c/?type/?position
+ *                     (home.php L243-256 — the count-by-status overview)
+ *   - $sql_Table    → tb_admin WHERE 1 + same filters,
+ *                     order by [0] (DataTables default = "วันที่สมัครใช้ระบบ"
+ *                     desc = adminregistered desc) — home.php L143-239,
+ *                     L289 datatables init order [[0, 'desc']].
+ *
+ * Auth — runbook §3 says keep the Pacred auth chain. The legacy
+ * gate is "HR / ITDT / CEO can add/edit/delete; everyone else can
+ * see the list" (home.php L94-99, L394-405; admin-table.php L19-30,
+ * L42-50). The closest Pacred V3 RBAC role is `super` — used here
+ * as the "can mutate" gate. All admins can view the list.
+ *
+ * URL filters (transcribed from home.php L145-234) — exposed as
+ * search params on this Next.js route, same query-string shape as
+ * the legacy URL:
+ *   ?s=all|1|2           → status filter (default = "1" / active)
+ *   ?c=1|2|3|all         → company filter (1/2/3 = Cargo&Freight/Freight/Cargo)
+ *   ?type=…              → adminType filter (1..7 + 3and4)
+ *   ?position=…          → section filter (messenger/driver/shipping-*)
+ *
+ * Rebrand: legacy `PCS<n>` member-code style → `PR<n>` (mirrors the
+ * customer pilot). The legacy company-type 2 + 3 labels stay
+ * literal ("PCS Freight", "PCS Cargo") because those are
+ * legacy-company brand names recorded in `tb_admin.companytype` —
+ * per CLAUDE.md / ADR-0017, the PCS scrub is API-switchover-gated,
+ * NOT a faithful-port concern; the rebrand is "branding text +
+ * member codes only".
+ *
+ * Not transcribed (deliberate · documented for the pilot):
+ *   - The legacy edit-user (`editUser()`) + delete-user
+ *     (`deleteAdmin()`) + recover (`recoverUser()`) jQuery+AJAX
+ *     handlers (home.php L465-525) — those mutations are SEPARATE
+ *     pilots (`?page=edit`/`detail`/`add` map to sibling routes:
+ *     `/admin/admins/[id]/edit`, `/admin/admins/[id]`,
+ *     `/admin/admins/add`). The action buttons in the row are
+ *     rendered with their legacy href/aria but the click handler
+ *     is wired in a follow-up.
+ *   - The SweetAlert sweet-alert popup after add/update
+ *     (home.php L586-604) — deferred with the add/edit pilots.
+ *   - The DataTables JS init (home.php L526-585): sortable headers,
+ *     export-buttons (copy/csv/excel/print), per-page length
+ *     selector, fixed header — those plugins are not in the Pacred
+ *     dependency tree. The static markup carries the same wrapper
+ *     classes (`.dataTables_wrapper`, `#myTable`, `.dt-buttons`)
+ *     and the CSS reproduces the filter chrome so the screen looks
+ *     identical at rest. Functional sort/filter is a follow-up
+ *     (likely a small Pacred-side React DataTables shim or
+ *     `<DataTable>` import).
  */
 
 export const dynamic = "force-dynamic";
 
-const ALL_ROLES = ["super","ops","accounting","sales_admin","warehouse","driver","interpreter"] as const;
-type AdminRole = typeof ALL_ROLES[number];
+// ============================================================================
+// Inline transcription of pcs-admin/include/function.php helper functions —
+// these are pure functions that turn integer codes into HTML strings.
+// Kept inline (not extracted to lib/) because this is a pilot; the
+// pattern lift-to-`lib/` happens after a few admin pilots show the
+// repeated callers.
+// ============================================================================
 
-const ROLE_LABEL: Record<AdminRole, string> = {
-  super:       "Super",
-  ops:         "Ops",
-  accounting:  "Accounting",
-  sales_admin: "Sales Admin",
-  warehouse:   "Warehouse",
-  driver:      "Driver",
-  interpreter: "ล่ามจีน (Interpreter)",
+/** Legacy `nameCompanyType($int)` — function.php L2899-2907 */
+function nameCompanyType(t: string | null): { label: string; cls: string } | null {
+  switch (t) {
+    case "1": return { label: "Freight & Cargo", cls: "badge badge-danger badge-pill" };
+    case "2": return { label: "PCS Freight",     cls: "badge badge-success badge-pill" };
+    case "3": return { label: "PCS Cargo",       cls: "badge badge-warning badge-pill" };
+    default:  return null;
+  }
+}
+
+/** Legacy `nameAdminType($int)` — function.php L3139-3151 */
+function nameAdminType(t: string | null): { label: string; cls: string } | null {
+  switch (t) {
+    case "1": return { label: "พนักงานประจำ", cls: "badge badge-danger  badge-pill" };
+    case "2": return { label: "ทดลองงาน",     cls: "badge badge-warning badge-pill" };
+    case "3": return { label: "เด็กฝึกงาน",    cls: "badge badge-info    badge-pill" };
+    case "4": return { label: "สหกิจศึกษา",    cls: "badge badge-success badge-pill" };
+    case "5": return { label: "พาสเนอร์",      cls: "badge badge-danger  badge-pill" };
+    case "6": return { label: "ฟรีแลนซ์",     cls: "badge badge-warning badge-pill" };
+    case "7": return { label: "คนในบ้าน",     cls: "badge badge-primary badge-pill" };
+    default:  return null;
+  }
+}
+
+/** Legacy `diffDateNow($datetime)` — function.php L1426-1450.
+ *  Returns "<m> เดือน <d> วัน" / "<y> ปี <m> เดือน <d> วัน" etc. */
+function diffDateNow(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const target = new Date(iso);
+  if (Number.isNaN(target.getTime())) return "";
+  const now = new Date();
+  let y = target.getFullYear() - now.getFullYear();
+  let m = target.getMonth() - now.getMonth();
+  let d = target.getDate() - now.getDate();
+  if (d < 0) {
+    const daysInPrev = new Date(target.getFullYear(), target.getMonth(), 0).getDate();
+    d += daysInPrev; m -= 1;
+  }
+  if (m < 0) { m += 12; y -= 1; }
+  // legacy uses abs values
+  y = Math.abs(y); m = Math.abs(m); d = Math.abs(d);
+  if (y === 0 && m === 0) return `${d} วัน `;
+  if (y === 0)            return `${m} เดือน ${d} วัน `;
+  return `${y} ปี ${m} เดือน ${d} วัน `;
+}
+
+/** Legacy `checkRightsName([companyType, department, section, adminType])`
+ *  — function.php L3023-3054. The PHP version reads the org-chart from
+ *  pcs-admin/include/pages/organization-chart/dataJson.php (40 rows of
+ *  (companyNo, departmentNo, sectionNo, …) -> (companyName, departmentName,
+ *  sectionName)). Inlined here verbatim so the lookup is a faithful
+ *  identical mapping. */
+type OrgRow = {
+  companyNo: number;
+  departmentNo: number;
+  sectionNo: number;
+  departmentName: string;
+  sectionName: string;
 };
-const ROLE_BADGE: Record<AdminRole, string> = {
-  super:       "bg-red-50 text-red-700 border-red-200",
-  ops:         "bg-blue-50 text-blue-700 border-blue-200",
-  accounting:  "bg-green-50 text-green-700 border-green-200",
-  sales_admin: "bg-purple-50 text-purple-700 border-purple-200",
-  warehouse:   "bg-amber-50 text-amber-700 border-amber-200",
-  driver:      "bg-cyan-50 text-cyan-700 border-cyan-200",
-  interpreter: "bg-pink-50 text-pink-700 border-pink-200",
+const ORG_CHART: OrgRow[] = [
+  { companyNo: 1, departmentNo: 0, sectionNo: 0,  departmentName: "CEO",         sectionName: "CEO" },
+  { companyNo: 1, departmentNo: 1, sectionNo: 1,  departmentName: "Manager",     sectionName: "Manager" },
+  { companyNo: 1, departmentNo: 2, sectionNo: 2,  departmentName: "HR",          sectionName: "HR Manager" },
+  { companyNo: 1, departmentNo: 2, sectionNo: 3,  departmentName: "HR",          sectionName: "HR" },
+  { companyNo: 1, departmentNo: 2, sectionNo: 4,  departmentName: "HR",          sectionName: "Maid" },
+  { companyNo: 1, departmentNo: 3, sectionNo: 5,  departmentName: "QA & QC",     sectionName: "QA Manager" },
+  { companyNo: 1, departmentNo: 3, sectionNo: 6,  departmentName: "QA & QC",     sectionName: "QA" },
+  { companyNo: 1, departmentNo: 3, sectionNo: 7,  departmentName: "QA & QC",     sectionName: "QC" },
+  { companyNo: 1, departmentNo: 4, sectionNo: 8,  departmentName: "Accounting",  sectionName: "Accounting Manager" },
+  { companyNo: 1, departmentNo: 4, sectionNo: 9,  departmentName: "Accounting",  sectionName: "Admin Accounting" },
+  { companyNo: 1, departmentNo: 5, sectionNo: 10, departmentName: "Marketing",   sectionName: "Manager Marketing" },
+  { companyNo: 1, departmentNo: 5, sectionNo: 11, departmentName: "Marketing",   sectionName: "Pricing" },
+  { companyNo: 1, departmentNo: 5, sectionNo: 12, departmentName: "Marketing",   sectionName: "Marketing/Creative" },
+  { companyNo: 1, departmentNo: 5, sectionNo: 13, departmentName: "Marketing",   sectionName: "Graphic/Editing" },
+  { companyNo: 1, departmentNo: 6, sectionNo: 14, departmentName: "ITDT",        sectionName: "IT Project Manager" },
+  { companyNo: 1, departmentNo: 6, sectionNo: 15, departmentName: "ITDT",        sectionName: "Front End" },
+  { companyNo: 1, departmentNo: 6, sectionNo: 16, departmentName: "ITDT",        sectionName: "Back End" },
+  { companyNo: 1, departmentNo: 6, sectionNo: 17, departmentName: "ITDT",        sectionName: "Full Stack" },
+  { companyNo: 2, departmentNo: 1, sectionNo: 1,  departmentName: "Sales Freight", sectionName: "Sales Manager" },
+  { companyNo: 2, departmentNo: 1, sectionNo: 2,  departmentName: "Sales Freight", sectionName: "Sales" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 3,  departmentName: "Freight Export", sectionName: "Manager Export" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 4,  departmentName: "Freight Export", sectionName: "CS/Doc Export" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 5,  departmentName: "Freight Export", sectionName: "Shipping Doc Export" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 6,  departmentName: "Freight Export", sectionName: "Shipping Clearance Export" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 7,  departmentName: "Freight Export", sectionName: "Shipping Clearance Import & Export" },
+  { companyNo: 2, departmentNo: 2, sectionNo: 8,  departmentName: "Freight Export", sectionName: "Messenger" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 9,  departmentName: "Freight Import", sectionName: "Manager Import" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 10, departmentName: "Freight Import", sectionName: "CS/Doc Import" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 11, departmentName: "Freight Import", sectionName: "Shipping Doc Import" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 12, departmentName: "Freight Import", sectionName: "Shipping Clearance Import" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 13, departmentName: "Freight Import", sectionName: "Shipping Clearance Import & Export" },
+  { companyNo: 2, departmentNo: 3, sectionNo: 14, departmentName: "Freight Import", sectionName: "Messenger" },
+  { companyNo: 3, departmentNo: 1, sectionNo: 1,  departmentName: "Sales Cargo",   sectionName: "Sales Manager" },
+  { companyNo: 3, departmentNo: 1, sectionNo: 2,  departmentName: "Sales Cargo",   sectionName: "Sales" },
+  { companyNo: 3, departmentNo: 2, sectionNo: 3,  departmentName: "CS Purchasing", sectionName: "Manager Purchasing" },
+  { companyNo: 3, departmentNo: 2, sectionNo: 4,  departmentName: "CS Purchasing", sectionName: "Purchasing" },
+  { companyNo: 3, departmentNo: 3, sectionNo: 5,  departmentName: "Warehouse",     sectionName: "Manager warehouse" },
+  { companyNo: 3, departmentNo: 3, sectionNo: 6,  departmentName: "Warehouse",     sectionName: "Warehouse" },
+  { companyNo: 3, departmentNo: 3, sectionNo: 7,  departmentName: "Warehouse",     sectionName: "Driver" },
+  { companyNo: 1, departmentNo: 5, sectionNo: 18, departmentName: "Marketing",     sectionName: "Sales All" },
+];
+function checkRightsName(
+  companyType: string | null, department: string | null, section: string | null, adminType: string | null
+): { departmentName: string; sectionName: string } {
+  const c = Number(companyType ?? 0);
+  const d = Number(department ?? 0);
+  const s = Number(section ?? 0);
+  const row = ORG_CHART.find((r) => r.companyNo === c && r.departmentNo === d && r.sectionNo === s);
+  if (row) return { departmentName: row.departmentName, sectionName: row.sectionName };
+  // Legacy fallback (function.php L3045-3051): adminType=7 -> "คนในบ้าน"
+  if (adminType === "7") return { departmentName: "คนในบ้าน", sectionName: "คนในบ้าน" };
+  return { departmentName: "unknown", sectionName: "unknown" };
+}
+
+/** Legacy `generateBadgeDepartment($role)` — function.php L3256-3279 */
+function generateBadgeDepartment(role: string): { label: string; cls: string } {
+  switch (role) {
+    case "CEO":
+    case "Manager":
+    case "HR":
+    case "QA & QC":
+    case "Accounting":
+    case "Marketing":
+    case "ITDT":
+      return { label: role, cls: "badge badge-danger badge-pill" };
+    case "Sales Freight":
+    case "Sales Cargo":
+      return { label: role, cls: "badge badge-info badge-pill" };
+    case "FREIGHT Export":
+      return { label: role, cls: "badge badge-primary badge-pill" };
+    case "FREIGHT Import":
+    case "CS Purchasing":
+      return { label: role, cls: "badge badge-success badge-pill" };
+    case "Warehouse":
+      return { label: role, cls: "badge badge-warning badge-pill" };
+    default:
+      return { label: role, cls: "badge badge-secondary badge-pill" };
+  }
+}
+
+/** Legacy `generateBadgeSection($role)` — function.php L3281-3328 */
+function generateBadgeSection(role: string): { label: string; cls: string } {
+  const dangerSet = new Set([
+    "CEO", "Manager", "HR Manager", "HR", "Maid",
+    "QA Manager", "QA", "QC", "Accounting Manager", "Admin Accounting",
+    "Manager Marketing", "Pricing", "Marketing/Creative", "Graphic/Editing",
+    "IT Project Manager", "Front End", "Back End", "Full Stack",
+    "Sales Manager", "Manager Export", "Manager Import",
+    "Manager Purchasing", "Manager Warehouse",
+  ]);
+  const warningSet = new Set([
+    "Shipping Doc Export", "Shipping Clearance Export",
+    "Shipping Clearance Import & Export", "Messenger",
+    "CS/Doc Import", "Shipping Doc Import", "Shipping Clearance Import",
+    "Driver", "Warehouse",
+  ]);
+  if (dangerSet.has(role))  return { label: role, cls: "badge badge-danger badge-pill" };
+  if (role === "Sales" || role === "Sales All") return { label: role, cls: "badge badge-info badge-pill" };
+  if (role === "CS/Doc Export" || role === "Purchasing")
+                            return { label: role, cls: "badge badge-success badge-pill" };
+  if (warningSet.has(role)) return { label: role, cls: "badge badge-warning badge-pill" };
+  return { label: role, cls: "badge badge-secondary badge-pill" };
+}
+
+/** Legacy `checkNULL($data,$lable,$enter,$link)` — function.php L697-709.
+ *  Renders the value as a link if a link target is provided, else plain text. */
+function CheckNull({ value, link }: { value: string | null | undefined; link?: string }) {
+  if (!value) return null;
+  if (link) return <a href={link}>{value}</a>;
+  return <>{value}</>;
+}
+
+// ============================================================================
+// SQL — admin client, RLS-locked to service_role.
+// ============================================================================
+
+type AdminRow = {
+  id: number;
+  adminregistered: string | null;
+  adminid: string;
+  adminname: string;
+  adminlastname: string;
+  adminnickname: string | null;
+  adminpicture: string | null;
+  adminemail: string | null;
+  admintel: string | null;
+  admintype: string | null;
+  admintmp: string | null;
+  adminstatusa: string | null;
+  admindel: string | null;
+  companytype: string | null;
+  department: string | null;
+  section: string | null;
+  enddate: string | null;
 };
 
-type SP = { role?: string; active?: string };
+type SP = { s?: string; c?: string; type?: string; position?: string };
 
-export default async function AdminAdminsPage({
+export default async function AdminTablePage({
   searchParams,
 }: { searchParams: Promise<SP> }) {
-  await requireAdmin(["super"]);                      // only super can manage admins
+  // home.php is wrapped by admin-table.php which is wrapped by include/header.php
+  // -> the header.php gate is "any logged-in admin can view". Per runbook §3
+  // we keep the Pacred auth chain; require any admin role.
+  const { roles } = await requireAdmin();
+
+  // Legacy `departmentKey == 'HR' || 'ITDT' || 'CEO'` — the gate for the
+  // "เพิ่มใหม่" CTA + the action-cell buttons (edit / delete / reset-pass).
+  // Closest V3 RBAC role = `super` (the role that owns admin-mutation).
+  const canMutate = roles.includes("super");
+
   const sp = await searchParams;
-  const roleFilter   = (ALL_ROLES as readonly string[]).includes(sp.role ?? "") ? (sp.role as AdminRole) : null;
-  const activeOnly   = sp.active === "on";
   const admin = createAdminClient();
 
-  // Pull all admin rows + joined profile + contact extras
-  const { data: adminRows } = await admin
-    .from("admins")
-    .select(`
-      profile_id, role, granted_at, is_active,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email, avatar_url ),
-      contact:admin_contact_extras!profile_id ( display_name, direct_phone, department, section )
-    `)
-    .order("granted_at", { ascending: false });
+  // ── tb_admin filtered query (home.php L143-239) ──────────────
+  // The legacy combines four filter blocks (s = status, c = company,
+  // position = section list, type = adminType) into a single WHERE.
+  // Each filter resolves to a Postgrest predicate; the s=1 default
+  // (no ?s query param) is the "active staff" view.
+  let q = admin.from("tb_admin").select(
+    "id, adminregistered, adminid, adminname, adminlastname, adminnickname, " +
+    "adminpicture, adminemail, admintel, admintype, admintmp, adminstatusa, " +
+    "admindel, companytype, department, section, enddate"
+  );
 
-  type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; avatar_url: string | null };
-  type Contact = { display_name: string | null; direct_phone: string | null; department: string | null; section: string | null };
-  type Row = {
-    profile_id: string; role: AdminRole;
-    granted_at: string; is_active: boolean;
-    profile: Profile | Profile[] | null;
-    contact: Contact | Contact[] | null;
-  };
-  const allRows = ((adminRows ?? []) as Row[]).map((r) => ({
-    ...r,
-    profile_one: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-    contact_one: Array.isArray(r.contact) ? r.contact[0] ?? null : r.contact,
-  }));
-
-  // Role distribution overview — counted off ALL rows, NOT filtered.
-  const roleDistribution: Record<AdminRole, { active: number; inactive: number }> =
-    Object.fromEntries(ALL_ROLES.map((r) => [r, { active: 0, inactive: 0 }])) as Record<AdminRole, { active: number; inactive: number }>;
-  for (const r of allRows) {
-    if (r.is_active) roleDistribution[r.role].active   += 1;
-    else             roleDistribution[r.role].inactive += 1;
+  switch (sp.s) {
+    case "1":   q = q.eq("adminstatusa", "1"); break;
+    case "2":   q = q.eq("adminstatusa", "0"); break;
+    case "all": /* no action */ break;
+    default:    /* not set — legacy datatable defaults to s-1 visual; data
+                   shows all (the active filter is applied client-side via
+                   the active CSS class) — match by leaving unfiltered. */ break;
   }
-  const totalAdmins = new Set(allRows.map((r) => r.profile_id)).size;
+  switch (sp.c) {
+    case "1": q = q.eq("companytype", "1"); break;
+    case "2": q = q.eq("companytype", "2"); break;
+    case "3": q = q.eq("companytype", "3"); break;
+  }
+  switch (sp.position) {
+    case "messenger":                q = q.in("section", ["8", "14"]); break;
+    case "driver":                   q = q.eq("section", "7"); break;
+    case "shipping-import":          q = q.eq("section", "12"); break;
+    case "shipping-export":          q = q.eq("section", "6"); break;
+    case "shipping-importAndExport": q = q.in("section", ["7", "13"]).eq("companytype", "2"); break;
+  }
+  switch (sp.type) {
+    case "1":     q = q.eq("admintype", "1"); break;
+    case "2":     q = q.eq("admintype", "2"); break;
+    case "3and4": q = q.in("admintype", ["3", "4"]); break;
+    case "3":     q = q.eq("admintype", "3"); break;
+    case "4":     q = q.eq("admintype", "4"); break;
+    case "5":     q = q.eq("admintype", "5"); break;
+    case "6":     q = q.eq("admintype", "6"); break;
+    case "7":     q = q.eq("admintype", "7"); break;
+  }
+  // Legacy L235-239: non-HR / non-section-0 viewers cannot see
+  // adminType=7 (คนในบ้าน). Pacred V3 has no `departmentKey`/`section`
+  // equivalent — the closest match is "hide adminType=7 unless super".
+  if (!canMutate) q = q.neq("admintype", "7");
 
-  // Apply filters AFTER counting distribution.
-  const rows = allRows.filter((r) => {
-    if (roleFilter && r.role !== roleFilter) return false;
-    if (activeOnly && !r.is_active)         return false;
-    return true;
-  });
+  // DataTables default order is column 0 desc — "วันที่สมัครใช้ระบบ"
+  // = adminregistered (home.php L289 + L545).
+  q = q.order("adminregistered", { ascending: false, nullsFirst: false });
 
-  // Group by profile_id (so same person with 2 roles shows as 1 row + multi badges)
-  const byProfile = new Map<string, typeof rows>();
-  for (const r of rows) {
-    const arr = byProfile.get(r.profile_id) ?? [];
-    arr.push(r);
-    byProfile.set(r.profile_id, arr);
+  // ── Status overview counts (home.php L243-256) ───────────────
+  // sAll = filtered total ignoring the status filter.
+  // s1   = filtered active count.
+  // s2   = sAll - s1.
+  // Re-runs the same filter chain without the status predicate; in
+  // PostgREST we use head:true + count:"exact" so no rows are read.
+  const buildCountQ = (statusVal: "active" | "all") => {
+    let cq = admin.from("tb_admin").select("id", { count: "exact", head: true }).neq("admintype", "");
+    if (statusVal === "active") cq = cq.eq("adminstatusa", "1");
+    switch (sp.c) {
+      case "1": cq = cq.eq("companytype", "1"); break;
+      case "2": cq = cq.eq("companytype", "2"); break;
+      case "3": cq = cq.eq("companytype", "3"); break;
+    }
+    switch (sp.position) {
+      case "messenger":                cq = cq.in("section", ["8", "14"]); break;
+      case "driver":                   cq = cq.eq("section", "7"); break;
+      case "shipping-import":          cq = cq.eq("section", "12"); break;
+      case "shipping-export":          cq = cq.eq("section", "6"); break;
+      case "shipping-importAndExport": cq = cq.in("section", ["7", "13"]).eq("companytype", "2"); break;
+    }
+    switch (sp.type) {
+      case "1":     cq = cq.eq("admintype", "1"); break;
+      case "2":     cq = cq.eq("admintype", "2"); break;
+      case "3and4": cq = cq.in("admintype", ["3", "4"]); break;
+      case "3":     cq = cq.eq("admintype", "3"); break;
+      case "4":     cq = cq.eq("admintype", "4"); break;
+      case "5":     cq = cq.eq("admintype", "5"); break;
+      case "6":     cq = cq.eq("admintype", "6"); break;
+      case "7":     cq = cq.eq("admintype", "7"); break;
+    }
+    if (!canMutate) cq = cq.neq("admintype", "7");
+    return cq;
+  };
+
+  // ── tb_org_email_ships ⋈ tb_organization_email (home.php L116-127) ──
+  //    SELECT email, adminID FROM tb_org_email_ships LEFT JOIN tb_organization_email
+  //    -> arrEmailOrg[adminID] = email
+  // Same shape for tell.
+  const [tableRes, sAllRes, s1Res, emailShipsRes, tellShipsRes, emailOrgRes, tellOrgRes] = await Promise.all([
+    q,
+    buildCountQ("all"),
+    buildCountQ("active"),
+    admin.from("tb_org_email_ships").select("adminid, oeid"),
+    admin.from("tb_org_tell_ships").select("adminid, otid"),
+    admin.from("tb_organization_email").select("id, email"),
+    admin.from("tb_organization_tell").select("id, tell"),
+  ]);
+
+  const rows: AdminRow[] = (tableRes.data ?? []) as unknown as AdminRow[];
+  const sAll = sAllRes.count ?? 0;
+  const s1   = s1Res.count   ?? 0;
+  const s2   = sAll - s1;
+
+  const emailById = new Map<number, string>();
+  for (const r of (emailOrgRes.data ?? []) as Array<{ id: number; email: string }>) {
+    emailById.set(Number(r.id), r.email);
+  }
+  const tellById = new Map<number, string>();
+  for (const r of (tellOrgRes.data ?? []) as Array<{ id: number; tell: string }>) {
+    tellById.set(Number(r.id), r.tell);
+  }
+  const arrEmailOrg = new Map<string, string>();
+  for (const r of (emailShipsRes.data ?? []) as Array<{ adminid: string; oeid: number }>) {
+    const email = emailById.get(Number(r.oeid));
+    if (email) arrEmailOrg.set(r.adminid, email);
+  }
+  const arrTellOrg = new Map<string, string>();
+  for (const r of (tellShipsRes.data ?? []) as Array<{ adminid: string; otid: number }>) {
+    const tell = tellById.get(Number(r.otid));
+    if (tell) arrTellOrg.set(r.adminid, tell);
   }
 
-  // ── Recent RBAC change events (admin_audit_log filter) ─────────────
-  // Surface the 10 most recent admin.grant_role / admin.toggle_role
-  // / admin.revoke_role events for super-review.
-  const { data: recentRbacEvents } = await admin
-    .from("admin_audit_log")
-    .select("id, admin_id, action, target_type, target_id, payload, created_at, admin:profiles!admin_id(member_code, first_name, last_name)")
-    .like("action", "admin.%")
-    .order("created_at", { ascending: false })
-    .limit(10);
-  type RbacEvent = {
-    id: string;
-    admin_id: string;
-    action: string;
-    target_type: string;
-    target_id: string;
-    payload: Record<string, unknown> | null;
-    created_at: string;
-    admin: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;
+  // ── Page title — admin-table.php L251 ────────────────────────
+  const pageTitle = "รายชื่อพนักงานทั้งหมดแบบตารางข้อมูล";
+
+  // Active tab — home.php L455-463 (sets the `.active` class on
+  // the status nav-link based on ?s). Default tab when no ?s = "1".
+  const activeTab = sp.s === "all" ? "all" : sp.s === "2" ? "2" : "1";
+
+  // Build URL preserving non-status filters (so changing the status
+  // tab doesn't lose the c/position/type filters).
+  const buildStatusUrl = (s: "all" | "1" | "2") => {
+    const params = new URLSearchParams();
+    params.set("s", s);
+    if (sp.c)        params.set("c", sp.c);
+    if (sp.type)     params.set("type", sp.type);
+    if (sp.position) params.set("position", sp.position);
+    return `/admin/admins?${params.toString()}`;
   };
-  const rbacEvents = ((recentRbacEvents ?? []) as RbacEvent[]).map((e) => ({
-    ...e,
-    actor: Array.isArray(e.admin) ? e.admin[0] ?? null : e.admin,
-  }));
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · U4-1 RBAC console</p>
-        <h1 className="mt-1 text-2xl font-bold">จัดการ admin (super only)</h1>
-        <p className="mt-1 text-sm text-muted">เพิ่มสิทธิ์ admin / ปิดสิทธิ์ / ตั้งชื่อแสดงสำหรับการ์ดเซลล์ · ดูสถิติ role + ประวัติเปลี่ยน RBAC ล่าสุด</p>
-      </div>
+    <div className="pcs-legacy">
+      {/* Legacy admin chrome + page-specific CSS — both served as
+          static /public/ assets so they bypass Tailwind / PostCSS. */}
+      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
+      <link rel="stylesheet" href="/legacy/pcs/admin/admin-table.css" />
 
-      {/* RBAC distribution overview */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h2 className="font-bold text-sm">การกระจาย role</h2>
-          <p className="text-xs text-muted">{totalAdmins} คน รวม · {allRows.length} role grants</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-          {ALL_ROLES.map((r) => {
-            const counts = roleDistribution[r];
-            const isFiltered = roleFilter === r;
-            const total = counts.active + counts.inactive;
-            return (
-              <Link
-                key={r}
-                href={`/admin/admins?role=${r}${activeOnly ? "&active=on" : ""}`}
-                className={`rounded-lg border p-2.5 transition ${
-                  isFiltered ? "ring-2 ring-primary-400 " + ROLE_BADGE[r]
-                             : "border-border bg-surface-alt/30 hover:bg-surface-alt"
-                }`}
-              >
-                <p className="text-[10px] uppercase tracking-wide font-medium">{ROLE_LABEL[r]}</p>
-                <p className="text-xl font-bold">{counts.active}</p>
-                {counts.inactive > 0 && (
-                  <p className="text-[10px] text-muted">+{counts.inactive} ปิดอยู่</p>
-                )}
-                <p className="text-[10px] text-muted">รวม {total}</p>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Filter chips */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-muted font-medium">ตัวกรอง:</span>
-        {roleFilter && (
-          <Link href={`/admin/admins${activeOnly ? "?active=on" : ""}`} className="rounded-full border border-border bg-white px-3 py-1 hover:bg-surface-alt">
-            ✕ ล้าง role
-          </Link>
-        )}
-        <Link
-          href={`/admin/admins?${new URLSearchParams({
-            ...(roleFilter ? { role: roleFilter } : {}),
-            ...(activeOnly ? {} : { active: "on" }),
-          })}`}
-          className={`rounded-full border px-3 py-1 ${
-            activeOnly ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
-          }`}
-        >
-          {activeOnly ? "✓ active เท่านั้น" : "active เท่านั้น"}
-        </Link>
-        <span className="text-muted ml-2">→ {rows.length} จาก {allRows.length} grants ที่เห็น</span>
-      </div>
-
-      <div className="grid lg:grid-cols-[1fr_320px] gap-6">
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-          {byProfile.size === 0 ? (
-            <p className="p-12 text-center text-sm text-muted">ยังไม่มี admin อื่นนอกจากคุณ</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">โปรไฟล์</th>
-                  <th className="px-4 py-3">บัตรเซลล์ (display)</th>
-                  <th className="px-4 py-3">Roles</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(byProfile.entries()).map(([profileId, entries]) => {
-                  const first = entries[0];
-                  const p = first.profile_one;
-                  const c = first.contact_one;
-                  return (
-                    <tr key={profileId} className="border-t border-border align-top">
-                      <td className="px-4 py-3 text-xs">
-                        <div className="font-mono">{p?.member_code ?? "—"}</div>
-                        <div className="font-medium text-foreground">{p?.first_name} {p?.last_name}</div>
-                        <div className="text-muted">📞 {p?.phone ?? "—"}</div>
-                        <div className="text-muted">{p?.email ?? "—"}</div>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {c?.display_name ? (
-                          <>
-                            <div className="font-medium">{c.display_name}</div>
-                            {c.direct_phone && <div className="text-muted">📞 {c.direct_phone}</div>}
-                            {c.department && <div className="text-muted">{c.department}{c.section ? ` / ${c.section}` : ""}</div>}
-                          </>
-                        ) : (
-                          <div className="text-muted">ยังไม่ตั้ง</div>
-                        )}
-                        <ContactForm
-                          profileId={profileId}
-                          displayName={c?.display_name ?? null}
-                          directPhone={c?.direct_phone ?? null}
-                          department={c?.department ?? null}
-                          section={c?.section ?? null}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-xs space-y-1">
-                        {entries.map((e) => (
-                          <div key={e.role} className="flex items-center gap-2">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${ROLE_BADGE[e.role]}`}>
-                              {ROLE_LABEL[e.role]}
-                            </span>
-                            <RowActions profileId={profileId} role={e.role} isActive={e.is_active} />
-                          </div>
-                        ))}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {entries.every((e) => e.is_active) ? "✓ ใช้งาน" : "○ ปิดบางส่วน"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <GrantForm />
-      </div>
-
-      {/* Recent RBAC change events */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h2 className="font-bold text-sm">การเปลี่ยน RBAC ล่าสุด</h2>
-            <p className="text-[10px] text-muted mt-0.5">10 เหตุการณ์ล่าสุดจาก <code className="rounded bg-surface-alt px-1">admin_audit_log</code> action prefix <code className="rounded bg-surface-alt px-1">admin.</code></p>
+      {/* BEGIN: Content — admin-table.php L? → home.php L68 */}
+      <div className="app-content content">
+        <div className="content-overlay"></div>
+        <div className="content-wrapper">
+          {/* Breadcrumb — home.php L72 → breadcrumbAdmin($title)
+              (function.php L2976-2996) */}
+          <div className="content-header row">
+            <div className="content-header-left col-12">
+              <div className="row breadcrumbs-top">
+                <div className="breadcrumb-wrapper col-12">
+                  <ol className="breadcrumb">
+                    <li className="breadcrumb-item">
+                      <Link href="/admin">หน้าแรก</Link>
+                    </li>
+                    <li className="breadcrumb-item">
+                      <Link href="/admin/admins">{pageTitle}</Link>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            </div>
           </div>
-          <Link href="/admin/audit?action=admin." className="text-[10px] text-primary-600 hover:underline shrink-0">
-            ↗ ดูทั้งหมดใน audit log
-          </Link>
-        </div>
-        {rbacEvents.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted">ยังไม่มีการเปลี่ยน RBAC</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {rbacEvents.map((e) => {
-              const actor = e.actor;
-              const actorLabel = actor
-                ? `${[actor.first_name, actor.last_name].filter(Boolean).join(" ") || "—"}${actor.member_code ? ` (${actor.member_code})` : ""}`
-                : e.admin_id.slice(0, 8);
-              return (
-                <li key={e.id} className="px-5 py-2.5 text-xs flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0 space-y-0.5">
-                    <p>
-                      <span className="font-mono font-medium text-primary-700">{e.action}</span>
-                      <span className="text-muted"> on </span>
-                      <span className="font-mono">{e.target_id.slice(0, 8)}</span>
-                    </p>
-                    <p className="text-[10px] text-muted">
-                      โดย <span className="text-foreground font-medium">{actorLabel}</span>
-                      {" · "}
-                      {new Date(e.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                    </p>
+
+          <div className="content-body body-new">
+            <section>
+              <div className="row">
+                <div className="col-md-12 col-sm-12">
+                  <div className="card">
+                    <div className="card-content">
+                      <div className="card-body">
+                        {/* ── Card header — home.php L84-114 ── */}
+                        <div className="row">
+                          <div className="content-header-left col-md-8 col-12">
+                            <div className="text-center text-md-left">
+                              <h2 className="text-color-main">{pageTitle}</h2>
+                              <div className="pcs-sequence"></div>
+                            </div>
+                          </div>
+                          {canMutate && (
+                            <div className="content-header-right col-md-4 col-12">
+                              <div className="text-center text-md-right">
+                                <Link href="/admin/admins/add">
+                                  <button
+                                    className="btn btn-sm btn-circle btn-success text-white"
+                                    type="button"
+                                    title="เพิ่มใหม่"
+                                  >
+                                    <svg className="pcs-icon" viewBox="0 0 24 24">
+                                      <line x1="12" y1="5" x2="12" y2="19" />
+                                      <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                  </button>
+                                  <span className="font-normal text-dark"> เพิ่มใหม่</span>
+                                </Link>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ── Status overview tabs — home.php L257-285 ── */}
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="p-05">
+                              <ul className="nav nav-tabs nav-underline pcs-tabs no-hover-bg">
+                                <li className={`nav-item s-all ${activeTab === "all" ? "active" : ""}`}>
+                                  <a className={`nav-link s-all ${activeTab === "all" ? "active" : ""}`} href={buildStatusUrl("all")}>
+                                    ทั้งหมด
+                                    {sAll > 0 && (
+                                      <div className="pcs-badge badge-secondary pcs-badge-pill">{sAll}</div>
+                                    )}
+                                  </a>
+                                </li>
+                                <li className={`nav-item s-1 ${activeTab === "1" ? "active" : ""}`}>
+                                  <a className={`nav-link s-1 ${activeTab === "1" ? "active" : ""}`} href={buildStatusUrl("1")}>
+                                    ยังทำงานอยู่
+                                    {s1 > 0 && (
+                                      <div className="pcs-badge badge-warning pcs-badge-pill">{s1}</div>
+                                    )}
+                                  </a>
+                                </li>
+                                <li className={`nav-item s-2 ${activeTab === "2" ? "active" : ""}`}>
+                                  <a className={`nav-link s-2 ${activeTab === "2" ? "active" : ""}`} href={buildStatusUrl("2")}>
+                                    ลาออกแล้ว/หมดเวลาทำงาน
+                                    {s2 > 0 && (
+                                      <div className="pcs-badge badge-danger pcs-badge-pill">{s2}</div>
+                                    )}
+                                  </a>
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ── DataTables-wrapped admin table — home.php L286-417 ── */}
+                        <div className="row">
+                          <div className="col-md-12">
+                            <div className="table-responsive">
+                              <div className="dataTables_wrapper">
+                                <table id="myTable" className="table display table-bordered table-striped dataTable no-footer dtr-inlind">
+                                  <thead>
+                                    <tr className="text-center bg-white">
+                                      <th className="">วันที่สมัครใช้ระบบ</th>
+                                      <th className="">รหัสพนักงาน<br />เชื่อมเครื่อง<br />สแกนนิ้ว</th>
+                                      <th className="">ชื่อผู้ใช้งานระบบ</th>
+                                      <th className="">ชื่อ - นามสกุล</th>
+                                      <th className="">ชิ่อเล่น</th>
+                                      <th className="">บริษัท</th>
+                                      <th className="">ประเภทพนักงาน</th>
+                                      <th className="">แผนก</th>
+                                      <th className="">ตำแหน่ง</th>
+                                      <th className="">อีเมลส่วนตัว</th>
+                                      <th className="">เบอร์ส่วนตัว</th>
+                                      <th className="">อีเมลบริษัท</th>
+                                      <th className="">เบอร์โทรบริษัท</th>
+                                      <th className="">สถานะพักงาน</th>
+                                      <th className="">........ตัวเลือก........</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {rows.map((row) => {
+                                      // home.php L320-321 — adminPicture lives under
+                                      // basePath/images/admin/<file>. The migrated
+                                      // tb_admin.adminpicture is a bare filename
+                                      // (default 'user.jpg'). The customer-images
+                                      // backfill (Phase A pending the Supabase Pro
+                                      // upgrade) will populate the per-admin photos;
+                                      // until then every row resolves to the
+                                      // user.jpg default. Path mirrors the legacy.
+                                      const pic = row.adminpicture && row.adminpicture.trim() !== ""
+                                        ? row.adminpicture : "user.jpg";
+                                      const picUrl = `/legacy/pcs/admin/images/${pic}`;
+
+                                      const companyBadge = nameCompanyType(row.companytype);
+                                      const typeBadge    = nameAdminType(row.admintype);
+                                      const rights       = checkRightsName(row.companytype, row.department, row.section, row.admintype);
+                                      const deptBadge    = generateBadgeDepartment(rights.departmentName);
+                                      const sectBadge    = generateBadgeSection(rights.sectionName);
+                                      const isTrainee    = row.admintype === "3" || row.admintype === "4";
+                                      const remaining    = isTrainee ? diffDateNow(row.enddate) : "";
+                                      const dueDate      = row.enddate ? row.enddate.slice(0, 10) : "";
+                                      const isInactive   = row.adminstatusa === "0";
+
+                                      return (
+                                        <tr key={row.id} className="text- font-12">
+                                          {/* 1 — วันที่สมัครใช้ระบบ */}
+                                          <td className="">{row.adminregistered ?? ""}</td>
+                                          {/* 2 — รหัสพนักงาน (ID) */}
+                                          <td className="">[{row.id}]</td>
+                                          {/* 3 — ชื่อผู้ใช้งานระบบ (adminID link) */}
+                                          <td className="">
+                                            <a target="_blank" href={`/admin/admins/${encodeURIComponent(row.adminid)}`}>
+                                              {row.adminid}
+                                            </a>
+                                          </td>
+                                          {/* 4 — รูป + ชื่อ-นามสกุล */}
+                                          <td className="">
+                                            <a className="image-popup-vertical-fit el-link" href={picUrl}>
+                                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                                              <img src={picUrl} alt="user" className="rounded-circle" width={35} />
+                                            </a>
+                                            {" "}
+                                            <a
+                                              href={`/admin/admins/${encodeURIComponent(row.adminid)}`}
+                                              className="text-info"
+                                              target="_blank"
+                                            >
+                                              {row.adminname} {row.adminlastname}
+                                            </a>
+                                          </td>
+                                          {/* 5 — ชื่อเล่น */}
+                                          <td className="text-center">{row.adminnickname ?? ""}</td>
+                                          {/* 6 — บริษัท */}
+                                          <td className="text-center">
+                                            {companyBadge && (
+                                              <span className={companyBadge.cls}>{companyBadge.label}</span>
+                                            )}
+                                          </td>
+                                          {/* 7 — ประเภทพนักงาน (+ trainee remaining) */}
+                                          <td className="text-center">
+                                            {typeBadge && (
+                                              <span className={typeBadge.cls}>{typeBadge.label}</span>
+                                            )}
+                                            {isTrainee && (
+                                              <>
+                                                <br />
+                                                เหลือเวลาฝึก : <span className="bg-danger2">{remaining}</span>
+                                                <br />
+                                                ครบกำหนด : {dueDate}
+                                              </>
+                                            )}
+                                          </td>
+                                          {/* 8 — แผนก */}
+                                          <td className="text-center">
+                                            <span className={deptBadge.cls}>{deptBadge.label}</span>
+                                          </td>
+                                          {/* 9 — ตำแหน่ง */}
+                                          <td className="text-center">
+                                            <span className={sectBadge.cls}>{sectBadge.label}</span>
+                                          </td>
+                                          {/* 10 — อีเมลส่วนตัว */}
+                                          <td>
+                                            <CheckNull value={row.adminemail} link={row.adminemail ? `mailto:${row.adminemail}` : undefined} />
+                                          </td>
+                                          {/* 11 — เบอร์ส่วนตัว */}
+                                          <td>
+                                            <CheckNull value={row.admintel} link={row.admintel ? `tel:${row.admintel}` : undefined} />
+                                          </td>
+                                          {/* 12 — อีเมลบริษัท */}
+                                          <td>{arrEmailOrg.get(row.adminid) ?? ""}</td>
+                                          {/* 13 — เบอร์โทรบริษัท */}
+                                          <td>{arrTellOrg.get(row.adminid) ?? ""}</td>
+                                          {/* 14 — สถานะพักงาน */}
+                                          <td className="text-center">
+                                            {row.admintmp === "2" && " (พักงานชั่วคราว ปิดรับออเดอร์)"}
+                                          </td>
+                                          {/* 15 — ตัวเลือก (action buttons) */}
+                                          <td className="text-center action">
+                                            {isInactive ? (
+                                              <>
+                                                <span className="text-white bg-danger">บัญชีนี้ถูกลบแล้ว</span>
+                                                <span className="text-white bg-danger">ลบโดย {row.admindel}</span>
+                                              </>
+                                            ) : (
+                                              canMutate && (
+                                                <>
+                                                  <a target="_blank" href={`/admin/admins/${encodeURIComponent(row.adminid)}`}>
+                                                    <button type="button" className="btn btn-warning btn-rounded btn-sm" title="แก้ไขข้อมูล">
+                                                      <svg className="pcs-icon" viewBox="0 0 24 24">
+                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                      </svg>
+                                                    </button>
+                                                  </a>
+                                                  {" "}
+                                                  <button type="button" className="btn btn-danger btn-rounded btn-sm" title="ลบบัญชี" data-action-delete={row.adminid}>
+                                                    <svg className="pcs-icon" viewBox="0 0 24 24">
+                                                      <polyline points="3 6 5 6 21 6" />
+                                                      <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                                                      <path d="M10 11v6" />
+                                                      <path d="M14 11v6" />
+                                                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                    </svg>
+                                                  </button>
+                                                  {" "}
+                                                  <button type="button" className="btn btn-info btn-rounded btn-sm" title="รีเซ็ตรหัสผ่าน" data-action-reset={row.adminid}>
+                                                    <svg className="pcs-icon" viewBox="0 0 24 24">
+                                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                                    </svg>
+                                                  </button>
+                                                </>
+                                              )
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  {e.payload && Object.keys(e.payload).length > 0 && (
-                    <details className="text-[10px] shrink-0 max-w-[50%]">
-                      <summary className="cursor-pointer text-muted hover:text-foreground">payload</summary>
-                      <pre className="mt-1 rounded bg-surface-alt/50 p-2 overflow-x-auto font-mono text-[10px] whitespace-pre-wrap break-words">
-                        {JSON.stringify(e.payload, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
-    </main>
+      {/* legacy editForm/resetPass injection slots — home.php L429-430.
+          The modals are AJAX-rendered in the legacy; the equivalent
+          Pacred routes are sibling pilots (see file-header notes). */}
+      <div id="editForm"></div>
+      <div id="resetPass"></div>
+      {/* END: Content */}
+    </div>
   );
 }

@@ -1,0 +1,205 @@
+/* =============================================================
+ * china-address.legacy.css — legacy PCS Cargo `member/china-address.php`
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `china-address.php` renders
+ *   with, copied verbatim from the legacy stylesheets that
+ *   `member/include/header.php` loads (in this load order — later
+ *   files win the cascade):
+ *     - assets/css/bootstrap.min.css        (BS4 grid + base card/breadcrumb)
+ *     - assets/css/bootstrap-extended.min.css  (theme card-header + breadcrumb)
+ *     - assets/css/components.min.css       (app-content / content-wrapper)
+ *     - assets/css/style.css                (Prompt font on .breadcrumb)
+ *
+ *   `china-address.php`'s own content body uses ONLY these classes:
+ *   .app-content .content-overlay .content-wrapper .content-header
+ *   .content-header-left .breadcrumbs-top .breadcrumb-wrapper
+ *   .breadcrumb .breadcrumb-item (+ .active) .card .card-header
+ *   .card-content .card-body, plus the BS4 grid (.row .col-12
+ *   .col-md-12 .col-sm-12) and the spacing helper .mb-2. The legacy
+ *   card-body of this screen is EMPTY — china-address.php is a
+ *   placeholder card with just a heading.
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset
+ *   public/legacy/pcs/china-address.css and loaded with a plain
+ *   <link rel="stylesheet"> from page.tsx — it must bypass the app's
+ *   Tailwind v4 / PostCSS pipeline, which rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid subset (exact BS4 4.x values) ---- */
+/* china-address.php is Bootstrap-4 markup; these are the only BS4
+ * grid classes its content body uses. Values copied from
+ * bootstrap.min.css. */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+/* spacing helper used by china-address.php (BS4 spacing scale) */
+.pcs-legacy .mb-2 { margin-bottom: 1rem !important; }
+
+/* ---- app-content / content layout (components.min.css) ---- */
+/* components.min.css — the content shell. NOTE: the 200px hero
+ * `.content-header` variant is scoped under `.content-head-image`,
+ * which china-address.php's <body> does NOT carry — so the plain
+ * `.content-header` here is a normal block (no rule of its own). */
+.pcs-legacy .app-content {
+  background-color: #f4f5fa;
+  overflow-x: hidden;
+}
+.pcs-legacy .app-content.content {
+  margin-bottom: 3rem;
+}
+.pcs-legacy .app-content .content-overlay {
+  position: fixed;
+  opacity: 0;
+  transition: all 0.7s;
+  z-index: -1;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  height: 100%;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+/* components.min.css — html body .content .content-wrapper */
+.pcs-legacy .content-wrapper {
+  padding: 1rem 1rem 0;
+}
+
+/* ---- Breadcrumb (bootstrap.min.css -> bootstrap-extended.min.css) ---- */
+/* bootstrap.min.css base, then bootstrap-extended.min.css overrides
+ * (loaded after -> wins): transparent bg, Quicksand font, no radius,
+ * the breadcrumbs-top zero-margin/padding, and the "-" separator. */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  font-size: 1rem;
+  font-family: Quicksand, Georgia, "Times New Roman", Times, serif;
+  background-color: transparent;
+  padding: 0 0 0.75rem;
+  margin-bottom: 1rem;
+  min-height: auto;
+}
+/* style.css L67 — the legacy member theme swaps the breadcrumb font
+ * to Prompt (loaded after bootstrap-extended). */
+.pcs-legacy .breadcrumb {
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+}
+/* breadcrumbs-top wrapper — zero out the breadcrumb box (extended) */
+.pcs-legacy .breadcrumbs-top .breadcrumb {
+  margin: 0;
+  padding: 0;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item {
+  padding-left: 0.5rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  color: #6b6f82;
+  content: "-";
+}
+.pcs-legacy .breadcrumb > li + li::before {
+  padding-right: 0.6rem;
+  padding-left: 0.6rem;
+}
+.pcs-legacy .breadcrumb-item.active {
+  color: #6b6f82;
+}
+
+/* ---- Card (bootstrap.min.css -> bootstrap-extended.min.css) ---- */
+/* bootstrap.min.css base, then bootstrap-extended.min.css overrides
+ * (loaded after -> wins): no border, the theme shadow, .45rem radius. */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  box-shadow: 0 2px 18px 1px rgba(49, 53, 72, 0.1);
+  border-radius: 0.45rem;
+  margin-bottom: 1.875rem;
+}
+/* style.css L145 — the member theme tightens the card bottom margin */
+.pcs-legacy .card {
+  margin-bottom: 1rem;
+}
+.pcs-legacy .card-content {
+  position: relative;
+}
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* card-header — bootstrap.min.css base, then bootstrap-extended.min.css
+ * overrides (loaded after -> wins): the orange theme band + white text. */
+.pcs-legacy .card-header {
+  position: relative;
+  padding: 1.5rem;
+  margin-bottom: 0;
+  background-color: #ff9149;
+  color: #fff;
+  border-bottom: none;
+}
+.pcs-legacy .card-header:first-child {
+  border-radius: 0.45rem 0.45rem 0 0;
+}
+
+/* heading reset so the legacy <h3> matches the theme, not Tailwind
+ * preflight (which zeroes heading margin + font-size). BS4 h3 value. */
+.pcs-legacy h3 {
+  font-size: 1.75rem;
+  font-weight: 500;
+  margin: 0 0 0.5rem;
+  line-height: 1.2;
+}
+/* .card-header .card-title { margin-bottom: 0 } — the legacy <h3> here
+ * carries no .card-title class, but the menu pilot resets headings the
+ * same way; keep the BS4 h3 above. */
+.pcs-legacy a {
+  color: inherit;
+  text-decoration: none;
+}
+.pcs-legacy a:hover {
+  text-decoration: none;
+}
+.pcs-legacy ol {
+  margin: 0;
+}

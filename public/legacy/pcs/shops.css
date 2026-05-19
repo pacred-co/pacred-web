@@ -1,0 +1,519 @@
+/* =============================================================
+ * shops.css — legacy PCS Cargo `member/shops.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — the ฝากสั่งซื้อสินค้า
+ * (China shop-order) customer screen. Sibling of the `menu.php`
+ * pilot (`public/legacy/pcs/menu.css`).
+ *
+ * THE CSS-HANDLING PATTERN (copied from the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   This file holds the exact rules `shops.php` renders with,
+ *   copied verbatim from the legacy stylesheets:
+ *     - the inline <style> block in shops.php          (lines 471-691)
+ *     - assets/css/style.css / custom.css              (theme + tabs/badges)
+ *     - the Bootstrap-4 grid/card/table/badge/nav-tabs subset
+ *       shops.php uses (exact BS4 4.x values)
+ *     - the DataTables (.dataTables_wrapper / responsive) chrome
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   Served as the STATIC asset public/legacy/pcs/shops.css and loaded
+ *   with a plain <link rel="stylesheet"> from page.tsx — it must bypass
+ *   the app's Tailwind v4 / PostCSS pipeline, which rejects verbatim
+ *   legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid subset (exact BS4 4.x values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-3,
+.pcs-legacy .col-6,
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-3  { flex: 0 0 25%; max-width: 25%; }
+.pcs-legacy .col-6  { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .col-12 { flex: 0 0 100%; max-width: 100%; }
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-6  { flex: 0 0 50%; max-width: 50%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+  .pcs-legacy .offset-md-3 { margin-left: 25%; }
+}
+
+/* ---- Bootstrap-4 card ---- */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+.pcs-legacy .border-black { border: 1px solid #000 !important; }
+
+/* ---- Bootstrap-4 spacing helpers shops.php uses ---- */
+.pcs-legacy .p-0  { padding: 0 !important; }
+.pcs-legacy .p-1  { padding: 0.25rem !important; }
+.pcs-legacy .p-05 { padding: 0.125rem !important; }
+.pcs-legacy .pt-1 { padding-top: 0.25rem !important; }
+.pcs-legacy .pb-0 { padding-bottom: 0 !important; }
+.pcs-legacy .pl-1 { padding-left: 0.25rem !important; }
+.pcs-legacy .pr-1 { padding-right: 0.25rem !important; }
+.pcs-legacy .mb-0 { margin-bottom: 0 !important; }
+.pcs-legacy .mt-1 { margin-top: 0.25rem !important; }
+
+/* ---- display + alignment helpers ---- */
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-white  { color: #fff !important; }
+.pcs-legacy .text-dark   { color: #2f3036 !important; }
+.pcs-legacy .text-info   { color: #00cfdd !important; }
+.pcs-legacy .text-danger { color: #FF586B !important; }
+.pcs-legacy .float-right    { float: right !important; }
+.pcs-legacy .float-md-right { float: none !important; }
+.pcs-legacy .d-block        { display: block !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .d-none         { display: none !important; }
+.pcs-legacy .d-sm-none      { }
+@media (min-width: 576px) {
+  .pcs-legacy .d-sm-none { display: none !important; }
+}
+@media (max-width: 575.98px) {
+  .pcs-legacy .d-sm-none { display: block !important; }
+}
+.pcs-legacy .img-fluid { max-width: 100%; height: auto; }
+@media (min-width: 768px) {
+  .pcs-legacy .text-md-left  { text-align: left !important; }
+  .pcs-legacy .text-md-right { text-align: right !important; }
+  .pcs-legacy .float-md-right { float: right !important; }
+}
+
+/* ---- typography reset (Tailwind preflight zeroes headings) ---- */
+.pcs-legacy h2 { font-size: 2rem;    font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+.pcs-legacy ol { margin: 0; }
+.pcs-legacy hr { box-sizing: content-box; height: 0; overflow: visible; }
+/* Tailwind v4 preflight forces img { display:block } — restore inline. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+.pcs-legacy .font-12 { font-size: 12px; }
+.pcs-legacy .font-13 { font-size: 13px; }
+.pcs-legacy .font-30 { font-size: 30px; }
+.pcs-legacy .font-normal { font-weight: 400; }
+.pcs-legacy .notranslate { }
+
+/* ---- theme colour helpers (assets/css/style.css / custom.css) ---- */
+.pcs-legacy .text-color       { color: #E9091F; }
+.pcs-legacy .text-color-main  { color: #E9091F; }
+.pcs-legacy .bg-danger        { background-color: #FF586B !important; }
+.pcs-legacy .bg-danger2       { background-color: #fde2e4 !important; }
+
+/* ---- Bootstrap-4 breadcrumb ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: transparent;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item { padding-left: 0.5rem; }
+.pcs-legacy .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  color: #6c757d;
+  content: "/";
+}
+.pcs-legacy .breadcrumb-item.active { color: #6c757d; }
+.pcs-legacy .breadcrumbs-top { margin-bottom: 0.5rem; }
+.pcs-legacy .content-header-left { }
+
+/* ---- Bootstrap-4 buttons (theme) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.pcs-legacy .btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  border-radius: 0.21rem;
+}
+.pcs-legacy .btn-circle { border-radius: 50%; width: 32px; height: 32px; padding: 0; }
+.pcs-legacy .btn-rounded { border-radius: 1.5rem; }
+.pcs-legacy .round { border-radius: 1.5rem; }
+.pcs-legacy .btn-success { background-color: #16D39A; color: #fff; }
+.pcs-legacy .btn-danger  { background-color: #FF586B; color: #fff; }
+.pcs-legacy .btn-color-main { background-color: #E9091F; color: #fff; }
+.pcs-legacy .btn-outline-success { color: #16D39A; border-color: #16D39A; background: transparent; }
+.pcs-legacy .btn-outline-danger  { color: #FF586B; border-color: #FF586B; background: transparent; }
+.pcs-legacy .btn-outline-info    { color: #00cfdd; border-color: #00cfdd; background: transparent; }
+.pcs-legacy .btn-outline-primary { color: #5A8DEE; border-color: #5A8DEE; background: transparent; }
+.pcs-legacy .btn-group {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.pcs-legacy .btn-group > .btn { position: relative; }
+.pcs-legacy .waves-effect { position: relative; overflow: hidden; }
+
+/* ---- Bootstrap-4 badges + the legacy pcs-badge pills ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: 0.25em 0.4em;
+  font-size: 75%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .badge-pill { padding-right: 0.6em; padding-left: 0.6em; border-radius: 10rem; }
+.pcs-legacy .badge-warning { background-color: #FFA87D; color: #fff; }
+.pcs-legacy .badge-danger  { background-color: #FF586B; color: #fff; }
+.pcs-legacy .badge-info    { background-color: #00cfdd; color: #fff; }
+.pcs-legacy .badge-primary { background-color: #5A8DEE; color: #fff; }
+.pcs-legacy .badge-success { background-color: #16D39A; color: #fff; }
+.pcs-legacy .badge-vip     { background-color: #E9091F; color: #fff; }
+/* the legacy tab counter pill (.pcs-badge2 .pcs-badge-pill) */
+.pcs-legacy .pcs-badge2 {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  text-align: center;
+  padding: 3px 6px;
+  vertical-align: middle;
+}
+.pcs-legacy .pcs-badge-pill { border-radius: 10rem; }
+
+/* ---- Bootstrap-4 nav-tabs + the legacy nav-underline / pcs-tabs ---- */
+.pcs-legacy .nav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+.pcs-legacy .nav-tabs { border-bottom: 1px solid #ddd; }
+.pcs-legacy .nav-item { }
+.pcs-legacy .nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: #6B6F82;
+}
+.pcs-legacy .nav-tabs .nav-link {
+  border: 1px solid transparent;
+  border-top-left-radius: 0.25rem;
+  border-top-right-radius: 0.25rem;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  border: none;
+  border-bottom: 2px solid transparent;
+  line-height: 1.25rem !important; /* shops.php inline <style> L522-524 */
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link.active {
+  border-bottom: 2px solid #E9091F;
+  color: #E9091F;
+  background: transparent;
+}
+.pcs-legacy .pcs-tabs .nav-item { margin-bottom: -1px; }
+.pcs-legacy .tab-sm-center { }
+
+/* ---- Bootstrap-4 tables ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #6B6F82;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  padding: 0.25rem 0.5rem; /* shops.php inline <style> L510-512 */
+  vertical-align: top;
+  border-top: 1px solid #ddd;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #ddd;
+}
+.pcs-legacy .table-bordered { border: 1px solid #ddd; }
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td { border: 1px solid #ddd; }
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- Bootstrap-4 forms (the slip / checkbox bits) ---- */
+.pcs-legacy .hr-dashed {
+  border-top: 1px dashed #ddd;
+  margin: 1rem 0;
+}
+
+/* =============================================================
+ * shops.php inline <style> block — verbatim (lines 471-691)
+ * ============================================================= */
+
+/* L472-474 */
+.pcs-legacy .add-text-all::before {
+  content: "ทั้งหมด ";
+}
+
+/* L502-509 — sticky helper */
+.pcs-legacy .sticky {
+  position: fixed;
+  top: 0;
+  width: 100%;
+}
+.pcs-legacy .sticky + .content {
+  padding-top: 102px;
+}
+
+/* L513-518 */
+.pcs-legacy .text-center p.btn {
+  margin-bottom: 0.2rem !important;
+}
+.pcs-legacy p {
+  margin-bottom: 0rem;
+}
+
+/* L519-521 */
+.pcs-legacy .max-w {
+  max-width: 220px;
+}
+
+/* L475-501 — mobile (max-width: 578px) */
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .content-wrapper {
+    padding: 0 !important;
+  }
+  .pcs-legacy .content-header-left {
+    margin: 0.5rem !important;
+  }
+  .pcs-legacy .tr1::after {
+    content: " \A คลิกดูเพิ่มเติม";
+    white-space: pre-wrap;
+  }
+  .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > td:first-child,
+  .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > th:first-child {
+    padding: 10px;
+  }
+  .pcs-legacy .p-m-0 {
+    padding: 0 !important;
+  }
+  .pcs-legacy .dtr-details br {
+    display: none;
+  }
+  .pcs-legacy .btn-group.t {
+    bottom: 148px !important;
+  }
+  .pcs-legacy .btn-group {
+    bottom: 70px !important;
+  }
+}
+
+/* L526-531 — success gif */
+.pcs-legacy .success-gif {
+  background-image: url("/legacy/pcs/theme/success.gif");
+  height: 70px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* L533-540 */
+.pcs-legacy .success-checkmark {
+  width: 50px;
+  height: 115px;
+  margin: 0 auto;
+  position: absolute;
+  top: 47.5%;
+  left: 40%;
+}
+
+/* L541-552 — mobile (max-width: 600px) */
+@media only screen and (max-width: 600px) {
+  .pcs-legacy .b-pay {
+    bottom: 70px !important;
+    width: 100% !important;
+    height: 70px !important;
+    z-index: 999 !important;
+  }
+  .pcs-legacy .success-checkmark {
+    top: 45.5%;
+    left: 38%;
+  }
+}
+
+/* L554-626 — success checkmark animation chrome */
+.pcs-legacy .success-checkmark .check-icon {
+  width: 80px;
+  height: 80px;
+  position: relative;
+  border-radius: 50%;
+  box-sizing: content-box;
+  border: 4px solid #4caf50;
+}
+.pcs-legacy .success-checkmark .check-icon::before {
+  top: 3px;
+  left: -2px;
+  width: 30px;
+  transform-origin: 100% 50%;
+  border-radius: 100px 0 0 100px;
+}
+.pcs-legacy .success-checkmark .check-icon::after {
+  top: 0;
+  left: 30px;
+  width: 60px;
+  transform-origin: 0 50%;
+  border-radius: 0 100px 100px 0;
+  animation: rotate-circle 4.25s infinite;
+}
+.pcs-legacy .success-checkmark .check-icon::before,
+.pcs-legacy .success-checkmark .check-icon::after {
+  content: "";
+  height: 100px;
+  position: absolute;
+  background: transparent;
+  transform: rotate(-45deg);
+}
+.pcs-legacy .success-checkmark .check-icon .icon-line {
+  height: 5px;
+  background-color: #4caf50;
+  display: block;
+  border-radius: 2px;
+  position: absolute;
+  z-index: 10;
+}
+.pcs-legacy .success-checkmark .check-icon .icon-line.line-tip {
+  top: 46px;
+  left: 14px;
+  width: 25px;
+  transform: rotate(45deg);
+  animation: icon-line-tip 0.75s infinite;
+}
+.pcs-legacy .success-checkmark .check-icon .icon-line.line-long {
+  top: 38px;
+  right: 8px;
+  width: 47px;
+  transform: rotate(-45deg);
+  animation: icon-line-long 0.75s infinite;
+}
+.pcs-legacy .success-checkmark .check-icon .icon-circle {
+  top: -4px;
+  left: -4px;
+  z-index: 10;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  position: absolute;
+  box-sizing: content-box;
+  border: 4px solid rgba(76, 175, 80, 0.5);
+}
+.pcs-legacy .success-checkmark .check-icon .icon-fix {
+  top: 8px;
+  width: 5px;
+  left: 26px;
+  z-index: 1;
+  height: 85px;
+  position: absolute;
+  transform: rotate(-45deg);
+  background-color: transparent;
+}
+
+@keyframes rotate-circle {
+  0%   { transform: rotate(-45deg); }
+  5%   { transform: rotate(-45deg); }
+  12%  { transform: rotate(-405deg); }
+  100% { transform: rotate(-405deg); }
+}
+@keyframes icon-line-tip {
+  0%   { width: 0;    left: 1px;  top: 19px; }
+  54%  { width: 0;    left: 1px;  top: 19px; }
+  70%  { width: 50px; left: -8px; top: 37px; }
+  84%  { width: 17px; left: 21px; top: 48px; }
+  100% { width: 25px; left: 14px; top: 45px; }
+}
+@keyframes icon-line-long {
+  0%   { width: 0;    right: 46px; top: 54px; }
+  65%  { width: 0;    right: 46px; top: 54px; }
+  84%  { width: 55px; right: 0px;  top: 35px; }
+  100% { width: 47px; right: 8px;  top: 38px; }
+}
+
+/* =============================================================
+ * Theme-icon font + layout helpers shops.php markup relies on
+ * (assets/fonts/feather + assets/css/style.css). Reproduced as
+ * minimal no-op placeholders so the legacy class names are present
+ * and the layout matches even though the icon webfont is not staged.
+ * ============================================================= */
+.pcs-legacy .ft-shopping-cart::before { content: ""; }
+.pcs-legacy .ft-plus::before { content: "+"; }
+.pcs-legacy .mdi-check-circle-outline::before { content: ""; }
+.pcs-legacy .pr110 { padding-right: 0; }
+.pcs-legacy .p-m-0 { }
+.pcs-legacy .anchor { }
+
+/* the content shell — matches the legacy `.app-content .content`
+ * page wrapper (style.css). The customer portal NavBar is the
+ * Pacred chrome; this only positions the page body. */
+.pcs-legacy .app-content { padding: 2rem; }
+.pcs-legacy .content-wrapper { padding: 0 2.2rem; }
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .app-content { padding: 0.5rem; }
+}

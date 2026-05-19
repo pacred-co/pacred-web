@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Claude Code session worktrees — separate git checkouts, not source
     ".claude/worktrees/**",
+    // Static assets — never source. Includes the staged legacy PCS vendor
+    // bundles (jQuery / Bootstrap-4 / DataTables) under public/legacy/pcs/vendor/.
+    "public/**",
   ]),
 ]);
 
