@@ -45,9 +45,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending,
       shopAwaitPay,
       shopOrdered,
+      shopNote,
       forwarderArrived,
       forwarderDelivery,
       forwarderCredit,
+      forwarderNote,
+      forwarderWhError,
       driverItems,
       yuanPending,
       salesPayout,
@@ -72,6 +75,17 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
         .eq("status", "awaiting_payment"),
       admin.from("service_orders").select("id", { count: "exact", head: true })
         .eq("status", "ordered"),
+      // หมายเหตุฝากสั่ง — legacy countNoteShop: tb_header_order
+      // WHERE hNote <> '' AND hStatus NOT IN (5,6). Pacred analogue:
+      // service_orders.note_admin (= legacy hNote per 0011 line 172),
+      // skipped for completed/cancelled (= legacy hStatus 5/6).
+      // PostgREST: `not.is.null` + `neq.''` chain — both are needed
+      // because the legacy column is NOT NULL with empty-string default,
+      // and the Pacred port is NULLABLE with NULL = "no note set".
+      admin.from("service_orders").select("id", { count: "exact", head: true })
+        .not("note_admin", "is", null)
+        .neq("note_admin", "")
+        .not("status", "in", "(completed,cancelled)"),
       // ── ฝากนำเข้า (forwarders) ──────────────────────────────────
       // Legacy badgeMenu on ฝากนำเข้า ~ countForwarder6 area
       // (ถึงไทย / รอชำระ). Pacred: arrived_thailand.
@@ -81,6 +95,31 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
         .eq("status", "out_for_delivery"),
       admin.from("forwarders").select("id", { count: "exact", head: true })
         .eq("status", "pending_payment").eq("credit_used", true),
+      // หมายเหตุนำเข้า — legacy countNote: tb_forwarder WHERE
+      // fNote <> '' AND fStatus <> 7. Pacred: forwarders.note_admin
+      // (= legacy fNote per 0010 line 140), skipped for delivered
+      // (= legacy fStatus 7). The note-queue is a daily-flow workspace
+      // staff actively work — docs/research/wave-1-fidelity/
+      // audit-b4-admin-sidebar.md §4.
+      admin.from("forwarders").select("id", { count: "exact", head: true })
+        .not("note_admin", "is", null)
+        .neq("note_admin", "")
+        .neq("status", "delivered"),
+      // ประวัติเข้าโกดังไทย error queue — legacy countErrorF4:
+      // tb_forwarder_import2 scan rows whose `fid` (the matched parcel
+      // FK) is NULL — i.e. a barcode was scanned at the TH warehouse
+      // but couldn't be paired to a known forwarder row. Staff fix
+      // these from /admin/forwarders/warehouse-history (legacy
+      // forwarder-import-warehouse.php).
+      //
+      // NOTE — this is the ONLY query in this batch hitting a legacy
+      // tb_* table directly (the rebuilt schema has no equivalent
+      // table; see docs/research/sidebar-fidelity-audit/01-broken-links
+      // §"/admin/forwarders/warehouse-history"). The wider migration
+      // to all-tb_* queries is tracked as the B-0 swap in
+      // docs/research/wave-1-fidelity/audit-b4-admin-sidebar.md §7.
+      admin.from("tb_forwarder_import2").select("id", { count: "exact", head: true })
+        .is("fid", null),
       // มอบงานคนขับ — forwarders ready to assign (out_for_delivery is
       // the closest Pacred analogue of legacy status_driver_item).
       admin.from("forwarders").select("id", { count: "exact", head: true })
@@ -138,12 +177,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending:       n(shopPending),
       shopAwaitPay:      n(shopAwaitPay),
       shopOrdered:       n(shopOrdered),
-      shopNote:          0, // หมายเหตุฝากสั่ง — note queue not yet ported (Phase B §5)
+      shopNote:          n(shopNote),
       forwarderArrived:  n(forwarderArrived),
       forwarderDelivery: n(forwarderDelivery),
       forwarderCredit:   n(forwarderCredit),
-      forwarderNote:     0, // หมายเหตุนำเข้า — note queue not yet ported (Phase B §4)
-      forwarderWhError:  0, // ประวัติเข้าโกดังไทย error queue not yet ported
+      forwarderNote:     n(forwarderNote),
+      forwarderWhError:  n(forwarderWhError),
       driverItems:       n(driverItems),
       yuanPending:       n(yuanPending),
       cntDrawMoney:      cnt,
