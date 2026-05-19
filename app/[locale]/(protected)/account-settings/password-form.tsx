@@ -31,6 +31,9 @@
  * `$sweetalert` outcome code and this component renders the matching
  * SweetAlert text (L206-247). On `sPass` it redirects to logout after
  * 4.5s — exactly as the legacy `window.setTimeout(... logout/ ,4500)`.
+ * The SweetAlert content is DERIVED from the action result during
+ * render (not set inside an effect); only the success→logout timer is
+ * a real side effect, so it stays in a `useEffect`.
  *
  * Rebrand: PCS -> PR is branding text + member codes only.
  */
@@ -46,6 +49,35 @@ import {
 function useShowPassword(): [boolean, () => void] {
   const [shown, setShown] = useState(false);
   return [shown, () => setShown((s) => !s)];
+}
+
+type SwalContent = { title: string; text: string; type: "success" | "error" };
+
+/**
+ * Maps the legacy `$sweetalert` outcome code to the SweetAlert title/text/
+ * type — account-settings.php L206-247. Pure: the popup is fully derived
+ * from the action result, so it is computed during render (no effect).
+ */
+function deriveSwal(state: AccountSettingsResult | null): SwalContent | null {
+  if (!state) return null;
+  switch (state.sweetalert) {
+    case "sPass": // L208-219
+      return {
+        title: "อัปเดตข้อมูลสำเร็จ",
+        text: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง!!!",
+        type: "success",
+      };
+    case "eSQL": // L220-228
+      return { title: "ผิดพลาด", text: "กรุณาลองใหม่อีกครั้ง!!!", type: "error" };
+    case "ePass": // L229-237
+      return { title: "ผิดพลาด", text: "รหัสผ่านเดิมไม่ถูกต้อง!!!", type: "error" };
+    case "eConfirm": // L238-246
+      return { title: "ผิดพลาด", text: "รหัสใหม่ไม่ตรงกัน!!!", type: "error" };
+    case "empty": // L7 — legacy alert("กรุณากรอกข้อมูลให้ครบ")
+      return { title: "กรุณากรอกข้อมูลให้ครบ", text: "", type: "error" };
+    default:
+      return null;
+  }
 }
 
 export function PasswordForm() {
@@ -72,60 +104,22 @@ export function PasswordForm() {
   // L182/L195 — document.getElementById("btnSubmit").disabled = true/false
   const submitDisabled = newSameAsOld || confirmMismatch;
 
-  // ── SweetAlert result handling (account-settings.php L206-247) ──
-  const [alertMsg, setAlertMsg] = useState<{
-    title: string;
-    text: string;
-    type: "success" | "error";
-  } | null>(null);
+  // ── SweetAlert result (account-settings.php L206-247) ──
+  // The popup is DERIVED from the action result during render. The error
+  // popup has a "ตกลง" dismiss button — remembering which result the user
+  // dismissed (by object identity — `useActionState` mints a fresh result
+  // object per submit) hides it without a derive-in-effect anti-pattern.
+  const [dismissed, setDismissed] = useState<AccountSettingsResult | null>(null);
+  const alertMsg = state && state !== dismissed ? deriveSwal(state) : null;
 
+  // The ONLY real side effect: on `sPass` the legacy page does
+  // `window.setTimeout(... logout/ ,4500)`. No setState here.
   useEffect(() => {
-    if (!state) return;
-    switch (state.sweetalert) {
-      case "sPass":
-        // L208-219 — success + redirect to logout/ after 4500ms
-        setAlertMsg({
-          title: "อัปเดตข้อมูลสำเร็จ",
-          text: "กรุณาเข้าสู่ระบบใหม่อีกครั้ง!!!",
-          type: "success",
-        });
-        window.setTimeout(() => {
-          void accountSettingsLogoutAction();
-        }, 4500);
-        break;
-      case "eSQL":
-        // L220-228
-        setAlertMsg({
-          title: "ผิดพลาด",
-          text: "กรุณาลองใหม่อีกครั้ง!!!",
-          type: "error",
-        });
-        break;
-      case "ePass":
-        // L229-237
-        setAlertMsg({
-          title: "ผิดพลาด",
-          text: "รหัสผ่านเดิมไม่ถูกต้อง!!!",
-          type: "error",
-        });
-        break;
-      case "eConfirm":
-        // L238-246
-        setAlertMsg({
-          title: "ผิดพลาด",
-          text: "รหัสใหม่ไม่ตรงกัน!!!",
-          type: "error",
-        });
-        break;
-      case "empty":
-        // L7 — legacy alert("กรุณากรอกข้อมูลให้ครบ")
-        setAlertMsg({
-          title: "กรุณากรอกข้อมูลให้ครบ",
-          text: "",
-          type: "error",
-        });
-        break;
-    }
+    if (state?.sweetalert !== "sPass") return;
+    const timer = window.setTimeout(() => {
+      void accountSettingsLogoutAction();
+    }, 4500);
+    return () => window.clearTimeout(timer);
   }, [state]);
 
   return (
@@ -151,7 +145,6 @@ export function PasswordForm() {
               onChange={(e) => setOldPass(e.target.value)}
             />
             <div className="input-group-addon input-show-pass">
-              {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
               <a
                 href=""
                 onClick={(e) => {
@@ -195,7 +188,6 @@ export function PasswordForm() {
             />
             <div className="input-info">(6-20 ตัวอักษร)</div>
             <div className="input-group-addon input-show-pass">
-              {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
               <a
                 href=""
                 onClick={(e) => {
@@ -235,7 +227,6 @@ export function PasswordForm() {
               }}
             />
             <div className="input-group-addon input-show-pass">
-              {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
               <a
                 href=""
                 onClick={(e) => {
@@ -287,7 +278,7 @@ export function PasswordForm() {
               <button
                 type="button"
                 className="btn btn-outline-info round btn-min-width"
-                onClick={() => setAlertMsg(null)}
+                onClick={() => setDismissed(state)}
               >
                 ตกลง
               </button>
