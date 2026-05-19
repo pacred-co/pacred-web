@@ -57,7 +57,7 @@ import { WalletCounter } from "./wallet-counter";
 // (left-menu.php L30-34) — the central PCS line, rebranded.
 const SALES_FALLBACK = {
   nickname: "ส่วนกลาง",
-  picture: "/legacy/pcs/logo.png",
+  picture: "/images/pacred-logo-red.png",
   tel: "02-055-6063",
 } as const;
 
@@ -249,7 +249,7 @@ export default async function DashboardPage() {
                                     <img
                                       className="brand-logo logo-wallet"
                                       alt="logo"
-                                      src="/legacy/pcs/logo.png"
+                                      src="/images/pacred-logo-red.png"
                                     />
                                   </div>
                                 </div>
