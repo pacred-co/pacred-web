@@ -1,0 +1,240 @@
+/* =============================================================
+ * forwarder-table.css — legacy PCS Cargo `member/forwarder-table.php`
+ *   ("รายการฝากนำเข้า" — import-forwarder list, table view)
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php / forwarder.php
+ * pilots — see public/legacy/pcs/menu.css / service-import.css):
+ * to be 100% visually identical to the legacy PHP we do NOT
+ * re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *
+ * forwarder-table.php is the SAME chrome family as forwarder.php
+ * (it includes the same legacy header.php + header-theme.php +
+ * theme). Its Bootstrap-4 grid / card / nav-tabs / badge / table /
+ * modal / button base is therefore ALREADY supplied by the shared
+ * `service-import.css` — the page loads service-import.css FIRST,
+ * then this file. This file holds ONLY what forwarder-table.php
+ * adds on top:
+ *   - the screen's own inline <style> block (forwarder-table.php
+ *     L576-722) — reproduced VERBATIM below.
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ * collide with — the rest of the Tailwind app. The page renders the
+ * legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/forwarder-table.css
+ * and loaded with a plain <link rel="stylesheet"> from page.tsx —
+ * it must bypass the app's Tailwind v4 / PostCSS pipeline, which
+ * rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* =============================================================
+ * The inline <style> block from forwarder-table.php L576-722,
+ * copied byte-for-byte; the only change is the `.pcs-legacy `
+ * scope prefix on every selector. Note this block intentionally
+ * RE-DECLARES `.add-text-all::before` (here as a single space) —
+ * service-import.css declares it as "ทั้งหมด "; the legacy
+ * forwarder-table.php's own later inline block wins at runtime, so
+ * we keep this declaration last (this file loads after
+ * service-import.css) to reproduce that exact cascade.
+ * ============================================================= */
+.pcs-legacy .add-text-all::before {
+    content: " ";
+}
+
+.pcs-legacy .nav-link.active h3 {
+    color: #cc3333;
+}
+.pcs-legacy table {
+    font-size: 0.8rem !important;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.pcs-legacy .table td {
+    padding: 0.15rem 0.3rem !important;
+}
+.pcs-legacy .table {
+    color: #000;
+}
+.pcs-legacy .table th {
+    padding: 0.25rem 0.25rem !important;
+}
+.pcs-legacy .d-none2 .dt-checkboxes {
+    display: none;
+}
+.pcs-legacy .bg-color {
+    background: linear-gradient(to right, #ce35a1 0%, #ee7411 100%);
+    color: #fff;
+}
+.pcs-legacy .nav-link h3 {
+    font-size: 1.4rem;
+}
+.pcs-legacy .bg-danger2 {
+    background: linear-gradient(to right, #ce35a1 0%, #ee7411 100%);
+}
+.pcs-legacy .card-body {
+    padding: 0.7rem;
+}
+.pcs-legacy .dataTables_filter {
+    width: 50%;
+    display: inline-block;
+}
+.pcs-legacy .dt-buttons {
+    width: 50%;
+    display: inline-block;
+}
+.pcs-legacy .pcs-tabs button {
+    color: #000 !important;
+}
+@media only screen and (max-width: 1641px) {
+    .pcs-legacy body {
+        min-width: 1700px;
+    }
+}
+@media only screen and (max-width: 1200px) {
+    .pcs-legacy .d-none-1200 {
+        display: none;
+    }
+    .pcs-legacy table {
+        font-size: 0.80rem;
+    }
+    .pcs-legacy body {
+        min-width: 1100px;
+    }
+}
+@media only screen and (max-width: 578px) {
+    .pcs-legacy .content-wrapper {
+        padding: 0 !important;
+    }
+    .pcs-legacy .content-header-left {
+        margin: 0.5rem !important;
+    }
+
+    .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > td:first-child,
+    .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > th:first-child {
+        padding: 10px;
+    }
+    .pcs-legacy .p-m-0 {
+        padding: 0 !important;
+    }
+    .pcs-legacy .dtr-details br {
+        display: none;
+    }
+    .pcs-legacy body {
+        min-width: unset;
+    }
+    .pcs-legacy .d-none-578 {
+        display: none;
+    }
+    .pcs-legacy .dataTables_filter {
+        width: 100%;
+        display: inline-block;
+    }
+    .pcs-legacy .dt-buttons {
+        text-align: center;
+        width: 100%;
+        display: inline-block;
+    }
+}
+.pcs-legacy #fTrackingCHN {
+    min-width: 250px;
+    margin-bottom: 0.8rem;
+}
+.pcs-legacy .mr-05 {
+    margin-right: 0.5rem;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+    padding: 0.25rem 0.25rem;
+}
+.pcs-legacy button.nav-link {
+    background-color: transparent;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item button.nav-link.active {
+    background-color: rgba(255, 137, 137, 0.192);
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item button.nav-link.active {
+    color: #cc3333;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item button.nav-link {
+    position: relative;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 2rem;
+    padding: 0.5rem 1rem;
+    -webkit-transition: color .2s;
+    transition: color .2s;
+    border: none;
+}
+.pcs-legacy .nav.nav-tabs .nav-item .nav-link.active {
+    border-color: #cc3333 #cc3333 #fff !important;
+}
+.pcs-legacy .nav button {
+    width: 100%;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+    line-height: 1.25rem !important;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item button.nav-link {
+    line-height: 1.2rem !important;
+}
+.pcs-legacy table {
+    font-size: 0.90rem !important;
+}
+.pcs-legacy .price-product .h1,
+.pcs-legacy .h2,
+.pcs-legacy .h3,
+.pcs-legacy .h4,
+.pcs-legacy .h5,
+.pcs-legacy .h6,
+.pcs-legacy h1,
+.pcs-legacy h2,
+.pcs-legacy h3,
+.pcs-legacy h4,
+.pcs-legacy h5,
+.pcs-legacy h6 {
+    margin-bottom: 0rem !important;
+}
+
+/* =============================================================
+ * Supporting BS4 / theme classes forwarder-table.php uses in its
+ * markup that are NOT in the service-import.css base, copied
+ * verbatim from the legacy stylesheets:
+ *   - .table-striped / .table-bordered / .display / .no-footer
+ *     (assets/plugins/datatables/css/dataTables.bootstrap4.css)
+ *   - .hr-dashed (assets/css/custom.css)
+ *   - .btn-color-main already in base; .b-pay already in base.
+ * Scope prefix `.pcs-legacy ` is the only change.
+ * ============================================================= */
+
+/* DataTables BS4 wrapper chrome — the static-rendered table keeps
+ * the .dataTables_wrapper / .dt-buttons classes so the look is
+ * identical at rest even though the JS init is a follow-up. */
+.pcs-legacy .dataTables_wrapper { position: relative; }
+.pcs-legacy table.dataTable {
+    width: 100%;
+    margin: 0 auto;
+    clear: both;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.pcs-legacy table.dataTable.no-footer { border-bottom: 1px solid #111; }
+.pcs-legacy table.dataTable thead th { position: relative; }
+
+/* the dashed separator above the table (forwarder-table.php L938) */
+.pcs-legacy .hr-dashed {
+    border-top: 1px dashed #babfc7;
+    margin: 0.5rem 0;
+}
+
+/* the legacy app-content / content shell — verbatim from
+ * assets/css/style.css (same as the service-import base). */
+.pcs-legacy .app-content { position: relative; }
+.pcs-legacy .content-wrapper { padding: 1.5rem; }
+.pcs-legacy .content-body { position: relative; }
+.pcs-legacy .content-overlay { position: absolute; }

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!--
+ @license
+ Copyright 2019 Google LLC. All Rights Reserved.
+ SPDX-License-Identifier: Apache-2.0
+
+ =============================================================
+ map.html — legacy PCS Cargo `member/map.php`, reproduced VERBATIM.
+
+ D1 / ADR-0017 faithful-port transcription · runbook
+ docs/runbook/faithful-port-transcription.md.
+
+ The legacy `map.php` is a STANDALONE full HTML document — it has
+ NO PHP `include`s, no `header.php` chrome, no auth code, no SQL.
+ It is the Google Maps "Geolocation" sample verbatim (a Google
+ LLC sample, Apache-2.0). The runbook's map.php gotcha says:
+ "reproduce the legacy embed verbatim — keep the legacy map
+ markup/script as-is; it is part of the 1:1".
+
+ So map.php is brought across as this STATIC HTML file, served
+ byte-identical from public/legacy/pcs/map.html, and embedded by
+ the Next.js route app/[locale]/(protected)/map/page.tsx in an
+ <iframe>. The Google Maps <script> tag, the inline <style>, the
+ initMap() geolocation logic, and the polyfill are ALL copied
+ exactly from member/map.php L1-130 — zero changes. (map.php
+ contains no `PCS` branding text, so the PCS→PR rebrand is a
+ no-op here — the file is a literal verbatim copy.)
+
+ The Google Maps API key below is the EXACT key the legacy
+ map.php embeds (member/map.php L63). Per the faithful-port
+ runbook the PCS→PR change is branding + member codes only; the
+ borrowed third-party keys/integrations are NOT scrubbed here —
+ that switchover is gated on ก๊อต (docs/runbook/pcs-scrub-plan.md).
+ Flagged for ก๊อต: this is a real Google Maps key carried over
+ verbatim from the legacy embed.
+ =============================================================
+-->
+<html>
+  <head>
+    <title>Geolocation</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+    <style>
+        /**
+ * @license
+ * Copyright 2019 Google LLC. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * Always set the map height explicitly to define the size of the div element
+ * that contains the map.
+ */
+#map {
+  height: 100%;
+}
+
+/*
+ * Optional: Makes the sample page fill the window.
+ */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.custom-map-control-button {
+  background-color: #fff;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px -1px rgba(0, 0, 0, 0.3);
+  margin: 10px;
+  padding: 0 0.5em;
+  font: 400 18px Roboto, Arial, sans-serif;
+  overflow: hidden;
+  height: 40px;
+  cursor: pointer;
+}
+.custom-map-control-button:hover {
+  background: rgb(235, 235, 235);
+}
+    </style>
+    <!-- jsFiddle will insert css and js -->
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <!--
+     The `defer` attribute causes the callback to execute after the full HTML
+     document has been parsed. For non-blocking uses, avoiding race conditions,
+     and consistent behavior across browsers, consider loading using Promises
+     with https://www.npmjs.com/package/@googlemaps/js-api-loader.
+    -->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA3urnty1XJM38uaJi18yk3M_Nx2dHxEJU&callback=initMap&v=weekly"
+      defer
+    ></script>
+    <script>
+        /**
+ * @license
+ * Copyright 2019 Google LLC. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// Note: This example requires that you consent to location sharing when
+// prompted by your browser. If you see the error "The Geolocation service
+// failed.", it means you probably did not give permission for the browser to
+// locate you.
+let map, infoWindow;
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: -34.397, lng: 150.644 },
+    zoom: 6,
+  });
+  infoWindow = new google.maps.InfoWindow();
+
+  const locationButton = document.createElement("button");
+
+  locationButton.textContent = "Pan to Current Location";
+  locationButton.classList.add("custom-map-control-button");
+  map.controls[google.maps.ControlPosition.TOP_CENTER].push(locationButton);
+  locationButton.addEventListener("click", () => {
+    // Try HTML5 geolocation.
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const pos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+
+          infoWindow.setPosition(pos);
+          infoWindow.setContent("Location found.");
+          infoWindow.open(map);
+          map.setCenter(pos);
+        },
+        () => {
+          handleLocationError(true, infoWindow, map.getCenter());
+        }
+      );
+    } else {
+      // Browser doesn't support Geolocation
+      handleLocationError(false, infoWindow, map.getCenter());
+    }
+  });
+}
+
+function handleLocationError(browserHasGeolocation, infoWindow, pos) {
+  infoWindow.setPosition(pos);
+  infoWindow.setContent(
+    browserHasGeolocation
+      ? "Error: The Geolocation service failed."
+      : "Error: Your browser doesn't support geolocation."
+  );
+  infoWindow.open(map);
+}
+
+window.initMap = initMap;
+
+    </script>
+  </body>
+</html>
