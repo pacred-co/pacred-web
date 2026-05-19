@@ -457,7 +457,6 @@ export default async function AddressesPage() {
                                   id="demo1"
                                   className="demo"
                                   style={{ display: "none" }}
-                                  autoComplete="off"
                                 >
                                   <div className="mb-1">
                                     <label className="form-control-label" htmlFor="district">

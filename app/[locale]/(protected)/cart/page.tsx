@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -161,7 +162,7 @@ function convertIMGCHN(url: string | null, size: string): string {
   if (!url || url === "") {
     return "/legacy/pcs/images/shops/default.png";
   }
-  let u = url
+  const u = url
     .split("?x-oss-process=style/alsy")
     .join("")
     .split("?x-oss-process=style/tbsy")
@@ -217,7 +218,9 @@ export default async function CartPage() {
   const rsDefault = Number(settingsRes.data?.rsdefault ?? 0);
   const userAddressID = userRowRes.data?.useraddressid ?? "";
   // cart.php L150-151: $userTransportType is read then forced to 2.
-  const userTransportType = 2;
+  // Typed `number` (not the literal 2) so the legacy `=== 1` radio
+  // checks below stay as faithful transcribed comparisons.
+  const userTransportType: number = 2;
   let userShipBy = userRowRes.data?.usershipby ?? "";
   // cart.php L163-170: $countCart from the COUNT(ID) query.
   const countCart = cartCountRes.count ?? 0;
@@ -432,7 +435,7 @@ export default async function CartPage() {
                           <div className="text-danger font-0_85rem">
                             หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo
                             ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
-                            <a href="/freearea" target="_blank" rel="noreferrer">
+                            <a href="https://pcscargo.co.th/freearea" target="_blank" rel="noreferrer">
                               (เช็คพื้นที่ได้ที่นี่)
                             </a>
                           </div>
@@ -600,9 +603,9 @@ export default async function CartPage() {
                               />
                             </div>
                             <h5 className="pb-1">
-                              <a className="text-info" href="/service-order/add">
+                              <Link className="text-info" href="/service-order/add">
                                 เพิ่มสินค้า
-                              </a>
+                              </Link>
                             </h5>
                           </div>
                         )}
@@ -793,7 +796,7 @@ export default async function CartPage() {
                                             alt=""
                                           />
                                           <br />
-                                          <a href="/freearea">
+                                          <a href="https://pcscargo.co.th/freearea">
                                             <span className="text-info">
                                               ดูพื้นที่จัดส่งและรายละเอียด
                                             </span>
@@ -826,7 +829,7 @@ export default async function CartPage() {
                                               alt=""
                                             />
                                             <br />
-                                            <a href="/โปรโมชัน/นำเข้าจีน260303/">
+                                            <a href="https://pcscargo.co.th/โปรโมชัน/นำเข้าจีน260303/">
                                               <span className="text-info">
                                                 ดูรายละเอียดโปรโมชัน
                                               </span>

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -238,9 +239,9 @@ export default async function WalletPage() {
                 <div className="breadcrumb-wrapper col-12">
                   <ol className="breadcrumb ">
                     <li className="breadcrumb-item">
-                      <a href="/dashboard">
+                      <Link href="/dashboard">
                         <span className="menu-home">หน้าแรก</span>
-                      </a>
+                      </Link>
                     </li>
                     <li className="breadcrumb-item active">กระเป๋าสตางค์ </li>
                   </ol>
@@ -301,12 +302,12 @@ export default async function WalletPage() {
                                 className="text-center pt-1"
                                 style={{ marginBottom: "-20px" }}
                               >
-                                <a href="/wallet/add">
+                                <Link href="/wallet/deposit">
                                   <div className="btn-add-wallet">
                                     {" "}
                                     <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า{" "}
                                   </div>
-                                </a>
+                                </Link>
                               </div>
                             </div>
                           </div>
@@ -553,7 +554,7 @@ export default async function WalletPage() {
                             <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
-                              <a href="/../การเติมเงิน/" target="_blank">
+                              <a href="https://pcscargo.co.th/การเติมเงิน/" target="_blank">
                                 ดูวิธีการเติมเงิน
                               </a>
                             </div>
