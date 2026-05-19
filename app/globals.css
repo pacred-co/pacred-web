@@ -68,6 +68,11 @@ body {
   body {
     padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
+  /* Auth/admin routes where FloatingTabs is hidden — kill the clearance gap
+     (the bottom nav isn't there, so the 64px would just push content down). */
+  body.no-bottom-tabs {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 @keyframes marquee {

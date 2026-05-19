@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Phone, Sparkles, Headset, Award, MessageCircle } from "lucide-react";
+import { Phone, Sparkles, Headset, Award, MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { trackCtaClick } from "@/lib/analytics";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
@@ -24,7 +25,7 @@ const SALES: SalesPerson[] = [
     name: "วิน",
     role: "Freight Specialist",
     tagline: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
-    phone: "066-125-3007",
+    phone: "062-603-0456",
     image: "/images/Character_Icon/win.png",
     badge: "FCL / LCL Expert",
     badgeIcon: Award,
@@ -51,7 +52,30 @@ const SALES: SalesPerson[] = [
     badgeIcon: Headset,
     alt: "เซลล์พลอย Pacred ผู้เชี่ยวชาญด่านศุลกากร",
   },
+  {
+    name: "เรดาห์",
+    role: "Air Freight Specialist",
+    tagline: "ไกลแค่ไหนก็เหมือนใกล้ เมื่อการจัดส่งใส่ใจทุกรายละเอียด",
+    phone: "099-444-9978",
+    image: "/images/Character_Icon/redar.png",
+    badge: "Air Freight Expert",
+    badgeIcon: Award,
+    alt: "เซลล์เรดาห์ Pacred ผู้เชี่ยวชาญ Air Freight",
+  },
+  {
+    name: "พี",
+    role: "Payment Specialist",
+    tagline: "ไม่ใช่แค่การส่งของ แต่คือการส่งมอบความไว้วางใจ",
+    phone: "061-779-9299",
+    image: "/images/Character_Icon/pee.png",
+    badge: "Yuan Transfer Expert",
+    badgeIcon: Sparkles,
+    alt: "เซลล์พี Pacred ผู้เชี่ยวชาญฝากโอนเงินจีน",
+  },
 ];
+
+// Mobile order classes — must be literal Tailwind strings (the JIT can't see template-built names).
+const MOBILE_ORDER = ["order-2", "order-3", "order-4", "order-5", "order-6"];
 
 interface ContactSalesProps {
   /** Sales person name to feature in the middle slot (defaults to "แนท") */
@@ -63,16 +87,44 @@ interface ContactSalesProps {
 }
 
 export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = false, compact = false }: ContactSalesProps = {}) {
-  // Reorder so the requested person lands at index 1 (the "featured" middle card)
+  // Reorder so the requested person lands at the visual middle position of the row.
   const featuredIdx = SALES.findIndex((s) => s.name === featuredName);
+  const middleIdx = Math.floor(SALES.length / 2);
   const orderedSales: SalesPerson[] =
-    featuredIdx < 0 || featuredIdx === 1
+    featuredIdx < 0 || featuredIdx === middleIdx
       ? SALES
       : (() => {
           const featured = SALES[featuredIdx];
           const rest = SALES.filter((s) => s.name !== featuredName);
-          return [rest[0], featured, rest[1]];
+          return [...rest.slice(0, middleIdx), featured, ...rest.slice(middleIdx)];
         })();
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => {
+      // Container has `px-[10px]` so scrollLeft starts at ~10 even at the visual start —
+      // use a 16px buffer to keep the prev button hidden until the user actually scrolls.
+      setCanScrollLeft(el.scrollLeft > 16);
+      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 16);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  // Card width (340px) + gap (20px on desktop) = 360px per scroll step.
+  const scrollByCard = (dir: -1 | 1) => {
+    scrollRef.current?.scrollBy({ left: dir * 360, behavior: "smooth" });
+  };
 
   return (
     <section id="contact-sales" className={`relative overflow-hidden ${compact ? "py-2 md:py-4" : "py-5 md:py-14"}`}>
@@ -103,18 +155,36 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         </div>
 
         {/* 3 sales cards — horizontal swipe on mobile, 3-col grid on desktop */}
-        <div className="mt-4 md:mt-10 flex md:grid md:grid-cols-3 gap-3 md:gap-5 overflow-x-auto md:overflow-visible scroll-smooth snap-x snap-mandatory pb-2 md:pb-0 -mx-[10px] md:mx-0 px-[10px] md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative mt-4 md:mt-10">
+        {/* Prev / Next chevrons — desktop only, hidden at scroll boundaries */}
+        <button
+          type="button"
+          aria-label="เลื่อนซ้าย"
+          onClick={() => scrollByCard(-1)}
+          className={`hidden md:flex absolute left-0 md:-left-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white dark:bg-surface shadow-[0_6px_18px_rgba(15,23,42,0.18)] border border-border items-center justify-center text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all ${canScrollLeft ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          <ChevronLeft className="w-5 h-5" strokeWidth={2.6} />
+        </button>
+        <button
+          type="button"
+          aria-label="เลื่อนขวา"
+          onClick={() => scrollByCard(1)}
+          className={`hidden md:flex absolute right-0 md:-right-3 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white dark:bg-surface shadow-[0_6px_18px_rgba(15,23,42,0.18)] border border-border items-center justify-center text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all ${canScrollRight ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          <ChevronRight className="w-5 h-5" strokeWidth={2.6} />
+        </button>
+        <div ref={scrollRef} className="flex gap-3 md:gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 -mx-[10px] px-[10px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedSales.map((s, i) => {
             const BadgeIcon = s.badgeIcon;
-            const featured = i === 1;
-            // Mobile flex order — featured card first, others follow desktop order
-            const mobileOrder = featured ? "order-1" : i === 0 ? "order-2" : "order-3";
+            const featured = s.name === featuredName;
+            // Mobile flex order — featured card swipes first, others keep array order
+            const mobileOrder = featured ? "order-1" : MOBILE_ORDER[i];
             return (
               <div
                 key={s.name}
                 className={[
                   "group relative rounded-2xl md:rounded-3xl overflow-hidden border transition-all duration-400 hover:-translate-y-1",
-                  "shrink-0 w-[82%] max-w-[300px] snap-start md:w-auto md:max-w-none md:shrink",
+                  "shrink-0 w-[82%] max-w-[300px] snap-start md:w-[340px] md:max-w-none",
                   `${mobileOrder} md:order-none`,
                   featured
                     ? "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 text-white border-primary-700 shadow-[0_18px_40px_rgba(179,0,0,0.30)] hover:shadow-[0_28px_60px_rgba(179,0,0,0.42)]"
@@ -252,6 +322,7 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
               </div>
             );
           })}
+        </div>
         </div>
 
         {/* Bottom assurance strip */}
