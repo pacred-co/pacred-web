@@ -1,7 +1,26 @@
 # เดฟ — Project Lead / Integrator
 
-Last reviewed: 2026-05-19 (D1 — Phase A loaded · Phase B wave-1 integrated)
-Branch: `dave` (integration) → merges into `main` via ก๊อต gate · Authority: second-tier owner
+Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
+Branch: **`dave-pacred`** (1:1 integration) → merges into `faithful-port` → ก๊อต gate → `main` · Authority: second-tier owner
+
+> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+>
+> You established the 1:1 transcription direction this afternoon
+> (commits `7e1dce2` runbook · `13bf18a` menu.php pilot · `da4cd79` CSS fix
+> · `162f72e` pilot fixes + team plan · then customer batch-1 `3011f94` /
+> `f145351` / `1a20982`). ภูม pivoted from V3 (`Poom`) to **`Poom-pacred`**
+> and started the admin lane with `admin-table.php` pilot on 2026-05-19
+> evening (pushed to `Poom-pacred`).
+>
+> **New branch loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (you customer/integrate)
+> + `podeng` (ปอน customer-portal) → **`faithful-port`** (you integrate) → ก๊อต
+> gate → `main` (Vercel). V3 work is preserved + frozen.
+>
+> **READ FIRST:** [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) §11 "Open for เดฟ" — ภูม's open questions for you (admin-pilot scope · admin CSS path · admin-side B-0 swap timing).
+>
+> The runbook + pilot pattern + the team-wide work-split are all set. ภูม
+> is the admin lane (187 .php files) · ปอน is the customer lane (~22
+> remaining customer .php) · you integrate + drive batches.
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

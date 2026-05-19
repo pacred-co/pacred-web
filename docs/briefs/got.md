@@ -1,7 +1,32 @@
 # ก๊อต — Senior Advisor / Production Watcher
 
-Last reviewed: 2026-05-19 (D1 — Phase A loaded · Phase B wave-1 integrated)
+Last reviewed: 2026-05-19 (D1 — **direction shifted PM to 1:1 PHP→Next port**)
 Branch: `main` (production gatekeeper) · Authority: second-tier owner
+
+> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+>
+> The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
+> shipped this morning) to a **literal 1:1 transcription** of legacy PHP →
+> Next.js per the owner's "100% sameness FIRST" rule. **New branch loop:**
+> `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer/integrate) +
+> `podeng` (ปอน customer-portal) → **`faithful-port`** (integration target)
+> → **YOUR gate** → `main` (Vercel production).
+>
+> **Your boundary unchanged** — you still own `main` + Vercel + domain + the
+> production smoke gate. What changed is the *pre-production* integration
+> target: **`faithful-port` replaces `dave`** for the 1:1 work. V3 commits
+> on `Poom`/`dave` are preserved (already merged into `faithful-port`) but
+> frozen — nothing new lands there until further notice.
+>
+> **READ FIRST:** [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) §7 "ก๊อต production-gate context"
+> · [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) (the method).
+>
+> **Open for your confirmation** (per save-point §11):
+> 1. Confirm `faithful-port` as pre-production integration target (replaces `dave` for 1:1 work)
+> 2. Confirm production cutover gate (one-click vs staged?)
+> 3. Borrowed-API switchover status (TAMIT / JMF / LINE Notify / MOMO) — when can ภูม scrub these refs from transcribed admin screens?
+> 4. Per-screen fidelity review process (sync vs async · cadence?)
+> 5. ThemeForest "Modern Admin" template — OK to mirror byte-identically in `public/legacy/pcs/admin/`? (same template legacy already ships · no licence change)
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

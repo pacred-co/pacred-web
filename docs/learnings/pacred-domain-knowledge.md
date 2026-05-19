@@ -187,3 +187,90 @@ The terse facts a future agent needs:
 - [`docs/architecture/container-centric-model.md`](../architecture/container-centric-model.md) — the `cargo_*` schema spine
 
 ---
+
+## [2026-05-19] Legacy PCS Cargo system — full decode (ภูม's research drop)
+
+**Context:** ภูม did a deep research pass on the legacy PCS Cargo PHP system — the
+SOT for the D1 1:1 faithful port. The 4 verbatim research files are in
+[`docs/research/pcs-legacy/`](../research/pcs-legacy/_index.md) (`BUSINESS_FLOW.md`,
+`PCS_CARGO_COMPLETE_ANALYSIS.md`, `PCS_Cargo_Guidebook_TH.md`, `docs.md`). This is the
+synthesized load-bearing knowledge a future agent/dev needs without re-reading 5,500 lines.
+
+> ⚠️ **Stack note:** ภูม's docs sketch a *target* of Next.js 14 + Prisma + NextAuth +
+> MySQL. **Pacred's actual stack is Next 16 + Supabase + custom legacy-auth bridge** —
+> ignore the Prisma/NextAuth framing. The **business logic, DB schema, status enums,
+> calc formulas, and workflows** below ARE authoritative for the port.
+
+### The 3 revenue services (legacy = cargo-only; Pacred extends to freight)
+
+| Service (TH) | What | Fee | Legacy PHP page |
+|---|---|---|---|
+| **ฝากสั่งสินค้า** Shopping | Customer pastes a 1688/Taobao/Tmall URL → PCS buys on their behalf | 5% (VIP 3%) of product value | `shops.php` / `cart.php` |
+| **ฝากนำเข้า** Forwarding | Customer already bought in China → PCS imports it (weight/CBM-priced) | shipping by weight/volume + add-ons | `forwarder.php` |
+| **ฝากชำระ/โอน** Payment | PCS pays a Chinese supplier (Alipay/WeChat/bank) for the customer | 3%, min 50 THB | `payment.php` |
+
+### DB schema — the legacy `tb_*` tables (MySQL `pcsc_main`)
+
+The customer-facing spine (full column lists in `PCS_CARGO_COMPLETE_ANALYSIS.md` §5):
+- `tb_user` — PK `userID` = `PCS####`; `creditUser` (0=regular,1=VIP), `adminIDSale` (assigned sales), `userStatus` (1/0/2). **Pacred uses `PR###` not `PCS###`.**
+- `tb_admin` — `adminType` 1=Super 2=Mgr 3=Section 4=Intern 5=Sales 6=Ops; `adminStatusSale`=commission-eligible.
+- `tb_shops` — shopping orders; `sProvider` 1=1688 2=Taobao 3=Tmall 4=Shops 5=Nice; total = `sPriceTotal + sServiceFee + sShipCHN`.
+- `tb_cart` — shopping cart, no expiry; same item can repeat with different color/size.
+- `tb_forwarder` + `tb_forwarder_item` + `tb_forwarder_img` — import orders (1 header → N items → N images). The header carries **per-status date columns** `fDateStatus2..7` (legacy stamps the time it entered each status — not a separate history table).
+- `tb_payment` — yuan-transfer requests; `pStatus` 1=pending 2=processing 3=paid 4=failed 5=refunded.
+- `tb_wallet` — running-balance ledger; `wType` **1=topup 2=withdraw 3=payment 4=refund 5=commission 6=adjustment**, `wBalance` = balance AFTER the txn.
+- `tb_address` — multi-address per user, lat/long, default flag is app-logic (not a column).
+- `tb_account_pcs` — company bank accounts; bankName code 1=Chinese-bank 2=KBank 3=SCB 4=BBL 5=KTB 8=PromptPay.
+
+### Status enums (port these VERBATIM — staff are trained on them)
+
+**Shopping order `sStatus`:** 1 Draft/cart · 2 รอชำระเงิน · 3 ชำระแล้ว/processing · 4 สั่งจากร้านจีนแล้ว · 5 ถึงคลังจีน · 6 ส่งมาไทย · 7 ถึงไทย · 8 กำลังจัดส่ง · 9 สำเร็จ · **0 ยกเลิก**.
+
+**Forwarder order `fStatus`:** 1 Draft · 2 รอสินค้า (tracking entered) · 3 ถึงคลังจีน · 4 ถึงไทย · 5 **รอชำระ** · 6 พร้อมจัดส่ง · 7 กำลังจัดส่ง · 8 สำเร็จ.
+→ **Critical:** in the forwarder flow the **pay-point is status 5 — AFTER the goods reach Thailand**, i.e. cargo COD. The customer pays the final (post-actual-weigh) invoice. (This is the inversion the D1 fidelity audit flagged — see `d1-fidelity-workflow.md`.)
+
+### Code maps for the forwarder
+
+- `fWarehouseChina`: 1=Guangzhou 2=Yiwu.
+- `fWarehouseName` (partner warehouse): 1=SAI 2=CTT 3=MK 4=MX 5=JMF 6=GOGO 7=CargoCenter 8=MOMO.
+- `fTransportType`: 1=Sea 2=Air 3=Express.
+- `fShipBy` (TH last-mile): 1=DHL 2=Flash 3=JK 4=Kerry 5=Nim 6=S&J 7=SB 8=SCG.
+- `chinaWoodenCrateFeeType`: 1=no crate 2=wooden crate.
+- `fRefPrice`: 1=bill by weight, 2=bill by volume.
+
+### Calc formulas (the revenue math — port exactly)
+
+- **Shopping:** `priceTHB = price_cny × buy_rate × qty` → `serviceFee = priceTHB × (VIP?0.03:0.05)` → `total = priceTHB + serviceFee + chinaShipping`.
+- **Forwarding chargeable weight:** `CBM = W×L×H/1,000,000` (cm→m³); `volumetricWeight = CBM × {sea 1000, air 167, express 200}`; `chargeableWeight = max(actualWeight, volumetricWeight)`; `shippingCost = chargeableWeight × ratePerKg {sea 25, air 45, express 85}` (rates are *examples* — confirm live ratesheet). Add-ons: crate `CBM×1000`, inspection 200, photo 100, + TH delivery by zone.
+- **TH delivery zones:** Z1 Bangkok / Z2 Central / Z3 other / Z4 remote=quote-only. Tiered base by weight + per-kg overage. Free-shipping thresholds: >5k THB→Z1 free, >10k→Z2, >20k→Z3.
+- **Payment service:** `serviceFee = max(amountTHB × 0.03, 50)`.
+- **4 exchange rates:** เรทลังซื้อ (buy — shopping), เรทโอน (transfer — payment service), เรท Sale, เรท Pro (VIP/bulk). Manual admin entry, history kept.
+
+### VIP credit + agent commission rules
+
+- **VIP-credit eligibility (ALL must hold):** account ≥30 days · ≥10 completed orders · ≥50,000 THB lifetime · 0 payment issues · ID verified. Initial limit = `min(avgOrderValue×2, 10,000)`; max 100,000. Increase by 1.5× if utilization <80% + on-time ≥95% + age ≥90d.
+- **Overdue interest:** ≤7d 2% · 8-14d 5% · >14d 10% + credit suspended. Suspend if >14d overdue OR ≥3 missed OR overdue > 50% of limit.
+- **Agent commission** is on the **service fee only** (never product cost): tiered by team monthly volume — <50k 2% · <100k 3% · <200k 4% · ≥200k 5%. Min payout 500 THB.
+- Customer lifecycle: Lead → New → Active → VIP → (At-Risk → Churned).
+
+### Operational gotchas worth remembering
+
+- **24-hour SLA:** after a shopping order is paid, staff must place the China-shop order within 24h (a tracked KPI).
+- **+10% re-quote rule:** in forwarding, if the actual weigh/measure makes the cost rise >10% over the estimate, staff MUST notify the customer to confirm before shipping; the customer may cancel at that point.
+- **Cancel policy hardens by stage:** free before payment → fee while processing → **un-cancellable once the China shop has shipped / goods reached the China warehouse**.
+- The legacy admin dashboard is a **count-badge cockpit** — every sidebar entry shows a live pending count (e.g. "บริการฝากนำเข้า (273)", "กระเป๋าสตางค์ (8)"). Faithful port must reproduce the badges (see `d1-fidelity-admin.md`).
+- **Wallet top-up is slip-upload + manual admin verify** by default (QR auto-verify is the legacy "future" path); withdrawal is always manual finance review.
+- Legacy notification fan-out: SMS for every milestone, Email for confirm/invoice/report, LINE for paid + invoice events.
+
+**Why this matters next time:**
+- Any D1 Phase-B port of shopping / forwarding / payment / wallet → these enums + formulas are the spec. Don't invent or "improve" — faithful first (owner mandate).
+- The forwarder pay-at-status-5 (post-arrival COD) is counter-intuitive vs the shop-order pay-at-status-3 — don't unify the two pay-points.
+- `wType`/`sStatus`/`fStatus` are numeric strings in legacy; Pacred's ported schema may differ — when reconciling, this is the legacy source mapping.
+
+**Cross-links:**
+- [`docs/research/pcs-legacy/_index.md`](../research/pcs-legacy/_index.md) — the 4 verbatim research files
+- [`docs/research/d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) · [`d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) · [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md) — the D1 Phase-B fidelity audit
+- [`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) — D1 direction
+- [`docs/learnings/php-port-patterns.md`](php-port-patterns.md) — port mechanics (MySQL→PG, schema mapping)
+
+---
