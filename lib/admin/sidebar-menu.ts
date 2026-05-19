@@ -228,6 +228,7 @@ const blockAccCargo: MenuItem = {
       ],
     },
     { labelKey: "accCargo.payment",   href: "/admin/yuan-payments",               icon: "BarChart3" },
+    { labelKey: "accCargo.containerPay", href: "/admin/accounting/container-payments", icon: "Receipt" },
     { labelKey: "accCargo.withdraw",  href: "/admin/withdrawals",                 icon: "BarChart3" },
     { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending" },
   ],

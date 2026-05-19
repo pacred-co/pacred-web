@@ -2515,6 +2515,7 @@
       "receipt": "Receipt history",
       "total": "All totals",
       "payment": "Yuan transfer / payment",
+      "containerPay": "Container payments (tb_cnt)",
       "withdraw": "Withdrawals / direct transfer",
       "refund": "Refund to wallet"
     },

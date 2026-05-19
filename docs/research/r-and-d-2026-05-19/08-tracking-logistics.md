@@ -178,7 +178,7 @@ This is `W-4` in PORT_PLAN. From a tracking-domain lens it is the #1 *backend* b
 
 **Symptom.** Container statuses in the customer's `/shipments` page only move when a warehouse staff member manually clicks "in_transit" → "arrived". MOMO has live data; we are not pulling it.
 
-**Evidence.** [`docs/integrations/momo-jmf-api-spec.md`](../integrations/momo-jmf-api-spec.md) §3.1 lists 4 files needed: `client.ts` (✅) + `types.ts` (✅) + `sync.ts` (🔴 body stubbed) + `reconcile.ts` (🔴 missing). PORT_PLAN W-4 (P0).
+**Evidence.** [`docs/integrations/momo-jmf-api-spec.md`](../../integrations/momo-jmf-api-spec.md) §3.1 lists 4 files needed: `client.ts` (✅) + `types.ts` (✅) + `sync.ts` (🔴 body stubbed) + `reconcile.ts` (🔴 missing). PORT_PLAN W-4 (P0).
 
 **Why it's a tracking-domain blocker.** Without MOMO sync, the customer's freshness pill always shows "stale" or "very-old" unless a human staff member taps the status flip every few hours. The whole point of the freshness UX (U1-7) — "ข้อมูลล่าสุด: 5 นาทีที่แล้ว" — depends on a sync running.
 

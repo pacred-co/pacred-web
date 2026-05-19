@@ -28,7 +28,7 @@
   - Login/Logout swap based on session state (line 173)
   - Floating LINE bubble at `bottom-[78px] right-3` (line 240) — above the nav, customer-reachable.
 - Global `body` has a 64px+safe-area bottom pad on mobile to clear the nav ([`app/globals.css:67-71`](../../../app/globals.css)).
-- Customer-facing shipment timeline at [`app/[locale]/(protected)/shipments/[code]/page.tsx`](../../../app/[locale]/(protected)/shipments/[code]/page.tsx) renders well at narrow widths — fluid containers, freshness pill (lines 144-151), CBM-mismatch warning (lines 156-161). Truly good post-launch surface.
+- Customer-facing shipment timeline at `app/[locale]/(protected)/shipments/[code]/page.tsx` renders well at narrow widths — fluid containers, freshness pill (lines 144-151), CBM-mismatch warning (lines 156-161). Truly good post-launch surface.
 
 **The bad (mobile-first compliance violations):**
 
@@ -38,14 +38,14 @@
 | 1.1b | **No PWA manifest** at all (no `app/manifest.ts`, no `public/manifest.json`, no `next-pwa`). The `package.json` carries `qrcode` but no scanning lib, no `next-pwa`. Pacred cannot be installed as a home-screen app on either Android or iOS today, even though the owner explicitly wants "ใช้เครื่องสแกน หรือมือถือสแกนสินค้า". | High — blocks the on-the-go warehouse/driver use case |
 | 1.1c | **No `apple-touch-icon`** — only `/images/pdiwaicon.png` exists as a non-sized icon. Add-to-Home-Screen on iOS gets a generic webclip icon. | Medium — brand polish + trust |
 | 1.1d | **`Button` size variants all under 44px** at [`components/ui/button.tsx:25-29`](../../../components/ui/button.tsx). `sm=py-1.5 text-sm` ≈ 28px tall; `md=py-2.5 text-sm` ≈ 36px tall; `lg=py-3 text-base` ≈ 44px tall (border-line). Only `lg` passes the iOS 44px tap-target gate. Most call sites use `md` or `sm`. | High — every tappable button across the customer portal fails the 44px gate |
-| 1.1e | **Sub-16px text on `<input>` elements** in admin screens (iOS zoom-on-focus bug). Hits: [`app/[locale]/(admin)/admin/audit/page.tsx:110,114,118,122,126,130`](../../../app/[locale]/(admin)/admin/audit/page.tsx) — all `text-sm` on date/text inputs; [`app/[locale]/(admin)/admin/system/notifications/page.tsx:213,217`](../../../app/[locale]/(admin)/admin/system/notifications/page.tsx) — `text-xs` on date inputs (the worst). File inputs in [`app/[locale]/(protected)/service-payment/yuan-payment-form.tsx:261,266`](../../../app/[locale]/(protected)/service-payment/yuan-payment-form.tsx) + [`app/[locale]/(protected)/service-order/add/add-form.tsx:163`](../../../app/[locale]/(protected)/service-order/add/add-form.tsx) + [`app/[locale]/(protected)/service-import/add/forwarder-form.tsx:403,407`](../../../app/[locale]/(protected)/service-import/add/forwarder-form.tsx) all use `text-sm`. | High on admin (warehouse staff use a phone); medium on customer side (file inputs are tap-once) |
-| 1.1f | **74 `<table>` elements** in `(admin)` route group, all wrapped in `overflow-x-auto` per convention but at 360px width this means horizontal scroll on *every* admin table — warehouse staff has to scrub left/right to see Tracking + Status + Date columns. The forwarders table at [`app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx:123`](../../../app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx) is the prime example: 9 columns × ~120px each = ~1080px wide. | High — warehouse/driver/sales staff are on phones (ops-roles.md §12 + §13 explicitly) |
-| 1.1g | **Driver action buttons** at [`app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx:43,52,60,67`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx) — every button is `px-4 py-2 text-xs` (~32px tall, 12px text). Drivers are 100% on phones (ops-roles.md §13). Worst-case combo: small text + small tap area + the moment a driver is reaching for "รับงาน" or "ยืนยันส่งสำเร็จ" they are at a customer doorstep, often one-handed. | **Critical — this is the legacy app rebuilt with the same flaws** |
-| 1.1h | **Admin shipment-row controls** at [`app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx:17`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx) use `px-2 py-1 text-xs` inputs (~24px tall, 12px text). Container rebind currently requires **pasting a raw UUID** (line 60 comment: "admin pastes target container UUID"). Impossible on a phone with no copy/paste flow. | High — warehouse staff cannot do this on their phone |
+| 1.1e | **Sub-16px text on `<input>` elements** in admin screens (iOS zoom-on-focus bug). Hits: `app/[locale]/(admin)/admin/audit/page.tsx:110,114,118,122,126,130` — all `text-sm` on date/text inputs; `app/[locale]/(admin)/admin/system/notifications/page.tsx:213,217` — `text-xs` on date inputs (the worst). File inputs in `app/[locale]/(protected)/service-payment/yuan-payment-form.tsx:261,266` + `app/[locale]/(protected)/service-order/add/add-form.tsx:163` + `app/[locale]/(protected)/service-import/add/forwarder-form.tsx:403,407` all use `text-sm`. | High on admin (warehouse staff use a phone); medium on customer side (file inputs are tap-once) |
+| 1.1f | **74 `<table>` elements** in `(admin)` route group, all wrapped in `overflow-x-auto` per convention but at 360px width this means horizontal scroll on *every* admin table — warehouse staff has to scrub left/right to see Tracking + Status + Date columns. The forwarders table at `app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx:123` is the prime example: 9 columns × ~120px each = ~1080px wide. | High — warehouse/driver/sales staff are on phones (ops-roles.md §12 + §13 explicitly) |
+| 1.1g | **Driver action buttons** at `app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx:43,52,60,67` — every button is `px-4 py-2 text-xs` (~32px tall, 12px text). Drivers are 100% on phones (ops-roles.md §13). Worst-case combo: small text + small tap area + the moment a driver is reaching for "รับงาน" or "ยืนยันส่งสำเร็จ" they are at a customer doorstep, often one-handed. | **Critical — this is the legacy app rebuilt with the same flaws** |
+| 1.1h | **Admin shipment-row controls** at `app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx:17` use `px-2 py-1 text-xs` inputs (~24px tall, 12px text). Container rebind currently requires **pasting a raw UUID** (line 60 comment: "admin pastes target container UUID"). Impossible on a phone with no copy/paste flow. | High — warehouse staff cannot do this on their phone |
 
 ### 1.2 Scanning workflow current state
 
-**What exists ([`app/[locale]/(admin)/admin/barcode/scan-form.tsx`](../../../app/[locale]/(admin)/admin/barcode/scan-form.tsx) — 372 lines, well-engineered for its scope):**
+**What exists (`app/[locale]/(admin)/admin/barcode/scan-form.tsx` — 372 lines, well-engineered for its scope):**
 
 - A **single ScanForm component** is reused on 3 routes: `/admin/barcode` (intake/prepare), `/admin/barcode/driver` (driver out-for-delivery + delivered), and embedded as `ScanEventForm` on `/admin/warehouse/containers/[code]` (per-shipment event recorder).
 - The form has 3 modes: `intake` (→ `arrived_thailand`), `prepare` (→ `out_for_delivery`), `driver` (→ `delivered`).
@@ -54,7 +54,7 @@
 - **Manual fallback input** with `font-mono text-base` (line 286 — only place where text-base is used on an input in admin scan flows, this one is correct).
 - **Session log** showing up to 50 last scans with success/error count chips (lines 326-369).
 - Server action [`actions/admin/barcode.ts`](../../../actions/admin/barcode.ts) tries forwarders first (matches on `f_no` / `tracking_chn` / `tracking_th` / `cabinet_number`), then service_orders by `h_no`. Auto-fires LINE/notif on status change (lines 79-87).
-- The **container detail page** ([`app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx)) has 7 event presets — `scan_receive`, `scan_pack`, `scan_seal`, `scan_depart`, `scan_arrive`, `scan_unload`, `scan_deliver` (lines 11-19) — with auto-status mapping.
+- The **container detail page** (`app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx`) has 7 event presets — `scan_receive`, `scan_pack`, `scan_seal`, `scan_depart`, `scan_arrive`, `scan_unload`, `scan_deliver` (lines 11-19) — with auto-status mapping.
 
 **What's missing:**
 
@@ -75,10 +75,10 @@
 
 **The customer portal is server-rendered first** — that part is great for mobile (fast first paint, no JS-blocked initial render). Mobile-tested + observed surfaces:
 
-- ✅ `/dashboard` (post-login PCS launchpad — [`app/[locale]/(protected)/dashboard/page.tsx`](../../../app/[locale]/(protected)/dashboard/page.tsx)) — fluid, the 9-icon launchpad grid is 3×3 → renders cleanly at 360px.
+- ✅ `/dashboard` (post-login PCS launchpad — `app/[locale]/(protected)/dashboard/page.tsx`) — fluid, the 9-icon launchpad grid is 3×3 → renders cleanly at 360px.
 - ✅ `/shipments` + `/shipments/[code]` — fluid, freshness-pill UX is good, timeline is a vertical `<ol>` (mobile-friendly), CBM diff badge wraps at narrow widths.
-- ⚠️ `/wallet/deposit` ([`app/[locale]/(protected)/wallet/deposit/deposit-form.tsx`](../../../app/[locale]/(protected)/wallet/deposit/deposit-form.tsx)) — uses PromptPay QR (good), but the slip-upload `<input type="file">` is `text-sm` (1.1e violation) + no `capture="environment"` hint → iOS users tap → gallery picker (not camera). Slip-from-camera is a 1-tap saving × every wallet deposit.
-- ⚠️ Yuan payment form ([`app/[locale]/(protected)/service-payment/yuan-payment-form.tsx:261,266`](../../../app/[locale]/(protected)/service-payment/yuan-payment-form.tsx)) — same `text-sm` slip-upload, no `capture` hint.
+- ⚠️ `/wallet/deposit` (`app/[locale]/(protected)/wallet/deposit/deposit-form.tsx`) — uses PromptPay QR (good), but the slip-upload `<input type="file">` is `text-sm` (1.1e violation) + no `capture="environment"` hint → iOS users tap → gallery picker (not camera). Slip-from-camera is a 1-tap saving × every wallet deposit.
+- ⚠️ Yuan payment form (`app/[locale]/(protected)/service-payment/yuan-payment-form.tsx:261,266`) — same `text-sm` slip-upload, no `capture` hint.
 - ⚠️ Service-import / service-order forms — verbose multi-step forms with `text-sm` labels + many sub-controls. The "Pinselector" / "DocAttachSelector" / "LaborSelector" booking sub-components ([`components/booking/options/*`](../../../components/booking/options/)) need their own mobile pass.
 - ⚠️ `BookingCalculator` ([`components/booking/BookingCalculator.tsx`](../../../components/booking/BookingCalculator.tsx)) — uses `h-11 px-4 md:px-6 ... text-[13px] md:text-sm` for chips — 44px tall, **but 13px text is sub-16px on mobile** → iOS zoom risk if the chip ever wraps in a focusable element.
 - ❌ **No public guest tracking page** at `/track/[code]` or similar. The only tracking surface is `/shipments/[code]` and `/service-import/[fNo]` — both behind `requireAuth()`. A customer who got their tracking via LINE OA has **no way to share it without logging in**. The legacy PHP had a public tracking page (chat audit W-9 — pasteable URL).
@@ -123,7 +123,7 @@
 
 **G-M2 — `Button` size variants fail the 44px gate.** Single-file fix at [`components/ui/button.tsx:25-29`](../../../components/ui/button.tsx); `md` → `min-h-11`, `sm` → `min-h-11` (or rename and add an `xs`). Every consumer benefits. Touch-target compliance is non-negotiable per [`docs/conventions.md`](../../conventions.md) §11.
 
-**G-M3 — Driver action buttons fail badly.** [`action-buttons.tsx`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx) — every button is `text-xs`. The driver is the most-mobile, most-time-pressured staff role. Fix: dedicated `<DriverButton>` primitive with `min-h-12 text-base` + visual weight (big colored block, label below icon, single-tap to action).
+**G-M3 — Driver action buttons fail badly.** `action-buttons.tsx` — every button is `text-xs`. The driver is the most-mobile, most-time-pressured staff role. Fix: dedicated `<DriverButton>` primitive with `min-h-12 text-base` + visual weight (big colored block, label below icon, single-tap to action).
 
 **G-M4 — Tables on phones (74 sites).** All admin lists are tables wrapped in `overflow-x-auto`. The right pattern on mobile is a **card list**: stack each row vertically, keep the most-load-bearing 3-4 fields visible, hide secondary fields behind an accordion or a "more" tap. Already done correctly on `/admin/warehouse/containers/[code]` shipment list (lines 240-326 of that file = `<ul className="divide-y">` not `<table>`). Pattern is to extend that to forwarders + containers + driver runs + bookings + invoices.
 
@@ -148,7 +148,7 @@ This unlocks: iOS notch-safe rendering, correct status-bar color, Android Chrome
 
 ### 2.2 High-value gaps (P1)
 
-**G-M7 — `<input type="file">` slip-upload should hint camera.** Adding `capture="environment"` to file inputs in [`yuan-payment-form.tsx:261,266`](../../../app/[locale]/(protected)/service-payment/yuan-payment-form.tsx) + [`wallet/deposit/deposit-form.tsx`](../../../app/[locale]/(protected)/wallet/deposit/deposit-form.tsx) + [`forwarder-form.tsx:403,407`](../../../app/[locale]/(protected)/service-import/add/forwarder-form.tsx) + [`add-form.tsx:163`](../../../app/[locale]/(protected)/service-order/add/add-form.tsx) → tapping triggers camera directly on mobile (instead of the gallery picker dialog). 1-line change × every slip upload × every customer = real revenue path win.
+**G-M7 — `<input type="file">` slip-upload should hint camera.** Adding `capture="environment"` to file inputs in `yuan-payment-form.tsx:261,266` + `wallet/deposit/deposit-form.tsx` + `forwarder-form.tsx:403,407` + `add-form.tsx:163` → tapping triggers camera directly on mobile (instead of the gallery picker dialog). 1-line change × every slip upload × every customer = real revenue path win.
 
 **G-M8 — Sub-16px text on inputs (iOS zoom-on-focus).** Most admin filter forms (audit, system/notifications, system/crons, sidebar search) use `text-xs` / `text-sm` on text inputs. Fix: enforce `text-base` (16px) on all `<input>` / `<select>` / `<textarea>`. Helper component or an ESLint rule (`no-text-xs-on-input`).
 
@@ -158,7 +158,7 @@ This unlocks: iOS notch-safe rendering, correct status-bar color, Android Chrome
 
 **G-M11 — Card-list mobile table pattern.** A reusable `<MobileCard>` component that renders the same data as a table cell, stacked. Convert all 74 admin tables — or at minimum: forwarders, containers, driver-runs, bookings, invoices, wallet-deposits-pending, slip-approvals.
 
-**G-M12 — Container rebind needs a search picker.** [`shipment-row-controls.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx) currently asks the admin to paste a raw UUID. Replace with a server-action-backed combobox over `cargo_containers` by code prefix (recent + active only).
+**G-M12 — Container rebind needs a search picker.** `shipment-row-controls.tsx` currently asks the admin to paste a raw UUID. Replace with a server-action-backed combobox over `cargo_containers` by code prefix (recent + active only).
 
 **G-M13 — Bulk scan / batch mode for intake.** Switch the scan-form to a "queue then submit" mode: scan 10 in 10s, the screen shows them stacked, one tap submits all → server batches in one round-trip. Cuts MOMO-intake bottleneck (Pacred receives several containers per week from MOMO).
 
@@ -174,7 +174,7 @@ This unlocks: iOS notch-safe rendering, correct status-bar color, Android Chrome
 
 **G-M18 — Haptic feedback.** `navigator.vibrate([50])` on success, `[100, 50, 100]` on error. Free, supported on Android.
 
-**G-M19 — Map embed on driver-runs.** Each row at [`driver-runs/page.tsx:151`](../../../app/[locale]/(admin)/admin/driver-runs/page.tsx) has a `ship_address_line` + sub_district + district + province + postal_code. Concatenate + render a "เปิด Google Maps" link (`https://www.google.com/maps/search/?api=1&query=...`) + optional inline embed.
+**G-M19 — Map embed on driver-runs.** Each row at `driver-runs/page.tsx:151` has a `ship_address_line` + sub_district + district + province + postal_code. Concatenate + render a "เปิด Google Maps" link (`https://www.google.com/maps/search/?api=1&query=...`) + optional inline embed.
 
 **G-M20 — Mobile-optimised customer dashboard.** The 3×3 PCS launchpad icon grid is fine. But the secondary stats sections (wallet, recent orders, recent forwarders) are dense at 360px — collapse into a tabbed view with `aria-controls`.
 
@@ -192,7 +192,7 @@ This unlocks: iOS notch-safe rendering, correct status-bar color, Android Chrome
 
 ### R-1 (P0, Effort: S) — `@zxing/browser` polyfill for `BarcodeDetector`
 
-- **What it solves:** G-M1 (iOS Safari = no scanner). The branching is already there in [`scan-form.tsx:144-148`](../../../app/[locale]/(admin)/admin/barcode/scan-form.tsx) — drop in a polyfill in the `else` branch instead of showing "not supported".
+- **What it solves:** G-M1 (iOS Safari = no scanner). The branching is already there in `scan-form.tsx:144-148` — drop in a polyfill in the `else` branch instead of showing "not supported".
 - **Lib:** [`@zxing/browser`](https://github.com/zxing-js/browser) (Apache-2.0). ~120KB gz. Active maintenance. Supports the exact 9 formats Pacred lists.
 - **Where it lands:** new file `lib/scan/detector.ts` exports `getDetector()` returning native if available, else a `BrowserMultiFormatReader` adapter.
 - **Effort:** S (≤3 d — drop-in + verify on real iPhone). Already mentioned as a candidate in [`docs/sprints/archive-a-to-n.md:899`](../../sprints/archive-a-to-n.md) and [`docs/sprints/archive-a-to-n.md:1129`](../../sprints/archive-a-to-n.md) D-3 row — **the team picked this lib then never delivered the fallback path.**
@@ -323,7 +323,7 @@ export function MobileCard({ children, title, badges, actions }: {
 ### R-8 (P1, Effort: S) — Public guest tracking page `/track/[code]`
 
 - **What it solves:** G-M15 (no public tracking) + chat audit #1 customer pain ("ตู้ X เข้าเมื่อไหร่").
-- **Pattern:** Mirror [`app/[locale]/(protected)/shipments/[code]/page.tsx`](../../../app/[locale]/(protected)/shipments/[code]/page.tsx) in a public route. Server action `getPublicShipment(code, token)`. RLS: a `shipment_share_tokens` table OR allow read-by-shipment_code-only with rate limit + Sentry suspicious-pattern alert.
+- **Pattern:** Mirror `app/[locale]/(protected)/shipments/[code]/page.tsx` in a public route. Server action `getPublicShipment(code, token)`. RLS: a `shipment_share_tokens` table OR allow read-by-shipment_code-only with rate limit + Sentry suspicious-pattern alert.
 - **Effort:** S (≤3 d). Reuse the existing component tree.
 - **Impact:** Customer-pain #1 closed. Shareable LINE links. Open path for ad campaigns ("Track your shipment" CTA).
 - **Mobile-first considerations:** The page IS already mobile-first. The new entry point + SEO metadata (Open Graph for LINE preview) is the work. Add a Pacred-branded QR generator on the page (G-M21) so customers can save the link to their phone home screen.
@@ -342,11 +342,11 @@ export function MobileCard({ children, title, badges, actions }: {
 
 - **What it solves:** G-M3 inline.
 - **Specific edits:**
-  - [`action-buttons.tsx:43`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx) — `px-4 py-2 text-xs` → `min-h-12 px-5 text-base`.
-  - [`action-buttons.tsx:52`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx) — same.
-  - [`action-buttons.tsx:60`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx) — same.
-  - [`scan-form.tsx:208-219`](../../../app/[locale]/(admin)/admin/barcode/scan-form.tsx) — mode-selector buttons: `py-3 text-sm` → `min-h-12 text-base`.
-  - [`scan-form.tsx:282-298`](../../../app/[locale]/(admin)/admin/barcode/scan-form.tsx) — manual input + OK button: already `py-3` + `text-base` on input, but the OK button is `px-5 rounded-lg ... text-sm` — bump to `min-h-12 text-base`.
+  - `action-buttons.tsx:43` — `px-4 py-2 text-xs` → `min-h-12 px-5 text-base`.
+  - `action-buttons.tsx:52` — same.
+  - `action-buttons.tsx:60` — same.
+  - `scan-form.tsx:208-219` — mode-selector buttons: `py-3 text-sm` → `min-h-12 text-base`.
+  - `scan-form.tsx:282-298` — manual input + OK button: already `py-3` + `text-base` on input, but the OK button is `px-5 rounded-lg ... text-sm` — bump to `min-h-12 text-base`.
 - **Effort:** S (≤1 d).
 - **Impact:** Direct driver/warehouse UX win.
 
@@ -354,7 +354,7 @@ export function MobileCard({ children, title, badges, actions }: {
 
 - **What it solves:** G-M19.
 - **Pattern:** Concat the address fields → `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(...)}`. Render as a button.
-- **Steps:** edit [`driver-runs/page.tsx:151`](../../../app/[locale]/(admin)/admin/driver-runs/page.tsx) row template; add a new "เปิดแผนที่ →" button next to "📞 phone" link.
+- **Steps:** edit `driver-runs/page.tsx:151` row template; add a new "เปิดแผนที่ →" button next to "📞 phone" link.
 - **Effort:** S (≤2 d).
 - **Impact:** Driver saves 5-10 sec per delivery. Compound on a 30-stop day.
 
@@ -420,27 +420,27 @@ export function MobileCard({ children, title, badges, actions }: {
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/layout.tsx`](../../../app/layout.tsx) — root layout, no `viewport` export
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/layout.tsx`](../../../app/[locale]/layout.tsx) — locale layout
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/globals.css`](../../../app/globals.css) — Tailwind theme + mobile body pad
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/page.tsx`](../../../app/[locale]/(admin)/admin/barcode/page.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/scan-form.tsx`](../../../app/[locale]/(admin)/admin/barcode/scan-form.tsx) — the 372-line ScanForm
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/driver/page.tsx`](../../../app/[locale]/(admin)/admin/barcode/driver/page.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/page.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/page.tsx) — 451-line container detail
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx) — UUID-paste rebind
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/manual-shipment-form.tsx`](../../../app/[locale]/(admin)/admin/warehouse/containers/[code]/manual-shipment-form.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/driver-runs/page.tsx`](../../../app/[locale]/(admin)/admin/driver-runs/page.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx`](../../../app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx`](../../../app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx) — 9-column table
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/forwarders/bulk-search/bulk-search-form.tsx`](../../../app/[locale]/(admin)/admin/forwarders/bulk-search/bulk-search-form.tsx) — multi-line bulk search
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/audit/page.tsx`](../../../app/[locale]/(admin)/admin/audit/page.tsx) — text-sm inputs
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/system/notifications/page.tsx`](../../../app/[locale]/(admin)/admin/system/notifications/page.tsx) — text-xs date inputs
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/inventory/page.tsx`](../../../app/[locale]/(admin)/admin/inventory/page.tsx) — redirect to barcode
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/shipments/[code]/page.tsx`](../../../app/[locale]/(protected)/shipments/[code]/page.tsx) — best customer mobile surface
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/shipments/page.tsx`](../../../app/[locale]/(protected)/shipments/page.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/dashboard/page.tsx`](../../../app/[locale]/(protected)/dashboard/page.tsx) — PCS launchpad
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-payment/yuan-payment-form.tsx`](../../../app/[locale]/(protected)/service-payment/yuan-payment-form.tsx) — slip upload
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-import/add/forwarder-form.tsx`](../../../app/[locale]/(protected)/service-import/add/forwarder-form.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-order/add/add-form.tsx`](../../../app/[locale]/(protected)/service-order/add/add-form.tsx)
-- [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(public)/status/page.tsx`](../../../app/[locale]/(public)/status/page.tsx)
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/page.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/scan-form.tsx` — the 372-line ScanForm
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/barcode/driver/page.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/scan-form.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/page.tsx` — 451-line container detail
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/shipment-row-controls.tsx` — UUID-paste rebind
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/warehouse/containers/[code]/manual-shipment-form.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/driver-runs/page.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/driver-runs/action-buttons.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx` — 9-column table
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/forwarders/bulk-search/bulk-search-form.tsx` — multi-line bulk search
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/audit/page.tsx` — text-sm inputs
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/system/notifications/page.tsx` — text-xs date inputs
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(admin)/admin/inventory/page.tsx` — redirect to barcode
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/shipments/[code]/page.tsx` — best customer mobile surface
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/shipments/page.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/dashboard/page.tsx` — PCS launchpad
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-payment/yuan-payment-form.tsx` — slip upload
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-import/add/forwarder-form.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(protected)/service-order/add/add-form.tsx`
+- `/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/app/[locale]/(public)/status/page.tsx`
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/actions/admin/barcode.ts`](../../../actions/admin/barcode.ts) — adminBarcodeScan
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/components/ui/button.tsx`](../../../components/ui/button.tsx) — sizing primitive (the keystone fix)
 - [`/Users/dev/pacred-web/.claude/worktrees/frosty-bhaskara-a38ced/components/sections/floating-tabs.tsx`](../../../components/sections/floating-tabs.tsx) — mobile bottom-nav (the best surface)
