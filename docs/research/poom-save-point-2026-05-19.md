@@ -254,3 +254,79 @@ pnpm verify       # lint + tsc + test:unit + audit — all exit 0
 **ลุยต่อนะ ภูม 💪** — B-auth + Wave 1 อยู่บน `Poom` หมดแล้ว verify ผ่าน · งานต่อไป
 = `B-0` (re-point `tb_*`) ให้ Wave 1 โชว์ data จริง · พรุ่งนี้ที่บริษัท sync + ตั้ง
 `.env.local` ตาม §6 แล้วลุย review Wave 1 เชิงลึกเทียบ PHP เดิม
+
+---
+
+## 11. 🆕 Session log — 2026-05-19 evening (company machine · post-dave sync)
+
+> Continuation of this save-point's recommended "review Wave 1 vs legacy"
+> step.  ภูม + 4 shadow-clone reviewers did the per-slice fidelity QC pass
+> + an empirical probe of dev Supabase that surfaced a bigger gap than the
+> per-slice audits flagged.  Commits today on `Poom`:
+> `8feb5d6` · `e66a3ab` · `2da9b8f`.
+
+### 11.1 What landed
+1. **Wave-1 fidelity audit (4 parallel shadow-clone reviewers)** —
+   `docs/research/wave-1-fidelity/audit-b{1,3,4,6}-*.md`
+   · B-1 launchpad: 🟢 layout EXCELLENT · 🔴🔴 0 `tb_*` reads
+   · B-3 order flow: 🟢 strong (6 tabs · 151-cap · link-paste) · 🔴 0 `tb_*` reads + 4 sub-gaps
+   · B-4 admin sidebar+badges: 🟢 17 OOP blocks + 7 menus + 6 EN headers · 🔴 14/14 badges hit rebuilt-era
+   · B-6 `tb_cnt` ledger: ✅ THE EXCEPTION — fully faithful end-to-end
+2. **Synthesis + send-back-to-เดฟ brief** — `docs/research/wave-1-fidelity/_SYNTHESIS.md`
+3. **§7 Wave-2-ready swap diffs** (post-audit prep) — concrete before/after `.from()` rewrites for 5+6+14 callsites + identity-bridge note + B-2 status-vocab map
+4. **§8 EMPIRICAL FINDING (critical)** — direct probe of dev Supabase via service-role REST:
+   · `tb_users` rows: **8,898**
+   · `profiles` rows with `member_code LIKE 'PR%'`: **6** (0.067%)
+   · Spot-checked PR169 = 1,956 forwarders in `tb_*`, no `profiles` row
+   · Root cause: B-auth provisions `auth.users` ✅ but NOT a `profiles` row
+   · Wave 2 (updated) = 3-step bundle: `0088_pcs_profiles_backfill.sql` +
+     extend `pcs-legacy-bridge.ts` to bind on first login + §7 swap diffs
+5. **B-6 sticky fix shipped** — `actions/admin/sidebar-counts.ts`: lifted
+   hardcoded `const cnt = 0` to a real `tb_cnt WHERE cntstatus='1'`
+   count query. Legacy "ค่าตู้รออนุมัติ" badge now lights.
+
+### 11.2 Dev-Supabase verification (matters for next setup)
+- All Phase-A tables loaded with real data:
+  `tb_users` 8,898 · `tb_header_order` 21,950 · `tb_forwarder` 47,626 ·
+  `tb_cnt` 958 · `tb_payment` 1,460 · `tb_cart` 15,477 · `tb_admin` 181 ·
+  `reserve_meeting_room` 5 (+ 110 more — full 117 per Phase A)
+- Indexes from `0082` working (UNIQUE lookups by userid OK)
+- Function `next_pr_member_code()` from `0083` returns `"PR1"` (lowest vacant)
+- **`0081`/`0082`/`0083` are SKIP-in-Dashboard** — เดฟ loaded them via
+  psql/pgloader per runbook §5-§6 (canonical path); Supabase Dashboard
+  doesn't track that load, so re-running via Dashboard errors with
+  "relation already exists".  This is expected — the files are
+  reference-of-what-was-loaded.  Skip when applying via Dashboard;
+  the data is there.
+
+### 11.3 Next-actions list (consolidated · what blocks who)
+
+**ภูม non-blocking — can do anytime:**
+- LINE-ping เดฟ with the synthesis link (esp. §8 critical finding) so
+  Wave 2 starts informed
+- LINE-ping ก๊อต for Q2 auth-bridge ratification
+- R&D 8-specialist deep-dive read (`docs/research/r-and-d-2026-05-19/`) ·
+  add cargo-domain notes if relevant
+- Manual smoke-test on `http://localhost:3000` — log in as a migrated
+  PCS customer (B-auth) and visually confirm the ghost-customer symptom
+
+**Waiting on เดฟ:**
+- Wave 2 = `0088_pcs_profiles_backfill.sql` + bridge extension + §7 swap
+- A-4 customer-file migration (still blocked on แต้ม) · A-5 prod load
+- Supabase Pro upgrade (3 oversized log tables waiting)
+
+**Waiting on ก๊อต:**
+- Ratify ADR-0017 (still "pending ratification")
+- Ratify Q2 auth-bridge posture
+- Clear JMF API spec with แต้ม
+
+### 11.4 Branch state at session end
+
+```
+main = dave = Poom = 2da9b8f (= origin/Poom, in-sync, nothing to push)
+```
+
+Commits added this session (all on `Poom` · all pushed):
+- `8feb5d6` — Wave-1 fidelity audit (4 slices + synthesis + B-6 badge fix)
+- `e66a3ab` — _SYNTHESIS.md §7 Wave-2-ready swap diffs
+- `2da9b8f` — _SYNTHESIS.md §8 🔴 ghost-customer empirical finding
