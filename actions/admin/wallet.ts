@@ -298,3 +298,110 @@ export async function adminSetWalletTxSlipTransferredAt(
     },
   );
 }
+
+// ════════════════════════════════════════════════════════════
+// Admin manual wallet entry — legacy /admin/wallet/add
+// ════════════════════════════════════════════════════════════
+// The legacy `pcs-admin/wallet.php` ($_GET['page']=='add' branch) lets
+// an accounting admin record a wallet entry that the auto-verify flow
+// couldn't post — typically a customer slip that didn't match any
+// pending row, or a manual balance adjustment.
+//
+// Pacred mapping: insert a single `wallet_transactions` row with
+// admin_id set + status='completed' (admin is the one verifying — no
+// second-admin approval needed for the legacy parity). The balance
+// trigger auto-recomputes `wallet.balance` for the affected bucket.
+//
+// Guard: accounting (or super) only. Amount sign is enforced (deposit
+// positive · withdraw negative · adjustment either) on top of the
+// `wallet_transactions` table CHECK constraint added by migration 0072.
+
+const manualEntrySchema = z.object({
+  profile_id:    z.string().uuid({ message: "เลือกสมาชิกก่อน" }),
+  bucket:        z.enum(["main","cashback","credit"]).default("main"),
+  kind:          z.enum(["deposit","withdraw","adjustment","refund"]),
+  amount:        z.number().refine((n) => n !== 0, { message: "จำนวนต้องไม่เท่ากับ 0" }),
+  bank_name:     z.string().trim().max(100).optional(),
+  account_name:  z.string().trim().max(200).optional(),
+  account_number: z.string().trim().max(50).optional(),
+  slip_date:     z.string().optional(),    // YYYY-MM-DD or empty
+  note:          z.string().trim().max(1000).optional(),
+});
+
+export type AdminCreateManualWalletEntryInput = z.infer<typeof manualEntrySchema>;
+
+export async function adminCreateManualWalletEntry(
+  input: AdminCreateManualWalletEntryInput,
+): Promise<AdminActionResult<{ id: string }>> {
+  const parsed = manualEntrySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  // Sign-sanity (defence-in-depth alongside migration 0072 CHECK):
+  // deposit must be positive, withdraw must be negative. adjustment +
+  // refund accept either sign (refunds are typically positive but
+  // admin reversals can be negative).
+  if (d.kind === "deposit"  && !(d.amount > 0))
+    return { ok: false, error: "deposit ต้องเป็นจำนวนบวก" };
+  if (d.kind === "withdraw" && !(d.amount < 0))
+    return { ok: false, error: "withdraw ต้องเป็นจำนวนลบ (เช่น -100.00)" };
+
+  return withAdmin<{ id: string }>(
+    ["accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // Verify the target customer exists.
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("id, member_code")
+        .eq("id", d.profile_id)
+        .maybeSingle<{ id: string; member_code: string | null }>();
+      if (!prof) return { ok: false, error: "ไม่พบสมาชิก" };
+
+      let slipDateIso: string | null = null;
+      if (d.slip_date && d.slip_date.trim()) {
+        const dt = new Date(d.slip_date);
+        if (Number.isNaN(dt.getTime())) {
+          return { ok: false, error: "วันที่สลิปไม่ถูกต้อง" };
+        }
+        slipDateIso = dt.toISOString();
+      }
+
+      const { data: row, error } = await admin
+        .from("wallet_transactions")
+        .insert({
+          profile_id:     d.profile_id,
+          bucket:         d.bucket,
+          amount:         d.amount,
+          kind:           d.kind,
+          status:         "completed",   // admin is the verifier
+          bank_name:      d.bank_name ?? null,
+          account_name:   d.account_name ?? null,
+          account_number: d.account_number ?? null,
+          slip_date:      slipDateIso,
+          reference_type: "manual",
+          note:           d.note ?? null,
+          admin_id:       adminId,
+        })
+        .select("id")
+        .single<{ id: string }>();
+
+      if (error || !row) return { ok: false, error: error?.message ?? "insert failed" };
+
+      await logAdminAction(adminId, "wallet_tx.manual_create", "wallet_tx", row.id, {
+        member_code: prof.member_code,
+        bucket: d.bucket,
+        kind: d.kind,
+        amount: d.amount,
+        note: d.note,
+      });
+
+      revalidatePath("/admin/wallet");
+      revalidatePath("/admin/wallet/history");
+      return { ok: true, data: { id: row.id } };
+    },
+  );
+}
