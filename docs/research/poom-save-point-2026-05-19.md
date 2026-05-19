@@ -424,3 +424,51 @@ Commits added in evening-2 (all on `Poom` · all pushed):
 **Total today (combining §11 + §12):** 7 commits · 70+ sidebar items
 audited + ~52 fixed · 1 new migration · Wave-2 brief sharpened to a
 3-step bundle.
+
+---
+
+## 13. 🆕 Session log — 2026-05-19 evening-3 (IA restructure proposal)
+
+> ภูม flagged that Wave A/B fixed individual broken links but the
+> sidebar STRUCTURE itself is broken — 3-into-1 duplicates, orphan
+> workspaces, over-nesting (Freight accounting 3-level), Pacred lost
+> legacy's 6 fixed EN section headers. Ran 3-agent audit + synthesis.
+> Commit on `Poom`: `0fff0a4`.
+
+### 13.1 What landed
+- **4 new audit docs** (`docs/research/sidebar-fidelity-audit/`):
+  - `04-workspace-inventory.md` — 129 page.tsx · 16 redirect-stubs
+  - `05-sidebar-map.md` — 268 sidebar items → 74 unique workspaces · 13+13 duplicate clusters · 17 orphans
+  - `06-legacy-menu-structure.md` — legacy 6-section IA tree (fallback to docs · local PHP at `C:\xampp\` not present)
+  - `07-IA-restructure-proposal.md` — synthesis · Option 3 Hybrid · Wave R1-R3 plan · Q1-Q8 decisions table
+
+### 13.2 ภูม decisions (Q1-Q4 answered · Q5-Q8 took defaults)
+- Q1 ✅ EN section headers (ตาม legacy · zero retraining)
+- Q2 ✅ Search dedicated rows กลับมา (hybrid · เก็บ ?focus=search URL)
+- Q3 ✅ แยกบัญชี Cargo + Freight เป็น 2 parents
+- Q4 ✅ ลบ dead orphans ใน R2
+- Q5/Q6/Q7 — defaults per proposal (see 07-IA §7)
+- Q8 — flagged for เดฟ + ก๊อต visibility check (per-role matrix)
+
+### 13.3 Wave R-series plan (ภูม-owned · ~16-20h split)
+- **R1 (~4h):** 6 EN section headers as new top-level grouping · zero workflow impact
+- **R2 (~6h):** delete 10 dead orphans + collapse 13 duplicates + wire `/admin/admins` + bring back search rows + delete /admin/inventory stub
+- **R3 (~8h):** split accounting Cargo/Freight + move ย้ายเซลล์ to QA + expand Extension (5 carrier audits + meeting-room build) + wire 14 missing badges
+
+### 13.4 Handoff to เดฟ
+Brief in `07-IA-restructure-proposal.md` §9.5 — addresses:
+- What's shipped on Poom (4 commits)
+- What R1-R3 will add
+- No file conflicts with Wave 2 ghost-customer fix
+- Ask for ก๊อต/เดฟ 5-min visibility review on per-role matrix before R1
+
+### 13.5 Branch state at session end (evening-3)
+```
+main = dave = 2da9b8f
+Poom = 0fff0a4 (5 ahead of dave)
+```
+
+Commits added in evening-3 (all on `Poom` · all pushed):
+- `0fff0a4` — 4 audit docs + IA restructure proposal (1390 lines)
+
+**Next step:** start Wave R1 (the section headers · ~4h · safest first step)

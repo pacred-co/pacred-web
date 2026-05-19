@@ -291,18 +291,22 @@ Adopt legacy's 6 EN section headers. CEO (super) sees all 6; per-role menus incl
 
 ---
 
-## 7. Open questions for ภูม (DECIDE before R1 starts)
+## 7. Decisions — ภูม answered 2026-05-19 evening
 
-| # | Question | Default if you don't answer |
+| # | Question | Decision |
 |---|---|---|
-| Q1 | **6 EN section headers** (Cargo & Freight / Freight / Cargo / Settings / Learning / Extension) — keep English exactly like legacy, or translate to Thai? | Keep English (per legacy = zero retraining) |
-| Q2 | **Search as dedicated row** (per §5 revisit) — bring back "ค้นหารหัสสมาชิก" / "ค้นหาฝากสั่งซื้อ" / "ค้นหานำเข้า" as their own sidebar rows? | YES — bring back |
-| Q3 | **`ระบบบัญชี` split** (Cargo + Freight as 2 parents) — split or keep merged? | Split (per legacy + ภูม's "บัญชี Freight nested too deep" complaint) |
-| Q4 | **Class-A duplicate #5** — `accCargo.invoice` should point at: (a) a new BUILD `/admin/freight/invoices` page · (b) repoint at `/admin/tax-invoices` · (c) drop the row | (a) — legacy has `hs-forwarder-invoice.php` |
-| Q5 | **Class-A duplicate #7** (driver-runs report vs payout) — split into separate route or `?view=` switch? | Split route (legacy = 2 PHP files) |
-| Q6 | **`/admin/inventory` redirect stub** — delete + repoint sidebar items at barcode, or keep as alias? | Delete + repoint |
-| Q7 | **Dead orphans (10 routes)** — delete in this proposal's Wave R2, or hold for a separate cleanup PR? | Delete in R2 (couples cleanup with the IA reset) |
-| Q8 | **Per-role visibility matrix in §4** — does it match what each team actually needs? Worth a 5-min review with ก๊อต/เดฟ before R1 ships | (review needed) |
+| Q1 | 6 EN section headers — keep English or translate? | ✅ **EN ตาม legacy** (zero retraining · per owner rule) |
+| Q2 | Search as dedicated row (hybrid: keep ?focus=search URL + bring back row) | ✅ **เอากลับมา** |
+| Q3 | `ระบบบัญชี` split Cargo + Freight as 2 parents? | ✅ **แยก 2 parents** (per legacy + fixes Freight 3-level dropdown) |
+| Q4 | Dead orphans — delete in R2 or separate PR? | ✅ **Delete in R2** (couples cleanup with IA reset) |
+
+### Defaults taken for Q5-Q8 (no explicit answer · using proposal recommendations)
+| # | Question | Default applied |
+|---|---|---|
+| Q5 | `accCargo.invoice` destination | (a) BUILD `/admin/freight/invoices` page — Wave-R3 build · legacy `hs-forwarder-invoice.php` |
+| Q6 | driver-runs report vs payout — split vs `?view=`? | SPLIT route — `/admin/driver-payouts` (Wave-R2) · legacy = 2 PHP files |
+| Q7 | `/admin/inventory` redirect — delete + repoint? | DELETE + repoint sidebar items at `/admin/barcode?mode=…` (Wave-R2) |
+| Q8 | Per-role visibility matrix — review with ก๊อต/เดฟ before R1 | **Flag for เดฟ visibility check** (see §10) — R1 ships without blocking unless ก๊อต flags |
 
 ---
 
@@ -311,6 +315,46 @@ Adopt legacy's 6 EN section headers. CEO (super) sees all 6; per-role menus incl
 - **เดฟ's Wave 2 bundle** (0088 ghost-customer backfill + bridge extension + §7 swap diffs) — touches `actions/` + a few page reads. **No file conflict with this proposal.** Wave R1-R3 can run in parallel.
 - **Wave A + B already shipped** (a51e338 · d0319f5) — survives this proposal. The search collapse from A-2 is the only thing this proposal partially reverts (add back dedicated rows · keep the URL).
 - **Migration 0089** — applied to dev ✅ (ภูม). prod apply pending.
+
+---
+
+## 9.5. 📨 Handoff brief — เดฟ + ก๊อต please read
+
+> ภูม asked me to surface this work clearly so you can see + coordinate.
+
+### What's shipped today on `Poom` (4 commits — already in `origin/Poom`)
+- `d27cf6c` — R&D 8-specialist QC notes
+- `80a6aab` — Sidebar fidelity audit (4 docs · 73% mismatch finding) — the audit ภูม flagged
+- `a51e338` — **Wave A** — 38-item sidebar fidelity fix (12 files · 4 parallel agents · tsc+lint clean)
+  - 7 href rewires + 1 stub (cost-check) + 5 wallet/disbursement fixes + customers `?group=` filter + 17 label drifts
+  - Migration `0089_disbursement_kind_extend.sql` (renumbered from 0088 to reserve เดฟ's slot for `pcs_profiles_backfill`)
+- `d0319f5` — **Wave B partial** — `?sla=` (9 items) + `?topic=` (5 items) filter implementations (defensive label-only banner pattern · no wrong-SQL risk)
+
+### What this proposal adds (Wave R1-R3 · ~16-20h split across 3 sub-waves)
+The above fixed individual links. **The IA itself is broken** — 268 sidebar items → 74 unique workspaces (3.6× over-pointing) + Pacred lost legacy's 6 fixed EN section headers + ~14 badges not wired + search items collapsed.
+
+| Wave | Effort | Owner | Workflow risk |
+|---|---|---|---|
+| **R1** | ~4h | ภูม | **Zero** — section headers only, no item moves |
+| **R2** | ~6h | ภูม | Low — delete dead orphans + wire 1 high-impact (`/admin/admins`) + collapse 13 duplicate clusters |
+| **R3** | ~8h | ภูม | Medium — accounting split + Extension expansion + 14 badge counters |
+
+### Coordination with เดฟ's Wave 2 (ghost-customer fix)
+**No file conflicts.** Wave R1-R3 touch:
+- `lib/admin/sidebar-menu.ts` (R1-R3)
+- `actions/admin/sidebar-counts.ts` (R3 badges)
+- A few page.tsx files (R2 duplicate fixes + R3 builds)
+- No migration files (the disbursement `0089` is in `Poom`; if `dave` lands a `0088_pcs_profiles_backfill` later it can sit at `0088` cleanly)
+
+Wave 2 touches: actions data sources + bridge auth + a few page reads. Different surface.
+
+### What needs เดฟ + ก๊อต before R1 ships
+- **Q8 — per-role visibility matrix (§4)**: my proposed per-role section visibility might miss role-specific needs. Quick 5-min skim by ก๊อต (RBAC owner) + เดฟ (integrator) would catch any "we need X visible to ops too" gaps before R1 ships.
+- **Wave R3 5-build scope** (5 Thai-carrier audit pages + meeting-room): ภูม-buildable, but if เดฟ's Wave 2 brings in ports for any of these, coordinate to avoid double work.
+
+### Open follow-ups (not blocking R1)
+- Migration `0089` applied to dev ✅ (ภูม ran in Supabase) · prod apply pending
+- Wave B remaining ~13h (wallet builds) — GATED on เดฟ's Wave 2
 
 ---
 
