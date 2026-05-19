@@ -15,14 +15,15 @@
  *     - the Bootstrap-4 grid/card subset menu.php uses (exact BS4 values)
  *
  *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
- *   the legacy rules + the Bootstrap-4 grid classes (.row/.col-*/.card)
+ *   the legacy rules + the Bootstrap-4 grid classes (.row, .col-*, .card)
  *   cannot leak into — or collide with — the rest of the Tailwind app.
  *   The page renders the legacy markup 1:1 inside <div class="pcs-legacy">.
  *
- *   The file is co-located next to the route and `import`ed at the top
- *   of page.tsx, so Next.js bundles + minifies it. Static binary assets
- *   (the icon PNGs, logo.png) live under public/legacy/pcs/ and are
- *   referenced by absolute URL — see page.tsx.
+ *   This file is served as the STATIC asset public/legacy/pcs/menu.css
+ *   and loaded with a plain <link rel="stylesheet"> from page.tsx — it
+ *   must bypass the app's Tailwind v4 / PostCSS pipeline, which rejects
+ *   verbatim legacy CSS. Binary assets (icon PNGs, logo.png) likewise
+ *   live under public/legacy/pcs/, referenced by absolute URL.
  *
  * Rebrand: PCS -> PR is branding text + member codes only; class
  * names + colours are copied unchanged so the look is identical.

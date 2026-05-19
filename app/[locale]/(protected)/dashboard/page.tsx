@@ -5,7 +5,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 import { WalletCounter } from "./wallet-counter";
-import "./menu.legacy.css";
 
 /**
  * Customer post-login launchpad — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -15,10 +14,10 @@ import "./menu.legacy.css";
  * This is a transcription, NOT a reinterpretation. The JSX below is the
  * exact HTML markup `menu.php` renders — same elements, same Bootstrap-4
  * class names, same structure, same labels, same order. The visual
- * identity comes from the legacy CSS, brought in verbatim as the
- * co-located, `.pcs-legacy`-scoped `./menu.legacy.css` (see that file's
- * header for the full CSS-handling pattern). The icon PNGs + logo + bg
- * are the legacy raster assets, copied to `public/legacy/pcs/`.
+ * identity comes from the legacy CSS, brought in verbatim as the static
+ * `.pcs-legacy`-scoped `public/legacy/pcs/menu.css`, loaded via a plain
+ * `<link>` so it bypasses the app's Tailwind v4 / PostCSS pipeline. The
+ * icon PNGs + logo + bg are the legacy raster assets in `public/legacy/pcs/`.
  *
  * `menu.php` source structure transcribed here (lines 66-347):
  *   .app-content > .content-wrapper > .content-body > section#basic-carousel
@@ -121,6 +120,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="pcs-legacy">
+      {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
+          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+      <link rel="stylesheet" href="/legacy/pcs/menu.css" />
       {/* BEGIN: Content — menu.php L66 */}
       <div className="app-content content" style={{ paddingTop: "0rem" }}>
         <div className="content-overlay"></div>

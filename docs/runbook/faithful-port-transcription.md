@@ -31,6 +31,16 @@ the slowest *and* least-faithful path.
 legacy does something you would design differently — reproduce the legacy way.
 Improvements are Phase C, not now.
 
+**CSS handling — the pilot-proven pattern.** A screen's legacy stylesheet is
+brought **verbatim** as a static file under `public/legacy/<area>/…css` and
+loaded with a plain `<link rel="stylesheet">` from the page — **never
+`import`-ed**. The app's Tailwind v4 / PostCSS pipeline rejects verbatim legacy
+CSS (it failed on the first screen); a static `public/` file is served
+byte-identical and bypasses PostCSS. Scope every legacy rule under one
+`.pcs-legacy` wrapper class and override the Tailwind-preflight collisions
+inside that scope. Reference — the `menu.php` pilot:
+`app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`.
+
 ---
 
 ## 2. Source — all local, no blockers
