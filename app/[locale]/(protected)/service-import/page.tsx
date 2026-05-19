@@ -279,13 +279,12 @@ function calPriceForwarderSumCompany(
     priceOther -
     fDiscount;
   // Legacy: ($userCompany==1 && pricePayAll>=1000 && fUserCompany!=2) || fUserCompany==1
-  // — here $userCompany and $fUserCompany are the SAME column (the
-  // call passes fUserCompany twice), so the WHT-1% reduction applies
-  // when fUserCompany=='1'.
-  if (
-    (fUserCompany === "1" && pricePayAll >= 1000 && fUserCompany !== "2") ||
-    fUserCompany === "1"
-  ) {
+  // — the legacy call passes the SAME column as both $userCompany and
+  // $fUserCompany, so that whole condition reduces exactly to
+  // `fUserCompany=='1'` (once `==1` holds the `!=2` sub-clause is always
+  // true — tsc flags it as dead). Written in the reduced form; the
+  // WHT-1% reduction behaviour is identical 1:1.
+  if (fUserCompany === "1") {
     pricePayAll = pricePayAll - pricePayAll * 0.01;
   }
   return pricePayAll;

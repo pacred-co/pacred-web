@@ -40,6 +40,7 @@
 
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizePhone } from "@/lib/utils/phone";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -142,7 +143,15 @@ export async function updateProfileAction(
   }
 
   // profile.php L53-57 — phone changed → drop the customer's OTP rows.
+  // Pacred-port addition (runbook §9.7): the legacy stores the phone only
+  // in tb_users, but Pacred auth is SPLIT — the sign-in phone lives in
+  // Supabase Auth. Writing tb_users alone would desync them: the new
+  // number could not sign the customer in. Keep Supabase Auth's phone in
+  // sync. Best-effort — the tb_users write above already succeeded.
   if (userTel !== currentTel) {
+    await admin.auth.admin.updateUserById(data.user.id, {
+      phone: normalizePhone(userTel),
+    });
     await admin.from("tb_users_otp").delete().eq("userid", memberCode);
   }
 
