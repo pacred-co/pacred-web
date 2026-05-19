@@ -330,3 +330,97 @@ Commits added this session (all on `Poom` · all pushed):
 - `8feb5d6` — Wave-1 fidelity audit (4 slices + synthesis + B-6 badge fix)
 - `e66a3ab` — _SYNTHESIS.md §7 Wave-2-ready swap diffs
 - `2da9b8f` — _SYNTHESIS.md §8 🔴 ghost-customer empirical finding
+
+---
+
+## 12. 🆕 Session log — 2026-05-19 evening-2 (Wave A sidebar fidelity fix)
+
+> Continuation from §11.  ภูม noticed sidebar items linking to 404s /
+> wrong content / dead `?param=` carriers.  Ran a 4-agent shadow-clone
+> audit + a 4-agent shadow-clone Wave-A fix in the same session.
+> Commits today on `Poom`: `d27cf6c` · `80a6aab` · `a51e338`.
+
+### 12.1 What landed
+
+1. **R&D 8-specialist deep-dive QC notes** (`d27cf6c`) —
+   `docs/research/r-and-d-2026-05-19/_poom-notes-{A,B,C,D,MASTER}.md` ·
+   5 notes through cargo-domain lens: 7 items to RIDE Wave 2 (~10h),
+   3 🔴 cargo-domain misreads (G1 + DN-1 + billing automation), 6
+   items collapse into existing B-stages, 15+ open senior-lane Qs.
+
+2. **Sidebar fidelity audit** (`80a6aab`) —
+   `docs/research/sidebar-fidelity-audit/_MASTER-FIX-PLAN.md` +
+   `01-broken-links.md` + `02-wallet-withdrawal-pattern.md` +
+   `03-mislinks.md` ·
+   118 sidebar items audited, **70 have problems (73%)**:
+   · 15 broken (404 / no `page.tsx`)
+   · ~46 mislinks (page exists but ignores `?kind=`/`?sla=`/`?topic=` etc.)
+   · ~22 label drift (page correct but sidebar wording off)
+   · ~7 inconclusive · ~28 clean
+   · 3-wave fix plan (A ~5-6h · B ~16h · C ~31h) + split-vs-filter rule.
+
+3. **Wave A — 38-item sidebar fidelity fix** (`a51e338`) ·
+   4 shadow-clone agents in parallel · 12 files · +347 -79:
+   - **A-1** stub: `forwarders/container-cost-check/page.tsx`
+   - **A-2** 7 href rewires (customers/forwarders/service-orders search + notes)
+   - **A-3** 6 wallet/disbursement href fixes + migration
+     `0089_disbursement_kind_extend.sql` (`container_lease` enum) +
+     `wallet/deposit` redirect preserves `?kind&status` +
+     `sales-payouts` `?kind=` UI with label-only banner +
+     disbursements form/page kind extension
+   - **A-4** `customers/page.tsx` `?group=` filter (6 branches · chip · ×-clear)
+   - **A-5** 17 of 22 label drifts in `messages/th.json` + `en.json`
+     (5 skipped per audit "Acceptable" notes; #19 flagged as needs-page-rebuild)
+   - Gates: `tsc` exit 0 · `lint` exit 0 · `audit:i18n` 2328=2328 parity
+
+   Migration renumbered `0088` → `0089` to reserve `0088` for เดฟ's
+   planned Wave-2 `0088_pcs_profiles_backfill`.
+
+### 12.2 Wave B partial — B-5 (`?sla=`) + B-6 (`?topic=`) shipped
+
+After Wave A landed, picked the 2 Wave-B items that are **not** gated on
+เดฟ's Wave 2 ghost-customer fix (they touch reports + learning, not
+wallet/customer pages):
+
+- **B-5 — `?sla=` filter** across 5 report pages
+  (`monthly-orders` · `containers-awaiting-th` · `pending-payments` ·
+  `credit-pending` · `customers/recently-active`).  9 sidebar items now
+  show the SLA name in heading + clear-chip + amber banner ("กำลังพัฒนา
+  เงื่อนไขกรอง").  **Label-only** filter on purpose — without legacy PHP
+  source, picking wrong SQL thresholds (what counts as "pending-10min"?)
+  would mis-report numbers worse than today.  Same defensive pattern
+  Wave-A `sales-payouts` used.
+- **B-6 — per-topic routing** on `/admin/learning` (5 topics: job-flow ·
+  business-plan · culture · newsfeed · regulations).  Early-return preserves
+  the 4-card hub for the no-topic case byte-for-byte.
+
+**Wave B remaining (~13h · gated on เดฟ's Wave 2):** B-1/B-2/B-3
+(wallet/pay-user · wallet/add · wallet/history) + B-4 (forwarders/new)
+all touch customer/wallet surfaces and need the ghost-customer
+backfill in flight before they show correct counts.
+
+### 12.3 Open follow-ups
+
+1. 🟡 **Run migration `0089` on dev + prod** via `psql` (Dashboard SKIP
+   rule still applies to schema-altering migrations per §11.2)
+2. 🔵 **Wave B remaining (~13h)** — wait for เดฟ's Wave 2 to land
+   (or be in flight), then build wallet/pay-user + wallet/add +
+   wallet/history + forwarders/new
+3. 🔵 **Wave C (~31h)** — bundle with Phase-B B-7 (barcode 8-mode overlap)
+
+### 12.4 Branch state at session end (evening-2)
+
+```
+main = dave = 2da9b8f
+Poom = <this commit> (4 ahead of dave)
+```
+
+Commits added in evening-2 (all on `Poom` · all pushed):
+- `d27cf6c` — R&D 8-specialist QC notes (5 docs)
+- `80a6aab` — Sidebar fidelity audit (4 docs · 73% mismatch finding)
+- `a51e338` — Wave A — 38-item sidebar fidelity fix (12 files · 4 agents)
+- `<this commit>` — Wave B partial (B-5 `?sla=` + B-6 `?topic=`) · 14 items · 2 agents
+
+**Total today (combining §11 + §12):** 7 commits · 70+ sidebar items
+audited + ~52 fixed · 1 new migration · Wave-2 brief sharpened to a
+3-step bundle.

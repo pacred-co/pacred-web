@@ -16,6 +16,16 @@ import { AdminDateFilter } from "@/components/admin/date-filter";
 
 type ActType = "all" | "personal" | "juristic";
 
+// D1 Phase-B Wave-B5 (sidebar fidelity): sidebar routes 1 SLA queue here
+// — ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน. The real "no contact" rule in legacy
+// PHP requires joining against a (still-unported) contact-log table; we
+// surface ?sla= as a chip + banner today and leave the activity ranking
+// untouched until the contact-log model lands. Premature SQL would
+// either over- or under-report leads and hurt sales follow-up.
+const SLA_CFG: Record<string, string> = {
+  "no-contact-2d": "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",
+};
+
 type ProfileRow = {
   id:               string;
   member_code:      string | null;
@@ -50,6 +60,7 @@ export default async function RecentlyActiveCustomersPage({
     type?:      string;
     date_from?: string;
     date_to?:   string;
+    sla?:       string;
   }>;
 }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists customer PII
@@ -60,6 +71,14 @@ export default async function RecentlyActiveCustomersPage({
   const type: ActType = sp.type === "personal" || sp.type === "juristic" ? sp.type : "all";
   const dateFrom  = sp.date_from ?? "";
   const dateTo    = sp.date_to   ?? "";
+  const slaKey    = sp.sla && SLA_CFG[sp.sla] ? sp.sla : undefined;
+  const slaLabel  = slaKey ? SLA_CFG[slaKey] : undefined;
+
+  // Clear-link preserves other active filters (type / date range)
+  const clearSlaParams = new URLSearchParams({ type });
+  if (dateFrom) clearSlaParams.set("date_from", dateFrom);
+  if (dateTo)   clearSlaParams.set("date_to",   dateTo);
+  const clearSlaHref = `/admin/customers/recently-active?${clearSlaParams}`;
 
   const admin = createAdminClient();
 
@@ -178,7 +197,9 @@ export default async function RecentlyActiveCustomersPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · CUSTOMERS</p>
-          <h1 className="mt-1 text-2xl font-bold">รายงานลูกค้าที่ใช้งานล่าสุด</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            รายงานลูกค้าที่ใช้งานล่าสุด{slaLabel ? ` — ${slaLabel}` : ""}
+          </h1>
           <p className="text-sm text-muted mt-1">
             แสดงลูกค้าทั้งหมด เรียงตาม activity ล่าสุด (shop / forwarder / yuan transfer) — ใช้สำหรับติดตามลูกค้าที่หายไปและกระตุ้น activity
           </p>
@@ -190,6 +211,26 @@ export default async function RecentlyActiveCustomersPage({
           ← Customer list
         </Link>
       </div>
+
+      {slaKey && slaLabel && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700">
+              SLA: {slaLabel}
+              <Link
+                href={clearSlaHref}
+                className="rounded-full bg-white/70 px-1.5 leading-none hover:bg-white"
+                aria-label="ล้างตัวกรอง SLA"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ตัวกรอง SLA: {slaLabel} · กำลังพัฒนาเงื่อนไขกรอง · แสดงทุกรายการในขณะนี้
+          </div>
+        </>
+      )}
 
       {/* Filters */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
