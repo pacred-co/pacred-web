@@ -99,6 +99,15 @@
 | [`d1-fidelity-admin.md`](d1-fidelity-admin.md) | **Admin back-office fidelity audit** — 14 modules: the per-role sidebar model, missing menu-count badges, forwarder status inverted+truncated, container = a payment-slip ledger in legacy, 6 missing module families | 2026-05-19 |
 | [`d1-fidelity-workflow.md`](d1-fidelity-workflow.md) | **Workflow-loop fidelity audit** — 6 loops: the forwarder pay-point inverted (legacy bills post-arrival = cargo COD), status vocabulary reinterpreted, 3 competing container models, no status-rollback (`fStatus=99`) | 2026-05-19 |
 
+### Ads launch + frontend tooling (2026-05-19)
+
+> Produced for the 2026-05-20 paid-ads launch. They **consolidate** the prior growth/tools/observability docs and reconcile them with D1 — read these, not the five source docs separately.
+
+| Doc | Topic | Date |
+|---|---|---|
+| [`ads-launch-action-plan-2026-05-20.md`](ads-launch-action-plan-2026-05-20.md) | **Ads-launch action plan** — consolidates the 5 prior growth/tools/observability docs + reconciles with D1: the funnel is built but MEASURE is OFF (`NEXT_PUBLIC_GTM_ID` unset → ads run blind); the sequenced pre-launch connection checklist; the rank-#1 lean-budget strategy (SEO + 4 channels); the in-system monitoring plan | 2026-05-19 |
+| [`podeng-tooling-2026-05-20.md`](podeng-tooling-2026-05-20.md) | **ปอน frontend tooling — D1 update** — extends `frontend-tooling-2026-05-18`: re-prioritises for the D1 portal rework + ads launch; documents the 4 tools delivered this batch (`legacy-fidelity-check` + `landing-conversion-audit` skills · `pnpm audit:images` · `pnpm check:connections`) | 2026-05-19 |
+
 ## Cross-references
 
 - 📋 Task scheduling → [`../PORT_PLAN.md`](../PORT_PLAN.md) Part V (cargo backlog) + Part W (gap-hunt backlog)

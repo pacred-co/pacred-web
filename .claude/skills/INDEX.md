@@ -4,11 +4,11 @@
 
 > **How they fit into Pacred's workflow:** The role briefs say WHAT to work on. ADRs say WHAT was decided. Skills say HOW to execute repeatable patterns — bug hunts, audits, refactors, ports, knowledge capture — without the agent reinventing the approach each time.
 
-Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px customer-surface mobile check; +branch-integrate-loop — the integrate→verify→distribute consolidation cycle; +qa-flow-simulator — agent-driven end-to-end flow verification)
+Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px customer-surface mobile check; +branch-integrate-loop — the integrate→verify→distribute consolidation cycle; +qa-flow-simulator — agent-driven end-to-end flow verification) · 2026-05-19 (+legacy-fidelity-check — the D1 owner-mandate fidelity gate; +landing-conversion-audit — the pre-ads landing CRO + tracking check)
 
 ---
 
-## The starter set (12 skills — all `.claude/skills/<name>/SKILL.md`)
+## The skill set (14 skills — all `.claude/skills/<name>/SKILL.md`)
 
 | Skill | Trigger keywords / context | One-line purpose |
 |---|---|---|
@@ -24,6 +24,8 @@ Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px cust
 | **qa-flow-simulator** | "run test cases" · "did the flow actually work" · "functional verification" · "§0 gate" · before a dave→main deploy | Agent simulates a real user journey end-to-end + asserts the observable outcome (not just a 200) |
 | **branch-integrate-loop** | "consolidate the branches" · "merge ภูม/ปอน's work" · "ดึงงานทุก branch มารวม" · "integrate + distribute" · before a dave→main deploy | The daily integrate → verify → distribute cycle — consolidate teammate branches into dave without losing work or shipping a half-state |
 | **mobile-first-verify** | "check this on mobile" · "is this responsive" · "phone QA" · "ดูบนมือถือ" · before pushing a customer surface | Render a page at the 360/390px reference viewports + assert no horizontal scroll · tap targets ≥ 44px · text ≥ 16px · CTA thumb-reachable |
+| **legacy-fidelity-check** | "fidelity check" · "เหมือนของเดิมไหม" · "ตรงกับ PCS เก่าไหม" · before pushing a D1 Phase-B rework | Audit a port screen element-by-element against its legacy PCS original — the owner's "copy 100% first" gate |
+| **landing-conversion-audit** | "พร้อมยิงแอดยัง" · "conversion audit" · "CRO check" · before ads point at a page | Pre-flight a landing for CONVERT + TRACK + Quality-Score so paid traffic converts AND is measured |
 
 ---
 

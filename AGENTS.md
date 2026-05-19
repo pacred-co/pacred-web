@@ -51,6 +51,8 @@ The old revenue lens (more **true** / **billable** / **measurable**) still holds
 
 **Plan work properly.** Don't ship half-built to chase a deadline; don't skip the quality gate to "save time".
 
+**⚠️ 2026-05-19 — owner escalation.** The owner reviewed the team's output and **scolded the whole team** — screens were still diverging from legacy PCS. The rule, verbatim: **"ต้องเอาของเดิมมา copy ให้ได้ ให้เหมือนทั้งหมด 100% ก่อน แล้วเราค่อยพัฒนาให้เหนือยิ่งกว่า"** — copy the original to 100% sameness FIRST, then improve. **Applies to everything.** Before shipping any Phase-B rework, run the **`legacy-fidelity-check`** skill — the executable form of this rule. A genuine improvement idea → record it for Phase C; never ship it inside a port diff (it hides divergence in a good-looking change).
+
 📋 D1 work is sequenced in [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) — the D1 phase plan (Phase A migration → Phase B workflow fidelity → Phase C enhancements). The cargo + gap-hunt backlogs it draws from = [`docs/PORT_PLAN.md`](docs/PORT_PLAN.md) Part V (cargo-forensics) + Part W (gap-hunt). Start with UPGRADE_PLAN, not the raw backlogs.
 
 ## 3. Don't preempt brand cleanup
@@ -83,7 +85,7 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 12 starter skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 14 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
 - `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
 - `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
@@ -97,6 +99,8 @@ The `.claude/skills/` directory contains 12 starter skills (see [`.claude/skills
 - `qa-flow-simulator` — agent simulates a user journey end-to-end, asserts the real outcome (not just a 200)
 - `branch-integrate-loop` — consolidate teammate branches into `dave` safely (integrate → verify → distribute)
 - `mobile-first-verify` — render a customer surface at 360/390px + assert it's mobile-clean before pushing
+- `legacy-fidelity-check` — audit a D1 port screen against its legacy PCS original before shipping (the owner's "copy 100% first" gate)
+- `landing-conversion-audit` — pre-flight a landing page for conversion + tracking + Quality-Score before ads point at it
 
 When a situation matches a skill's description → invoke via the Skill tool (`skill: <name>`). Or describe the situation and let the harness match.
 
