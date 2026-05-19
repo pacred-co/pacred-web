@@ -1,0 +1,297 @@
+/* =============================================================
+ * account-settings.css — legacy PCS Cargo `member/account-settings.php`
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot):
+ *
+ *   To be 100% visually identical to the legacy PHP we do NOT
+ *   re-implement the look in Tailwind — we BRING THE LEGACY CSS.
+ *   account-settings.php has NO inline <style> block; its look comes
+ *   entirely from the legacy theme stylesheets. This file holds the
+ *   exact rules that screen renders with, copied verbatim from:
+ *     - assets/css/bootstrap.min.css           (BS4 grid/card/form/btn)
+ *     - assets/css/bootstrap-extended.min.css  (card · breadcrumb · round · btn-min-width)
+ *     - assets/css/style.css                   (.input-show-pass · .breadcrumb font · .font-16 · .form-control-lg)
+ *     - assets/css/custom.css                  (.content-body.pr110)
+ *
+ *   EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ *   the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ *   collide with — the rest of the Tailwind app. The page renders the
+ *   legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ *   This file is served as the STATIC asset public/legacy/pcs/
+ *   account-settings.css and loaded with a plain <link rel="stylesheet">
+ *   from page.tsx — it must bypass the app's Tailwind v4 / PostCSS
+ *   pipeline, which rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid (exact bootstrap.min.css values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+.pcs-legacy .col-md-6 { flex: 0 0 50%; max-width: 50%; }
+.pcs-legacy .offset-md-3 { margin-left: 25%; }
+
+/* ---- Bootstrap-4 card — overridden by bootstrap-extended.min.css ---- */
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  /* bootstrap-extended.min.css: card border:none + shadow + radius */
+  border: none;
+  box-shadow: 0 2px 18px 1px rgba(49, 53, 72, .1);
+  border-radius: .45rem;
+  margin-bottom: 1.875rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+/* the screen still puts `border-black` on the card — the pilot value */
+.pcs-legacy .border-black { border: 1px solid #000 !important; }
+
+/* ---- spacing + display helpers (Bootstrap-4 spacing scale) ---- */
+.pcs-legacy .mb-2 { margin-bottom: 1.5rem !important; }
+.pcs-legacy .mt-2 { margin-top: 1.5rem !important; }
+.pcs-legacy .pt-2 { padding-top: 1.5rem !important; }
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .d-none { display: none !important; }
+.pcs-legacy .rounded-circle { border-radius: 50% !important; }
+.pcs-legacy .text-danger { color: #ff4961 !important; }
+
+/* ---- breadcrumb (bootstrap.min.css base + bootstrap-extended override) ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  list-style: none;
+  /* bootstrap-extended.min.css L?: transparent + no rounding + Prompt font */
+  font-size: 1rem;
+  font-family: "Prompt", Georgia, "Times New Roman", Times, serif;
+  background-color: transparent;
+  padding: 0 0 .75rem;
+  margin-bottom: 1rem;
+  min-height: auto;
+}
+.pcs-legacy .breadcrumb-item.active { color: #6b6f82; }
+.pcs-legacy .breadcrumb .breadcrumb-item + .breadcrumb-item::before {
+  content: "/" !important;
+  padding-right: .5rem;
+  padding-left: .5rem;
+  color: #6b6f82;
+}
+
+/* ---- content layout wrappers (semantic — no theme rules) ---- */
+/* custom.css L113 — the screen's .content-body carries `pr110` */
+.pcs-legacy .content-body.pr110 {
+  padding-right: 100px;
+}
+
+/* ---- typography ---- */
+/* style.css L151 */
+.pcs-legacy .font-16 { font-size: 16px; }
+/* heading reset so the legacy <h2>/<h5> match the theme, not Tailwind
+ * preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h2 { font-size: 2rem; font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 .5rem; line-height: 1.2; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ol { margin: 0; }
+.pcs-legacy hr {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, .1);
+}
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy avatar is centred via .text-center, so restore
+ * the legacy/browser-default inline rendering inside the scope. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* ---- Bootstrap-4 form controls (exact bootstrap.min.css values) ---- */
+.pcs-legacy .form-group { margin-bottom: 1rem; }
+.pcs-legacy .form-control {
+  display: block;
+  width: 100%;
+  height: calc(1.25em + 1.5rem + 2px);
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+  color: #4e5154;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #babfc7;
+  border-radius: .25rem;
+  transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+.pcs-legacy .form-control:focus {
+  color: #4e5154;
+  background-color: #fff;
+  border-color: #1e9ff2;
+  outline: 0;
+  box-shadow: none;
+}
+.pcs-legacy .form-control::placeholder { color: #babfc7; opacity: 1; }
+/* style.css L218 — the large input variant the screen uses */
+.pcs-legacy .form-control-lg {
+  height: calc(1.5rem + 1.5rem + 2px);
+  padding: 1rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .35rem;
+}
+/* invalid state — the jQuery focusout handler toggles `is-invalid` */
+.pcs-legacy .form-control.is-invalid {
+  border-color: #ff4961;
+}
+.pcs-legacy .form-control.is-invalid:focus {
+  border-color: #ff4961;
+  box-shadow: 0 0 0 .2rem rgba(255, 73, 97, .25);
+}
+
+/* ---- show/hide-password addon (style.css L226-237) ---- */
+.pcs-legacy .input-group-addon.input-show-pass {
+  position: absolute;
+  top: 29px;
+  right: 35px;
+  background: transparent;
+}
+.pcs-legacy .input-group-addon.input-show-pass a { color: #464855; }
+
+/* ---- Bootstrap-4 buttons (exact bootstrap.min.css values) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  color: #6b6f82;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: .75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: .25rem;
+  cursor: pointer;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out;
+}
+.pcs-legacy .btn:hover { color: #6b6f82; text-decoration: none; }
+.pcs-legacy .btn:focus { outline: 0; box-shadow: none; }
+.pcs-legacy .btn:disabled { opacity: .65; }
+.pcs-legacy .btn-outline-secondary { color: #6b6f82; border-color: #6b6f82; }
+.pcs-legacy .btn-outline-secondary:hover {
+  color: #fff;
+  background-color: #6b6f82;
+  border-color: #6b6f82;
+}
+.pcs-legacy .btn-outline-info { color: #1e9ff2; border-color: #1e9ff2; }
+.pcs-legacy .btn-outline-info:hover {
+  color: #fff;
+  background-color: #1e9ff2;
+  border-color: #1e9ff2;
+}
+/* bootstrap-extended.min.css */
+.pcs-legacy .round { border-radius: 1.5rem; }
+.pcs-legacy .btn-min-width { min-width: 8.5rem; }
+
+/* ---- Bootstrap-4 modal-footer (the form's action bar) ---- */
+.pcs-legacy .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem;
+  border-top: 1px solid #626e82;
+  border-bottom-right-radius: .35rem;
+  border-bottom-left-radius: .35rem;
+}
+
+/* ---- responsive: custom.css drops the right padding on tablet/mobile ---- */
+@media only screen and (max-width: 768px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
+@media only screen and (max-width: 578px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 0; }
+}
+
+/* ---- SweetAlert result popup (account-settings.php L206-247) ----
+ * The legacy plugin is SweetAlert2 (assets/plugins/sweetalert/…). It is
+ * not an app npm dependency, so the result popup is reproduced as a
+ * centred modal with the SweetAlert2 look — same Thai title/text. */
+.pcs-legacy .pcs-swal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .4);
+}
+.pcs-legacy .pcs-swal-box {
+  background: #fff;
+  border-radius: .3125rem;
+  padding: 1.25rem 1.5rem 2rem;
+  width: 32em;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 0 .625em rgba(0, 0, 0, .1);
+}
+.pcs-legacy .pcs-swal-icon {
+  width: 5rem;
+  height: 5rem;
+  margin: 1.25rem auto 1.875rem;
+  border-radius: 50%;
+  border: .25rem solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.75rem;
+  line-height: 1;
+}
+.pcs-legacy .pcs-swal-icon-success {
+  border-color: #a5dc86;
+  color: #a5dc86;
+}
+.pcs-legacy .pcs-swal-icon-error {
+  border-color: #f27474;
+  color: #f27474;
+}
+.pcs-legacy .pcs-swal-title {
+  color: #595959;
+  font-size: 1.875rem;
+  font-weight: 600;
+  margin: 0 0 .4em;
+}
+.pcs-legacy .pcs-swal-text {
+  color: #545454;
+  font-size: 1.125rem;
+  margin-bottom: 1.25rem;
+}
