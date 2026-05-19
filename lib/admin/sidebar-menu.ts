@@ -116,7 +116,7 @@ const blockPurchasing: MenuItem = {
     { labelKey: "purchasing.pending",  href: "/admin/service-orders?q=1",    icon: "Clock", badge: "shopPending" },
     { labelKey: "purchasing.cart",     href: "/admin/service-orders/cart",   icon: "ShoppingCart" },
     { labelKey: "purchasing.cartAdd",  href: "/admin/service-orders/cart/add", icon: "Plus" },
-    { labelKey: "purchasing.note",     href: "/admin/service-orders?q=note", icon: "MessageSquare", badge: "shopNote" },
+    { labelKey: "purchasing.note",     href: "/admin/service-orders/notes",  icon: "MessageSquare", badge: "shopNote" },
   ],
 };
 
@@ -172,7 +172,7 @@ const blockForwarder: MenuItem = {
         { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",  icon: "PackagePlus" },
       ],
     },
-    { labelKey: "forwarder.note",          href: "/admin/forwarders?q=note",               icon: "MessageSquare", badge: "forwarderNote" },
+    { labelKey: "forwarder.note",          href: "/admin/forwarders/notes",                icon: "MessageSquare", badge: "forwarderNote" },
     { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
     { labelKey: "forwarder.cntReport",     href: "/admin/containers",                      icon: "Truck" },
     { labelKey: "forwarder.whHistory",     href: "/admin/forwarders/warehouse-history",    icon: "PackageCheck", badge: "forwarderWhError" },
