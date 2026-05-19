@@ -6,6 +6,20 @@ import { CsvButton } from "@/components/admin/csv-button";
 // V-B1 #6: month's orders — forwarders + service_orders within selected month.
 // Selector = ?month=YYYY-MM (defaults to current month).
 
+// D1 Phase-B Wave-B5 (sidebar fidelity): the sidebar routes 3 distinct SLA
+// queues here — รายการยกเลิก · สั่งซื้อรอเกิน 10 นาที · สั่งซื้อรอร้านจีนส่งเกิน 2 วัน.
+// We surface the active ?sla= as a chip + banner so staff see the URL state
+// honoured; the underlying query is NOT yet filtered — we don't have access
+// to the legacy PHP threshold semantics (created_at vs queue_entered_at,
+// etc.) and picking wrong SQL would misreport numbers worse than the
+// current undifferentiated view. When the legacy thresholds are decoded,
+// add real WHERE clauses + status filters per key.
+const SLA_CFG: Record<string, string> = {
+  "cancelled":       "รายการยกเลิกออเดอร์",
+  "pending-10min":   "สั่งซื้อรอเกิน 10 นาที",
+  "chn-dispatch-2d": "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",
+};
+
 type FRow = {
   id: string; f_no: string; status: string; total_price: number;
   transport_type: string; created_at: string;
@@ -37,7 +51,7 @@ function monthBounds(monthStr: string): { from: string; to: string; label: strin
 export default async function MonthlyOrdersReport({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; sla?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
@@ -45,6 +59,8 @@ export default async function MonthlyOrdersReport({
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const month = sp.month ?? defaultMonth;
   const { from, to, label } = monthBounds(month);
+  const slaKey   = sp.sla && SLA_CFG[sp.sla] ? sp.sla : undefined;
+  const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
 
   const admin = createAdminClient();
 
@@ -122,11 +138,33 @@ export default async function MonthlyOrdersReport({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รีพอร์ตเฉพาะกิจ (V-B1)</p>
-          <h1 className="mt-1 text-2xl font-bold">ออเดอร์ในเดือน · {label}</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            ออเดอร์ในเดือน · {label}{slaLabel ? ` — ${slaLabel}` : ""}
+          </h1>
           <p className="mt-1 text-sm text-muted">ฝากนำเข้า + ฝากสั่งซื้อในเดือนที่เลือก (UTC)</p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
+
+      {slaKey && slaLabel && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700">
+              SLA: {slaLabel}
+              <Link
+                href={`/admin/reports/monthly-orders?month=${month}`}
+                className="rounded-full bg-white/70 px-1.5 leading-none hover:bg-white"
+                aria-label="ล้างตัวกรอง SLA"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ตัวกรอง SLA: {slaLabel} · กำลังพัฒนาเงื่อนไขกรอง · แสดงทุกรายการในขณะนี้
+          </div>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-center gap-2 flex-wrap">

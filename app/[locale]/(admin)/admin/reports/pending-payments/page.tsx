@@ -7,6 +7,18 @@ import { CsvButton } from "@/components/admin/csv-button";
 // V-B1 #1: forwarders sitting in `pending_payment` — staff sees "who hasn't paid yet"
 // without asking dev. Sorted oldest first (most-overdue at top).
 
+// D1 Phase-B Wave-B5 (sidebar fidelity): sidebar routes 2 queues here —
+// รอชำระสินค้าเกิน 1 วัน (shop side / service_orders) · รอชำระค่านำเข้า
+// เกิน 2 วัน (forwarder side). We surface ?sla= as a chip + banner; the
+// underlying query (forwarders.status='pending_payment') is unchanged.
+// shop-1d would point to service_orders entirely — we don't yet branch
+// the data source by sla key since the legacy threshold + table split is
+// not confirmed; faithful pass-through avoids misreporting.
+const SLA_CFG: Record<string, string> = {
+  "shop-1d":      "รอชำระสินค้าเกิน 1 วัน",
+  "forwarder-2d": "รอชำระค่านำเข้าเกิน 2 วัน",
+};
+
 type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null } | null;
 type Raw = {
   id: string; f_no: string; total_price: number; weight_kg: number | null; volume_cbm: number | null;
@@ -29,10 +41,12 @@ function daysAgo(iso: string): number {
 export default async function PendingPaymentsReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
+  const slaKey   = sp.sla && SLA_CFG[sp.sla] ? sp.sla : undefined;
+  const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
   let q = admin
@@ -82,11 +96,33 @@ export default async function PendingPaymentsReport({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รีพอร์ตเฉพาะกิจ (V-B1)</p>
-          <h1 className="mt-1 text-2xl font-bold">ฝากนำเข้ารอชำระเงิน</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            ฝากนำเข้ารอชำระเงิน{slaLabel ? ` — ${slaLabel}` : ""}
+          </h1>
           <p className="mt-1 text-sm text-muted">ลูกค้าที่สั่งฝากนำเข้าแล้วแต่ยังไม่ชำระ — เก่าสุดอยู่บนสุด</p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
+
+      {slaKey && slaLabel && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700">
+              SLA: {slaLabel}
+              <Link
+                href="/admin/reports/pending-payments"
+                className="rounded-full bg-white/70 px-1.5 leading-none hover:bg-white"
+                aria-label="ล้างตัวกรอง SLA"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ตัวกรอง SLA: {slaLabel} · กำลังพัฒนาเงื่อนไขกรอง · แสดงทุกรายการในขณะนี้
+          </div>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <AdminDateFilter dateFrom={sp.date_from} dateTo={sp.date_to} />

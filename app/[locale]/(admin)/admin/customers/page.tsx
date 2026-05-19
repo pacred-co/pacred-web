@@ -9,7 +9,27 @@ const STATUS_CFG: Record<string, { label: string; className: string }> = {
   suspended:  { label: "ระงับ",       className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string }> }) {
+// Sidebar `?group=` filter (lib/admin/sidebar-menu.ts blockUserCargo) →
+// the DB filter we run + the chip label we render. Six legacy customer
+// segments collapse onto profiles columns:
+//   general → customer_group='PR'   (Pacred default; ~99% of migrated rows)
+//   vip     → customer_group ilike 'VIP'   (case-insensitive vs rates seed)
+//   svip    → customer_group ilike 'SVIP'
+//   corporate → account_type='juristic'
+//   credit    → credit_enabled=true  (0003 column-preserved from PHP port)
+//   comparison → comparison_enabled=true
+// When Wave 2 swaps the read surface to `tb_users.userType`, the same
+// `?group=` switch passes through unchanged (per _SYNTHESIS §7.5).
+const GROUP_CFG: Record<string, { label: string }> = {
+  general:    { label: "สมาชิกทั่วไป" },
+  vip:        { label: "สมาชิก VIP" },
+  svip:       { label: "สมาชิก SVIP" },
+  corporate:  { label: "สมาชิกนิติบุคคล" },
+  credit:     { label: "สมาชิกเครดิต" },
+  comparison: { label: "สมาชิกคิดค่าเทียบ" },
+};
+
+export default async function AdminCustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string; group?: string }> }) {
   // W-1 (gap-admin H-1/H-7): page-level role gate. Lists every
   // customer's member_code/name/phone/email + wallet balances via
   // createAdminClient (RLS-bypass) — a PDPA/PII surface. ops + sales +
@@ -29,6 +49,16 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     .limit(200);
 
   if (sp.type === "personal" || sp.type === "juristic") q = q.eq("account_type", sp.type);
+
+  // Sidebar `?group=` filter — see GROUP_CFG header comment for the mapping.
+  const group = typeof sp.group === "string" && sp.group in GROUP_CFG ? sp.group : null;
+  if (group === "general")    q = q.eq("customer_group", "PR");
+  if (group === "vip")        q = q.ilike("customer_group", "VIP");
+  if (group === "svip")       q = q.ilike("customer_group", "SVIP");
+  if (group === "corporate")  q = q.eq("account_type", "juristic");
+  if (group === "credit")     q = q.eq("credit_enabled", true);
+  if (group === "comparison") q = q.eq("comparison_enabled", true);
+
   if (sp.q) {
     // Search by member_code OR phone OR name (parallel OR via or() filter)
     q = q.or(`member_code.ilike.%${sp.q}%,phone.ilike.%${sp.q}%,first_name.ilike.%${sp.q}%,last_name.ilike.%${sp.q}%,company_name.ilike.%${sp.q}%`);
@@ -47,7 +77,21 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ลูกค้า</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            ลูกค้า{group ? ` — ${GROUP_CFG[group].label}` : ""}
+          </h1>
+          {group ? (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+              <span>กรอง: {GROUP_CFG[group].label}</span>
+              <Link
+                href="/admin/customers"
+                className="rounded-full px-1 leading-none hover:bg-primary-100"
+                aria-label="ล้างตัวกรองกลุ่มลูกค้า"
+              >
+                ×
+              </Link>
+            </div>
+          ) : null}
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           <Link
@@ -63,6 +107,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
             ⇄ ย้ายเซลล์ผู้ดูแล
           </Link>
         <form action="/admin/customers" className="flex gap-2">
+          {group ? <input type="hidden" name="group" value={group} /> : null}
           <input
             name="q"
             defaultValue={sp.q}
