@@ -21,16 +21,25 @@ import { CustomerWhtUploadPanel } from "@/components/customer-wht-upload-panel";
  * status='pending' or 'cancelled' → notFound (getServiceOrderForReceipt
  *                                    refuses these per legacy PHP rule)
  *
+ * Legacy PCS shops.php exposes TWO print actions per order row —
+ * "พิมพ์ใบเสร็จ" (printShop/?print=1) and "พิมพ์ใบแจ้งหนี้"
+ * (printShop/?print=2). ?doc=invoice forces the ใบแจ้งหนี้ rendering even
+ * for a completed order, so the invoice button stays faithful.
+ *
  * Closes T-P1 GAP 3 (deferred from ภูม commit 121ea0d) — pre-req for
  * T-D1 cargo flow end-to-end smoke test. "ขอใบกำกับภาษี" CTA wires in
  * Phase G2b per ADR-0006 (depends on 0034_tax_invoices.sql).
  */
 export default async function ShopOrderReceiptPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ hNo: string }>;
+  searchParams: Promise<{ doc?: string }>;
 }) {
   const { hNo } = await params;
+  const { doc } = await searchParams;
+  const forceInvoice = doc === "invoice";
   const res = await getServiceOrderForReceipt(hNo);
   if (!res.ok || !res.data) notFound();
   const o = res.data;
@@ -61,8 +70,11 @@ export default async function ShopOrderReceiptPage({
       gross_invoice_thb:  number;
     }>();
 
+  // isPaid drives the "ชำระเงินแล้ว" stamp + the THB-paid framing; the doc
+  // label can be overridden to ใบแจ้งหนี้ via ?doc=invoice (legacy print=2).
   const isPaid       = o.status === "completed";
-  const docLabel     = isPaid ? "ใบเสร็จรับเงิน" : "ใบแจ้งหนี้";
+  const showAsInvoice = forceInvoice || !isPaid;
+  const docLabel     = showAsInvoice ? "ใบแจ้งหนี้" : "ใบเสร็จรับเงิน";
   // The tax-invoice panel is allowed once the order is paid ('ordered'+),
   // matching requestTaxInvoice's server gate (awaiting_payment is the only
   // ineligible status that reaches this page).
@@ -111,7 +123,7 @@ export default async function ShopOrderReceiptPage({
             <p className="text-xs text-gray-600">
               วันที่: {new Date(dateForHead).toLocaleDateString("th-TH")}
             </p>
-            {isPaid && (
+            {isPaid && !showAsInvoice && (
               <p className="mt-1 inline-block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                 ชำระเงินแล้ว
               </p>

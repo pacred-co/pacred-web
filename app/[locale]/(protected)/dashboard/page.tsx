@@ -4,9 +4,30 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
-import { SalesRepCard } from "@/components/sales-rep-card";
 import { DashboardBanners } from "@/components/dashboard-banners";
-import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon } from "lucide-react";
+import { PcsLaunchpadHeader } from "@/components/sections/pcs-launchpad-header";
+import { PcsWalletCard } from "@/components/sections/pcs-wallet-card";
+import { PcsSalesRepCard } from "@/components/sections/pcs-sales-rep-card";
+import { PcsIconGrid } from "@/components/sections/pcs-icon-grid";
+
+/**
+ * Customer post-login home — the PCS launchpad.
+ *
+ * D1 / ADR-0017 Phase B: rebuilt as a faithful port of the legacy PCS Cargo
+ * `member/menu.php` dashboard so the ~8,898 migrated customers need zero
+ * retraining. Legacy launchpad (gap doc `docs/research/d1-fidelity-customer.md`
+ * §1) is, top → bottom:
+ *
+ *   1. red gradient header band — avatar + name + PR#### + 2 corner icons
+ *   2. white wallet card overlapping the band — animated balance counter
+ *   3. sales-rep card — round photo, "เซลล์ <name>", tappable phone
+ *   4. the 9-icon launchpad grid (3×3)
+ *
+ * Pacred's prior stats / banners / recent-activity lists are kept but
+ * DEMOTED to a clearly-secondary section appended below the grid (the gap
+ * doc marks them 🟢 Pacred-only — acceptable as a secondary row, must not
+ * replace the grid).
+ */
 
 const STATUS_BADGE_F: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -43,10 +64,9 @@ export default async function DashboardPage() {
     pendingPaymentCountRes,
     recentForwardersRes,
     recentOrdersRes,
-    settingsRes,
   ] = await Promise.all([
-    supabase.from("wallet").select("balance, cashback_balance, credit_balance").eq("profile_id", profile.id).maybeSingle<{
-      balance: number; cashback_balance: number; credit_balance: number;
+    supabase.from("wallet").select("balance").eq("profile_id", profile.id).maybeSingle<{
+      balance: number;
     }>(),
     supabase.from("cart_items").select("id", { count: "exact", head: true }).eq("profile_id", profile.id),
     supabase.from("service_orders")
@@ -71,228 +91,179 @@ export default async function DashboardPage() {
       .eq("profile_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase.from("settings").select("yuan_rate").eq("id", 1).maybeSingle<{ yuan_rate: number }>(),
   ]);
 
-  const wallet = walletRes.data ?? { balance: 0, cashback_balance: 0, credit_balance: 0 };
-  const yuanRate = Number(settingsRes.data?.yuan_rate ?? 5.0);
-  // Shopping-cart rate runs slightly higher than Alipay (legacy PCS pattern: ฝากสั่ง 4.97 vs Alipay 4.93)
-  const shopRate = yuanRate;
-  const alipayRate = Math.max(0, yuanRate - 0.04);
+  const balance = Number(walletRes.data?.balance ?? 0);
   const displayName = profile.first_name
     ? `${profile.first_name}${profile.last_name ? " " + profile.last_name : ""}`
     : profile.company_name ?? t("fallbackName");
 
   return (
     <>
-      <main className="mx-auto w-full max-w-[1200px] px-4 py-8 space-y-6">
-        {/* Sales rep card (server component, renders nothing if no rep) */}
-        <SalesRepCard profileId={profile.id} />
+      <main className="mx-auto w-full max-w-[640px] pb-10">
+        {/* ── Legacy PCS launchpad — the faithful primary surface ── */}
+        <PcsLaunchpadHeader
+          displayName={displayName}
+          memberCode={profile.member_code}
+          avatarUrl={profile.avatar_url}
+        />
+        <PcsWalletCard balance={balance} />
+        <div className="mt-4">
+          <PcsSalesRepCard profileId={profile.id} />
+        </div>
+        <div className="mt-5">
+          <PcsIconGrid />
+        </div>
 
-        {/* Greeting + live rates ticker */}
-        <section className="rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 text-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-white/70">{t("kicker")}</p>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-bold">{t("greeting", { name: displayName })}</h1>
-              {profile.member_code && (
-                <p className="mt-1 text-sm text-white/80">
-                  {t("memberCode")}: <span className="font-mono font-semibold">{profile.member_code}</span>
-                </p>
+        {/* ── Pacred-only secondary section (demoted below the grid) ── */}
+        <div className="mt-8 space-y-5 px-4">
+          {/* Marketing banners (admin-managed via dashboard_banners table) */}
+          <DashboardBanners />
+
+          {/* Stats row — quick counts, secondary to the icon grid */}
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MiniStat
+              href="/service-order/pending"
+              label={t("statOrdersPending")}
+              value={String(pendingOrderCountRes.count ?? 0)}
+              badge={cartCountRes.count ?? 0}
+            />
+            <MiniStat
+              href="/service-import/pending"
+              label={t("statForwardersPending")}
+              value={String(pendingForwarderCountRes.count ?? 0)}
+            />
+            <MiniStat
+              href="/service-payment"
+              label={t("quickPayment")}
+              value={String(pendingPaymentCountRes.count ?? 0)}
+            />
+            <MiniStat
+              href="/wallet/history"
+              label={t("statBalance")}
+              value={`฿${balance.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
+            />
+          </section>
+
+          {/* Recent activity lists */}
+          <section className="grid gap-4 lg:grid-cols-2">
+            {/* Recent shopping orders */}
+            <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <h2 className="font-bold">{t("recentOrders")}</h2>
+                <Link href="/service-order" className="text-xs text-primary-500 hover:underline">{t("viewAll")}</Link>
+              </div>
+              {!recentOrdersRes.data?.length ? (
+                <div className="p-8 text-center text-sm text-muted">
+                  {t("noRecentOrders")}
+                  <div className="mt-3">
+                    <Link href="/service-order/add" className="inline-block rounded-lg bg-primary-500 px-3 py-1.5 text-xs text-white">+ {t("quickShop")}</Link>
+                  </div>
+                </div>
+              ) : (
+                <ul>
+                  {recentOrdersRes.data.map((o) => (
+                    <li key={o.id} className="border-t border-border px-5 py-3 first:border-t-0 hover:bg-surface-alt/30">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-primary-600">{o.h_no}</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_SO[o.status]}`}>
+                              {t(`status.${o.status}` as Parameters<typeof t>[0])}
+                            </span>
+                          </div>
+                          <p className="truncate text-sm text-foreground">{o.title ?? "—"}</p>
+                          <p className="text-xs text-muted">
+                            {o.item_count} {t("items")} · {new Date(o.created_at).toLocaleDateString("th-TH")}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-mono text-sm font-bold">฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+                          {o.status === "awaiting_payment" && o.payment_due_at && (
+                            <p className="text-[10px] text-yellow-700">
+                              {t("payBy", { date: new Date(o.payment_due_at).toLocaleDateString("th-TH") })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="rounded-full bg-white/15 backdrop-blur-sm px-4 py-1.5 text-xs">
-                <span className="text-white/70">ฝากสั่ง</span>{" "}
-                <span className="font-mono font-bold text-base">{shopRate.toFixed(2)}</span>
+
+            {/* Recent forwarders */}
+            <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                <h2 className="font-bold">{t("recentForwarders")}</h2>
+                <Link href="/service-import" className="text-xs text-primary-500 hover:underline">{t("viewAll")}</Link>
               </div>
-              <div className="rounded-full bg-white/15 backdrop-blur-sm px-4 py-1.5 text-xs">
-                <span className="text-white/70">Alipay</span>{" "}
-                <span className="font-mono font-bold text-base">{alipayRate.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Link href="/service-order/add"   className="rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors">+ {t("quickShop")}</Link>
-            <Link href="/service-import/add"  className="rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors">+ {t("quickImport")}</Link>
-            <Link href="/service-payment"     className="rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors">{t("quickPayment")}</Link>
-            <Link href="/wallet/deposit"      className="rounded-lg bg-white text-primary-700 hover:bg-white/95 px-4 py-2 text-sm font-bold transition-colors">+ {t("quickDeposit")}</Link>
-          </div>
-        </section>
-
-        {/* Marketing banners (admin-managed via dashboard_banners table) */}
-        <DashboardBanners />
-
-        {/* Stats row — 4 PCS-style cards (number left, icon right, progress bar bottom, hover lift) */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <PcsStatCard
-            href="/service-order/pending"
-            label="ฝากสั่งซื้อสินค้า"
-            value={String(pendingOrderCountRes.count ?? 0)}
-            cartBadge={cartCountRes.count ?? 0}
-            tone="info"
-            icon={<ShoppingBasket className="w-9 h-9" />}
-          />
-          <PcsStatCard
-            href="/service-import/pending"
-            label="ฝากนำเข้าสินค้า"
-            value={String(pendingForwarderCountRes.count ?? 0)}
-            tone="warning"
-            icon={<Box className="w-9 h-9" />}
-          />
-          <PcsStatCard
-            href="/service-payment"
-            label="ฝากชำระเงิน"
-            value={String(pendingPaymentCountRes.count ?? 0)}
-            tone="purple"
-            icon={<ArrowLeftRight className="w-9 h-9" />}
-          />
-          <PcsStatCard
-            href="/wallet/history"
-            label="กระเป๋าสตางค์"
-            value={`฿${Number(wallet.balance).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}
-            tone="success"
-            icon={<WalletIcon className="w-9 h-9" />}
-            small
-          />
-        </section>
-
-        {/* Two-column lists */}
-        <section className="grid gap-4 lg:grid-cols-2">
-          {/* Recent shopping orders */}
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-              <h2 className="font-bold">{t("recentOrders")}</h2>
-              <Link href="/service-order" className="text-xs text-primary-500 hover:underline">{t("viewAll")}</Link>
-            </div>
-            {!recentOrdersRes.data?.length ? (
-              <div className="p-8 text-center text-sm text-muted">
-                {t("noRecentOrders")}
-                <div className="mt-3">
-                  <Link href="/service-order/add" className="inline-block rounded-lg bg-primary-500 text-white px-3 py-1.5 text-xs">+ {t("quickShop")}</Link>
+              {!recentForwardersRes.data?.length ? (
+                <div className="p-8 text-center text-sm text-muted">
+                  {t("noRecentForwarders")}
+                  <div className="mt-3">
+                    <Link href="/service-import/add" className="inline-block rounded-lg bg-primary-500 px-3 py-1.5 text-xs text-white">+ {t("quickImport")}</Link>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <ul>
-                {recentOrdersRes.data.map((o) => (
-                  <li key={o.id} className="px-5 py-3 border-t border-border first:border-t-0 hover:bg-surface-alt/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-primary-600">{o.h_no}</span>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_SO[o.status]}`}>
-                            {t(`status.${o.status}` as Parameters<typeof t>[0])}
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground truncate">{o.title ?? "—"}</p>
-                        <p className="text-xs text-muted">
-                          {o.item_count} {t("items")} · {new Date(o.created_at).toLocaleDateString("th-TH")}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono font-bold text-sm">฿{Number(o.total_thb).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
-                        {o.status === "awaiting_payment" && o.payment_due_at && (
-                          <p className="text-[10px] text-yellow-700">
-                            {t("payBy", { date: new Date(o.payment_due_at).toLocaleDateString("th-TH") })}
+              ) : (
+                <ul>
+                  {recentForwardersRes.data.map((f) => (
+                    <li key={f.id} className="border-t border-border px-5 py-3 first:border-t-0 hover:bg-surface-alt/30">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-primary-600">{f.f_no}</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_F[f.status]}`}>
+                              {t(`fstatus.${f.status}` as Parameters<typeof t>[0])}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted">
+                            {Number(f.weight_kg).toFixed(2)} kg · {Number(f.volume_cbm).toFixed(3)} cbm · {new Date(f.created_at).toLocaleDateString("th-TH")}
                           </p>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Recent forwarders */}
-          <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-            <div className="px-5 py-4 flex items-center justify-between border-b border-border">
-              <h2 className="font-bold">{t("recentForwarders")}</h2>
-              <Link href="/service-import" className="text-xs text-primary-500 hover:underline">{t("viewAll")}</Link>
-            </div>
-            {!recentForwardersRes.data?.length ? (
-              <div className="p-8 text-center text-sm text-muted">
-                {t("noRecentForwarders")}
-                <div className="mt-3">
-                  <Link href="/service-import/add" className="inline-block rounded-lg bg-primary-500 text-white px-3 py-1.5 text-xs">+ {t("quickImport")}</Link>
-                </div>
-              </div>
-            ) : (
-              <ul>
-                {recentForwardersRes.data.map((f) => (
-                  <li key={f.id} className="px-5 py-3 border-t border-border first:border-t-0 hover:bg-surface-alt/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-primary-600">{f.f_no}</span>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE_F[f.status]}`}>
-                            {t(`fstatus.${f.status}` as Parameters<typeof t>[0])}
-                          </span>
+                          {f.tracking_th && <p className="text-[10px] text-muted">TH: {f.tracking_th}</p>}
                         </div>
-                        <p className="text-xs text-muted">
-                          {Number(f.weight_kg).toFixed(2)} kg · {Number(f.volume_cbm).toFixed(3)} cbm · {new Date(f.created_at).toLocaleDateString("th-TH")}
-                        </p>
-                        {f.tracking_th && <p className="text-[10px] text-muted">TH: {f.tracking_th}</p>}
+                        <div className="shrink-0 text-right">
+                          <p className="font-mono text-sm font-bold">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-mono font-bold text-sm">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        </div>
       </main>
       <Footer />
     </>
   );
 }
 
-/** PCS-style stat card: big colored number on the left, icon on the right,
- *  full-width gradient progress bar at bottom, hover lift. Mirrors the
- *  card layout from legacy member dashboard. */
-function PcsStatCard({
-  href, label, value, icon, tone, cartBadge, small = false,
+/** Compact stat tile for the demoted secondary section — small number,
+ *  label, optional cart badge. Deliberately understated so it does not
+ *  compete with the legacy 9-icon launchpad above it. */
+function MiniStat({
+  href, label, value, badge,
 }: {
   href: string;
   label: string;
   value: string;
-  icon: React.ReactNode;
-  tone: "info" | "warning" | "purple" | "success";
-  cartBadge?: number;
-  small?: boolean;
+  badge?: number;
 }) {
-  const tones = {
-    info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
-    warning: { text: "text-amber-500",   bar: "from-amber-400 to-orange-500" },
-    purple:  { text: "text-purple-600",  bar: "from-purple-400 to-fuchsia-600" },
-    success: { text: "text-emerald-600", bar: "from-emerald-400 to-green-600" },
-  }[tone];
-
   return (
     <Link
       href={href}
-      className="group block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden"
+      className="block rounded-xl border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-surface"
     >
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className={`font-bold leading-none ${tones.text} ${small ? "text-2xl" : "text-4xl"} font-mono`}>{value}</p>
-              {cartBadge !== undefined && cartBadge > 0 && (
-                <span className="rounded-full bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5">รถเข็น {cartBadge}</span>
-              )}
-            </div>
-            <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
-          </div>
-          <div className={`shrink-0 ${tones.text} opacity-90 group-hover:opacity-100`}>{icon}</div>
-        </div>
+      <div className="flex items-center gap-1.5">
+        <p className="font-mono text-xl font-bold text-foreground">{value}</p>
+        {badge !== undefined && badge > 0 && (
+          <span className="rounded-full bg-primary-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {badge}
+          </span>
+        )}
       </div>
-      <div className="h-1.5 w-full bg-surface-alt">
-        <div className={`h-full w-full bg-gradient-to-r ${tones.bar}`} />
-      </div>
+      <p className="mt-1 text-xs text-muted">{label}</p>
     </Link>
   );
 }
