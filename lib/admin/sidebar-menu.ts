@@ -187,6 +187,13 @@ const blockBarcode: MenuItem = {
  *  defined here. Removed 2026-05-20 ค่ำ per ภูม brief — operations now live
  *  in the page top-menubar; the deeper barcode toolbox stays in `blockBarcode`
  *  for warehouse role's sidebar reuse. */
+/**
+ * Two-level: parent → Cargo (FCL/LCL) + Freight (FCL/LCL). Transport-mode
+ * (รถ/เรือ/แอร์) intentionally NOT in sidebar — those are in-page filter
+ * chips on `/admin/forwarders` (per ภูม 2026-05-20 ค่ำ · screenshot 1).
+ * Sidebar carries the SERVICE-TYPE split (Cargo vs Freight, FCL vs LCL);
+ * the page chips carry the TRANSPORT-MODE filter.
+ */
 const blockForwarderImport: MenuItem = {
   labelKey: "forwarderImport.title",
   icon: "Package",
@@ -204,11 +211,8 @@ const blockForwarderImport: MenuItem = {
       labelKey: "forwarderImport.freight",
       icon: "Truck",
       children: [
-        { labelKey: "forwarderImport.fcl",   href: "/admin/forwarders?segment=freight-fcl",   icon: "Package" },
-        { labelKey: "forwarderImport.lcl",   href: "/admin/forwarders?segment=freight-lcl",   icon: "Package" },
-        { labelKey: "forwarderImport.truck", href: "/admin/forwarders?segment=freight-truck", icon: "Truck" },
-        { labelKey: "forwarderImport.sea",   href: "/admin/forwarders?segment=freight-sea",   icon: "Truck" },
-        { labelKey: "forwarderImport.air",   href: "/admin/forwarders?segment=freight-air",   icon: "Truck" },
+        { labelKey: "forwarderImport.fcl", href: "/admin/forwarders?segment=freight-fcl", icon: "Package" },
+        { labelKey: "forwarderImport.lcl", href: "/admin/forwarders?segment=freight-lcl", icon: "Package" },
       ],
     },
   ],
@@ -421,16 +425,18 @@ const blockExtIncidents: MenuItem = {
   labelKey: "extension.incidents", href: "/admin/incidents", icon: "AlertTriangle", badge: "incidents", phase: 2,
 };
 
-// ── Dashboard item — legacy 3-way All/Freight/Cargo switch ───────
+// ── Dashboard — single leaf (Pacred-is-one-company per ภูม 2026-05-20 ค่ำ).
+//
+//  Prior shape carried a 3-way All/Freight/Cargo dropdown pointing at
+//  `/admin?c=all/freight/cargo`. The page (`app/[locale]/(admin)/admin/page.tsx`)
+//  only honours `?tab=…` so the `?c=…` carriers were a no-op — all three
+//  dropdown items rendered the exact same dashboard, hiding behind a
+//  fake "feature". Collapsed to one leaf; any carrier filter belongs in
+//  the in-page tab strip, not the sidebar.
 const itemDashboard: MenuItem = {
   labelKey: "dashboard.title",
   href: "/admin",
   icon: "LayoutDashboard",
-  children: [
-    { labelKey: "dashboard.all",     href: "/admin?c=all",     icon: "LayoutDashboard" },
-    { labelKey: "dashboard.freight", href: "/admin?c=freight", icon: "LayoutDashboard" },
-    { labelKey: "dashboard.cargo",   href: "/admin?c=cargo",   icon: "LayoutDashboard" },
-  ],
 };
 
 // ════════════════════════════════════════════════════════════════

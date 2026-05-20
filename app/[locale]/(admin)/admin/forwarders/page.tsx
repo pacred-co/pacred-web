@@ -89,7 +89,17 @@ type SearchParams = {
   q_multi?: string;     // U2-5: multi-line bulk tracking search (one term per line)
   date_from?: string;
   date_to?: string;
-  segment?: string;     // ภูม brief 2026-05-20 ค่ำ — label-only chip (no SQL filter)
+  segment?: string;     // sidebar Cargo/Freight × FCL/LCL — label-only chip (no SQL filter)
+  mode?: string;        // ภูม brief 2026-05-20 ค่ำ — transport-mode in-page filter (truck/ship/air)
+};
+
+// Transport-mode in-page chip strip (ภูม brief 2026-05-20 ค่ำ — moved
+// out of sidebar to make sidebar slim). Values match `forwarders.transport_type`
+// CHECK constraint from migration 0010 (truck/ship/air).
+const MODE_LABEL: Record<string, string> = {
+  truck: "🚛 รถ",
+  ship:  "🚢 เรือ",
+  air:   "✈️ เครื่องบิน",
 };
 
 export default async function AdminForwardersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -112,6 +122,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     .limit(300);
 
   if (sp.status)    q = q.eq("status", sp.status);
+  if (sp.mode && MODE_LABEL[sp.mode]) q = q.eq("transport_type", sp.mode);
   if (sp.date_from) q = q.gte("created_at", sp.date_from);
   if (sp.date_to)   q = q.lte("created_at", sp.date_to + "T23:59:59");
 
@@ -217,6 +228,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.q)         params.set("q", sp.q);
           if (sp.date_from) params.set("date_from", sp.date_from);
           if (sp.date_to)   params.set("date_to", sp.date_to);
+          if (sp.mode)      params.set("mode", sp.mode);
+          if (sp.segment)   params.set("segment", sp.segment);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
           return (
@@ -225,6 +238,33 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
                 active ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
               }`}>
               {o.l}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Transport-mode chip strip — รถ/เรือ/แอร์ (ภูม brief 2026-05-20 ค่ำ
+          · moved out of sidebar Nested Submenu · pattern: in-page chip
+          like the spine page). Preserves all other search params. */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted font-medium">ขนส่ง:</span>
+        {([undefined, "truck", "ship", "air"] as const).map((m) => {
+          const params = new URLSearchParams();
+          if (m)            params.set("mode", m);
+          if (sp.status)    params.set("status", sp.status);
+          if (sp.q)         params.set("q", sp.q);
+          if (sp.date_from) params.set("date_from", sp.date_from);
+          if (sp.date_to)   params.set("date_to", sp.date_to);
+          if (sp.segment)   params.set("segment", sp.segment);
+          const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
+          const active = (sp.mode ?? "") === (m ?? "");
+          const label = m ? MODE_LABEL[m] : "ทุก mode";
+          return (
+            <Link key={m ?? "all"} href={href}
+              className={`rounded-full border px-3 py-1 whitespace-nowrap ${
+                active ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
+              }`}>
+              {label}
             </Link>
           );
         })}
