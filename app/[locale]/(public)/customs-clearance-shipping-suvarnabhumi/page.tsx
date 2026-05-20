@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { GoogleAdsScript } from "@/components/analytics/google-ads-script";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
@@ -244,6 +245,9 @@ export default async function CustomsClearancePage({
 
   return (
     <>
+      {/* Google Ads conversion tag — fires on phone (tel:) + LINE clicks.
+          Scoped to this page only (paid traffic is routed here). */}
+      <GoogleAdsScript />
       <JsonLd
         data={[
           serviceSchema({
@@ -1007,9 +1011,9 @@ export default async function CustomsClearancePage({
                   CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
                 </div>
                 <h3 className="text-[20px] lg:text-[30px] xl:text-[40px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_12px_rgba(0,0,0,0.6)]">
-                  มั่นใจ เคลียร์ของได้แน่
+                  มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
                   <br />
-                  เมื่อเลือก <span className="text-yellow-300">Pacred Shipping</span>
+                  เลือก <span className="text-yellow-300">Pacred Shipping</span>
                 </h3>
                 <p className="mt-1 lg:mt-1.5 text-[11.5px] lg:text-[13px] xl:text-[15px] leading-[1.4] font-medium text-white/95 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
                   อยู่ข้างคุณทุกขั้นตอน —{" "}
@@ -1105,9 +1109,9 @@ export default async function CustomsClearancePage({
                     CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
                   </div>
                   <h3 className="text-[24px] font-black text-white leading-[1.1] tracking-[-0.02em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                    มั่นใจ เคลียร์ของได้แน่
+                    มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
                     <br />
-                    เมื่อเลือก <span className="text-yellow-300">Pacred Shipping</span>
+                    เลือก <span className="text-yellow-300">Pacred Shipping</span>
                   </h3>
                   <p className="mt-2 text-[13.5px] leading-[1.45] font-medium text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
                     อยู่ข้างคุณทุกขั้นตอน —{" "}

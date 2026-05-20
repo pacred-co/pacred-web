@@ -22,7 +22,7 @@ import {
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
-const HOTLINE = "066-125-3007";
+const HOTLINE = "062-603-0456";
 
 type Mode = "cargo" | "freight";
 type Term = "DDP" | "EXW" | "FOB";
