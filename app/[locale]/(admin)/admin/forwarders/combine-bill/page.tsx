@@ -1,7 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildCombineBillPrintHref } from "@/actions/admin/combine-bill";
+import { buildCombineBillPrintHref } from "@/lib/admin/combine-bill-urls";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 
 /**

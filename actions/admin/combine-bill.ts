@@ -306,19 +306,7 @@ export async function adminDeleteCombineBill(
 // ────────────────────────────────────────────────────────────
 // PRINT — URL stub (the @react-pdf follow-up will own the real renderer)
 // ────────────────────────────────────────────────────────────
-//
-// The legacy `printBill.php` produces a mPDF (THSarabunNew) document
-// from a flat list of `tb_forwarder.id` values, passed as the
-// `id[]=…&id[]=…` query string. The Pacred PDF pipeline is
-// `@react-pdf/renderer` per the existing `components/pdf/` convention;
-// the route owning that renderer lives at `/admin/forwarders/combine-bill/print`.
-// Until that lands, the list page links here and we return a stub
-// payload the future page can consume directly.
-//
-// Faithful behaviour preserved: same legacy `id[]=…` query-string shape,
-// same target route slug.
-
-export function buildCombineBillPrintHref(forwarderIds: number[]): string {
-  const qs = forwarderIds.map((id) => `id[]=${encodeURIComponent(id)}`).join("&");
-  return `/admin/forwarders/combine-bill/print${qs ? `?${qs}` : ""}`;
-}
+// (URL builder for the print route moved to
+//  `lib/admin/combine-bill-urls.ts` — a "use server" file may only
+//  export ASYNC functions; the sync URL builder lives in `lib/` so this
+//  module stays Server-Action-pure.)
