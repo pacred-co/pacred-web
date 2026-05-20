@@ -3,6 +3,7 @@ import createIntlMiddleware from "next-intl/middleware";
 import { createServerClient } from "@supabase/ssr";
 import { routing } from "./i18n/routing";
 import { VISITOR_COOKIE, newVisitorId } from "./lib/experiments";
+import { isPhase2PlusRoute } from "./lib/admin/phase-access";
 
 const handleI18n = createIntlMiddleware(routing);
 
@@ -77,6 +78,55 @@ export default async function middleware(request: NextRequest) {
     // carry over cookies the middleware set (visitor id, refreshed session)
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase 2/3/4 hard route block (2026-05-20 night owner brief).
+  //
+  // Three tiers of enforcement, fail-closed:
+  //   (1) Sidebar visibility filter — `lib/admin/sidebar-menu.ts` +
+  //       `components/sections/admin-sidebar.tsx` drop Phase-2+ items
+  //       from the rendered menu for non-`super` roles. UX layer only.
+  //   (2) Page-level helper — `canAccessRoute()` in
+  //       `lib/admin/phase-access.ts`, available to any Server
+  //       Component / Action that wants a per-request gate.
+  //   (3) Network-level block (THIS BLOCK) — bounces a non-`super`
+  //       admin who requests a Phase-2+ URL directly (typing into the
+  //       address bar, bookmark, etc.) back to /admin (the Phase-1
+  //       dashboard they CAN see).
+  //
+  // Threat model:
+  //   ✓ Prevents accidental URL typing reaching a Phase-2 page
+  //   ✓ Prevents a bookmarked Phase-2 URL from rendering for a non-super
+  //   ✗ Does NOT prevent a malicious admin from extracting data via the
+  //     API/Supabase directly — that is RLS's job. RBAC + RLS sit below.
+  //
+  // Cost note: the admins-table query only fires for signed-in users
+  // who actually hit a Phase-2+ pathname (the cheap `isPhase2PlusRoute`
+  // string-match runs first). Phase-1 admin pages — the common case —
+  // take zero extra DB hits.
+  //
+  // Strategy: `redirect('/admin')` (NOT `rewrite('/404')`) — this repo
+  // has no `/404` route + no `app/not-found.tsx`, so a rewrite would
+  // serve a 200 with the framework default body (status-code mismatch
+  // + brittle if Next 16 changes that resolution). A redirect to the
+  // dashboard is unambiguous, well-supported in middleware, and
+  // matches the user's "redirect cleaner" guidance in the brief.
+  // (A future `app/not-found.tsx` + switch to `rewrite` would preserve
+  // the typed URL — but the visibility goal is already met here.)
+  // ──────────────────────────────────────────────────────────────
+  if (user && isPhase2PlusRoute(request.nextUrl.pathname)) {
+    const { data: rows } = await supabase
+      .from("admins")
+      .select("role")
+      .eq("profile_id", user.id)
+      .eq("is_active", true);
+    const isSuper = (rows ?? []).some((r) => r.role === "super");
+    if (!isSuper) {
+      const bounce = NextResponse.redirect(new URL("/admin", request.url));
+      response.cookies.getAll().forEach((c) => bounce.cookies.set(c));
+      return bounce;
+    }
   }
 
   return response;

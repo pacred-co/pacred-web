@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import CartRowActions, { CartRowRemove } from "./cart-row-actions";
+import CartSubmitButton from "./cart-submit-button";
 
 /**
  * Admin > "รถเข็นสินค้า" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -617,29 +619,23 @@ export default async function AdminCartPage({
                                                   <div className="product-price">
                                                     {numberFormat2(row.cprice)}
                                                   </div>
-                                                  {/* 5 — จำนวน */}
+                                                  {/* 5 — จำนวน + 6 — แอคชั่น (remove)
+                                                      Both wired to Server Actions via
+                                                      client islands. Same legacy column
+                                                      wrappers + child classes so the
+                                                      `public/legacy/pcs/admin/cart.css`
+                                                      float-grid layout is preserved. The
+                                                      qty <input> keeps name="cAmount[]"
+                                                      so the surrounding addOrder form
+                                                      still submits its values legacy-style. */}
                                                   <div className="product-quantity">
-                                                    <input
-                                                      type="number"
-                                                      className="input-product-quantity"
-                                                      defaultValue={row.camount}
-                                                      name="cAmount[]"
-                                                      min={1}
-                                                      step={1}
+                                                    <CartRowActions
+                                                      cartId={row.id}
+                                                      initialQty={row.camount}
                                                     />
                                                   </div>
-                                                  {/* 6 — แอคชั่น (remove) — the legacy
-                                                      `removeItem(ID)` AJAX handler is a
-                                                      follow-up Server Action pilot. */}
                                                   <div className="product-removal">
-                                                    <button
-                                                      type="button"
-                                                      className="remove-product font-12 btn btn-outline-danger round"
-                                                      data-action-remove={row.id}
-                                                      title="ลบรายการนี้"
-                                                    >
-                                                      <i className="ft-trash"></i> ลบ
-                                                    </button>
+                                                    <CartRowRemove cartId={row.id} />
                                                   </div>
                                                   {/* 7 — ราคารวม */}
                                                   <div className="product-line-price">{linePrice}</div>
@@ -785,14 +781,7 @@ export default async function AdminCartPage({
                                             </div>
                                           </div>
                                           <div className="text-right">
-                                            <button
-                                              type="submit"
-                                              className="checkout2 btn btn-outline-info round btn-min-width waves-effect"
-                                              id="CheckWait"
-                                              name="addOrder"
-                                            >
-                                              ยืนยันการสั่งซื้อ
-                                            </button>
+                                            <CartSubmitButton cartOwnerUserid={targetUserId} />
                                           </div>
                                         </div>
                                       </div>

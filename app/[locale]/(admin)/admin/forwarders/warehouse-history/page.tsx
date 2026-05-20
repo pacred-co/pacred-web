@@ -1,6 +1,12 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  WarehouseHistoryRelinkButton,
+  WarehouseHistoryDeleteButton,
+  WarehouseHistoryMatchedActions,
+  WarehouseHistoryModalHost,
+} from "./warehouse-history-row-actions";
 
 /**
  * Admin > "ประวัติเข้าโกดังไทย" — a FAITHFUL 1:1 TRANSCRIPTION of
@@ -601,6 +607,11 @@ export default async function AdminForwardersWarehouseHistoryPage({
       <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
       <link rel="stylesheet" href="/legacy/pcs/admin/warehouse-history.css" />
 
+      {/* Singleton relink-modal host — listens for openRelinkModal()
+          events from the per-row relink buttons. Mounted once here so
+          row buttons stay light-weight (just dispatchEvent + JSX). */}
+      <WarehouseHistoryModalHost />
+
       {/* BEGIN: Content — L81-386 */}
       <div className="app-content content">
         <div className="content-overlay"></div>
@@ -819,28 +830,27 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                             <td>กล่อง : {row.fi2amount}/0</td>
                                             <td>
                                               ไม่พบรายการ กรุณาเลือกเชื่อมรายการ
-                                              <a
-                                                href="#"
-                                                data-action-search={row.id}
-                                              >
-                                                <p className="btn btn-sm font-12 btn-danger btn-rounded">
-                                                  ค้นหาและเชื่อมรายการ
-                                                </p>
-                                              </a>
+                                              {/* Relink handler — client
+                                                  island; same markup +
+                                                  data-action-search payload
+                                                  as the legacy. */}
+                                              <WarehouseHistoryRelinkButton
+                                                scanId={row.id}
+                                                keysearch={row.keysearch}
+                                              />
                                             </td>
                                             <td className="text-right"></td>
                                             <td></td>
                                             <td className="text-center"></td>
                                             <td className="font-14 text-center">{row.adminid}</td>
                                             <td className="text-center">
-                                              <a
-                                                href="#"
-                                                data-action-delete={row.id}
-                                              >
-                                                <p className="btn btn-sm font-12 btn-danger btn-rounded">
-                                                  ลบยิงเข้า
-                                                </p>
-                                              </a>
+                                              {/* Delete handler — client
+                                                  island; same markup +
+                                                  data-action-delete payload
+                                                  as the legacy. */}
+                                              <WarehouseHistoryDeleteButton
+                                                scanId={row.id}
+                                              />
                                             </td>
                                           </tr>
                                         );
@@ -1049,28 +1059,17 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                               <br />
                                               {row.adminid}
                                             </td>
-                                            {/* 10 — ตัวเลือก (L322-328) */}
+                                            {/* 10 — ตัวเลือก (L322-328) —
+                                                delete + view + update; the
+                                                client island carries the
+                                                delete confirm + Server Action;
+                                                view/update stay plain links. */}
                                             <td className="text-center">
-                                              <a
-                                                href="#"
-                                                data-action-delete={row.id}
-                                              >
-                                                <p className="btn btn-sm font-12 btn-danger btn-rounded">
-                                                  ลบยิงเข้า
-                                                </p>
-                                              </a>
-                                              <Link href={`/admin/forwarder/detail/${row.f_id ?? ""}`}>
-                                                <p className="btn btn-sm font-12 btn-outline-success btn-rounded p-05">
-                                                  {" "}ดูข้อมูล{" "}
-                                                </p>
-                                              </Link>
-                                              {row.f_fstatus !== "7" && (
-                                                <Link href={`/admin/forwarder/update/${row.f_id ?? ""}`}>
-                                                  <p className="btn btn-sm font-12 btn-warning btn-rounded p-05">
-                                                    {" "}อัปเดต
-                                                  </p>
-                                                </Link>
-                                              )}
+                                              <WarehouseHistoryMatchedActions
+                                                scanId={row.id}
+                                                forwarderId={row.f_id}
+                                                forwarderStatus={row.f_fstatus}
+                                              />
                                             </td>
                                           </tr>
                                         );

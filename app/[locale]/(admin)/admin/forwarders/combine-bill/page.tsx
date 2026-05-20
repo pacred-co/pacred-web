@@ -1,6 +1,8 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildCombineBillPrintHref } from "@/actions/admin/combine-bill";
+import { CombineBillRowActions } from "./combine-bill-row-actions";
 
 /**
  * Admin > "ประวัติรายการรวมบิล" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -495,14 +497,11 @@ export default async function CombineBillPage({
                                       // `id[]=…&amp;id[]=…` query string for
                                       // the print link. Preserve the same
                                       // shape so the future print pilot can
-                                      // consume it directly.
-                                      const printQs = fids
-                                        .map(
-                                          (fid) =>
-                                            `id[]=${encodeURIComponent(fid)}`,
-                                        )
-                                        .join("&");
-                                      const printHref = `/admin/forwarders/combine-bill/print?${printQs}`;
+                                      // consume it directly. The builder lives
+                                      // alongside the Server Action so the
+                                      // shape stays single-sourced.
+                                      const printHref =
+                                        buildCombineBillPrintHref(fids);
 
                                       return (
                                         <tr key={row.billid}>
@@ -543,30 +542,18 @@ export default async function CombineBillPage({
                                           <td>{row.date ?? ""}</td>
                                           {/* 6 — ตัวเลือก (delete + print)
                                               forwarder-bill.php L208-210.
-                                              The "ลบรายการ" button keeps its
-                                              legacy data attribute payload —
-                                              functional handler lands with
-                                              the future Server Action. */}
+                                              The interactive bits (delete
+                                              confirm + Server Action) live
+                                              in `combine-bill-row-actions.tsx`;
+                                              the markup it emits keeps the
+                                              legacy data attribute payload +
+                                              same button classes so the CSS
+                                              hooks hold. */}
                                           <td>
-                                            <a
-                                              href="#"
-                                              data-action-delete-bill={
-                                                row.billid
-                                              }
-                                            >
-                                              <span className="btn btn-sm btn-outline-danger round">
-                                                ลบรายการ
-                                              </span>
-                                            </a>{" "}
-                                            <a
-                                              target="_blank"
-                                              href={printHref}
-                                              rel="noreferrer"
-                                            >
-                                              <span className="mt-1 btn btn-sm btn-color-main round waves-effect">
-                                                พิมพ์บิลรวม
-                                              </span>
-                                            </a>
+                                            <CombineBillRowActions
+                                              billId={row.billid}
+                                              printHref={printHref}
+                                            />
                                           </td>
                                         </tr>
                                       );
