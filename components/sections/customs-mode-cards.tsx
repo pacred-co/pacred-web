@@ -116,25 +116,52 @@ const MODES = [
 ];
 
 export function CustomsModeCards() {
-  // On mobile (<768px), the carousel snaps to centre and lands on the AIR
-  // (featured) card first — per ปอน 2026-05-20 night: AIR is the recommended
-  // service, so the eye should land on it before swiping to SEA / TRUCK.
+  // On mobile (<768px), the carousel snaps to centre and locks the AIR
+  // (featured) card as the default — per ปอน 2026-05-20 night: AIR is the
+  // recommended service, so on load AIR is centred and SEA + TRUCK peek
+  // in from the sides. Swipes snap-center to whichever card is closest.
   // Desktop stays as a 3-col grid (no scroll).
-  const scrollRef    = useRef<HTMLDivElement | null>(null);
-  const featuredRef  = useRef<HTMLElement   | null>(null);
+  const scrollRef   = useRef<HTMLDivElement | null>(null);
+  const featuredRef = useRef<HTMLElement   | null>(null);
 
   useEffect(() => {
     const scroller = scrollRef.current;
     const card     = featuredRef.current;
     if (!scroller || !card) return;
-    // Only do this on the mobile carousel (where the parent actually scrolls).
-    if (window.matchMedia("(min-width: 768px)").matches) return;
 
-    // Centre the featured (AIR) card within the visible viewport. We avoid
-    // scrollIntoView because it can scroll the WHOLE PAGE — we only want the
-    // horizontal scroller. Manual offset calc keeps the page Y position.
-    const target = card.offsetLeft - (scroller.clientWidth - card.clientWidth) / 2;
-    scroller.scrollTo({ left: target, behavior: "instant" as ScrollBehavior });
+    const centerAirCard = () => {
+      // Only do this on the mobile carousel (where the parent actually scrolls).
+      if (window.matchMedia("(min-width: 768px)").matches) return;
+      // Centre the featured card within the visible viewport. We avoid
+      // scrollIntoView() because it scrolls the WHOLE PAGE Y — we only want
+      // the horizontal scroller. scrollLeft= is the simplest reliable form
+      // (no behavior arg → instant, no smooth-scroll → no visible jump on
+      // first paint).
+      const target = card.offsetLeft - (scroller.clientWidth - card.clientWidth) / 2;
+      scroller.scrollLeft = Math.max(0, target);
+    };
+
+    // 1) First pass — after current layout. requestAnimationFrame ensures
+    //    we run AFTER the browser has computed widths.
+    requestAnimationFrame(centerAirCard);
+
+    // 2) Re-run after the banner images load — Next/Image fills the 128px
+    //    header on mount but card height + offsets can still shift a tick.
+    const imgs = Array.from(card.querySelectorAll("img"));
+    const onLoad = () => requestAnimationFrame(centerAirCard);
+    imgs.forEach((img) => {
+      if (!img.complete) img.addEventListener("load", onLoad, { once: true });
+    });
+
+    // 3) Re-centre on viewport changes (rotation, browser chrome toggle).
+    const onResize = () => requestAnimationFrame(centerAirCard);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      imgs.forEach((img) => img.removeEventListener("load", onLoad));
+    };
   }, []);
 
   return (
