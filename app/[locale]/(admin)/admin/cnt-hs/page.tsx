@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { TopMenuReport } from "@/components/admin/top-menu-report";
 
 /**
  * Admin > "รายการเบิกเงินค่าตู้" — a FAITHFUL 1:1 TRANSCRIPTION
@@ -143,7 +144,24 @@ type CntRow = {
   nameaccount: string;   // ชื่อบัญชี
 };
 
-type SP = { q?: string };
+/**
+ * Search-param shape:
+ *   - q       legacy `cntStatus` filter — '1' รอดำเนินการ · '2' สำเร็จแล้ว.
+ *             Kept verbatim from cnt-hs.php L218-222 for URL stability so
+ *             existing bookmarks + sidebar links still work. Any non-"1"/"2"
+ *             value is treated as the new free-text search keyword.
+ *   - search  free-text search across ID / nameBlank / noBlank (spec Part B
+ *             req #6). Added by ภูม 2026-05-20 ค่ำ — operators kept asking
+ *             how to find "the payment to Krungsri 1234567890" without
+ *             scrolling 200 rows. ILIKE across `id::text`, `nameblank`,
+ *             `noblank` (case-insensitive contains match).
+ *   - offset  pagination offset (spec req #7) — 200 rows / page. `?offset=200`
+ *             jumps to the 201st most-recent payment. Default 0.
+ */
+type SP = { q?: string; search?: string; offset?: string };
+
+/** Page size — 200 rows max per the spec. */
+const PAGE_SIZE = 200;
 
 export default async function CntHsPage({
   searchParams,
@@ -178,15 +196,46 @@ export default async function CntHsPage({
   //   if ?q=N : $sqlMain.= " AND cntStatus='N' "
   // Default order matches DataTables `order: [[1, 'desc']]` →
   // column 1 = วันที่ทำรายการ desc (cnt-hs.php L423).
+  //
+  // Pagination: LIMIT 200, OFFSET = `?offset=` (spec Part B req #7).
+  // Negative / NaN offsets fall back to 0 so a malformed URL doesn't
+  // 500 the route.
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0
+    ? Math.floor(offsetRaw)
+    : 0;
+  // Free-text search keyword. Comes from `?search=` first; if absent,
+  // we treat `?q=` as a search term IF its value isn't the legacy
+  // status code "1"/"2". This preserves URL stability for `?q=1`/`?q=2`
+  // while giving the operator a single-field search.
+  const searchTerm = (sp.search ?? "").trim();
+  const qIsStatus = sp.q === "1" || sp.q === "2";
+  const qAsSearch = !qIsStatus ? (sp.q ?? "").trim() : "";
+  const search = searchTerm || qAsSearch;
+
   let q = admin
     .from("tb_cnt")
     .select(
       "id, cntname, cntstatus, cntamount, cntimagesslip, cntfile, date, " +
         "adminidcreate, nameblank, noblank, nameaccount",
+      { count: "exact" },
     )
-    .order("date", { ascending: false, nullsFirst: false });
+    .order("date", { ascending: false, nullsFirst: false })
+    .range(offset, offset + PAGE_SIZE - 1);
 
-  if (sp.q === "1" || sp.q === "2") q = q.eq("cntstatus", sp.q);
+  if (qIsStatus) q = q.eq("cntstatus", sp.q!);
+
+  if (search) {
+    // ILIKE across id::text / nameblank / noblank — the three legacy
+    // identifiers operators reach for. PostgREST `.or()` strings each
+    // condition together with commas; we escape any embedded comma/
+    // paren in the keyword to avoid breaking the filter syntax.
+    const safe = search.replace(/[(),]/g, " ");
+    const pattern = `%${safe}%`;
+    q = q.or(
+      `id::text.ilike.${pattern},nameblank.ilike.${pattern},noblank.ilike.${pattern}`,
+    );
+  }
 
   // ── Status overview counts (cnt-hs.php L222-228) ───────────────
   //   $countAll = COUNT(SELECT * FROM tb_cnt)
@@ -202,11 +251,31 @@ export default async function CntHsPage({
   const countAll = countAllRes.count ?? 0;
   const count1 = count1Res.count ?? 0;
   const count2 = countAll - count1;
+  // Result-set total (for paginator). When no filters apply this equals
+  // countAll; with status/search filters PostgREST returns the filtered
+  // count via the `count: exact` option on the main query.
+  const resultTotal = tableRes.count ?? rows.length;
 
   // Active-tab marker for the .active CSS class (cnt-hs.php L398-404 +
   // L237-258 wrapping `nav-link cnt-1/cnt-2/cnt-all`).
   const activeTab: "all" | "1" | "2" =
     sp.q === "1" ? "1" : sp.q === "2" ? "2" : "all";
+
+  // Pagination boundary calculations.
+  const hasPrev = offset > 0;
+  const hasNext = offset + rows.length < resultTotal;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  // Build a query string that preserves the active filter set when
+  // hopping pages. Keep `q` (legacy status) + `search` keys intact.
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.q) params.set("q", sp.q);
+    if (searchTerm) params.set("search", searchTerm);
+    if (newOffset > 0) params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/cnt-hs?${qs}` : "/admin/cnt-hs";
+  };
 
   // Storage base paths for slip + file links — mirror the legacy
   // `basePath.'storage/slip/'` / `basePath.'storage/file/'`
@@ -219,7 +288,14 @@ export default async function CntHsPage({
   const slipDetailHref = (id: number) => `/admin/cnt-hs/${id}`;
 
   return (
-    <div className="pcs-legacy">
+    <>
+      {/* 11-button warehouse/container audit menu — shared across the
+          /admin/report-cnt + /admin/cnt-hs cluster (see TopMenuReport
+          comment). Lives OUTSIDE the `.pcs-legacy` scope so it renders
+          in the Pacred admin chrome rather than legacy Bootstrap. */}
+      <TopMenuReport activeHref="/admin/cnt-hs" />
+
+      <div className="pcs-legacy">
       {/* Legacy admin chrome + page-specific CSS — both served as
           static /public/ assets so they bypass Tailwind / PostCSS. */}
       <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
@@ -296,6 +372,46 @@ export default async function CntHsPage({
                           </Link>
                         </li>
                       </ul>
+                    </div>
+
+                    {/* Search bar — Pacred addition (spec Part B req #6).
+                        Submits a GET to /admin/cnt-hs?search=<keyword> +
+                        preserves the active status tab via the hidden
+                        `q` input. Server-side filter is ILIKE across
+                        id::text / nameblank / noblank. */}
+                    <div className="p-1 px-2">
+                      <form action="/admin/cnt-hs" method="GET" className="d-flex" style={{ gap: 8 }}>
+                        {sp.q && (
+                          <input type="hidden" name="q" value={sp.q} />
+                        )}
+                        <input
+                          type="text"
+                          name="search"
+                          defaultValue={searchTerm}
+                          placeholder="ค้นหา ID / ธนาคาร / เลขที่บัญชี"
+                          className="form-control form-control-sm"
+                          style={{ maxWidth: 320 }}
+                        />
+                        <button
+                          type="submit"
+                          className="btn btn-sm btn-primary"
+                        >
+                          ค้นหา
+                        </button>
+                        {searchTerm && (
+                          <Link
+                            href={sp.q ? `/admin/cnt-hs?q=${sp.q}` : "/admin/cnt-hs"}
+                            className="btn btn-sm btn-outline-secondary"
+                          >
+                            ล้าง
+                          </Link>
+                        )}
+                        <span className="ml-2 align-self-center" style={{ fontSize: 12, color: "#888" }}>
+                          พบ {resultTotal.toLocaleString()} รายการ
+                          {resultTotal > PAGE_SIZE &&
+                            ` · แสดง ${(offset + 1).toLocaleString()}–${Math.min(offset + rows.length, resultTotal).toLocaleString()}`}
+                        </span>
+                      </form>
                     </div>
 
                     {/* DataTable wrapper (cnt-hs.php L261-359) */}
@@ -452,6 +568,52 @@ export default async function CntHsPage({
                         </table>
                       </form>
                     </div>
+                    {/* Pagination — Pacred addition (spec Part B req #7).
+                        200 rows per page, prev/next via `?offset=`. */}
+                    {(hasPrev || hasNext) && (
+                      <div
+                        className="d-flex justify-content-between align-items-center p-2"
+                        style={{ borderTop: "1px solid #eee" }}
+                      >
+                        <span style={{ fontSize: 12, color: "#666" }}>
+                          หน้า {Math.floor(offset / PAGE_SIZE) + 1} จาก{" "}
+                          {Math.max(1, Math.ceil(resultTotal / PAGE_SIZE))}
+                        </span>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {hasPrev ? (
+                            <Link
+                              href={buildPageHref(prevOffset)}
+                              className="btn btn-sm btn-outline-secondary"
+                            >
+                              ก่อนหน้า
+                            </Link>
+                          ) : (
+                            <span
+                              className="btn btn-sm btn-outline-secondary disabled"
+                              style={{ pointerEvents: "none", opacity: 0.45 }}
+                            >
+                              ก่อนหน้า
+                            </span>
+                          )}
+                          {hasNext ? (
+                            <Link
+                              href={buildPageHref(nextOffset)}
+                              className="btn btn-sm btn-outline-secondary"
+                            >
+                              ถัดไป
+                            </Link>
+                          ) : (
+                            <span
+                              className="btn btn-sm btn-outline-secondary disabled"
+                              style={{ pointerEvents: "none", opacity: 0.45 }}
+                            >
+                              ถัดไป
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Empty fixed bottom-button slot (cnt-hs.php L360) */}
                     <div className="btn-group" style={{ position: "fixed", bottom: 20 }}></div>
                   </div>
@@ -467,6 +629,7 @@ export default async function CntHsPage({
       <div id="list-forwarder-data"></div>
       <div id="get-form-edit-file"></div>
       {/* END: Content */}
-    </div>
+      </div>
+    </>
   );
 }

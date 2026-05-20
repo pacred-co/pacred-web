@@ -416,9 +416,17 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
           </div>
         )}
 
-        {/* Action buttons — only visible to money-tier roles */}
+        {/* Action buttons — only visible to money-tier roles.
+            Faithful port of `report-cnt.php` L502-505 — the fixed-bottom
+            "ทำรายการจ่ายเงินตู้" + "ประวัติรายการจ่ายเงินตู้" pair. */}
         {showMoney && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50">
+            <Link
+              href="/admin/report-cnt/pay"
+              className="rounded-full bg-green-600 text-white px-4 py-2 text-xs font-medium shadow-lg hover:bg-green-700"
+            >
+              ทำรายการจ่ายเงินตู้
+            </Link>
             <Link
               href="/admin/cnt-hs"
               className="rounded-full bg-primary-500 text-white px-4 py-2 text-xs font-medium shadow-lg hover:bg-primary-600"

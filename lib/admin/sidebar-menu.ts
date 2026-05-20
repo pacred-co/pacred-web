@@ -136,34 +136,46 @@ const itemPurchasingAll: MenuItem = {
 };
 
 /** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
- *  Phase 4: warehouse-only deeper-future toolbox (per 2026-05-20 owner brief). */
+ *
+ *  2026-05-20 ค่ำ (Wave 2D · Option A) — Phase 4 tags removed; barcode is
+ *  Phase 1 because it's the faithful port of legacy daily-use scanners
+ *  (`barcode-c-*.php` + `barcode-d-*.php`). Each item below was a `?mode=…`
+ *  placeholder; now points at the real routes built by Wave 2B agents.
+ *  Driver leaves = USB handheld scanner UI; Cargo leaves = mobile camera UI. */
 const blockBarcode: MenuItem = {
   labelKey: "barcode.title",
   icon: "Barcode",
   children: [
     {
-      labelKey: "barcode.searchImport",
+      labelKey: "barcode.searchImport",  // ทั้งหมด (search any tracking)
       icon: "Search",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-all",   icon: "ScanLine", phase: 4 },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-all", icon: "Camera",   phase: 4 },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/all", icon: "ScanLine" },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/all",  icon: "Camera"   },
       ],
     },
-    { labelKey: "barcode.recordIntake", href: "/admin/barcode?mode=intake", icon: "PackageCheck", phase: 4 },
     {
-      labelKey: "barcode.searchPrepare",
+      labelKey: "barcode.recordIntake",  // บันทึกเข้าโกดังไทย (type=4)
+      icon: "PackageCheck",
+      children: [
+        { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/import", icon: "ScanLine" },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/import",  icon: "Camera"   },
+      ],
+    },
+    {
+      labelKey: "barcode.searchPrepare",  // เตรียมส่ง (type=6)
       icon: "Package",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-prepare",   icon: "ScanLine", phase: 4 },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-prepare", icon: "Camera",   phase: 4 },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/prepare", icon: "ScanLine" },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/prepare",  icon: "Camera"   },
       ],
     },
     {
-      labelKey: "barcode.scanFromBox",
+      labelKey: "barcode.scanFromBox",  // พิมพ์จากหน้ากล่อง / รับเข้าจีน (type=from)
       icon: "Printer",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-box",   icon: "ScanLine", phase: 4 },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-box", icon: "Camera",   phase: 4 },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/from", icon: "ScanLine" },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/from",  icon: "Camera"   },
       ],
     },
   ],
