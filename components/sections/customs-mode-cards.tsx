@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 import {
   Ship,
@@ -35,7 +38,7 @@ const MODES = [
     price: "2,800",
     featured: false,
     stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "3-7 วัน" },
+      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
       { icon: Package, label: "รองรับ", value: "LCL / FCL" },
       { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
     ] as Stat[],
@@ -65,7 +68,7 @@ const MODES = [
     featured: true,
     promoText: "ยอดนิยม · เคลียร์เร็วที่สุด · เคลียร์ทันก่อนค่าฝากเก็บขึ้น",
     stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "1-3 วัน" },
+      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
       { icon: Package, label: "รองรับ", value: "Air Cargo" },
       { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
     ] as Stat[],
@@ -94,7 +97,7 @@ const MODES = [
     price: "2,500",
     featured: false,
     stats: [
-      { icon: Clock, label: "เคลียร์ใน", value: "5-14 วัน" },
+      { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
       { icon: Package, label: "รองรับ", value: "Cross-Border" },
       { icon: Headphones, label: "ตอบไว", value: "24 ชม." },
     ] as Stat[],
@@ -113,10 +116,32 @@ const MODES = [
 ];
 
 export function CustomsModeCards() {
+  // On mobile (<768px), the carousel snaps to centre and lands on the AIR
+  // (featured) card first — per ปอน 2026-05-20 night: AIR is the recommended
+  // service, so the eye should land on it before swiping to SEA / TRUCK.
+  // Desktop stays as a 3-col grid (no scroll).
+  const scrollRef    = useRef<HTMLDivElement | null>(null);
+  const featuredRef  = useRef<HTMLElement   | null>(null);
+
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const card     = featuredRef.current;
+    if (!scroller || !card) return;
+    // Only do this on the mobile carousel (where the parent actually scrolls).
+    if (window.matchMedia("(min-width: 768px)").matches) return;
+
+    // Centre the featured (AIR) card within the visible viewport. We avoid
+    // scrollIntoView because it can scroll the WHOLE PAGE — we only want the
+    // horizontal scroller. Manual offset calc keeps the page Y position.
+    const target = card.offsetLeft - (scroller.clientWidth - card.clientWidth) / 2;
+    scroller.scrollTo({ left: target, behavior: "instant" as ScrollBehavior });
+  }, []);
+
   return (
     <div className="relative">
       <div
-        className="flex overflow-x-auto gap-3 -mx-4 px-4 pt-2 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pt-3 md:pb-2 md:snap-none md:items-stretch"
+        ref={scrollRef}
+        className="flex overflow-x-auto gap-3 -mx-4 px-[8%] pt-2 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pt-3 md:pb-2 md:snap-none md:items-stretch"
       >
         {MODES.map((c) => {
           const Icon = c.badgeIcon;
@@ -124,8 +149,9 @@ export function CustomsModeCards() {
           return (
             <article
               key={c.mode}
+              ref={isFeatured ? featuredRef : undefined}
               className={[
-                "group relative flex flex-col shrink-0 w-[88%] sm:w-[400px] md:w-auto snap-start md:snap-none rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
+                "group relative flex flex-col shrink-0 w-[84%] sm:w-[400px] md:w-auto snap-center md:snap-none rounded-2xl md:rounded-3xl overflow-hidden transition-all duration-400",
                 isFeatured
                   ? // Featured (middle): dark-red gradient bg, white text, slight scale-up
                     "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white border-2 border-primary-700 shadow-[0_18px_42px_rgba(179,0,0,0.32)] hover:shadow-[0_28px_60px_rgba(179,0,0,0.45)] md:scale-[1.03] md:-translate-y-1 hover:md:-translate-y-2"
