@@ -238,7 +238,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
               );
             })}
             <Link
-              href="/admin/containers"
+              href="/admin/report-cnt"
               className="inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50 whitespace-nowrap"
             >
               🚛 รายการตู้

@@ -12,6 +12,74 @@
 
 ---
 
+## 🔴 2026-05-20 ค่ำ — Option C: spine retirement (ภูม → พี่เดฟ heads-up)
+
+ภูม audited `/admin/warehouse/containers` (the "spine" — pre-D1 wave-1
+T-P2/CT-4 redesign with `cargo_containers`/`cargo_shipments` and the
+new status enum `packing/sealed/in_transit/arrived/unloading/closed`).
+The audit found a **complete gap** vs legacy `member/pcs-admin/report-cnt.php`
+(2487 LOC) + `top-menu-report.php` (the 11-button audit menu):
+
+| Element | Legacy `report-cnt.php` | Spine | Gap |
+|---|---|---|---|
+| 11-button top menu (ประวัติเข้าโกดังไทย · รายงานตู้ · หมายเหตุ × 2 · ไม่ใส่X × 6 · เครดิตเกินกำหนด) | ✅ | ❌ | 🔴 |
+| Status tabs (รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว) | ✅ (`fStatus<4` vs `>3`) | ❌ (different enum) | 🔴 |
+| Date-range + actionPay search form | ✅ | ❌ (only `?q=` code) | 🔴 |
+| Money columns (ต้นทุน · ราคาขาย · กำไร · role-gated CEO/Manager/QA/Accounting/IT) | ✅ | ❌ | 🔴 |
+| ทำรายการจ่ายเงินตู้ + ประวัติรายการจ่ายเงินตู้ | ✅ (`tb_cnt`/`tb_cnt_item`) | ❌ | 🔴 |
+| Data source | `tb_forwarder` (legacy, ported via migration 0081) | `cargo_containers` (spine model) | 🔴 |
+
+**Decision (Option C, owner-approved 2026-05-20 ค่ำ):** retire the spine
+page; the canonical รายการตู้ becomes a faithful port of `report-cnt.php`
+reading `tb_forwarder` directly with `GROUP BY fCabinetNumber`.
+
+**What landed (Wave 1, this commit chain):**
+- New `<TopMenuReport>` component (`components/admin/top-menu-report.tsx`) —
+  the 11-button audit menu, badge counts queried from `tb_forwarder`.
+- New `/admin/report-cnt` — faithful port of `report-cnt.php` (status tabs,
+  transport-mode tabs, date+actionPay search, totals row, money columns
+  gated to `super`/`ops`/`accounting`).
+- New `/admin/forwarder-action?action=…` — 9 audit-queue stubs with the
+  legacy SQL condition wired (Note / notPhoto / notPortage / notContainer /
+  NotDateContainerClose / fCreditError live; NoteShop + NotShipFree* need
+  `tb_shop` / ZIP-list join → Wave 2).
+- New `/admin/forwarder-import-warehouse` — ประวัติเข้าโกดังไทย stub
+  reading `tb_forwarder` rows with `fStatus≥4`.
+- Tombstoned `/admin/warehouse/containers` → 308-redirect to
+  `/admin/report-cnt`. Sidebar `warehouse.containers` repointed.
+  Dashboard top-strip "🚛 รายการตู้" repointed.
+
+**What's NOT touched (heads-up for พี่เดฟ):**
+- `cargo_containers` + `cargo_shipments` tables (migration 0033) — still
+  live. The detail routes `/admin/warehouse/containers/[code]/*` (scan-form,
+  sack-form, status-form, link-form, manual-shipment-form, hs-lines-editor)
+  are unchanged; ภูม did NOT delete the scan flow. They're reachable via
+  direct URL but no longer in the sidebar.
+- Migration: no schema change in this wave. `tb_forwarder` already has all
+  the columns we need (fCabinetNumber, fStatus, fTransportType, fDateStatus4,
+  fCostTotalPrice, fTotalPrice, fCredit, fCreditDate, fNote, fCover).
+
+**Wave 2 (next):**
+- `ทำรายการจ่ายเงินตู้` form action — POST insert into `tb_cnt` /
+  `tb_cnt_item` / `tb_cnt_pay_idorco` / `tb_cnt_pay_trackingchn` (legacy
+  flow from `report-cnt.php` L4-101).
+- `NoteShop` queue — join `tb_forwarder` × `tb_shop`.
+- `NotShipFree` + `NotShipFreeError` — ZIP-code list from legacy free-shipping
+  config (need to locate the source — likely `tb_shipfree` or similar).
+- Decision on retiring `cargo_containers` + scan flow vs keeping it as
+  Pacred-extension (warehouse internal use). **พี่เดฟ-decision pending.**
+
+**Question for พี่เดฟ:** the scan flow (`/admin/warehouse/containers/[code]/scan-form`
+etc.) is genuinely Pacred-original (no legacy counterpart in PHP — the
+PHP barcode flow is at `member/pcs-admin/barcode-*.php` reading
+`tb_forwarder` directly). Should we (a) retire it, (b) port the PHP
+barcode flow over and absorb the spine's scan helpers, or (c) keep it
+as a Pacred-extension internal tool? Flagging for review.
+
+---
+
+---
+
 ## Branch model
 
 | Branch | Role |

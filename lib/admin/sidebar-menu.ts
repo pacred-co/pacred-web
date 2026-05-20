@@ -625,7 +625,10 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
         ],
       },
-      { labelKey: "warehouse.containers", href: "/admin/warehouse/containers", icon: "Package" },
+      // Option C (ภูม 2026-05-20 ค่ำ) — point at the faithful port of legacy
+      // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
+      // (tombstoned · redirects to /admin/report-cnt).
+      { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
       // Phase 2 — warehouse bulletin + QA inspection queues align with QA queues.
       { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",       icon: "ClipboardCheck", phase: 2 },
       { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert",    phase: 2 },
