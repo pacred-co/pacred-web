@@ -19,7 +19,7 @@
  */
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
@@ -71,30 +71,56 @@ const ROLE_LABEL_KEY: Record<AdminRole, string> = {
 };
 
 /** Does any descendant href match the current path? Used to auto-open. */
-function subtreeHasActive(item: MenuItem, pathname: string): boolean {
-  if (item.href && hrefMatches(item.href, pathname)) return true;
-  return (item.children ?? []).some((c) => subtreeHasActive(c, pathname));
+function subtreeHasActive(item: MenuItem, pathname: string, search: string): boolean {
+  if (item.href && hrefMatches(item.href, pathname, search)) return true;
+  return (item.children ?? []).some((c) => subtreeHasActive(c, pathname, search));
 }
 
-/** Path-match ignoring locale prefix + query string.
+/** Path + query-string match (locale-agnostic).
  *
- * IMPORTANT: exact match only. A previous startsWith-based version
- * (pre-2026-05-20) made every leaf under /admin/forwarders/X also
- * highlight the /admin/forwarders parent + its siblings — clicking
- * "ประวัติเข้าโกดังไทย" highlighted ทุก item ใน "บริการฝากนำเข้า"
- * (ภูมิ-flagged bug). Use exact match: a leaf highlights ONLY when its
- * own href is the active path; parent dropdowns still auto-open via
- * `subtreeHasActive` (which uses this same matcher recursively).
+ * Two ภูม-flagged bugs this matcher closes:
+ *
+ * Bug A (2026-05-20 morning): `startsWith`-based matching highlighted
+ *   every leaf under `/admin/forwarders/X` whenever any sibling page
+ *   was open (the entire "บริการฝากนำเข้า" subtree lit up). Fixed by
+ *   moving to **exact** path equality — leaves highlight ONLY when
+ *   their own href is the active route; parent dropdowns still open
+ *   via `subtreeHasActive` (the recursive matcher).
+ *
+ * Bug B (2026-05-20 afternoon): URL = `/admin/wallet?kind=withdraw&
+ *   status=pending` lit up FIVE sidebar items at once (walletAll +
+ *   wallet.deposit + wallet.withdraw + accCargo.topup + accCargo.withdraw)
+ *   because `usePathname()` strips the query string — everything sharing
+ *   the same bare pathname matched. Fixed by **including the query
+ *   string in the comparison**: every key in the href's query must be
+ *   present + equal in the current URL's query; a query-less href
+ *   only matches a query-less URL.
  *
  * Locale: next/navigation's usePathname() returns the locale-prefixed
  * path ("/en/admin/...") for non-default locales. Strip the 2-letter
  * prefix so the comparison is locale-agnostic (TH default = no prefix
  * so the strip is a no-op).
  */
-function hrefMatches(href: string, pathname: string): boolean {
-  const base = href.split("?")[0];
+function hrefMatches(href: string, pathname: string, currentSearch: string): boolean {
+  const [hrefBase, hrefQuery = ""] = href.split("?");
   const stripped = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "");
-  return stripped === base;
+  if (stripped !== hrefBase) return false;
+
+  const currentParams = new URLSearchParams(currentSearch);
+  if (hrefQuery === "") {
+    // A bare href ("ทั้งหมด") matches ONLY a bare URL. If the user is
+    // on /admin/wallet?kind=withdraw, the bare "/admin/wallet" item
+    // should NOT light up — wallet.withdraw owns that view.
+    return currentParams.toString() === "";
+  }
+
+  // A href-with-query matches only when every key it declares is
+  // present + equal in the current URL.
+  const hrefParams = new URLSearchParams(hrefQuery);
+  for (const [key, value] of hrefParams) {
+    if (currentParams.get(key) !== value) return false;
+  }
+  return true;
 }
 
 // ── A red count pill — the legacy badgeMenu($n). ───────────────────────
@@ -109,18 +135,19 @@ function CountBadge({ value }: { value: number }) {
 
 // ── One menu row — recursive (handles nested accordion). ───────────────
 function MenuRow({
-  item, depth, counts, pathname, t, onNavigate,
+  item, depth, counts, pathname, search, t, onNavigate,
 }: {
   item: MenuItem;
   depth: number;
   counts: BadgeCounts;
   pathname: string;
+  search: string;
   t: (k: string) => string;
   onNavigate: () => void;
 }) {
   const hasChildren = !!item.children?.length;
-  const active = item.href ? hrefMatches(item.href, pathname) : false;
-  const branchActive = subtreeHasActive(item, pathname);
+  const active = item.href ? hrefMatches(item.href, pathname, search) : false;
+  const branchActive = subtreeHasActive(item, pathname, search);
   const [open, setOpen] = useState(branchActive);
 
   const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
@@ -158,6 +185,7 @@ function MenuRow({
                 depth={depth + 1}
                 counts={counts}
                 pathname={pathname}
+                search={search}
                 t={t}
                 onNavigate={onNavigate}
               />
@@ -243,6 +271,11 @@ export function AdminSidebar({
   adminLabel?: string;
 }) {
   const pathname = usePathname() ?? "";
+  // useSearchParams() is the current URL's query string — needed by
+  // hrefMatches to disambiguate sidebar items that share a pathname
+  // but carry different ?kind= / ?status= / ?group= carriers (ภูม
+  // 2026-05-20 Bug B). Strip leading "?" for clean construction.
+  const search = useSearchParams()?.toString() ?? "";
   const t = useTranslations("pcsAdminNav");
   const [openMobile, setOpenMobile] = useState(false);
 
@@ -310,6 +343,7 @@ export function AdminSidebar({
                     depth={0}
                     counts={counts}
                     pathname={pathname}
+                    search={search}
                     t={t}
                     onNavigate={closeMobile}
                   />
