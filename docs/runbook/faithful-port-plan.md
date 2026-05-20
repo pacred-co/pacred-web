@@ -76,6 +76,40 @@ PHP barcode flow is at `member/pcs-admin/barcode-*.php` reading
 barcode flow over and absorb the spine's scan helpers, or (c) keep it
 as a Pacred-extension internal tool? Flagging for review.
 
+### ✅ 2026-05-20 ค่ำ — DECISION: Option A (พี่เดฟ confirmed · ภูม locked)
+
+**Decision:** **Option A — Retire spine wholesale + port legacy `barcode-*.php`
+1:1.** ภูม consulted with พี่เดฟ — พี่เดฟ confirms "just match what พี่ป๊อป
+wants" (faithful 100% per owner rule). ภูม verified Supabase
+`cargo_containers` / `cargo_shipments` / `cargo_sacks` are empty (no
+production data to migrate).
+
+**Wave 2 scope (split across 5 parallel agents on 2026-05-20 ค่ำ):**
+
+| Agent | Files | Source | Destination |
+|---|---|---|---|
+| 1 | 4 cargo barcode pages | `barcode-c-{all,from,import,prepare}.php` (~1500L) | `/admin/barcode/cargo/{all,from,import,prepare}` |
+| 2 | 4 driver barcode pages | `barcode-d-{all,from,import,prepare}.php` (~530L) | `/admin/barcode/driver/{all,from,import,prepare}` |
+| 3 | Gateway + menu | `gateway.php` (213L) + new `<TopMenuBarcode>` | `/admin/barcode/gateway` + `components/admin/top-menu-barcode.tsx` |
+| 4 | Cnt-payment + history | `report-cnt.php` L4-101 (POST form) + `cnt-hs.php` (1861L) | server action on `/admin/report-cnt` + new `/admin/cnt-hs` page |
+| 5 | Remaining audit queues | `forwarder-action.php` (NoteShop · NotShipFree · NotShipFreeError conditions) | 3 wave-1 stubs in `/admin/forwarder-action` |
+
+**Wave 2D cleanup (after agents complete):**
+- DROP tables: `cargo_containers` · `cargo_shipments` · `cargo_sacks`
+  (migration `0090_drop_spine_tables.sql`).
+- Delete spine routes under `/admin/warehouse/containers/[code]/*`
+  (scan-form, sack-form, status-form, link-form, manual-shipment-form,
+  hs-lines-editor, unlink-button — ~1100 LOC).
+- Delete `lib/warehouse/{containers,shipments,sacks,bulletin,cargo-type,
+  code-gen,lifecycle,tracking}.ts` (~800 LOC) + 4 `.test.ts` files.
+- Update sidebar: add `/admin/barcode/cargo/all` + `/admin/barcode/driver/all`
+  leaves; remove dead `warehouse.containers` reference.
+- pnpm tsc + lint + smoke routes.
+
+After Wave 2D: there is exactly ONE source of truth for container/scan
+data — `tb_forwarder` — read by `/admin/report-cnt` (faithful list) and
+written by `/admin/barcode/*` (faithful scan).
+
 ---
 
 ---
