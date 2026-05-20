@@ -43,12 +43,29 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_vNH5pL5AiLWmJKjXwA58vA_TE1-ZJnb
 SUPABASE_SERVICE_ROLE_KEY=<the JWT you already have in dev .env.local — same value works>
 ```
 
-⚠️ **Service-role caveat:** the JWT we kept has `ref:"pprrlabgebrnocthwdmg"`
-(the dev project). It may NOT cryptographically validate against
-`yzljakczhwrpbxflnmco`. ภูม confirmed "ของเก่าใช้ได้" but if `/admin/*`
-pages return 401 / "row not found", grab the prod project's service_role
-from Supabase dashboard → Project Settings → API → service_role key and
-paste it in.
+🔴 **Service-role CONFIRMED BROKEN (test 2026-05-20 ค่ำ post-handoff):**
+the JWT in dev backup has `ref:"pprrlabgebrnocthwdmg"`. Tested against
+prod:
+```
+GET https://yzljakczhwrpbxflnmco.supabase.co/rest/v1/forwarders
+  with the dev service_role JWT
+→ 401 "Invalid API key"
+```
+
+Supabase validates the JWT's `ref` claim against the project, so the
+dev key cannot authenticate prod no matter what. **ภูม MUST fetch the
+prod service_role key** from Supabase dashboard → project
+`yzljakczhwrpbxflnmco` → Settings → API → service_role (secret) → copy
+paste into `.env.local`.
+
+Until that's done, ALL `/admin/*` routes that use `createAdminClient()`
+silently fail. Symptoms seen so far:
+- `/admin/forwarders` renders but shows "0 รายการ" (the empty-result
+  path is hit because Supabase error is swallowed)
+- `/admin/barcode/driver` doesn't load (the page's 3 Promise.all
+  count queries throw)
+- ApiKey mismatch is the single root cause for almost every "page
+  doesn't work" you see on prod.
 
 ### Backup file already created on office machine:
 `.env.local.dev-backup-2026-05-20` (gitignored · contains the OLD dev
