@@ -24,8 +24,7 @@ const MODES = [
     image: "/images/countryport/suvannapoomlong.png",
     imageAlt: "เคลียร์สินค้านำเข้า สนามบินสุวรรณภูมิ Pacred",
     accent: "from-amber-400/35 to-orange-600/35",
-    description:
-      "ไม่ว่าจะผ่าน DHL, FedEx, UPS, TNT หรือ Air Cargo เจ้าใดก็ตาม — Pacred พร้อมดูแลตั้งแต่ต้นทาง จนสินค้าถึงมือคุณ",
+    price: "2,800",
     services: [
       "เตรียม Invoice · Packing List · ใบอนุญาต (อย. / มอก.)",
       "ตรวจสอบพิกัดภาษี (HS Code) แม่นยำ",
@@ -35,7 +34,7 @@ const MODES = [
     ],
     carriers: [
       { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
-      { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com" },
+      { name: "Thai Cargo", logo: "/images/partners/thaicargo.png", url: "https://www.thaicargo.com" },
       { name: "UPS", logo: "/images/partners/upspartner.png", url: "https://www.ups.com" },
       { name: "TNT", logo: "/images/partners/tntpartner.png", url: "https://www.tnt.com" },
     ],
@@ -50,8 +49,7 @@ const MODES = [
     image: "/images/countryport/laemchabanglong.png",
     imageAlt: "เคลียร์สินค้านำเข้า ท่าเรือแหลมฉบัง / คลองเตย Pacred",
     accent: "from-sky-500/35 to-blue-700/35",
-    description:
-      "ไม่ว่าจะผ่าน สายเรือ Maersk, COSCO, MSC, CMA CGM, Evergreen, ONE, Yang Ming, HMM, OOCL หรือ PIL — Pacred ดูแลตั้งแต่ต้นทาง ถึงปลายทาง ครบวงจร",
+    price: "2,800",
     services: [
       "จัดทำใบขนสินค้าขาเข้า · ขาออก ครบทุกเอกสาร",
       "ประสานสายเรือ · ท่าเรือ · กรมศุลกากร",
@@ -76,8 +74,7 @@ const MODES = [
     image: "/images/countryport/mukdahanlong.png",
     imageAlt: "เคลียร์สินค้านำเข้า ด่านมุกดาหาร / นครพนม Pacred",
     accent: "from-red-500/35 to-orange-700/35",
-    description:
-      "เคลียร์สินค้านำเข้าผ่านด่านชายแดนทุกประเทศ — ลาว · จีน · พม่า · มาเลเซีย · กัมพูชา — Pacred ทำงานร่วมกับขนส่งทางบกข้ามแดนทุกเจ้า",
+    price: "2,500",
     services: [
       "ขึ้นทะเบียนผู้นำเข้า · ส่งออก · จับคู่ (YY) ภายใน 30 นาที",
       "จัดทำใบขน · ประสานเจ้าหน้าที่ด่านชายแดน",
@@ -86,10 +83,10 @@ const MODES = [
       "Door-to-Door ส่งจากด่าน ถึงคลังลูกค้า",
     ],
     carriers: [
-      { name: "Thai Cargo", logo: "/images/partners/thaicargo.png", url: "https://www.thaicargo.com" },
+      { name: "FedEx", logo: "/images/partners/fedexpartner.png", url: "https://www.fedex.com" },
       { name: "DHL", logo: "/images/partners/dhlpartner.png", url: "https://www.dhl.com" },
-      { name: "PAT", logo: "/images/partners/patpartner.png", url: "https://www.port.co.th" },
-      { name: "AOT", logo: "/images/partners/aotpartner.png", url: "https://www.airportthai.co.th" },
+      { name: "Alibaba", logo: "/images/partners/alibabapartner.png", url: "https://www.alibaba.com" },
+      { name: "e-Tracking", logo: "/images/partners/etracking.png", url: "https://www.etracking.com" },
     ],
   },
 ];
@@ -140,7 +137,7 @@ export function CustomsModeCards() {
                   </div>
                   <div className="mt-1 flex items-baseline gap-1.5">
                     <span className="text-[28px] md:text-[32px] font-black text-primary-600 dark:text-primary-300 leading-none tracking-tight">
-                      2,800
+                      {c.price}
                     </span>
                     <span className="text-[14px] md:text-[15px] font-bold text-primary-700 dark:text-primary-300">
                       บาท
@@ -150,10 +147,6 @@ export function CustomsModeCards() {
                     </span>
                   </div>
                 </div>
-
-                <p className="rounded-lg bg-amber-50/60 dark:bg-amber-900/15 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2.5 text-[13px] md:text-[13.5px] leading-[1.6] text-foreground/85 font-medium">
-                  {c.description}
-                </p>
 
                 <ul className="flex flex-col gap-1.5 text-[12.5px] md:text-[13px] leading-snug text-foreground/90">
                   {c.services.map((s) => (
