@@ -198,14 +198,14 @@ const blockReport: MenuItem = {
   labelKey: "report.title",
   icon: "BarChart3",
   children: [
-    { labelKey: "report.shop",      href: "/admin/reports/monthly-orders",  icon: "BarChart3" },
-    { labelKey: "report.forwarder", href: "/admin/reports/forwarder-volume", icon: "Package" },
-    { labelKey: "report.payment",   href: "/admin/reports",                 icon: "Wallet" },
+    { labelKey: "report.shop",      href: "/admin/reports/shop",            icon: "BarChart3" },
+    { labelKey: "report.forwarder", href: "/admin/reports/forwarder",       icon: "Package" },
+    { labelKey: "report.payment",   href: "/admin/reports/payment",         icon: "Wallet" },
     { labelKey: "report.salesRep",  href: "/admin/reports/sales-by-rep",    icon: "BarChart3" },
     { labelKey: "report.allUser",   href: "/admin/reports/user-sales-history", icon: "BarChart3" },
     { labelKey: "report.byCode",    href: "/admin/reports/hs-code-revenue", icon: "BarChart3" },
     { labelKey: "report.driver",    href: "/admin/driver-runs",             icon: "Truck" },
-    { labelKey: "report.web",       href: "/admin/kpi",                     icon: "Activity" },
+    { labelKey: "report.web",       href: "/admin/reports/system",          icon: "Activity" },
   ],
 };
 
@@ -217,19 +217,19 @@ const blockAccCargo: MenuItem = {
   children: [
     { labelKey: "accCargo.inOut",     href: "/admin/accounting",                  icon: "BarChart3" },
     { labelKey: "accCargo.topup",     href: "/admin/wallet?kind=deposit&status=pending", icon: "BarChart3" },
-    { labelKey: "accCargo.shop",      href: "/admin/reports/monthly-orders",      icon: "BarChart3" },
+    { labelKey: "accCargo.shop",      href: "/admin/accounting/shop",             icon: "BarChart3" },
     {
       labelKey: "accCargo.forwarder",
       icon: "BarChart3",
       children: [
-        { labelKey: "accCargo.invoice", href: "/admin/freight/declarations", icon: "Printer" },
+        { labelKey: "accCargo.invoice", href: "/admin/accounting/forwarder-invoice", icon: "Printer" },
         { labelKey: "accCargo.receipt", href: "/admin/tax-invoices",         icon: "Printer" },
-        { labelKey: "accCargo.total",   href: "/admin/reports/forwarder-volume", icon: "BarChart3" },
+        { labelKey: "accCargo.total",   href: "/admin/accounting/forwarder",        icon: "BarChart3" },
       ],
     },
-    { labelKey: "accCargo.payment",   href: "/admin/yuan-payments",               icon: "BarChart3" },
+    { labelKey: "accCargo.payment",   href: "/admin/accounting/payment",          icon: "BarChart3" },
     { labelKey: "accCargo.containerPay", href: "/admin/cnt-hs", icon: "Receipt" },
-    { labelKey: "accCargo.withdraw",  href: "/admin/wallet?kind=withdraw&status=pending", icon: "BarChart3" },
+    { labelKey: "accCargo.withdraw",  href: "/admin/accounting/withdraw",         icon: "BarChart3" },
     { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending" },
   ],
 };
@@ -353,7 +353,7 @@ const blockWithdrawalList: MenuItem = {
       children: [
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
         { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney" },
-        { labelKey: "withdrawal.thaiFreight", href: "/admin/accounting/disbursements?kind=trucking", icon: "Truck" },
+        { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th",  icon: "Truck" },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
         { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout" },
         { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout" },
