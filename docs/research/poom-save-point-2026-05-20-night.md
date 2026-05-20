@@ -43,29 +43,24 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_vNH5pL5AiLWmJKjXwA58vA_TE1-ZJnb
 SUPABASE_SERVICE_ROLE_KEY=<the JWT you already have in dev .env.local — same value works>
 ```
 
-🔴 **Service-role CONFIRMED BROKEN (test 2026-05-20 ค่ำ post-handoff):**
-the JWT in dev backup has `ref:"pprrlabgebrnocthwdmg"`. Tested against
-prod:
+✅ **Service-role FIXED (2026-05-20 ค่ำ post-handoff):**
+ภูม fetched the prod project's service_role JWT (ref=yzljakczhwrpbxflnmco)
+and pasted into `.env.local`. Tested 2026-05-20 ค่ำ:
 ```
 GET https://yzljakczhwrpbxflnmco.supabase.co/rest/v1/forwarders
-  with the dev service_role JWT
-→ 401 "Invalid API key"
+  with the prod service_role JWT
+→ 200 [] (auth OK · table empty)
 ```
 
-Supabase validates the JWT's `ref` claim against the project, so the
-dev key cannot authenticate prod no matter what. **ภูม MUST fetch the
-prod service_role key** from Supabase dashboard → project
-`yzljakczhwrpbxflnmco` → Settings → API → service_role (secret) → copy
-paste into `.env.local`.
+The two prod keys are committed in `docs/env.md` (URL + anon = public-
+safe). Service_role is NOT committed (would be OWASP A02 "Cryptographic
+Failure"); ภูม fetches from Supabase dashboard manually on each new
+machine. See `docs/env.md` §1 for paste instructions.
 
-Until that's done, ALL `/admin/*` routes that use `createAdminClient()`
-silently fail. Symptoms seen so far:
-- `/admin/forwarders` renders but shows "0 รายการ" (the empty-result
-  path is hit because Supabase error is swallowed)
-- `/admin/barcode/driver` doesn't load (the page's 3 Promise.all
-  count queries throw)
-- ApiKey mismatch is the single root cause for almost every "page
-  doesn't work" you see on prod.
+**Earlier "/admin/forwarders 0 รายการ" + "/admin/barcode/driver ไม่มา"
+symptoms were caused by the broken dev JWT** — they should resolve
+after restart with the new keys + a fresh browser login (Supabase
+session cookies signed by the old project are invalid).
 
 ### Backup file already created on office machine:
 `.env.local.dev-backup-2026-05-20` (gitignored · contains the OLD dev
