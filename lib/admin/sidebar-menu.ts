@@ -274,21 +274,21 @@ const blockSettingsCargo: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-user.php — สมาชิก (Cargo customer list block) */
-const blockUserCargo: MenuItem = {
-  labelKey: "userCargo.title",
+/** Single-leaf "ลูกค้าทั้งหมด" replacement (ภูม brief 2026-05-20 ค่ำ —
+ *  Pacred is one company; the legacy Cargo/Freight customer-split + the
+ *  8-item nested dropdown was retired). Cargo/Freight subdivision +
+ *  group filters (ทั่วไป/VIP/SVIP/นิติ/เครดิต/เทียบ) now live in the
+ *  page top-menubar on /admin/customers (CUSTOMERS_MENUBAR config).
+ *
+ *  Tombstone: the prior `blockUserCargo` + `blockUserCargoAndFreight`
+ *  defined here · 2026-05-19 R1-restructure had carved them faithful to
+ *  the legacy `OOP/Cargo/menu-user.php` + `OOP/CargoAndFreight/menu-user.php`.
+ *  Removed 2026-05-20 ค่ำ per Pacred-is-one-company brief. */
+const itemCustomersAll: MenuItem = {
+  labelKey: "manageCustomersAll.title",
+  href: "/admin/customers",
   icon: "Users",
   badge: "corporatePending",
-  children: [
-    { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
-    { labelKey: "userCargo.all",        href: "/admin/customers",              icon: "Users" },
-    { labelKey: "userCargo.general",    href: "/admin/customers?group=general", icon: "User" },
-    { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
-    { labelKey: "userCargo.svip",       href: "/admin/customers?group=svip",  icon: "User" },
-    { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
-    { labelKey: "userCargo.credit",     href: "/admin/customers?group=credit", icon: "User" },
-    { labelKey: "userCargo.comparison", href: "/admin/customers?group=comparison", icon: "User" },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-QAAndQC.php — 11 SLA-breach queues
@@ -388,22 +388,10 @@ const blockWithdrawalList: MenuItem = {
   ],
 };
 
-/** legacy OOP/CargoAndFreight/menu-user.php — จัดการลูกค้า (Cargo+Freight) */
-const blockUserCargoAndFreight: MenuItem = {
-  labelKey: "manageCustomers.title",
-  icon: "Users",
-  badge: "corporatePending",
-  children: [
-    { ...blockUserCargo, labelKey: "manageCustomers.cargo" },
-    {
-      labelKey: "manageCustomers.freight",
-      icon: "Users",
-      children: [
-        { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
-      ],
-    },
-  ],
-};
+/** RETIRED 2026-05-20 ค่ำ — replaced by single-leaf `itemCustomersAll`
+ *  above (ภูม brief: Pacred = 1 company · no Cargo/Freight customer split).
+ *  Tombstone kept so future agents do not re-add a parallel block by mistake. */
+// const blockUserCargoAndFreight: MenuItem = { ... } // RETIRED — see itemCustomersAll
 
 /** RETIRED — the standalone Freight-only accounting block was merged
  * into the unified `blockAccounting` above (Pacred is one company,
@@ -501,7 +489,7 @@ const menuSuper: MenuSection[] = [
     items: [
       { labelKey: "hrGroup.title", icon: "UserCheck", children: [blockHrHumanResource, blockHrCorporateAssets] },
       { ...blockQA, labelKey: "qa.titleGroup" },
-      blockUserCargoAndFreight,
+      itemCustomersAll,
       blockWithdrawalList,
       blockWallet,
       blockPurchasing,

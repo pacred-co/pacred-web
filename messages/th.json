@@ -2510,6 +2510,9 @@
       "cargo": "Cargo",
       "freight": "Freight"
     },
+    "manageCustomersAll": {
+      "title": "ลูกค้าทั้งหมด"
+    },
     "accCargo": {
       "title": "ระบบบัญชี Cargo",
       "inOut": "รายรับ - รายจ่าย",

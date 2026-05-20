@@ -2510,6 +2510,9 @@
       "cargo": "Cargo",
       "freight": "Freight"
     },
+    "manageCustomersAll": {
+      "title": "All customers"
+    },
     "accCargo": {
       "title": "Accounting (Cargo)",
       "inOut": "Income - expenses",

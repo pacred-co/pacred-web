@@ -2,6 +2,39 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
+import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+
+// ─────────────────────────────────────────────────────────────────────
+// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
+// Sidebar got a single-leaf "ลูกค้าทั้งหมด" → click lands here. All
+// group filters + work queues + search live in the horizontal menubar
+// so the sidebar stays slim (Pacred-is-one-company pattern · matches
+// accounting/cargo + accounting/freight pages).
+// ─────────────────────────────────────────────────────────────────────
+const CUSTOMERS_MENUBAR: MenubarItem[] = [
+  { label: "หน้าหลัก", href: "/admin/customers" },
+  {
+    label: "ตามประเภท",
+    children: [
+      { label: "ลูกค้าทั่วไป",        href: "/admin/customers?group=general" },
+      { label: "VIP",                href: "/admin/customers?group=vip" },
+      { label: "SVIP",               href: "/admin/customers?group=svip" },
+      { label: "นิติบุคคล",          href: "/admin/customers?group=corporate" },
+      { label: "เครดิต",             href: "/admin/customers?group=credit" },
+      { label: "คิดค่าเทียบ",        href: "/admin/customers?group=comparison" },
+      { label: "ลูกค้า Freight",     href: "/admin/customers?segment=freight" },
+    ],
+  },
+  {
+    label: "งาน",
+    children: [
+      { label: "รออนุมัติ",          href: "/admin/customers/pending" },
+      { label: "เคลื่อนไหวล่าสุด",   href: "/admin/customers/recently-active" },
+      { label: "ย้ายเซลล์ดูแล",      href: "/admin/customers/transfer-rep" },
+    ],
+  },
+  { label: "ค้นหา", href: "/admin/customers?focus=search" },
+];
 
 // D1 Wave-2 (_SYNTHESIS §7.1 / §7.4): the admin customer list reads the
 // migrated legacy table `tb_users` (~8,898 PCS customers) — NOT the
@@ -108,7 +141,9 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   }
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={CUSTOMERS_MENUBAR} activeHref="/admin/customers" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
@@ -229,5 +264,6 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         )}
       </div>
     </main>
+    </>
   );
 }
