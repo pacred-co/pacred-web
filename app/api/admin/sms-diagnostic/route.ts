@@ -68,9 +68,9 @@ export async function GET(request: Request) {
     provider:    process.env.SMS_PROVIDER ?? "thaibulksms",
     otpBypass:   process.env.OTP_BYPASS === "true",
     // `force` routes the SMS via Standard / Premium / Corporate credit pool.
-    // Pacred's Corporate sender approval is on the Corporate pool; without
-    // this set we hit Standard (0 credits) → ERROR_INSUFFICIENT_CREDIT.
-    force:       process.env.THAIBULKSMS_FORCE ?? "(unset — defaults to Standard pool)",
+    // Default is "premium" (Pacred's Corporate sender approval lives there).
+    // Override via THAIBULKSMS_FORCE if needed.
+    force:       process.env.THAIBULKSMS_FORCE ?? "premium (default)",
   };
 
   // 1) balance probe (safe — no SMS sent)
