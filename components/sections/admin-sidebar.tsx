@@ -76,11 +76,25 @@ function subtreeHasActive(item: MenuItem, pathname: string): boolean {
   return (item.children ?? []).some((c) => subtreeHasActive(c, pathname));
 }
 
-/** Path-match ignoring locale prefix + query string. */
+/** Path-match ignoring locale prefix + query string.
+ *
+ * IMPORTANT: exact match only. A previous startsWith-based version
+ * (pre-2026-05-20) made every leaf under /admin/forwarders/X also
+ * highlight the /admin/forwarders parent + its siblings — clicking
+ * "ประวัติเข้าโกดังไทย" highlighted ทุก item ใน "บริการฝากนำเข้า"
+ * (ภูมิ-flagged bug). Use exact match: a leaf highlights ONLY when its
+ * own href is the active path; parent dropdowns still auto-open via
+ * `subtreeHasActive` (which uses this same matcher recursively).
+ *
+ * Locale: next/navigation's usePathname() returns the locale-prefixed
+ * path ("/en/admin/...") for non-default locales. Strip the 2-letter
+ * prefix so the comparison is locale-agnostic (TH default = no prefix
+ * so the strip is a no-op).
+ */
 function hrefMatches(href: string, pathname: string): boolean {
   const base = href.split("?")[0];
-  if (base === "/admin") return pathname === "/admin" || pathname.endsWith("/admin");
-  return pathname === base || pathname.startsWith(base + "/");
+  const stripped = pathname.replace(/^\/[a-z]{2}(?=\/|$)/, "");
+  return stripped === base;
 }
 
 // ── A red count pill — the legacy badgeMenu($n). ───────────────────────
