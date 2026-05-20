@@ -150,6 +150,19 @@ async function sendThaiBulkSms(
   const msisdn = phone.replace(/^\+/, "");
   const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString("base64");
 
+  // 2026-05-20 incident — `prod register` returned ERROR_INSUFFICIENT_CREDIT
+  // even though the ThaiBulkSMS account had 7,302 Corporate credits — because
+  // the v2 API defaults to the Standard pool (0 credits) when `force` is not
+  // set. Pacred's Corporate sender approval lives in Corporate pool.
+  //
+  // Set THAIBULKSMS_FORCE=premium (or `corporate`/`standard`) on Vercel env
+  // to route via that pool. We send the param verbatim — ThaiBulkSMS docs
+  // call this `force` with values `premium`/`standard`/`corporate`.
+  const force = process.env.THAIBULKSMS_FORCE;
+
+  const params = new URLSearchParams({ msisdn, message, sender });
+  if (force) params.set("force", force);
+
   try {
     const res = await fetch("https://api-v2.thaibulksms.com/sms", {
       method: "POST",
@@ -157,11 +170,7 @@ async function sendThaiBulkSms(
         Authorization: `Basic ${auth}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        msisdn,
-        message,
-        sender,
-      }),
+      body: params,
     });
 
     if (!res.ok) {
