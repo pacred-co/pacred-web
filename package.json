@@ -23,6 +23,7 @@
     "verify": "pnpm lint && tsc --noEmit && pnpm test:unit && pnpm audit:all"
   },
   "dependencies": {
+    "@ericblade/quagga2": "^1.12.1",
     "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@line/liff": "^2.29.0",
     "@react-pdf/renderer": "^4.5.1",

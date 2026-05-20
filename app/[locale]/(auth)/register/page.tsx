@@ -148,8 +148,11 @@ const SOURCES: { id: SourceId; label: string; icon: React.ReactNode }[] = [
 ];
 
 /* ─────────────────────────── INPUT BASE STYLES (matches login/page.tsx) ─────────────────────────── */
+// Mobile-fix per Agent C audit 2026-05-20 ค่ำ — input font-size bumped from
+// 14px to 16px so iOS Safari does NOT auto-zoom on focus (iOS auto-zooms
+// when an input's computed font-size is below 16px → jarring jump on mobile).
 const INPUT_BASE =
-  "w-full rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-4 py-[10px] text-[14px] text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
+  "w-full rounded-xl border-[1.5px] border-border bg-white dark:bg-surface px-4 py-[10px] text-base text-foreground placeholder:text-muted transition focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/10";
 
 /* ─────────────────────────── MAIN PAGE ─────────────────────────── */
 export default function RegisterPage() {
