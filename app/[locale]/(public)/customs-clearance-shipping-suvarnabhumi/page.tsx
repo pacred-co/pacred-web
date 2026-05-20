@@ -368,8 +368,12 @@ export default async function CustomsClearancePage({
               </div>
             </div>
 
-            {/* Bullet list — flat list under the banner (no card wrapper) */}
-            <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
+            {/* Bullet list — wrapped in a themed card. Subtle primary-red
+                tinted border + gradient bg + soft red shadow so it reads
+                as a "service highlights" block tied to the red banner above
+                without competing with it. */}
+            <div className="mt-4 md:mt-5 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
+              <ul className="flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
                   { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
                   { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
@@ -386,6 +390,7 @@ export default async function CustomsClearancePage({
                   </li>
                 ))}
               </ul>
+            </div>
 
           </div>
         </section>
