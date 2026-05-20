@@ -228,7 +228,7 @@ const blockAccCargo: MenuItem = {
       ],
     },
     { labelKey: "accCargo.payment",   href: "/admin/yuan-payments",               icon: "BarChart3" },
-    { labelKey: "accCargo.containerPay", href: "/admin/accounting/container-payments", icon: "Receipt" },
+    { labelKey: "accCargo.containerPay", href: "/admin/cnt-hs", icon: "Receipt" },
     { labelKey: "accCargo.withdraw",  href: "/admin/wallet?kind=withdraw&status=pending", icon: "BarChart3" },
     { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending" },
   ],
@@ -312,7 +312,7 @@ const blockHrHumanResource: MenuItem = {
       labelKey: "hr.people",
       icon: "Users",
       children: [
-        { labelKey: "hr.peopleAll",     href: "/admin/hr/employees",          icon: "Users" },
+        { labelKey: "hr.peopleAll",     href: "/admin/admins",                icon: "Users" },
         { labelKey: "hr.peopleAudit",   href: "/admin/hr/audit",              icon: "ClipboardCheck" },
         { labelKey: "hr.peoplePolicies", href: "/admin/hr/policies",          icon: "FileText" },
       ],
@@ -352,7 +352,7 @@ const blockWithdrawalList: MenuItem = {
       badge: "withdrawalAll",
       children: [
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
-        { labelKey: "withdrawal.cntCost",     href: "/admin/accounting/disbursements?kind=container_lease", icon: "Truck", badge: "cntDrawMoney" },
+        { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney" },
         { labelKey: "withdrawal.thaiFreight", href: "/admin/accounting/disbursements?kind=trucking", icon: "Truck" },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
         { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout" },
