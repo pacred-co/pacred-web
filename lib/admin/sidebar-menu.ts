@@ -231,31 +231,22 @@ const blockReport: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-acc.php — รายงานรับรู้รายได้ Cargo */
+/** legacy OOP/Cargo/menu-acc.php — รายงานรับรู้รายได้ Cargo
+ *
+ * 2026-05-20 night consolidate (ภูม brief — "sidebar รก, เอาตามรูป 2"):
+ * The 10-row accordion under บัญชี Cargo was COLLAPSED to a single
+ * sidebar leaf that lands on `/admin/accounting/cargo` — the hub now
+ * carries the page top-menubar (`<PageTopMenubar items={CARGO_MENUBAR}/>`)
+ * which covers รายรับ → 9 doc types → 4 services → 5 statuses (~103 leaves)
+ * legacy-style. The 6 LIVE sub-pages (shop / forwarder / forwarder-invoice /
+ * payment / withdraw / cnt-hs) are reachable from the hub body's 6-card
+ * quick-access grid; the deeper cascade is in the top-menubar dropdown.
+ * Sidebar slim is the goal.
+ */
 const blockAccCargo: MenuItem = {
   labelKey: "accCargo.title",
-  href: "/admin/accounting",
+  href: "/admin/accounting/cargo",
   icon: "Landmark",
-  children: [
-    { labelKey: "accCargo.inOut",     href: "/admin/accounting",                  icon: "BarChart3" },
-    { labelKey: "accCargo.topup",     href: "/admin/wallet?kind=deposit&status=pending", icon: "BarChart3" },
-    { labelKey: "accCargo.shop",      href: "/admin/accounting/shop",             icon: "BarChart3" },
-    {
-      labelKey: "accCargo.forwarder",
-      icon: "BarChart3",
-      children: [
-        { labelKey: "accCargo.invoice", href: "/admin/accounting/forwarder-invoice", icon: "Printer" },
-        { labelKey: "accCargo.receipt", href: "/admin/tax-invoices",         icon: "Printer" },
-        { labelKey: "accCargo.total",   href: "/admin/accounting/forwarder",        icon: "BarChart3" },
-      ],
-    },
-    { labelKey: "accCargo.payment",   href: "/admin/accounting/payment",          icon: "BarChart3" },
-    // Phase 3 — container-payments per 2026-05-20 owner brief (deeper-future).
-    { labelKey: "accCargo.containerPay", href: "/admin/cnt-hs", icon: "Receipt", phase: 3 },
-    { labelKey: "accCargo.withdraw",  href: "/admin/accounting/withdraw",         icon: "BarChart3" },
-    // Phase 2 — refunds not yet live to customers.
-    { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending", phase: 2 },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo */
@@ -411,26 +402,21 @@ const blockUserCargoAndFreight: MenuItem = {
   ],
 };
 
-/** legacy OOP/Freight/menu-acc.php — ระบบบัญชี Freight */
+/** legacy OOP/Freight/menu-acc.php — ระบบบัญชี Freight
+ *
+ * 2026-05-20 night consolidate (ภูม brief — "sidebar รก, เอาตามรูป 2"):
+ * The 7-row accordion under บัญชี Freight was COLLAPSED to a single
+ * sidebar leaf that lands on `/admin/accounting/freight` — the hub now
+ * carries the page top-menubar (`<PageTopMenubar items={FREIGHT_MENUBAR}/>`)
+ * which covers รายรับ → 9 doc types → 6 freight services × statuses
+ * (~170 leaves). LIVE freight sub-pages (quotes / declarations /
+ * shipments / tax-invoices / closing / reports) reachable from the hub
+ * body's 6-card quick-access grid; deeper cascade is in the top-menubar.
+ */
 const blockAccFreight: MenuItem = {
   labelKey: "accFreight.title",
+  href: "/admin/accounting/freight",
   icon: "Landmark",
-  children: [
-    { labelKey: "accFreight.ledger",   href: "/admin/accounting/reconcile", icon: "BarChart3" },
-    {
-      labelKey: "accFreight.income",
-      icon: "BarChart3",
-      children: [
-        { labelKey: "accFreight.quotation", href: "/admin/freight/quotes",       icon: "Receipt", badge: "bookingsPending" },
-        { labelKey: "accFreight.invoice",   href: "/admin/freight/shipments",    icon: "Receipt" },
-        { labelKey: "accFreight.receipt",   href: "/admin/tax-invoices",         icon: "Receipt" },
-        { labelKey: "accFreight.wht",       href: "/admin/accounting/closing",   icon: "Receipt" },
-        { labelKey: "accFreight.overview",  href: "/admin/reports",              icon: "BarChart3" },
-      ],
-    },
-    // Phase 2 — customs declarations form (service #8) not yet live to customers.
-    { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck", phase: 2 },
-  ],
 };
 
 // ── Learning section blocks — legacy OOP/Learning/* ──────────────
