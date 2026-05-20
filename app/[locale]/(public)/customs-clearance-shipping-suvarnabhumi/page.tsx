@@ -368,8 +368,12 @@ export default async function CustomsClearancePage({
               </div>
             </div>
 
-            {/* Bullet list — flat list under the banner (no card wrapper) */}
-            <ul className="mt-4 md:mt-5 flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
+            {/* Bullet list — wrapped in a themed card. Subtle primary-red
+                tinted border + gradient bg + soft red shadow so it reads
+                as a "service highlights" block tied to the red banner above
+                without competing with it. */}
+            <div className="mt-4 md:mt-5 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
+              <ul className="flex flex-col gap-y-3 md:gap-y-3.5 text-[14px] md:text-[16px] leading-[1.55] text-foreground/95">
                 {[
                   { icon: "/images/hero-section/icon-draf/transfast.png",       text: "รับเคลียร์ทั้งขาเข้า–ขาออก ไม่ว่าจะมาทางอากาศ ทางเรือ หรือทางรถ" },
                   { icon: "/images/hero-section/icon-draf/checklistred.png",    text: "จับคู่ทะเบียนผู้นำเข้า–ส่งออก (YY) ที่กรมศุลฯ ให้ จบไวภายในครึ่งชั่วโมง" },
@@ -386,6 +390,7 @@ export default async function CustomsClearancePage({
                   </li>
                 ))}
               </ul>
+            </div>
 
           </div>
         </section>
@@ -594,26 +599,30 @@ export default async function CustomsClearancePage({
                     เคลียร์ได้ <span className="text-primary-600">เร็ว · ราคาชัด · ติดต่อง่าย 100%</span>
                   </span>
                 </h3>
-                <ul className="flex flex-col gap-y-2.5 md:gap-y-3 text-[13px] md:text-[15px] leading-[1.55] text-foreground/90">
-                  {[
-                    { icon: "/images/hero-section/icon-draf/ptrack.png",          title: "เคลียร์ด่วน ภายใน 1 ชั่วโมง",  desc: "ของได้ออกจากด่านในวันเดียว ไม่ต้องนอนค้างให้เสียค่าฝากเก็บเพิ่ม" },
-                    { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: "ราคาโปร่งใส ไม่มีบวกแอบ",   desc: "ภาษี ค่าพิธีการ ค่ารถ — รวบในใบเดียวอ่านเข้าใจง่าย ไม่มีค่าใช้จ่ายงอกทีหลัง" },
-                    { icon: "/images/hero-section/icon-draf/people.png",          title: "ทีมหน้างานจริง ทุกด่าน",      desc: "มีคนประจำที่สุวรรณภูมิ คลองเตย แหลมฉบัง ICD มุกดาหาร นครพนม และอรัญฯ" },
-                    { icon: "/images/hero-section/icon-draf/customclearance.png", title: "แก้ปัญหาที่คนอื่นทำไม่ได้",   desc: "ของติดด่าน, HS Code ผิด, ภาษีเกินจริง หรือใบอนุญาต อย./มอก. ยังไม่ครบ เราเข้าไปคุยให้" },
-                    { icon: "/images/hero-section/icon-draf/checklistred.png",    title: "มีใบอนุญาตจริง ไม่ใช่นายหน้า", desc: "Shipping License, ทะเบียนกรมศุล, DBD และ ภพ.20 ครบทุกใบ ตรวจสอบได้" },
-                    { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: "ประสบการณ์ 15+ ปี",            desc: "ผ่านสินค้าเกือบทุกประเภท ทุก Term และทุก Port ในไทย" },
-                    { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: "รองรับสินค้าควบคุม",            desc: "ยา เครื่องสำอาง อิเล็กทรอนิกส์ เครื่องจักร และเคมีภัณฑ์ เอาอยู่หมด" },
-                    { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: "Tracking real-time",            desc: "อัปเดตสถานะทุกขั้นตอน ทักทีมได้ตลอด 24 ชม. ไม่ต้องลุ้น" },
-                  ].map((item) => (
-                    <li key={item.title} className="flex items-start gap-2.5 md:gap-3">
-                      <Image src={item.icon} alt="" width={28} height={28} aria-hidden className="w-6 h-6 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain" />
-                      <span>
-                        <strong className="font-black text-[#111827] dark:text-white">{item.title}</strong>
-                        <span className="text-muted"> — {item.desc}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {/* Themed frame — same primary-tinted card as the hero
+                    service-highlights list above, for visual consistency. */}
+                <div className="rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
+                  <ul className="flex flex-col gap-y-2.5 md:gap-y-3 text-[13px] md:text-[15px] leading-[1.55] text-foreground/90">
+                    {[
+                      { icon: "/images/hero-section/icon-draf/ptrack.png",          title: "เคลียร์ด่วน ภายใน 1 ชั่วโมง",  desc: "ของได้ออกจากด่านในวันเดียว ไม่ต้องนอนค้างให้เสียค่าฝากเก็บเพิ่ม" },
+                      { icon: "/images/hero-section/icon-draf/ongkorn.png",         title: "ราคาโปร่งใส ไม่มีบวกแอบ",   desc: "ภาษี ค่าพิธีการ ค่ารถ — รวบในใบเดียวอ่านเข้าใจง่าย ไม่มีค่าใช้จ่ายงอกทีหลัง" },
+                      { icon: "/images/hero-section/icon-draf/people.png",          title: "ทีมหน้างานจริง ทุกด่าน",      desc: "มีคนประจำที่สุวรรณภูมิ คลองเตย แหลมฉบัง ICD มุกดาหาร นครพนม และอรัญฯ" },
+                      { icon: "/images/hero-section/icon-draf/customclearance.png", title: "แก้ปัญหาที่คนอื่นทำไม่ได้",   desc: "ของติดด่าน, HS Code ผิด, ภาษีเกินจริง หรือใบอนุญาต อย./มอก. ยังไม่ครบ เราเข้าไปคุยให้" },
+                      { icon: "/images/hero-section/icon-draf/checklistred.png",    title: "มีใบอนุญาตจริง ไม่ใช่นายหน้า", desc: "Shipping License, ทะเบียนกรมศุล, DBD และ ภพ.20 ครบทุกใบ ตรวจสอบได้" },
+                      { icon: "/images/hero-section/icon-draf/pcs-sales.png",       title: "ประสบการณ์ 15+ ปี",            desc: "ผ่านสินค้าเกือบทุกประเภท ทุก Term และทุก Port ในไทย" },
+                      { icon: "/images/hero-section/icon-draf/pcs-forwarder.png",   title: "รองรับสินค้าควบคุม",            desc: "ยา เครื่องสำอาง อิเล็กทรอนิกส์ เครื่องจักร และเคมีภัณฑ์ เอาอยู่หมด" },
+                      { icon: "/images/hero-section/icon-draf/pcs-address.png",     title: "Tracking real-time",            desc: "อัปเดตสถานะทุกขั้นตอน ทักทีมได้ตลอด 24 ชม. ไม่ต้องลุ้น" },
+                    ].map((item) => (
+                      <li key={item.title} className="flex items-start gap-2.5 md:gap-3">
+                        <Image src={item.icon} alt="" width={28} height={28} aria-hidden className="w-6 h-6 md:w-7 md:h-7 shrink-0 mt-0.5 object-contain" />
+                        <span>
+                          <strong className="font-black text-[#111827] dark:text-white">{item.title}</strong>
+                          <span className="text-muted"> — {item.desc}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
