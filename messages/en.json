@@ -2505,8 +2505,13 @@
       "driver": "Driver delivery jobs",
       "web": "Website access"
     },
+    "accounting": {
+      "title": "Accounting",
+      "cargo": "Cargo",
+      "freight": "Freight"
+    },
     "accCargo": {
-      "title": "Cargo revenue recognition",
+      "title": "Accounting (Cargo)",
       "inOut": "Income - expenses",
       "topup": "Top-ups",
       "shop": "Shop-order report",

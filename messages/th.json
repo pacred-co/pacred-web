@@ -2505,8 +2505,13 @@
       "driver": "งานขนส่งคนขับรถ",
       "web": "การเข้าถึงเว็บไซต์"
     },
+    "accounting": {
+      "title": "ระบบบัญชี",
+      "cargo": "Cargo",
+      "freight": "Freight"
+    },
     "accCargo": {
-      "title": "รายงานรับรู้รายได้ Cargo",
+      "title": "ระบบบัญชี Cargo",
       "inOut": "รายรับ - รายจ่าย",
       "topup": "รายการเติมเงิน",
       "shop": "รายงานฝากสั่ง",

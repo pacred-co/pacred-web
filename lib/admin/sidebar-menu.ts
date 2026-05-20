@@ -231,22 +231,25 @@ const blockReport: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-acc.php — รายงานรับรู้รายได้ Cargo
+/** Unified "ระบบบัญชี" sidebar entry — Pacred is ONE company, so the
+ * legacy 3-companies-split (CargoAndFreight + Freight + Cargo) collapses
+ * to a single Accounting parent with 2 children (ภูม brief 2026-05-20 ค่ำ).
  *
- * 2026-05-20 night consolidate (ภูม brief — "sidebar รก, เอาตามรูป 2"):
- * The 10-row accordion under บัญชี Cargo was COLLAPSED to a single
- * sidebar leaf that lands on `/admin/accounting/cargo` — the hub now
- * carries the page top-menubar (`<PageTopMenubar items={CARGO_MENUBAR}/>`)
- * which covers รายรับ → 9 doc types → 4 services → 5 statuses (~103 leaves)
- * legacy-style. The 6 LIVE sub-pages (shop / forwarder / forwarder-invoice /
- * payment / withdraw / cnt-hs) are reachable from the hub body's 6-card
- * quick-access grid; the deeper cascade is in the top-menubar dropdown.
- * Sidebar slim is the goal.
+ * Click "ระบบบัญชี" → dropdown lists Cargo + Freight. Each child lands
+ * on its hub (`/admin/accounting/{cargo,freight}`) which carries the
+ * page top-menubar legacy-style (PageTopMenubar items={CARGO_MENUBAR | FREIGHT_MENUBAR}).
+ *
+ * The two stand-alone blocks (`blockAccCargo` + `blockAccFreight`) used
+ * by the pre-2026-05-20-evening sidebars are RETIRED — use this single
+ * `blockAccounting` everywhere.
  */
-const blockAccCargo: MenuItem = {
-  labelKey: "accCargo.title",
-  href: "/admin/accounting/cargo",
+const blockAccounting: MenuItem = {
+  labelKey: "accounting.title",
   icon: "Landmark",
+  children: [
+    { labelKey: "accounting.cargo",   href: "/admin/accounting/cargo",   icon: "Package" },
+    { labelKey: "accounting.freight", href: "/admin/accounting/freight", icon: "Truck" },
+  ],
 };
 
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo */
@@ -402,22 +405,12 @@ const blockUserCargoAndFreight: MenuItem = {
   ],
 };
 
-/** legacy OOP/Freight/menu-acc.php — ระบบบัญชี Freight
- *
- * 2026-05-20 night consolidate (ภูม brief — "sidebar รก, เอาตามรูป 2"):
- * The 7-row accordion under บัญชี Freight was COLLAPSED to a single
- * sidebar leaf that lands on `/admin/accounting/freight` — the hub now
- * carries the page top-menubar (`<PageTopMenubar items={FREIGHT_MENUBAR}/>`)
- * which covers รายรับ → 9 doc types → 6 freight services × statuses
- * (~170 leaves). LIVE freight sub-pages (quotes / declarations /
- * shipments / tax-invoices / closing / reports) reachable from the hub
- * body's 6-card quick-access grid; deeper cascade is in the top-menubar.
- */
-const blockAccFreight: MenuItem = {
-  labelKey: "accFreight.title",
-  href: "/admin/accounting/freight",
-  icon: "Landmark",
-};
+/** RETIRED — the standalone Freight-only accounting block was merged
+ * into the unified `blockAccounting` above (Pacred is one company,
+ * not three; per ภูม brief 2026-05-20 night). All role menus now reference
+ * `blockAccounting`. Keep this stub commented-out as a tombstone so a
+ * future agent doesn't re-add a parallel block by mistake. */
+// const blockAccFreight: MenuItem = { ... } // RETIRED — see blockAccounting
 
 // ── Learning section blocks — legacy OOP/Learning/* ──────────────
 // Phase 2 — Learning hub per 2026-05-20 owner brief (soon-to-launch).
@@ -507,10 +500,9 @@ const menuSuper: MenuSection[] = [
       blockWithdrawalList,
     ],
   },
-  { header: "Freight", items: [blockAccFreight] },
   {
     header: "Cargo",
-    items: [blockWallet, blockPurchasing, blockForwarder, blockPayment, blockReport, blockAccCargo],
+    items: [blockWallet, blockPurchasing, blockForwarder, blockPayment, blockReport, blockAccounting],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
@@ -550,10 +542,9 @@ const menuOps: MenuSection[] = [
 const menuAccounting: MenuSection[] = [
   { header: "", items: [itemDashboard] },
   { header: "Cargo & Freight", items: [blockWithdrawalList] },
-  { header: "Freight", items: [blockAccFreight] },
   {
     header: "Cargo",
-    items: [blockWallet, blockPayment, blockReport, blockAccCargo],
+    items: [blockWallet, blockPayment, blockReport, blockAccounting],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
