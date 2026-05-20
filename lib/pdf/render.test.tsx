@@ -161,7 +161,8 @@ function cancelledTaxInvoice(): TaxInvoiceData {
 function baseShopOrder(): ShopOrderReceiptData {
   return {
     h_no:                  "ONS260516-001",
-    status:                "completed",
+    // Legacy tb_header_order.hstatus code: '5' = สำเร็จ (completed/paid).
+    status:                "5",
     created_at:            "2026-05-16T09:00:00Z",
     date_awaiting_payment: "2026-05-16T09:30:00Z",
     payment_due_at:        "2026-05-23T09:30:00Z",
@@ -233,7 +234,8 @@ function juristicShopOrderWithOverride(): ShopOrderReceiptData {
 
 function pendingShopOrder(): ShopOrderReceiptData {
   const o = baseShopOrder();
-  o.status = "awaiting_payment";
+  // Legacy hstatus code: '2' = รอชำระเงิน (awaiting payment → renders as ใบแจ้งหนี้).
+  o.status = "2";
   o.date_completed = null;
   return o;
 }

@@ -1,0 +1,530 @@
+/* =============================================================
+ * payment.css — legacy PCS Cargo `member/payment.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription (ฝากชำระ / โอนหยวน —
+ * the yuan-transfer flow · menu launchpad icon 4).
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot — see
+ * public/legacy/pcs/menu.css): to be 100% visually identical to
+ * the legacy PHP we do NOT re-implement the look in Tailwind — we
+ * BRING THE LEGACY CSS. This file holds the exact rules
+ * `payment.php` renders with, copied verbatim from the legacy
+ * stylesheets + the page's own inline <style> block:
+ *   - assets/css/bootstrap.min.css / bootstrap-extended.min.css
+ *                              (the BS4 grid / card / nav / nav-tabs /
+ *                               table / badge / modal / form-control /
+ *                               button subset payment.php uses)
+ *   - assets/css/style.css     (border-black · bg-main · pcs-tabs ·
+ *                               pcs-badge · btn-circle · btn-color-main ·
+ *                               border-wallet · btn-add-wallet · fonts ·
+ *                               gradients · colour helpers)
+ *   - assets/css/custom.css    (.content-body.pr110)
+ *   - assets/css/palette-gradient.css (bg-gradient-x-warning)
+ *   - the inline <style> block in payment.php (lines 222-242)
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ * collide with — the rest of the Tailwind app. The page renders the
+ * legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/payment.css and loaded
+ * with a plain <link rel="stylesheet"> from page.tsx — it must bypass
+ * the app's Tailwind v4 / PostCSS pipeline, which rejects verbatim
+ * legacy CSS. Binary assets (logo.png) live under public/legacy/pcs/.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid + card subset (exact BS4 4.x values) ---- */
+/* payment.php is Bootstrap-4 markup; values copied from
+ * bootstrap.min.css / bootstrap-extended.min.css. */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-6  { flex: 0 0 50%;  max-width: 50%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+}
+
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+}
+/* style.css — the .border-black card variant used by payment.php */
+.pcs-legacy .card.border-black {
+  border: 1px solid #000;
+}
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* spacing helpers used by payment.php (Bootstrap-4 spacing scale) */
+.pcs-legacy .p-1   { padding: 0.25rem !important; }
+.pcs-legacy .p-2   { padding: 1rem !important; }
+.pcs-legacy .pb-0  { padding-bottom: 0 !important; }
+.pcs-legacy .pb-3  { padding-bottom: 1rem !important; }
+.pcs-legacy .pt-1  { padding-top: 0.25rem !important; }
+.pcs-legacy .pt-2  { padding-top: 1rem !important; }
+.pcs-legacy .mt-1  { margin-top: 0.25rem !important; }
+.pcs-legacy .mt-2  { margin-top: 1rem !important; }
+.pcs-legacy .mb-0  { margin-bottom: 0 !important; }
+.pcs-legacy .mb-1  { margin-bottom: 0.5rem !important; }
+.pcs-legacy .mr-3  { margin-right: 1rem !important; }
+
+/* display + alignment helpers */
+.pcs-legacy .text-center  { text-align: center !important; }
+.pcs-legacy .text-right   { text-align: right !important; }
+.pcs-legacy .text-left    { text-align: left !important; }
+.pcs-legacy .text-white   { color: #fff !important; }
+.pcs-legacy .text-dark    { color: #2f3036 !important; }
+.pcs-legacy .d-flex       { display: flex !important; }
+.pcs-legacy .d-inline-block { display: inline-block !important; }
+.pcs-legacy .float-right  { float: right !important; }
+.pcs-legacy .list-inline  { padding-left: 0; list-style: none; }
+.pcs-legacy .list-inline-item { display: inline-block; }
+.pcs-legacy .list-unstyled { padding-left: 0; list-style: none; }
+@media (min-width: 768px) {
+  .pcs-legacy .text-md-left  { text-align: left !important; }
+  .pcs-legacy .text-md-right { text-align: right !important; }
+  .pcs-legacy .float-md-right { float: right !important; }
+}
+
+/* Bootstrap-4 media object (the wallet card inside the add-payment modal) */
+.pcs-legacy .media { display: flex; align-items: flex-start; }
+.pcs-legacy .media-body { flex: 1; }
+
+/* Bootstrap-4 progress bar (the gold bar under the wallet balance) */
+.pcs-legacy .progress {
+  display: flex;
+  height: 1rem;
+  overflow: hidden;
+  font-size: 0.75rem;
+  background-color: #eceeef;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .progress-sm { height: 0.5rem; }
+.pcs-legacy .progress-bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+}
+.pcs-legacy .box-shadow-2 { box-shadow: 0 4px 10px 0 rgba(0, 0, 0, 0.1); }
+
+/* ---- Bootstrap-4 nav + nav-tabs (verbatim BS4 values) ---- */
+.pcs-legacy .nav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+.pcs-legacy .nav-item { }
+.pcs-legacy .nav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+}
+.pcs-legacy .nav-tabs {
+  border-bottom: 1px solid #babfc7;
+}
+.pcs-legacy .nav-tabs .nav-item {
+  margin-bottom: -1px;
+}
+.pcs-legacy .nav-tabs .nav-link {
+  border: 1px solid transparent;
+  border-top-left-radius: 0.25rem;
+  border-top-right-radius: 0.25rem;
+}
+
+/* style.css — the .nav-underline tab variant payment.php uses for the
+ * status-filter tabs (ทั้งหมด / รอดำเนินการ / สำเร็จ / ไม่สำเร็จ) */
+.pcs-legacy .nav.nav-tabs.nav-underline {
+  border-bottom: 1px solid #ddd;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  color: #6b6f82;
+}
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link.active {
+  color: #E9091F;
+  background-color: transparent;
+  border-bottom: 2px solid #E9091F;
+}
+/* payment.php inline <style> L223-225 — verbatim */
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  line-height: 1rem;
+}
+/* style.css — the pcs-tabs theme wrapper + no-hover-bg helper */
+.pcs-legacy .pcs-tabs .nav-link { padding: 0.5rem 0.75rem; }
+.pcs-legacy .no-hover-bg .nav-link:hover { background-color: transparent; }
+
+/* style.css — pcs-badge (the count chip beside each status tab) */
+.pcs-legacy .pcs-badge {
+  display: inline-block;
+  padding: 0.2em 0.45em;
+  font-size: 70%;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+  color: #fff;
+}
+.pcs-legacy .pcs-badge-pill {
+  padding-right: 0.6em;
+  padding-left: 0.6em;
+  border-radius: 10rem;
+}
+
+/* ---- Bootstrap-4 badge subset (verbatim BS4 values) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: 0.35em 0.4em;
+  font-size: 80%;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .badge-pill {
+  padding-right: 0.6em;
+  padding-left: 0.6em;
+  border-radius: 10rem;
+}
+.pcs-legacy .badge-primary { color: #fff;     background-color: #5a8dee; }
+.pcs-legacy .badge-warning,
+.pcs-legacy .pcs-badge.badge-warning { color: #2a2e30; background-color: #ff9149; }
+.pcs-legacy .badge-info,
+.pcs-legacy .pcs-badge.badge-info    { color: #fff;     background-color: #1e9ff2; }
+.pcs-legacy .badge-danger,
+.pcs-legacy .pcs-badge.badge-danger  { color: #fff;     background-color: #ff4961; }
+.pcs-legacy .badge-dark    { color: #fff;     background-color: #1a1e21; }
+.pcs-legacy .badge-success { color: #2a2e30; background-color: #28d094; }
+
+/* ---- Bootstrap-4 table subset (the #myTable DataTables list) ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #6b6f82;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  /* payment.php inline <style> L226-228 — verbatim override */
+  padding: 0.25rem 0.5rem;
+  vertical-align: top;
+  border-top: 1px solid #ECEFF5;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #ECEFF5;
+}
+.pcs-legacy .table-bordered { border: 1px solid #ECEFF5; }
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td { border: 1px solid #ECEFF5; }
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* DataTables-rendered table classes — the legacy table carries
+ * `dataTable no-footer dtr-inline` even before its JS init; reproduce
+ * the at-rest look so the table is visually identical. */
+.pcs-legacy table.dataTable { border-collapse: collapse !important; }
+.pcs-legacy table.dataTable.no-footer { border-bottom: 1px solid #ECEFF5; }
+
+/* ---- Bootstrap-4 buttons (the theme btn base + payment variants) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.pcs-legacy .btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 0.2rem;
+}
+.pcs-legacy .btn-block { display: block; width: 100%; }
+/* style.css — theme button variants */
+.pcs-legacy .btn-success {
+  background-color: #28d094;
+  border-color: #28d094;
+  color: #fff;
+}
+.pcs-legacy .btn-warning {
+  background-color: #ff9149;
+  border-color: #ff9149;
+  color: #fff;
+}
+.pcs-legacy .btn-main {
+  background-color: #E9091F;
+  border-color: #E9091F;
+  color: #fff;
+}
+/* style.css — the red gradient primary button (modal confirm) */
+.pcs-legacy .btn-color-main {
+  background: linear-gradient(to right, #cc3333, #f15a24);
+  border: 0 solid #fff;
+  color: #fff;
+}
+.pcs-legacy .btn-outline-success {
+  color: #28d094;
+  border-color: #28d094;
+  background-color: transparent;
+}
+.pcs-legacy .btn-outline-secondary {
+  color: #6b6f82;
+  border-color: #6b6f82;
+  background-color: transparent;
+}
+.pcs-legacy .btn-outline-danger {
+  color: #E9091F;
+  border-color: #E9091F;
+  background-color: transparent;
+}
+/* style.css — the round / pill button shapes */
+.pcs-legacy .btn-circle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+}
+.pcs-legacy .btn-rounded { border-radius: 10rem; }
+.pcs-legacy .round { border-radius: 1rem !important; }
+.pcs-legacy .waves-effect { position: relative; overflow: hidden; }
+
+/* ---- Bootstrap-4 form-control subset (the add-payment modal form) ---- */
+.pcs-legacy .form-group { margin-bottom: 1rem; }
+.pcs-legacy .form-control-label {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.pcs-legacy .form-control {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #6b6f82;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .form-control-lg {
+  padding: 0.5rem 1rem;
+  font-size: 1.25rem;
+  border-radius: 0.3rem;
+}
+.pcs-legacy textarea.form-control { height: auto; }
+.pcs-legacy select.form-control { height: calc(2.45rem + 2px); }
+
+/* ---- BS4 modal subset (the #add-payment modal markup) ----
+ * payment.php renders the modal markup inline; it stays hidden until
+ * the Bootstrap-4 `data-toggle="modal"` JS shows it (vendor JS is
+ * staged globally — the modal opens 1:1). Reproduce the BS4 default
+ * hidden state + chrome so the markup is present + styled identically. */
+.pcs-legacy .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: 0;
+}
+.pcs-legacy .modal-dialog {
+  position: relative;
+  width: auto;
+  margin: 0.5rem;
+  pointer-events: none;
+}
+@media (min-width: 576px) {
+  .pcs-legacy .modal-dialog {
+    max-width: 500px;
+    margin: 1.75rem auto;
+  }
+}
+.pcs-legacy .modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  background-color: #fff;
+  background-clip: padding-box;
+  border-radius: 0.3rem;
+  outline: 0;
+}
+.pcs-legacy .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #ECEFF5;
+}
+.pcs-legacy .modal-body {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+.pcs-legacy .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem;
+  border-top: 1px solid #ECEFF5;
+}
+.pcs-legacy .modal-footer > * { margin: 0.25rem; }
+.pcs-legacy .close {
+  float: right;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  opacity: 0.5;
+  background: transparent;
+  border: 0;
+}
+/* style.css — the modal "header-from" theme variant payment.php uses */
+.pcs-legacy .header-from { background-color: #fff; }
+
+/* ---- Theme: gradient + typography (assets/css/style.css) ---- */
+/* payment.php inline <style> L238-241 — the bg-main red gradient */
+.pcs-legacy .bg-main {
+  background: linear-gradient(to right, #cc3333, #f15a24);
+  color: #fff;
+}
+/* style.css — the solid red danger block (the gate messages) */
+.pcs-legacy .bg-danger {
+  background-color: #E9091F !important;
+  color: #fff;
+}
+/* style.css — font-size helpers */
+.pcs-legacy .font-11   { font-size: 11px; }
+.pcs-legacy .font-12   { font-size: 12px; }
+.pcs-legacy .font-14   { font-size: 14px; }
+.pcs-legacy .font-30   { font-size: 30px; }
+.pcs-legacy .font-3rem { font-size: 3rem; }
+/* style.css — colour helpers */
+.pcs-legacy .text-danger { color: #ff4961 !important; }
+.pcs-legacy .text-info   { color: #1e9ff2 !important; }
+.pcs-legacy .text-primary { color: #5a8dee !important; }
+.pcs-legacy .text-black-1 { color: #464855; }
+.pcs-legacy .text-color-main { color: #E9091F; }
+.pcs-legacy .font-normal { font-weight: 400; }
+/* `warning` is the legacy Bootstrap text colour used on the wallet <h3> */
+.pcs-legacy .warning { color: #FF9149; }
+/* style.css L1008 — the Pacred logo on the wallet card */
+.pcs-legacy .logo-wallet { max-width: 60px; }
+
+/* style.css L298-302 — the wallet balance card outline (in the modal) */
+.pcs-legacy .border-wallet {
+  border: 3px solid #e03400;
+  border-radius: 2rem;
+  box-shadow: 0 2px 18px 1px rgb(50 60 60 / 30%);
+}
+/* style.css L536-546 — the "เติมเงินเข้ากระเป๋า" pill button */
+.pcs-legacy .btn-add-wallet {
+  padding: 0.35em 0.7em;
+  border-radius: 10rem;
+  display: inline-block;
+  text-align: center;
+  border: 0px solid #fff;
+  border-image-source: linear-gradient(45deg, #cc3333, #f15a24);
+  border-image-slice: 1;
+  background: linear-gradient(to right, #cc3333, #f15a24);
+  color: #fff;
+}
+
+/* the gold progress bar under the wallet balance
+ * (core/colors/palette-gradient.css) */
+.pcs-legacy .bg-gradient-x-warning {
+  background-image: linear-gradient(to right, #ff7216 0%, #ffb07c 100%);
+  background-repeat: repeat-x;
+}
+
+/* heading reset so the legacy <h2>/<h3>/<h4>/<h5> match the theme,
+ * not Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h2 { font-size: 2rem;    font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy b  { font-weight: 700; }
+.pcs-legacy a  { color: inherit; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+/* payment.php inline <style> L232-234 — verbatim */
+.pcs-legacy p { margin-bottom: 0rem; }
+/* payment.php inline <style> L229-231 — verbatim */
+.pcs-legacy .text-center p.btn { margin-bottom: 0.2rem !important; }
+/* payment.php inline <style> L235-237 — verbatim */
+.pcs-legacy .max-w { max-width: 220px; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy payment.php layout depends on images being
+ * inline (the logo sits beside the balance in the modal's .media
+ * object). Restore the legacy/browser-default inline rendering. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+/* fa / la — FontAwesome + Line-Awesome glyphs are referenced inline.
+ * FontAwesome 5.9.0 loads from CDN in the (protected) layout; the
+ * Line-Awesome `la` font is not bundled in this scope — reserve the
+ * inline box so the layout holds either way. */
+.pcs-legacy .fa,
+.pcs-legacy .fas,
+.pcs-legacy .la,
+.pcs-legacy .ft-plus { display: inline-block; }
+
+/* custom.css L113-115 — the desktop content-body right padding (the
+ * legacy fixed sidebar gutter) */
+.pcs-legacy .content-body.pr110 { padding-right: 100px; }
+
+/* ===== Responsive breakpoints — verbatim from the legacy
+ * stylesheets. ===== */
+
+/* custom.css L304/L318 — content-body padding drops on small screens */
+@media (max-width: 992px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 15px; }
+}

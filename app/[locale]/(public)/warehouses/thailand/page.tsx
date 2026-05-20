@@ -58,7 +58,15 @@ const HIGHLIGHTS = [
   },
 ];
 
-const PHOTOS = [1, 2, 3, 4];
+const PHOTOS: { src: string }[] = [
+  { src: "/images/warehousethai118/1.png" },
+  { src: "/images/warehousethai118/2.png" },
+  { src: "/images/warehousethai118/3.png" },
+  { src: "/images/warehousethai118/4.png" },
+  { src: "/images/aboutus/warehouse_01.jpg" },
+  { src: "/images/aboutus/warehouse_02.jpg" },
+  { src: "/images/aboutus/warehouse_03.jpg" },
+];
 
 export default async function Page({
   params,
@@ -206,21 +214,24 @@ export default async function Page({
                 <span className="text-primary-600"> โกดังจริง</span>
               </h3>
 
-              <div className="mt-4 md:mt-5 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
-                {PHOTOS.map((n) => (
+              {/* Horizontal-scroll gallery — mobile 2 rows, desktop 1 row.
+                  `grid-flow-col` packs items column-first so cards wrap into
+                  the row grid before overflowing horizontally. */}
+              <div className="mt-4 md:mt-5 grid grid-rows-2 md:grid-rows-1 grid-flow-col auto-cols-[170px] md:auto-cols-[280px] gap-2.5 md:gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory -mx-3 md:-mx-4 px-3 md:px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {PHOTOS.map((photo, i) => (
                   <div
-                    key={n}
-                    className="group relative aspect-[4/3] rounded-xl md:rounded-2xl overflow-hidden border border-border shadow-[0_6px_18px_rgba(15,23,42,0.06)]"
+                    key={photo.src}
+                    className="group relative aspect-[4/3] rounded-xl md:rounded-2xl overflow-hidden border border-border shadow-[0_6px_18px_rgba(15,23,42,0.06)] snap-start"
                   >
                     <Image
-                      src={`/images/warehousethai118/${n}.png`}
-                      alt={`บรรยากาศโกดังไทย Pacred ${n}`}
+                      src={photo.src}
+                      alt={`บรรยากาศโกดังไทย Pacred ${i + 1}`}
                       fill
-                      sizes="(max-width: 768px) 50vw, 25vw"
+                      sizes="(max-width: 768px) 170px, 280px"
                       className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
                     />
                     <div className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 dark:bg-surface/90 backdrop-blur-sm text-[9.5px] md:text-[10px] font-black text-primary-600">
-                      WAREHOUSE {n}/4
+                      WAREHOUSE {i + 1}/{PHOTOS.length}
                     </div>
                   </div>
                 ))}

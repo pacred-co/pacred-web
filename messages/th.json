@@ -1267,6 +1267,18 @@
       "button": "ทักพลอยเลย",
       "role": "ชิปปิ้งเคลียร์สินค้าติดด่าน"
     },
+    "redar": {
+      "slogan": "ไกลแค่ไหนก็เหมือนใกล้ เมื่อการจัดส่งใส่ใจทุกรายละเอียด",
+      "alt": "เซลล์เรดาห์ Pacred",
+      "button": "ทักเรดาห์เลย",
+      "role": "Air Freight Specialist"
+    },
+    "pee": {
+      "slogan": "ไม่ใช่แค่การส่งของ แต่คือการส่งมอบความไว้วางใจ",
+      "alt": "เซลล์พี Pacred",
+      "button": "ทักพีเลย",
+      "role": "Payment Specialist"
+    },
     "lineCta": "ทักด่วน LINE"
   },
   "heroBanner": {
@@ -1388,7 +1400,7 @@
       "truckSub": "รถบรรทุกจีน–ไทย ส่งถึงหน้าบ้าน · แชร์รถประหยัด · เหมารถรวดเร็ว",
       "airTitle": "ขนส่งทางอากาศ <em>นำเข้า–ส่งออก</em>",
       "airSub": "Air Freight ด่วน จากจีน ญี่ปุ่น และทั่วโลก · คำนวณ Chargeable Weight",
-      "customsTitle": "บริการ <em>ชิปปิ้ง เคลียร์ภาษี</em><mbr></mbr> <nowrap><em>รถ</em> เรือ แอร์</nowrap>",
+      "customsTitle": "<nowrap><em>ชิปปิ้ง</em>เคลียร์ภาษี</nowrap><mbr></mbr><nowrap><em>เคลียร์</em>สินค้าติดด่าน</nowrap>",
       "customsSub": "<hl>เริ่มต้น</hl> <em><hl>2</hl>,800 บาท</em>",
       "sourcingTitle": "ฝากสั่งซื้อสินค้า <em>จากจีน</em>",
       "sourcingSub": "1688 · Taobao · Alibaba · Tmall — ฝากซื้อ ชำระ นำส่ง ครบในที่เดียว",
@@ -2417,7 +2429,7 @@
       "peopleAudit": "บันทึกการแก้ไขข้อมูล",
       "peoplePolicies": "กฏระเบียบบริษัท",
       "attendance": "รายงานการเข้าทำงาน",
-      "attendanceBoard": "แดชบอร์ดการเข้างาน",
+      "attendanceBoard": "บันทึกเวลาเข้างาน",
       "attendanceLeaves": "บันทึกการลางาน",
       "training": "การอบรม"
     },
@@ -2445,7 +2457,7 @@
     },
     "wallet": {
       "title": "กระเป๋าสตางค์",
-      "all": "เป๋าตังทั้งหมด",
+      "all": "กระเป๋าเงิน — รายการทั้งหมด",
       "payUser": "จ่ายแทนลูกค้า",
       "history": "ประวัติรายการ",
       "withdraw": "รายการถอนเงิน",
@@ -2455,7 +2467,7 @@
     "purchasing": {
       "title": "บริการฝากสั่งสินค้า",
       "search": "ค้นหาฝากสั่งซื้อ",
-      "all": "รายการสั่งสินค้าทั้งหมด",
+      "all": "ฝากสั่ง — รายการทั้งหมด",
       "pending": "รอดำเนินการ",
       "cart": "รถเข็นสินค้า",
       "cartAdd": "เพิ่มสินค้าในรถเข็น",
@@ -2476,7 +2488,7 @@
       "search": "ค้นหารายการนำเข้า",
       "searchMulti": "ค้นหาแบบหลายรายการ",
       "list": "รายการนำเข้า",
-      "listAll": "รายการทั้งหมด",
+      "listAll": "ฝากนำเข้า — รายการทั้งหมด",
       "listPrepare": "รายการเตรียมส่ง",
       "listCredit": "รายการนำเข้าเครดิต",
       "listAdd": "เพิ่มรายการนำเข้า",
@@ -2489,7 +2501,7 @@
     },
     "payment": {
       "title": "บริการฝากโอน/ชำระ",
-      "list": "รายการฝากชำระ",
+      "list": "ฝากโอนหยวน — รายการ",
       "add": "เพิ่มรายการ"
     },
     "report": {
@@ -2502,7 +2514,7 @@
       "salesRep": "ยอดพนักงานขาย",
       "allUser": "ยอดรวมทุกบริการ",
       "byCode": "ยอดขายรวมตามรหัส",
-      "driver": "รายงานคนขับรถ",
+      "driver": "งานขนส่งคนขับรถ",
       "web": "การเข้าถึงเว็บไซต์"
     },
     "accCargo": {
@@ -2512,7 +2524,7 @@
       "shop": "รายงานฝากสั่ง",
       "forwarder": "ฝากนำเข้าสินค้า",
       "invoice": "ใบแจ้งหนี้",
-      "receipt": "ประวัติใบเสร็จ",
+      "receipt": "ใบกำกับภาษี",
       "total": "ยอดทั้งหมด",
       "payment": "ฝากชำระ/โอนหยวน",
       "containerPay": "ค่าตู้สินค้า (tb_cnt)",
@@ -2525,9 +2537,9 @@
       "income": "รายรับ",
       "quotation": "ใบเสนอราคา",
       "invoice": "ใบแจ้งหนี้",
-      "receipt": "ใบเสร็จ",
+      "receipt": "ใบกำกับภาษี",
       "wht": "ภาษีหัก ณ ที่จ่าย",
-      "overview": "ภาพรวม",
+      "overview": "ภาพรวมรายงาน",
       "declarations": "ใบขนสินค้า"
     },
     "settingsCargo": {
@@ -2555,7 +2567,7 @@
       "comparison": "สมาชิกคิดค่าเทียบ",
       "pending": "รอ Approve",
       "recentlyActive": "Active ล่าสุด",
-      "transferRep": "โอนทีมขาย",
+      "transferRep": "ย้ายเซลล์ผู้ดูแลลูกค้า",
       "teamLeaders": "ทีมขาย"
     },
     "manageCustomers": {
@@ -2569,15 +2581,15 @@
       "title": "รายการเบิกเงิน",
       "titleSales": "รายการเบิกเงิน",
       "cargo": "PCS Cargo",
-      "freight": "PCS Freight",
+      "freight": "ค่าคอม Freight",
       "shopGoods": "เบิกเงินค่าสินค้า",
       "cntCost": "ค่าตู้สินค้า",
       "thaiFreight": "ค่าขนส่งไทย",
-      "agentCustomer": "รายงานลูกค้าตัวแทน",
-      "salesBonus": "โบนัสเซลล์",
-      "interpreterBonus": "โบนัสล่ามจีน",
+      "agentCustomer": "ประวัติยอดขายต่อลูกค้า",
+      "salesBonus": "ค่าคอมเซลล์",
+      "interpreterBonus": "ค่าคอมล่ามจีน",
       "driver": "พนักงานขับรถ",
-      "forwarderComm": "ค่าคอม Forwarder"
+      "forwarderComm": "ค่าคอมมิชชันฝากนำเข้า"
     },
     "learning": {
       "regulations": "กฏระเบียบและสัญญา",
@@ -2590,9 +2602,9 @@
     },
     "extension": {
       "juristicCheck": "เช็คข้อมูลลูกค้านิติบุคคล",
-      "thaiTransport": "เช็คข้อมูลขนส่งไทย",
+      "thaiTransport": "จัดการขนส่งไทย",
       "meetingRoom": "จองห้องประชุม",
-      "history": "ประวัติการทำรายการ",
+      "history": "บันทึกการทำรายการแอดมิน",
       "incidents": "แจ้งเตือนระบบ (Incident)"
     },
     "warehouse": {

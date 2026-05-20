@@ -25,7 +25,14 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
-const KINDS = ["freight", "customs_duty", "handling", "fuel", "storage", "trucking", "other"] as const;
+// Keep in lock-step with the CHECK enum in supabase/migrations
+// 0069_container_costs_disbursements.sql + 0089_disbursement_kind_extend.sql.
+// 'container_lease' added in 0089 to support the legacy ค่าตู้สินค้า
+// sidebar bucket (D1 Phase-B Wave-A audit fix).
+const KINDS = [
+  "freight", "customs_duty", "handling", "fuel", "storage",
+  "trucking", "container_lease", "other",
+] as const;
 export type DisbursementKind = (typeof KINDS)[number];
 
 const createSchema = z.object({

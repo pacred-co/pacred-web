@@ -13,7 +13,11 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "รอตรวจ", approved: "อนุมัติ", paid: "โอนแล้ว", rejected: "ปฏิเสธ",
 };
 
-export default async function AdminSalesPayoutsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function AdminSalesPayoutsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; kind?: string }>;
+}) {
   // W-1 (gap-admin H-1): page-level role gate. Exposes sales-rep bank
   // accounts + commission payouts via createAdminClient (RLS-bypass) —
   // accounting + sales_admin (super implicit).
@@ -21,6 +25,19 @@ export default async function AdminSalesPayoutsPage({ searchParams }: { searchPa
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // D1 Phase-B Wave-A audit
+  // (docs/research/sidebar-fidelity-audit/02-wallet-withdrawal-pattern.md
+  //  §3 + §5.1b): sidebar splits "เบิกค่าสินค้า ?kind=shop-goods" from
+  // "โบนัสเซลล์ (default)" but sales_payouts has NO kind column today —
+  // legacy ที่ฝั่ง PHP keeps these in two tables (tb_sale_*  for goods,
+  // tb_sales_commission for bonus). The audit defers the data-model
+  // split to Wave-B (adding a payout_kind column + backfill); meanwhile
+  // we surface the active filter as a chip so staff arriving from the
+  // sidebar see the URL state honoured (no silent drop). The query is
+  // un-filtered by kind today — when the column lands, swap the
+  // comment block below for a real .eq() filter.
+  // const KIND_TODO: only filter once payout_kind column is added (Wave-B).
 
   let q = admin.from("sales_payouts")
     .select(`
@@ -50,10 +67,18 @@ export default async function AdminSalesPayoutsPage({ searchParams }: { searchPa
     <main className="p-6 lg:p-8 space-y-5">
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">เบิกค่าคอม (sales payouts)</h1>
+        <h1 className="mt-1 text-2xl font-bold">
+          {sp.kind === "shop-goods" ? "เบิกเงินค่าสินค้า" : "เบิกค่าคอม (sales payouts)"}
+        </h1>
+        {sp.kind && (
+          <p className="mt-1 text-xs text-amber-700">
+            ⚠️ kind filter ({sp.kind}) ยังไม่ active — รอ payout_kind column (Wave-B). แสดงทุก payout ก่อน.
+          </p>
+        )}
       </div>
 
-      <FilterBar currentStatus={sp.status} />
+      <KindBar currentKind={sp.kind} currentStatus={sp.status} />
+      <FilterBar currentKind={sp.kind} currentStatus={sp.status} />
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
@@ -112,7 +137,21 @@ export default async function AdminSalesPayoutsPage({ searchParams }: { searchPa
   );
 }
 
-function FilterBar({ currentStatus }: { currentStatus?: string }) {
+function buildHref(kind?: string, status?: string) {
+  const u = new URLSearchParams();
+  if (kind)   u.set("kind", kind);
+  if (status) u.set("status", status);
+  const qs = u.toString();
+  return qs ? `/admin/sales-payouts?${qs}` : "/admin/sales-payouts";
+}
+
+function FilterBar({
+  currentKind,
+  currentStatus,
+}: {
+  currentKind?:   string;
+  currentStatus?: string;
+}) {
   const opts = [
     { v: undefined, l: "ทั้งหมด" },
     ...Object.entries(STATUS_LABEL).map(([v, l]) => ({ v, l })),
@@ -120,9 +159,41 @@ function FilterBar({ currentStatus }: { currentStatus?: string }) {
   return (
     <div className="flex flex-wrap gap-2">
       {opts.map((o) => (
-        <Link key={o.l} href={o.v ? `/admin/sales-payouts?status=${o.v}` : "/admin/sales-payouts"}
+        <Link key={o.l} href={buildHref(currentKind, o.v)}
           className={`rounded-full border px-3 py-1 text-xs ${
             (currentStatus ?? "") === (o.v ?? "") ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
+          }`}>
+          {o.l}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Kind chip strip — surfaces the active kind from the sidebar so staff
+ * see which queue they're in (เบิกค่าสินค้า vs โบนัสเซลล์). The query
+ * itself doesn't yet filter by kind — see the page-body comment about
+ * the deferred payout_kind column.
+ */
+function KindBar({
+  currentKind,
+  currentStatus,
+}: {
+  currentKind?:   string;
+  currentStatus?: string;
+}) {
+  const opts: Array<{ v: string | undefined; l: string }> = [
+    { v: undefined,     l: "ทุกประเภท" },
+    { v: "sales-bonus", l: "โบนัสเซลล์" },
+    { v: "shop-goods",  l: "เบิกเงินค่าสินค้า" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {opts.map((o) => (
+        <Link key={o.l} href={buildHref(o.v, currentStatus)}
+          className={`rounded-full border px-3 py-1 text-xs ${
+            (currentKind ?? "") === (o.v ?? "") ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"
           }`}>
           {o.l}
         </Link>

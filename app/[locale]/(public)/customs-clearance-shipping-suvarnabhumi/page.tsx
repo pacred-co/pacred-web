@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { RelatedTagsTabs } from "@/components/sections/related-tags-tabs";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
+import { GoogleAdsScript } from "@/components/analytics/google-ads-script";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
@@ -244,6 +245,9 @@ export default async function CustomsClearancePage({
 
   return (
     <>
+      {/* Google Ads conversion tag — fires on phone (tel:) + LINE clicks.
+          Scoped to this page only (paid traffic is routed here). */}
+      <GoogleAdsScript />
       <JsonLd
         data={[
           serviceSchema({
@@ -393,10 +397,10 @@ export default async function CustomsClearancePage({
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              CLEARANCE PRICING · ราคาเคลียร์ของตามด่าน
+              Shipping Clearance — เคลียร์ของติดด่าน
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ราคา <span className="text-primary-600">เคลียร์ของติดด่าน</span> ทุก Port · ชัดเจน ไม่บวกแอบ
+              บริการ <span className="text-primary-600">เคลียร์ของติดด่าน</span> Air · Sea · By Truck ทุก Port ราคาชัดเจน<span className="md:hidden"> ไม่บวกแอบ</span>
             </h2>
           </div>
 
@@ -423,31 +427,49 @@ export default async function CustomsClearancePage({
             <div className="mt-6 md:mt-8 flex overflow-x-auto gap-3 -mx-4 px-4 pb-3 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-2 lg:grid-cols-5 md:gap-4 md:overflow-visible md:mx-0 md:px-0 md:pb-0 md:snap-none">
               {STEPS.map((s, idx) => {
                 const isLast = idx === STEPS.length - 1;
+                // Step 02 ("ทักผ่าน LINE / Email / โทร") is the LINE-tap step —
+                // the whole card becomes a clickable CTA into the LINE OA.
+                const isLineCta = s.num === "02";
+                const cardClass = "relative rounded-2xl border border-border bg-gradient-to-br from-white to-primary-50/40 dark:from-surface dark:to-primary-900/10 p-4 md:p-5 shadow-[0_6px_16px_rgba(15,23,42,0.05)] hover:border-primary-300 hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(179,0,0,0.12)] transition-all duration-300";
+                const cardInner = (
+                  <>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[34px] md:text-[40px] font-black text-primary-200/70 dark:text-primary-900/70 leading-none tracking-tight">
+                        {s.num}
+                      </span>
+                      <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
+                        <Image
+                          src={s.icon}
+                          alt=""
+                          width={28}
+                          height={28}
+                          aria-hidden
+                          className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert"
+                        />
+                      </span>
+                    </div>
+                    <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
+                      {s.title}
+                    </h3>
+                    <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
+                      {s.desc}
+                    </p>
+                  </>
+                );
                 return (
                   <div key={s.num} className="relative shrink-0 w-[70%] sm:w-[260px] snap-start md:w-auto md:shrink">
-                    <div className="relative rounded-2xl border border-border bg-gradient-to-br from-white to-primary-50/40 dark:from-surface dark:to-primary-900/10 p-4 md:p-5 shadow-[0_6px_16px_rgba(15,23,42,0.05)] hover:border-primary-300 hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(179,0,0,0.12)] transition-all duration-300">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[34px] md:text-[40px] font-black text-primary-200/70 dark:text-primary-900/70 leading-none tracking-tight">
-                          {s.num}
-                        </span>
-                        <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
-                          <Image
-                            src={s.icon}
-                            alt=""
-                            width={28}
-                            height={28}
-                            aria-hidden
-                            className="w-5 h-5 md:w-6 md:h-6 object-contain brightness-0 invert"
-                          />
-                        </span>
-                      </div>
-                      <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
-                        {s.title}
-                      </h3>
-                      <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
-                        {s.desc}
-                      </p>
-                    </div>
+                    {isLineCta ? (
+                      <TrackedExternalLink
+                        href="/line"
+                        cta="line_step_card"
+                        surface="customs_clearance_steps"
+                        className={`${cardClass} block cursor-pointer hover:border-primary-400`}
+                      >
+                        {cardInner}
+                      </TrackedExternalLink>
+                    ) : (
+                      <div className={cardClass}>{cardInner}</div>
+                    )}
                     {!isLast && (
                       <span aria-hidden className="hidden lg:flex pointer-events-none absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-white dark:bg-surface border border-primary-200 dark:border-primary-900 items-center justify-center text-primary-500 shadow-[0_3px_8px_rgba(179,0,0,0.10)]">
                         <ArrowRight className="w-3 h-3" strokeWidth={3} />
@@ -501,7 +523,7 @@ export default async function CustomsClearancePage({
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>066-125-3007</span>
+                      <span>062-603-0456</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>ทักไลน์ <span className="font-black">@pacred</span></span>
@@ -638,7 +660,7 @@ export default async function CustomsClearancePage({
                     </p>
                     <p className="hidden md:flex mt-1.5 text-[18px] font-bold text-white/95 items-center gap-3 [text-shadow:0_1px_3px_rgba(1,58,20,0.45)]">
                       <Phone className="w-5 h-5 shrink-0" strokeWidth={2.6} />
-                      <span>066-125-3007</span>
+                      <span>062-603-0456</span>
                       <span className="text-white/60">·</span>
                       <MessageCircle className="w-5 h-5 shrink-0" strokeWidth={2.6} />
                       <span>ทักไลน์ <span className="font-black">@pacred</span></span>
@@ -952,18 +974,187 @@ export default async function CustomsClearancePage({
             </ul>
 
             {/* ── Closing confidence block — themed card with red gradient ── */}
-            <div className="mt-8 md:mt-12 relative overflow-hidden rounded-2xl border border-primary-200 dark:border-primary-900/40 bg-gradient-to-br from-primary-50/70 via-white to-white dark:from-primary-900/15 dark:via-surface dark:to-surface p-5 md:p-7 text-center shadow-[0_8px_24px_rgba(179,0,0,0.08)]">
-              <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-                <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
-                CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+            {/* Desktop — Trip.com-style FULL-BLEED banner with text overlay,
+                LINE-QR + 2 tel: badges. Outer is a plain <div> (can't nest <a>
+                inside <a>); the banner-wide LINE click target is layered via
+                an absolute <TrackedExternalLink> behind the text overlay. */}
+            <div className="hidden md:block relative w-screen left-1/2 -translate-x-1/2 mt-12 group">
+              <Image
+                src="/images/bannerdesktop/bannerbottom02.png"
+                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                width={3840}
+                height={800}
+                sizes="100vw"
+                className="w-full h-auto block"
+                quality={95}
+                unoptimized
+              />
+
+              {/* Banner-wide click target (LINE) — sits behind the overlay so
+                  clicks on the visual/empty areas still route to LINE. */}
+              <TrackedExternalLink
+                href="/line"
+                cta="line_banner"
+                surface="customs_clearance_bottom_banner"
+                className="absolute inset-0 z-0"
+                aria-label="ทักไลน์ Pacred Shipping"
+              >
+                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+              </TrackedExternalLink>
+
+              {/* Text overlay (z-10) — pointer-events:none lets clicks through
+                  to the banner-wide LINE target, except on the CTA row which
+                  re-enables them so QR + phone badges are tappable. */}
+              <div className="absolute inset-y-0 left-0 right-[45%] z-10 pointer-events-none flex flex-col justify-center px-[6%] lg:px-[8%] xl:px-[10%] py-2 lg:py-3">
+                <div className="inline-flex items-center gap-1.5 mb-1 lg:mb-1.5 text-yellow-300 text-[11px] lg:text-[13px] xl:text-[15px] font-black tracking-[0.08em] uppercase drop-shadow-[0_1px_4px_rgba(0,0,0,0.55)]">
+                  <ShieldCheck className="w-3.5 h-3.5 lg:w-4 lg:h-4 xl:w-5 xl:h-5" strokeWidth={2.6} />
+                  CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                </div>
+                <h3 className="text-[20px] lg:text-[30px] xl:text-[40px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_12px_rgba(0,0,0,0.6)]">
+                  มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                  <br />
+                  เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                </h3>
+                <p className="mt-1 lg:mt-1.5 text-[11.5px] lg:text-[13px] xl:text-[15px] leading-[1.4] font-medium text-white/95 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
+                  อยู่ข้างคุณทุกขั้นตอน —{" "}
+                  <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด</strong>
+                  {" "}ปรึกษาฟรี 24 ชม.
+                </p>
+
+                {/* CTA row — QR card + 2 phone tel: badges. Shifted slightly
+                    inward (ml-[X%]) to feel more centered, less wedged in
+                    the corner. pointer-events-auto re-enables clicks here. */}
+                <div className="mt-1.5 lg:mt-2 xl:mt-2.5 flex flex-wrap items-center gap-2 lg:gap-2.5 self-start ml-[5%] lg:ml-[8%] xl:ml-[11%] pointer-events-auto">
+                  {/* QR card */}
+                  <TrackedExternalLink
+                    href="/line"
+                    cta="line_qr_banner"
+                    surface="customs_clearance_bottom_banner_qr"
+                    className="inline-flex items-center gap-2 lg:gap-2.5 bg-white/95 backdrop-blur-sm rounded-lg lg:rounded-xl p-1.5 pr-2.5 lg:pr-3 shadow-[0_8px_20px_rgba(0,0,0,0.28)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.4)] hover:scale-[1.03] transition-all duration-200"
+                  >
+                    <Image
+                      src="/images/qr-line-oa.png"
+                      alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                      width={140}
+                      height={140}
+                      className="w-[60px] lg:w-[74px] xl:w-[88px] h-auto block rounded-sm"
+                    />
+                    <div className="leading-tight">
+                      <p className="text-[9px] lg:text-[10.5px] xl:text-[11.5px] font-bold text-primary-600 tracking-[0.05em] uppercase">
+                        สแกน QR
+                      </p>
+                      <p className="text-[12.5px] lg:text-[15px] xl:text-[17px] font-black text-primary-700 leading-tight">
+                        ทักไลน์ฟรี →
+                      </p>
+                    </div>
+                  </TrackedExternalLink>
+
+                  {/* Phones — stacked column right of the QR */}
+                  <div className="flex flex-col gap-1.5 lg:gap-2">
+                    <a
+                      href="tel:024213325"
+                      className="inline-flex items-center gap-1.5 lg:gap-2 bg-white/95 backdrop-blur-sm rounded-md lg:rounded-lg px-2.5 lg:px-3 py-1 lg:py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.22)] hover:scale-[1.04] hover:bg-white transition-all"
+                    >
+                      <Phone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-primary-600" strokeWidth={2.7} />
+                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">02-421-3325</span>
+                    </a>
+                    <a
+                      href="tel:0626030456"
+                      className="inline-flex items-center gap-1.5 lg:gap-2 bg-white/95 backdrop-blur-sm rounded-md lg:rounded-lg px-2.5 lg:px-3 py-1 lg:py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.22)] hover:scale-[1.04] hover:bg-white transition-all"
+                    >
+                      <Phone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-primary-600" strokeWidth={2.7} />
+                      <span className="text-[12px] lg:text-[14px] xl:text-[16px] font-black text-primary-700 tracking-tight">062-603-0456</span>
+                    </a>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-[20px] md:text-[28px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white">
-                มั่นใจ เคลียร์ของได้แน่<br className="md:hidden" />
-                {" "}เมื่อเลือก <span className="text-primary-600">Pacred Shipping</span>
-              </h3>
-              <p className="mt-2.5 md:mt-3 text-[14px] md:text-[16px] leading-[1.65] font-medium text-muted max-w-[820px] mx-auto">
-                อยู่ข้างคุณทุกขั้นตอน — <strong className="text-primary-600 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong> ของออกจากด่านเร็ว คุ้มค่าจริง ทักไลน์ปรึกษาฟรีตลอด 24 ชม. ทีมตอบไว
-              </p>
+            </div>
+
+            {/* Mobile — Trip-style full-bleed banner (1080×1080 source).
+                Same content as desktop but stacked: text → QR → phones, all
+                at the top. The banner crops to a 5:4 aspect (`aspect-[5/4]`)
+                so its bottom aligns roughly with the last phone number; the
+                photo crops bottom-up via `object-top` so พี่ป็อป + the phone
+                he's holding stay in frame. */}
+            <div className="md:hidden relative w-screen left-1/2 -translate-x-1/2 mt-8 group aspect-[6/5] overflow-hidden">
+              <Image
+                src="/images/bannermobile/pacredbannermobile01.png"
+                alt="Pacred Shipping — บริการครบ ราคาชัด คุยกับทีมง่าย ปรึกษาฟรีตลอด 24 ชม."
+                fill
+                sizes="100vw"
+                className="object-cover object-top"
+                quality={95}
+                unoptimized
+              />
+
+              {/* Banner-wide click target → LINE (sits below the overlays) */}
+              <TrackedExternalLink
+                href="/line"
+                cta="line_banner_mobile"
+                surface="customs_clearance_bottom_banner_mobile"
+                className="absolute inset-0 z-0"
+                aria-label="ทักไลน์ Pacred Shipping"
+              >
+                <span className="sr-only">ทักไลน์ Pacred Shipping</span>
+              </TrackedExternalLink>
+
+              {/* Single top-down overlay: text → QR square → 2 phones, all
+                  stacked vertically on the LEFT. Gradient runs left-to-right
+                  (not top-to-bottom) so the dark mask sits behind the text
+                  column only — พี่ป็อป on the right stays bright + clear. */}
+              <div className="absolute inset-0 z-10 pointer-events-none px-4 pt-3.5 pb-6 bg-gradient-to-r from-black/55 via-black/20 to-transparent flex flex-col items-start gap-2.5">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 mb-1.5 text-yellow-300 text-[11px] font-black tracking-[0.10em] uppercase drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
+                    <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
+                    CLEARANCE GUARANTEE · มั่นใจเคลียร์ได้ 100%
+                  </div>
+                  <h3 className="text-[24px] font-black text-white leading-[1.1] tracking-[-0.02em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+                    มั่นใจ เคลียร์ เร็ว ไว ไม่มีคำว่าทำไม่ได้
+                    <br />
+                    เลือก <span className="text-yellow-300">Pacred Shipping</span>
+                  </h3>
+                  <p className="mt-2 text-[13.5px] leading-[1.45] font-medium text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.7)]">
+                    อยู่ข้างคุณทุกขั้นตอน —{" "}
+                    <strong className="text-yellow-200 font-black">บริการครบ ราคาชัด คุยกับทีมง่าย</strong>
+                    {" "}ปรึกษาฟรี 24 ชม.
+                  </p>
+                </div>
+
+                {/* QR — just the white square (no side caption) — clickable */}
+                <TrackedExternalLink
+                  href="/line"
+                  cta="line_qr_banner_mobile"
+                  surface="customs_clearance_bottom_banner_mobile_qr"
+                  className="inline-block bg-white rounded-xl p-1.5 shadow-[0_8px_22px_rgba(0,0,0,0.32)] pointer-events-auto"
+                  aria-label="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                >
+                  <Image
+                    src="/images/qr-line-oa.png"
+                    alt="สแกน QR เพื่อทักไลน์ Pacred Shipping"
+                    width={140}
+                    height={140}
+                    className="w-[80px] h-auto block rounded-sm"
+                  />
+                </TrackedExternalLink>
+
+                {/* Phones — each on its own row, tap to call */}
+                <div className="flex flex-col gap-1.5 pointer-events-auto">
+                  <a
+                    href="tel:024213325"
+                    className="inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.28)]"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.8} />
+                    <span className="text-[13px] font-black text-primary-700 tracking-tight">02-421-3325</span>
+                  </a>
+                  <a
+                    href="tel:0626030456"
+                    className="inline-flex items-center gap-1.5 bg-white/95 backdrop-blur-sm rounded-lg px-2.5 py-1.5 shadow-[0_6px_16px_rgba(0,0,0,0.28)]"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.8} />
+                    <span className="text-[13px] font-black text-primary-700 tracking-tight">062-603-0456</span>
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </section>

@@ -272,9 +272,16 @@ export function AdminSidebar({
         {/* Avatar + adminID + role badge — legacy itop block */}
         <SidebarHeader adminLabel={adminLabel} roleKey={roleKey} t={t} />
 
-        {/* Per-role nested-accordion menu, grouped by legacy section headers */}
+        {/*
+          Per-role nested-accordion menu, grouped by the 6 fixed legacy
+          EN section headers (Cargo & Freight · Freight · Cargo · Settings ·
+          Learning · Extension — header text is rendered verbatim, no i18n,
+          per ภูม Q1 decision 2026-05-19 "EN ตาม legacy · zero retraining").
+          Empty sections (zero items) are suppressed so e.g. a Warehouse
+          worker never sees a Freight divider with nothing under it.
+        */}
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3">
-          {sections.map((sec, si) => (
+          {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (
                 <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-white/35 font-bold">

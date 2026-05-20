@@ -16,7 +16,8 @@ import { SearchBar } from "@/components/sections/search-bar";
 import { ContactSales } from "@/components/sections/contact-sales";
 import { ClearanceBanner } from "@/components/sections/clearance-banner";
 import { Footer } from "@/components/sections/footer";
-import { Link } from "@/i18n/navigation";
+import { Link, redirect } from "@/i18n/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   breadcrumbSchema,
@@ -91,6 +92,20 @@ export default async function CustomsPortDetailPage({
   const { locale, port: portSlug } = await params;
   const port = findCustomsPortBySlug(portSlug);
   if (!port) notFound();
+
+  // Auth gate — the customs detail page is only available to signed-in members.
+  // Guests are routed through `/login?next=<this-page>` so they land back here
+  // after authenticating (same pattern as `/start-order`).
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect({
+      href: { pathname: "/login", query: { next: `${PARENT_PATH}/${port.slug}` } },
+      locale,
+    });
+  }
 
   const typedLocale = (locale === "en" ? "en" : "th") as "th" | "en";
   const template = TEMPLATES[port.template];

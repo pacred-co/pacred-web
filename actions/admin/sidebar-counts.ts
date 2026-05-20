@@ -45,9 +45,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending,
       shopAwaitPay,
       shopOrdered,
+      shopNote,
       forwarderArrived,
       forwarderDelivery,
       forwarderCredit,
+      forwarderNote,
+      forwarderWhError,
       driverItems,
       yuanPending,
       salesPayout,
@@ -58,35 +61,60 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       refundsPending,
       bookingsPending,
       incidents,
+      cntUnpaid,
     ] = await Promise.all([
       // ── Wallet ────────────────────────────────────────────────
-      admin.from("wallet_transactions").select("id", { count: "exact", head: true })
-        .eq("kind", "deposit").eq("status", "pending"),
-      admin.from("wallet_transactions").select("id", { count: "exact", head: true })
-        .eq("kind", "withdraw").eq("status", "pending"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_wallet_hs.
+      // status='1' = รออนุมัติ; deposit = amount > 0, withdraw = amount < 0
+      // (legacy stores withdrawals as a negative amount in the same table).
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
+        .eq("status", "1").gt("amount", 0),
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
+        .eq("status", "1").lt("amount", 0),
       // ── ฝากสั่งสินค้า (shop orders) ─────────────────────────────
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "awaiting_payment"),
-      admin.from("service_orders").select("id", { count: "exact", head: true })
-        .eq("status", "ordered"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_header_order.
+      // hstatus 1=รอดำเนินการ · 2=รอชำระเงิน · 3=สั่งสินค้า.
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "1"),
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "2"),
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .eq("hstatus", "3"),
+      // หมายเหตุฝากสั่ง — legacy countNoteShop: tb_header_order WHERE
+      // hnote <> '' AND hstatus NOT IN (5,6). A daily-flow note queue staff
+      // actively work (ภูม sidebar-IA batch · re-pointed to tb_* for Wave-2).
+      admin.from("tb_header_order").select("id", { count: "exact", head: true })
+        .neq("hnote", "")
+        .not("hstatus", "in", "(5,6)"),
       // ── ฝากนำเข้า (forwarders) ──────────────────────────────────
-      // Legacy badgeMenu on ฝากนำเข้า ~ countForwarder6 area
-      // (ถึงไทย / รอชำระ). Pacred: arrived_thailand.
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "arrived_thailand"),
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "out_for_delivery"),
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "pending_payment").eq("credit_used", true),
-      // มอบงานคนขับ — forwarders ready to assign (out_for_delivery is
-      // the closest Pacred analogue of legacy status_driver_item).
-      admin.from("forwarders").select("id", { count: "exact", head: true })
-        .eq("status", "out_for_delivery"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_forwarder.
+      // fstatus 4=ถึงไทยแล้ว · 5=รอชำระเงิน · 6=เตรียมส่ง.
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "4"),
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "6"),
+      // forwarderCredit — fstatus=5 (รอชำระเงิน); credit-flag = paydeposit='1'.
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "5").eq("paydeposit", "1"),
+      // หมายเหตุนำเข้า — legacy countNote: tb_forwarder WHERE fnote <> ''
+      // AND fstatus <> 7 (ภูม sidebar-IA batch · re-pointed to tb_* for Wave-2).
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .not("fnote", "is", null)
+        .neq("fnote", "")
+        .neq("fstatus", "7"),
+      // ประวัติเข้าโกดังไทย error queue — legacy countErrorF4:
+      // tb_forwarder_import2 scan rows whose `fid` (the matched-parcel FK)
+      // is NULL — scanned at the TH warehouse but unpaired to a forwarder.
+      admin.from("tb_forwarder_import2").select("id", { count: "exact", head: true })
+        .is("fid", null),
+      // มอบงานคนขับ — forwarders ready to assign. Legacy fstatus=6 (เตรียมส่ง).
+      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+        .eq("fstatus", "6"),
       // ── ฝากโอน/ชำระ (yuan) ──────────────────────────────────────
-      admin.from("yuan_payments").select("id", { count: "exact", head: true })
-        .in("status", ["pending", "processing"]),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_payment.
+      // paystatus '1'=pending '2'=processing.
+      admin.from("tb_payment").select("id", { count: "exact", head: true })
+        .in("paystatus", ["1", "2"]),
       // ── เบิกเงิน (payouts) ──────────────────────────────────────
       admin.from("sales_payouts").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
@@ -94,12 +122,14 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       admin.from("commissions").select("id", { count: "exact", head: true })
         .eq("status", "pending"),
       // ── ลูกค้า ──────────────────────────────────────────────────
-      // สมาชิกนิติบุคคล รอตรวจ — legacy countComp (corporateStatus=1).
-      admin.from("profiles").select("id", { count: "exact", head: true })
-        .eq("account_type", "juristic").eq("status", "incomplete"),
-      // ลูกค้ารอ approve — accounts not yet activated.
-      admin.from("profiles").select("id", { count: "exact", head: true })
-        .eq("status", "incomplete"),
+      // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_users.
+      // สมาชิกนิติบุคคล รอตรวจ — usercompany='1' (นิติบุคคล) +
+      // useractive='0' (รอ approve) — legacy countComp.
+      admin.from("tb_users").select("id", { count: "exact", head: true })
+        .eq("usercompany", "1").eq("useractive", "0"),
+      // ลูกค้ารอ approve — useractive='0' = accounts not yet activated.
+      admin.from("tb_users").select("id", { count: "exact", head: true })
+        .eq("useractive", "0"),
       // ── ข้อความติดต่อ (lead funnel) ─────────────────────────────
       admin.from("contact_messages").select("id", { count: "exact", head: true })
         .eq("status", "new"),
@@ -112,11 +142,20 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       // ── Incident triage (IO-1) ──────────────────────────────────
       admin.from("platform_incidents").select("id", { count: "exact", head: true })
         .in("status", ["open", "acknowledged"]),
+      // ── ค่าตู้รออนุมัติ (tb_cnt — B-6 shipped) ─────────────────────
+      // cntstatus = '1' = รอจ่ายเงิน (legacy varchar(1)). Wave-1 audit
+      // (docs/research/wave-1-fidelity/audit-b6-container-payments.md)
+      // flagged this badge was hardcoded to 0 — lifted post-audit so
+      // the legacy 'cnt-hs ⑤' unpaid count actually lights.
+      admin.from("tb_cnt").select("id", { count: "exact", head: true })
+        .eq("cntstatus", "1"),
     ]);
 
     const wt = n(walletTopup);
     const ww = n(walletWithdraw);
-    const cnt = 0; // tb_cnt container-payment ledger not yet ported (Phase B §6)
+    // B-6 ledger shipped (Wave 1) — query the live tb_cnt table for the
+    // legacy "ค่าตู้รออนุมัติ" badge instead of the prior hardcoded 0.
+    const cnt = n(cntUnpaid);
     const shopPayout = n(salesPayout); // legacy เบิกค่าสินค้า — folds into sales_payouts
     const sp = n(salesPayout);
     const ip = n(interpreterPayout);
@@ -128,12 +167,12 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       shopPending:       n(shopPending),
       shopAwaitPay:      n(shopAwaitPay),
       shopOrdered:       n(shopOrdered),
-      shopNote:          0, // หมายเหตุฝากสั่ง — note queue not yet ported (Phase B §5)
+      shopNote:          n(shopNote),
       forwarderArrived:  n(forwarderArrived),
       forwarderDelivery: n(forwarderDelivery),
       forwarderCredit:   n(forwarderCredit),
-      forwarderNote:     0, // หมายเหตุนำเข้า — note queue not yet ported (Phase B §4)
-      forwarderWhError:  0, // ประวัติเข้าโกดังไทย error queue not yet ported
+      forwarderNote:     n(forwarderNote),
+      forwarderWhError:  n(forwarderWhError),
       driverItems:       n(driverItems),
       yuanPending:       n(yuanPending),
       cntDrawMoney:      cnt,

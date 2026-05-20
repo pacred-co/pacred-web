@@ -8,6 +8,16 @@ import { CsvButton } from "@/components/admin/csv-button";
 // but have NO completed import_payment wallet_transaction yet. Common
 // case: cash-on-delivery customer hasn't paid after delivery.
 
+// D1 Phase-B Wave-B5 (sidebar fidelity): sidebar routes 1 SLA queue here
+// — เครดิตเกินกำหนด. The page already segments stuck14 (>=14 days) as a
+// stat card; the real "overdue" threshold in legacy PHP is not yet
+// confirmed (could be per-customer credit_terms vs hardcoded N days), so
+// we surface ?sla= as a chip + banner and leave the query untouched
+// until the rule is decoded.
+const SLA_CFG: Record<string, string> = {
+  "overdue": "เครดิตเกินกำหนด",
+};
+
 type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null } | null;
 type FwdRaw = {
   id: string; f_no: string; status: string; total_price: number; transport_type: string;
@@ -33,10 +43,12 @@ function daysAgo(iso: string): number {
 export default async function CreditPendingReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
+  const slaKey   = sp.sla && SLA_CFG[sp.sla] ? sp.sla : undefined;
+  const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
   // 1) Fetch shipped+ forwarders in window
@@ -106,13 +118,35 @@ export default async function CreditPendingReport({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รีพอร์ตเฉพาะกิจ (V-B1)</p>
-          <h1 className="mt-1 text-2xl font-bold">เครดิตค้างนำเข้า</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            เครดิตค้างนำเข้า{slaLabel ? ` — ${slaLabel}` : ""}
+          </h1>
           <p className="mt-1 text-sm text-muted">
             ออกจากจีนแล้ว/ถึงไทย/ส่งแล้ว แต่ยังไม่มี wallet_tx <span className="font-mono">import_payment</span> completed
           </p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
+
+      {slaKey && slaLabel && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700">
+              SLA: {slaLabel}
+              <Link
+                href="/admin/reports/credit-pending"
+                className="rounded-full bg-white/70 px-1.5 leading-none hover:bg-white"
+                aria-label="ล้างตัวกรอง SLA"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ตัวกรอง SLA: {slaLabel} · กำลังพัฒนาเงื่อนไขกรอง · แสดงทุกรายการในขณะนี้
+          </div>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <AdminDateFilter dateFrom={sp.date_from} dateTo={sp.date_to} />

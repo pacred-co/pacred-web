@@ -43,6 +43,7 @@ type LegacyUser = {
   userlastname: string | null;
   userpass: string;
   userstatus: string;
+  usercompany: string | null;
 };
 
 /** A usable Thai E.164 number — `+66` then an 8- or 9-digit national number. */
@@ -67,7 +68,7 @@ async function findLegacyUser(identifier: string): Promise<LegacyUser | null> {
   // admin (service-role) client is mandatory for this read.
   let query = admin
     .from("tb_users")
-    .select("userid, usertel, useremail, username, userlastname, userpass, userstatus");
+    .select("userid, usertel, useremail, username, userlastname, userpass, userstatus, usercompany");
 
   const kind = detectIdentifier(id);
   if (kind === "email") {
@@ -165,17 +166,71 @@ export async function bridgeLegacyLogin(
   }
 
   const supabase = await createClient();
-  const { error: signInErr } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
     ...credential,
     password,
   });
-  if (signInErr) {
+  if (signInErr || !signInData.user) {
     logger.warn(SCOPE, "legacy bridge sign-in failed after provisioning", {
       userid: row.userid,
     });
     return { ok: false };
   }
 
+  // The migrated customer is authenticated — but the ~8,898 ported PCS
+  // customers have no `profiles` row, so `getCurrentUserWithProfile()` would
+  // return profile:null and the protected layout would bounce/crash. Create
+  // the profile row now (the auth.users row exists → the profiles.id→auth.users
+  // FK is satisfiable). Idempotent — a no-op on every repeat login.
+  // The ghost-customer fix per docs/research/wave-1-fidelity/_SYNTHESIS.md §8.
+  await ensureLegacyProfile(signInData.user.id, row);
+
   logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userid: row.userid });
   return { ok: true };
+}
+
+/**
+ * Create the `profiles` row for a migrated PCS customer on first legacy login.
+ * Keyed by the auth.users id, carrying the legacy `member_code`
+ * (= `tb_users.userid`) that every customer-side `tb_*` query joins on. Safe to
+ * call on every login — it no-ops once the row exists.
+ */
+async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise<void> {
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("member_code", row.userid)
+    .maybeSingle();
+
+  if (existing) {
+    // A different id = a pre-D1 `0067`-scaffold row already holds this
+    // member_code (~6 customers, _SYNTHESIS §8.3) — leave it, log for เดฟ.
+    if (existing.id !== authUserId) {
+      logger.warn(SCOPE, "member_code already bound to a different profile — manual reconcile", {
+        userid: row.userid,
+      });
+    }
+    return;
+  }
+
+  const e164 = normalizePhone(row.usertel ?? "");
+  const { error } = await admin.from("profiles").insert({
+    id: authUserId,
+    member_code: row.userid,
+    first_name: row.username,
+    last_name: row.userlastname,
+    phone: isUsablePhone(e164) ? e164 : row.usertel,
+    email: row.useremail,
+    account_type: row.usercompany === "1" ? "juristic" : "personal",
+    status: "active",
+  });
+  if (error) {
+    // Non-fatal — the customer is authenticated; never block login on this.
+    logger.warn(SCOPE, "legacy profile provisioning failed", {
+      userid: row.userid,
+      reason: error.message,
+    });
+  }
 }

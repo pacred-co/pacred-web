@@ -1267,6 +1267,18 @@
       "button": "Chat with Ploy",
       "role": "Customs clearance for stuck cargo"
     },
+    "redar": {
+      "slogan": "Wherever you are, attentive delivery brings it close",
+      "alt": "Sales — Redar (Pacred)",
+      "button": "Chat with Redar",
+      "role": "Air Freight Specialist"
+    },
+    "pee": {
+      "slogan": "Not just shipping — delivering trust at every step",
+      "alt": "Sales — Pee (Pacred)",
+      "button": "Chat with Pee",
+      "role": "Payment Specialist"
+    },
     "lineCta": "Quick chat on LINE"
   },
   "heroBanner": {
@@ -1388,7 +1400,7 @@
       "truckSub": "China–Thailand trucking, door-to-door · shared truck for value · full truck for speed",
       "airTitle": "Air freight — <em>import & export</em>",
       "airSub": "Express air freight from China, Japan and worldwide · Chargeable weight calculator",
-      "customsTitle": "<em>Shipping &amp; Tax Clearance</em><mbr></mbr> <nowrap><em>road</em>, sea &amp; air</nowrap>",
+      "customsTitle": "<nowrap><em>Shipping</em> &amp; Tax Clearance</nowrap><mbr></mbr><nowrap><em>Clear</em> Detained Goods</nowrap>",
       "customsSub": "<hl>Starting</hl> at ฿<em><hl>2</hl>,800</em>",
       "sourcingTitle": "Purchase agent service <em>from China</em>",
       "sourcingSub": "1688 · Taobao · Alibaba · Tmall — buy, pay, ship — all in one place",
@@ -2417,7 +2429,7 @@
       "peopleAudit": "Edit audit log",
       "peoplePolicies": "Company policies",
       "attendance": "Attendance report",
-      "attendanceBoard": "Attendance dashboard",
+      "attendanceBoard": "Clock-in records",
       "attendanceLeaves": "Leave records",
       "training": "Training"
     },
@@ -2445,7 +2457,7 @@
     },
     "wallet": {
       "title": "Wallet",
-      "all": "All wallets",
+      "all": "Wallet — all entries",
       "payUser": "Pay on behalf of customer",
       "history": "Transaction history",
       "withdraw": "Withdrawals",
@@ -2455,7 +2467,7 @@
     "purchasing": {
       "title": "Shop-order service",
       "search": "Search shop orders",
-      "all": "All shop orders",
+      "all": "Shop orders — all",
       "pending": "Pending",
       "cart": "Cart",
       "cartAdd": "Add item to cart",
@@ -2476,7 +2488,7 @@
       "search": "Search import items",
       "searchMulti": "Multi-item search",
       "list": "Import list",
-      "listAll": "All items",
+      "listAll": "Imports — all items",
       "listPrepare": "Prep-to-ship items",
       "listCredit": "Credit imports",
       "listAdd": "Add an import item",
@@ -2489,7 +2501,7 @@
     },
     "payment": {
       "title": "Yuan transfer service",
-      "list": "Transfer requests",
+      "list": "Yuan transfers — list",
       "add": "Add a request"
     },
     "report": {
@@ -2502,7 +2514,7 @@
       "salesRep": "Sales-rep totals",
       "allUser": "All-service totals",
       "byCode": "Totals by customer code",
-      "driver": "Driver report",
+      "driver": "Driver delivery jobs",
       "web": "Website access"
     },
     "accCargo": {
@@ -2512,7 +2524,7 @@
       "shop": "Shop-order report",
       "forwarder": "Import goods",
       "invoice": "Invoices",
-      "receipt": "Receipt history",
+      "receipt": "Tax invoices",
       "total": "All totals",
       "payment": "Yuan transfer / payment",
       "containerPay": "Container payments (tb_cnt)",
@@ -2525,9 +2537,9 @@
       "income": "Income",
       "quotation": "Quotations",
       "invoice": "Invoices",
-      "receipt": "Receipts",
+      "receipt": "Tax invoices",
       "wht": "Withholding tax",
-      "overview": "Overview",
+      "overview": "Reports overview",
       "declarations": "Customs declarations"
     },
     "settingsCargo": {
@@ -2555,7 +2567,7 @@
       "comparison": "Comparison-rate members",
       "pending": "Awaiting approval",
       "recentlyActive": "Recently active",
-      "transferRep": "Transfer sales team",
+      "transferRep": "Reassign account rep",
       "teamLeaders": "Sales team"
     },
     "manageCustomers": {
@@ -2569,13 +2581,13 @@
       "title": "Disbursement requests",
       "titleSales": "Disbursement requests",
       "cargo": "PCS Cargo",
-      "freight": "PCS Freight",
+      "freight": "Freight commission",
       "shopGoods": "Goods-cost disbursement",
       "cntCost": "Container cost",
       "thaiFreight": "TH freight cost",
-      "agentCustomer": "Agent-customer report",
-      "salesBonus": "Sales bonus",
-      "interpreterBonus": "Interpreter bonus",
+      "agentCustomer": "Per-customer sales history",
+      "salesBonus": "Sales commission",
+      "interpreterBonus": "Interpreter commission",
       "driver": "Drivers",
       "forwarderComm": "Forwarder commission"
     },
@@ -2590,9 +2602,9 @@
     },
     "extension": {
       "juristicCheck": "Juristic customer check",
-      "thaiTransport": "TH transport check",
+      "thaiTransport": "Manage TH carriers",
       "meetingRoom": "Meeting-room booking",
-      "history": "Transaction history",
+      "history": "Admin action log",
       "incidents": "System incidents"
     },
     "warehouse": {

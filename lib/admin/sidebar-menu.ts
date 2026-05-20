@@ -99,8 +99,8 @@ const blockWallet: MenuItem = {
     { labelKey: "wallet.all",      href: "/admin/wallet",           icon: "Wallet" },
     { labelKey: "wallet.payUser",  href: "/admin/wallet/pay-user",  icon: "HandCoins" },
     { labelKey: "wallet.history",  href: "/admin/wallet/history",   icon: "History" },
-    { labelKey: "wallet.withdraw", href: "/admin/withdrawals",      icon: "ArrowRightLeft", badge: "walletWithdraw" },
-    { labelKey: "wallet.deposit",  href: "/admin/wallet/deposit",   icon: "BadgeCheck",     badge: "walletTopup" },
+    { labelKey: "wallet.withdraw", href: "/admin/wallet?kind=withdraw&status=pending", icon: "ArrowRightLeft", badge: "walletWithdraw" },
+    { labelKey: "wallet.deposit",  href: "/admin/wallet?kind=deposit&status=pending",  icon: "BadgeCheck",     badge: "walletTopup" },
     { labelKey: "wallet.add",      href: "/admin/wallet/add",       icon: "Plus" },
   ],
 };
@@ -111,12 +111,12 @@ const blockPurchasing: MenuItem = {
   icon: "ShoppingCart",
   badge: "shopPending",
   children: [
-    { labelKey: "purchasing.search",   href: "/admin/service-orders/search", icon: "Search" },
+    { labelKey: "purchasing.search",   href: "/admin/service-orders",        icon: "Search" },
     { labelKey: "purchasing.all",      href: "/admin/service-orders",        icon: "Layers" },
     { labelKey: "purchasing.pending",  href: "/admin/service-orders?q=1",    icon: "Clock", badge: "shopPending" },
     { labelKey: "purchasing.cart",     href: "/admin/service-orders/cart",   icon: "ShoppingCart" },
     { labelKey: "purchasing.cartAdd",  href: "/admin/service-orders/cart/add", icon: "Plus" },
-    { labelKey: "purchasing.note",     href: "/admin/service-orders/notes",  icon: "MessageSquare", badge: "shopNote" },
+    { labelKey: "purchasing.note",     href: "/admin/service-orders?q=note", icon: "MessageSquare", badge: "shopNote" },
   ],
 };
 
@@ -159,7 +159,7 @@ const blockForwarder: MenuItem = {
   icon: "Package",
   badge: "forwarderArrived",
   children: [
-    { labelKey: "forwarder.search",      href: "/admin/forwarders/search",      icon: "Search" },
+    { labelKey: "forwarder.search",      href: "/admin/forwarders",             icon: "Search" },
     { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search", icon: "Search" },
     {
       labelKey: "forwarder.list",
@@ -172,7 +172,7 @@ const blockForwarder: MenuItem = {
         { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",  icon: "PackagePlus" },
       ],
     },
-    { labelKey: "forwarder.note",          href: "/admin/forwarders/notes",                icon: "MessageSquare", badge: "forwarderNote" },
+    { labelKey: "forwarder.note",          href: "/admin/forwarders?q=note",               icon: "MessageSquare", badge: "forwarderNote" },
     { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
     { labelKey: "forwarder.cntReport",     href: "/admin/containers",                      icon: "Truck" },
     { labelKey: "forwarder.whHistory",     href: "/admin/forwarders/warehouse-history",    icon: "PackageCheck", badge: "forwarderWhError" },
@@ -216,7 +216,7 @@ const blockAccCargo: MenuItem = {
   icon: "Landmark",
   children: [
     { labelKey: "accCargo.inOut",     href: "/admin/accounting",                  icon: "BarChart3" },
-    { labelKey: "accCargo.topup",     href: "/admin/wallet/deposit",              icon: "BarChart3" },
+    { labelKey: "accCargo.topup",     href: "/admin/wallet?kind=deposit&status=pending", icon: "BarChart3" },
     { labelKey: "accCargo.shop",      href: "/admin/reports/monthly-orders",      icon: "BarChart3" },
     {
       labelKey: "accCargo.forwarder",
@@ -229,7 +229,7 @@ const blockAccCargo: MenuItem = {
     },
     { labelKey: "accCargo.payment",   href: "/admin/yuan-payments",               icon: "BarChart3" },
     { labelKey: "accCargo.containerPay", href: "/admin/accounting/container-payments", icon: "Receipt" },
-    { labelKey: "accCargo.withdraw",  href: "/admin/withdrawals",                 icon: "BarChart3" },
+    { labelKey: "accCargo.withdraw",  href: "/admin/wallet?kind=withdraw&status=pending", icon: "BarChart3" },
     { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending" },
   ],
 };
@@ -262,8 +262,8 @@ const blockUserCargo: MenuItem = {
   icon: "Users",
   badge: "corporatePending",
   children: [
-    { labelKey: "userCargo.search",     href: "/admin/customers/search",      icon: "Search" },
-    { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
+    { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
+    { labelKey: "userCargo.all",        href: "/admin/customers",              icon: "Users" },
     { labelKey: "userCargo.general",    href: "/admin/customers?group=general", icon: "User" },
     { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
     { labelKey: "userCargo.svip",       href: "/admin/customers?group=svip",  icon: "User" },
@@ -352,8 +352,8 @@ const blockWithdrawalList: MenuItem = {
       badge: "withdrawalAll",
       children: [
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
-        { labelKey: "withdrawal.cntCost",     href: "/admin/accounting/disbursements?kind=container", icon: "Truck", badge: "cntDrawMoney" },
-        { labelKey: "withdrawal.thaiFreight", href: "/admin/accounting/disbursements?kind=thai-freight", icon: "Truck" },
+        { labelKey: "withdrawal.cntCost",     href: "/admin/accounting/disbursements?kind=container_lease", icon: "Truck", badge: "cntDrawMoney" },
+        { labelKey: "withdrawal.thaiFreight", href: "/admin/accounting/disbursements?kind=trucking", icon: "Truck" },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
         { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout" },
         { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout" },
@@ -497,13 +497,17 @@ const menuSuper: MenuSection[] = [
 /**
  * `ops` — Cargo CS / Purchasing operator (legacy Cargo/CSPurchasing).
  * Cargo operational queues, no finance back-office, no HR.
+ *
+ * R1 (sidebar IA restructure): regrouped to legacy section order
+ * (Cargo & Freight → Cargo → Learning → Extension). No item changes.
  */
 const menuOps: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
+  { header: "Cargo & Freight", items: [{ ...blockQA, labelKey: "qa.titleGroup" }] },
   {
     header: "Cargo",
     items: [
-      { labelKey: "userCargo.searchTop", href: "/admin/customers/search", icon: "Search" },
+      { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
       blockWallet,
       blockPurchasing,
       blockForwarder,
@@ -511,7 +515,6 @@ const menuOps: MenuSection[] = [
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3" },
     ],
   },
-  { header: "Cargo & Freight", items: [{ ...blockQA, labelKey: "qa.titleGroup" }] },
   learningSection,
   extensionSection([blockExtJuristic, blockExtThaiTransport, blockExtIncidents]),
 ];
@@ -536,19 +539,24 @@ const menuAccounting: MenuSection[] = [
 /**
  * `sales_admin` — Cargo Sales / Sales manager (legacy Cargo/SaleCargo).
  * Customer book + sell pipeline + sales commission, light finance.
+ *
+ * R1 (sidebar IA restructure): regrouped to legacy section headers
+ * (Cargo & Freight → Cargo → Learning → Extension). No item changes —
+ * `manageCustomers.titleSales` + `withdrawal.titleSales` are surfaced
+ * under Cargo & Freight because legacy `OOP/CargoAndFreight/menu-user.php`
+ * + `menu-withdrawal-list.php` live in that section.
  */
 const menuSalesAdmin: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    header: "Cargo",
+    header: "Cargo & Freight",
     items: [
-      blockWallet,
       {
         labelKey: "manageCustomers.titleSales",
         icon: "Users",
         badge: "corporatePending",
         children: [
-          { labelKey: "userCargo.search",     href: "/admin/customers/search",      icon: "Search" },
+          { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
           { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
           { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending" },
           { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
@@ -558,8 +566,6 @@ const menuSalesAdmin: MenuSection[] = [
           { labelKey: "userCargo.teamLeaders", href: "/admin/team-leaders",         icon: "Coins" },
         ],
       },
-      blockPurchasing,
-      { ...blockReport, labelKey: "report.titleSales" },
       {
         labelKey: "withdrawal.titleSales",
         icon: "Banknote",
@@ -569,6 +575,14 @@ const menuSalesAdmin: MenuSection[] = [
           { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt" },
         ],
       },
+    ],
+  },
+  {
+    header: "Cargo",
+    items: [
+      blockWallet,
+      blockPurchasing,
+      { ...blockReport, labelKey: "report.titleSales" },
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing" },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending" },
     ],
@@ -586,13 +600,13 @@ const menuWarehouse: MenuSection[] = [
   {
     header: "Cargo",
     items: [
-      { labelKey: "userCargo.searchTop", href: "/admin/customers/search", icon: "Search" },
+      { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
       {
         labelKey: "forwarder.titleWarehouse",
         icon: "Package",
         badge: "forwarderArrived",
         children: [
-          { labelKey: "forwarder.search",      href: "/admin/forwarders/search",            icon: "Search" },
+          { labelKey: "forwarder.search",      href: "/admin/forwarders",                   icon: "Search" },
           { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search",       icon: "Search" },
           { labelKey: "forwarder.listAll",     href: "/admin/forwarders",                   icon: "Package" },
           { labelKey: "forwarder.whHistory",   href: "/admin/forwarders/warehouse-history", icon: "PackageCheck", badge: "forwarderWhError" },

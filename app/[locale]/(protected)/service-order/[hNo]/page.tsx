@@ -4,17 +4,20 @@ import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getServiceOrder } from "@/actions/service-order";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { CancelButton } from "./cancel-button";
 import { PayFromWalletButton } from "./pay-from-wallet-button";
 import { DeliveryAckPanel } from "@/components/delivery-ack-panel";
 
+// Badge colours keyed by the legacy tb_header_order.hstatus code ('1'-'6').
 const STATUS_BADGE: Record<string, string> = {
-  pending:               "bg-gray-50 text-gray-700 border-gray-200",
-  awaiting_payment:      "bg-yellow-50 text-yellow-700 border-yellow-200",
-  ordered:               "bg-blue-50 text-blue-700 border-blue-200",
-  awaiting_chn_dispatch: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  completed:             "bg-green-50 text-green-700 border-green-200",
-  cancelled:             "bg-red-50 text-red-700 border-red-200",
+  "1": "bg-gray-50 text-gray-700 border-gray-200",     // รอดำเนินการ
+  "2": "bg-yellow-50 text-yellow-700 border-yellow-200", // รอชำระเงิน
+  "3": "bg-blue-50 text-blue-700 border-blue-200",     // สั่งสินค้า
+  "4": "bg-indigo-50 text-indigo-700 border-indigo-200", // รอร้านจีนจัดส่ง
+  "5": "bg-green-50 text-green-700 border-green-200",   // สำเร็จ
+  "6": "bg-red-50 text-red-700 border-red-200",        // ยกเลิก
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -28,23 +31,37 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   if (!res.ok || !res.data) notFound();
   const o = res.data;
 
-  const canCancel = o.status === "pending" || o.status === "awaiting_payment";
-  const canPrintReceipt = o.status !== "pending" && o.status !== "cancelled";   // mirrors PHP printShop.php (status 2..5 only)
+  // D1 Phase-B Wave 2: o.status is the legacy tb_header_order.hstatus code.
+  //   '1'=รอดำเนินการ '2'=รอชำระเงิน '3'=สั่งสินค้า '4'=รอร้านจีนจัดส่ง '5'=สำเร็จ '6'=ยกเลิก
+  const canCancel = o.status === "1" || o.status === "2";
+  const canPrintReceipt = o.status !== "1" && o.status !== "6";   // mirrors PHP printShop.php (status 2..5 only)
   const itemsTotalCny = o.items.reduce((s, it) => s + Number(it.price_cny) * Number(it.amount), 0);
 
-  // Fetch main wallet balance only when relevant (status='awaiting_payment')
+  // Fetch main wallet balance only when relevant (hstatus='2' รอชำระเงิน)
   // — closes the cargo loop by letting customer self-pay from balance.
+  // Reads the ported legacy tb_wallet (RLS-locked → admin client), keyed by
+  // the customer's member_code.
   let walletBalance: number | null = null;
-  if (o.status === "awaiting_payment") {
+  if (o.status === "2") {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: wallet } = await supabase
-        .from("wallet")
-        .select("balance")
-        .eq("profile_id", user.id)
-        .maybeSingle<{ balance: number }>();
-      walletBalance = Number(wallet?.balance ?? 0);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("member_code")
+        .eq("id", user.id)
+        .maybeSingle<{ member_code: string | null }>();
+      if (profile?.member_code) {
+        const admin = createAdminClient();
+        const { data: wallet } = await admin
+          .from("tb_wallet")
+          .select("wallettotal")
+          .eq("userid", profile.member_code)
+          .maybeSingle<{ wallettotal: number }>();
+        walletBalance = Number(wallet?.wallettotal ?? 0);
+      } else {
+        walletBalance = 0;
+      }
     }
   }
 
@@ -57,8 +74,8 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
             <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")} · {t("detailTitle")}</p>
             <div className="mt-1 flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold font-mono text-foreground">{o.h_no}</h1>
-              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[o.status]}`}>
-                {t(`status.${o.status}` as Parameters<typeof t>[0])}
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[o.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                {legacyOrderStatusThai(o.status)}
               </span>
             </div>
             <p className="text-xs text-muted mt-1">{t("createdAt", { date: new Date(o.created_at).toLocaleString("th-TH") })}</p>
@@ -74,15 +91,15 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                 rel="noopener noreferrer"
                 className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
               >
-                {o.status === "completed" ? "📄 ดาวน์โหลดใบเสร็จ PDF" : "📄 ดาวน์โหลดใบแจ้งหนี้ PDF"}
+                {o.status === "5" ? "📄 ดาวน์โหลดใบเสร็จ PDF" : "📄 ดาวน์โหลดใบแจ้งหนี้ PDF"}
               </a>
             )}
             {canCancel && <CancelButton hNo={o.h_no!} />}
           </div>
         </div>
 
-        {/* U4-3a: delivery acknowledgement — green confirm card when completed + not yet acked */}
-        {o.status === "completed" && !o.acknowledged_at && o.h_no && (
+        {/* U4-3a: delivery acknowledgement — green confirm card when completed (hstatus '5') + not yet acked */}
+        {o.status === "5" && !o.acknowledged_at && o.h_no && (
           <DeliveryAckPanel kind="service_order" refNo={o.h_no} />
         )}
 
@@ -103,8 +120,8 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
           </div>
         )}
 
-        {/* Payment-due banner */}
-        {o.status === "awaiting_payment" && o.payment_due_at && (
+        {/* Payment-due banner — legacy hstatus '2' = รอชำระเงิน */}
+        {o.status === "2" && o.payment_due_at && (
           <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-5 space-y-3">
             <div>
               <p className="text-sm font-semibold text-yellow-900">{t("payByBanner")}</p>

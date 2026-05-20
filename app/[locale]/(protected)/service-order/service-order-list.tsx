@@ -6,26 +6,27 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { ServiceOrderSummary } from "@/actions/service-order";
 import { cancelServiceOrder } from "@/actions/service-order";
+import { legacyOrderStatusThai } from "@/lib/legacy-status-map";
 import { Eye, Package, Printer, FileText, XCircle, Wallet } from "lucide-react";
 
-const STATUS_BADGE: Record<ServiceOrderSummary["status"], string> = {
-  pending:               "bg-gray-100 text-gray-700",
-  awaiting_payment:      "bg-amber-100 text-amber-700",
-  ordered:               "bg-blue-100 text-blue-700",
-  awaiting_chn_dispatch: "bg-indigo-100 text-indigo-700",
-  completed:             "bg-emerald-100 text-emerald-700",
-  cancelled:             "bg-red-100 text-red-700",
+// D1 Phase-B Wave 2: rows carry the legacy tb_header_order.hstatus code
+// ('1'-'6'). Badge colours + the per-row action gates are keyed by code.
+const STATUS_BADGE: Record<string, string> = {
+  "1": "bg-gray-100 text-gray-700",      // รอดำเนินการ
+  "2": "bg-amber-100 text-amber-700",    // รอชำระเงิน
+  "3": "bg-blue-100 text-blue-700",      // สั่งสินค้า
+  "4": "bg-indigo-100 text-indigo-700",  // รอร้านจีนจัดส่ง
+  "5": "bg-emerald-100 text-emerald-700", // สำเร็จ
+  "6": "bg-red-100 text-red-700",        // ยกเลิก
 };
 
 // Legacy shops.php gates the per-row actions on hStatus:
-//  - cancel  : hStatus <= 2  (pending | awaiting_payment)
-//  - pay     : hStatus == 2  (awaiting_payment)
-//  - receipt : hStatus == 5  (completed)
-//  - invoice : hStatus 2..5  (awaiting_payment .. completed)
-const CANCELLABLE: ServiceOrderSummary["status"][] = ["pending", "awaiting_payment"];
-const INVOICEABLE: ServiceOrderSummary["status"][] = [
-  "awaiting_payment", "ordered", "awaiting_chn_dispatch", "completed",
-];
+//  - cancel  : hStatus <= 2  ('1' รอดำเนินการ | '2' รอชำระเงิน)
+//  - pay     : hStatus == 2  ('2' รอชำระเงิน)
+//  - receipt : hStatus == 5  ('5' สำเร็จ)
+//  - invoice : hStatus 2..5  ('2' .. '5')
+const CANCELLABLE: ServiceOrderSummary["status"][] = ["1", "2"];
+const INVOICEABLE: ServiceOrderSummary["status"][] = ["2", "3", "4", "5"];
 
 export function ServiceOrderList({
   items,
@@ -42,9 +43,9 @@ export function ServiceOrderList({
   // Selection drives the legacy bulk-cancel button + the sticky pay bar.
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // Only awaiting_payment rows feed the sticky "ชำระเงิน" bar (legacy: hStatus==2).
+  // Only awaiting_payment rows feed the sticky "ชำระเงิน" bar (legacy: hStatus=='2').
   const payableRows = useMemo(
-    () => items.filter((o) => o.status === "awaiting_payment" && o.h_no),
+    () => items.filter((o) => o.status === "2" && o.h_no),
     [items],
   );
   const selectedPayable = useMemo(
@@ -146,7 +147,7 @@ export function ServiceOrderList({
             <tbody className="divide-y divide-border">
               {items.map((o) => {
                 const created = new Date(o.created_at);
-                const selectable = !!o.h_no && (o.status === "awaiting_payment" || CANCELLABLE.includes(o.status));
+                const selectable = !!o.h_no && (o.status === "2" || CANCELLABLE.includes(o.status));
                 return (
                   <tr key={o.id} className="hover:bg-surface-alt/30 transition-colors">
                     <td className="px-3 py-3 align-top">
@@ -170,7 +171,7 @@ export function ServiceOrderList({
                           {o.h_no}
                         </Link>
                       ) : <span className="text-muted">—</span>}
-                      {o.payment_due_at && o.status === "awaiting_payment" && (
+                      {o.payment_due_at && o.status === "2" && (
                         <div className="mt-1 text-[10px] text-amber-700">
                           {t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}
                         </div>
@@ -199,8 +200,8 @@ export function ServiceOrderList({
                       </div>
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[o.status]}`}>
-                        {t(`status.${o.status}` as Parameters<typeof t>[0])}
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_BADGE[o.status] ?? "bg-gray-100 text-gray-700"}`}>
+                        {legacyOrderStatusThai(o.status)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono align-top">
@@ -220,8 +221,8 @@ export function ServiceOrderList({
                           >
                             <Eye className="w-3.5 h-3.5" /> {tp("viewDetail")}
                           </Link>
-                          {/* Pay — legacy hStatus==2 */}
-                          {o.status === "awaiting_payment" && (
+                          {/* Pay — legacy hStatus=='2' */}
+                          {o.status === "2" && (
                             <Link
                               href={`/service-order/${o.h_no}`}
                               className="inline-flex items-center justify-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700 px-3 py-1 text-xs font-semibold hover:bg-cyan-100"
@@ -247,8 +248,8 @@ export function ServiceOrderList({
                               <XCircle className="w-3.5 h-3.5" /> {tp("cancelOrder")}
                             </button>
                           )}
-                          {/* Receipt — legacy hStatus==5 (completed) */}
-                          {o.status === "completed" && (
+                          {/* Receipt — legacy hStatus=='5' (สำเร็จ) */}
+                          {o.status === "5" && (
                             <Link
                               href={`/service-order/${o.h_no}/receipt`}
                               className="inline-flex items-center justify-center gap-1 rounded-full border border-primary-200 bg-primary-50 text-primary-700 px-3 py-1 text-xs font-semibold hover:bg-primary-100"

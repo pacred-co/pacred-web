@@ -8,6 +8,17 @@ import { CsvButton } from "@/components/admin/csv-button";
 // in the pipeline before they hit `closed`. Sorted by ETA (oldest ETA
 // first so overdue tubs surface).
 
+// D1 Phase-B Wave-B5 (sidebar fidelity): sidebar funnels 2 SLA queues here
+// — รอเข้าโกดังจีนเกิน 2 วัน · กำลังมาไทยเกินกำหนด. We surface ?sla= as
+// a chip + banner; the underlying status filter is unchanged. Real
+// threshold filters (e.g. status='packing' AND now - created_at > 2d for
+// chn-wh-2d, or eta < now for transit) wait until the legacy PHP
+// semantics are confirmed — a stub WHERE clause would misreport tubs.
+const SLA_CFG: Record<string, string> = {
+  "chn-wh-2d": "รอเข้าโกดังจีนเกิน 2 วัน",
+  "transit":   "กำลังมาไทยเกินกำหนด",
+};
+
 type Row = {
   id: string; code: string | null; transport_mode: string | null;
   origin: string | null; destination: string | null; status: string;
@@ -42,10 +53,12 @@ function daysUntil(iso: string | null): number | null {
 export default async function ContainersAwaitingThReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
 }) {
   await requireAdmin(["super", "ops", "warehouse", "accounting"]);
   const sp = await searchParams;
+  const slaKey   = sp.sla && SLA_CFG[sp.sla] ? sp.sla : undefined;
+  const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
   let q = admin
@@ -122,11 +135,33 @@ export default async function ContainersAwaitingThReport({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รีพอร์ตเฉพาะกิจ (V-B1)</p>
-          <h1 className="mt-1 text-2xl font-bold">ตู้คอนเทนเนอร์รอเข้าโกดังไทย</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            ตู้คอนเทนเนอร์รอเข้าโกดังไทย{slaLabel ? ` — ${slaLabel}` : ""}
+          </h1>
           <p className="mt-1 text-sm text-muted">ตู้ที่ยังไม่ปิดงาน (packing → sealed → in_transit → arrived → unloading) — ETA เก่าสุดบนสุด</p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
+
+      {slaKey && slaLabel && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs text-primary-700">
+              SLA: {slaLabel}
+              <Link
+                href="/admin/reports/containers-awaiting-th"
+                className="rounded-full bg-white/70 px-1.5 leading-none hover:bg-white"
+                aria-label="ล้างตัวกรอง SLA"
+              >
+                ×
+              </Link>
+            </span>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            ตัวกรอง SLA: {slaLabel} · กำลังพัฒนาเงื่อนไขกรอง · แสดงทุกรายการในขณะนี้
+          </div>
+        </>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <AdminDateFilter dateFrom={sp.date_from} dateTo={sp.date_to} />
