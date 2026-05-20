@@ -2,7 +2,49 @@
 
 ---
 
-# 🚨 2026-05-19 EVENING — DIRECTION SHIFT (read FIRST)
+# 🚨 2026-05-20 EVENING — PHASE 1 PUSH (read FIRST · supersedes 2026-05-19 below)
+
+ภูม ran a 12-hour Phase 1 push tonight. 8 commits land on `Poom-pacred`
+(`b584c22..90c1dbe` + this save-point commit). Customers tapping in from
+running ads — the sprint is "rip the band-aid before they hit the rough edges".
+
+**🔥 Env change:** Pacred is now **Supabase prod only** —
+`https://yzljakczhwrpbxflnmco.supabase.co` (ก๊อต took dev project for
+other work · Pro plan upgraded). `.env.local` updated locally (gitignored
+so backup at `.env.local.dev-backup-2026-05-20`). **Resume on a new
+machine → manually update `NEXT_PUBLIC_SUPABASE_URL` +
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` per the save-point doc.**
+
+**📦 What landed today:** Wave 1 (faithful port of `report-cnt.php` +
+11-button audit menu + 9 audit queues + spine list tombstoned) · Wave 2
+(8 barcode routes faithful-ported · gateway routing · `tb_cnt` cnt-payment
+flow · 3 audit queues wired with `tb_header_order` + 41-ZIP free-shipping
+list · 8 spine scan routes deleted) · Wave 3 (Quagga2 installed ·
+DataTables-Responsive added · iOS auto-zoom fixed on register · 4 audits
+landed: fidelity / mobile / pcs-complete-analysis / pcs-admin-roles /
+pcs-business-flow). Spine retirement migration `0090` written but DEFERRED
+(14 cargo_* consumers still need cleanup · Wave 4).
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-20-night.md`](docs/research/poom-save-point-2026-05-20-night.md) — the canonical resume doc (env-change steps · 8-commit summary · open questions · resume commands)
+2. 📋 [`docs/audit/pcs-master-synthesis-2026-05-20.md`](docs/audit/pcs-master-synthesis-2026-05-20.md) — P0/P1/P2 action list from 5 audits (6 P0 items remain · ~14-21 ชม)
+3. 🛠 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — Option A locked · Wave 2 done · Wave 3 partial · Wave 4 backlog
+4. 🧰 [`docs/audit/fidelity-2026-05-20.md`](docs/audit/fidelity-2026-05-20.md) — element-by-element diff of 7 admin screens vs legacy
+
+**🚨 Top P0 for next session:** rewrite `/admin/forwarders` to read
+`tb_forwarder` (currently reads the REBUILT `forwarders` table — staff
+will read wrong status to customers). 4-6 ชม.
+
+**Critical discovery — newrealdatapcs:** ภูม pointed at
+`C:\Users\Admin\Downloads\newrealdatapcs\` as พี่เดฟ's "real latest"
+PCS Cargo update. The PHP code there is BYTE-IDENTICAL to our existing
+snapshot (16,184 files · 0 hash diffs). The real value = พี่เดฟ's 5
+markdown analysis docs at `N'POOM - PCS LEARNNING/` (6,826L combined),
+which we've digested into the 4 audits above.
+
+---
+
+# 🚨 2026-05-19 EVENING — DIRECTION SHIFT
 
 The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
 sidebar-fidelity work shipped this morning) to a **literal 1:1 transcription**

@@ -76,6 +76,29 @@ PHP barcode flow is at `member/pcs-admin/barcode-*.php` reading
 barcode flow over and absorb the spine's scan helpers, or (c) keep it
 as a Pacred-extension internal tool? Flagging for review.
 
+### 🟢 2026-05-20 EVENING — Wave 1/2/3 + audits + env switch (8 commits)
+
+ภูม ran a 12-hour Phase 1 push. Cumulative state as of `90c1dbe`:
+
+**Shipped:**
+- Wave 1: `/admin/report-cnt` faithful port + `<TopMenuReport>` 11-button menu + 9 audit-queue stubs + spine list tombstone (`967f2dc`)
+- Wave 2: 8 barcode routes (cargo + driver) + gateway routing + cnt-payment server action + cnt-hs history + 3 audit queues wired (NoteShop→tb_header_order · NotShipFree×2 with 41-ZIP list) + 8 spine scan routes deleted (`ffdad6c`)
+- Wave 3 mobile P0: DataTables-Responsive + iOS auto-zoom + Quagga2 install (`81f80b1`)
+- Schema bundle `supabase/bundle/prod-fresh.sql` (891 KB · 117 legacy tables verified)
+- Env switch: dev (pprrlabgebrnocthwdmg) → prod (yzljakczhwrpbxflnmco) · publishable-key format · service_role JWT kept per ภูม
+- 4 audit docs: fidelity-2026-05-20 · mobile-verify-2026-05-20 · pcs-complete-analysis · pcs-admin-roles · pcs-business-flow · pcs-master-synthesis (P0/P1/P2 list)
+- พี่เดฟ's "real latest" pcscargo source = byte-identical (16,184 PHP · 0 hash diffs). Value = the 5 markdown analyses in `N'POOM - PCS LEARNNING/`.
+
+**Wave 4 backlog (per master-synthesis):** 6 P0 items remain · ~14-21 ชม
+1. `/admin/forwarders` rewrite → read tb_forwarder (currently reads rebuilt `forwarders`) — most-used screen, biggest operational risk · 4-6 ชม
+2. QA module rebuild (tombstoned currently) · 6-8 ชม
+3. Forwarder 10%-over-preview re-confirm gate (surprise-billing risk) · 2-3 ชม
+4. driver role phase-unlock (sidebar invisible) · 30 นาที
+5. qa role enum add (no QA login without super) · 1 ชม
+6. sales_admin vs sales clarify · 30 นาที (or already settled by Q3 agent tonight)
+
+**Wave 3D unfinished:** 14 of 19 cargo_* consumers still reference retired tables · `lib/warehouse/*` helpers undeleted · migration `0090` DROP commented. Prerequisite before applying 0090 to prod.
+
 ### ✅ 2026-05-20 ค่ำ — DECISION: Option A (พี่เดฟ confirmed · ภูม locked)
 
 **Decision:** **Option A — Retire spine wholesale + port legacy `barcode-*.php`

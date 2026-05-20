@@ -104,14 +104,32 @@ function Icon({ name, active }: { name?: string; active: boolean }) {
 }
 
 // ── Role badge label (legacy nameAdminType + dept/section). ────────────
+// 2026-05-20 ค่ำ — extended to cover the 8 new roles added by migration
+// 0091 (sales + qa + 13 freight_*). i18n keys under `role.*` are added
+// in messages/th.json + en.json by Agent ZZ in the same wave.
 const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   super:       "role.super",
   ops:         "role.ops",
   accounting:  "role.accounting",
   sales_admin: "role.salesAdmin",
+  sales:       "role.sales",
+  qa:          "role.qa",
   warehouse:   "role.warehouse",
   driver:      "role.driver",
   interpreter: "role.interpreter",
+  freight_sales_manager:    "role.freightSalesManager",
+  freight_sales:            "role.freightSales",
+  freight_export_manager:   "role.freightExportManager",
+  freight_export_cs:        "role.freightExportCs",
+  freight_export_doc:       "role.freightExportDoc",
+  freight_export_clearance: "role.freightExportClearance",
+  freight_clearance_both:   "role.freightClearanceBoth",
+  freight_export_messenger: "role.freightExportMessenger",
+  freight_import_manager:   "role.freightImportManager",
+  freight_import_cs:        "role.freightImportCs",
+  freight_import_doc:       "role.freightImportDoc",
+  freight_import_clearance: "role.freightImportClearance",
+  freight_import_messenger: "role.freightImportMessenger",
 };
 
 /** Does any descendant href match the current path? Used to auto-open. */

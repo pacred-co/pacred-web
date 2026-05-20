@@ -652,8 +652,17 @@ const menuWarehouse: MenuSection[] = [
 ];
 
 /**
- * `driver` — Cargo Driver (legacy Cargo/Warehouse/Driver.php).
- * The shortest menu — just the driver's own delivery jobs.
+ * `driver` — Cargo Driver (legacy Cargo/Warehouse/Driver.php · doc lines
+ * 1005-1034).
+ *
+ * 2026-05-20 ค่ำ (Agent ZZ · per audit CF-1 + ภูม brief): un-phase-gated the
+ * three driver leaves. Previously every item was tagged `phase: 2/4` which —
+ * combined with the "Phase 2+ = super only" rule — meant a real driver
+ * login saw an EMPTY menu (only Dashboard + Learning + Extension chrome,
+ * nothing operational). Drivers now see their daily essentials by default.
+ *
+ * Note: the driver UI behind these URLs is still being built; the routes
+ * themselves may render placeholder content. Visibility is correct now.
  */
 const menuDriver: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
@@ -662,11 +671,327 @@ const menuDriver: MenuSection[] = [
     // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
     header: "Cargo & Freight",
     items: [
-      // Phase 2 — driver-runs sales-only side not yet live (super-only).
-      { labelKey: "driver.toDeliver", href: "/admin/driver-runs",        icon: "Truck", badge: "driverItems", phase: 2 },
-      { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck",                  phase: 2 },
-      // Phase 4 — barcode toolbox per 2026-05-20 brief.
-      { labelKey: "driver.barcode",   href: "/admin/barcode/driver",     icon: "Barcode",                     phase: 4 },
+      // Phase 1 — operational driver items (CF-1 fix · ZZ 2026-05-20 ค่ำ).
+      { labelKey: "driver.toDeliver", href: "/admin/driver-runs",             icon: "Truck", badge: "driverItems" },
+      { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck"                       },
+      { labelKey: "driver.barcode",   href: "/admin/barcode/driver",          icon: "Barcode"                     },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/**
+ * `sales` — Cargo Sales **Staff** (legacy Cargo/SaleCargo/Sales.php ·
+ * doc lines 792-870 · role #30). Agent ZZ 2026-05-20 ค่ำ.
+ *
+ * DISTINCT from `sales_admin` (= Cargo Sales **Manager** #29, lines 780-788)
+ * which inherits this menu PLUS approval rights. The Staff tier sees the
+ * operational customer + wallet + purchasing + forwarder + payment + report
+ * menu but NOT the per-account-allowlist marketing settings (notify / popup)
+ * — which the legacy file gates to `admin_mew / admin_fogus` only (doc line
+ * 852, currently not modelled in Pacred — flagged for พี่เดฟ in the plan doc).
+ *
+ * Shape mirrors `menuSalesAdmin` with two trims:
+ *   - DROPS the `bookings` + `broadcasts` Pacred-extension items (those
+ *     remain Manager-tier · `sales_admin`).
+ *   - DROPS the `userCargo.transferRep` + `userCargo.teamLeaders` leaves
+ *     (Manager-tier approval / configuration).
+ */
+const menuSales: MenuSection[] = [
+  { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
+  {
+    header: "Cargo & Freight",
+    items: [
+      {
+        labelKey: "manageCustomers.titleSales",
+        icon: "Users",
+        badge: "corporatePending",
+        children: [
+          { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
+          { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
+          { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
+          { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
+          { labelKey: "userCargo.recentlyActive", href: "/admin/customers/recently-active", icon: "Activity" },
+        ],
+      },
+      {
+        labelKey: "withdrawal.titleSales",
+        icon: "Banknote",
+        badge: "salesPayout",
+        children: [
+          { labelKey: "withdrawal.salesBonus", href: "/admin/sales-payouts", icon: "BadgePercent", badge: "salesPayout", phase: 2 },
+        ],
+      },
+      itemWalletAll,
+      itemPurchasingAll,
+      { ...itemReportsAll, labelKey: "report.titleSales" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtJuristic, blockExtIncidents]),
+];
+
+/**
+ * `qa` — QA & QC staff (legacy doc role #5, lines 358-382). Agent ZZ
+ * 2026-05-20 ค่ำ · audit CF-2 fix.
+ *
+ * Before this role existed, the 12 SLA-breach queues (`itemQAAll` → `/admin/qa`)
+ * plus the sales-rep transfer tool (`/admin/customers/transfer-rep`) were
+ * visible to `super` only — meaning a real QA staffer had to be granted
+ * `super` (over-privileged: HR, accounting, settings). This menu carves
+ * out the minimum QA workspace.
+ *
+ * The 12 SLA-breach sub-queues continue to live inside the `/admin/qa` hub's
+ * page top-menubar (per ภูม brief 2026-05-20 ค่ำ — Pacred-is-one-company
+ * consolidation); the sidebar surface stays one leaf.
+ */
+const menuQa: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Cargo & Freight",
+    items: [
+      // QA hub (12 SLA-breach queues live in this page's top-menubar) —
+      // un-phase-gated for the `qa` role specifically. `itemQAAll` keeps
+      // `phase: 2` for non-QA roles via the menu file precedence.
+      { labelKey: "qa.title", href: "/admin/qa", icon: "ShieldAlert" },
+      // Sales-rep reassignment tool (doc line 230 + 1295).
+      { labelKey: "userCargo.transferRep", href: "/admin/customers/transfer-rep", icon: "ArrowRightLeft" },
+      // Read-only customer search — QA needs to look up a customer to investigate.
+      { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+// ════════════════════════════════════════════════════════════════
+// FREIGHT ROLE MENUS — stubs per doc CompanyType 2 (roles #16-28)
+// ════════════════════════════════════════════════════════════════
+// Per ภูม "ห้ามเดา" rule + audit CF-5: the legacy doc enumerates Freight
+// role NAMES + section headers ONLY — never the per-role sidebar item
+// trees ("[Full Export Operations Access]" placeholder for every role).
+// These stubs reproduce that exact spec:
+//   - Dashboard (always)
+//   - The doc's listed item(s) (only `จัดการลูกค้า Freight` + the
+//     `รายงานรับรู้รายได้ Freight` are concretely named in the doc for
+//     Manager-tier roles · everything else is the placeholder)
+//   - Learning + Extension chrome (faithful — every Freight role lists these)
+//
+// When พี่เดฟ extends the doc with the real per-role menu trees, each
+// stub becomes a hand-assembled MenuSection like menuWarehouse — DO NOT
+// guess items from the table at the top of the doc.
+
+/** Doc role #16 — Freight Sales Manager (lines 588-600).
+ *  Items concretely named in doc: จัดการลูกค้า Freight · รายงานรับรู้รายได้
+ *  Freight · ออกรายงาน. The deeper sub-items are NOT enumerated in the doc.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightSalesManager: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight",
+    items: [
+      { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
+      { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
+      { ...itemReportsAll, labelKey: "report.titleSales" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #17 — Freight Sales (lines 604-614). Doc enumerates ONE item:
+ *  จัดการลูกค้า Freight. No deeper sub-items.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightSales: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight",
+    items: [
+      { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #18 — Export Manager (lines 618-630). Doc lists section header
+ *  "Freight - Export" + `[Full Export Operations Access]` placeholder +
+ *  จัดการลูกค้า Freight + รายงานรับรู้รายได้ Freight.
+ *  TODO: needs menu enumeration · ask พี่เดฟ for the full Export ops tree. */
+const menuFreightExportManager: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Export",
+    items: [
+      // TODO: needs menu enumeration · doc says [Full Export Operations Access]
+      { labelKey: "freightExportOps.placeholder", href: "/admin/forwarders?segment=freight-export", icon: "Truck" },
+      { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
+      { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #19 — CS / Doc Export (lines 634-644). Doc shows `[Export CS
+ *  Operations]` placeholder · no items enumerated.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightExportCs: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Export",
+    items: [
+      // TODO: needs menu enumeration · doc says [Export CS Operations]
+      { labelKey: "freightExportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-export&role=cs", icon: "Truck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #20 — Shipping Doc Export (lines 648-658). Doc shows `[Export
+ *  Shipping Document Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightExportDoc: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Export",
+    items: [
+      // TODO: needs menu enumeration · doc says [Export Shipping Document Operations]
+      { labelKey: "freightExportOps.docPlaceholder", href: "/admin/forwarders?segment=freight-export&role=doc", icon: "FileText" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #21 — Shipping Clearance (Export) (lines 662-672). Doc shows
+ *  `[Export Clearance Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightExportClearance: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Export",
+    items: [
+      // TODO: needs menu enumeration · doc says [Export Clearance Operations]
+      { labelKey: "freightExportOps.clearancePlaceholder", href: "/admin/forwarders?segment=freight-export&role=clearance", icon: "ClipboardCheck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #22 — Shipping Clearance (Import & Export) (lines 676-686). Doc
+ *  shows section header "Freight" + `[Both Import & Export Clearance Access]`
+ *  placeholder. Single PHP file shared between dept=2 sec=7 and dept=3 sec=13.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightClearanceBoth: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight",
+    items: [
+      // TODO: needs menu enumeration · doc says [Both Import & Export Clearance Access]
+      { labelKey: "freightClearance.bothPlaceholder", href: "/admin/forwarders?segment=freight", icon: "ClipboardCheck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #23 — Messenger (Export Dept) (lines 690-700). Doc shows
+ *  `[Messenger/Delivery Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightExportMessenger: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Export",
+    items: [
+      // TODO: needs menu enumeration · doc says [Messenger/Delivery Operations]
+      { labelKey: "freightMessenger.exportPlaceholder", href: "/admin/forwarders?segment=freight-export&role=messenger", icon: "Truck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #24 — Import Manager (lines 704-716). Doc lists section header
+ *  "Freight - Import" + `[Full Import Operations Access]` + จัดการลูกค้า
+ *  Freight + รายงานรับรู้รายได้ Freight.
+ *  TODO: needs menu enumeration · ask พี่เดฟ for the full Import ops tree. */
+const menuFreightImportManager: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Import",
+    items: [
+      // TODO: needs menu enumeration · doc says [Full Import Operations Access]
+      { labelKey: "freightImportOps.placeholder", href: "/admin/forwarders?segment=freight-import", icon: "Truck" },
+      { labelKey: "manageCustomers.freightAll", href: "/admin/customers?segment=freight", icon: "Users" },
+      { labelKey: "accFreight.title",           href: "/admin/accounting/freight",        icon: "Landmark" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #25 — CS & Doc Import (lines 720-730). Doc shows `[Import CS
+ *  Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightImportCs: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Import",
+    items: [
+      // TODO: needs menu enumeration · doc says [Import CS Operations]
+      { labelKey: "freightImportOps.csPlaceholder", href: "/admin/forwarders?segment=freight-import&role=cs", icon: "Truck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #26 — Shipping Doc Import (lines 734-744). Doc shows `[Import
+ *  Shipping Document Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightImportDoc: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Import",
+    items: [
+      // TODO: needs menu enumeration · doc says [Import Shipping Document Operations]
+      { labelKey: "freightImportOps.docPlaceholder", href: "/admin/forwarders?segment=freight-import&role=doc", icon: "FileText" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #27 — Shipping Clearance (Import) (lines 748-758). Doc shows
+ *  `[Import Clearance Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightImportClearance: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Import",
+    items: [
+      // TODO: needs menu enumeration · doc says [Import Clearance Operations]
+      { labelKey: "freightImportOps.clearancePlaceholder", href: "/admin/forwarders?segment=freight-import&role=clearance", icon: "ClipboardCheck" },
+    ],
+  },
+  learningSection,
+  extensionSection([blockExtIncidents]),
+];
+
+/** Doc role #28 — Messenger (Import Dept) (lines 762-772). Doc shows
+ *  `[Messenger/Delivery Operations]` placeholder.
+ *  TODO: needs menu enumeration · ask พี่เดฟ. */
+const menuFreightImportMessenger: MenuSection[] = [
+  { header: "", items: [itemDashboard] },
+  {
+    header: "Freight - Import",
+    items: [
+      // TODO: needs menu enumeration · doc says [Messenger/Delivery Operations]
+      { labelKey: "freightMessenger.importPlaceholder", href: "/admin/forwarders?segment=freight-import&role=messenger", icon: "Truck" },
     ],
   },
   learningSection,
@@ -697,9 +1022,29 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
   ops:         menuOps,
   accounting:  menuAccounting,
   sales_admin: menuSalesAdmin,
+  sales:       menuSales,
+  qa:          menuQa,
   warehouse:   menuWarehouse,
   driver:      menuDriver,
   interpreter: menuInterpreter,
+  // Freight roles (#16-28) — STUB menus per Agent ZZ 2026-05-20 ค่ำ.
+  // Each is a faithful placeholder of the legacy doc's section header +
+  // the few items the doc concretely names. Deeper item trees are TODO
+  // (the legacy doc shows "[Full ... Access]" placeholders only). DO NOT
+  // guess items here — see TODO comments on each menu definition.
+  freight_sales_manager:    menuFreightSalesManager,
+  freight_sales:            menuFreightSales,
+  freight_export_manager:   menuFreightExportManager,
+  freight_export_cs:        menuFreightExportCs,
+  freight_export_doc:       menuFreightExportDoc,
+  freight_export_clearance: menuFreightExportClearance,
+  freight_clearance_both:   menuFreightClearanceBoth,
+  freight_export_messenger: menuFreightExportMessenger,
+  freight_import_manager:   menuFreightImportManager,
+  freight_import_cs:        menuFreightImportCs,
+  freight_import_doc:       menuFreightImportDoc,
+  freight_import_clearance: menuFreightImportClearance,
+  freight_import_messenger: menuFreightImportMessenger,
 };
 
 /**
@@ -713,9 +1058,37 @@ const ROLE_MENUS: Record<AdminRole, MenuSection[]> = {
  *                             by the fixed precedence below. This keeps each
  *                             staffer on a single coherent legacy tree
  *                             rather than a merged Frankenstein menu.
+ *
+ * 2026-05-20 ค่ำ (Agent ZZ): precedence extended to cover the 13 Freight
+ * roles + `sales` Staff + `qa`. Manager-tier roles rank above Staff-tier
+ * within the same dept (mirrors legacy approval-rights inheritance).
+ * Cargo roles outrank Freight roles ONLY because Cargo is the launched
+ * revenue path; this is a Pacred-internal tie-breaker, not a legacy rule.
  */
 const ROLE_PRECEDENCE: AdminRole[] = [
-  "super", "accounting", "ops", "sales_admin", "warehouse", "driver", "interpreter",
+  "super",
+  "accounting",
+  "qa",                          // QA outranks ops (audit reach)
+  "ops",
+  "sales_admin",                 // Cargo Sales Manager (#29) — has approval
+  "sales",                       // Cargo Sales Staff   (#30) — no approval
+  "warehouse",
+  "driver",
+  "interpreter",
+  // Freight Mgrs first, then Staff in dept order (Sales → Export → Import).
+  "freight_sales_manager",
+  "freight_sales",
+  "freight_export_manager",
+  "freight_export_cs",
+  "freight_export_doc",
+  "freight_export_clearance",
+  "freight_clearance_both",
+  "freight_export_messenger",
+  "freight_import_manager",
+  "freight_import_cs",
+  "freight_import_doc",
+  "freight_import_clearance",
+  "freight_import_messenger",
 ];
 
 export function menuForRoles(roles: AdminRole[]): MenuSection[] {
