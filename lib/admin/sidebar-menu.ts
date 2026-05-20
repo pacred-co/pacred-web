@@ -492,17 +492,24 @@ function extensionSection(items: MenuItem[]): MenuSection {
 const menuSuper: MenuSection[] = [
   { header: "", items: [itemDashboard] },
   {
+    // 2026-05-20 ค่ำ ภูม brief: Pacred = 1 company (not the legacy
+    // 3-company split). Merged the prior "Cargo & Freight" + "Cargo"
+    // sections into a single section. Cross-shared items (HR/QA/
+    // จัดการลูกค้า/รายการเบิกเงิน) come first, then operational
+    // (wallet/purchasing/forwarder/payment/report/accounting).
     header: "Cargo & Freight",
     items: [
       { labelKey: "hrGroup.title", icon: "UserCheck", children: [blockHrHumanResource, blockHrCorporateAssets] },
       { ...blockQA, labelKey: "qa.titleGroup" },
       blockUserCargoAndFreight,
       blockWithdrawalList,
+      blockWallet,
+      blockPurchasing,
+      blockForwarder,
+      blockPayment,
+      blockReport,
+      blockAccounting,
     ],
-  },
-  {
-    header: "Cargo",
-    items: [blockWallet, blockPurchasing, blockForwarder, blockPayment, blockReport, blockAccounting],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
@@ -518,10 +525,11 @@ const menuSuper: MenuSection[] = [
  */
 const menuOps: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
-  { header: "Cargo & Freight", items: [{ ...blockQA, labelKey: "qa.titleGroup" }] },
   {
-    header: "Cargo",
+    // Section merged 2026-05-20 ค่ำ (see menuSuper comment).
+    header: "Cargo & Freight",
     items: [
+      { ...blockQA, labelKey: "qa.titleGroup" },
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
       blockWallet,
       blockPurchasing,
@@ -541,10 +549,10 @@ const menuOps: MenuSection[] = [
  */
 const menuAccounting: MenuSection[] = [
   { header: "", items: [itemDashboard] },
-  { header: "Cargo & Freight", items: [blockWithdrawalList] },
   {
-    header: "Cargo",
-    items: [blockWallet, blockPayment, blockReport, blockAccounting],
+    // Section merged 2026-05-20 ค่ำ (see menuSuper comment).
+    header: "Cargo & Freight",
+    items: [blockWithdrawalList, blockWallet, blockPayment, blockReport, blockAccounting],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
@@ -594,11 +602,8 @@ const menuSalesAdmin: MenuSection[] = [
           { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt", phase: 2 },
         ],
       },
-    ],
-  },
-  {
-    header: "Cargo",
-    items: [
+      // — operational items below appended after the 2026-05-20 ค่ำ
+      //   section merge (previously a separate "Cargo" section).
       blockWallet,
       blockPurchasing,
       { ...blockReport, labelKey: "report.titleSales" },
@@ -618,7 +623,9 @@ const menuSalesAdmin: MenuSection[] = [
 const menuWarehouse: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    header: "Cargo",
+    // Section header standardised to "Cargo & Freight" everywhere
+    // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
+    header: "Cargo & Freight",
     items: [
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
       {
@@ -654,7 +661,9 @@ const menuWarehouse: MenuSection[] = [
 const menuDriver: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    header: "Cargo",
+    // Section header standardised to "Cargo & Freight" everywhere
+    // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
+    header: "Cargo & Freight",
     items: [
       // Phase 2 — driver-runs sales-only side not yet live (super-only).
       { labelKey: "driver.toDeliver", href: "/admin/driver-runs",        icon: "Truck", badge: "driverItems", phase: 2 },
@@ -674,7 +683,9 @@ const menuDriver: MenuSection[] = [
 const menuInterpreter: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    header: "Cargo",
+    // Section header standardised to "Cargo & Freight" everywhere
+    // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
+    header: "Cargo & Freight",
     items: [
       // Phase 2 — interpreter commissions sales-only side not yet live.
       { labelKey: "interpreter.commissions", href: "/admin/commissions", icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
