@@ -12,6 +12,7 @@ import {
   Sparkles,
   ArrowRight,
   Phone,
+  Lock,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
@@ -415,9 +416,20 @@ export function CustomsModeCards() {
                       : "bg-primary-600 text-white hover:bg-primary-700",
                   ].join(" ")}
                 >
+                  <Lock className="w-3.5 h-3.5" strokeWidth={2.6} />
                   ขอราคา {c.mode} ฟรี
                   <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
                 </Link>
+                {/* Membership notice — the detail page redirects guests to /login,
+                    so set expectations here. Pacred signup is free + ~30s. */}
+                <p
+                  className={[
+                    "text-center text-[10px] md:text-[10.5px] font-bold tracking-wide leading-snug",
+                    isFeatured ? "text-yellow-200/90" : "text-primary-700/85 dark:text-primary-300/85",
+                  ].join(" ")}
+                >
+                  สำหรับสมาชิก Pacred · สมัครฟรี ใช้เวลา 30 วินาที
+                </p>
                 <TrackedExternalLink
                   href={LINE_URL}
                   cta="line_consult"
