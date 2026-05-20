@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendSms } from "@/lib/sms/gateway";
 import { normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
+import { logger, redactPhone } from "@/lib/logger";
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
@@ -94,7 +95,18 @@ export async function requestOtp(
     phone,
     `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 5 นาที)`,
   );
-  if (!sms.ok) return { ok: false, error: "sms_failed" };
+  if (!sms.ok) {
+    // Capture the actual gateway reason — without this, every prod
+    // SMS failure looks identical to the user ("ส่ง SMS ไม่สำเร็จ")
+    // and we can't tell apart a credit-exhausted account from a
+    // rotated API key or a sender-ID block.
+    logger.error("otp", "sendSms failed for requestOtp", undefined, {
+      purpose,
+      phone:  redactPhone(phone),
+      reason: sms.error,
+    });
+    return { ok: false, error: "sms_failed" };
+  }
 
   const { error: insertErr } = await admin.from("otp_codes").insert({
     phone,
