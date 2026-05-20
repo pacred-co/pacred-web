@@ -59,11 +59,25 @@ export type BadgeKey =
 export type BadgeCounts = Partial<Record<BadgeKey, number>>;
 
 // ──────────────────────────────────────────────────────────────
+// Phase-gated visibility (2026-05-20 night owner brief).
+//   Phase 1 = LIVE for customers (visible to ALL admin staff).
+//   Phase 2 = soon-to-launch (QA queues · refunds · driver-runs ·
+//             commissions · learning · marketing) — `super` only.
+//   Phase 3 = deeper future (broadcasts/bookings internal ·
+//             container-costs · csv-imports · system tools) — `super` only.
+//   Phase 4 = way later (Extension toolbox · barcode · etc.) — `super` only.
+//   Default = Phase 1. Only TAG LEAVES with `phase` 2/3/4. A parent's
+//   effective phase is computed at filter time as MIN of its children.
+// ──────────────────────────────────────────────────────────────
+export type Phase = 1 | 2 | 3 | 4;
+
+// ──────────────────────────────────────────────────────────────
 // Menu item shape. Mirrors a legacy `<li class="nav-item">`.
 //  - `badge`    → live-count pill key (legacy badgeMenu($count))
 //  - `children` → nested accordion (legacy `<ul class="menu-content">`)
 //  - `icon`     → lucide icon name (resolved in the component)
 //  - `labelKey` → i18n key under the `pcsAdminNav` namespace
+//  - `phase`    → visibility gate (defaults to 1 = visible to all)
 // ──────────────────────────────────────────────────────────────
 export type MenuItem = {
   /** i18n key under namespace `pcsAdminNav` (e.g. "wallet.title"). */
@@ -74,6 +88,8 @@ export type MenuItem = {
   icon?: string;
   /** Live-count badge key — renders a red pill (legacy badgeMenu). */
   badge?: BadgeKey;
+  /** Phase gate. Undefined = 1 (visible to all). 2/3/4 = super only. */
+  phase?: Phase;
   /** Nested sub-menu (legacy nested <ul>). */
   children?: MenuItem[];
 };
@@ -120,7 +136,8 @@ const blockPurchasing: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested) */
+/** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
+ *  Phase 4: warehouse-only deeper-future toolbox (per 2026-05-20 owner brief). */
 const blockBarcode: MenuItem = {
   labelKey: "barcode.title",
   icon: "Barcode",
@@ -129,25 +146,25 @@ const blockBarcode: MenuItem = {
       labelKey: "barcode.searchImport",
       icon: "Search",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-all",   icon: "ScanLine" },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-all", icon: "Camera" },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-all",   icon: "ScanLine", phase: 4 },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-all", icon: "Camera",   phase: 4 },
       ],
     },
-    { labelKey: "barcode.recordIntake", href: "/admin/barcode?mode=intake", icon: "PackageCheck" },
+    { labelKey: "barcode.recordIntake", href: "/admin/barcode?mode=intake", icon: "PackageCheck", phase: 4 },
     {
       labelKey: "barcode.searchPrepare",
       icon: "Package",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-prepare",   icon: "ScanLine" },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-prepare", icon: "Camera" },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-prepare",   icon: "ScanLine", phase: 4 },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-prepare", icon: "Camera",   phase: 4 },
       ],
     },
     {
       labelKey: "barcode.scanFromBox",
       icon: "Printer",
       children: [
-        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-box",   icon: "ScanLine" },
-        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-box", icon: "Camera" },
+        { labelKey: "barcode.byScanner", href: "/admin/barcode?mode=scan-box",   icon: "ScanLine", phase: 4 },
+        { labelKey: "barcode.byCamera",  href: "/admin/barcode?mode=camera-box", icon: "Camera",   phase: 4 },
       ],
     },
   ],
@@ -173,10 +190,13 @@ const blockForwarder: MenuItem = {
       ],
     },
     { labelKey: "forwarder.note",          href: "/admin/forwarders/notes",                icon: "MessageSquare", badge: "forwarderNote" },
-    { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
+    // Phase 3 — container-cost-check is deeper-future admin tool (the brief
+    // lists "container-costs" as Phase 3).
+    { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator",   phase: 3 },
     { labelKey: "forwarder.cntReport",     href: "/admin/containers",                      icon: "Truck" },
     { labelKey: "forwarder.whHistory",     href: "/admin/forwarders/warehouse-history",    icon: "PackageCheck", badge: "forwarderWhError" },
-    { labelKey: "forwarder.assignDriver",  href: "/admin/drivers",                         icon: "Truck", badge: "driverItems" },
+    // Phase 2 — driver-runs not yet live to customers (sales-only side).
+    { labelKey: "forwarder.assignDriver",  href: "/admin/drivers",                         icon: "Truck",        badge: "driverItems", phase: 2 },
     { labelKey: "forwarder.combineBill",   href: "/admin/forwarders/combine-bill",         icon: "Printer" },
     blockBarcode,
   ],
@@ -204,8 +224,10 @@ const blockReport: MenuItem = {
     { labelKey: "report.salesRep",  href: "/admin/reports/sales-by-rep",    icon: "BarChart3" },
     { labelKey: "report.allUser",   href: "/admin/reports/user-sales-history", icon: "BarChart3" },
     { labelKey: "report.byCode",    href: "/admin/reports/hs-code-revenue", icon: "BarChart3" },
-    { labelKey: "report.driver",    href: "/admin/driver-runs",             icon: "Truck" },
-    { labelKey: "report.web",       href: "/admin/reports/system",          icon: "Activity" },
+    // Phase 2 — driver-runs sales-only side not yet live.
+    { labelKey: "report.driver",    href: "/admin/driver-runs",             icon: "Truck",    phase: 2 },
+    // Phase 3 — system-health / observability reports (Tier-2 deferred).
+    { labelKey: "report.web",       href: "/admin/reports/system",          icon: "Activity", phase: 3 },
   ],
 };
 
@@ -228,9 +250,11 @@ const blockAccCargo: MenuItem = {
       ],
     },
     { labelKey: "accCargo.payment",   href: "/admin/accounting/payment",          icon: "BarChart3" },
-    { labelKey: "accCargo.containerPay", href: "/admin/cnt-hs", icon: "Receipt" },
+    // Phase 3 — container-payments per 2026-05-20 owner brief (deeper-future).
+    { labelKey: "accCargo.containerPay", href: "/admin/cnt-hs", icon: "Receipt", phase: 3 },
     { labelKey: "accCargo.withdraw",  href: "/admin/accounting/withdraw",         icon: "BarChart3" },
-    { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending" },
+    // Phase 2 — refunds not yet live to customers.
+    { labelKey: "accCargo.refund",    href: "/admin/refunds",                     icon: "BarChart3", badge: "refundsPending", phase: 2 },
   ],
 };
 
@@ -273,23 +297,24 @@ const blockUserCargo: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-QAAndQC.php — 11 SLA-breach queues */
+/** legacy OOP/Cargo/menu-QAAndQC.php — 11 SLA-breach queues
+ *  Phase 2 — all SLA-breach queues are "soon-to-launch" per 2026-05-20 brief. */
 const blockQA: MenuItem = {
   labelKey: "qa.title",
   icon: "ShieldAlert",
   children: [
-    { labelKey: "qa.payShopOver1d",      href: "/admin/reports/pending-payments?sla=shop-1d",     icon: "AlertTriangle" },
-    { labelKey: "qa.payFwdOver2d",       href: "/admin/reports/pending-payments?sla=forwarder-2d", icon: "AlertTriangle" },
-    { labelKey: "qa.orderCancelled",     href: "/admin/reports/monthly-orders?sla=cancelled",     icon: "AlertTriangle" },
-    { labelKey: "qa.creditOverdue",      href: "/admin/reports/credit-pending?sla=overdue",       icon: "AlertTriangle" },
-    { labelKey: "qa.orderOver10min",     href: "/admin/reports/monthly-orders?sla=pending-10min", icon: "AlertTriangle" },
-    { labelKey: "qa.chnShopOver2d",      href: "/admin/reports/monthly-orders?sla=chn-dispatch-2d", icon: "AlertTriangle" },
-    { labelKey: "qa.chnWhOver2d",        href: "/admin/reports/containers-awaiting-th?sla=chn-wh-2d", icon: "AlertTriangle" },
-    { labelKey: "qa.transitOverdue",     href: "/admin/reports/containers-awaiting-th?sla=transit", icon: "AlertTriangle" },
-    { labelKey: "qa.ownerlessGoods",     href: "/admin/forwarders?q=ownerless",                   icon: "AlertTriangle" },
-    { labelKey: "qa.prepareOverdue",     href: "/admin/forwarders?q=prepare-overdue",             icon: "AlertTriangle" },
-    { labelKey: "qa.newClientNoContact", href: "/admin/customers/recently-active?sla=no-contact-2d", icon: "AlertTriangle" },
-    { labelKey: "qa.transferSalesRep",   href: "/admin/customers/transfer-rep",                   icon: "ArrowRightLeft" },
+    { labelKey: "qa.payShopOver1d",      href: "/admin/reports/pending-payments?sla=shop-1d",     icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.payFwdOver2d",       href: "/admin/reports/pending-payments?sla=forwarder-2d", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.orderCancelled",     href: "/admin/reports/monthly-orders?sla=cancelled",     icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.creditOverdue",      href: "/admin/reports/credit-pending?sla=overdue",       icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.orderOver10min",     href: "/admin/reports/monthly-orders?sla=pending-10min", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.chnShopOver2d",      href: "/admin/reports/monthly-orders?sla=chn-dispatch-2d", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.chnWhOver2d",        href: "/admin/reports/containers-awaiting-th?sla=chn-wh-2d", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.transitOverdue",     href: "/admin/reports/containers-awaiting-th?sla=transit", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.ownerlessGoods",     href: "/admin/forwarders?q=ownerless",                   icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.prepareOverdue",     href: "/admin/forwarders?q=prepare-overdue",             icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.newClientNoContact", href: "/admin/customers/recently-active?sla=no-contact-2d", icon: "AlertTriangle", phase: 2 },
+    { labelKey: "qa.transferSalesRep",   href: "/admin/customers/transfer-rep",                   icon: "ArrowRightLeft", phase: 2 },
   ],
 };
 
@@ -329,14 +354,15 @@ const blockHrHumanResource: MenuItem = {
   ],
 };
 
-/** legacy OOP/CargoAndFreight/menu-hr-manage-corporate-assets.php */
+/** legacy OOP/CargoAndFreight/menu-hr-manage-corporate-assets.php
+ *  Phase 2 — corporate-assets / inventory module not in Phase 1 essentials. */
 const blockHrCorporateAssets: MenuItem = {
   labelKey: "assets.title",
   icon: "Boxes",
   children: [
-    { labelKey: "assets.maintenance", href: "/admin/inventory?tab=maintenance", icon: "Wrench" },
-    { labelKey: "assets.purchasing",  href: "/admin/inventory?tab=purchasing",  icon: "ShoppingBag" },
-    { labelKey: "assets.stock",       href: "/admin/inventory",                 icon: "Boxes" },
+    { labelKey: "assets.maintenance", href: "/admin/inventory?tab=maintenance", icon: "Wrench",      phase: 2 },
+    { labelKey: "assets.purchasing",  href: "/admin/inventory?tab=purchasing",  icon: "ShoppingBag", phase: 2 },
+    { labelKey: "assets.stock",       href: "/admin/inventory",                 icon: "Boxes",       phase: 2 },
   ],
 };
 
@@ -352,15 +378,19 @@ const blockWithdrawalList: MenuItem = {
       badge: "withdrawalAll",
       children: [
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
-        { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney" },
-        { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th",  icon: "Truck" },
+        // Phase 3 — container-costs deeper-future per 2026-05-20 brief.
+        { labelKey: "withdrawal.cntCost",     href: "/admin/cnt-hs", icon: "Truck", badge: "cntDrawMoney", phase: 3 },
+        // Phase 2 — freight-th stub (no legacy source · still placeholder per brief).
+        { labelKey: "withdrawal.thaiFreight", href: "/admin/withdrawal/freight-th",  icon: "Truck", phase: 2 },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },
-        { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout" },
-        { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout" },
-        { labelKey: "withdrawal.driver",      href: "/admin/driver-runs",                    icon: "Truck" },
+        // Phase 2 — sales-only commissions / payouts (not live to customers).
+        { labelKey: "withdrawal.salesBonus",  href: "/admin/sales-payouts",                  icon: "BadgePercent", badge: "salesPayout",       phase: 2 },
+        { labelKey: "withdrawal.interpreterBonus", href: "/admin/commissions",               icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
+        { labelKey: "withdrawal.driver",      href: "/admin/driver-runs",                    icon: "Truck",                                     phase: 2 },
       ],
     },
-    { labelKey: "withdrawal.freight", href: "/admin/forwarder-sales", icon: "Banknote" },
+    // Phase 2 — Freight side withdrawal (forwarder-sales commissions, not live).
+    { labelKey: "withdrawal.freight", href: "/admin/forwarder-sales", icon: "Banknote", phase: 2 },
   ],
 };
 
@@ -398,45 +428,52 @@ const blockAccFreight: MenuItem = {
         { labelKey: "accFreight.overview",  href: "/admin/reports",              icon: "BarChart3" },
       ],
     },
-    { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck" },
+    // Phase 2 — customs declarations form (service #8) not yet live to customers.
+    { labelKey: "accFreight.declarations", href: "/admin/freight/declarations", icon: "ClipboardCheck", phase: 2 },
   ],
 };
 
 // ── Learning section blocks — legacy OOP/Learning/* ──────────────
+// Phase 2 — Learning hub per 2026-05-20 owner brief (soon-to-launch).
 const blockLearningRegulations: MenuItem = {
-  labelKey: "learning.regulations", href: "/admin/learning?topic=regulations", icon: "ScrollText",
+  labelKey: "learning.regulations", href: "/admin/learning?topic=regulations", icon: "ScrollText", phase: 2,
 };
 const blockLearningTraining: MenuItem = {
   labelKey: "learning.training",
   icon: "GraduationCap",
   children: [
-    { labelKey: "learning.businessPlan", href: "/admin/learning?topic=business-plan", icon: "FileText" },
-    { labelKey: "learning.culture",      href: "/admin/learning?topic=culture",       icon: "FileText" },
-    { labelKey: "learning.jobFlow",      href: "/admin/learning?topic=job-flow",      icon: "FileText" },
+    { labelKey: "learning.businessPlan", href: "/admin/learning?topic=business-plan", icon: "FileText", phase: 2 },
+    { labelKey: "learning.culture",      href: "/admin/learning?topic=culture",       icon: "FileText", phase: 2 },
+    { labelKey: "learning.jobFlow",      href: "/admin/learning?topic=job-flow",      icon: "FileText", phase: 2 },
   ],
 };
 const blockLearningNewsfeed: MenuItem = {
-  labelKey: "learning.newsfeed", href: "/admin/learning?topic=newsfeed", icon: "Newspaper",
+  labelKey: "learning.newsfeed", href: "/admin/learning?topic=newsfeed", icon: "Newspaper", phase: 2,
 };
 const blockLearningTos: MenuItem = {
-  labelKey: "learning.tos", href: "/admin/settings/tos-versions", icon: "FileText",
+  labelKey: "learning.tos", href: "/admin/settings/tos-versions", icon: "FileText", phase: 2,
 };
 
 // ── Extension section blocks — legacy OOP/Extension/* ────────────
+// Phase 4 — Extension toolbox per 2026-05-20 owner brief (way later).
+// Exception: `extension.history` (= /admin/audit) is Phase 1 because HR audit
+// is in the Phase 1 essentials list ("ระบบทำงานพนักงาน · audit · policies").
 const blockExtJuristic: MenuItem = {
-  labelKey: "extension.juristicCheck", href: "/admin/juristic-check", icon: "ClipboardCheck",
+  labelKey: "extension.juristicCheck", href: "/admin/juristic-check", icon: "ClipboardCheck", phase: 4,
 };
 const blockExtThaiTransport: MenuItem = {
-  labelKey: "extension.thaiTransport", href: "/admin/carriers", icon: "Truck",
+  labelKey: "extension.thaiTransport", href: "/admin/carriers", icon: "Truck", phase: 4,
 };
 const blockExtMeetingRoom: MenuItem = {
-  labelKey: "extension.meetingRoom", href: "/admin/hr/attendance?tab=meeting-room", icon: "CalendarCheck",
+  labelKey: "extension.meetingRoom", href: "/admin/hr/attendance?tab=meeting-room", icon: "CalendarCheck", phase: 4,
 };
 const blockExtHistory: MenuItem = {
+  // Phase 1 — HR audit is an explicit Phase 1 essential.
   labelKey: "extension.history", href: "/admin/audit", icon: "Save",
 };
 const blockExtIncidents: MenuItem = {
-  labelKey: "extension.incidents", href: "/admin/incidents", icon: "AlertTriangle", badge: "incidents",
+  // Phase 2 — incident triage aligns with QA queues (also Phase 2).
+  labelKey: "extension.incidents", href: "/admin/incidents", icon: "AlertTriangle", badge: "incidents", phase: 2,
 };
 
 // ── Dashboard item — legacy 3-way All/Freight/Cargo switch ───────
@@ -512,7 +549,8 @@ const menuOps: MenuSection[] = [
       blockPurchasing,
       blockForwarder,
       blockPayment,
-      { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3" },
+      // Phase 2 — driver-runs sales-only side not yet live.
+      { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
     ],
   },
   learningSection,
@@ -558,12 +596,15 @@ const menuSalesAdmin: MenuSection[] = [
         children: [
           { labelKey: "userCargo.search",     href: "/admin/customers?focus=search", icon: "Search" },
           { labelKey: "userCargo.all",        href: "/admin/customers",             icon: "Users" },
-          { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending" },
+          // Phase 2 — customer approval queue is QA-like, soon-to-launch.
+          { labelKey: "userCargo.pending",    href: "/admin/customers/pending",     icon: "Clock", badge: "customerPending", phase: 2 },
           { labelKey: "userCargo.vip",        href: "/admin/customers?group=vip",   icon: "User" },
           { labelKey: "userCargo.corporate",  href: "/admin/customers?group=corporate", icon: "Building2", badge: "corporatePending" },
           { labelKey: "userCargo.recentlyActive", href: "/admin/customers/recently-active", icon: "Activity" },
-          { labelKey: "userCargo.transferRep", href: "/admin/customers/transfer-rep", icon: "ArrowRightLeft" },
-          { labelKey: "userCargo.teamLeaders", href: "/admin/team-leaders",         icon: "Coins" },
+          // Phase 2 — sales-rep transfer is QA-like ops (already Phase 2 in blockQA).
+          { labelKey: "userCargo.transferRep", href: "/admin/customers/transfer-rep", icon: "ArrowRightLeft", phase: 2 },
+          // Phase 2 — team-leaders bonus tool aligns with sales-only commissions.
+          { labelKey: "userCargo.teamLeaders", href: "/admin/team-leaders",         icon: "Coins", phase: 2 },
         ],
       },
       {
@@ -571,8 +612,9 @@ const menuSalesAdmin: MenuSection[] = [
         icon: "Banknote",
         badge: "salesPayout",
         children: [
-          { labelKey: "withdrawal.salesBonus",   href: "/admin/sales-payouts",     icon: "BadgePercent", badge: "salesPayout" },
-          { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt" },
+          // Phase 2 — sales-only commissions / payouts (not live to customers).
+          { labelKey: "withdrawal.salesBonus",   href: "/admin/sales-payouts",     icon: "BadgePercent", badge: "salesPayout", phase: 2 },
+          { labelKey: "withdrawal.forwarderComm", href: "/admin/forwarder-sales",  icon: "Receipt", phase: 2 },
         ],
       },
     ],
@@ -583,8 +625,9 @@ const menuSalesAdmin: MenuSection[] = [
       blockWallet,
       blockPurchasing,
       { ...blockReport, labelKey: "report.titleSales" },
-      { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing" },
-      { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending" },
+      // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
+      { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
+      { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },
     ],
   },
   learningSection,
@@ -611,13 +654,15 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.listAll",     href: "/admin/forwarders",                   icon: "Package" },
           { labelKey: "forwarder.whHistory",   href: "/admin/forwarders/warehouse-history", icon: "PackageCheck", badge: "forwarderWhError" },
           { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?q=6",               icon: "Truck", badge: "forwarderDelivery" },
-          { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems" },
+          // Phase 2 — driver-runs sales-only side not yet live.
+          { labelKey: "forwarder.assignDriver", href: "/admin/drivers",                     icon: "Truck", badge: "driverItems", phase: 2 },
           { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
         ],
       },
       { labelKey: "warehouse.containers", href: "/admin/warehouse/containers", icon: "Package" },
-      { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",   icon: "ClipboardCheck" },
-      { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert" },
+      // Phase 2 — warehouse bulletin + QA inspection queues align with QA queues.
+      { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",       icon: "ClipboardCheck", phase: 2 },
+      { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert",    phase: 2 },
       blockBarcode,
     ],
   },
@@ -634,9 +679,11 @@ const menuDriver: MenuSection[] = [
   {
     header: "Cargo",
     items: [
-      { labelKey: "driver.toDeliver", href: "/admin/driver-runs",        icon: "Truck", badge: "driverItems" },
-      { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck" },
-      { labelKey: "driver.barcode",   href: "/admin/barcode/driver",     icon: "Barcode" },
+      // Phase 2 — driver-runs sales-only side not yet live (super-only).
+      { labelKey: "driver.toDeliver", href: "/admin/driver-runs",        icon: "Truck", badge: "driverItems", phase: 2 },
+      { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck",                  phase: 2 },
+      // Phase 4 — barcode toolbox per 2026-05-20 brief.
+      { labelKey: "driver.barcode",   href: "/admin/barcode/driver",     icon: "Barcode",                     phase: 4 },
     ],
   },
   learningSection,
@@ -652,7 +699,8 @@ const menuInterpreter: MenuSection[] = [
   {
     header: "Cargo",
     items: [
-      { labelKey: "interpreter.commissions", href: "/admin/commissions", icon: "BadgePercent", badge: "interpreterPayout" },
+      // Phase 2 — interpreter commissions sales-only side not yet live.
+      { labelKey: "interpreter.commissions", href: "/admin/commissions", icon: "BadgePercent", badge: "interpreterPayout", phase: 2 },
     ],
   },
   learningSection,

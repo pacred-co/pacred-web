@@ -39,6 +39,50 @@ import {
   menuForRoles, primaryRole, type BadgeCounts, type MenuItem, type MenuSection,
 } from "@/lib/admin/sidebar-menu";
 
+// ──────────────────────────────────────────────────────────────
+// Phase-gated visibility (2026-05-20 night owner brief).
+//
+// Tag rule (in `lib/admin/sidebar-menu.ts`):
+//   undefined / 1 = visible to all admin staff
+//   2 / 3 / 4     = visible to `super` only
+//
+// Parent items are NOT tagged — a parent's effective phase is the
+// MIN of its remaining (post-filter) children's phases. If every
+// child of a parent is filtered out, the parent is dropped too.
+//
+// This is purely a UI visibility filter; route-level enforcement is
+// the responsibility of `lib/admin/phase-access.ts` (`canAccessRoute`),
+// which the (admin) layout / per-page guards consume.
+// ──────────────────────────────────────────────────────────────
+function filterByPhase(items: MenuItem[], role: AdminRole | null): MenuItem[] {
+  if (role === "super") return items; // super sees everything
+  return items
+    .map((item): MenuItem | null => {
+      const hasOriginalChildren = !!item.children?.length;
+      const childrenFiltered = hasOriginalChildren
+        ? filterByPhase(item.children!, role)
+        : undefined;
+
+      // A parent's "effective phase" = MIN of its surviving children's phases.
+      // If the parent originally had children but ALL got filtered out, treat
+      // the parent as gone too (Infinity). For a true leaf (never had any
+      // children), default to its own phase or 1.
+      const effectivePhase = hasOriginalChildren
+        ? (childrenFiltered!.length === 0
+            ? Infinity
+            : Math.min(...childrenFiltered!.map((c) => c.phase ?? 1)))
+        : (item.phase ?? 1);
+
+      // An explicit `phase` on the item itself always wins. Otherwise the
+      // effective (child-derived for parents · 1-default for leaves) phase
+      // decides.
+      const myPhase = item.phase ?? effectivePhase;
+      if (myPhase > 1) return null;
+      return { ...item, children: childrenFiltered };
+    })
+    .filter((x): x is MenuItem => x !== null);
+}
+
 // ── Icon-name → component map. Menu items carry icon NAMES (strings) so
 //    `lib/admin/sidebar-menu.ts` stays a plain non-JSX module. ──────────
 const ICONS: Record<string, LucideIcon> = {
@@ -280,8 +324,14 @@ export function AdminSidebar({
   const [openMobile, setOpenMobile] = useState(false);
 
   // Per-role purpose-built menu — faithful to the legacy per-role .php.
-  const sections: MenuSection[] = menuForRoles(roles);
+  // After role-routing, apply the Phase-gate filter (2026-05-20 brief): items
+  // tagged `phase: 2/3/4` are hidden from everyone except `super`.
   const role = primaryRole(roles);
+  const rawSections: MenuSection[] = menuForRoles(roles);
+  const sections: MenuSection[] = rawSections.map((sec) => ({
+    ...sec,
+    items: filterByPhase(sec.items, role),
+  }));
   const roleKey = role ? ROLE_LABEL_KEY[role] : null;
 
   const closeMobile = () => setOpenMobile(false);

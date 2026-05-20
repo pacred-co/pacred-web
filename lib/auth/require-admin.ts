@@ -9,6 +9,19 @@
  *   - signed in, not an admin (or doesn't have any of the required roles)
  *                      → 404 (notFound)
  *   - admin            → returns user + their active roles
+ *
+ * Phase-gated visibility (2026-05-20 owner brief): this function gates on
+ * admin-vs-non-admin only. To also gate by sidebar Phase (i.e. block non-
+ * `super` admins from Phase 2/3/4 URLs), compose with `canAccessRoute(...)`
+ * from `lib/admin/phase-access.ts` in the layout/page:
+ *
+ *     const { roles } = await requireAdmin();
+ *     const role = primaryRole(roles);
+ *     const pathname = (await headers()).get("x-pathname") ?? "";
+ *     if (!canAccessRoute(pathname, role)) notFound();
+ *
+ * (requireAdmin itself stays pathname-agnostic — adding `headers()` reads
+ * here would force every admin Server Action into the dynamic bucket.)
  */
 
 import "server-only";
