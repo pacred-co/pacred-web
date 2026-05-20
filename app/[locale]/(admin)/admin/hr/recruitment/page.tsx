@@ -277,7 +277,7 @@ export default async function AdminHRRecruitmentPage({
       )}
 
       <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted">
-        เมื่อรับเข้าทำงานแล้ว ระบบจะลิงก์ applicant กับ profile (โปรไฟล์ลูกค้า) เพื่อให้ขึ้นทะเบียนพนักงานต่อใน <Link href="/admin/hr/employees" className="text-primary-600 hover:underline">/admin/hr/employees</Link>
+        เมื่อรับเข้าทำงานแล้ว ระบบจะลิงก์ applicant กับ profile (โปรไฟล์ลูกค้า) เพื่อให้ขึ้นทะเบียนพนักงานต่อใน <Link href="/admin/admins" className="text-primary-600 hover:underline">/admin/admins</Link>
       </div>
     </main>
   );

@@ -17,9 +17,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * The route slug `cnt-hs` is preserved verbatim from the legacy
  * (the staff already know `/pcs-admin/cnt-hs/`) so retraining
- * is zero. A separately rebuilt Tailwind variant lives at
- * `/admin/accounting/container-payments` and stays — that's the
- * "new design" surface; this page is the faithful-port surface.
+ * is zero. ภูม decided 2026-05-20 to retire the rebuilt-style
+ * sister page `/admin/accounting/container-payments` and keep
+ * ONLY this faithful-port page — sidebar now points here, and
+ * the detail/edit flow drops into `/admin/cnt-hs/[id]` (stub
+ * pending the full faithful detail pilot of `cnt-hs.php?page=detail`).
  *
  * The JSX below is the exact HTML structure `cnt-hs.php` renders —
  * same Bootstrap-4 markup, same elements, same labels (Thai
@@ -70,16 +72,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   (none) → ทั้งหมด (everything)
  *
  * Mutations (deliberate · documented for the pilot):
- *   The legacy `addPay` POST handler at cnt-hs.php L4-101 maps to
- *   the EXISTING server actions in
- *   `actions/admin/pcs-container-payments.ts` (the prior fidelity
- *   pass — `adminCreatePcsContainerPayment` + `uploadPcsContainerPaymentSlip`).
- *   The actions are already wired into the rebuilt-style page at
- *   `/admin/accounting/container-payments`; this faithful-port
- *   page is a READ-only surface for the pilot — staff click
- *   "อัปเดตและดูรายละเอียด" to drop into the detail/edit flow,
- *   which is a SEPARATE pilot (`?page=detail` map = future
- *   `/admin/cnt-hs/[id]` route).
+ *   The legacy `addPay` POST handler at cnt-hs.php L4-101 will be
+ *   re-introduced as a faithful Server Action on the `/admin/cnt-hs/[id]`
+ *   detail pilot. The prior `pcs-container-payments.ts` action file
+ *   was retired together with the rebuilt-style sister page (ภูม Q3
+ *   decision 2026-05-20). This page is READ-only for the current pilot
+ *   — staff click "อัปเดตและดูรายละเอียด" to drop into the detail/edit
+ *   flow, which is a SEPARATE pilot (`?page=detail` map → future
+ *   `/admin/cnt-hs/[id]` route · currently a placeholder stub).
  *
  * Rebrand: legacy `PCS Cargo Admin` window title → `PR Cargo
  * Admin`; everything else is verbatim Thai. The PCS-scrub stays
@@ -87,11 +87,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * faithful-port concern; "branding text + member codes only".
  *
  * Not transcribed (deliberate · documented for the pilot):
- *   - The `addPay` POST handler (cnt-hs.php L4-101) — the matching
- *     Server Action `adminCreatePcsContainerPayment` is already
- *     wired into the rebuilt-style sister page at
- *     `/admin/accounting/container-payments`. A faithful Bootstrap-4
- *     add-form is a follow-up pilot.
+ *   - The `addPay` POST handler (cnt-hs.php L4-101) — will land with
+ *     the faithful Bootstrap-4 add-form pilot (sister page that used
+ *     to host this action was retired in the ภูม Q3 cleanup 2026-05-20).
  *   - The `?page=detail&id=` sub-route (cnt-hs.php L486+) — future
  *     pilot at `/admin/cnt-hs/[id]/page.tsx`.
  *   - The DataTables JS init (cnt-hs.php L407-468): pageLength,
@@ -212,15 +210,13 @@ export default async function CntHsPage({
 
   // Storage base paths for slip + file links — mirror the legacy
   // `basePath.'storage/slip/'` / `basePath.'storage/file/'`
-  // (cnt-hs.php L323, L328). The actions/admin/pcs-container-payments.ts
-  // upload helper writes into Supabase Storage bucket `slips` under
-  // `pcs-container-pay/<filename>`. The DB column stores the relative
-  // path under the bucket, so the public URL is built by Supabase
-  // public-URL conventions. For private-bucket reads the dropdown
-  // detail page issues a signed URL — here we link out via the
-  // existing rebuilt slip-viewer.
-  const slipDetailHref = (id: number) =>
-    `/admin/accounting/container-payments/${id}`;
+  // (cnt-hs.php L323, L328). The Supabase Storage bucket `slips`
+  // holds the uploaded slip under `pcs-container-pay/<filename>`;
+  // the DB column stores the relative path. For private-bucket reads
+  // the detail page issues a signed URL — link drops into the
+  // faithful `/admin/cnt-hs/[id]` detail (currently a stub awaiting
+  // the full `cnt-hs.php?page=detail` pilot).
+  const slipDetailHref = (id: number) => `/admin/cnt-hs/${id}`;
 
   return (
     <div className="pcs-legacy">
@@ -414,7 +410,7 @@ export default async function CntHsPage({
                                       <>
                                         ยังไม่แนบเอกสาร{" "}
                                         <Link
-                                          href={`/admin/accounting/container-payments/${row.id}`}
+                                          href={`/admin/cnt-hs/${row.id}`}
                                           className="font-12 text-info cursor-pointer"
                                         >
                                           เพิ่มไฟล์
@@ -439,12 +435,11 @@ export default async function CntHsPage({
                                   {/* 10 — ตัวเลือก (cnt-hs.php L345-349)
                                       The legacy "อัปเดตและดูรายละเอียด"
                                       button drops into cnt-hs.php?page=detail
-                                      → maps to `/admin/cnt-hs/[id]` (future
-                                      pilot). For now the link reuses the
-                                      existing rebuilt detail at
-                                      `/admin/accounting/container-payments/[id]`. */}
+                                      → maps to `/admin/cnt-hs/[id]`
+                                      (currently a stub; full faithful
+                                      detail pilot is a follow-up). */}
                                   <td className="text-center">
-                                    <Link href={`/admin/accounting/container-payments/${row.id}`}>
+                                    <Link href={`/admin/cnt-hs/${row.id}`}>
                                       <span className="btn font-12 btn-sm btn-warning btn-rounded">
                                         {" "}อัปเดตและดูรายละเอียด{" "}
                                       </span>

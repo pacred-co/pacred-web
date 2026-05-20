@@ -189,7 +189,7 @@ export default async function AdminHRAuditPage({
                   <h3 className="font-bold text-foreground">{e.title}</h3>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-                    <Link href={`/admin/hr/employees/${e.profile_id}`} className="inline-flex items-center gap-1.5 text-primary-600 hover:underline">
+                    <Link href={`/admin/admins/${e.profile_id}`} className="inline-flex items-center gap-1.5 text-primary-600 hover:underline">
                       <Avatar src={p?.avatar_url ?? null} name={full} />
                       <span className="font-mono">{p?.member_code ?? "—"}</span>
                       <span>·</span>

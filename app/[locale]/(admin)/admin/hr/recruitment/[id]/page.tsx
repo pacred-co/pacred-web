@@ -280,7 +280,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
       })}
 
       <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted">
-        เมื่อกด <b>รับเข้าทำงาน</b> ระบบจะแค่ตั้ง stage = hired — ขั้นถัดไป HR ต้องไปที่ <Link href="/admin/admins" className="text-primary-600 hover:underline">/admin/admins</Link> เพื่อเปิดสิทธิ์ admin ให้พนักงานใหม่ แล้วไปแก้ฟิลด์ HR ที่ <Link href="/admin/hr/employees" className="text-primary-600 hover:underline">/admin/hr/employees</Link>
+        เมื่อกด <b>รับเข้าทำงาน</b> ระบบจะแค่ตั้ง stage = hired — ขั้นถัดไป HR ต้องไปที่ <Link href="/admin/admins" className="text-primary-600 hover:underline">/admin/admins</Link> เพื่อเปิดสิทธิ์ admin + แก้ฟิลด์ HR ของพนักงานใหม่
       </div>
     </main>
   );

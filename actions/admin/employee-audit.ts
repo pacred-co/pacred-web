@@ -40,7 +40,7 @@ export async function adminCreateAuditEntry(input: z.infer<typeof createSchema>)
     if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
     await logAdminAction(adminId, `employee_audit.${d.entry_type}`, "employee_audit_entry", data.id, d);
     revalidatePath("/admin/hr/audit");
-    revalidatePath(`/admin/hr/employees/${d.profile_id}`);
+    revalidatePath(`/admin/admins/${d.profile_id}`);
     return { ok: true, data: { id: data.id } };
   });
 }
