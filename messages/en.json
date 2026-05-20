@@ -2407,6 +2407,9 @@
     },
     "hr": {
       "title": "Manage HR",
+      "titleSection": "HR",
+      "humanResource": "Human Resource",
+      "corporateAssets": "Corporate Assets",
       "orgChartImage": "Org chart (visual)",
       "orgChartTable": "Org chart (table)",
       "recruitment": "Recruitment",
@@ -2486,6 +2489,16 @@
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",
       "combineBill": "Combine bills"
+    },
+    "forwarderImport": {
+      "title": "Import service",
+      "cargo": "Cargo",
+      "freight": "Freight",
+      "fcl": "FCL",
+      "lcl": "LCL",
+      "truck": "Truck",
+      "sea": "Sea",
+      "air": "Air"
     },
     "payment": {
       "title": "Yuan transfer service",

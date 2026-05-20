@@ -2407,6 +2407,9 @@
     },
     "hr": {
       "title": "จัดการทรัพยากรบุคคล",
+      "titleSection": "HR",
+      "humanResource": "จัดการทรัพยากรบุคคล",
+      "corporateAssets": "จัดการทรัพย์สินองค์กร",
       "orgChartImage": "ผังองค์กรแบบภาพ",
       "orgChartTable": "ผังองค์กรแบบตาราง",
       "recruitment": "สรรหาบุคคล",
@@ -2486,6 +2489,16 @@
       "whHistory": "ประวัติเข้าโกดังไทย",
       "assignDriver": "มอบงานคนขับรถ",
       "combineBill": "รวมบิลสินค้า"
+    },
+    "forwarderImport": {
+      "title": "บริการฝากนำเข้า",
+      "cargo": "Cargo",
+      "freight": "Freight",
+      "fcl": "FCL",
+      "lcl": "LCL",
+      "truck": "รถ",
+      "sea": "เรือ",
+      "air": "แอร์"
     },
     "payment": {
       "title": "บริการฝากโอน/ชำระ",

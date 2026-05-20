@@ -4,6 +4,34 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { WalletTxActions } from "./actions-cell";
 import { WalletBulkApproveBar, WalletRowCheckbox } from "./bulk-approve-bar";
 import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
+import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+
+// ─────────────────────────────────────────────────────────────────────
+// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
+// The sidebar `กระเป๋าสตางค์` now lands a single leaf here; all kind/
+// status filters + work actions live in this horizontal menubar so the
+// sidebar stays slim (Pacred-is-one-company pattern · matches
+// /admin/customers + /admin/accounting/cargo pattern).
+// ─────────────────────────────────────────────────────────────────────
+const WALLET_MENUBAR: MenubarItem[] = [
+  { label: "หน้าหลัก", href: "/admin/wallet" },
+  {
+    label: "กรองรายการ",
+    children: [
+      { label: "ทั้งหมด",     href: "/admin/wallet" },
+      { label: "รอเติมเงิน",  href: "/admin/wallet?kind=deposit&status=pending" },
+      { label: "รอถอน",       href: "/admin/wallet?kind=withdraw&status=pending" },
+    ],
+  },
+  {
+    label: "จัดการ",
+    children: [
+      { label: "จ่ายแทนลูกค้า",       href: "/admin/wallet/pay-user" },
+      { label: "ประวัติทั้งหมด",      href: "/admin/wallet/history" },
+      { label: "เพิ่ม Topup ด้วยมือ", href: "/admin/wallet/add" },
+    ],
+  },
+];
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -53,7 +81,9 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
   }));
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={WALLET_MENUBAR} activeHref="/admin/wallet" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">กระเป๋าเงิน — รายการ</h1>
@@ -153,6 +183,7 @@ export default async function AdminWalletPage({ searchParams }: { searchParams: 
         )}
       </div>
     </main>
+    </>
   );
 }
 

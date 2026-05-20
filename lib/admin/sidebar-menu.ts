@@ -106,34 +106,33 @@ export type MenuSection = {
 // Each block === one legacy `include/pages/left-menu/OOP/*` file.
 // ════════════════════════════════════════════════════════════════
 
-/** legacy OOP/Cargo/menu-wallet.php — กระเป๋าสตางค์ */
-const blockWallet: MenuItem = {
+/** Single-leaf "กระเป๋าสตางค์" replacement (ภูม brief 2026-05-20 ค่ำ —
+ *  Pacred is one company; the legacy 6-leaf wallet dropdown was retired).
+ *  Sub-items (ทั้งหมด / จ่ายแทน / ประวัติ / ถอน / เติม / เพิ่ม) now live
+ *  in the page top-menubar on /admin/wallet (Agent B owns the page).
+ *
+ *  Tombstone: prior `blockWallet: MenuItem = { labelKey: "wallet.title", ... 6 children ... }`
+ *  defined here was the legacy `OOP/Cargo/menu-wallet.php` faithful port.
+ *  Removed 2026-05-20 ค่ำ per ภูม brief. */
+const itemWalletAll: MenuItem = {
   labelKey: "wallet.title",
+  href: "/admin/wallet",
   icon: "Wallet",
   badge: "walletAll",
-  children: [
-    { labelKey: "wallet.all",      href: "/admin/wallet",           icon: "Wallet" },
-    { labelKey: "wallet.payUser",  href: "/admin/wallet/pay-user",  icon: "HandCoins" },
-    { labelKey: "wallet.history",  href: "/admin/wallet/history",   icon: "History" },
-    { labelKey: "wallet.withdraw", href: "/admin/wallet?kind=withdraw&status=pending", icon: "ArrowRightLeft", badge: "walletWithdraw" },
-    { labelKey: "wallet.deposit",  href: "/admin/wallet?kind=deposit&status=pending",  icon: "BadgeCheck",     badge: "walletTopup" },
-    { labelKey: "wallet.add",      href: "/admin/wallet/add",       icon: "Plus" },
-  ],
 };
 
-/** legacy OOP/Cargo/menu-purchasing.php — บริการฝากสั่งสินค้า */
-const blockPurchasing: MenuItem = {
+/** Single-leaf "บริการฝากสั่งสินค้า" replacement (ภูม brief 2026-05-20 ค่ำ).
+ *  Sub-items (search / all / pending / cart / cartAdd / note) now live in
+ *  the page top-menubar on /admin/service-orders (Agent B owns the page).
+ *
+ *  Tombstone: prior `blockPurchasing: MenuItem = { labelKey: "purchasing.title", ... 6 children ... }`
+ *  defined here was the legacy `OOP/Cargo/menu-purchasing.php` faithful port.
+ *  Removed 2026-05-20 ค่ำ per ภูม brief. */
+const itemPurchasingAll: MenuItem = {
   labelKey: "purchasing.title",
+  href: "/admin/service-orders",
   icon: "ShoppingCart",
   badge: "shopPending",
-  children: [
-    { labelKey: "purchasing.search",   href: "/admin/service-orders",        icon: "Search" },
-    { labelKey: "purchasing.all",      href: "/admin/service-orders",        icon: "Layers" },
-    { labelKey: "purchasing.pending",  href: "/admin/service-orders?q=1",    icon: "Clock", badge: "shopPending" },
-    { labelKey: "purchasing.cart",     href: "/admin/service-orders/cart",   icon: "ShoppingCart" },
-    { labelKey: "purchasing.cartAdd",  href: "/admin/service-orders/cart/add", icon: "Plus" },
-    { labelKey: "purchasing.note",     href: "/admin/service-orders/notes",  icon: "MessageSquare", badge: "shopNote" },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-barcode.php — สแกนบาร์โค้ด (nested)
@@ -170,35 +169,48 @@ const blockBarcode: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-forwarder.php — บริการฝากนำเข้า */
-const blockForwarder: MenuItem = {
-  labelKey: "forwarder.title",
+/** 2-level "บริการฝากนำเข้า" dropdown (ภูม brief 2026-05-20 ค่ำ — split by
+ *  Cargo/Freight then by mode). The legacy 10+ operational items (search,
+ *  note, whHistory, combine-bill, barcode, container-cost-check, etc.)
+ *  collapse into the page top-menubar on /admin/forwarders. The dropdown
+ *  here is a SEGMENT FILTER router — each leaf takes the operator to the
+ *  same `/admin/forwarders` page pre-filtered by `?segment=<group>-<mode>`.
+ *
+ *  URL contract (Agent B uses these on /admin/forwarders/page.tsx):
+ *    - Cargo:   ?segment=cargo-fcl | ?segment=cargo-lcl
+ *    - Freight: ?segment=freight-fcl | ?segment=freight-lcl
+ *                ?segment=freight-truck | ?segment=freight-sea | ?segment=freight-air
+ *
+ *  Tombstone: prior `blockForwarder` (legacy `OOP/Cargo/menu-forwarder.php`
+ *  faithful port — search · searchMulti · list parent · note · checkCntCost ·
+ *  cntReport · whHistory · assignDriver · combineBill · blockBarcode) was
+ *  defined here. Removed 2026-05-20 ค่ำ per ภูม brief — operations now live
+ *  in the page top-menubar; the deeper barcode toolbox stays in `blockBarcode`
+ *  for warehouse role's sidebar reuse. */
+const blockForwarderImport: MenuItem = {
+  labelKey: "forwarderImport.title",
   icon: "Package",
   badge: "forwarderArrived",
   children: [
-    { labelKey: "forwarder.search",      href: "/admin/forwarders",             icon: "Search" },
-    { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search", icon: "Search" },
     {
-      labelKey: "forwarder.list",
+      labelKey: "forwarderImport.cargo",
       icon: "Package",
-      badge: "forwarderDelivery",
       children: [
-        { labelKey: "forwarder.listAll",     href: "/admin/forwarders",      icon: "Package" },
-        { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?q=6",  icon: "Truck",  badge: "forwarderDelivery" },
-        { labelKey: "forwarder.listCredit",  href: "/admin/forwarders?q=c",  icon: "Package", badge: "forwarderCredit" },
-        { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",  icon: "PackagePlus" },
+        { labelKey: "forwarderImport.fcl", href: "/admin/forwarders?segment=cargo-fcl", icon: "Package" },
+        { labelKey: "forwarderImport.lcl", href: "/admin/forwarders?segment=cargo-lcl", icon: "Package" },
       ],
     },
-    { labelKey: "forwarder.note",          href: "/admin/forwarders/notes",                icon: "MessageSquare", badge: "forwarderNote" },
-    // Phase 3 — container-cost-check is deeper-future admin tool (the brief
-    // lists "container-costs" as Phase 3).
-    { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator",   phase: 3 },
-    { labelKey: "forwarder.cntReport",     href: "/admin/containers",                      icon: "Truck" },
-    { labelKey: "forwarder.whHistory",     href: "/admin/forwarders/warehouse-history",    icon: "PackageCheck", badge: "forwarderWhError" },
-    // Phase 2 — driver-runs not yet live to customers (sales-only side).
-    { labelKey: "forwarder.assignDriver",  href: "/admin/drivers",                         icon: "Truck",        badge: "driverItems", phase: 2 },
-    { labelKey: "forwarder.combineBill",   href: "/admin/forwarders/combine-bill",         icon: "Printer" },
-    blockBarcode,
+    {
+      labelKey: "forwarderImport.freight",
+      icon: "Truck",
+      children: [
+        { labelKey: "forwarderImport.fcl",   href: "/admin/forwarders?segment=freight-fcl",   icon: "Package" },
+        { labelKey: "forwarderImport.lcl",   href: "/admin/forwarders?segment=freight-lcl",   icon: "Package" },
+        { labelKey: "forwarderImport.truck", href: "/admin/forwarders?segment=freight-truck", icon: "Truck" },
+        { labelKey: "forwarderImport.sea",   href: "/admin/forwarders?segment=freight-sea",   icon: "Truck" },
+        { labelKey: "forwarderImport.air",   href: "/admin/forwarders?segment=freight-air",   icon: "Truck" },
+      ],
+    },
   ],
 };
 
@@ -213,22 +225,18 @@ const blockPayment: MenuItem = {
   ],
 };
 
-/** legacy OOP/Cargo/menu-report.php — ออกรายงาน */
-const blockReport: MenuItem = {
+/** Single-leaf "ออกรายงาน" replacement (ภูม brief 2026-05-20 ค่ำ).
+ *  The 8 sub-reports (shop / forwarder / payment / salesRep / allUser /
+ *  byCode / driver / web) now live in the page top-menubar on
+ *  /admin/reports (Agent B owns the page).
+ *
+ *  Tombstone: prior `blockReport: MenuItem = { labelKey: "report.title", ... 8 children ... }`
+ *  defined here was the legacy `OOP/Cargo/menu-report.php` faithful port.
+ *  Removed 2026-05-20 ค่ำ per ภูม brief. */
+const itemReportsAll: MenuItem = {
   labelKey: "report.title",
+  href: "/admin/reports",
   icon: "BarChart3",
-  children: [
-    { labelKey: "report.shop",      href: "/admin/reports/shop",            icon: "BarChart3" },
-    { labelKey: "report.forwarder", href: "/admin/reports/forwarder",       icon: "Package" },
-    { labelKey: "report.payment",   href: "/admin/reports/payment",         icon: "Wallet" },
-    { labelKey: "report.salesRep",  href: "/admin/reports/sales-by-rep",    icon: "BarChart3" },
-    { labelKey: "report.allUser",   href: "/admin/reports/user-sales-history", icon: "BarChart3" },
-    { labelKey: "report.byCode",    href: "/admin/reports/hs-code-revenue", icon: "BarChart3" },
-    // Phase 2 — driver-runs sales-only side not yet live.
-    { labelKey: "report.driver",    href: "/admin/driver-runs",             icon: "Truck",    phase: 2 },
-    // Phase 3 — system-health / observability reports (Tier-2 deferred).
-    { labelKey: "report.web",       href: "/admin/reports/system",          icon: "Activity", phase: 3 },
-  ],
 };
 
 /** Unified "ระบบบัญชี" sidebar entry — Pacred is ONE company, so the
@@ -291,72 +299,42 @@ const itemCustomersAll: MenuItem = {
   badge: "corporatePending",
 };
 
-/** legacy OOP/Cargo/menu-QAAndQC.php — 11 SLA-breach queues
- *  Phase 2 — all SLA-breach queues are "soon-to-launch" per 2026-05-20 brief. */
-const blockQA: MenuItem = {
+/** Single-leaf "QA & QC" replacement (ภูม brief 2026-05-20 ค่ำ · Phase 2).
+ *  The 12 SLA-breach sub-queues now live in the page top-menubar on
+ *  /admin/qa (Agent B creates the new hub page).
+ *
+ *  Tombstone: prior `blockQA: MenuItem = { labelKey: "qa.title", ... 12 SLA leaves ... }`
+ *  defined here was the legacy `OOP/Cargo/menu-QAAndQC.php` faithful port.
+ *  Removed 2026-05-20 ค่ำ per ภูม brief — Phase 2 (super-only) preserved. */
+const itemQAAll: MenuItem = {
   labelKey: "qa.title",
+  href: "/admin/qa",
   icon: "ShieldAlert",
-  children: [
-    { labelKey: "qa.payShopOver1d",      href: "/admin/reports/pending-payments?sla=shop-1d",     icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.payFwdOver2d",       href: "/admin/reports/pending-payments?sla=forwarder-2d", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.orderCancelled",     href: "/admin/reports/monthly-orders?sla=cancelled",     icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.creditOverdue",      href: "/admin/reports/credit-pending?sla=overdue",       icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.orderOver10min",     href: "/admin/reports/monthly-orders?sla=pending-10min", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.chnShopOver2d",      href: "/admin/reports/monthly-orders?sla=chn-dispatch-2d", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.chnWhOver2d",        href: "/admin/reports/containers-awaiting-th?sla=chn-wh-2d", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.transitOverdue",     href: "/admin/reports/containers-awaiting-th?sla=transit", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.ownerlessGoods",     href: "/admin/forwarders?q=ownerless",                   icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.prepareOverdue",     href: "/admin/forwarders?q=prepare-overdue",             icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.newClientNoContact", href: "/admin/customers/recently-active?sla=no-contact-2d", icon: "AlertTriangle", phase: 2 },
-    { labelKey: "qa.transferSalesRep",   href: "/admin/customers/transfer-rep",                   icon: "ArrowRightLeft", phase: 2 },
-  ],
+  phase: 2,
 };
 
-/** legacy OOP/CargoAndFreight/menu-hr-manage-human-resource.php */
-const blockHrHumanResource: MenuItem = {
-  labelKey: "hr.title",
-  icon: "Building2",
+/** 2-level "HR" dropdown (ภูม brief 2026-05-20 ค่ำ — flatten the prior
+ *  `hrGroup.title` wrapper + the two standalone blocks into a single
+ *  HR block with 2 hub children). Each child routes to a hub page
+ *  (Agent B creates `/admin/hr/humanresource` and `/admin/hr/assets`),
+ *  where the deeper items (org-chart · recruitment · employees ·
+ *  attendance · maintenance · purchasing · stock) become page top-menubar
+ *  items.
+ *
+ *  Tombstones: prior `blockHrHumanResource` (legacy
+ *  `OOP/CargoAndFreight/menu-hr-manage-human-resource.php` faithful port —
+ *  orgChartImage · orgChartTable · recruitment · people · attendance) and
+ *  `blockHrCorporateAssets` (legacy `menu-hr-manage-corporate-assets.php` —
+ *  maintenance · purchasing · stock) were defined here. Removed
+ *  2026-05-20 ค่ำ per ภูม brief — and the `hrGroup.title` wrapper that
+ *  previously nested both in `menuSuper` is dropped (this `blockHr` IS
+ *  the wrapper now). */
+const blockHr: MenuItem = {
+  labelKey: "hr.titleSection",
+  icon: "UserCheck",
   children: [
-    { labelKey: "hr.orgChartImage", href: "/admin/hr/org-chart",   icon: "Network" },
-    { labelKey: "hr.orgChartTable", href: "/admin/hr/org-table",   icon: "ListOrdered" },
-    {
-      labelKey: "hr.recruitment",
-      icon: "UserPlus",
-      children: [
-        { labelKey: "hr.recruitPost",       href: "/admin/hr/recruitment/new", icon: "UserPlus" },
-        { labelKey: "hr.recruitApplicants", href: "/admin/hr/recruitment",     icon: "Users" },
-      ],
-    },
-    {
-      labelKey: "hr.people",
-      icon: "Users",
-      children: [
-        { labelKey: "hr.peopleAll",     href: "/admin/admins",                icon: "Users" },
-        { labelKey: "hr.peopleAudit",   href: "/admin/hr/audit",              icon: "ClipboardCheck" },
-        { labelKey: "hr.peoplePolicies", href: "/admin/hr/policies",          icon: "FileText" },
-      ],
-    },
-    {
-      labelKey: "hr.attendance",
-      icon: "CalendarClock",
-      children: [
-        { labelKey: "hr.attendanceBoard",  href: "/admin/hr/attendance",        icon: "CalendarClock" },
-        { labelKey: "hr.attendanceLeaves", href: "/admin/hr/attendance/leaves", icon: "CalendarClock" },
-        { labelKey: "hr.training",         href: "/admin/hr/training",          icon: "GraduationCap" },
-      ],
-    },
-  ],
-};
-
-/** legacy OOP/CargoAndFreight/menu-hr-manage-corporate-assets.php
- *  Phase 2 — corporate-assets / inventory module not in Phase 1 essentials. */
-const blockHrCorporateAssets: MenuItem = {
-  labelKey: "assets.title",
-  icon: "Boxes",
-  children: [
-    { labelKey: "assets.maintenance", href: "/admin/inventory?tab=maintenance", icon: "Wrench",      phase: 2 },
-    { labelKey: "assets.purchasing",  href: "/admin/inventory?tab=purchasing",  icon: "ShoppingBag", phase: 2 },
-    { labelKey: "assets.stock",       href: "/admin/inventory",                 icon: "Boxes",       phase: 2 },
+    { labelKey: "hr.humanResource",   href: "/admin/hr/humanresource", icon: "Users" },
+    { labelKey: "hr.corporateAssets", href: "/admin/hr/assets",        icon: "Boxes" },
   ],
 };
 
@@ -485,17 +463,23 @@ const menuSuper: MenuSection[] = [
     // sections into a single section. Cross-shared items (HR/QA/
     // จัดการลูกค้า/รายการเบิกเงิน) come first, then operational
     // (wallet/purchasing/forwarder/payment/report/accounting).
+    //
+    // 2026-05-20 ค่ำ second batch: 6 sections consolidated — the deep
+    // dropdowns (wallet · purchasing · forwarder · report · QA · HR) were
+    // flattened to single-leaves (or 2-level Cargo/Freight × mode for
+    // forwarder, 2-level for HR) so the sidebar stays scannable; the
+    // deeper operational items moved to each page's top-menubar.
     header: "Cargo & Freight",
     items: [
-      { labelKey: "hrGroup.title", icon: "UserCheck", children: [blockHrHumanResource, blockHrCorporateAssets] },
-      { ...blockQA, labelKey: "qa.titleGroup" },
+      blockHr,
+      itemQAAll,
       itemCustomersAll,
       blockWithdrawalList,
-      blockWallet,
-      blockPurchasing,
-      blockForwarder,
+      itemWalletAll,
+      itemPurchasingAll,
+      blockForwarderImport,
       blockPayment,
-      blockReport,
+      itemReportsAll,
       blockAccounting,
     ],
   },
@@ -514,14 +498,16 @@ const menuSuper: MenuSection[] = [
 const menuOps: MenuSection[] = [
   { header: "", items: [{ labelKey: "dashboard.title", href: "/admin", icon: "LayoutDashboard" }] },
   {
-    // Section merged 2026-05-20 ค่ำ (see menuSuper comment).
+    // Section merged 2026-05-20 ค่ำ (see menuSuper comment). Second
+    // batch (same date) consolidated wallet/purchasing/forwarder/QA
+    // to leaves + Cargo/Freight × mode dropdown.
     header: "Cargo & Freight",
     items: [
-      { ...blockQA, labelKey: "qa.titleGroup" },
+      itemQAAll,
       { labelKey: "userCargo.searchTop", href: "/admin/customers?focus=search", icon: "Search" },
-      blockWallet,
-      blockPurchasing,
-      blockForwarder,
+      itemWalletAll,
+      itemPurchasingAll,
+      blockForwarderImport,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -538,9 +524,10 @@ const menuOps: MenuSection[] = [
 const menuAccounting: MenuSection[] = [
   { header: "", items: [itemDashboard] },
   {
-    // Section merged 2026-05-20 ค่ำ (see menuSuper comment).
+    // Section merged 2026-05-20 ค่ำ (see menuSuper comment). Second
+    // batch (same date) consolidated wallet + report to single leaves.
     header: "Cargo & Freight",
-    items: [blockWithdrawalList, blockWallet, blockPayment, blockReport, blockAccounting],
+    items: [blockWithdrawalList, itemWalletAll, blockPayment, itemReportsAll, blockAccounting],
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
@@ -591,10 +578,11 @@ const menuSalesAdmin: MenuSection[] = [
         ],
       },
       // — operational items below appended after the 2026-05-20 ค่ำ
-      //   section merge (previously a separate "Cargo" section).
-      blockWallet,
-      blockPurchasing,
-      { ...blockReport, labelKey: "report.titleSales" },
+      //   section merge (previously a separate "Cargo" section). Second
+      //   batch (same date) consolidated wallet/purchasing/report to leaves.
+      itemWalletAll,
+      itemPurchasingAll,
+      { ...itemReportsAll, labelKey: "report.titleSales" },
       // Phase 2 — Marketing/broadcasts/bookings post-launch features per 2026-05-20 brief.
       { labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing",      phase: 2 },
       { labelKey: "bookings.title",   href: "/admin/bookings",   icon: "CalendarCheck", badge: "bookingsPending", phase: 2 },

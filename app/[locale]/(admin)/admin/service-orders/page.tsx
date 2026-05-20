@@ -1,5 +1,28 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+
+// ─────────────────────────────────────────────────────────────────────
+// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
+// Sidebar "บริการฝากสั่งสินค้า" lands a single leaf here; status filters
+// + cart actions + notes + search live in this horizontal menubar so
+// the sidebar stays slim (Pacred-is-one-company pattern · matches
+// /admin/customers + /admin/accounting/cargo pattern).
+// ─────────────────────────────────────────────────────────────────────
+const PURCHASING_MENUBAR: MenubarItem[] = [
+  { label: "หน้าหลัก", href: "/admin/service-orders" },
+  {
+    label: "สถานะ",
+    children: [
+      { label: "ทั้งหมด",                href: "/admin/service-orders" },
+      { label: "รอดำเนินการ",            href: "/admin/service-orders?q=1" },
+      { label: "cart",                  href: "/admin/service-orders/cart" },
+      { label: "เพิ่มสินค้าใน cart",     href: "/admin/service-orders/cart/add" },
+    ],
+  },
+  { label: "หมายเหตุฝากสั่ง", href: "/admin/service-orders/notes" },
+  { label: "ค้นหา",          href: "/admin/service-orders?focus=search" },
+];
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-gray-50 text-gray-700 border-gray-200",
@@ -42,7 +65,9 @@ export default async function AdminServiceOrdersPage({ searchParams }: { searchP
   }));
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={PURCHASING_MENUBAR} activeHref="/admin/service-orders" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ฝากสั่ง — Ops</h1>
@@ -98,6 +123,7 @@ export default async function AdminServiceOrdersPage({ searchParams }: { searchP
         )}
       </div>
     </main>
+    </>
   );
 }
 

@@ -4,6 +4,64 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
+import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+
+// ─────────────────────────────────────────────────────────────────────
+// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
+// Sidebar "บริการฝากนำเข้า" dropdown lands here with `?segment=cargo-fcl
+// | cargo-lcl | freight-{fcl,lcl,truck,sea,air}` — the menubar shows
+// operational items + a `?segment=` chip in the page header so staff
+// see which segment is active. Wave-B P0.5 pattern: segment is label-
+// only (no SQL filter) until the legacy `tb_forwarder` schema gets a
+// proper segment column. Status/work/barcode/search filters all live
+// here so the sidebar stays slim (Pacred-is-one-company pattern).
+// ─────────────────────────────────────────────────────────────────────
+const FORWARDER_MENUBAR: MenubarItem[] = [
+  { label: "หน้าหลัก", href: "/admin/forwarders" },
+  {
+    label: "ตามประเภท",
+    children: [
+      { label: "ทั้งหมด",   href: "/admin/forwarders" },
+      { label: "เตรียมส่ง", href: "/admin/forwarders?q=6" },
+      { label: "เครดิต",   href: "/admin/forwarders?q=c" },
+      { label: "หมายเหตุ", href: "/admin/forwarders?q=note" },
+    ],
+  },
+  {
+    label: "งาน",
+    children: [
+      { label: "รวมบิลสินค้า",         href: "/admin/forwarders/combine-bill" },
+      { label: "ประวัติเข้าโกดังไทย", href: "/admin/forwarders/warehouse-history" },
+      { label: "มอบงานคนขับ",         href: "/admin/forwarders/drivers" },
+    ],
+  },
+  {
+    label: "บาร์โค้ด",
+    children: [
+      { label: "ทั้งหมด", href: "/admin/barcode" },
+      { label: "driver", href: "/admin/barcode/driver" },
+    ],
+  },
+  {
+    label: "ค้นหา",
+    children: [
+      { label: "รหัสเดียว",    href: "/admin/forwarders?focus=search" },
+      { label: "หลายรหัส",     href: "/admin/forwarders/bulk-search" },
+    ],
+  },
+];
+
+// Sidebar `?segment=` chip — label-only (Wave-B P0.5 pattern); no SQL
+// filter applied. Keep the keys in sync with the sidebar dropdown.
+const SEGMENT_LABEL: Record<string, string> = {
+  "cargo-fcl":   "Cargo · FCL",
+  "cargo-lcl":   "Cargo · LCL",
+  "freight-fcl": "Freight · FCL",
+  "freight-lcl": "Freight · LCL",
+  "freight-truck": "Freight · รถ",
+  "freight-sea":   "Freight · เรือ",
+  "freight-air":   "Freight · แอร์",
+};
 
 type Row = {
   id: string;
@@ -31,6 +89,7 @@ type SearchParams = {
   q_multi?: string;     // U2-5: multi-line bulk tracking search (one term per line)
   date_from?: string;
   date_to?: string;
+  segment?: string;     // ภูม brief 2026-05-20 ค่ำ — label-only chip (no SQL filter)
 };
 
 export default async function AdminForwardersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -110,13 +169,32 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     { v: "cancelled",        l: `${STATUS_LABEL.cancelled} (${statusCounts.cancelled ?? 0})` },
   ];
 
+  // ภูม brief 2026-05-20 ค่ำ — segment chip (label-only · Wave-B P0.5).
+  const segmentLabel = sp.segment && SEGMENT_LABEL[sp.segment] ? SEGMENT_LABEL[sp.segment] : null;
+
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={FORWARDER_MENUBAR} activeHref="/admin/forwarders" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ฝากนำเข้า — Ops</h1>
+          <h1 className="mt-1 text-2xl font-bold">
+            ฝากนำเข้า — Ops{segmentLabel ? ` — ${segmentLabel}` : ""}
+          </h1>
           <p className="text-sm text-muted mt-0.5">{rows.length} รายการ</p>
+          {segmentLabel ? (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+              <span>กรอง: {segmentLabel}</span>
+              <Link
+                href="/admin/forwarders"
+                className="rounded-full px-1 leading-none hover:bg-primary-100"
+                aria-label="ล้างตัวกรองกลุ่ม"
+              >
+                ×
+              </Link>
+            </div>
+          ) : null}
         </div>
         <Link
           href="/admin/forwarders/bulk-search"
@@ -155,5 +233,6 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       {/* Table with checkboxes + bulk action */}
       <ForwardersTable rows={rows} />
     </main>
+    </>
   );
 }

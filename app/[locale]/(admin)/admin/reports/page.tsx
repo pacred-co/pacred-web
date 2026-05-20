@@ -4,6 +4,36 @@ import { Link } from "@/i18n/navigation";
 import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+
+// ─────────────────────────────────────────────────────────────────────
+// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
+// Sidebar "ออกรายงาน" lands a single leaf here; the 8 report-type leaves
+// the sidebar used to host now live in this horizontal menubar so the
+// sidebar stays slim (Pacred-is-one-company pattern · matches
+// /admin/customers + /admin/accounting/cargo pattern).
+// ─────────────────────────────────────────────────────────────────────
+const REPORTS_MENUBAR: MenubarItem[] = [
+  { label: "หน้าหลัก", href: "/admin/reports" },
+  {
+    label: "ฝั่งบัญชี",
+    children: [
+      { label: "ฝากสั่ง",    href: "/admin/reports/shop" },
+      { label: "ฝากนำเข้า", href: "/admin/reports/forwarder" },
+      { label: "ฝากชำระ",   href: "/admin/reports/payment" },
+    ],
+  },
+  { label: "การเข้าถึงระบบ", href: "/admin/reports/system" },
+  {
+    label: "ปริมาณ",
+    children: [
+      { label: "ฝากนำเข้า (volume)", href: "/admin/reports/forwarder-volume" },
+      { label: "sales-by-rep",       href: "/admin/reports/sales-by-rep" },
+    ],
+  },
+  { label: "ลูกค้า", href: "/admin/reports/user-sales-history" },
+  { label: "คนขับ", href: "/admin/driver-runs" },
+];
 
 type Profile = {
   member_code: string | null;
@@ -341,7 +371,9 @@ export default async function AdminReportsPage({
   // ── render ──────────────────────────────────────────────────────────────────
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={REPORTS_MENUBAR} activeHref="/admin/reports" />
+      <main className="p-6 lg:p-8 space-y-5">
       {/* V-B1 quick-link cards — at-a-glance operational health */}
       <section className="rounded-2xl border border-border bg-surface-alt/30 p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -604,6 +636,7 @@ export default async function AdminReportsPage({
         </DataTable>
       )}
     </main>
+    </>
   );
 }
 
