@@ -1,0 +1,86 @@
+/* =============================================================
+ * accounting-forwarder-invoice.css — legacy PCS Cargo
+ *   `pcs-admin/hs-forwarder-invoice.php` (default view → home.php)
+ *   page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "ประวัติการออกใบแจ้งหนี้ ฝากนำเข้า" (forwarder import-invoice
+ * history) ledger.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — the default view (include/pages/hs-forwarder-invoice/home.php
+ * L1-88) is a "header-shell" page (heading + "คำแนะนำการใช้งาน"
+ * help-modal + "เพิ่มรายการใหม่" CTA + a centred page heading)
+ * with NO inline <style> block of its own. The only screen-specific
+ * styles it relies on are:
+ *   1. `.bg-color-recom`  — the legacy brand-coloured "คำแนะนำ" CTA
+ *      pill (the default Bootstrap-4 `.btn` is colourless without it).
+ *   2. `.text-color-main` — already provided by admin-base.css (the
+ *      legacy theme's PCS-red).
+ *
+ * The screen IS a LIST-OF-INVOICES view — the legacy renders an
+ * empty card with a "เพิ่มรายการใหม่" link to `?page=add`; the actual
+ * issued-invoice list lives in the `?page=detail&id=X` sub-route's
+ * own paginated view (not loaded in the default page). This file
+ * carries only the styles the default header-shell needs; the
+ * detail-view styles land with the future detail pilot.
+ *
+ * Every selector is scoped under `.pcs-legacy` so the legacy
+ * Bootstrap-4 cannot leak into — or collide with — the rest of
+ * the Tailwind app, exactly as the cnt-hs + admin-table pilots
+ * established.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- legacy admin theme override (style.css L405-410) —
+ * `.bg-color-recom` is the orange "recommend" gradient pill the
+ * legacy uses for the inline-help modal CTA on every admin page.
+ * The hs-forwarder-invoice/home.php references it at L28-30 to open
+ * the "การใช้งานระบบออกใบแจ้งหนี้รายการฝากนำเข้าสินค้า" modal. */
+.pcs-legacy .bg-color-recom {
+  background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+  color: #fff;
+}
+.pcs-legacy .bg-color-recom:hover { color: #fff; }
+
+/* ---- legacy admin theme override — `.box-shadow-2` (the lift
+ *      on the recommend pill / "เพิ่มรายการใหม่" CTA). The legacy
+ *      bootstrap-extended.min.css ships this; restated here so the
+ *      pill has the expected drop-shadow. */
+.pcs-legacy .box-shadow-2 { box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.25); }
+
+/* ---- cursor-pointer — used by the recommend CTA span ---- */
+.pcs-legacy .cursor-pointer { cursor: pointer; }
+
+/* ---- modal chrome (Bootstrap-4 default — the legacy theme uses
+ * its global `header-from` modal wrapper for the inline help modal.
+ * Kept hidden by default — the modal opens via data-toggle wired by
+ * the vendor jQuery+Bootstrap-4 bundle in the (admin) layout). */
+.pcs-legacy .modal { display: none; }
+.pcs-legacy .modal-dialog { margin: 1.75rem auto; max-width: 96%; }
+.pcs-legacy .modal-xl     { max-width: 90%; }
+.pcs-legacy .modal-md     { max-width: 500px; }
+.pcs-legacy .modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  border-radius: .3rem;
+}
+.pcs-legacy .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+.pcs-legacy .modal-body { padding: 1rem; }
+.pcs-legacy .header-from .modal-header { background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%); color: #fff; }
+.pcs-legacy .header-from .modal-title  { color: #fff; }
+.pcs-legacy .header-from .close        { color: #fff; opacity: 1; background: transparent; border: 0; }

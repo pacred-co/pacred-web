@@ -1,0 +1,92 @@
+/* =============================================================
+ * reports-forwarder.css — legacy PCS Cargo
+ *                         `pcs-admin/report-forwarder.php`
+ *                         page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "รายงานฝากนำเข้าสินค้า" (forwarder report) — date-range chart +
+ * filtered ledger.
+ *
+ * Paired with the chrome bundle:
+ *   public/legacy/pcs/admin/admin-base.css
+ *
+ * Source — the legacy `report-forwarder.php` itself has NO inline
+ * <style> block (L1-389). Its visual identity comes entirely from
+ * the shared admin chrome + the DataTables / daterangepicker
+ * plug-ins (`assets/plugins/datatables/css/dataTables.bootstrap4.css`
+ * L5; `assets/plugins/daterangepicker/daterangepicker.css` L7).
+ *
+ * Because the chart in the legacy `<section>` is an echarts canvas
+ * (L98 `#basic-line`) and we don't ship echarts, we substitute a
+ * faithful fallback grid (`.pcs-legacy .report-chart-fallback`).
+ * The shape (height 400px wrapper, table of date / revenue) is
+ * mirrored so the visual block on the page is the same size as
+ * the legacy chart canvas.
+ *
+ * Every selector is scoped under `.pcs-legacy`. The static-asset +
+ * <link rel="stylesheet"> loading rule (no `import`) applies as in
+ * the customer pilot — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- echarts chart canvas size (report-forwarder.php L98) ----
+ * Legacy: `<div id="basic-line" style="height:400px;"></div>`.
+ * Pacred substitutes a static fallback grid in the same wrapper,
+ * sized identically so the section card height matches the
+ * legacy page layout. */
+.pcs-legacy .report-chart-fallback {
+  min-height: 400px;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  padding: 0.75rem;
+  overflow: auto;
+}
+
+.pcs-legacy .report-chart-fallback table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pcs-legacy .report-chart-fallback th,
+.pcs-legacy .report-chart-fallback td {
+  padding: 0.25rem 0.5rem;
+  text-align: right;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.pcs-legacy .report-chart-fallback th:first-child,
+.pcs-legacy .report-chart-fallback td:first-child {
+  text-align: left;
+}
+
+.pcs-legacy .report-chart-fallback th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+/* Legacy echarts series color was `#ff9149` (report-forwarder.php
+ * L310) — match the table header band so the visual identity is
+ * recognisable. */
+.pcs-legacy .report-chart-fallback .chart-color {
+  color: #ff9149;
+  font-weight: 600;
+}
+
+/* ---- tighter table padding (mirrors the report-system inline
+ * <style> block which we cross-applied because both forwarder +
+ * system reports share the table dense-row visual). */
+.pcs-legacy .table.report-table td {
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .table.report-table th {
+  padding: 0.5rem 0.5rem;
+}
+
+/* ---- shipped status badge colours used in the row (mirrors
+ * report-forwarder.php L191-197 — already covered by admin-base
+ * but added here for explicit clarity of source). */
