@@ -1,0 +1,264 @@
+/* =============================================================
+ * cart.css — legacy PCS Cargo `pcs-admin/cart.php` (default view)
+ *            page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "รถเข็นสินค้า" (admin-side cart) screen.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — verbatim from cart.php L148-346 inline <style> block
+ * (the 8-column shopping-cart grid + the totals strip + the
+ * mobile responsive breakpoints + the filter-list search button
+ * offset). Every selector is scoped under `.pcs-legacy` so the
+ * legacy Bootstrap-4 cannot leak into — or collide with — the
+ * rest of the Tailwind app, exactly as the admin-table + cnt-hs
+ * pilots did.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- cart.php L149-180 — 8-column shopping-cart product grid
+ *      (lำดับ / รูปสินค้า / รายละเอียดสินค้า / ราคาต่อชิ้น /
+ *       จำนวน / แอคชั่น / ราคารวม). Each column is a float-left
+ *       fraction of the parent .shopping-cart width. */
+.pcs-legacy .product-count {
+  float: left;
+  width: 8%;
+}
+.pcs-legacy .product-image {
+  float: left;
+  width: 10%;
+}
+.pcs-legacy .product-details {
+  float: left;
+  width: 33%;
+}
+.pcs-legacy .product-price {
+  float: left;
+  width: 12%;
+  text-align: right;
+}
+.pcs-legacy .product-quantity {
+  float: left;
+  width: 16%;
+  text-align: center;
+}
+.pcs-legacy .product-removal {
+  float: left;
+  width: 8%;
+  text-align: center;
+}
+.pcs-legacy .product-line-price {
+  float: left;
+  width: 12%;
+  text-align: right;
+}
+
+/* ---- cart.php L181-196 — clearfix utility for the cart sections
+ *      (.shopping-cart, .column-labels, .product, .totals-item).
+ *      Same pattern as Bootstrap 3's .clearfix. */
+.pcs-legacy .group:before,
+.pcs-legacy .shopping-cart:before,
+.pcs-legacy .column-labels:before,
+.pcs-legacy .product:before,
+.pcs-legacy .totals-item:before,
+.pcs-legacy .group:after,
+.pcs-legacy .shopping-cart:after,
+.pcs-legacy .column-labels:after,
+.pcs-legacy .product:after,
+.pcs-legacy .totals-item:after {
+  content: '';
+  display: table;
+}
+.pcs-legacy .group:after,
+.pcs-legacy .shopping-cart:after,
+.pcs-legacy .column-labels:after,
+.pcs-legacy .product:after,
+.pcs-legacy .totals-item:after {
+  clear: both;
+}
+.pcs-legacy .group,
+.pcs-legacy .shopping-cart,
+.pcs-legacy .column-labels,
+.pcs-legacy .product,
+.pcs-legacy .totals-item {
+  zoom: 1;
+}
+
+/* ---- cart.php L198-204 — currency-symbol prefix on each price
+ *      cell. Yuan (¥) for unit price + line price + the subtotal;
+ *      baht (฿) for the THB grand total. */
+.pcs-legacy .product .product-price:before,
+.pcs-legacy .product .product-line-price:before,
+.pcs-legacy .totals-value:before {
+  content: '¥';
+}
+.pcs-legacy .totals-value2:before {
+  content: '฿';
+}
+
+/* ---- cart.php L205-212 — bolder labels + tighter column-label
+ *      padding (the row of column headings above the products). */
+.pcs-legacy label {
+  font-weight: 600;
+}
+.pcs-legacy .column-labels label {
+  padding: 5px;
+  margin-bottom: 0;
+}
+
+/* ---- cart.php L213-219 — separator between products
+ *      (margin + soft grey bottom border per product row). */
+.pcs-legacy .product {
+  margin-bottom: 20px;
+  margin-top: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eee;
+}
+.pcs-legacy .product .product-image {
+  text-align: center;
+}
+.pcs-legacy .product .product-image img {
+  width: 100px;
+}
+.pcs-legacy .product .product-details .product-title {
+  margin-right: 20px;
+}
+.pcs-legacy .product .product-details .product-description {
+  margin: 5px 20px 5px 0;
+  line-height: 1.4em;
+}
+.pcs-legacy .product .product-quantity input {
+  width: 72px;
+}
+
+/* ---- cart.php L237-263 — totals strip (subtotal in ¥ + exchange
+ *      rate + grand total in ฿). All values float right next to
+ *      their label, matching the legacy "summary card" layout. */
+.pcs-legacy .totals .totals-item {
+  float: right;
+  clear: both;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.pcs-legacy .totals .totals-item label {
+  float: left;
+  clear: both;
+  width: 37%;
+  text-align: right;
+}
+.pcs-legacy .totals .totals-item .totals-value {
+  float: right;
+  width: 63%;
+  text-align: right;
+}
+.pcs-legacy .totals-value2 {
+  float: right;
+  width: 63%;
+  text-align: right;
+}
+.pcs-legacy .totals-value4 {
+  float: right;
+  width: 63%;
+  text-align: right;
+}
+
+/* ---- cart.php L264-276 — the big green "checkout" submit button
+ *      (used by the legacy "ยืนยันการสั่งซื้อ" CTA). Kept verbatim
+ *      so the legacy markup looks identical at rest. */
+.pcs-legacy .checkout {
+  float: right;
+  border: 0;
+  margin-top: 20px;
+  padding: 6px 25px;
+  background-color: #6b6;
+  color: #fff;
+  font-size: 25px;
+  border-radius: 3px;
+}
+.pcs-legacy .checkout:hover {
+  background-color: #494;
+}
+
+/* ---- cart.php L277-321 — tablet breakpoint (≤ 650px). The 8-col
+ *      product grid collapses: image floats right, details span
+ *      full width, price/quantity/removal stack into compact
+ *      blocks. Matches the legacy mobile cart layout. */
+@media screen and (max-width: 650px) {
+  .pcs-legacy .shopping-cart {
+    margin: 0;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+  }
+  .pcs-legacy .column-labels {
+    display: none;
+  }
+  .pcs-legacy .product-image {
+    float: right;
+    width: auto;
+  }
+  .pcs-legacy .product-image img {
+    margin: 0 0 10px 10px;
+  }
+  .pcs-legacy .product-details {
+    float: none;
+    margin-bottom: 10px;
+    width: auto;
+  }
+  .pcs-legacy .product-price {
+    clear: both;
+    width: 70px;
+    padding-top: 7px;
+    padding-right: 5px;
+  }
+  .pcs-legacy .product-quantity {
+    width: 120px;
+  }
+  .pcs-legacy .product-quantity input {
+    margin-left: 20px;
+  }
+  .pcs-legacy .product-quantity:before {
+    content: 'x';
+  }
+  .pcs-legacy .product-removal {
+    width: auto;
+  }
+  .pcs-legacy .product-line-price {
+    float: right;
+    width: 70px;
+  }
+}
+
+/* ---- cart.php L322-342 — phone breakpoint (≤ 350px). Tighter
+ *      stacking for the smallest screens. */
+@media screen and (max-width: 350px) {
+  .pcs-legacy .product-removal {
+    float: right;
+  }
+  .pcs-legacy .product-line-price {
+    float: right;
+    clear: left;
+    width: auto;
+    margin-top: 10px;
+  }
+  .pcs-legacy .product .product-line-price:before {
+    content: 'Item Total: $';
+  }
+  .pcs-legacy .totals .totals-item label {
+    width: 60%;
+  }
+  .pcs-legacy .totals .totals-item .totals-value {
+    width: 40%;
+  }
+}
+
+/* ---- cart.php L343-345 — filter-list search button position
+ *      offset (the magnifying-glass button next to the URL input). */
+.pcs-legacy .filtered-list-search form button {
+  top: -2px;
+}
