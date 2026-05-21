@@ -54,6 +54,11 @@ const WALLET_MENUBAR: MenubarItem[] = [
       { label: "จ่ายแทนลูกค้า",       href: "/admin/wallet/pay-user" },
       { label: "ประวัติทั้งหมด",      href: "/admin/wallet/history" },
       { label: "เพิ่ม Topup ด้วยมือ", href: "/admin/wallet/add" },
+      // Wave 7.3 (2026-05-22): wired refunds orphan per ภูม decision in
+      // page-inventory-2026-05-21-night.md §🔴 DEAD. Refunds is a Pacred-
+      // only feature (no legacy equivalent) but conceptually lives under
+      // wallet management — money flowing back to the customer wallet.
+      { label: "คืนเงินลูกค้า",        href: "/admin/refunds" },
     ],
   },
 ];

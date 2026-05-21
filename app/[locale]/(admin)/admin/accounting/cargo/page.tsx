@@ -132,6 +132,10 @@ const CARGO_MENUBAR: MenubarItem[] = [
   {
     label: "การบัญชี",
     children: [
+      // Wave 7.3 (2026-05-22): wired 2 orphan accounting pages here per
+      // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
+      { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
+      { label: "กระทบยอด", href: "/admin/accounting/reconcile" },
       // TODO — legacy L496-597: ผังบัญชี / บัญชีรายวัน / บัญชีแยกประเภท / งบทดลอง / งบฐานะ / งบกำไรขาดทุน / งบกระแสเงินสด / DBD e-Filing / สินทรัพย์.
       { label: "อยู่ระหว่างพัฒนา", href: "#" },
     ],

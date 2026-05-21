@@ -29,6 +29,9 @@ const REPORTS_MENUBAR: MenubarItem[] = [
     children: [
       { label: "ฝากนำเข้า (volume)", href: "/admin/reports/forwarder-volume" },
       { label: "sales-by-rep",       href: "/admin/reports/sales-by-rep" },
+      // Wave 7.3 (2026-05-22): wired containers-hs orphan per ภูม decision
+      // in page-inventory-2026-05-21-night.md §🔴 DEAD.
+      { label: "ตู้ตาม HS code",      href: "/admin/reports/containers-hs" },
     ],
   },
   { label: "ลูกค้า", href: "/admin/reports/user-sales-history" },

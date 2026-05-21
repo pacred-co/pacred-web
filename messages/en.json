@@ -2576,7 +2576,14 @@
       "rateVip": "VIP customer rates",
       "rateCustomUser": "Custom-user rates",
       "rateCustomHs": "Custom-HS rates",
-      "vipTiers": "VIP membership tiers"
+      "vipTiers": "VIP membership tiers",
+      "system": "System",
+      "crons": "Cron jobs",
+      "systemNotifs": "System notifications",
+      "csvImports": "CSV bulk import",
+      "tools": "Tools",
+      "orgEmail": "Organization email",
+      "adminUsers": "Admin users"
     },
     "userCargo": {
       "title": "Customer management",

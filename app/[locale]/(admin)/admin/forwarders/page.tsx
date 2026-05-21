@@ -56,9 +56,13 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
   {
     label: "งาน",
     children: [
-      { label: "รวมบิลสินค้า",         href: "/admin/forwarders/combine-bill" },
-      { label: "ประวัติเข้าโกดังไทย", href: "/admin/forwarders/warehouse-history" },
-      { label: "มอบงานคนขับ",         href: "/admin/drivers" },
+      { label: "รวมบิลสินค้า",            href: "/admin/forwarders/combine-bill" },
+      { label: "ประวัติเข้าโกดังไทย",     href: "/admin/forwarders/warehouse-history" },
+      { label: "มอบงานคนขับ",            href: "/admin/drivers" },
+      // Wave 7.3 (2026-05-22): wired 2 orphan container-cost pages per
+      // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
+      { label: "ต้นทุนตู้",                href: "/admin/accounting/container-costs" },
+      { label: "เช็คต้นทุนตู้ (Sheet)",    href: "/admin/forwarders/container-cost-check" },
     ],
   },
   {

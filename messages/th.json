@@ -2576,7 +2576,14 @@
       "rateVip": "เรทลูกค้า VIP",
       "rateCustomUser": "เรท Custom-user",
       "rateCustomHs": "เรท Custom-HS",
-      "vipTiers": "ประเภทสมาชิก VIP"
+      "vipTiers": "ประเภทสมาชิก VIP",
+      "system": "ระบบ",
+      "crons": "Cron jobs",
+      "systemNotifs": "การแจ้งเตือนระบบ",
+      "csvImports": "นำเข้าข้อมูล (CSV)",
+      "tools": "เครื่องมือ",
+      "orgEmail": "อีเมลในองค์กร",
+      "adminUsers": "พนักงาน admin"
     },
     "userCargo": {
       "title": "ระบบจัดการลูกค้า",

@@ -269,7 +269,14 @@ const blockAccounting: MenuItem = {
   icon: "Landmark",
 };
 
-/** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo */
+/** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo
+ *
+ * 2026-05-22 (Wave 7.3 orphan wiring): added 2 new groups — "ระบบ" (cron
+ * jobs · system notification log · CSV bulk import) and "เครื่องมือ"
+ * (organization email · admin users). These were orphan pages prior to
+ * this commit — accessible only via URL typing. ภูม confirmed wiring
+ * per re-audit-2026-05-21-night.md §D + page-inventory-2026-05-21-night.md.
+ */
 const blockSettingsCargo: MenuItem = {
   labelKey: "settingsCargo.title",
   icon: "Settings",
@@ -288,6 +295,23 @@ const blockSettingsCargo: MenuItem = {
       ],
     },
     { labelKey: "settingsCargo.vipTiers",  href: "/admin/settings/business-config",  icon: "Users" },
+    {
+      labelKey: "settingsCargo.system",
+      icon: "Activity",
+      children: [
+        { labelKey: "settingsCargo.crons",        href: "/admin/system/crons",         icon: "Clock" },
+        { labelKey: "settingsCargo.systemNotifs", href: "/admin/system/notifications", icon: "BellRing" },
+        { labelKey: "settingsCargo.csvImports",   href: "/admin/csv-imports",          icon: "Upload" },
+      ],
+    },
+    {
+      labelKey: "settingsCargo.tools",
+      icon: "Wrench",
+      children: [
+        { labelKey: "settingsCargo.orgEmail",   href: "/admin/organization-email", icon: "MessageCircle" },
+        { labelKey: "settingsCargo.adminUsers", href: "/admin/admins",             icon: "UserCog" },
+      ],
+    },
   ],
 };
 
