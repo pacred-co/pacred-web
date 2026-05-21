@@ -36,7 +36,12 @@ export default async function LiffLinkPage() {
     redirect("/login");
   }
 
-  const liffId = process.env.NEXT_PUBLIC_LIFF_ID ?? null;
+  // LIFF ID hardcoded as a default fallback per the owner directive
+  // (tracking-and-integration IDs embedded in code; env override
+  // supported for dev/staging). The Pacred LIFF app — see
+  // developers.line.biz → channel 2010105778 → LIFF.
+  const liffId =
+    process.env.NEXT_PUBLIC_LIFF_ID ?? "2010105778-SaSkkGza";
   const t = await getTranslations("liff");
 
   return (
