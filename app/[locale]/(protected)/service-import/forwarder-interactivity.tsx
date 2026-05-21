@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { calculateForwarderTotal } from "@/actions/forwarder";
 import {
   ForwarderRowView,
@@ -167,10 +168,29 @@ export function ForwarderInteractivity({
 
   // The legacy `<input id="select">` (forwarder.php L860) submits
   // the selected ids to the bulk-pay flow — wired UNLESS empty.
-  // The destination route is the legacy "ชำระเงิน multi-bill" page;
-  // until that Server Action lands the click no-ops (logged), but
-  // the disabled state mirrors the legacy guard at L1357.
+  // Bulk-bill submit Server Action ยังไม่ลง (cross-cutting, needs
+  // tb_wallet + tb_wallet_hs + LINE Notify orchestration); per-row
+  // /service-import/[fNo]?pay=true flow IS working end-to-end via
+  // the existing pay-from-wallet-button component. Bridge: clicking
+  // the pay-bar button navigates to the FIRST selected row's pay
+  // page so the customer can finish the transaction. If multiple
+  // are selected, a confirm dialog explains that bulk-pay will be
+  // added shortly — until then, pay one-by-one.
   const submitDisabled = selectedIds.size === 0;
+  const router = useRouter();
+  function handleBulkPay() {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const firstId = ids[0];
+    if (ids.length === 1) {
+      router.push(`/service-import/${firstId}?pay=true`);
+      return;
+    }
+    const ok = window.confirm(
+      `คุณเลือก ${ids.length} รายการ ยอดรวม ฿${displayTotal}\n\nระบบกำลังเตรียมการชำระแบบรวมบิลพร้อมกันทุกรายการ — ระหว่างนี้ระบบจะนำคุณไปยังรายการแรก (#${firstId}) เพื่อชำระทีละรายการ\n\nกด OK เพื่อไปต่อ`,
+    );
+    if (ok) router.push(`/service-import/${firstId}?pay=true`);
+  }
   const allChecked =
     eligibleIds.length > 0 && selectedIds.size === eligibleIds.length;
 
@@ -327,6 +347,7 @@ export function ForwarderInteractivity({
                       className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
                       id="select"
                       disabled={submitDisabled}
+                      onClick={handleBulkPay}
                     >
                       ชำระเงิน
                     </button>
