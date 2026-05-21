@@ -200,34 +200,22 @@ const blockBarcode: MenuItem = {
  *  in the page top-menubar; the deeper barcode toolbox stays in `blockBarcode`
  *  for warehouse role's sidebar reuse. */
 /**
- * Two-level: parent → Cargo (FCL/LCL) + Freight (FCL/LCL). Transport-mode
- * (รถ/เรือ/แอร์) intentionally NOT in sidebar — those are in-page filter
- * chips on `/admin/forwarders` (per ภูม 2026-05-20 ค่ำ · screenshot 1).
- * Sidebar carries the SERVICE-TYPE split (Cargo vs Freight, FCL vs LCL);
- * the page chips carry the TRANSPORT-MODE filter.
+ * 2026-05-21 ภูม brief — collapsed to a SINGLE leaf. Previously a 4-leaf
+ * nested dropdown (Cargo>FCL/LCL · Freight>FCL/LCL) — but per ภูม
+ * "ทำให้มันใช้งานง่าย ไม่ต้องเป็น dropdown menu" the Cargo/Freight +
+ * FCL/LCL split moved to in-page **Segmented Control** pills inside
+ * `<PageTopMenubar>` on `/admin/forwarders` (the same head menu that
+ * holds the รถ/เรือ/แอร์ mode chip).
+ *
+ * Sidebar = 1 line · the head menu carries every filter dimension
+ * (service-type segment · FCL/LCL · mode). Tombstone keeps old comment
+ * for context.
  */
 const blockForwarderImport: MenuItem = {
   labelKey: "forwarderImport.title",
+  href: "/admin/forwarders",
   icon: "Package",
   badge: "forwarderArrived",
-  children: [
-    {
-      labelKey: "forwarderImport.cargo",
-      icon: "Package",
-      children: [
-        { labelKey: "forwarderImport.fcl", href: "/admin/forwarders?segment=cargo-fcl", icon: "Package" },
-        { labelKey: "forwarderImport.lcl", href: "/admin/forwarders?segment=cargo-lcl", icon: "Package" },
-      ],
-    },
-    {
-      labelKey: "forwarderImport.freight",
-      icon: "Truck",
-      children: [
-        { labelKey: "forwarderImport.fcl", href: "/admin/forwarders?segment=freight-fcl", icon: "Package" },
-        { labelKey: "forwarderImport.lcl", href: "/admin/forwarders?segment=freight-lcl", icon: "Package" },
-      ],
-    },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-payment.php — บริการฝากโอน/ชำระ */

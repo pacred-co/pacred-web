@@ -126,9 +126,26 @@ type SearchParams = {
   q_multi?: string;     // U2-5: multi-line bulk tracking search
   date_from?: string;
   date_to?: string;
-  segment?: string;     // sidebar Cargo/Freight × FCL/LCL — label-only chip
+  segment?: string;     // DEPRECATED — kept for old bookmark links (cargo-fcl etc.)
+  service?: string;     // 2026-05-21 segmented control · 'cargo' | 'freight' — label-only
+  container?: string;   // 2026-05-21 segmented control · 'fcl' | 'lcl' — label-only
   mode?: string;        // transport mode chip ('1'/'2'/'3')
 };
+
+// 2026-05-21 ภูม brief — Segmented Controls in head menu (NOT sidebar).
+// Legacy tb_forwarder has NO explicit cargo/freight or FCL/LCL column —
+// these are LABEL-ONLY filters for now; the SQL doesn't change. Real
+// filter requires a derived expression or new column (Phase C).
+const SERVICE_OPTIONS = [
+  { v: undefined,  l: "ทั้งหมด"  },
+  { v: "cargo",    l: "Cargo"   },
+  { v: "freight",  l: "Freight" },
+] as const;
+const CONTAINER_OPTIONS = [
+  { v: undefined, l: "ทั้งหมด" },
+  { v: "fcl",     l: "FCL"     },
+  { v: "lcl",     l: "LCL"     },
+] as const;
 
 type RawForwarderRow = {
   id: number;
@@ -359,6 +376,19 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // ภูม brief 2026-05-20 ค่ำ — segment chip (label-only · Wave-B P0.5).
   const segmentLabel = sp.segment && SEGMENT_LABEL[sp.segment] ? SEGMENT_LABEL[sp.segment] : null;
 
+  // 2026-05-21 ภูม brief — back-compat: if old `?segment=cargo-fcl` URL hit
+  // is taken, split into the new dual-dimension `service` + `container`.
+  let service = sp.service;
+  let container = sp.container;
+  if (!service && !container && sp.segment) {
+    const parts = sp.segment.split("-");
+    if (parts[0] === "cargo" || parts[0] === "freight") service = parts[0];
+    if (parts[1] === "fcl" || parts[1] === "lcl") container = parts[1];
+  }
+  const serviceLabel = service === "cargo" ? "Cargo" : service === "freight" ? "Freight" : null;
+  const containerLabel = container === "fcl" ? "FCL" : container === "lcl" ? "LCL" : null;
+  const headerSuffix = [serviceLabel, containerLabel].filter(Boolean).join(" · ");
+
   return (
     <>
       <PageTopMenubar items={FORWARDER_MENUBAR} activeHref="/admin/forwarders" />
@@ -367,23 +397,11 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">
-            ฝากนำเข้า — Ops{segmentLabel ? ` — ${segmentLabel}` : ""}
+            ฝากนำเข้า — Ops{headerSuffix ? ` · ${headerSuffix}` : ""}
           </h1>
           <p className="text-sm text-muted mt-0.5">
             {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด {counts.total.toLocaleString("th-TH")})
           </p>
-          {segmentLabel ? (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
-              <span>กรอง: {segmentLabel}</span>
-              <Link
-                href="/admin/forwarders"
-                className="rounded-full px-1 leading-none hover:bg-primary-100"
-                aria-label="ล้างตัวกรองกลุ่ม"
-              >
-                ×
-              </Link>
-            </div>
-          ) : null}
         </div>
         <Link
           href="/admin/forwarders/bulk-search"
@@ -404,6 +422,31 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         </div>
       )}
 
+      {/* Segmented Control · ภูม brief 2026-05-21 — Cargo/Freight × FCL/LCL
+          moved out of sidebar (4-leaf dropdown) into head-menu pills.
+          Label-only filter for now (legacy tb_forwarder has no
+          service/container columns). */}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <span className="text-muted font-medium">บริการ:</span>
+        <SegmentedPills
+          name="service"
+          options={SERVICE_OPTIONS}
+          current={service}
+          sp={sp}
+          serviceOverride={service}
+          containerOverride={container}
+        />
+        <span className="text-muted font-medium ml-2">ตู้:</span>
+        <SegmentedPills
+          name="container"
+          options={CONTAINER_OPTIONS}
+          current={container}
+          sp={sp}
+          serviceOverride={service}
+          containerOverride={container}
+        />
+      </div>
+
       {/* Status filter chips — legacy 10 tabs */}
       <div className="flex flex-wrap gap-2">
         {filterOpts.map((o) => {
@@ -413,7 +456,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.date_from) params.set("date_from", sp.date_from);
           if (sp.date_to)   params.set("date_to", sp.date_to);
           if (sp.mode)      params.set("mode", sp.mode);
-          if (sp.segment)   params.set("segment", sp.segment);
+          if (service)      params.set("service", service);
+          if (container)    params.set("container", container);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
           return (
@@ -437,7 +481,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.q)         params.set("q", sp.q);
           if (sp.date_from) params.set("date_from", sp.date_from);
           if (sp.date_to)   params.set("date_to", sp.date_to);
-          if (sp.segment)   params.set("segment", sp.segment);
+          if (service)      params.set("service", service);
+          if (container)    params.set("container", container);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.mode ?? "") === (m ?? "");
           const label = m ? MODE_LABEL[m] : "ทุก mode";
@@ -508,4 +553,57 @@ async function loadStatusCounts(admin: ReturnType<typeof createAdminClient>) {
   ]);
 
   return { total, s1, s2, s3, s4, s5, s6, s7, credit, special };
+}
+
+/** 2026-05-21 ภูม brief — Segmented Control component for service · container
+ * pills. Renders an iOS-style pill group; one option active at a time.
+ * Preserves all other URL params on navigation. */
+function SegmentedPills({
+  name,
+  options,
+  current,
+  sp,
+  serviceOverride,
+  containerOverride,
+}: {
+  name: "service" | "container";
+  options: ReadonlyArray<{ v: string | undefined; l: string }>;
+  current: string | undefined;
+  sp: SearchParams;
+  serviceOverride: string | undefined;
+  containerOverride: string | undefined;
+}) {
+  return (
+    <div className="inline-flex rounded-full border border-border bg-white p-0.5 shadow-sm">
+      {options.map((o) => {
+        const params = new URLSearchParams();
+        // Preserve current filter state EXCEPT for this dimension (override below).
+        if (sp.status)    params.set("status", sp.status);
+        if (sp.q)         params.set("q", sp.q);
+        if (sp.date_from) params.set("date_from", sp.date_from);
+        if (sp.date_to)   params.set("date_to", sp.date_to);
+        if (sp.mode)      params.set("mode", sp.mode);
+        // Set both service + container — but override THIS dimension with o.v.
+        const svc = name === "service"   ? o.v : serviceOverride;
+        const con = name === "container" ? o.v : containerOverride;
+        if (svc) params.set("service", svc);
+        if (con) params.set("container", con);
+        const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
+        const active = (current ?? "") === (o.v ?? "");
+        return (
+          <Link
+            key={o.v ?? "all"}
+            href={href}
+            className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition ${
+              active
+                ? "bg-primary-500 text-white shadow"
+                : "text-foreground hover:bg-surface-alt"
+            }`}
+          >
+            {o.l}
+          </Link>
+        );
+      })}
+    </div>
+  );
 }
