@@ -90,6 +90,22 @@ Pulled from all 5 audits:
 
 ---
 
+## 🟡 2026-05-21 Wave 6 backlog — dashboard rewrite
+
+ภูม smoke-tested `/admin` on 2026-05-21 ค่ำ. Dashboard renders BUT reads
+the rebuilt schema → shows ฿0.00 for every revenue card · "10 ลูกค้า"
+(test profiles) instead of the real **8,898 PCS migrated customers** +
+**47,626 tb_forwarder rows**.
+
+Same pattern as P0 #1: replace rebuilt-table reads with tb_users /
+tb_forwarder / tb_header_order / tb_payment queries. 14+ count queries
+to rewrite · estimated 2-3 hr. Owner = next session.
+
+Workaround until then: super admins use **`/admin/kpi`** (the Phase 2
+exec dashboard wired in commit cd2104d) which queries the right tables
++ shows ลูกค้าใหม่ (9 this month) + ตู้กำลังขนส่ง (22) — already
+production-correct.
+
 ## 🚀 Recommended next move
 
 The P0 list is **9 items totalling ~18-25 ชม**, **3 already fixed** in Wave 3 (4/5/6). Remaining P0 work = **6 items · 14-21 ชม**.
