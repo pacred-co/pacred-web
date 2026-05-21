@@ -4,76 +4,94 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 
 /**
- * ฝากนำเข้า (forwarder import) RECEIPT PRINT document — a FAITHFUL
- * 1:1 TRANSCRIPTION of the legacy PCS Cargo `member/printReceiptF.php`
- * ("ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)" — the official receipt for a
- * customer's paid import shipments). D1 / ADR-0017 · faithful-port
- * transcription · runbook `docs/runbook/faithful-port-transcription.md`.
+ * Freight (ฝากนำเข้า / forwarder import) INVOICE document — a FAITHFUL
+ * 1:1 TRANSCRIPTION of the legacy PCS Cargo `member/invoiceF.php`
+ * ("ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)" — the invoice/receipt PDF for
+ * a freight (`F` = forwarder import) order). D1 / ADR-0017 ·
+ * faithful-port transcription · runbook
+ * `docs/runbook/faithful-port-transcription.md`.
  *
  * This is a transcription, NOT a reinterpretation. The JSX below is
- * the exact HTML markup `printReceiptF.php` builds into its mPDF
- * string — same elements, same class names, same Thai/English bilingual
- * labels, same column order, same 13-rows-per-page pagination, same
- * footer block. The visual identity comes from the legacy CSS:
- * printReceiptF.php has an INLINE <style> block (L146-258), brought
- * verbatim as the static `.pcs-legacy`-scoped
- * `public/legacy/pcs/print-receipt-f.css`, loaded via a plain <link>
+ * the exact HTML markup `invoiceF.php` builds into its mPDF string —
+ * same elements, same class names, same Thai/English bilingual labels,
+ * same column order, same 13-rows-per-page pagination, same footer
+ * block. The visual identity comes from the legacy CSS: invoiceF.php
+ * has an INLINE <style> block (L147-258), brought verbatim as the
+ * static `.pcs-legacy`-scoped `public/legacy/pcs/print-receipt-f.css`
+ * (shared with printReceiptF.php — the inline <style> block is
+ * byte-identical between the two files), loaded via a plain <link>
  * so it bypasses the app's Tailwind v4 / PostCSS pipeline.
  *
- * ── How the legacy screen is reached ─────────────────────────────
- * The legacy `receipt-f-hs.php` import-receipt history list links to
- * it (receipt-f-hs.php L121 / L138 / the bulk-print JS L238-246):
- *   printReceiptF.php?id=<rID>            — one receipt
- *   printReceiptF.php?type=1&id=<csv>     — bulk print (comma list)
- * Pacred has transcribed `receipt-f-hs.php` → `/service-import/
- * receipts`; until now that page kept a `LEGACY_PRINT_BASE`
- * placeholder URL for the un-ported print endpoint (its FLAG (A)).
- * THIS page is that endpoint, so the receipts-list links now resolve
- * inside Pacred — see the companion edit to receipt-f-hs's page.tsx.
+ * ── invoiceF.php vs printReceiptF.php (the F-variant pair) ────────
+ * The two legacy files are 99% identical mPDF generators that both
+ * produce a "ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)" document for a
+ * freight (`F`) order. The 3 meaningful differences are in the
+ * WHT-1% block (invoiceF.php L376-390 vs printReceiptF.php L375-392):
  *
- * Pacred route: `/service-import/receipts/print` (a sub-route of the
- * receipt-history screen). The legacy `?id` and `?type` GET params
- * become Next.js `searchParams` — faithful to the legacy URL
- * contract. `?id` is a comma-joined list, exactly like the PHP
- * `explode(",", $_GET['id'])`. `?type=1` is the legacy bulk-print
- * marker; printReceiptF.php only ever branches `$nameDocs` on it and
- * both branches produce the same '<br/>' — so it is read but has no
- * visible effect, reproduced 1:1.
+ *   - invoiceF gates the WHT-1% computation on `$ReCorporate==0`
+ *     (i.e. PERSONAL receipts), while printReceiptF gates on
+ *     `$ReCorporate==1` (CORPORATE receipts).
+ *   - invoiceF uses the threshold `diff0($amountPayAll2,$amountPayAll)<=1`
+ *     (a fine-grained 1-baht tolerance), while printReceiptF uses
+ *     `<=1200 && $amountPayAll2>1000` (the legacy bulk-print receipt
+ *     thresholds tolerant of larger WHT-related diffs).
+ *   - printReceiptF additionally `number_format`-rounds totalPriceAll
+ *     and Dis1per before/after the WHT line; invoiceF does not.
  *
- * ── Data — every printReceiptF.php mysqli query transcribed 1:1 ───
+ * The legacy `receipt-f-hs.php` history list links exclusively at
+ * `printReceiptF.php`; `invoiceF.php` is reached from older admin
+ * surfaces / direct links. The two routes are kept SEPARATE in
+ * Pacred to preserve the legacy WHT semantics 1:1 — collapsing them
+ * would alter the printed totals for some receipts.
+ *
+ * ── Route ────────────────────────────────────────────────────────
+ * Pacred route: `/freight/invoice/[id]` — the dynamic `[id]` segment
+ * carries the rID (the legacy `?id=`). The legacy supported a
+ * comma-joined `?id=PCS123,PCS456` for bulk; the new dynamic segment
+ * accepts the same comma-joined value as one path segment (Next.js
+ * URL-decodes, the page splits the same way `explode(",", $_GET['id'])`
+ * does). The legacy `?type` GET param is read from `searchParams`
+ * for fidelity; invoiceF.php only branches `$nameDocs` on it and
+ * both branches produce '<br/>' — read with no visible effect.
+ *
+ * ── Data — every invoiceF.php mysqli query transcribed 1:1 ────────
  * `tb_*` is RLS-locked to service_role, so reads go through the
- * admin client. printReceiptF.php pins the receipt's customer via
- * the cookie `pcs_userID`; the Pacred equivalent is the logged-in
+ * admin client. invoiceF.php pins the receipt's customer via the
+ * cookie `pcs_userID`; the Pacred equivalent is the logged-in
  * member's `member_code` ("PR<n>" === tb_*.userid) — every receipt
  * is checked to belong to that customer before it is rendered.
  *
- *   $sql       — printReceiptF.php L46-52: tb_receipt ⋈ tb_users ⋈
+ *   $sql       — invoiceF.php L46-52: tb_receipt ⋈ tb_users ⋈
  *                tb_corporate WHERE rID.
- *   address    — printReceiptF.php L76: tb_address_main ⋈ tb_address
+ *   address    — invoiceF.php L76: tb_address_main ⋈ tb_address
  *                — the customer's main address (non-corporate path).
- *   $sql_item  — printReceiptF.php L123-129: tb_receipt_item ⋈
+ *   $sql_item  — invoiceF.php L124-130: tb_receipt_item ⋈
  *                tb_receipt ⋈ tb_forwarder ⋈ tb_wallet_hs
  *                WHERE ri.rID & f.ID IS NOT NULL GROUP BY f.ID.
  *
  * ── FLAGGED — deferred mutation (a render is a PURE READ) ─────────
- * printReceiptF.php runs an UPDATE at render time (L58):
+ * invoiceF.php runs an UPDATE at render time (L58):
  *   UPDATE tb_receipt SET statusPrint='1', adminIDprint='ลูกค้า',
  *                         rDatePrint=NOW() WHERE rID
  * marking the receipt printed by the customer. A Next.js Server
  * Component render MUST stay a pure read (runbook §9.4), so this
- * write is NOT performed here — it is a DEFERRED Server Action
- * (see the report).
+ * write is NOT performed here — it is a DEFERRED Server Action.
+ *
+ * TODO(server-action): port the `UPDATE tb_receipt SET statusPrint`
+ *   mutation to actions/*.ts when reviewed by เดฟ.
  *
  * ── Notes on faithful reproduction ───────────────────────────────
- *  - The WHT-1% block (printReceiptF.php L375-392) only fires for a
- *    non-corporate-name receipt ($ReCorporate==1) — it conditionally
- *    shows "LESS WITHHOLDING TAX 1%". The legacy `diff0()` helper
+ *  - The WHT-1% block (invoiceF.php L376-390) only fires for a
+ *    PERSONAL receipt ($ReCorporate==0) — note this is the OPPOSITE
+ *    gate from printReceiptF.php (which fires it for CORPORATE).
+ *    This is the load-bearing difference between the two F-variants
+ *    and is reproduced verbatim. The legacy `diff0()` helper
  *    (function.php L1409) = abs($a-$b) rounded; transcribed below.
- *  - The PCS member-code special-cases (printReceiptF.php L70-113 —
+ *  - The PCS member-code special-cases (invoiceF.php L70-113 —
  *    PCS415 / PCS71 / PCS4136 / PCS8765) are kept verbatim, rebranded
  *    PCS→PR per the brand-split rule (runbook §3). They hardcode a
  *    name / tax id / address for those specific migrated customers.
- *  - logo.png / stamp.png / sin-wandee.jpg — printReceiptF.php prints
+ *  - logo.png / stamp.png / sin-wandee.jpg — invoiceF.php prints
  *    these `assets/images/theme/*` brand assets. The PR assets are
  *    not yet swapped; the legacy PCS assets are used as 1:1
  *    placeholders (`/legacy/pcs/theme/*`) and flagged for ปอน's
@@ -88,16 +106,15 @@ import { PrintButton } from "@/components/print-button";
  * legacy prints in the document are kept verbatim (interim brand
  * split — runbook §3 / the PCS-scrub plan gates the rename).
  */
-
 export const dynamic = "force-dynamic";
 
-// printReceiptF.php paginates 13 item rows per page (L138).
+// invoiceF.php paginates 13 item rows per page (L139).
 const ROWS_PER_PAGE = 13;
 
 // ── Legacy PCS theme assets (placeholders pending ปอน's PR swap) ──
 const THEME_BASE = "/legacy/pcs/theme";
 
-/** number_format($n, $d) — the PHP money formatter printReceiptF.php
+/** number_format($n, $d) — the PHP money formatter invoiceF.php
  *  uses throughout. */
 function numberFormat(n: number, decimals = 2): string {
   return (Number(n) || 0).toLocaleString("en-US", {
@@ -123,7 +140,7 @@ function diff0(a: number, b: number): number {
 
 /* ── Convert($amount) — the Thai baht-text reader.
  *    member/include/function.php L1021-1073 (Convert + ReadNumber).
- *    printReceiptF.php L411 prints Convert($totalPriceAll-$Dis1per). ── */
+ *    invoiceF.php L410 prints Convert($totalPriceAll-$Dis1per). ── */
 const POSITION_CALL = ["แสน", "หมื่น", "พัน", "ร้อย", "สิบ", ""];
 const NUMBER_CALL = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
 
@@ -169,10 +186,7 @@ function convert(amount: number): string {
   return ret;
 }
 
-/** DATE_FORMAT(d,'%d/%m/%Y') — dd/mm/YYYY. printReceiptF.php SELECTs
- *  the with-time format too (`%d/%m/%Y %T`) but the rendered document
- *  only ever prints $dateCreate, the date-only value (L55) — so only
- *  the date formatter is needed. */
+/** DATE_FORMAT(d,'%d/%m/%Y') — dd/mm/YYYY. */
 function fmtDate(d: string | null): string {
   if (!d) return "";
   const dt = new Date(d.replace(" ", "T"));
@@ -181,7 +195,7 @@ function fmtDate(d: string | null): string {
   return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()}`;
 }
 
-// ── Row types (the columns printReceiptF.php SELECTs + renders) ──
+// ── Row types (the columns invoiceF.php SELECTs + renders) ──
 type ReceiptRow = {
   rdate: string | null;
   userid: string;
@@ -211,8 +225,8 @@ type ForwarderItemRow = {
   amount: number; // tb_wallet_hs.amount (the slip amount)
 };
 
-/** One fully-resolved receipt ready to render — printReceiptF.php
- *  builds one or more mPDF pages per rID. */
+/** One fully-resolved receipt ready to render — invoiceF.php builds
+ *  one or more mPDF pages per rID. */
 type ReceiptDoc = {
   rID: string;
   dateCreate: string;
@@ -221,7 +235,7 @@ type ReceiptDoc = {
   corporateName: string;
   corporateNumber: string;
   corporateAddress: string;
-  addressBR: boolean; // legacy adds a spacer <br> when address ≤230 chars
+  addressBR: boolean;
   // page rollup totals
   rows: ForwarderItemRow[];
   fTotalPriceAll: number;
@@ -232,50 +246,51 @@ type ReceiptDoc = {
   totalPriceAll: number;
   amountPayAll: number;
   // WHT-1% block
-  reCorporate: number; // 0 = corporate-name receipt, 1 = personal
+  reCorporate: number; // 0 = personal-name receipt, 1 = corporate
   textPer1: string;
   pricPer1Visible: boolean;
   pricPer1Value: number;
   dis1per: number;
 };
 
-type SearchParams = {
-  id?: string;
-  type?: string;
-};
+type RouteParams = { id: string };
+type SearchParams = { type?: string };
 
-export default async function ServiceImportReceiptPrintPage({
+export default async function FreightInvoicePage({
+  params,
   searchParams,
 }: {
+  params: Promise<RouteParams>;
   searchParams: Promise<SearchParams>;
 }) {
-  // printReceiptF.php L6-10 — a logged-out visitor is redirected to /login.
+  // invoiceF.php L6-10 — a logged-out visitor is redirected to /login.
   const { profile } = await requireAuth();
+  const { id } = await params;
   const sp = await searchParams;
 
-  // printReceiptF.php L11: `if(isset($_GET['id']))`.
-  if (sp.id === undefined || sp.id === "") notFound();
+  // invoiceF.php L11: `if(isset($_GET['id']))`. The dynamic segment
+  // value comes in URL-decoded (Next.js handles %2C → ',').
+  if (!id || id === "") notFound();
 
   // $userID — the customer's member code ("PR<n>" === tb_*.userid).
   const userID = profile?.member_code ?? "";
 
-  // printReceiptF.php L39-43 — $arrID = explode(",", $_GET['id']);
-  // $dataTitle = the comma-joined list (used in the <title>).
-  const arrID = sp.id.split(",").filter((s) => s !== "");
+  // invoiceF.php L39-43 — $arrID = explode(",", $_GET['id']);
+  const arrID = id.split(",").filter((s) => s !== "");
   const dataTitle = arrID.join(", ");
   void dataTitle; // legacy uses it only in <title>; Next sets <title> elsewhere
 
-  // printReceiptF.php L14-16 — $nameDocs branches on ?type but BOTH
+  // invoiceF.php L14-16 — $nameDocs branches on ?type but BOTH
   // branches assign '<br/>' — read with no visible effect (1:1).
   void sp.type;
 
   const admin = createAdminClient();
 
-  // ── Build one ReceiptDoc per rID (printReceiptF.php L44-485) ──
+  // ── Build one ReceiptDoc per rID (invoiceF.php L44-484) ──
   const docs: ReceiptDoc[] = [];
 
   for (const ID of arrID) {
-    // $sql — printReceiptF.php L46-52: tb_receipt ⋈ tb_users ⋈
+    // $sql — invoiceF.php L46-52: tb_receipt ⋈ tb_users ⋈
     // tb_corporate WHERE rID. PostgREST cannot express the multi-table
     // join in one select, so it is the same sequence of lookups the
     // PHP effectively does.
@@ -285,15 +300,15 @@ export default async function ServiceImportReceiptPrintPage({
       .eq("rid", ID)
       .maybeSingle<{ rdate: string | null; userid: string }>();
 
-    // printReceiptF.php L53: `if ($result->num_rows > 0)` — skip a
+    // invoiceF.php L53: `if ($result->num_rows > 0)` — skip a
     // receipt id that does not exist.
     if (!receipt) continue;
 
-    // FAITHFUL ownership gate — printReceiptF.php scopes the print to
-    // the cookie owner ($_COOKIE['pcs_userID']); a customer must only
-    // ever print their OWN receipt. Skip a receipt owned by someone
-    // else (the legacy relies on the link only being shown to its
-    // owner; the Pacred port enforces it server-side).
+    // FAITHFUL ownership gate — invoiceF.php scopes the print to the
+    // cookie owner ($_COOKIE['pcs_userID']); a customer must only ever
+    // print their OWN receipt. Skip a receipt owned by someone else
+    // (the legacy relies on the link only being shown to its owner;
+    // the Pacred port enforces it server-side).
     if (receipt.userid !== userID) continue;
 
     const { data: userRow } = await admin
@@ -320,12 +335,11 @@ export default async function ServiceImportReceiptPrintPage({
       corporateaddress: corpRow?.corporateaddress ?? "",
       username: userRow?.username ?? "",
       userlastname: userRow?.userlastname ?? "",
-      // tb_receipt also carries the per-receipt reComp* override cols.
       recompnumber: "",
       recompname: "",
       recompaddress: "",
     };
-    // printReceiptF.php SELECTs reCompNumber / reCompName / reCompAddress
+    // invoiceF.php SELECTs reCompNumber / reCompName / reCompAddress
     // from tb_receipt — fetch them (the receipt-level company override).
     const { data: reComp } = await admin
       .from("tb_receipt")
@@ -342,25 +356,25 @@ export default async function ServiceImportReceiptPrintPage({
 
     const dateCreate = fmtDate(rowMain.rdate);
 
-    // printReceiptF.php L58 — the render-time UPDATE statusPrint='1'
-    // is DEFERRED (a render is a pure read; see the file header FLAG).
+    // invoiceF.php L58 — the render-time UPDATE statusPrint='1' is
+    // DEFERRED (a render is a pure read; see the file header FLAG).
+    // TODO(server-action): port to actions/*.ts when reviewed by เดฟ.
 
-    // ── Customer-name resolution — printReceiptF.php L62-113 ──
-    // $fName = userID . ' ' . corporateName  (corporate path).
+    // ── Customer-name resolution — invoiceF.php L62-114 ──
     let fName = `${rowMain.userid} ${rowMain.corporatename}`;
     let reCorporate: number;
 
     if (rowMain.corporatenumber === "") {
-      // not a tb_corporate customer (printReceiptF.php L68-93)
+      // not a tb_corporate customer (invoiceF.php L68-93)
       if (rowMain.recompname === "") {
-        // printReceiptF.php L70-74 — the PCS415 hardcode (rebranded PR415)
+        // invoiceF.php L70-74 — the PCS415 hardcode (rebranded PR415)
         if (rowMain.userid === "PR415") {
           rowMain.corporatename = "พีรวันติ์ ติระจารุอนันต์";
           rowMain.corporatenumber = "-";
           rowMain.corporateaddress =
             "222/1 หมู่4 หมู่บ้านลัดดาลม อีลี่ แกรนต์ ตำบล/แขวง บางขุนกอง อำเภอ/เขต บางกรวย จังหวัด นนทบุรี 11130";
         }
-        // printReceiptF.php L76-82 — fall back to the main address.
+        // invoiceF.php L76-82 — fall back to the main address.
         const { data: addrRow } = await admin
           .from("tb_address_main")
           .select("addressid")
@@ -383,7 +397,7 @@ export default async function ServiceImportReceiptPrintPage({
               addresstel: string;
             }>();
           if (addr) {
-            // CONCAT(addressNo,' ตำบล/แขวง ',…) — printReceiptF.php L76.
+            // CONCAT(addressNo,' ตำบล/แขวง ',…) — invoiceF.php L76.
             fullAddress =
               `${addr.addressno} ตำบล/แขวง ${addr.addresssubdistrict}` +
               ` อำเภอ/เขต ${addr.addressdistrict} จังหวัด ${addr.addressprovince}` +
@@ -395,7 +409,7 @@ export default async function ServiceImportReceiptPrintPage({
         rowMain.corporatename = `${rowMain.username} ${rowMain.userlastname}`;
         fName = `${rowMain.userid} ${rowMain.corporatename}`;
       } else {
-        // printReceiptF.php L83-92 — use the receipt-level reComp* override.
+        // invoiceF.php L83-92 — use the receipt-level reComp* override.
         rowMain.corporatename = rowMain.recompname ?? "";
         rowMain.corporatenumber =
           rowMain.recompnumber !== "" ? (rowMain.recompnumber ?? "") : "-";
@@ -407,10 +421,10 @@ export default async function ServiceImportReceiptPrintPage({
       reCorporate = 1;
     }
 
-    // printReceiptF.php L97-101 — a spacer <br> when the address is short.
+    // invoiceF.php L97-101 — a spacer <br> when the address is short.
     const addressBR = (rowMain.corporateaddress ?? "").length <= 230;
 
-    // printReceiptF.php L102-113 — three more PCS member-code hardcodes
+    // invoiceF.php L102-113 — three more PCS member-code hardcodes
     // (rebranded PR71 / PR4136 / PR8765).
     if (rowMain.userid === "PR71") {
       fName = "บริษัท 3พี อีควิปเม้นท์ เทรดดิ้ง จำกัด ";
@@ -426,9 +440,9 @@ export default async function ServiceImportReceiptPrintPage({
       rowMain.corporatenumber = "1350100500141";
     }
 
-    // printReceiptF.php L115-120 — the WHT-1% defaults.
+    // invoiceF.php L116-121 — the WHT-1% defaults.
     // $textPer1 starts hidden (white) for a personal receipt; for a
-    // corporate-name receipt it is shown. $pricPer1 starts white "0".
+    // corporate-name receipt it is SHOWN (invoiceF.php L119-121).
     let textPer1 =
       reCorporate === 1
         ? '<div>LESS WITHHOLDING TAX 1%</div>'
@@ -436,10 +450,9 @@ export default async function ServiceImportReceiptPrintPage({
     let pricPer1Visible = false;
 
     // ── $sql_item — tb_receipt_item ⋈ tb_forwarder ⋈ tb_wallet_hs ──
-    // printReceiptF.php L123-129. The legacy GROUP BY f.ID; the
-    // tb_wallet_hs join (status=2, type<>5) pulls `amount` — the slip
-    // amount actually paid for each forwarder line.
-    // 1. the receipt's item fIDs (tb_receipt_item).
+    // invoiceF.php L124-130. GROUP BY f.ID; tb_wallet_hs join
+    // (status=2, type<>5) pulls `amount` — the slip amount actually
+    // paid for each forwarder line.
     const { data: itemLinks } = await admin
       .from("tb_receipt_item")
       .select("fid")
@@ -450,8 +463,6 @@ export default async function ServiceImportReceiptPrintPage({
 
     const rows: ForwarderItemRow[] = [];
     if (fIds.length > 0) {
-      // tb_forwarder — the line columns the receipt table renders +
-      // the price columns the rollup sums.
       const { data: fRows } = await admin
         .from("tb_forwarder")
         .select(
@@ -459,8 +470,6 @@ export default async function ServiceImportReceiptPrintPage({
         )
         .in("id", fIds);
 
-      // tb_wallet_hs — the paid-slip amount per forwarder line
-      // (refOrder=f.ID, status=2, type<>5, userID=f.userID).
       const { data: walletRows } = await admin
         .from("tb_wallet_hs")
         .select("reforder, amount, status, type, userid")
@@ -473,10 +482,8 @@ export default async function ServiceImportReceiptPrintPage({
         amount: number;
         type: string;
       }[]) {
-        // type<>5 — printReceiptF.php L128.
+        // type<>5 — invoiceF.php L129.
         if (w.type === "5") continue;
-        // GROUP BY f.ID → the legacy keeps one wallet_hs amount per
-        // forwarder; take the first match (mirrors MySQL's grouped pick).
         if (!walletByRef.has(w.reforder)) {
           walletByRef.set(w.reforder, Number(w.amount) || 0);
         }
@@ -486,7 +493,6 @@ export default async function ServiceImportReceiptPrintPage({
         id: number;
         userid: string;
       } & Omit<ForwarderItemRow, "fid" | "amount">)[]) {
-        // f.userID match on the wallet join — keep it faithful.
         const amount = walletByRef.get(String(f.id)) ?? 0;
         rows.push({
           fid: f.id,
@@ -507,7 +513,7 @@ export default async function ServiceImportReceiptPrintPage({
       }
     }
 
-    // ── Rollup totals — printReceiptF.php L353-374 ──
+    // ── Rollup totals — invoiceF.php L354-373 ──
     let amountPayAll = 0;
     let fTotalPriceAll = 0;
     let fDiscountAll = 0;
@@ -516,7 +522,7 @@ export default async function ServiceImportReceiptPrintPage({
     let priceOtherBillAll = 0;
     let totalPriceAll = 0;
     for (const r of rows) {
-      // $totalPrice — printReceiptF.php L354.
+      // $totalPrice — invoiceF.php L355.
       const totalPrice =
         r.ftotalprice +
         r.ftransportprice +
@@ -536,28 +542,26 @@ export default async function ServiceImportReceiptPrintPage({
       totalPriceAll += totalPrice;
     }
 
-    // ── WHT-1% — printReceiptF.php L375-392 (the $ReCorporate==1 gate) ──
+    // ── WHT-1% — invoiceF.php L376-390 ──
+    // KEY DIFFERENCE vs printReceiptF.php: the gate is `$ReCorporate==0`
+    // (PERSONAL receipts), not `==1` (CORPORATE). The threshold is
+    // `diff0(amountPayAll2, amountPayAll) <= 1` (1 baht), not <=1200.
+    // Also: invoiceF.php does NOT number_format-round totalPriceAll
+    // before the WHT maths (printReceiptF.php does).
     let dis1per = 0;
     let pricPer1Value = 0;
-    if (reCorporate === 1) {
-      // totalPriceAll → number_format(...,2,'.','')*… — the legacy
-      // rounds to 2 dp with no separator before the ratio maths.
-      totalPriceAll = Number(totalPriceAll.toFixed(2));
+    if (reCorporate === 0) {
       dis1per = totalPriceAll * 0.01;
       const amountPayAll2 = Number((totalPriceAll - dis1per).toFixed(2));
       if (diff0(totalPriceAll, amountPayAll) === 0) {
         // exact-paid → no WHT line.
         textPer1 = "";
         dis1per = 0;
-      } else if (
-        diff0(amountPayAll2, amountPayAll) <= 1200 &&
-        amountPayAll2 > 1000
-      ) {
-        // WHT 1% withheld.
+      } else if (diff0(amountPayAll2, amountPayAll) <= 1) {
+        // WHT 1% withheld (1-baht tolerance).
         textPer1 = '<div>LESS WITHHOLDING TAX 1%</div>';
         pricPer1Visible = true;
         pricPer1Value = dis1per;
-        dis1per = Number(dis1per.toFixed(2));
       } else {
         textPer1 = "";
         dis1per = 0;
@@ -619,20 +623,16 @@ export default async function ServiceImportReceiptPrintPage({
 }
 
 /**
- * Renders one receipt as one-or-more print pages — printReceiptF.php
- * L346-479 paginates the item rows 13-per-page; the bilingual header
+ * Renders one receipt as one-or-more print pages — invoiceF.php
+ * L347-478 paginates the item rows 13-per-page; the bilingual header
  * repeats on every page and the footer summary block renders only on
  * the LAST page.
  */
 function ReceiptDocPages({ doc }: { doc: ReceiptDoc }) {
-  // printReceiptF.php L346-350 — $pageAll = ceil(rows / 13).
+  // invoiceF.php L347-351 — $pageAll = ceil(rows / 13).
   const pageAll = Math.max(1, Math.ceil(doc.rows.length / ROWS_PER_PAGE));
   const pages: React.ReactElement[] = [];
 
-  // The legacy keeps a running item number ($no) + a running
-  // $totalPriceAll as it walks the pages — but since the footer only
-  // prints on the last page with the final total, we render each page
-  // with its slice and the footer with the doc-level totals.
   for (let page = 1; page <= pageAll; page++) {
     const start = (page - 1) * ROWS_PER_PAGE;
     const slice = doc.rows.slice(start, start + ROWS_PER_PAGE);
@@ -651,8 +651,8 @@ function ReceiptDocPages({ doc }: { doc: ReceiptDoc }) {
   return <>{pages}</>;
 }
 
-/** A single A4 receipt page — printReceiptF.php $bodyHeader + the
- *  item rows + ($page==$pageAll ? the footer). */
+/** A single A4 receipt page — invoiceF.php $bodyHeader + the item
+ *  rows + ($page==$pageAll ? the footer). */
 function ReceiptPage({
   doc,
   slice,
@@ -668,9 +668,9 @@ function ReceiptPage({
 }) {
   return (
     <article style={{ pageBreakAfter: "always" }}>
-      {/* printReceiptF.php L260 — <table class="table"> */}
+      {/* invoiceF.php L261 — <table class="table"> */}
       <table className="table">
-        {/* ── Logo + company + document-title band — L261-277 ── */}
+        {/* ── Logo + company + document-title band — L262-278 ── */}
         <thead>
           <tr className="">
             <th colSpan={2} className="text-center">
@@ -703,7 +703,7 @@ function ReceiptPage({
           </tr>
         </thead>
 
-        {/* ── Issuer block — printReceiptF.php L278-307 ── */}
+        {/* ── Issuer block — invoiceF.php L279-308 ── */}
         <thead>
           <tr className="">
             <th colSpan={7}>
@@ -723,8 +723,8 @@ function ReceiptPage({
             <th colSpan={3} className="text-left v-a-t">
               <div>บริษัท พีซีเอส คาร์โก้ จำกัด</div>
               <div>0105560160694</div>
-              {/* printReceiptF.php L291-295 — the issuer address
-                  switched on 2025-03-20. Reproduced 1:1. */}
+              {/* invoiceF.php L292-296 — the issuer address switched
+                  on 2025-03-20. Reproduced 1:1. */}
               <div>{issuerAddress()}</div>
               <div>02-444-7046</div>
             </th>
@@ -734,8 +734,8 @@ function ReceiptPage({
             </th>
             <th colSpan={1} className="text-left v-a-t">
               <div>{doc.dateCreate}</div>
-              {/* printReceiptF.php replaces the literal "pagebillpage"
-                  token with $page."/".$pageAll. */}
+              {/* invoiceF.php replaces "pagebillpage" token with
+                  $page."/".$pageAll. */}
               <div>{pageName}</div>
             </th>
           </tr>
@@ -744,7 +744,7 @@ function ReceiptPage({
               <hr />
             </th>
           </tr>
-          {/* ── Customer block — printReceiptF.php L308-322 ── */}
+          {/* ── Customer block — invoiceF.php L309-323 ── */}
           <tr className="">
             <th colSpan={2} className="text-left v-a-t">
               <div>ลูกค้า / Customer : </div>
@@ -756,8 +756,8 @@ function ReceiptPage({
               <div className="h-sub">{countText(doc.corporateNumber, 20)}</div>
               <div className="h-sub" style={{ height: "50mm" }}>
                 {countText(doc.corporateAddress, 200)}
-                {/* printReceiptF.php L99 — the white-dot spacer line
-                    when the address is short. */}
+                {/* invoiceF.php L99 — the white-dot spacer line when
+                    the address is short. */}
                 {doc.addressBR ? (
                   <>
                     <br />
@@ -769,7 +769,7 @@ function ReceiptPage({
           </tr>
         </thead>
 
-        {/* ── Item-table head — printReceiptF.php L324-334 ── */}
+        {/* ── Item-table head — invoiceF.php L325-335 ── */}
         <thead>
           <tr>
             <th
@@ -835,7 +835,7 @@ function ReceiptPage({
           </tr>
         </thead>
 
-        {/* ── Item rows — printReceiptF.php L365-373 ── */}
+        {/* ── Item rows — invoiceF.php L366-374 ── */}
         <tbody>
           {slice.map((r, i) => (
             <tr key={r.fid}>
@@ -853,23 +853,21 @@ function ReceiptPage({
         </tbody>
       </table>
 
-      {/* ── Footer summary — printReceiptF.php L398-462, last page only ── */}
+      {/* ── Footer summary — invoiceF.php L397-461, last page only ── */}
       {isLast ? <ReceiptFooter doc={doc} /> : null}
     </article>
   );
 }
 
 /**
- * The fixed-bottom receipt footer — printReceiptF.php L398-462.
+ * The fixed-bottom receipt footer — invoiceF.php L397-461.
  * Renders only on the last page; carries the price summary, the
  * payment-method checkboxes, the Thai baht-text total, and the
  * issuer / approver / stamp / customer signature row.
  */
 function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
-  // printReceiptF.php L393-394 — the bank-transfer line.
-  // $textPay = checked bank-transfer + the centred amount line.
+  // invoiceF.php L392-393 — the bank-transfer line.
   const grandTotal = doc.totalPriceAll - doc.dis1per;
-  // printReceiptF.php L121-122 — the stamp + signature images.
   return (
     <div style={{ position: "fixed", bottom: "0mm", fontSize: "20px" }}>
       <hr />
@@ -895,7 +893,7 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
                 <input type="checkbox" style={{ fontSize: "20px" }} />{" "}
                 เช็คธนาคาร/สาขา_____________ วันที่________ เลขที่เช็ค____________
               </div>
-              {/* $textPay — printReceiptF.php L393-394 */}
+              {/* $textPay — invoiceF.php L392-393 */}
               <div>
                 <input
                   type="checkbox"
@@ -922,11 +920,11 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
               <div>Delivery Charge TH</div>
               <div>Other</div>
               <div>Discount</div>
-              {/* $textPer1 — the WHT-1% line; printReceiptF.php builds
-                  it as an HTML fragment. It is one of:
+              {/* $textPer1 — the WHT-1% line; invoiceF.php builds it
+                  as an HTML fragment. It is one of:
                   '' · '<div>LESS WITHHOLDING TAX 1%</div>' ·
                   '<div style="color:#fff;">…</div>' (the white/hidden
-                  default for a personal receipt). Rendered 1:1. */}
+                  default for a corporate receipt). Rendered 1:1. */}
               {doc.textPer1 === "" ? null : doc.textPer1.includes(
                   "#fff",
                 ) ? (
@@ -1014,7 +1012,7 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
 }
 
 /**
- * printReceiptF.php L291-295 — the issuer (PCS Cargo) address switched
+ * invoiceF.php L292-296 — the issuer (PCS Cargo) address switched
  * on 2025-03-20. `date('Y-m-d') > '2025-03-20'` → the new address.
  * Reproduced 1:1: today is past that cutover, so the new address.
  */

@@ -557,7 +557,7 @@ export default async function WalletPage() {
                             <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
-                              <a href="https://pcscargo.co.th/การเติมเงิน/" target="_blank">
+                              <a href="/wallet/deposit" target="_blank">
                                 ดูวิธีการเติมเงิน
                               </a>
                             </div>

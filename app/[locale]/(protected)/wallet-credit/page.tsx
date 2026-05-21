@@ -4,60 +4,102 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Customer "เติมเงินเข้ากระเป๋า" (wallet deposit) screen — a FAITHFUL 1:1
- * TRANSCRIPTION of the legacy PCS Cargo `member/wallet.php` `?page=='add'`
- * branch (L3-596 — the default branch the .htaccess sends `wallet/add/`
- * to via `^wallet/(.*)/$ wallet.php?page=$1`) (D1 / ADR-0017 ·
+ * Customer "กระเป๋าสตางค์เครดิต" (credit wallet) screen — a FAITHFUL 1:1
+ * TRANSCRIPTION of the legacy PCS Cargo `member/wallet-credit.php` (the
+ * default `page` branch — no `?page`, lines 1-532) (D1 / ADR-0017 ·
  * faithful-port transcription · runbook
  * `docs/runbook/faithful-port-transcription.md`).
  *
  * ── Legacy mapping ──
- * `member/.htaccess`: `wallet/add/` → `wallet.php?page=add`
- * `wallet.php` L3: `if(!isset($_GET['page']) || $_GET['page']=='add')` —
- *   the same code path renders the wallet landing AND the deposit modal.
- *   The L294-302 inline `<script>` then auto-opens the `#wallet-add`
- *   modal when `?page=='add'` is set.
+ * The legacy `.htaccess` (member/.htaccess L27-28) rewrites:
+ *   `wallet-credit/`        → `wallet-credit.php`         (no `?page`)
+ *   `wallet-credit/<x>/`    → `wallet-credit.php?page=<x>`
  *
- * Pacred routes the deposit-form variant at `/wallet/deposit` (the
- * landing without the modal stays at `/wallet`).
+ * `wallet-credit.php` has TWO branches keyed off `?page`:
+ *   - `?page` is unset OR `?page=='add'` (L3-532) → the credit-wallet
+ *     view + the #wallet-add deposit modal (default landing).
+ *   - `?page=='withdraw'`              (L535-803) → the credit-wallet
+ *     withdraw form + the #wallet-login password-confirm modal.
+ * This page transcribes the default branch; `/wallet-credit/withdraw`
+ * is a separate screen (not the target of this menu link).
  *
- * ── Page structure (wallet.php L85-288 with the auto-open modal) ──
- * Identical to `/wallet/page.tsx` (the same tabs + balance card render
- * for `?page=='add'`), with the `#wallet-add` Bootstrap modal auto-opened
- * by the L294-302 script. Transcribed as a static modal-open state — the
- * page renders with the deposit modal visible (the legacy intent).
+ * ── Page structure (wallet-credit.php L76-227) ──
+ * .app-content > .content-wrapper
+ *   1. .content-header > … > ol.breadcrumb
+ *      — "หน้าแรก" / "กระเป๋าสตางค์เครดิต"  (L80-91)
+ *   2. .content-body.pr110 > section > .row > .col-md-12 > .card …
+ *      a. balance card                        (L99-124)
+ *         — name · "วงเงินเครดิตที่ใช้งานได้" · tam-counter (=
+ *           userCreditValue - creditValue) · "ยอดเครดิตค้างชำระ" ·
+ *           "กระเป๋าสตางค์เงินสด" · logo · progress · "ชำระเงินเครดิต"
+ *           button (→ `forwarder/?q=c` = `/service-import?q=c`)
+ *      b. tab panel                            (L125-157)
+ *         — one tab: "รายการเดินบัญชี"
+ *         — empty state: "คุณยังไม่มีรายการ"   (when COUNT(ID)=0)
+ *   3. #wallet-add deposit modal                (L163-222)
+ *      — same K-Bank top card + amount input + dropify slip uploader +
+ *        QR code as wallet.php's modal, but the form posts to
+ *        `wallet-credit/` (legacy basePath."wallet-credit/")
  *
- * ── Data — every wallet.php mysqli query transcribed 1:1 ──
- * `tb_*` is RLS-locked to service_role → reads go through admin client.
- *   - $walletTotal     → tb_wallet.wallettotal          (header.php L86-92)
- *   - $userName etc.   → tb_users.username/userlastname (header.php L33-38)
- *   - $cbTotal         → tb_cash_back.cbtotal           (wallet.php L59-66)
- *   - history rows     → tb_wallet_hs                   (load_wallet_hs.php)
+ * ── Data — every wallet-credit.php mysqli query transcribed 1:1 ──
+ * The `tb_*` schema is RLS-locked to service_role → reads go through the
+ * admin client. Join key: `tb_*.userid === profile.member_code`
+ * (the customer's "PR<n>" code).
+ *   - $cbTotal          → tb_cash_back.cbtotal     (L59-66 / header.php L93)
+ *   - $userCreditValue  → tb_users.usercreditvalue (L67-74)
+ *   - $creditValue      → tb_credit.creditvalue   (header.php L113-120)
+ *   - $walletTotal      → tb_wallet.wallettotal   (header.php L86-92)
+ *   - $userName/userLastName → tb_users           (header.php L33-38)
+ *   - COUNT(ID) wUserCredit=1 → tb_wallet_hs     (L141-148)
+ *   - history rows      → tb_wallet_hs WHERE wusercredit=1
+ *                         ORDER BY ID DESC         (load_wallet_hs.php L8 · type='c' branch)
+ *
+ * The legacy AJAX infinite-scroll (`include/pages/wallet/load_wallet_hs.php`
+ * called from L325 with `type:'c'` → SQL `WHERE wUserCredit=1`) is
+ * replaced by a server-side render of every credit row; the
+ * scroll-to-load-more behaviour itself is not reproduced.
  *
  * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" only.
+ * "PR Cargo" branding text only.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
- *  1. wallet.php L3-51 (the `addData` POST handler — INSERT tb_wallet_hs,
- *     move_uploaded_file, LINE Notify) is a render-time write — NOT
- *     reproduced (Server Components must stay pure).
- *     TODO(server-action): port to actions/wallet.ts when reviewed by เดฟ.
- *  2. The L294-302 jQuery auto-show `<script>` for `?page=='add'` needs
- *     client JS not present here — modal is rendered visible by default
- *     (matching the user-visible end-state of the legacy auto-open).
- *  3. The dropify slip uploader + PromptPay QR-code generation +
- *     SweetAlert popups need client JS not present here — modal renders
- *     statically.
- *  4. The .tam-counter count-up animation needs client JS; balance is
- *     rendered statically as `number_format($n,2)`.
- *  5. The 4 tabs' jQuery infinite-scroll is replaced by a server-side
- *     render of every row; scroll-to-load-more is not reproduced.
- *  6. wallet.php L595 `saveHS()` (visit-log INSERT) is a render-time
- *     write — NOT reproduced.
+ *  1. wallet-credit.php L4-51 (the deposit POST handler — INSERT
+ *     tb_wallet_hs + move_uploaded_file + LINE Notify) is a render-time
+ *     write — NOT reproduced here (Server Components must stay pure).
+ *     Belongs to a Server Action: TODO(server-action).
+ *  2. The #wallet-add deposit modal markup IS transcribed 1:1, but its
+ *     jQuery behaviours (Bootstrap .modal('show') triggered by
+ *     `?page=='add'`, dropify file input, PromptPay QR-code generation,
+ *     SweetAlert success/error popups) need client JS not present here
+ *     — the modal renders statically.
+ *  3. The .tam-counter count-up animation needs client JS; the balance
+ *     is rendered statically as `number_format($n,2)`.
+ *  4. The legacy auto-show-modal `<script>` for `?page=='add'` (L233-241)
+ *     is not reproduced — the menu link target is `/wallet-credit/` (no
+ *     `?page`), so the modal stays hidden as legacy does for that path.
  */
 
 // Server Components reading cookies/auth under a layout must be dynamic.
 export const dynamic = "force-dynamic";
+
+// load_wallet_hs.php L21 — status badge.
+function statusBadge(status: string | null) {
+  if (status === "1") {
+    return <span className="badge badge-warning badge-pill">รอตรวจสอบ</span>;
+  }
+  if (status === "2") {
+    return <span className="badge badge-info badge-pill">สำเร็จ</span>;
+  }
+  return <span className="badge badge-danger badge-pill">ไม่สำเร็จ</span>;
+}
+
+// PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
+function numberFormat2(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 // Legacy `nameWallet($type)` — member/include/function.php L156-169.
 const NAME_WALLET: Record<string, string> = {
@@ -90,25 +132,7 @@ function dateThaiWallet(strDate: string | null): { date: string; time: string } 
   return { date: `${day} ${month} ${year}`, time: `${hh}:${mm} น.` };
 }
 
-// PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
-function numberFormat2(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-// load_wallet_hs.php L21 — status badge.
-function statusBadge(status: string | null) {
-  if (status === "1") {
-    return <span className="badge badge-warning badge-pill">รอตรวจสอบ</span>;
-  }
-  if (status === "2") {
-    return <span className="badge badge-info badge-pill">สำเร็จ</span>;
-  }
-  return <span className="badge badge-danger badge-pill">ไม่สำเร็จ</span>;
-}
-
+// A single wallet-hs row as load_wallet_hs.php L22-43 renders it.
 type WalletHsRow = {
   ID: number;
   date: string | null;
@@ -118,7 +142,7 @@ type WalletHsRow = {
   refOrder: string | null;
 };
 
-export default async function WalletDepositPage() {
+export default async function WalletCreditPage() {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
@@ -126,27 +150,52 @@ export default async function WalletDepositPage() {
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
 
-  // ── Transcribed queries (identical to /wallet/page.tsx) ──
-  const [walletRes, userRowRes, hsRes] = await Promise.all([
+  // ── Transcribed queries ──────────────────────────────────────
+  const [walletRes, userRowRes, cbRes, creditRes, hsRes] = await Promise.all([
+    // header.php L86-92: SELECT walletTotal FROM tb_wallet WHERE userID=…
     admin
       .from("tb_wallet")
       .select("wallettotal")
       .eq("userid", memberCode)
-      .maybeSingle<{ wallettotal: number }>(),
+      .maybeSingle<{ wallettotal: number | string | null }>(),
+    // wallet-credit.php L67-74 + header.php L33-38: tb_users
     admin
       .from("tb_users")
-      .select("username, userlastname")
+      .select("username, userlastname, usercreditvalue")
       .eq("userid", memberCode)
-      .maybeSingle<{ username: string | null; userlastname: string | null }>(),
+      .maybeSingle<{
+        username: string | null;
+        userlastname: string | null;
+        usercreditvalue: number | string | null;
+      }>(),
+    // wallet-credit.php L59-66: SELECT cbTotal FROM tb_cash_back WHERE userID=…
+    admin
+      .from("tb_cash_back")
+      .select("cbtotal")
+      .eq("userid", memberCode)
+      .maybeSingle<{ cbtotal: number | string | null }>(),
+    // header.php L113-120: SELECT creditValue FROM tb_credit WHERE userID=…
+    admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", memberCode)
+      .maybeSingle<{ creditvalue: number | string | null }>(),
+    // load_wallet_hs.php L8 (type='c' branch): SELECT … FROM tb_wallet_hs
+    //   WHERE userID=… AND wUserCredit=1 ORDER BY ID DESC
     admin
       .from("tb_wallet_hs")
       .select("id, date, status, amount, type, reforder")
       .eq("userid", memberCode)
+      .eq("wusercredit", 1)
       .order("id", { ascending: false }),
   ]);
 
   const walletTotal = Number(walletRes.data?.wallettotal ?? 0);
-
+  const userCreditValue = Number(userRowRes.data?.usercreditvalue ?? 0);
+  // wallet-credit.php L107: $userCreditValue - $creditValue → available credit
+  const creditValue = Number(creditRes.data?.creditvalue ?? 0);
+  const creditAvailable = userCreditValue - creditValue;
+  // wallet-credit.php L105: $userName . ' ' . $userLastName
   const legacyName = [userRowRes.data?.username, userRowRes.data?.userlastname]
     .filter((s): s is string => !!s && s.trim() !== "")
     .join(" ")
@@ -156,8 +205,12 @@ export default async function WalletDepositPage() {
     .join(" ")
     .trim();
   const fullName = legacyName || profileName || profile.company_name || "";
+  // wallet-credit.php L59-66 — cbTotal (unused in the rendered body but
+  // read by legacy header; kept for query parity).
+  void Number(cbRes.data?.cbtotal ?? 0);
 
-  const allRows: WalletHsRow[] = (
+  // Credit-history rows (wUserCredit=1) — load_wallet_hs.php L22-43 shape.
+  const rowsHistory: WalletHsRow[] = (
     (hsRes.data ?? []) as {
       id: number;
       date: string | null;
@@ -175,27 +228,20 @@ export default async function WalletDepositPage() {
     refOrder: r.reforder,
   }));
 
-  // Per-tab filters — exactly the WHERE clauses load_wallet_hs.php uses.
-  const rowsHistory = allRows;
-  const rowsAdd = allRows.filter((r) => r.type === "1" || r.type === "5");
-  const rowsPayments = allRows.filter(
-    (r) => r.type === "2" || r.type === "4" || r.type === "6" || r.type === "7",
-  );
-  const rowsWithdraw = allRows.filter((r) => r.type === "3");
-
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS theme CSS — same stylesheet wallet.php uses. */}
+      {/* Legacy PCS theme CSS — same stylesheet wallet.php uses (the
+          credit screen reuses the wallet card / tab / modal styles). */}
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
-      {/* wallet.php <title> L53 (Next.js owns <head> — kept as fidelity
-          comment): กระเป๋าสตางค์ | PR Cargo */}
+      {/* wallet-credit.php <title> L53 (Next.js owns <head> — kept as a
+          fidelity comment): กระเป๋าสตางค์เครดิต | PR Cargo */}
 
-      {/* BEGIN: Content — wallet.php L85 */}
+      {/* BEGIN: Content — wallet-credit.php L76 */}
       <div className="app-content content">
         <div className="content-overlay"></div>
         <div className="content-wrapper">
-          {/* L89-100 — breadcrumb */}
+          {/* L80-91 — breadcrumb header */}
           <div className="content-header row">
             <div className="content-header-left col-12 mb-2">
               <div className="row breadcrumbs-top ">
@@ -206,13 +252,15 @@ export default async function WalletDepositPage() {
                         <span className="menu-home">หน้าแรก</span>
                       </Link>
                     </li>
-                    <li className="breadcrumb-item active">กระเป๋าสตางค์ </li>
+                    <li className="breadcrumb-item active">
+                      กระเป๋าสตางค์เครดิต{" "}
+                    </li>
                   </ol>
                 </div>
               </div>
             </div>
           </div>
-          {/* L101 — content-body */}
+          {/* L92 — content-body */}
           <div className="content-body pr110">
             <section>
               <div className="row">
@@ -220,26 +268,37 @@ export default async function WalletDepositPage() {
                   <div className="card">
                     <div className="card-content">
                       <div className="card-body">
-                        {/* ── Wallet balance card — wallet.php L108-131 ── */}
+                        {/* ── Credit balance card — wallet-credit.php L99-124 ── */}
                         <div className="row">
                           <div className="col-md-6 offset-md-3">
                             <div className="card-body border-wallet pb-0">
                               <div className="media d-flex">
                                 <div className="media-body text-left">
-                                  <h3 className="warning mb-0">
-                                    <span className="text-black-1">{fullName}</span>
+                                  <h3 className="danger mb-0">
+                                    <span className="text-black-1">
+                                      กระเป๋าสตางค์เครดิต ({fullName})
+                                    </span>
                                     <br />
                                     <span className="text-black-1 font-14 ">
-                                      กระเป๋าสตางค์ (บาท)
+                                      วงเงินเครดิตที่ใช้งานได้ (บาท)
                                     </span>
                                     <br />
                                     <span
-                                      className="tam-counter font-3rem notranslate"
-                                      data-count={walletTotal}
+                                      className="tam-counter font-3rem"
+                                      data-count={creditAvailable}
                                     >
-                                      {numberFormat2(walletTotal)}
+                                      {numberFormat2(creditAvailable)}
                                     </span>
                                     <br />
+                                    <span className="text-black-1 font-14 ">
+                                      ยอดเครดิตค้างชำระ :{" "}
+                                      {numberFormat2(creditValue)} (บาท)
+                                    </span>
+                                    <br />
+                                    <span className="text-black-1 font-14 ">
+                                      กระเป๋าสตางค์เงินสด :{" "}
+                                      {numberFormat2(walletTotal)} (บาท)
+                                    </span>
                                   </h3>
                                 </div>
                                 <div>
@@ -265,10 +324,14 @@ export default async function WalletDepositPage() {
                                 className="text-center pt-1"
                                 style={{ marginBottom: "-20px" }}
                               >
-                                <Link href="/wallet/deposit">
+                                {/* L120 — `forwarder/?q=c` rebrands to
+                                    `/service-import?q=c` per AGENTS.md
+                                    transcription-rules step §8. */}
+                                <Link href="/service-import?q=c">
                                   <div className="btn-add-wallet">
                                     {" "}
-                                    <i className="ft-plus"></i> เติมเงินเข้ากระเป๋า{" "}
+                                    <i className="la la-money"></i>{" "}
+                                    ชำระเงินเครดิต{" "}
                                   </div>
                                 </Link>
                               </div>
@@ -276,7 +339,7 @@ export default async function WalletDepositPage() {
                           </div>
                         </div>
 
-                        {/* ── 4-tab wallet-history panel — wallet.php L132-227 ── */}
+                        {/* ── Single-tab history panel — wallet-credit.php L125-157 ── */}
                         <div className="row pt-3">
                           <div className="col-12">
                             <div className="card">
@@ -300,51 +363,6 @@ export default async function WalletDepositPage() {
                                       </span>
                                     </a>
                                   </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-hs-add"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="la la-money pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการเติมเงิน
-                                      </span>
-                                    </a>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-payment"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-credit-card pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการชำระเงิน
-                                      </span>
-                                    </a>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <a
-                                      className="nav-link"
-                                      data-toggle="tab"
-                                      href="#wallet-hs-withdraw"
-                                      role="tab"
-                                    >
-                                      <span className="hidden-sm-up">
-                                        <i className="far fa-handshake pr-05"></i>
-                                      </span>
-                                      <span className="hidden-xs-down">
-                                        รายการถอนเงิน
-                                      </span>
-                                    </a>
-                                  </li>
                                 </ul>
                                 <div className="tab-content">
                                   <div
@@ -359,65 +377,14 @@ export default async function WalletDepositPage() {
                                         </div>
                                       ) : (
                                         rowsHistory.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
+                                          <WalletHsRowView
+                                            key={row.ID}
+                                            row={row}
+                                          />
                                         ))
                                       )}
                                     </div>
                                     <div id="load_data_message_wallet_hs"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-hs-add"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_add">
-                                      {rowsAdd.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsAdd.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs_add"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-payment"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_payments">
-                                      {rowsPayments.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsPayments.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_payments"></div>
-                                  </div>
-                                  <div
-                                    className="tab-pane"
-                                    id="wallet-hs-withdraw"
-                                    role="tabpanel"
-                                  >
-                                    <div id="load_data_wallet_hs_withdraw">
-                                      {rowsWithdraw.length === 0 ? (
-                                        <div className="text-center text-no-data text-danger">
-                                          คุณยังไม่มีรายการ
-                                        </div>
-                                      ) : (
-                                        rowsWithdraw.map((row) => (
-                                          <WalletHsRowView key={row.ID} row={row} />
-                                        ))
-                                      )}
-                                    </div>
-                                    <div id="load_data_message_wallet_hs_withdraw"></div>
                                   </div>
                                 </div>
                               </div>
@@ -429,15 +396,16 @@ export default async function WalletDepositPage() {
                   </div>
                 </div>
               </div>
-              {/* ── Deposit modal — wallet.php L233-283 ──
-                  In legacy, the L294-302 inline <script> auto-opens this
-                  via $("#wallet-add").modal("show") because `?page=='add'`.
-                  Transcribed 1:1; the auto-open script needs Bootstrap-4
-                  jQuery (loaded by the protected layout) — the modal
-                  markup itself is identical to wallet.php's modal.
-                  TODO(server-action): wire the `addData` POST handler
-                  (L4-51) — INSERT tb_wallet_hs + move_uploaded_file + LINE
-                  Notify. */}
+
+              {/* ── Deposit modal — wallet-credit.php L163-222 ──
+                  Transcribed 1:1. The legacy jQuery behaviours
+                  (Bootstrap .modal('show') triggered by ?page=='add',
+                  dropify file input, PromptPay QR-code generation,
+                  SweetAlert result popups) need client JS not present
+                  here — the modal renders statically.
+                  TODO(server-action): wire the addData POST handler
+                  (L4-51) — INSERT tb_wallet_hs + move_uploaded_file +
+                  LINE Notify. */}
               <div
                 id="wallet-add"
                 className="modal fade in"
@@ -448,7 +416,9 @@ export default async function WalletDepositPage() {
                 <div className="modal-dialog">
                   <div className="modal-content ">
                     <div className="modal-header header-from">
-                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง PR Cargo</h4>
+                      <h4 className="modal-title">
+                        เติมเงินเข้าเป๋าตัง PR Cargo
+                      </h4>
                       <button
                         type="button"
                         className="close"
@@ -472,16 +442,70 @@ export default async function WalletDepositPage() {
                       </button>
                     </div>
                     <div className="modal-body header-from">
+                      <div className="row border-bottom-2">
+                        <div className="col-12">
+                          <div className="box-blank-kbank">
+                            <div className="row">
+                              <div className="col-12 col-md-9">
+                                <h2 className="text-white">
+                                  ธนาคารกสิกรไทย
+                                </h2>
+                                <div className="text-center">
+                                  เลขที่บัญชี{" "}
+                                  <span className="font-2rem mr-0-3" id="text2">
+                                    064-174-3836
+                                  </span>
+                                  <button
+                                    data-toggle="tooltip"
+                                    data-placement="top"
+                                    title="คัดลอกข้อความ"
+                                    type="button"
+                                    className="btn btn-sm2 btn-rounded btn-secondary"
+                                  >
+                                    คัดลอก
+                                  </button>
+                                  <br />
+                                  พร้อมเพย์{" "}
+                                  <span id="text1">0-1055-60160-69-4 </span>
+                                  <button
+                                    data-toggle="tooltip"
+                                    data-placement="top"
+                                    title="คัดลอกข้อความ"
+                                    type="button"
+                                    className="btn btn-sm2 btn-rounded btn-secondary"
+                                  >
+                                    คัดลอก
+                                  </button>
+                                  <h5 className="text-white">
+                                    บริษัท พีซีเอส คาร์โก้
+                                  </h5>
+                                </div>
+                              </div>
+                              <div className="col-0 wallet-logo col-md-3 text-right">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  className="img-fluid logo-blank"
+                                  src="/legacy/pcs/assets/images/theme/logo-kbank.png"
+                                  alt=""
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <form
                         className="form-horizontal"
                         method="POST"
-                        action="/wallet/"
+                        action="/wallet-credit"
                         autoComplete="off"
                         encType="multipart/form-data"
                       >
                         <div className="form-group pt-1">
                           <div className="">
-                            <label className="form-control-label" htmlFor="amount">
+                            <label
+                              className="form-control-label"
+                              htmlFor="amount"
+                            >
                               จำนวนเงิน (บาท)
                             </label>
                             <input
@@ -514,16 +538,38 @@ export default async function WalletDepositPage() {
                                 height: "250px",
                               }}
                             ></div>
-                            <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
-                            <div id="amount-show" style={{ textAlign: "center" }}></div>
+                            <div style={{ textAlign: "center", marginTop: "10px" }}>
+                              เลขที่บัญชี : <span>064-174-3836</span>
+                            </div>
+                            <div style={{ textAlign: "center" }}>
+                              พร้อมเพย์ :{" "}
+                              <span id="pp-id-show2">0-1055-60160-69-4</span>
+                            </div>
+                            <h5 className="text-center">
+                              บริษัท พีซีเอส คาร์โก้
+                            </h5>
+                            <div
+                              id="amount-show"
+                              style={{ textAlign: "center" }}
+                            ></div>
                             <div className="text-right">
-                              <a href="/wallet/deposit" target="_blank">
+                              {/* Legacy linked out to pcscargo.co.th/การเติมเงิน/
+                                  — rewritten to internal /wallet/deposit so
+                                  the customer stays inside Pacred. */}
+                              <a
+                                href="/wallet/deposit"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
                                 ดูวิธีการเติมเงิน
                               </a>
                             </div>
                           </div>
                           <div className="mb-1">
-                            <label className="form-control-label" htmlFor="imagesSlip">
+                            <label
+                              className="form-control-label"
+                              htmlFor="imagesSlip"
+                            >
                               หลักฐานการโอน (สลิปรายการ)
                             </label>
                             <div className="fallback">
@@ -536,40 +582,6 @@ export default async function WalletDepositPage() {
                                 required
                               />
                             </div>
-                          </div>
-                          <div className="mb-1">
-                            <div>
-                              เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
-                            </div>
-                            <ol className="">
-                              <li>
-                                {" "}
-                                สามารถถอนเงินได้เมื่อ
-                                ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                                PR Cargo มาก่อน
-                              </li>
-                              <li>
-                                {" "}
-                                การถอนเงินต้องแนบเอกสาร
-                                บัตรประจำตัวประชาชนและหน้าสมุดบัญชีธนาคาร
-                              </li>
-                              <li> ยอดถอนเงินขั้นต่ำ คือ 25 บาท</li>
-                              <li>
-                                {" "}
-                                หากยอดที่ทำรายการถอนเงินน้อยกว่า 500 บาท
-                                จะมีค่าบริการถอนเงิน 25 บาทต่อครั้ง
-                              </li>
-                              <li>
-                                {" "}
-                                ระยะเวลาดำเนินการใช้เวลา 7-10 วันทำการ
-                                (ไม่รวมวันหยุดนักขัตฤกษ์และวันอาทิตย์)
-                                เนื่องจากทางบริษัทจำเป็นต้องตรวจสอบข้อมูลและยอดเงินเพื่อดำเนินการประสานงานกับทางธนาคารที่ให้บริการ
-                              </li>
-                              <li>
-                                {" "}
-                                ทางบริษัทขอสงวนสิทธิ์ในการเปลี่ยนแปลงนโยบายไปตามเงื่อนไขที่บริษัทกำหนด
-                              </li>
-                            </ol>
                           </div>
                           <div className="modal-footer">
                             <button
@@ -597,20 +609,7 @@ export default async function WalletDepositPage() {
           </div>
         </div>
       </div>
-      {/* END: Content — wallet.php L288 */}
-
-      {/* wallet.php L294-302 — auto-open the #wallet-add modal because
-          ?page=='add' (Pacred routes this URL at /wallet/deposit, which
-          matches the legacy `?page=add` branch). */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            $(document).ready(function() {
-              $("#wallet-add").modal("show");
-            });
-          `,
-        }}
-      />
+      {/* END: Content — wallet-credit.php L227 */}
     </div>
   );
 }
@@ -622,6 +621,7 @@ export default async function WalletDepositPage() {
  * the `$nameColor` +/- logic (L20).
  */
 function WalletHsRowView({ row }: { row: WalletHsRow }) {
+  // load_wallet_hs.php L20 — type 1 or 5 = green (credit), else red.
   const nameColor = row.type === "1" || row.type === "5" ? "success" : "danger";
   const sign = nameColor === "success" ? "+" : "-";
   const { date, time } = dateThaiWallet(row.date);
@@ -647,11 +647,19 @@ function WalletHsRowView({ row }: { row: WalletHsRow }) {
                 <span className="text-muted font-12">
                   เลขที่ออเดอร์{" "}
                   {row.type === "2" ? (
-                    <a href={`/service-order/detail/${row.refOrder}`} target="_blank">
+                    <a
+                      href={`/service-order/detail/${row.refOrder}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {row.refOrder}
                     </a>
                   ) : row.type === "4" ? (
-                    <a href={`/service-import/detail/${row.refOrder}`} target="_blank">
+                    <a
+                      href={`/service-import/detail/${row.refOrder}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {row.refOrder}
                     </a>
                   ) : (

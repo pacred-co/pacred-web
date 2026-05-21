@@ -1,0 +1,168 @@
+/* ─────────────────────────────────────────────────────────────────
+   legacy-overrides.css — last-loaded scoped overrides for the D1
+   faithful PCS Cargo port. Scoped to `body.pcs-legacy-body` so the
+   (public) marketing pages by น้องปอน are NOT affected.
+
+   Why this file: Tailwind v4 (`@import "tailwindcss"` in
+   `app/globals.css`) ships a preflight that resets BS4 defaults
+   on .card / .img-fluid / h1-h6. Tailwind's preflight uses
+   @layer base, and although unlayered rules win, we keep this file
+   scoped to .pcs-legacy-body so (public) marketing is untouched.
+
+   NOTE — DO NOT add a `.container { max-width }` rule here. Legacy
+   `assets/css/custom.css` itself sets `.container { max-width: unset
+   !important }` @media (min-width: 768px), so legacy desktop runs
+   the container full-width inside .content-body. Faithful = match
+   that. (Earlier we mistakenly tried to re-add BS4 max-widths —
+   that was a misdiagnosis; the legacy site is NOT bounded at 1140.)
+   ───────────────────────────────────────────────────────────────── */
+
+/* ── 1. Carousel banner — constrain to legacy aspect (900x270 = 3.33:1) ─── */
+.pcs-legacy-body .single-item-member,
+.pcs-legacy-body .single-item-member .slick-list,
+.pcs-legacy-body .single-item-member .slick-track {
+  max-height: 320px;
+}
+.pcs-legacy-body .single-item-member img,
+.pcs-legacy-body .single-item-member .slick-slide img,
+.pcs-legacy-body .single-item-member a img {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── 3. .bander-index side-banner images (the 2 stacked banners next to the carousel) ── */
+.pcs-legacy-body .bander-index .col-md-4 .img-fluid {
+  width: 100%;
+  height: auto;
+  max-height: 145px;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── 4. BS4 heading defaults — Tailwind preflight resets h1-h6 to inherit font-size/weight; restore.
+   DUAL SCOPING (2026-05-21):
+   · `.pcs-legacy-body` — added to <body> by the client `PcsBodyClass`
+     component AFTER hydration; on SSR + first paint the class is absent
+     and the preflight reset wins → h5 ballooned on detail pages
+     (`/service-order/[hNo]` had 16+ <h5> tags inheriting body font-size
+     instead of 1.25rem). Owner called it "ข้อความบวม content บวม".
+   · `.pcs-legacy` — the inner wrapper added directly in each page's
+     JSX. Present from the first SSR render, so headings get the right
+     size on initial paint with no flash.
+   Both scopes share the same rule so the styles cascade everywhere a
+   legacy page renders, whether the body class beat hydration or not. ─── */
+.pcs-legacy-body h1, .pcs-legacy h1 { font-size: 2.5rem; font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+.pcs-legacy-body h2, .pcs-legacy h2 { font-size: 2rem;   font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+.pcs-legacy-body h3, .pcs-legacy h3 { font-size: 1.75rem;font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+.pcs-legacy-body h4, .pcs-legacy h4 { font-size: 1.5rem; font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+.pcs-legacy-body h5, .pcs-legacy h5 { font-size: 1.25rem;font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+.pcs-legacy-body h6, .pcs-legacy h6 { font-size: 1rem;   font-weight: 500; line-height: 1.2; margin-bottom: 0.5rem; }
+
+/* ── 5. BS4 form-control / button defaults — Tailwind preflight strips button bg + border ── */
+.pcs-legacy-body button:not([class*="btn"]) {
+  /* unstyled buttons inherit; .btn / .btn-* / .btn-color-main keep their BS4 styles */
+}
+
+/* ── 6. .card defaults — Tailwind preflight may remove border/border-radius; restore ── */
+.pcs-legacy-body .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: 1px solid rgba(0,0,0,.125);
+  border-radius: 0.428rem;
+}
+.pcs-legacy-body .card-body { flex: 1 1 auto; padding: 1.5rem; }
+
+/* ── 7. `img-fluid` — BS4 helper, may be reset by Tailwind preflight ─ */
+.pcs-legacy-body .img-fluid {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ── 8a. Body top padding to clear the fixed-navbar.
+
+   Legacy `components.min.css` sets `body.fixed-navbar { padding-top: 5rem }`
+   (70px), but the legacy `all-script.php` scrollFunction (L208-231) sets
+   `#header-navbar { min-height: 8.5rem }` (119px) at the non-scrolled
+   default state. That leaves a ~50px overlap where the content's top edge
+   hides behind the navbar's bottom edge.
+
+   Owner called the spacing out as "topbar / content overlap". Bumping the
+   body padding-top to `8.5rem` (matching the legacy navbar default min-
+   height) puts the content body BELOW the navbar with no overlap — exactly
+   what legacy renders post-scrollFunction-init. Scoped to .pcs-legacy-body
+   so ปอน's (public) marketing pages keep the original `5rem` value. ────── */
+body.pcs-legacy-body.fixed-navbar {
+  padding-top: 8.5rem;
+}
+
+/* ── 8b. Body padding — legacy chrome doesn't need the 64px mobile-bottom-nav
+        clearance from globals.css (we removed FloatingTabs on these routes),
+        so drop the bottom padding to match the legacy spacing exactly. ─── */
+@media (max-width: 767px) {
+  body.pcs-legacy-body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── 9. Image display — `<img class="pcs-icon">` in the sidebar MUST be inline
+        so it sits next to the text on ONE line.
+
+        Tailwind v4's preflight (`@layer base` in app/globals.css's
+        `@import "tailwindcss"`) forces `img, video { display: block }` site-
+        wide for the marketing pages. On the legacy customer portal that
+        breaks the sidebar: with `display: block` the 30×30 icon stacks ABOVE
+        the menu-title text → each `<li class="nav-item"> > a` renders ~76px
+        tall (30 icon + 22 text line + 12+12 padding) instead of the legacy
+        ~54px (icon and text on the same line, padding 12+12 + line-height 30).
+        Owner called the chrome "บวม" → this was the root cause.
+
+        Scoped to `.pcs-legacy-body .pcs-icon` so ปอน's (public) keeps the
+        Tailwind block-img default for marketing layouts. Verbatim match to
+        the LineAwesome-era theme behaviour. ──────────────────────────────── */
+.pcs-legacy-body .pcs-icon,
+.pcs-legacy-body .pcs-icon2,
+.pcs-legacy-body .brand-logo,
+.pcs-legacy-body .header-navbar img,
+.pcs-legacy-body .navigation img,
+.pcs-legacy-body .nav-right-pcs img,
+.pcs-legacy-body .nav-footer-pcs img {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ── 10. Font family — match the legacy customer portal exactly. ─────────── */
+   Pacred's root layout puts a Tailwind utility class on <body>
+   (`font-[family-name:var(--font-prompt)]`) so EVERY page inherits the
+   Prompt webfont. Prompt is the right font for ปอน's marketing pages
+   (modern, branded) but it's WIDER + TALLER than the legacy Modern-Admin
+   theme's font choice → menu items + admin contact card + stat boxes
+   render BLOATED (~76px tall per nav item vs ~45px in legacy) and break
+   the "clean / compact" feel of the legacy sidebar.
+
+   The legacy customer portal's `bootstrap-extended.min.css` sets
+       body { font-family: "Open Sans", -apple-system, …, sans-serif; }
+   with NO Thai font in the family chain — Thai glyphs fall through to
+   the user's OS Thai font (Sukhumvit Set on Mac, Tahoma on Windows),
+   which render more compactly than Prompt.
+
+   Scoped to `.pcs-legacy-body` so ปอน's (public) marketing keeps Prompt.
+   ──────────────────────────────────────────────────────────────────────── */
+body.pcs-legacy-body,
+body.pcs-legacy-body .navigation,
+body.pcs-legacy-body .main-menu,
+body.pcs-legacy-body .header-navbar,
+body.pcs-legacy-body .nav-right-pcs,
+body.pcs-legacy-body .nav-footer-pcs,
+body.pcs-legacy-body .content,
+body.pcs-legacy-body .footer {
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}

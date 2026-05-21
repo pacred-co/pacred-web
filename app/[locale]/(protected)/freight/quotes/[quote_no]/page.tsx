@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_OA, CONTACT } from "@/components/seo/site";
@@ -305,7 +304,6 @@ export default async function CustomerFreightQuoteDetailPage({
           </div>
         )}
       </main>
-      <Footer />
     </>
   );
 }

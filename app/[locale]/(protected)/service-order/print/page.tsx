@@ -491,23 +491,41 @@ export default async function ServiceOrderPrintPage({
   if (docs.length === 0) notFound();
 
   return (
-    <div className="pcs-legacy print-shop">
-      {/* Legacy PCS print stylesheet (printShop.php inline <style>) —
-          static public/ asset, loaded via a plain <link> so it
-          bypasses the Tailwind/PostCSS pipeline. */}
+    <div className="print-fullscreen-overlay">
+      {/* Two-layer wrap so the A4-sized receipt centers inside the
+          fullscreen overlay (otherwise the same element can't be both
+          full-viewport AND A4-sized). Outer = chrome-hider, inner = A4.
+          LOAD ORDER MATTERS: print-shop.css has its own `@page { margin:
+          4mm }` (L133-136); print-overlay.css must load AFTER so its
+          `@page { margin: 0 }` wins the cascade — otherwise top of the
+          receipt gets pushed down by the legacy 4mm. */}
       <link rel="stylesheet" href="/legacy/pcs/print-shop.css" />
+      <link rel="stylesheet" href="/legacy/pcs/print-overlay.css" />
 
       {/* On-screen print button — the legacy delivers the PDF straight
           from mPDF; in the browser the customer presses this (or
-          Ctrl+P) to save the PDF. Hidden in the printed output. */}
-      <div className="no-print" style={{ padding: "8px", textAlign: "right" }}>
+          Ctrl+P) to save the PDF. Hidden in the printed output.
+          Placed as a DIRECT CHILD of the overlay so the
+          `.print-fullscreen-overlay > .no-print { position: fixed }`
+          selector matches — keeps the button at the top-right of the
+          viewport, unscaled by the A4 sheet's transform. */}
+      <div className="no-print">
         <PrintButton />
       </div>
 
+      <div className="pcs-legacy print-shop">
+
       {/* printShop.php builds one mPDF page per id — one <body> table
           each. Reproduced as one document block per PrintDoc. */}
-      {docs.map((doc) => (
-        <article key={doc.hNo} style={{ pageBreakAfter: "always" }}>
+      {docs.map((doc, idx) => (
+        <article
+          key={doc.hNo}
+          style={
+            idx < docs.length - 1
+              ? { pageBreakAfter: "always" }
+              : undefined
+          }
+        >
           {/* printShop.php L196 — <table style="width: 200mm;"> */}
           <table style={{ width: "200mm" }} className="table">
             {/* ── Header — logo + document title — printShop.php L197-207 ── */}
@@ -687,6 +705,7 @@ export default async function ServiceOrderPrintPage({
           </table>
         </article>
       ))}
+      </div>
     </div>
   );
 }

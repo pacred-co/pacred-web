@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Package, ChevronRight, Home } from "lucide-react";
@@ -262,7 +261,6 @@ export default async function CustomerFreightShipmentsPage({
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

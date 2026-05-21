@@ -1,0 +1,36 @@
+/* member/index.php — verbatim transcription of the page's inline <style> blocks
+   (index.php L14-23 + L25-29). Loaded per-screen on /dashboard. */
+
+.tam-counter {
+  font-size: 2rem;
+}
+
+@media only screen and (max-width: 578px) {
+  .row.pt-2.bg-white {
+    padding-top: 0px !important;
+  }
+}
+
+/* Animation effect */
+@keyframes placeHolderShimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.animate-bg {
+  animation-duration: 1s;
+  animation-fill-mode: forwards;
+  animation-iteration-count: infinite;
+  animation-name: placeHolderShimmer;
+  animation-timing-function: linear;
+  background: #f6f7f8;
+  background: linear-gradient(to right, #eeeeee 8%, #dddddd 18%, #eeeeee 33%);
+  background-size: 800px 104px;
+  min-height: 12px;
+  display: block;
+  clear: both;
+}

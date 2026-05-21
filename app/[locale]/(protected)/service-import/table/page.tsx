@@ -1083,7 +1083,7 @@ export default async function ForwarderTablePage({
                   <div className="mb-1">
                     <div className="text-right">
                       <a
-                        href="https://pcscargo.co.th/ที่อยู่โกดังจีน"
+                        href="/china-address"
                         target="_blank"
                         rel="noreferrer"
                         className="text-info"

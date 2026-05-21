@@ -438,7 +438,7 @@ export default async function CartPage() {
                           <div className="text-danger font-0_85rem">
                             หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo
                             ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
-                            <a href="https://pcscargo.co.th/freearea" target="_blank" rel="noreferrer">
+                            <a href="/services/import-china" target="_blank" rel="noreferrer">
                               (เช็คพื้นที่ได้ที่นี่)
                             </a>
                           </div>
@@ -799,7 +799,7 @@ export default async function CartPage() {
                                             alt=""
                                           />
                                           <br />
-                                          <a href="https://pcscargo.co.th/freearea">
+                                          <a href="/services/import-china">
                                             <span className="text-info">
                                               ดูพื้นที่จัดส่งและรายละเอียด
                                             </span>
@@ -832,7 +832,7 @@ export default async function CartPage() {
                                               alt=""
                                             />
                                             <br />
-                                            <a href="https://pcscargo.co.th/โปรโมชัน/นำเข้าจีน260303/">
+                                            <a href="/services/import-china">
                                               <span className="text-info">
                                                 ดูรายละเอียดโปรโมชัน
                                               </span>

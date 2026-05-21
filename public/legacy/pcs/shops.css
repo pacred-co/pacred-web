@@ -517,3 +517,170 @@
 @media only screen and (max-width: 578px) {
   .pcs-legacy .app-content { padding: 0.5rem; }
 }
+
+/* =============================================================
+ * Detail-view rules — `shops.php?page=detail` (the `/service-order/[hNo]`
+ * route). Ported 2026-05-21 after the owner spotted "content บวม ไม่
+ * สมมาตร" on the detail page: the process tracker rendered left-aligned
+ * and the product-list table's columns had collapsed. Source files:
+ *   · assets/css/style.css L2900-2930  — `.process-model` (5-step tracker)
+ *   · assets/css/shop/shop.css L1-46   — `.product-*` float-based grid
+ * Both files are loaded by the legacy on `shops.php?page=detail` but
+ * weren't included in the initial port of shops.css.
+ * ============================================================= */
+
+/* ---- Process-model tracker (5 status circles row) — VERBATIM from
+ * legacy `assets/css/style.css` L657-744. The connecting line at
+ * top:33px is the vertical midpoint of the 68×68 circle (= li i),
+ * so the .process-model li i height MUST be 68px or the line floats
+ * above/below the circle. Adding ALL the legacy rules so the icon +
+ * line + label colors match the legacy 1:1. */
+.pcs-legacy .process-model {
+  list-style: none;
+  padding: 0;
+  position: relative;
+  margin: 0 auto 0;
+  border: none;
+  z-index: 0;
+  margin-bottom: -20px;
+  min-width: 800px;
+  text-align: center;
+}
+.pcs-legacy .process-model li {
+  display: inline-block;
+  width: 20%;
+  text-align: center;
+  float: none;
+  position: relative;
+}
+.pcs-legacy .process-model li a,
+.pcs-legacy .process-model li > span {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #606060;
+  display: block;
+}
+.pcs-legacy .process-model li::after {
+  background: #e5e5e5 none repeat scroll 0 0;
+  bottom: 0;
+  content: "";
+  display: block;
+  height: 4px;
+  margin: 0 auto;
+  position: absolute;
+  right: 45px;
+  top: 33px;
+  width: 85%;
+  z-index: -1;
+}
+.pcs-legacy .process-model li.visited::after {
+  background: #c24e4e;
+}
+.pcs-legacy .process-model li:last-child::after {
+  width: 0;
+}
+/* The CIRCLE — legacy uses font-icon inside <i>; our port uses <img>.
+ * Fix the <i> to a 68×68 round container so top:33px on ::after lands
+ * at vertical center. */
+.pcs-legacy .process-model li i {
+  display: block;
+  height: 68px;
+  width: 68px;
+  text-align: center;
+  margin: 0 auto;
+  background: #f5f6f7;
+  border: 2px solid #e5e5e5;
+  line-height: 60px;
+  font-size: 30px;
+  border-radius: 50%;
+  font-style: normal;
+}
+.pcs-legacy .process-model li.active i,
+.pcs-legacy .process-model li.visited i {
+  background: #fff;
+  border-color: #c24e4e;
+}
+/* Fit the <img> inside the 68px circle — image-fluid alone would let
+ * it grow to 68px square; we want a 40-ish padded icon. */
+.pcs-legacy .process-model li i img {
+  max-width: 40px;
+  max-height: 40px;
+  width: auto;
+  height: auto;
+  vertical-align: middle;
+  display: inline-block;
+}
+.pcs-legacy .process-model li p {
+  font-size: 14px;
+  margin: 7px 5px;
+}
+.pcs-legacy .process-model li.active,
+.pcs-legacy .process-model li.visited {
+  color: #c24e4e;
+}
+.pcs-legacy .process-model li.active a,
+.pcs-legacy .process-model li.active > span,
+.pcs-legacy .process-model li.visited a,
+.pcs-legacy .process-model li.visited > span {
+  color: #ee7411;
+}
+.pcs-legacy .process-model li.active p,
+.pcs-legacy .process-model li.visited p {
+  font-weight: 600;
+}
+
+/* ---- Product-list grid (float-based columns matching legacy shop.css)
+ * The product table on the detail page is NOT a real <table> — it's a
+ * flexbox of `.product` rows, each with floated children
+ * (`.product-count`, `.product-details`, `.product-price`, etc.) whose
+ * width % add to 100. Without these rules the columns stack vertically
+ * + the image grows to natural width, blowing the row apart. ---- */
+.pcs-legacy .product-count       { float: left; width: 6%;  padding: 5px; text-align: center; }
+.pcs-legacy .product-details     { float: left; width: 35%; padding: 5px; }
+.pcs-legacy .product-price       { float: left; width: 14%; padding: 5px; text-align: center; }
+.pcs-legacy .product-quantity    { float: left; width: 10%; padding: 5px; text-align: center; }
+.pcs-legacy .product-priceCHN    { float: left; width: 10%; padding: 5px; text-align: center; }
+.pcs-legacy .product-price-update{ float: left; width: 10%; padding: 5px; text-align: center; }
+.pcs-legacy .product-line-price  { float: left; width: 15%; padding: 5px; text-align: center; }
+
+/* Clearfix — the floats above leak otherwise; each row must clear
+ * before the next starts (column-labels = header row + .product = each
+ * item row + .shopping-cart = the wrapping container). */
+.pcs-legacy .shopping-cart::after,
+.pcs-legacy .column-labels::after,
+.pcs-legacy .product::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Column headers — legacy shop.css L87-89. */
+.pcs-legacy .column-labels label {
+  padding: 5px;
+  margin-bottom: 0;
+}
+
+/* Each product row — bottom border for clean row separation +
+ * vertical spacing. Legacy shop.css L96-101. The 2px #eee bottom border
+ * gives the table look without needing fragile per-cell borders. */
+.pcs-legacy .product {
+  margin-top: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eee;
+}
+
+/* Product thumbnail — legacy shop.css L103-105 hard-caps the image
+ * at 100px wide so it doesn't blow up to the natural 1000px+ of an
+ * Alicdn product photo. */
+.pcs-legacy .product .product-image img,
+.pcs-legacy .product .product-details img {
+  width: 100px;
+  height: auto;
+  max-width: 100%;
+}
+
+/* NOTE: legacy CSS prepends ¥ via ::before on price cells, but our
+ * port's TSX already includes the ¥ inline (page.tsx L1098+). Adding
+ * the ::before here would duplicate the symbol — skipped. */
