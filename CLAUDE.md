@@ -2,6 +2,41 @@
 
 ---
 
+# 🚨 2026-05-22 EVENING — WAVE 7.3 + WAVE 8 COMPLETE (read FIRST · supersedes 2026-05-20 below)
+
+ภูม ran tonight's session at the home computer. **4 new commits**
+land on `Poom-pacred` (`245e206..01fdebc`). Machine change tonight
+(home → work tomorrow).
+
+**📦 What landed tonight (19 surfaces · ~3,800 LOC):**
+- **Wave 7.3** (`11ebcbc`) — wired the last 12 orphan admin pages
+  into sidebar (`ระบบ` + `เครื่องมือ` Settings groups) + 4 page
+  top-menubars (cargo/forwarders/wallet/reports). Closes the
+  re-audit-2026-05-21-night 🔴 DEAD list.
+- **Wave 8 Group A** (`9fccdd2`) — 3 bulk-approve bars on `tb_*` schema:
+  wallet · yuan · customer-pending. Browser-verified on PROD data
+  (1,470 wallet pending rows show checkbox each).
+- **Wave 8 Group B+C** (`01fdebc`) — admin manual entry forms (wallet/add
+  + yuan/new + customers/transfer-rep) + reports SQL rewrites
+  (sales-by-rep · user-sales-history × 2) + Postgres view
+  `vw_sales_by_rep` (migration 0094).
+
+**⚠️ ภูม manual steps before next session:**
+1. Apply migration `supabase/migrations/0094_view_sales_by_rep.sql` via
+   Supabase dashboard (idempotent · `create or replace view`).
+2. Browser-test the 4 new Wave 8 surfaces with small entries on PROD.
+3. Re-install Claude for Chrome extension on the work computer.
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-22-night.md`](docs/research/poom-save-point-2026-05-22-night.md) — the canonical resume doc (commit list · env state · pending actions · resume commands)
+2. 📋 [`docs/audit/page-inventory-2026-05-21-night.md`](docs/audit/page-inventory-2026-05-21-night.md) — page-by-page checklist (Wave 7.3 rows now all ✅)
+3. 🛠 [`docs/audit/re-audit-2026-05-21-night.md`](docs/audit/re-audit-2026-05-21-night.md) — P0/P1/P2 list (P0 + P1 + most-P2 closed by Wave 7.3+8)
+
+**Top next pickup:** Phase A migration backlog (`tb_priceuser_*`
+unblock rates pages · 2-3 ชม · ภูม+ก๊อต).
+
+---
+
 # 🚨 2026-05-20 EVENING — PHASE 1 PUSH (read FIRST · supersedes 2026-05-19 below)
 
 ภูม ran a 12-hour Phase 1 push tonight. 8 commits land on `Poom-pacred`
