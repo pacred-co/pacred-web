@@ -491,6 +491,10 @@ const menuSuper: MenuSection[] = [
     items: [
       blockHr,
       itemQAAll,
+      // 2026-05-21 ภูม flagged — QA module rebuild (P0 #2) landed but had
+      // no super sidebar entry. menuWarehouse + menuQa already include it
+      // (L650 + L766). super now reaches it via this leaf too.
+      { labelKey: "warehouse.qaInspect", href: "/admin/warehouse/qa-inspections", icon: "ClipboardCheck" },
       itemCustomersAll,
       blockWithdrawalList,
       itemWalletAll,
