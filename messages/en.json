@@ -2629,7 +2629,13 @@
       "thaiTransport": "Manage TH carriers",
       "meetingRoom": "Meeting-room booking",
       "history": "Admin action log",
-      "incidents": "System incidents"
+      "incidents": "System incidents",
+      "kpi": "KPI Dashboard",
+      "contactMessages": "Customer contact messages",
+      "taxInvoices": "Tax invoices",
+      "workboard": "Work Board (team)",
+      "inbox": "My inbox",
+      "withdrawalsAll": "Withdrawals (all)"
     },
     "warehouse": {
       "containers": "Containers",

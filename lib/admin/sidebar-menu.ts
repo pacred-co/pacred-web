@@ -437,6 +437,33 @@ const blockExtIncidents: MenuItem = {
   labelKey: "extension.incidents", href: "/admin/incidents", icon: "AlertTriangle", badge: "incidents", phase: 2,
 };
 
+// ── 6 Phase 2 orphan extensions (ภูม flagged 2026-05-21) ─────────
+// Wired to menuSuper Extension section. All `phase: 2` → non-super
+// roles don't see them; super gets the navigation while waiting for
+// the broader launch. Audit doc: docs/research/orphan-pages-audit-2026-05-21.md
+const blockExtKpi: MenuItem = {
+  labelKey: "extension.kpi", href: "/admin/kpi", icon: "BarChart3", phase: 2,
+};
+const blockExtContactMessages: MenuItem = {
+  labelKey: "extension.contactMessages", href: "/admin/contact-messages",
+  icon: "MessageSquare", badge: "contactMessages", phase: 2,
+};
+const blockExtTaxInvoices: MenuItem = {
+  labelKey: "extension.taxInvoices", href: "/admin/tax-invoices", icon: "FileText", phase: 2,
+};
+const blockExtWorkboard: MenuItem = {
+  labelKey: "extension.workboard", href: "/admin/board", icon: "KanbanSquare", phase: 2,
+};
+const blockExtInbox: MenuItem = {
+  labelKey: "extension.inbox", href: "/admin/board/inbox", icon: "Inbox", phase: 2,
+};
+const blockExtBroadcasts: MenuItem = {
+  labelKey: "broadcasts.title", href: "/admin/broadcasts", icon: "BellRing", phase: 2,
+};
+const blockExtWithdrawalsAll: MenuItem = {
+  labelKey: "extension.withdrawalsAll", href: "/admin/withdrawals", icon: "Banknote", phase: 2,
+};
+
 // ── Dashboard — single leaf (Pacred-is-one-company per ภูม 2026-05-20 ค่ำ).
 //
 //  Prior shape carried a 3-way All/Freight/Cargo dropdown pointing at
@@ -507,7 +534,24 @@ const menuSuper: MenuSection[] = [
   },
   { header: "Settings", items: [blockSettingsCargo] },
   learningSection,
-  extensionSection([blockExtJuristic, blockExtThaiTransport, blockExtMeetingRoom, blockExtHistory, blockExtIncidents]),
+  // 2026-05-21 — Extension section expanded with 6 Phase 2 orphans
+  // (ภูม flagged · audit doc orphan-pages-audit-2026-05-21.md):
+  // kpi · workboard · inbox · contactMessages · broadcasts · taxInvoices ·
+  // withdrawalsAll. All phase: 2 — non-super doesn't see them.
+  extensionSection([
+    blockExtKpi,
+    blockExtWorkboard,
+    blockExtInbox,
+    blockExtContactMessages,
+    blockExtBroadcasts,
+    blockExtTaxInvoices,
+    blockExtWithdrawalsAll,
+    blockExtJuristic,
+    blockExtThaiTransport,
+    blockExtMeetingRoom,
+    blockExtHistory,
+    blockExtIncidents,
+  ]),
 ];
 
 /**

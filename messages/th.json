@@ -2629,7 +2629,13 @@
       "thaiTransport": "จัดการขนส่งไทย",
       "meetingRoom": "จองห้องประชุม",
       "history": "บันทึกการทำรายการแอดมิน",
-      "incidents": "แจ้งเตือนระบบ (Incident)"
+      "incidents": "แจ้งเตือนระบบ (Incident)",
+      "kpi": "แดชบอร์ด KPI",
+      "contactMessages": "ข้อความติดต่อจากลูกค้า",
+      "taxInvoices": "ใบกำกับภาษี",
+      "workboard": "Work Board (งานทีม)",
+      "inbox": "Inbox งานของฉัน",
+      "withdrawalsAll": "รายการเบิกเงิน (รวม)"
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
