@@ -6,16 +6,23 @@ import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 /**
  * Forwarders table — renders tb_forwarder rows (faithful port, Wave 3 P0 #1).
  *
- * The bulk-status-update affordance from the previous rebuilt-schema
- * version was removed: the existing `adminBulkUpdateForwarderStatus`
- * Server Action (`actions/admin/forwarders.ts`) still mutates the
- * Pacred-original `forwarders` table — calling it from a tb_forwarder
- * row would silently fail (wrong primary key shape). Wave 3D (Agent Z)
- * will rewrite that Server Action against tb_forwarder; the bulk bar
- * comes back then.
+ * Bulk-status-update affordance — DEFERRED (Wave 5 backlog):
+ * The existing `adminBulkUpdateForwarderStatus` Server Action mutates the
+ * rebuilt `forwarders` table (UUID PK · `status` enum · `admin_id_update`
+ * column). Rewriting against `tb_forwarder` (bigint PK · `fstatus` varchar(2)
+ * · `fdateadminstatus` + `fdatestatusN` per status · `userid` text not uuid ·
+ * notifications need a `tb_users.userid → profile_id` resolver) is ~60-90
+ * min of careful work — too big for tonight. The table renders cleanly
+ * without it; admins still edit status from the detail page row-at-a-time.
  *
- * TODO: ask ภูม — re-enable bulk status update after Agent Z lands the
- * tb_forwarder-aware `adminBulkUpdateForwarderStatus`.
+ * Wave 5 brief (write when ภูม picks it up):
+ *   - Add `adminBulkUpdateForwarderTbStatus({fids: number[], fstatus: string})`
+ *     to actions/admin/forwarders.ts. Update tb_forwarder.fstatus + the
+ *     legacy fdatestatusN column matching the new status.
+ *   - Re-add a small bulk action bar above the table (checkbox per row,
+ *     status dropdown, "อัพเดตสถานะ X รายการ" button).
+ *   - Notify each row's customer via the tb_users lookup the page already
+ *     builds (`usersByUserId` map).
  */
 
 export type Row = {

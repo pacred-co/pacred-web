@@ -208,16 +208,37 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     .limit(300);
 
   // Status filter — legacy keys (1..7, 6.1, c, p).
-  // The 6 vs 6.1 split needs the tb_forwarder_driver_item join (skipped
-  // here for performance — we treat both as fstatus='6' and let the user
-  // see the unified list; if they need the 6.1 split we'll add a join).
-  // TODO: ask ภูม — confirm we can defer 6.1 driver-join until Wave 3D.
+  //
+  // 6 vs 6.1 split (resolved 2026-05-21):
+  //   tab "เตรียมส่ง" (status=6)   = fstatus='6' AND NOT in tb_forwarder_driver_item
+  //                                  with fdistatus='' (legacy: "ยังไม่ขึ้นรถ" set)
+  //   tab "กำลังจัดส่ง" (status=6.1) = fstatus='6' AND     in tb_forwarder_driver_item
+  //                                  with fdistatus=''
+  //
+  // We resolve the 6.1 set via a 2nd query (PostgREST has no subquery
+  // syntax). For the unfiltered + most-status views the 6.1 join is
+  // skipped (saves a roundtrip on the common path).
+  let driverInProgressIds: Set<number> | null = null;
+  if (sp.status === "6" || sp.status === "6.1") {
+    const { data: driverItemRows } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("fid")
+      .eq("fdistatus", "");
+    driverInProgressIds = new Set(
+      (driverItemRows ?? []).map((r) => Number((r as { fid: number | string }).fid)),
+    );
+  }
+
   if (sp.status === "c") {
     q = q.eq("fcredit", "1");
   } else if (sp.status === "p") {
     q = q.eq("fstatus", "99");
+  } else if (sp.status === "6") {
+    q = q.eq("fstatus", "6");
+    // เตรียมส่ง = NOT in driver_item with fdistatus='' (filtered post-fetch · see L~248)
   } else if (sp.status === "6.1") {
     q = q.eq("fstatus", "6");
+    // กำลังจัดส่ง = IN driver_item with fdistatus='' (filtered post-fetch · see L~248)
   } else if (sp.status && /^[1-7]$/.test(sp.status)) {
     q = q.eq("fstatus", sp.status);
   }
@@ -228,7 +249,14 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   if (sp.date_to)   q = q.lte("fdate", sp.date_to + "T23:59:59");
 
   const { data: forwarderRows, error: forwarderErr } = await q;
-  const raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
+  let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
+
+  // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
+  if (sp.status === "6" && driverInProgressIds) {
+    raw = raw.filter((r) => !driverInProgressIds!.has(Number(r.id)));
+  } else if (sp.status === "6.1" && driverInProgressIds) {
+    raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
+  }
 
   // ─── 2nd query: tb_users for customer name/phone ──────────────────────
   const uniqueUserIds = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
