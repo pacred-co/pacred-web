@@ -1,0 +1,21 @@
+-- _all.sql.recipe
+-- A combined _all.sql would be ~778 MB — well over Supabase SQL editor's
+-- effective paste limit. Don't try to paste it.
+--
+-- If you still want one concatenated file for archive/record-keeping, run
+-- one of these after `node _extract.mjs all`:
+--
+-- PowerShell:
+--   Get-Content tb_history-part-*.sql, tb_history_key-part-*.sql, tb_web_hs-part-*.sql |
+--     Set-Content _all.sql -Encoding utf8
+--
+-- bash:
+--   cat tb_history-part-*.sql tb_history_key-part-*.sql tb_web_hs-part-*.sql > _all.sql
+--
+-- The concatenation preserves the BEGIN/COMMIT boundaries of each chunk, so
+-- running it via psql works:
+--   psql "<conn>" -f _all.sql
+--
+-- The shipping path however remains: paste each chunk into the Supabase SQL
+-- editor in the order documented in README.md §4 — that's the lowest-risk
+-- load, since one failed chunk doesn't block the others.

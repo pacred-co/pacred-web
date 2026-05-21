@@ -43,7 +43,16 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .eq("f_no", fNo)
     .maybeSingle();
 
-  if (!data) notFound();
+  if (!data) {
+    // Wave 3 P0 #1 fallback (2026-05-21): the list page reads tb_forwarder
+    // (legacy · 47K rows on prod) while this detail page reads the rebuilt
+    // forwarders (EMPTY on prod). Row clicks that came from the list will
+    // miss here. Look up the row in tb_forwarder by id or fidorco and render
+    // a minimal read-only legacy view + link to /admin/report-cnt for the
+    // container info. Full editable detail = Wave 5 (rewrite of update form
+    // + cost adjustments + driver assign + bill-to over tb_forwarder).
+    return await renderLegacyForwarderView(fNo, admin);
+  }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
   const f = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(f.profile) ? f.profile[0] ?? null : f.profile;
@@ -230,6 +239,155 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
     <div className="flex justify-between gap-3 text-sm">
       <span className="text-muted">{label}</span>
       <span className={mono ? "font-mono" : ""}>{value}</span>
+    </div>
+  );
+}
+
+// Wave 3 P0 #1 fallback — legacy tb_forwarder read-only view.
+// Used when the f_no path param doesn't match a row in the rebuilt
+// `forwarders` table; resolves it against tb_forwarder by id (numeric)
+// or fidorco (string). Renders a minimal read-only panel with all the
+// fields staff care about + a "ดูคอนเทนเนอร์/ตัวจ่ายเงิน" link to
+// /admin/report-cnt for the container-level view.
+async function renderLegacyForwarderView(
+  fNo: string,
+  admin: ReturnType<typeof createAdminClient>,
+) {
+  // Decide column to look up: numeric → id, else fidorco.
+  const asNumber = Number(fNo);
+  const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
+
+  let tbq = admin
+    .from("tb_forwarder")
+    .select(
+      "id, fidorco, userid, fstatus, fdate, fdatestatus4, ftransporttype, " +
+      "fwarehousechina, fwarehousename, fcabinetnumber, ftrackingchn, ftrackingth, " +
+      "fweight, fvolume, famount, ftotalprice, fcosttotalprice, " +
+      "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
+      "faddressdistrict, faddressprovince, faddresszipcode, fnote, fdetail, fcredit",
+    )
+    .limit(1);
+  tbq = isId ? tbq.eq("id", asNumber) : tbq.eq("fidorco", fNo);
+  const { data: tbRow } = await tbq.maybeSingle();
+  if (!tbRow) notFound();
+  const r = tbRow as unknown as {
+    id: number; fidorco: string | null; userid: string; fstatus: string;
+    fdate: string | null; fdatestatus4: string | null;
+    ftransporttype: string; fwarehousechina: string; fwarehousename: string;
+    fcabinetnumber: string | null; ftrackingchn: string | null; ftrackingth: string | null;
+    fweight: number | null; fvolume: number | null; famount: number | null;
+    ftotalprice: number | null; fcosttotalprice: number | null;
+    faddressname: string | null; faddresslastname: string | null;
+    faddressno: string | null; faddresssubdistrict: string | null;
+    faddressdistrict: string | null; faddressprovince: string | null;
+    faddresszipcode: string | null;
+    fnote: string | null; fdetail: string | null; fcredit: string | null;
+  };
+
+  // Customer name lookup
+  const { data: userRow } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, useremail")
+    .eq("userid", r.userid)
+    .maybeSingle();
+  const u = userRow as unknown as {
+    userid: string; username: string | null; userlastname: string | null;
+    usertel: string | null; useremail: string | null;
+  } | null;
+
+  const STATUS_LABEL: Record<string, string> = {
+    "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
+    "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
+  };
+  const MODE_LABEL: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
+  const WAREHOUSE_LABEL: Record<string, string> = {
+    "1":"แสง","2":"CTT","3":"MK","4":"MX","5":"JMF","6":"GOGO","7":"Cargo Center","8":"MOMO",
+  };
+
+  return (
+    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · LEGACY FORWARDER</p>
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
+          <h1 className="text-2xl font-bold font-mono">{r.fidorco ?? `#${r.id}`}</h1>
+          <span className="rounded-full border border-border bg-surface-alt px-2.5 py-0.5 text-xs">
+            {STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`}
+          </span>
+          {r.fcredit === "1" && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2.5 py-0.5 text-xs">
+              เครดิตสินค้า
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted mt-1">
+          ข้อมูลจาก legacy <code className="rounded bg-surface-alt px-1">tb_forwarder</code> (Wave 3 P0 #1) ·
+          การแก้ไขจะใช้งานได้ใน Wave 5 (rewrite of update form)
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <LegacyKV label="วันที่สร้าง" value={r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "-"} />
+        <LegacyKV label="วันที่ถึงไทย" value={r.fdatestatus4 ? new Date(r.fdatestatus4).toLocaleDateString("th-TH") : "-"} />
+        <LegacyKV label="ลูกค้า" value={`${u?.username ?? ""} ${u?.userlastname ?? ""} (${r.userid})`} />
+        <LegacyKV label="โทร · อีเมล" value={`${u?.usertel ?? "-"} · ${u?.useremail ?? "-"}`} />
+        <LegacyKV label="โกดังจีน" value={WAREHOUSE_LABEL[r.fwarehousename] ?? r.fwarehousename} />
+        <LegacyKV label="ขนส่ง" value={MODE_LABEL[r.ftransporttype] ?? r.ftransporttype} />
+        <LegacyKV label="หมายเลขตู้" value={r.fcabinetnumber ?? "—"} href={r.fcabinetnumber ? `/admin/report-cnt?id=${encodeURIComponent(r.fcabinetnumber)}` : undefined} />
+        <LegacyKV label="Tracking CN" value={r.ftrackingchn ?? "-"} mono />
+        <LegacyKV label="Tracking TH" value={r.ftrackingth ?? "-"} mono />
+        <LegacyKV label="กล่อง / กก. / cbm" value={`${r.famount ?? 0} · ${Number(r.fweight ?? 0).toFixed(2)} · ${Number(r.fvolume ?? 0).toFixed(3)}`} mono />
+        <LegacyKV label="ราคารวม (THB)" value={`฿${Number(r.ftotalprice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} mono />
+        <LegacyKV label="ต้นทุนรวม (THB)" value={`฿${Number(r.fcosttotalprice ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} mono />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm space-y-2">
+        <p className="text-xs font-semibold text-muted">ที่อยู่จัดส่ง</p>
+        <p>
+          {r.faddressname ?? ""} {r.faddresslastname ?? ""}<br />
+          {r.faddressno ?? ""} {r.faddresssubdistrict ?? ""} {r.faddressdistrict ?? ""} {r.faddressprovince ?? ""} {r.faddresszipcode ?? ""}
+        </p>
+      </div>
+
+      {r.fnote && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm">
+          <p className="text-xs font-semibold text-red-700">หมายเหตุ</p>
+          <p className="mt-1">{r.fnote}</p>
+        </div>
+      )}
+
+      {r.fdetail && (
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-sm">
+          <p className="text-xs font-semibold text-muted">รายละเอียดสินค้า</p>
+          <p className="mt-1 whitespace-pre-wrap">{r.fdetail}</p>
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap">
+        <Link href="/admin/forwarders" className="rounded-md border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt">
+          ← กลับรายการ
+        </Link>
+        {r.fcabinetnumber && (
+          <Link href={`/admin/report-cnt?id=${encodeURIComponent(r.fcabinetnumber)}`} className="rounded-md border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs text-white hover:bg-primary-600">
+            ดูตู้คอนเทนเนอร์ →
+          </Link>
+        )}
+      </div>
+    </main>
+  );
+}
+
+// Display helper for the legacy fallback view above.
+// (The existing `Row` component uses `value` prop · this one accepts an
+// optional `href` so cabinet number can link to /admin/report-cnt.)
+function LegacyKV({ label, value, mono, href }: { label: string; value: string; mono?: boolean; href?: string }) {
+  return (
+    <div className="flex justify-between border-b border-border/40 py-1.5">
+      <span className="text-muted">{label}</span>
+      {href ? (
+        <Link href={href} className={`text-primary-600 hover:underline ${mono ? "font-mono" : ""}`}>{value}</Link>
+      ) : (
+        <span className={mono ? "font-mono" : ""}>{value}</span>
+      )}
     </div>
   );
 }
