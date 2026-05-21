@@ -641,9 +641,13 @@ const menuWarehouse: MenuSection[] = [
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
       { labelKey: "warehouse.containers", href: "/admin/report-cnt", icon: "Package" },
-      // Phase 2 — warehouse bulletin + QA inspection queues align with QA queues.
+      // Phase 2 — warehouse bulletin aligns with QA queues.
       { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",       icon: "ClipboardCheck", phase: 2 },
-      { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert",    phase: 2 },
+      // QA inspection module (P0 #2 rebuild · 2026-05-21) — un-phase-gated for
+      // the warehouse role because PCS_Cargo_Guidebook_TH.md L441-454 lists
+      // pre-shipment QA as a daily warehouse duty (สีถูก / ไซส์ถูก / ของแท้).
+      // Live to all warehouse staff; not just super.
+      { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert" },
       blockBarcode,
     ],
   },
@@ -755,6 +759,11 @@ const menuQa: MenuSection[] = [
       // un-phase-gated for the `qa` role specifically. `itemQAAll` keeps
       // `phase: 2` for non-QA roles via the menu file precedence.
       { labelKey: "qa.title", href: "/admin/qa", icon: "ShieldAlert" },
+      // Pre-shipment QA inspection module (P0 #2 rebuild · 2026-05-21).
+      // The faithful port of legacy ตรวจสอบสินค้า workflow per
+      // PCS_Cargo_Guidebook_TH.md L441-454 — record verdict (pass/fail/
+      // hold/fake_product) + photos + blacklist flag.
+      { labelKey: "warehouse.qaInspect", href: "/admin/warehouse/qa-inspections", icon: "ClipboardCheck" },
       // Sales-rep reassignment tool (doc line 230 + 1295).
       { labelKey: "userCargo.transferRep", href: "/admin/customers/transfer-rep", icon: "ArrowRightLeft" },
       // Read-only customer search — QA needs to look up a customer to investigate.

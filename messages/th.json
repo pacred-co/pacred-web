@@ -2720,5 +2720,65 @@
     "openPdf": "เปิดไฟล์ PDF",
     "slipAlt": "สลิปการจ่ายเงินค่าตู้",
     "slipMissing": "ไม่มีไฟล์สลิป"
+  },
+  "qaInspection": {
+    "title": "ตรวจสอบสินค้า (QA & QC)",
+    "subtitle": "บันทึกการตรวจสินค้าก่อนจัดส่งให้ลูกค้า — แจ้งของปลอม / กักของ / ตรวจผ่าน",
+    "newCta": "บันทึก QA ใหม่",
+    "newTitle": "บันทึก QA ใหม่",
+    "newSubtitle": "เลือกรายการนำเข้า (f_no) → ตรวจสอบ → ระบุผลและรูปประกอบ",
+    "detailTitle": "รายละเอียด QA",
+    "currentState": "ผลตรวจปัจจุบัน",
+    "forwarderSection": "ข้อมูลรายการนำเข้า",
+    "photoGallery": "รูปประกอบ",
+    "updateSection": "แก้ไขผลตรวจ",
+    "backToList": "กลับรายการ",
+    "verdict": {
+      "all": "ทั้งหมด",
+      "pass": "ผ่าน",
+      "fail": "ตก",
+      "hold": "กักของ",
+      "fake_product": "ของปลอม"
+    },
+    "col": {
+      "inspectedAt": "วันที่ตรวจ",
+      "fNo": "เลขนำเข้า (f_no)",
+      "cabinet": "ตู้",
+      "member": "ลูกค้า",
+      "tracking": "แทรคกิ้งจีน",
+      "verdict": "ผลตรวจ",
+      "blacklist": "Blacklist",
+      "photos": "รูป"
+    },
+    "blacklistTag": "Blacklist",
+    "blacklistLabel": "ห้ามรับสินค้าจากร้านนี้ในอนาคต (Blacklist)",
+    "blacklistAutoFake": "ตั้งอัตโนมัติเมื่อผลคือของปลอม",
+    "notesLabel": "หมายเหตุ / รายละเอียด",
+    "notesPlaceholder": "บันทึกสภาพสินค้า สี ไซส์ ความเสียหาย ของแท้/ปลอม ฯลฯ",
+    "noPhotos": "ยังไม่มีรูปประกอบ",
+    "photoAlt": "รูปจาก QA",
+    "photoUnavailable": "เปิดรูปไม่ได้",
+    "searchPlaceholder": "ค้นหา f_no / ตู้ / รหัสลูกค้า / แทรคกิ้งจีน",
+    "searchSubmit": "ค้นหา",
+    "clearSearch": "ล้างคำค้น",
+    "loadError": "โหลดข้อมูลไม่สำเร็จ",
+    "emptyState": "ยังไม่มีรายการ QA",
+    "saveBtn": "บันทึก",
+    "savingBtn": "กำลังบันทึก…",
+    "createBtn": "บันทึก QA",
+    "updateOk": "บันทึกการเปลี่ยนแปลงแล้ว",
+    "uploadingProgress": "กำลังอัปโหลดรูป {i}/{n}…",
+    "form": {
+      "fNoLabel": "เลขนำเข้า (f_no)",
+      "fNoPlaceholder": "เช่น 123456",
+      "fNoHelp": "หมายเลข f_no จากตาราง tb_forwarder (ระบบขนส่ง)",
+      "photosLabel": "อัปโหลดรูป (jpg/png/webp/heic)",
+      "photosHelp": "อัปโหลดได้ไม่เกิน {max} รูป · ขนาดไฟล์ไม่เกิน 10 MB",
+      "photosSelected": "เลือกไว้"
+    },
+    "err": {
+      "fNoRequired": "กรุณาระบุ f_no (ตัวเลขล้วน)",
+      "uploadFailed": "อัปโหลดรูปไม่สำเร็จ"
+    }
   }
 }

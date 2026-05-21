@@ -2720,5 +2720,65 @@
     "openPdf": "Open PDF",
     "slipAlt": "Container payment slip",
     "slipMissing": "No slip file"
+  },
+  "qaInspection": {
+    "title": "QA & QC Inspection",
+    "subtitle": "Record pre-shipment QA — flag fake products, hold suspect items, mark pass",
+    "newCta": "New QA record",
+    "newTitle": "New QA inspection",
+    "newSubtitle": "Pick the import job (f_no) → inspect → record verdict + photos",
+    "detailTitle": "QA inspection detail",
+    "currentState": "Current verdict",
+    "forwarderSection": "Import job info",
+    "photoGallery": "Photos",
+    "updateSection": "Update verdict",
+    "backToList": "Back to list",
+    "verdict": {
+      "all": "All",
+      "pass": "Pass",
+      "fail": "Fail",
+      "hold": "Hold",
+      "fake_product": "Fake product"
+    },
+    "col": {
+      "inspectedAt": "Inspected at",
+      "fNo": "Import no. (f_no)",
+      "cabinet": "Container",
+      "member": "Customer",
+      "tracking": "China tracking",
+      "verdict": "Verdict",
+      "blacklist": "Blacklist",
+      "photos": "Photos"
+    },
+    "blacklistTag": "Blacklist",
+    "blacklistLabel": "Blacklist this shop (block future orders)",
+    "blacklistAutoFake": "auto-set when verdict = fake product",
+    "notesLabel": "Notes / details",
+    "notesPlaceholder": "Note item condition, color, size, damage, authenticity etc.",
+    "noPhotos": "No photos attached",
+    "photoAlt": "QA photo",
+    "photoUnavailable": "Photo unavailable",
+    "searchPlaceholder": "Search f_no / container / member / China tracking",
+    "searchSubmit": "Search",
+    "clearSearch": "Clear search",
+    "loadError": "Failed to load",
+    "emptyState": "No QA records yet",
+    "saveBtn": "Save",
+    "savingBtn": "Saving…",
+    "createBtn": "Save inspection",
+    "updateOk": "Changes saved",
+    "uploadingProgress": "Uploading photo {i}/{n}…",
+    "form": {
+      "fNoLabel": "Import no. (f_no)",
+      "fNoPlaceholder": "e.g. 123456",
+      "fNoHelp": "f_no value from tb_forwarder (import jobs table)",
+      "photosLabel": "Upload photos (jpg/png/webp/heic)",
+      "photosHelp": "Up to {max} photos · file size ≤ 10 MB",
+      "photosSelected": "selected"
+    },
+    "err": {
+      "fNoRequired": "Import no. (numeric) is required",
+      "uploadFailed": "Photo upload failed"
+    }
   }
 }
