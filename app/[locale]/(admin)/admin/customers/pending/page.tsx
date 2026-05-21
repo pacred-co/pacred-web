@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { Clock } from "lucide-react";
+import { TbCustomerBulkBar, TbCustomerRowCheckbox } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -73,11 +74,15 @@ export default async function AdminCustomersPendingPage() {
         </span>
       </div>
 
+      {/* Wave 8 Group A — sticky bulk-approve bar */}
+      <TbCustomerBulkBar />
+
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-alt/50 text-left">
+                <th className="px-2 py-3 w-8"></th>
                 <th className="px-4 py-3 font-semibold text-muted text-xs uppercase tracking-wide">
                   รหัสสมาชิก
                 </th>
@@ -104,7 +109,7 @@ export default async function AdminCustomersPendingPage() {
             <tbody className="divide-y divide-border">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted">
                     ไม่มีสมาชิกรอ Approve · ลูกค้าที่ลงทะเบียนใหม่ทุกราย ถูก approve อัตโนมัติ
                   </td>
                 </tr>
@@ -121,6 +126,9 @@ export default async function AdminCustomersPendingPage() {
                   : "—";
                 return (
                   <tr key={c.userid} className="hover:bg-surface-alt/30 transition-colors">
+                    <td className="px-2 py-3 w-8">
+                      <TbCustomerRowCheckbox userid={c.userid} />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted">{c.userid}</td>
                     <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
                       {personalName}

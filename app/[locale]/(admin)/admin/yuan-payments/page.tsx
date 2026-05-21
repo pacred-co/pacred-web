@@ -26,6 +26,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -194,6 +195,9 @@ export default async function AdminYuanPaymentsPage({
         </div>
       )}
 
+      {/* Wave 8 Group A — sticky bulk-approve bar */}
+      <TbYuanBulkBar />
+
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการ</p>
@@ -202,6 +206,7 @@ export default async function AdminYuanPaymentsPage({
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
+                  <th className="px-2 py-3 w-8"></th>
                   <th className="px-3 py-3">วันที่สร้าง</th>
                   <th className="px-3 py-3">ลูกค้า</th>
                   <th className="px-3 py-3">ช่องทาง</th>
@@ -222,6 +227,9 @@ export default async function AdminYuanPaymentsPage({
                     : r.userid ?? "—";
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-2 py-3 w-8">
+                        {status === "1" ? <TbYuanRowCheckbox id={r.id} /> : null}
+                      </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.paydate
                           ? new Date(r.paydate).toLocaleString("th-TH", {
