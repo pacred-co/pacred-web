@@ -65,23 +65,20 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
     .returns<ReconfirmRow[]>();
   const reconfirmRows: ReconfirmRow[] = reconfirmRowsRaw ?? [];
 
-  // Cargo spine visibility: surface linked cargo_shipments + their containers
-  // (RLS scopes to own rows via cargo_shipments_customer_read).
-  const sb = await createClient();
-  const { data: shipmentsRaw } = await sb
-    .from("cargo_shipments")
-    .select(`
-      id, shipment_code, status, box_count, received_box_count,
-      container:cargo_containers!cargo_container_id ( code, transport_mode, status, eta, close_at, carrier_container_no )
-    `)
-    .eq("forwarder_f_no", fNo)
-    .order("created_at", { ascending: false });
-  type ContainerEmbed = { code: string | null; transport_mode: string | null; status: string; eta: string | null; close_at: string | null; carrier_container_no: string | null };
-  type CargoShipmentRow = { id: string; shipment_code: string; status: string; box_count: number; received_box_count: number; container: ContainerEmbed | ContainerEmbed[] | null };
-  const cargoShipments = ((shipmentsRaw ?? []) as CargoShipmentRow[]).map((s) => ({
-    ...s,
-    container: Array.isArray(s.container) ? (s.container[0] ?? null) : s.container,
-  }));
+  // 2026-05-21 Wave 3D — cargo spine retired (cargo_shipments / cargo_containers
+  // dropped by migration 0090). Customer-visible container info now comes
+  // from `forwarders.cabinet_number` directly (legacy `tb_forwarder.fCabinetNumber`
+  // pattern). No live query needed; the cabinet code is already on `f`.
+  // Phase-C: when a true multi-shipment-per-container view is needed, build a
+  // GROUP BY view over `tb_forwarder` similar to /admin/report-cnt.
+  const cargoShipments: Array<{
+    id: string;
+    shipment_code: string;
+    status: string;
+    box_count: number;
+    received_box_count: number;
+    container: { code: string | null; transport_mode: string | null; status: string; eta: string | null; close_at: string | null; carrier_container_no: string | null } | null;
+  }> = [];
 
   return (
     <>

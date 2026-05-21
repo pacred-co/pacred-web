@@ -23,8 +23,8 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { readFileSync, existsSync, writeFileSync, statSync } from "node:fs";
-import { join, posix, dirname, basename } from "node:path";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { join, posix } from "node:path";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Types — mirror 01-survey.ts ManifestEntry exactly.
