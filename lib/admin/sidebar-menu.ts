@@ -515,6 +515,12 @@ const menuSuper: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
+      // entry · only reachable via the /admin/forwarders top-menubar
+      // "งาน → มอบงานคนขับ". Added as a top-level leaf so super can land
+      // on the driver-assignment queue in one click. Re-uses the existing
+      // driverItems badge.
+      { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
       blockPayment,
       itemReportsAll,
       blockAccounting,
