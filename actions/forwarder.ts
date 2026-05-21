@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertOwnedProfileId } from "@/lib/auth/owned-write";
+import { assertOwnedProfileId, assertOwnsRecord } from "@/lib/auth/owned-write";
 import { forwarderSchema, type ForwarderInput } from "@/lib/validators/forwarder";
 import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forwarder/calc-price";
 import { sendNotification } from "@/lib/notifications";
@@ -770,5 +770,178 @@ export async function customerAcknowledgeForwarderDelivery(
   return {
     ok: true,
     data: { acknowledged_at: now, already_acked: false },
+  };
+}
+
+// ────────────────────────────────────────────────────────────
+// 0092 · CUSTOMER RECONFIRM-DECISION on a cost adjustment
+// ────────────────────────────────────────────────────────────
+//
+// When admin adds a forwarder_cost_adjustments row whose cumulative
+// actual cost exceeds the original preview total by > threshold_pct
+// (default 10 — BUSINESS_FLOW.md L85-87, pcs-business-flow audit §3
+// Priority 2), the row enters status='pending_reconfirm' instead of
+// 'unpaid'. The customer then sees a banner on /service-import/[fNo]
+// and presses ACCEPT (→ status='unpaid' so admin can bill) or DISPUTE
+// (→ row stays pending_reconfirm + a high-priority work_item is opened
+// for ops to handle the dispute path).
+//
+// Both branches:
+//   - require auth + verify ownership of the adjustment via RLS
+//   - stamp customer_decision + customer_decision_at (constraints in
+//     migration 0092 require these symmetrically)
+//   - notify the customer (confirmation record in their feed)
+//   - idempotent — re-pressing returns the existing decision
+//
+// Per W-1/S-2: ownership is asserted both via RLS-scoped fetch AND via
+// assertOwnsRecord on the admin-client write, defence in depth.
+
+const decideAdjustmentSchema = z.object({
+  adjustment_id: z.string().uuid(),
+  decision:      z.enum(["accept", "dispute"]),
+  note:          z.string().trim().max(500).optional(),
+});
+export type DecideCostAdjustmentInput = z.infer<typeof decideAdjustmentSchema>;
+
+export async function customerDecideCostAdjustment(
+  input: DecideCostAdjustmentInput,
+): Promise<ActionResult<{ decision: "accept" | "dispute"; already_decided: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = decideAdjustmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // 1. RLS-scoped fetch — verifies ownership + reads current state.
+  //    Pull the forwarder f_no along the join for the redirect / notification.
+  type AdjRow = {
+    id: string;
+    forwarder_id: string;
+    profile_id: string;
+    status: string;
+    amount_thb: number;
+    customer_decision: "accept" | "dispute" | null;
+    customer_decision_at: string | null;
+    preview_total_thb: number | null;
+    cumulative_after_thb: number | null;
+    forwarder: { f_no: string | null } | { f_no: string | null }[] | null;
+  };
+  const { data: adjRaw } = await supabase
+    .from("forwarder_cost_adjustments")
+    .select(`
+      id, forwarder_id, profile_id, status, amount_thb,
+      customer_decision, customer_decision_at,
+      preview_total_thb, cumulative_after_thb,
+      forwarder:forwarders!forwarder_id ( f_no )
+    `)
+    .eq("id", d.adjustment_id)
+    .maybeSingle<AdjRow>();
+  if (!adjRaw) return { ok: false, error: "not_found" };
+
+  // assertOwnsRecord is the W-1/S-2 defence — RLS already scoped above,
+  // this guards against a future edit dropping the RLS fetch.
+  assertOwnsRecord(user.id, adjRaw);
+
+  const fNo = Array.isArray(adjRaw.forwarder)
+    ? (adjRaw.forwarder[0]?.f_no ?? null)
+    : (adjRaw.forwarder?.f_no ?? null);
+
+  // 2. Idempotent — if the customer already decided, return success with
+  //    the recorded decision (do not re-stamp).
+  if (adjRaw.customer_decision) {
+    return {
+      ok: true,
+      data: {
+        decision:        adjRaw.customer_decision,
+        already_decided: true,
+      },
+    };
+  }
+
+  // 3. Guard: only pending_reconfirm rows are decidable.
+  if (adjRaw.status !== "pending_reconfirm") {
+    return { ok: false, error: "not_pending_reconfirm" };
+  }
+
+  // 4. Write the decision via admin client (RLS bypass needed because the
+  //    customer UPDATE policy installed in 0092 is defence-in-depth only;
+  //    the W-1/S-2 ownership assertion above + the .eq("profile_id",
+  //    user.id) predicate below are the real gates).
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+  const nextStatus = d.decision === "accept" ? "unpaid" : "pending_reconfirm";
+
+  const { error: updErr } = await admin
+    .from("forwarder_cost_adjustments")
+    .update({
+      status:               nextStatus,
+      customer_decision:    d.decision,
+      customer_decision_at: nowIso,
+    })
+    .eq("id", adjRaw.id)
+    .eq("profile_id", user.id)
+    .eq("status", "pending_reconfirm")
+    .is("customer_decision", null);
+  if (updErr) return { ok: false, error: `decide update: ${updErr.message}` };
+
+  // 5. Side effects per branch.
+  if (d.decision === "accept") {
+    // Customer-self confirmation — admin can now mark paid via the
+    // existing adminMarkCostAdjustmentPaid flow.
+    void sendNotification(user.id, {
+      category: "payment",
+      severity: "success",
+      title:    `ยืนยันราคาแล้ว — ${fNo ?? ""}`,
+      body:     `คุณยืนยันราคาจริงเรียบร้อย — รอเจ้าหน้าที่ตัดยอด wallet เพื่อชำระ`,
+      link_href: fNo ? `/service-import/${fNo}` : undefined,
+      reference_type: "forwarder",
+      reference_id:   adjRaw.forwarder_id,
+    });
+  } else {
+    // Dispute — open a work_item for ops + notify the customer that
+    // their dispute is being reviewed.
+    try {
+      if (fNo) {
+        await admin.rpc("ensure_work_item", {
+          p_entity_type:   "forwarder",
+          p_entity_ref:    fNo,
+          p_type:          "cs_followup",
+          p_title:         `ลูกค้าขอตรวจสอบราคาจริง — ${fNo}`,
+          p_assigned_role: "ops",
+          p_priority:      "urgent",
+          p_due_at:        null,
+        });
+      }
+    } catch {
+      // best-effort; the decision stamp + notification are load-bearing
+    }
+    void sendNotification(user.id, {
+      category: "payment",
+      severity: "info",
+      title:    `รับเรื่องตรวจสอบราคา — ${fNo ?? ""}`,
+      body:     `เจ้าหน้าที่จะติดต่อกลับเพื่อตรวจสอบและสรุปยอดร่วมกัน${d.note ? ` — โน้ต: ${d.note.slice(0, 120)}` : ""}`,
+      link_href: fNo ? `/service-import/${fNo}` : undefined,
+      reference_type: "forwarder",
+      reference_id:   adjRaw.forwarder_id,
+    });
+  }
+
+  if (fNo) {
+    revalidatePath(`/service-import/${fNo}`);
+    revalidatePath(`/service-import/${fNo}/receipt`);
+    revalidatePath(`/admin/forwarders/${fNo}`);
+  }
+
+  return {
+    ok: true,
+    data: { decision: d.decision, already_decided: false },
   };
 }

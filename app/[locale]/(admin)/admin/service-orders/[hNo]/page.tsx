@@ -4,16 +4,10 @@ import { Link } from "@/i18n/navigation";
 import { AdminServiceOrderUpdateForm } from "./update-form";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 
-const SHIPMENT_STATUS_LABEL: Record<string, string> = {
-  received_cn:         "รับเข้าโกดังจีน",
-  packed_cn:           "บรรจุแล้ว (จีน)",
-  sealed_in_container: "ปิดตู้แล้ว (จีน)",
-  in_transit:          "กำลังเดินทาง",
-  arrived_th:          "ถึงไทยแล้ว",
-  unloaded:            "ลงจากตู้ (ไทย)",
-  out_for_delivery:    "กำลังจัดส่ง",
-  delivered:           "ส่งสำเร็จ",
-};
+// Wave 3 cleanup (2026-05-20 ค่ำ): the "Cargo shipments (spine)" section
+// was removed when cargo_shipments/cargo_containers were retired under
+// D1 Option A. The container view lives at `/admin/report-cnt` (faithful
+// port of report-cnt.php) which reads tb_forwarder GROUP BY fCabinetNumber.
 
 export default async function AdminServiceOrderDetail({ params }: { params: Promise<{ hNo: string }> }) {
   const { hNo } = await params;
@@ -55,22 +49,6 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
     .from("service_order_items")
     .select("id, provider, shop_name, title, price_cny, amount, url")
     .eq("service_order_id", o.id);
-
-  // Surface cargo_shipments linked to this service-order (V-D2/D3 + V-C3 visibility)
-  const { data: shipmentsRaw } = await admin
-    .from("cargo_shipments")
-    .select(`
-      id, shipment_code, status, box_count, received_box_count, cargo_type, weight_kg, volume_cbm, created_at,
-      container:cargo_containers!cargo_container_id ( code, transport_mode, status, eta, close_at, carrier_container_no )
-    `)
-    .eq("service_order_h_no", o.h_no)
-    .order("created_at", { ascending: false });
-  type ContainerEmbed = { code: string | null; transport_mode: string | null; status: string; eta: string | null; close_at: string | null; carrier_container_no: string | null };
-  type RawShipment = { id: string; shipment_code: string; status: string; box_count: number; received_box_count: number; cargo_type: string | null; weight_kg: number | null; volume_cbm: number | null; created_at: string; container: ContainerEmbed | ContainerEmbed[] | null };
-  const shipments = ((shipmentsRaw ?? []) as RawShipment[]).map((s) => ({
-    ...s,
-    container: Array.isArray(s.container) ? (s.container[0] ?? null) : s.container,
-  }));
 
   return (
     <main className="p-6 lg:p-8 space-y-6">
@@ -134,52 +112,9 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
             </div>
           </Section>
 
-          {/* Cargo shipments linked to this service-order */}
-          {shipments.length > 0 && (
-            <Section title={`📦 Cargo shipments (${shipments.length})`}>
-              <ul className="text-sm space-y-2">
-                {shipments.map((s) => (
-                  <li key={s.id} className="rounded-lg border border-border p-3 space-y-1">
-                    <div className="flex items-start justify-between flex-wrap gap-2">
-                      <div>
-                        <p className="font-mono text-xs font-medium">{s.shipment_code}</p>
-                        <p className="text-[10px] text-muted">
-                          {SHIPMENT_STATUS_LABEL[s.status] ?? s.status}
-                          {" · "}
-                          <span className={s.received_box_count >= s.box_count ? "text-green-700" : ""}>
-                            {s.received_box_count}/{s.box_count} กล่อง
-                          </span>
-                          {s.weight_kg != null && <> · {Number(s.weight_kg).toFixed(1)} kg</>}
-                        </p>
-                        {s.cargo_type && (
-                          <p className="text-[10px] text-blue-700">🏷️ {s.cargo_type}</p>
-                        )}
-                      </div>
-                      {s.container?.code ? (
-                        <Link
-                          href={`/admin/warehouse/containers/${s.container.code}`}
-                          className="rounded-lg border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] text-primary-700 hover:bg-primary-100"
-                        >
-                          ↗ ตู้ <span className="font-mono">{s.container.code}</span>
-                        </Link>
-                      ) : (
-                        <span className="text-[10px] text-muted">ยังไม่ assign ตู้</span>
-                      )}
-                    </div>
-                    {s.container?.carrier_container_no && (
-                      <p className="text-[10px] text-muted">B/L: <span className="font-mono">{s.container.carrier_container_no}</span></p>
-                    )}
-                    {s.container?.eta && (
-                      <p className="text-[10px] text-muted">
-                        ETA {new Date(s.container.eta).toLocaleDateString("th-TH")}
-                        {s.container.close_at && <> · ตัดตู้ {new Date(s.container.close_at).toLocaleDateString("th-TH")}</>}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+          {/* Wave 3 cleanup: spine "Cargo shipments" section removed.
+              Container number is on `forwarders.cabinet_number` (per-forwarder);
+              for the full container view see /admin/report-cnt. */}
 
           {(o as { acknowledged_at: string | null }).acknowledged_at && (
             <Section title="✅ ลูกค้ายืนยันรับสินค้าแล้ว (U4-3a)">

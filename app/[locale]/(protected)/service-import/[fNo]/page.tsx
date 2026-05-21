@@ -6,6 +6,7 @@ import { getForwarderByNo } from "@/actions/forwarder";
 import { createClient } from "@/lib/supabase/server";
 import { PayFromWalletButton } from "./pay-from-wallet-button";
 import { DeliveryAckPanel } from "@/components/delivery-ack-panel";
+import { CostReconfirmPanel, type ReconfirmRow } from "@/components/cost-reconfirm-panel";
 
 const STATUS_BADGE: Record<string, string> = {
   pending_payment:   "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -50,6 +51,19 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
       walletBalance = Number(wallet?.balance ?? 0);
     }
   }
+
+  // 0092: pending_reconfirm cost adjustments (>10% over preview gate).
+  // RLS (fwd_cost_adj_self_read) scopes to the customer's own profile_id.
+  // Empty array on miss → panel renders nothing.
+  const sbAdj = await createClient();
+  const { data: reconfirmRowsRaw } = await sbAdj
+    .from("forwarder_cost_adjustments")
+    .select("id, kind, amount_thb, note, preview_total_thb, cumulative_after_thb, reconfirm_required_at")
+    .eq("forwarder_id", f.id)
+    .eq("status", "pending_reconfirm")
+    .order("reconfirm_required_at", { ascending: false })
+    .returns<ReconfirmRow[]>();
+  const reconfirmRows: ReconfirmRow[] = reconfirmRowsRaw ?? [];
 
   // Cargo spine visibility: surface linked cargo_shipments + their containers
   // (RLS scopes to own rows via cargo_shipments_customer_read).
@@ -129,6 +143,14 @@ export default async function ForwarderDetailPage({ params }: { params: Promise<
               <li>รอ Pacred update status ใน order นี้ — เห็นใน “ติดตาม” หน้านี้</li>
             </ol>
           </div>
+        )}
+
+        {/* 0092 · >10%-over-preview RE-CONFIRM gate. Shown above the
+            payment banner so the customer sees the surprise-bill warning
+            BEFORE any "pay" CTA — surprise-billing is the exact thing
+            this gate exists to prevent (BUSINESS_FLOW.md L85-87). */}
+        {reconfirmRows.length > 0 && (
+          <CostReconfirmPanel rows={reconfirmRows} />
         )}
 
         {/* U4-3a: delivery acknowledgement — green confirm card when delivered + not yet acked */}

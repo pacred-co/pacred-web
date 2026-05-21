@@ -360,7 +360,12 @@ export default async function AdminReportsPage({
   ] = await Promise.all([
     admin.from("forwarders").select("*", { count: "exact", head: true }).eq("status", "pending_payment"),
     admin.from("forwarders").select("*", { count: "exact", head: true }).in("status", ["shipped_china", "in_transit", "arrived_thailand", "out_for_delivery", "delivered"]),
-    admin.from("cargo_containers").select("*", { count: "exact", head: true }).in("status", ["packing", "sealed", "in_transit", "arrived", "unloading"]),
+    // Wave 3: tb_forwarder DISTINCT fcabinetnumber where fStatus<4 (pre-arrival)
+    admin.from("tb_forwarder")
+      .select("fcabinetnumber")
+      .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
+      .lt("fstatus", "4")
+      .limit(50_000),
     admin.from("wallet").select("*", { count: "exact", head: true }).or("balance.lt.0,credit_balance.lt.0"),
     admin.from("wallet_transactions").select("*", { count: "exact", head: true }).eq("kind", "refund").eq("status", "completed").gte("created_at", nDaysAgoIso(30)),
     admin.from("forwarders").select("*", { count: "exact", head: true }).gte("created_at", monthStartIso()),
@@ -383,7 +388,7 @@ export default async function AdminReportsPage({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           <QuickCard href="/admin/reports/pending-payments"        label="รอชำระเงิน"         count={pendingPaymentsCnt.count ?? 0} />
           <QuickCard href="/admin/reports/credit-pending"          label="เครดิตค้างนำเข้า*" count={creditPendingCnt.count ?? 0}    note="≈ shipped+" />
-          <QuickCard href="/admin/reports/containers-awaiting-th"  label="ตู้รอเข้าไทย"        count={containersAwaitingThCnt.count ?? 0} />
+          <QuickCard href="/admin/reports/containers-awaiting-th"  label="ตู้รอเข้าไทย"        count={new Set((containersAwaitingThCnt.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber)).size} />
           <QuickCard href="/admin/reports/debtors"                 label="ลูกค้าติดหนี้"      count={debtorsCnt.count ?? 0}          highlight />
           <QuickCard href="/admin/reports/refunds"                 label="คืนเงิน 30 วัน"      count={refundsLast30Cnt.count ?? 0} />
           <QuickCard href="/admin/reports/monthly-orders"          label="ออเดอร์เดือนนี้"     count={monthlyOrdersCnt.count ?? 0} />

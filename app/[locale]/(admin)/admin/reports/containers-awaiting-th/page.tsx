@@ -4,50 +4,95 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
 
-// V-B1 #3: cargo_containers in transit / arrived / unloading — i.e.
-// in the pipeline before they hit `closed`. Sorted by ETA (oldest ETA
-// first so overdue tubs surface).
+/**
+ * Wave 3 cleanup (2026-05-20 ค่ำ) — V-B1 #3 containers รอเข้าโกดังไทย
+ * faithful-port edition.
+ *
+ * Original: read from `cargo_containers` (the retired spine), sorted by ETA.
+ * Now: groups `tb_forwarder` by `fcabinetnumber` (legacy single source of
+ * truth — same pattern as `/admin/report-cnt`). Shows ตู้ที่ fStatus<4
+ * (pre-arrival pipeline) — DISTINCT on fcabinetnumber so 50 shipments in
+ * 1 container = 1 row. Aggregates: COUNT(shipments), SUM(box_count),
+ * SUM(volume_cbm), oldest sealed/closed timestamp.
+ */
 
 // D1 Phase-B Wave-B5 (sidebar fidelity): sidebar funnels 2 SLA queues here
 // — รอเข้าโกดังจีนเกิน 2 วัน · กำลังมาไทยเกินกำหนด. We surface ?sla= as
 // a chip + banner; the underlying status filter is unchanged. Real
-// threshold filters (e.g. status='packing' AND now - created_at > 2d for
-// chn-wh-2d, or eta < now for transit) wait until the legacy PHP
-// semantics are confirmed — a stub WHERE clause would misreport tubs.
+// threshold filters wait until the legacy PHP semantics are confirmed.
 const SLA_CFG: Record<string, string> = {
   "chn-wh-2d": "รอเข้าโกดังจีนเกิน 2 วัน",
   "transit":   "กำลังมาไทยเกินกำหนด",
 };
 
-type Row = {
-  id: string; code: string | null; transport_mode: string | null;
-  origin: string | null; destination: string | null; status: string;
-  eta: string | null; packed_at: string | null; sealed_at: string | null;
-  actual_arrival: string | null; source: string;
-  total_boxes: number; total_weight_kg: number; total_cbm: number;
-  carrier_container_no: string | null; created_at: string;
+type ForwarderRow = {
+  fcabinetnumber:      string;
+  fdatecontainerclose: string | null;
+  fdatestatus4:        string | null;
+  ftransporttype:      string;
+  fwarehousename:      string;
+  fstatus:             string;
+  fvolume:             number;
+  fweight:             number;
 };
 
-const IN_FLIGHT = ["packing", "sealed", "in_transit", "arrived", "unloading"];
-
-const STATUS_LABEL: Record<string, string> = {
-  packing:    "กำลังบรรจุ",
-  sealed:     "ปิดตู้แล้ว",
-  in_transit: "กำลังเดินทาง",
-  arrived:    "ถึงปลายทาง",
-  unloading:  "กำลังขนลง",
+type Grouped = {
+  fcabinetnumber:      string;
+  fdatecontainerclose: string | null;
+  fdatestatus4:        string | null;
+  ftransporttype:      string;
+  fwarehousename:      string;
+  fstatus:             string;
+  shipmentCount:       number;
+  totalVolume:         number;
+  totalWeight:         number;
 };
+
 const TRANSPORT_LABEL: Record<string, string> = {
-  truck: "🚚 รถ", sea: "🚢 เรือ", air: "✈️ เครื่องบิน",
+  "1": "🚚 รถ", "2": "🚢 เรือ", "3": "✈️ เครื่องบิน",
+};
+const WAREHOUSE_LABEL: Record<string, string> = {
+  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
+};
+const STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ", "2": "เตรียมส่ง", "3": "กำลังส่งมาไทย",
 };
 
 function daysAgo(iso: string | null): number | null {
   if (!iso) return null;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
-function daysUntil(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.floor((new Date(iso).getTime() - Date.now()) / 86_400_000);
+
+function groupByContainer(rows: ForwarderRow[]): Grouped[] {
+  const by = new Map<string, Grouped>();
+  for (const r of rows) {
+    const k = r.fcabinetnumber;
+    const existing = by.get(k);
+    if (existing) {
+      existing.shipmentCount += 1;
+      existing.totalVolume += Number(r.fvolume ?? 0);
+      existing.totalWeight += Number(r.fweight ?? 0);
+    } else {
+      by.set(k, {
+        fcabinetnumber:      k,
+        fdatecontainerclose: r.fdatecontainerclose,
+        fdatestatus4:        r.fdatestatus4,
+        ftransporttype:      r.ftransporttype,
+        fwarehousename:      r.fwarehousename,
+        fstatus:             r.fstatus,
+        shipmentCount:       1,
+        totalVolume:         Number(r.fvolume ?? 0),
+        totalWeight:         Number(r.fweight ?? 0),
+      });
+    }
+  }
+  // Sort by oldest fdatecontainerclose first (overdue tubs surface)
+  return Array.from(by.values()).sort((a, b) => {
+    if (!a.fdatecontainerclose) return 1;
+    if (!b.fdatecontainerclose) return -1;
+    return a.fdatecontainerclose.localeCompare(b.fdatecontainerclose);
+  });
 }
 
 export default async function ContainersAwaitingThReport({
@@ -61,73 +106,47 @@ export default async function ContainersAwaitingThReport({
   const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
+  // Pull all tb_forwarder rows for ตู้ที่ยังไม่ถึงไทย (fStatus < 4)
   let q = admin
-    .from("cargo_containers")
-    .select(`id, code, transport_mode, origin, destination, status, eta, packed_at, sealed_at,
-      actual_arrival, source, total_boxes, total_weight_kg, total_cbm, carrier_container_no, created_at`)
-    .in("status", IN_FLIGHT)
-    .order("eta", { ascending: true, nullsFirst: false })
-    .limit(500);
-  if (sp.date_from) q = q.gte("created_at", sp.date_from);
-  if (sp.date_to)   q = q.lte("created_at", sp.date_to + "T23:59:59");
+    .from("tb_forwarder")
+    .select(`fcabinetnumber, fdatecontainerclose, fdatestatus4, ftransporttype,
+      fwarehousename, fstatus, fvolume, fweight`)
+    .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
+    .lt("fstatus", "4")
+    .limit(50_000);
+  if (sp.date_from) q = q.gte("fdatecontainerclose", sp.date_from);
+  if (sp.date_to)   q = q.lte("fdatecontainerclose", sp.date_to + " 23:59:59");
   const { data } = await q;
-  const rows = ((data ?? []) as Row[]);
+  const grouped = groupByContainer((data ?? []) as ForwarderRow[]);
 
-  // Pull shipment counts in one IN-query
-  const ids = rows.map((r) => r.id);
-  const countMap = new Map<string, number>();
-  if (ids.length > 0) {
-    const { data: shipsData } = await admin
-      .from("cargo_shipments")
-      .select("cargo_container_id")
-      .in("cargo_container_id", ids);
-    for (const s of (shipsData ?? []) as Array<{ cargo_container_id: string }>) {
-      countMap.set(s.cargo_container_id, (countMap.get(s.cargo_container_id) ?? 0) + 1);
-    }
-  }
-
-  const overdue = rows.filter((r) => {
-    const d = daysUntil(r.eta);
-    return d != null && d < 0;
+  const overdue = grouped.filter((g) => {
+    const d = daysAgo(g.fdatecontainerclose);
+    return d != null && d > 21;            // legacy heuristic — ปิดมา > 3 weeks = overdue
   }).length;
-  const totalBoxes = rows.reduce((s, r) => s + Number(r.total_boxes ?? 0), 0);
-  const totalCbm   = rows.reduce((s, r) => s + Number(r.total_cbm ?? 0), 0);
+  const totalShipments = grouped.reduce((s, g) => s + g.shipmentCount, 0);
+  const totalCbm       = grouped.reduce((s, g) => s + g.totalVolume, 0);
 
-  const csvRows = rows.map((r) => ({
-    code:                 r.code ?? "",
-    carrier_container_no: r.carrier_container_no ?? "",
-    transport:            r.transport_mode ?? "",
-    origin:               r.origin ?? "",
-    destination:          r.destination ?? "",
-    status:               r.status,
-    shipments:            countMap.get(r.id) ?? 0,
-    total_boxes:          r.total_boxes,
-    total_weight_kg:      r.total_weight_kg,
-    total_cbm:            r.total_cbm,
-    sealed_at:            r.sealed_at ?? "",
-    eta:                  r.eta ?? "",
-    actual_arrival:       r.actual_arrival ?? "",
-    days_since_sealed:    daysAgo(r.sealed_at) ?? "",
-    days_until_eta:       daysUntil(r.eta) ?? "",
-    source:               r.source,
+  const csvRows = grouped.map((g) => ({
+    fcabinetnumber:      g.fcabinetnumber,
+    transport:           TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype,
+    warehouse:           WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
+    status:              STATUS_LABEL[g.fstatus] ?? g.fstatus,
+    shipments:           g.shipmentCount,
+    total_volume_cbm:    g.totalVolume.toFixed(3),
+    total_weight_kg:     g.totalWeight.toFixed(2),
+    container_closed_at: g.fdatecontainerclose ?? "",
+    days_since_closed:   daysAgo(g.fdatecontainerclose) ?? "",
   }));
   const csvCols = [
-    { key: "code",                 label: "รหัส Pacred" },
-    { key: "carrier_container_no", label: "เลข B/L" },
-    { key: "transport",            label: "ขนส่ง" },
-    { key: "origin",               label: "ต้นทาง" },
-    { key: "destination",          label: "ปลายทาง" },
-    { key: "status",               label: "สถานะ" },
-    { key: "shipments",            label: "Shipments" },
-    { key: "total_boxes",          label: "กล่อง" },
-    { key: "total_weight_kg",      label: "น้ำหนัก (kg)" },
-    { key: "total_cbm",            label: "ปริมาตร (CBM)" },
-    { key: "sealed_at",            label: "ปิดตู้" },
-    { key: "eta",                  label: "ETA" },
-    { key: "actual_arrival",       label: "ถึงจริง" },
-    { key: "days_since_sealed",    label: "ปิดมาแล้วกี่วัน" },
-    { key: "days_until_eta",       label: "อีกกี่วันถึง (ลบ=เกิน ETA)" },
-    { key: "source",               label: "แหล่งข้อมูล" },
+    { key: "fcabinetnumber",      label: "หมายเลขตู้" },
+    { key: "transport",           label: "ขนส่ง" },
+    { key: "warehouse",           label: "โกดัง" },
+    { key: "status",              label: "สถานะ" },
+    { key: "shipments",           label: "จำนวน shipment" },
+    { key: "total_volume_cbm",    label: "ปริมาตร (CBM)" },
+    { key: "total_weight_kg",     label: "น้ำหนัก (kg)" },
+    { key: "container_closed_at", label: "วันที่ปิดตู้" },
+    { key: "days_since_closed",   label: "ปิดมาแล้วกี่วัน" },
   ];
 
   return (
@@ -138,7 +157,9 @@ export default async function ContainersAwaitingThReport({
           <h1 className="mt-1 text-2xl font-bold">
             ตู้คอนเทนเนอร์รอเข้าโกดังไทย{slaLabel ? ` — ${slaLabel}` : ""}
           </h1>
-          <p className="mt-1 text-sm text-muted">ตู้ที่ยังไม่ปิดงาน (packing → sealed → in_transit → arrived → unloading) — ETA เก่าสุดบนสุด</p>
+          <p className="mt-1 text-sm text-muted">
+            ตู้ที่ยัง fStatus &lt; 4 (รอตรวจสอบ → เตรียมส่ง → กำลังส่งมาไทย) — รวมจาก tb_forwarder GROUP BY fcabinetnumber
+          </p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
@@ -169,55 +190,57 @@ export default async function ContainersAwaitingThReport({
       </div>
 
       <div className="grid sm:grid-cols-4 gap-3">
-        <Card label="ตู้ทั้งหมด" value={String(rows.length)} />
-        <Card label="เกิน ETA" value={String(overdue)} highlight={overdue > 0} />
-        <Card label="กล่องรวม" value={totalBoxes.toLocaleString()} />
+        <Card label="ตู้ทั้งหมด" value={String(grouped.length)} />
+        <Card label="ปิดมา > 21 วัน" value={String(overdue)} highlight={overdue > 0} />
+        <Card label="Shipments รวม" value={totalShipments.toLocaleString()} />
         <Card label="CBM รวม" value={totalCbm.toFixed(2)} />
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        {rows.length === 0 ? (
+        {grouped.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">🎉 ไม่มีตู้ค้าง</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-4 py-3">รหัส</th>
+                  <th className="px-4 py-3">หมายเลขตู้</th>
                   <th className="px-4 py-3">ขนส่ง</th>
-                  <th className="px-4 py-3">เส้นทาง</th>
+                  <th className="px-4 py-3">โกดัง</th>
                   <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3 text-right">Ship/กล่อง/CBM</th>
-                  <th className="px-4 py-3">ETA</th>
+                  <th className="px-4 py-3 text-right">Ship / CBM</th>
+                  <th className="px-4 py-3">วันที่ปิดตู้</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
-                  const eta = daysUntil(r.eta);
-                  const etaBadge = eta == null ? "bg-surface-alt text-muted border-border"
-                    : eta < 0 ? "bg-red-50 text-red-700 border-red-200"
-                    : eta < 3 ? "bg-amber-50 text-amber-700 border-amber-200"
+                {grouped.map((g) => {
+                  const d = daysAgo(g.fdatecontainerclose);
+                  const dBadge = d == null ? "bg-surface-alt text-muted border-border"
+                    : d > 21 ? "bg-red-50 text-red-700 border-red-200"
+                    : d > 14 ? "bg-amber-50 text-amber-700 border-amber-200"
                     : "bg-green-50 text-green-700 border-green-200";
                   return (
-                    <tr key={r.id} className="border-t border-border">
+                    <tr key={g.fcabinetnumber} className="border-t border-border">
                       <td className="px-4 py-3 font-mono text-xs">
-                        {r.code ? (
-                          <Link href={`/admin/warehouse/containers/${r.code}`} className="text-primary-600 hover:underline">{r.code}</Link>
-                        ) : <span className="text-muted">—</span>}
-                        {r.carrier_container_no && <p className="text-[10px] text-muted mt-0.5">B/L: {r.carrier_container_no}</p>}
+                        <Link
+                          href={`/admin/report-cnt?id=${encodeURIComponent(g.fcabinetnumber)}`}
+                          className="text-primary-600 hover:underline"
+                        >
+                          {g.fcabinetnumber}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 text-xs">{r.transport_mode ? TRANSPORT_LABEL[r.transport_mode] : "—"}</td>
-                      <td className="px-4 py-3 text-xs">{r.origin ?? "—"} → {r.destination ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs">{STATUS_LABEL[r.status] ?? r.status}</td>
+                      <td className="px-4 py-3 text-xs">{TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype}</td>
+                      <td className="px-4 py-3 text-xs">{WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename}</td>
+                      <td className="px-4 py-3 text-xs">{STATUS_LABEL[g.fstatus] ?? g.fstatus}</td>
                       <td className="px-4 py-3 text-right text-xs font-mono">
-                        {countMap.get(r.id) ?? 0} / {r.total_boxes}
-                        <p className="text-[10px] text-muted">{Number(r.total_cbm).toFixed(2)} CBM</p>
+                        {g.shipmentCount}
+                        <p className="text-[10px] text-muted">{g.totalVolume.toFixed(2)} CBM</p>
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {r.eta ? new Date(r.eta).toLocaleDateString("th-TH") : <span className="text-muted">—</span>}
-                        {eta != null && (
-                          <span className={`block mt-1 rounded-full border px-2 py-0.5 text-[10px] w-fit ${etaBadge}`}>
-                            {eta < 0 ? `เกิน ${Math.abs(eta)} วัน` : `อีก ${eta} วัน`}
+                        {g.fdatecontainerclose ? g.fdatecontainerclose.slice(0, 10) : <span className="text-muted">—</span>}
+                        {d != null && (
+                          <span className={`block mt-1 rounded-full border px-2 py-0.5 text-[10px] w-fit ${dBadge}`}>
+                            ปิดมา {d} วัน
                           </span>
                         )}
                       </td>

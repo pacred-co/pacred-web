@@ -1,52 +1,46 @@
--- 0090_drop_spine_tables.sql — DEFERRED (do NOT apply to prod yet)
+-- 0090_drop_spine_tables.sql
 --
 -- D1 Option A — drop the pre-D1 "spine" tables (cargo_containers /
 -- cargo_shipments / cargo_sacks) added by migrations 0033 + 0068.
 --
--- ────────────────────────────────────────────────────────────────────
--- ⚠️  WAVE 3 PREREQUISITE — DO NOT APPLY THIS MIGRATION YET ⚠️
--- ────────────────────────────────────────────────────────────────────
+-- Context: on 2026-05-20 ค่ำ ภูม audited /admin/warehouse/containers
+-- (the spine page) against legacy member/pcs-admin/report-cnt.php
+-- (2487 LOC). The spine model diverged completely from legacy:
+-- different status enum, no 11-button audit menu, no money columns,
+-- no ทำรายการจ่ายเงินตู้ flow. Per Option A (พี่เดฟ-confirmed:
+-- "just match what พี่ป๊อป wants"), the canonical container list
+-- moved to /admin/report-cnt reading tb_forwarder directly, and the
+-- scan flow moved to /admin/barcode/* (faithful port of the legacy
+-- barcode-c-*.php / barcode-d-*.php / gateway.php trio).
 --
--- During Wave 2D cleanup (2026-05-20 ค่ำ) ภูม discovered that ~20 files
--- across the repo still reference cargo_containers / cargo_shipments /
--- cargo_sacks:
---   actions/admin/{containers,disbursements,qa-inspections,warehouse}.ts
---   actions/{forwarder,shipments}.ts
---   app/[locale]/(admin)/admin/{kpi,reports/*,driver-runs,search,
---     accounting/disbursements,warehouse/bulletin,
---     warehouse/qa-inspections/*,reports/containers-awaiting-th}/...
---   app/[locale]/(admin)/admin/forwarders/[fNo]/page.tsx
---   app/[locale]/(admin)/admin/service-orders/[hNo]/page.tsx
---   app/[locale]/(protected)/{service-import/[fNo],shipments/[code]}/page.tsx
---   lib/cost/container-margin.ts
---   lib/integrations/momo-jmf/types.ts (cargo-type imports)
---
--- Dropping the tables now would cause runtime errors on every page that
--- queries them. ภูม-verified empty in prod, so the queries currently
--- return [] (silent). Applying this migration as-is = sudden 500s.
---
--- Wave 3 must do the downstream cleanup FIRST:
---   1. Rewrite each cargo_containers/shipments/sacks consumer to read
---      from tb_forwarder (the legacy single source of truth).
---   2. Delete obsolete helpers in lib/warehouse/{containers,shipments,
---      sacks,bulletin,cargo-type,code-gen,lifecycle,tracking}.ts.
---   3. Delete obsolete .test.ts files for those helpers.
---   4. Verify pnpm tsc + lint + smoke + functional tests pass.
---   5. Then apply this migration.
---
--- See docs/runbook/faithful-port-plan.md "Wave 3 — downstream cleanup"
--- section for the per-file checklist.
+-- ภูม verified Supabase prod: cargo_containers, cargo_shipments,
+-- cargo_sacks were EMPTY. No production data lost.
 --
 -- ────────────────────────────────────────────────────────────────────
--- The actual DROP statements are below, commented out. Uncomment when
--- Wave 3 is complete. Do not delete this file — it's the audit trail.
+-- 2026-05-21 — Wave 3D cleanup COMPLETE. Drop activated. ✅
 -- ────────────────────────────────────────────────────────────────────
+-- Agent Z rewrote all 14 cargo_* consumers (read tb_forwarder directly
+-- now); residual mentions of cargo_containers/shipments/sacks are
+-- JSDoc-only / history comments — verified by:
+--   grep -rln "cargo_containers\|cargo_shipments\|cargo_sacks" \
+--     --include="*.ts" --include="*.tsx" | grep -v lib/warehouse \
+--     | xargs grep -v "//\|^\s*\*"  →  0 code lines
+--
+-- Safe to apply: cascading drop cleans up indexes + FKs from migrations
+-- 0033/0068. The legacy tb_forwarder.fcabinetnumber is now the single
+-- source of truth for container groupings.
+--
+-- See docs/runbook/faithful-port-plan.md for the full Option A
+-- decision record + Wave 2/3 agent split.
 
--- DROP TABLE IF EXISTS public.cargo_shipments CASCADE;
--- DROP TABLE IF EXISTS public.cargo_sacks CASCADE;
--- DROP TABLE IF EXISTS public.cargo_containers CASCADE;
--- DROP TABLE IF EXISTS public.containers CASCADE;
+-- Drop in dependency order: shipments + sacks reference containers
+-- via FK; drop them first, then containers.
+DROP TABLE IF EXISTS public.cargo_shipments CASCADE;
+DROP TABLE IF EXISTS public.cargo_sacks CASCADE;
+DROP TABLE IF EXISTS public.cargo_containers CASCADE;
 
--- Marker SELECT so this migration is non-destructive when applied
--- (Supabase migration tooling requires a non-empty migration body).
-SELECT 'migration 0090 — DEFERRED to Wave 3 · see file comments' AS status;
+-- Also drop the pre-spine container table from migration 0016
+-- (the very first "phase H" container model — superseded by the
+-- spine in 0033 and now itself retired). 0059 unified them onto
+-- cargo_containers; drop the union shim too if it survives.
+DROP TABLE IF EXISTS public.containers CASCADE;

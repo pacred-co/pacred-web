@@ -1,22 +1,16 @@
 /**
- * Warehouse spine — single export point for action callers (T-P2 / CT-2).
+ * Warehouse spine — STUB barrel (Wave 3 cleanup, 2026-05-20 ค่ำ).
  *
- * Re-exports types + the 3 client modules so callers can:
+ * The 0033 spine modules (containers · shipments · sacks · tracking ·
+ * bulletin · lifecycle · code-gen) were retired under D1 Option A in Wave 2
+ * in favour of the legacy `tb_forwarder` flow (faithful port of
+ * `report-cnt.php`). The only re-exports kept here are the pure-helper
+ * cargo-type taxonomy (still used by `lib/integrations/momo-jmf/*` to
+ * normalise legacy A/M/X/O/Z or G/T/F codes on import).
  *
- *   import {
- *     createContainer, listContainers, setContainerStatus,
- *     createShipment, attachShipmentToContainer, setShipmentStatus,
- *     appendTrackingEvent, listTrackingEvents,
- *     buildContainerCode,
- *   } from "@/lib/warehouse";
- *
- * Per architecture/container-centric-model.md.
+ * Type aliases (Container · Shipment · etc.) are NO LONGER exported —
+ * consumers that need to type a spine row should declare locally. Only
+ * cargo-type re-exports survive.
  */
 
-export * from "./types";
-export * from "./containers";
-export * from "./shipments";
-export * from "./tracking";
 export * from "./cargo-type";
-export * from "./sacks";
-export { buildContainerCode, originPrefix, dateSlug } from "./code-gen";

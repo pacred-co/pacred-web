@@ -30,14 +30,12 @@ const THAI_MONTHS = [
   "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 ];
 
-// Container statuses that count as "in-transit / live load". Covers BOTH
-// status families on the `containers` table — the 0033 spine (`packing` /
-// `sealed` / `in_transit`) and the 0016 legacy (`preparing` / `sealed` /
-// `in_transit`) — so the count is correct mid-migration. See
-// lib/warehouse/types.ts.
-const CONTAINER_IN_TRANSIT = ["packing", "preparing", "sealed", "in_transit"];
-// "Reached Thailand" — spine `arrived` + legacy `arrived_port`.
-const CONTAINER_ARRIVED = ["arrived", "arrived_port"];
+// Wave 3 cleanup (2026-05-20 ค่ำ): the rebuilt `containers` + `cargo_containers`
+// spine was retired under D1 Option A. Container-throughput KPIs now read
+// from `tb_forwarder` (the legacy single source of truth, faithful port of
+// report-cnt.php). The legacy `fStatus` column is 1..7 — 1..3 = pre-arrival
+// (กำลังขนส่ง), 4..6 = post-arrival (ถึงไทยแล้ว / สำเร็จ), 7 = ยกเลิก.
+// Counts are DISTINCT on fCabinetNumber (so 50 shipments in 1 container = 1 ตู้).
 
 // ── tiny helpers ─────────────────────────────────────────────────────────
 function thb(n: number): string {
@@ -78,8 +76,8 @@ export default async function AdminKpiPage() {
     soPrev, fwPrev, yuanPrev,
     // orders by status — full status row sets, counted in-app
     soStatuses, fwStatuses,
-    // container throughput
-    containersInTransit, containersArrivedMonth,
+    // container throughput (Wave 3: from tb_forwarder DISTINCT fcabinetnumber)
+    containersInTransitRows, containersArrivedMonthRows,
     // signups
     signupsMonth, signupsToday, signupsPrev, signupsTotal,
     // wallet top-up volume (completed deposits)
@@ -100,8 +98,22 @@ export default async function AdminKpiPage() {
     admin.from("service_orders").select("status"),
     admin.from("forwarders").select("status"),
 
-    admin.from("containers").select("id", { count: "exact", head: true }).in("status", CONTAINER_IN_TRANSIT),
-    admin.from("containers").select("id", { count: "exact", head: true }).in("status", CONTAINER_ARRIVED).gte("created_at", monthStart),
+    // In-transit ตู้ — tb_forwarder fStatus 1..3 = pre-arrival, DISTINCT fcabinetnumber.
+    // No date filter (we want the live load, not just rows created this month).
+    admin.from("tb_forwarder")
+      .select("fcabinetnumber")
+      .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
+      .lt("fstatus", "4")
+      .limit(50_000),
+
+    // Arrived ตู้ this month — fStatus 4..6 (ถึงไทยแล้ว / completed), DISTINCT.
+    // Date filter on fdatestatus4 (the legacy column for "arrived at Thailand").
+    admin.from("tb_forwarder")
+      .select("fcabinetnumber")
+      .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
+      .gt("fstatus", "3").lt("fstatus", "7")
+      .gte("fdatestatus4", monthStart)
+      .limit(50_000),
 
     admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", monthStart),
     admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", todayStart),
@@ -112,6 +124,10 @@ export default async function AdminKpiPage() {
     admin.from("wallet_transactions").select("amount").eq("kind", "deposit").eq("status", "completed").gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd),
     admin.from("wallet").select("balance"),
   ]);
+
+  // DISTINCT fcabinetnumber → 1 ตู้ = 1 count (many forwarders share a container)
+  const inTransitCount = new Set((containersInTransitRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber)).size;
+  const arrivedCount   = new Set((containersArrivedMonthRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber)).size;
 
   // ── revenue roll-up ──
   const revMonth = sumNum(soMonth.data, "total_thb") + sumNum(fwMonth.data, "total_price") + sumNum(yuanMonth.data, "thb_amount");
@@ -193,8 +209,8 @@ export default async function AdminKpiPage() {
           tone="primary"
           icon={<ContainerIcon className="h-5 w-5" />}
           label="ตู้กำลังขนส่ง"
-          value={int(containersInTransit.count ?? 0)}
-          sub={`เข้าไทยแล้วเดือนนี้ ${int(containersArrivedMonth.count ?? 0)} ตู้`}
+          value={int(inTransitCount)}
+          sub={`เข้าไทยแล้วเดือนนี้ ${int(arrivedCount)} ตู้`}
         />
       </section>
 

@@ -5,8 +5,13 @@ import { DriverActionButtons } from "./action-buttons";
 
 // CT-7 — Driver "งานของฉัน" landing.
 // Driver lands here, sees own forwarder_driver assignments (status IN 1/2)
-// + completed-today (status 4). Per row: forwarder details + linked
-// cargo_shipment + container code (cargo spine) + accept / complete buttons.
+// + completed-today (status 4). Per row: forwarder details + accept / complete buttons.
+//
+// Wave 3 cleanup (2026-05-20 ค่ำ): the cargo_shipments + container_code
+// lookup was removed when the spine was retired (D1 Option A). The
+// container number for each forwarder lives directly on `forwarders.cabinet_number`
+// / `forwarders.tracking_th` and is rendered inline. The scan flow now
+// targets the legacy barcode routes (`/admin/barcode/driver`).
 //
 // Self-row only — server action driverUpdateOwnAssignmentStatus enforces it.
 // Sidebar entry shows for driver role (super/ops also see for oversight).
@@ -25,6 +30,7 @@ type AssignmentRow = {
     transport_type:     string;
     status:             string;
     tracking_th:        string | null;
+    cabinet_number:     string | null;
     ship_first_name:    string | null;
     ship_last_name:     string | null;
     ship_phone:         string | null;
@@ -68,7 +74,7 @@ export default async function DriverRunsPage() {
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
       forwarder:forwarders!forwarder_id (
-        f_no, total_price, transport_type, status, tracking_th,
+        f_no, total_price, transport_type, status, tracking_th, cabinet_number,
         ship_first_name, ship_last_name, ship_phone, ship_address_line,
         ship_sub_district, ship_district, ship_province, ship_postal_code
       )
@@ -86,7 +92,7 @@ export default async function DriverRunsPage() {
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
       forwarder:forwarders!forwarder_id (
-        f_no, total_price, transport_type, status, tracking_th,
+        f_no, total_price, transport_type, status, tracking_th, cabinet_number,
         ship_first_name, ship_last_name, ship_phone, ship_address_line,
         ship_sub_district, ship_district, ship_province, ship_postal_code
       )
@@ -97,29 +103,10 @@ export default async function DriverRunsPage() {
     .order("completed_at", { ascending: false });
   const doneRows = ((doneRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
-  // Pull cargo_shipments + container for active forwarders (single IN-query)
-  const activeForwarderIds = activeRows.map((r) => r.forwarder_id);
-  const cargoByForwarderId = new Map<string, { shipment_code: string; container_code: string | null }>();
-  if (activeForwarderIds.length > 0) {
-    const { data: shipments } = await admin
-      .from("cargo_shipments")
-      .select("shipment_code, forwarder_f_no, container:cargo_containers!cargo_container_id(code)")
-      .in("forwarder_f_no", activeRows.map((r) => r.forwarder?.f_no).filter((s): s is string => !!s));
-    type Embed = { code: string | null };
-    type Row = { shipment_code: string; forwarder_f_no: string; container: Embed | Embed[] | null };
-    // Build a Map keyed on f_no first (since shipments link by f_no not forwarder_id)
-    const byFno = new Map<string, { shipment_code: string; container_code: string | null }>();
-    for (const s of (shipments ?? []) as Row[]) {
-      if (byFno.has(s.forwarder_f_no)) continue;
-      const cont = Array.isArray(s.container) ? (s.container[0] ?? null) : s.container;
-      byFno.set(s.forwarder_f_no, { shipment_code: s.shipment_code, container_code: cont?.code ?? null });
-    }
-    // Map forwarder_id → cargo via f_no
-    for (const r of activeRows) {
-      const fno = r.forwarder?.f_no;
-      if (fno && byFno.has(fno)) cargoByForwarderId.set(r.forwarder_id, byFno.get(fno)!);
-    }
-  }
+  // Wave 3 cleanup: spine retired (cargo_shipments → tb_forwarder).
+  // The container number for each forwarder is already on
+  // `forwarders.cabinet_number`; we surface it inline below in lieu of
+  // the deleted spine join.
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
@@ -146,7 +133,6 @@ export default async function DriverRunsPage() {
           <ul className="divide-y divide-border">
             {activeRows.map((r) => {
               const fwd = r.forwarder;
-              const cargo = cargoByForwarderId.get(r.forwarder_id);
               const addr = fwd
                 ? [fwd.ship_address_line, fwd.ship_sub_district && `ต.${fwd.ship_sub_district}`, fwd.ship_district && `อ.${fwd.ship_district}`, fwd.ship_province && `จ.${fwd.ship_province}`, fwd.ship_postal_code]
                     .filter(Boolean).join(" ")
@@ -172,8 +158,8 @@ export default async function DriverRunsPage() {
                       )}
                       <p className="text-xs text-muted">{addr}</p>
                       {fwd?.tracking_th && <p className="text-[10px] text-muted font-mono">TH tracking: {fwd.tracking_th}</p>}
-                      {cargo?.container_code && (
-                        <p className="text-[10px] text-muted">📦 ตู้: <span className="font-mono">{cargo.container_code}</span></p>
+                      {fwd?.cabinet_number && (
+                        <p className="text-[10px] text-muted">📦 ตู้: <span className="font-mono">{fwd.cabinet_number}</span></p>
                       )}
                       {r.note && <p className="text-[10px] text-amber-700 italic">📝 {r.note}</p>}
                     </div>
@@ -182,7 +168,7 @@ export default async function DriverRunsPage() {
                       <p className="text-[10px] text-muted mt-1">มอบหมาย {new Date(r.fd_date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</p>
                     </div>
                   </div>
-                  <DriverActionButtons assignmentId={r.id} status={r.status} shipmentCode={cargo?.shipment_code ?? null} />
+                  <DriverActionButtons assignmentId={r.id} status={r.status} shipmentCode={null} />
                 </li>
               );
             })}

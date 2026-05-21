@@ -8,13 +8,18 @@ import { Search } from "lucide-react";
  *
  * Single query box → ?q=<text> → searches across:
  *   - profiles      (member_code · first_name · last_name · phone · email · company_name)
- *   - forwarders    (f_no)
+ *   - forwarders    (f_no, cabinet_number)
  *   - service_orders (h_no)
  *   - freight_shipments (job_no)
  *   - tax_invoices  (invoice_no)
- *   - cargo_containers (code · legacy_container_no)
  *   - refund_requests (request_no)
  *   - freight_quotes (quote_no)
+ *
+ * Wave 3 cleanup (2026-05-20 ค่ำ): the dedicated cargo_containers entity
+ * was removed when the spine was retired. Container searches now go via
+ * forwarders.cabinet_number — staff paste a ตู้ number and get every
+ * forwarder in that container, then jump to /admin/report-cnt for the
+ * grouped container view.
  *
  * Each entity surfaces as a section with up to 5 hits + "ดูเพิ่ม" link to the
  * per-entity list filtered by the query. Designed so super/ops can paste any
@@ -41,11 +46,10 @@ type Profile = {
   account_type: "personal" | "juristic";
 };
 
-type Forwarder    = { id: string; f_no: string; status: string; profile_id: string; total_price: number | null; created_at: string };
+type Forwarder    = { id: string; f_no: string; status: string; profile_id: string; total_price: number | null; cabinet_number: string | null; created_at: string };
 type ServiceOrder = { id: string; h_no: string; status: string; profile_id: string; total_thb: number | null; created_at: string };
 type FreightShip  = { id: string; job_no: string | null; status: string; profile_id: string; created_at: string };
 type TaxInvoice   = { id: string; invoice_no: string | null; profile_id: string; total_thb: number | null; issued_at: string | null };
-type Container    = { id: string; code: string | null; legacy_container_no: string | null; status: string; transport_mode: string | null };
 type RefundReq    = { id: string; request_no: string | null; status: string; profile_id: string; amount_thb: number; created_at: string };
 type FreightQuote = { id: string; quote_no: string | null; status: string; profile_id: string | null; created_at: string };
 
@@ -78,7 +82,6 @@ export default async function AdminGlobalSearchPage({
   let serviceOrders:   ServiceOrder[] = [];
   let freightShips:    FreightShip[]  = [];
   let taxInvoices:     TaxInvoice[]   = [];
-  let containers:      Container[]    = [];
   let refundRequests:  RefundReq[]    = [];
   let freightQuotes:   FreightQuote[] = [];
 
@@ -99,11 +102,15 @@ export default async function AdminGlobalSearchPage({
       .limit(PER_ENTITY_LIMIT);
     profiles = (pData ?? []) as Profile[];
 
-    // Forwarders
+    // Forwarders — search both f_no AND cabinet_number (so a container ตู้
+    // search lands here directly, replacing the deleted cargo_containers entity)
     const { data: fData } = await admin
       .from("forwarders")
-      .select("id, f_no, status, profile_id, total_price, created_at")
-      .ilike("f_no", ilike)
+      .select("id, f_no, status, profile_id, total_price, cabinet_number, created_at")
+      .or([
+        `f_no.ilike.${ilike}`,
+        `cabinet_number.ilike.${ilike}`,
+      ].join(","))
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
     forwarders = (fData ?? []) as Forwarder[];
@@ -135,17 +142,9 @@ export default async function AdminGlobalSearchPage({
       .limit(PER_ENTITY_LIMIT);
     taxInvoices = (tiData ?? []) as TaxInvoice[];
 
-    // Cargo containers (search both spine `code` + legacy `legacy_container_no` from U1-1 backfill)
-    const { data: cData } = await admin
-      .from("cargo_containers")
-      .select("id, code, legacy_container_no, status, transport_mode")
-      .or([
-        `code.ilike.${ilike}`,
-        `legacy_container_no.ilike.${ilike}`,
-      ].join(","))
-      .order("created_at", { ascending: false })
-      .limit(PER_ENTITY_LIMIT);
-    containers = (cData ?? []) as Container[];
+    // Container search now folds into forwarders.cabinet_number above
+    // (Wave 3: cargo_containers retired). For the grouped container view,
+    // jump to /admin/report-cnt directly.
 
     // Refund requests
     const { data: rData } = await admin
@@ -167,7 +166,7 @@ export default async function AdminGlobalSearchPage({
   }
 
   const totalHits = profiles.length + forwarders.length + serviceOrders.length
-    + freightShips.length + taxInvoices.length + containers.length
+    + freightShips.length + taxInvoices.length
     + refundRequests.length + freightQuotes.length;
 
   return (
@@ -178,7 +177,7 @@ export default async function AdminGlobalSearchPage({
           <Search className="w-6 h-6" /> ค้นหาทุกที่
         </h1>
         <p className="mt-1 text-sm text-muted">
-          ค้นหาข้าม profiles · forwarders · service_orders · freight · tax invoices · containers · refunds · quotes
+          ค้นหาข้าม profiles · forwarders (+ตู้) · service_orders · freight · tax invoices · refunds · quotes
         </p>
       </div>
 
@@ -240,6 +239,7 @@ export default async function AdminGlobalSearchPage({
             <Link key={f.id} href={`/admin/forwarders/${f.f_no}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
               <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
                 <span className="font-mono font-medium text-primary-700">{f.f_no}</span>
+                {f.cabinet_number && <span className="text-muted text-[10px]">↳ ตู้: <span className="font-mono">{f.cabinet_number}</span></span>}
                 <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{f.status}</span>
                 <span className="font-mono">{thb(f.total_price)}</span>
                 <span className="text-muted">{new Date(f.created_at).toLocaleDateString("th-TH")}</span>
@@ -286,21 +286,6 @@ export default async function AdminGlobalSearchPage({
                 <span className="font-mono font-medium text-primary-700">{ti.invoice_no ?? "(no number)"}</span>
                 <span className="font-mono">{thb(ti.total_thb)}</span>
                 <span className="text-muted">{ti.issued_at ? new Date(ti.issued_at).toLocaleDateString("th-TH") : "ยังไม่ออก"}</span>
-              </div>
-            </Link>
-          ))}
-        </Section>
-      )}
-
-      {willRun && containers.length > 0 && (
-        <Section title="ตู้คอนเทนเนอร์ (containers)" count={containers.length} moreHref={`/admin/warehouse/containers?q=${encodeURIComponent(q)}`}>
-          {containers.map((c) => (
-            <Link key={c.id} href={`/admin/warehouse/containers/${c.code ?? c.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
-              <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
-                <span className="font-mono font-medium text-primary-700">{c.code ?? c.id.slice(0, 8)}</span>
-                {c.legacy_container_no && <span className="text-muted text-[10px]">↳ legacy: {c.legacy_container_no}</span>}
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px]">{c.status}</span>
-                <span className="text-muted">{c.transport_mode ?? "—"}</span>
               </div>
             </Link>
           ))}
