@@ -3,6 +3,12 @@ import { Prompt } from "next/font/google";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import { GtmScript, GtmNoscript } from "@/components/analytics/gtm-script";
 import { ClarityScript } from "@/components/analytics/clarity-script";
+import { GoogleAdsScript } from "@/components/analytics/google-ads-script";
+import { GoogleAnalyticsScript } from "@/components/analytics/google-analytics-script";
+import {
+  FacebookPixelScript,
+  FacebookPixelNoscript,
+} from "@/components/analytics/facebook-pixel-script";
 import { SITE_NAME, SITE_URL } from "@/components/seo/site";
 import "./globals.css";
 
@@ -94,12 +100,16 @@ export default function RootLayout({
         />
         <GtmScript />
         <ClarityScript />
+        <GoogleAdsScript />
+        <GoogleAnalyticsScript />
+        <FacebookPixelScript />
       </head>
       <body
         suppressHydrationWarning
         className="min-h-full flex flex-col bg-background text-foreground font-[family-name:var(--font-prompt)]"
       >
         <GtmNoscript />
+        <FacebookPixelNoscript />
         {/* Always-light-on-open (เดฟ, 2026-05-16): THEME_INIT_SCRIPT paints
             `light` pre-hydration and ThemeProvider starts `light` to match —
             no OS `prefers-color-scheme` detection, no head-script↔React

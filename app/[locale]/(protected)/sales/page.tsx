@@ -237,9 +237,14 @@ export default async function SalesTeamMembersPage() {
   });
 
   // user-sales.php L63 — basePath.'register/?recom='.$urlRecom.
-  // The legacy site root; the customer-facing register page is the
-  // public marketing site (faithful to the absolute legacy URL).
-  const inviteLink = `https://pcscargo.co.th/member/register/?recom=${agent.urlRecom}`;
+  // The agent copies this URL + shares it with prospects, so it needs
+  // a FULLY-QUALIFIED Pacred URL (not relative). Use NEXT_PUBLIC_SITE_URL
+  // — in dev http://localhost:3000, in prod https://pacred.co.th.
+  // Legacy hard-coded pcscargo.co.th — rewritten so referrals land on
+  // Pacred's own /register page, not the legacy site.
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://pacred.co.th";
+  const inviteLink = `${siteUrl}/register?recom=${agent.urlRecom}`;
 
   return (
     <div className="pcs-legacy">

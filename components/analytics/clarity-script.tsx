@@ -1,11 +1,14 @@
 import Script from "next/script";
 
-const CLARITY_ID = process.env.NEXT_PUBLIC_CLARITY_ID;
+// Clarity ID hardcoded as a default fallback per the owner directive
+// 2026-05-20 (tracking IDs embedded in code; env override supported).
+// `ws2tje8x24` is the Pacred Clarity project — clarity.microsoft.com.
+const CLARITY_ID = process.env.NEXT_PUBLIC_CLARITY_ID || "ws2tje8x24";
 
 /**
  * Microsoft Clarity tag loader. Provides heatmap, click recording, scroll
- * tracking, and session replay (free, no quota). Renders nothing when
- * NEXT_PUBLIC_CLARITY_ID is unset so dev / preview builds stay silent.
+ * tracking, and session replay (free, no quota). Hardcoded default fires
+ * on Vercel regardless of env config; env override supported.
  *
  * Place inside the root `<head>` (Server Component). Pairs with GTM (L-22)
  * to give the landing pivot a complete picture: GTM = event funnel +

@@ -499,14 +499,18 @@ export default async function ServiceOrderPage({
                                                   <br />
                                                   {fmtTime(row.hdate)} น.
                                                 </td>
-                                                {/* col 3 — ออเดอร์เลขที่ */}
+                                                {/* col 3 — ออเดอร์เลขที่.
+                                                    Legacy linked to pcscargo.co.th/member/shops/detail/{hno}/
+                                                    — rewritten to the internal Pacred route
+                                                    /service-order/{hno} so the customer stays inside
+                                                    Pacred (no bounce to the legacy site). */}
                                                 <td className="notranslate">
-                                                  <a
-                                                    href={`https://pcscargo.co.th/member/shops/detail/${row.hno}/`}
+                                                  <Link
+                                                    href={`/service-order/${row.hno}`}
                                                     className="text-info"
                                                   >
                                                     {row.hno} <ProBadge promoId={promoId} />
-                                                  </a>
+                                                  </Link>
                                                 </td>
                                                 {/* col 4 — ข้อมูลสินค้า */}
                                                 <td>
@@ -515,12 +519,12 @@ export default async function ServiceOrderPage({
                                                     <span className="font-12">{fmtDMYHMS(row.hdate)}</span>
                                                     <br />
                                                     เลขที่ออเดอร์ :{" "}
-                                                    <a
-                                                      href={`https://pcscargo.co.th/member/shops/detail/${row.hno}/`}
+                                                    <Link
+                                                      href={`/service-order/${row.hno}`}
                                                       className="text-info"
                                                     >
                                                       {row.hno} <ProBadge promoId={promoId} />
-                                                    </a>
+                                                    </Link>
                                                     <br />
                                                     สถานะ : <StatusBadgeAllM hStatus={row.hstatus} />
                                                     <br />
@@ -535,14 +539,14 @@ export default async function ServiceOrderPage({
                                                       <img className="img-fluid" src={hCover} width={60} alt="" />
                                                     </a>
                                                   </div>
-                                                  <a
-                                                    href={`https://pcscargo.co.th/member/shops/detail/${row.hno}/`}
+                                                  <Link
+                                                    href={`/service-order/${row.hno}`}
                                                     className="text-info"
                                                   >
                                                     {row.htitle}
                                                     {Number(row.hcount ?? 0) > 1 &&
                                                       ` และอีก ${Math.round(Number(row.hcount) - 1)} รายการ`}
-                                                  </a>
+                                                  </Link>
                                                   {row.hstatus === "2" && (
                                                     <>
                                                       <br />
@@ -572,23 +576,23 @@ export default async function ServiceOrderPage({
                                                       </p>
                                                     </a>
                                                   )}
-                                                  <a href={`https://pcscargo.co.th/member/shops/detail/${row.hno}/`}>
+                                                  <Link href={`/service-order/${row.hno}`}>
                                                     <p className="btn font-12 btn-outline-success btn-rounded btn-sm">
                                                       {" "}
                                                       ดูรายละเอียด{" "}
                                                     </p>
-                                                  </a>
+                                                  </Link>
                                                   {row.hstatus === "2" && (
                                                     <>
                                                       <br />
-                                                      <a
-                                                        href={`https://pcscargo.co.th/member/shops/detail/${row.hno}&pay=true/`}
+                                                      <Link
+                                                        href={`/service-order/${row.hno}?pay=true`}
                                                       >
                                                         <p className="btn font-12 btn-outline-info btn-rounded btn-sm">
                                                           {" "}
                                                           <i className="mdi mdi-check-circle-outline"></i> ชำระเงิน
                                                         </p>
-                                                      </a>
+                                                      </Link>
                                                     </>
                                                   )}
                                                   {/* shops.php L1012 — "พิมพ์ใบเสร็จ"

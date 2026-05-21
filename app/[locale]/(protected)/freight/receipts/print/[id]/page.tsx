@@ -4,11 +4,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 
 /**
- * ฝากนำเข้า (forwarder import) RECEIPT PRINT document — a FAITHFUL
- * 1:1 TRANSCRIPTION of the legacy PCS Cargo `member/printReceiptF.php`
- * ("ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)" — the official receipt for a
- * customer's paid import shipments). D1 / ADR-0017 · faithful-port
- * transcription · runbook `docs/runbook/faithful-port-transcription.md`.
+ * Freight (ฝากนำเข้า / forwarder import) RECEIPT PRINT document — a
+ * FAITHFUL 1:1 TRANSCRIPTION of the legacy PCS Cargo
+ * `member/printReceiptF.php` ("ใบเสร็จรับเงิน (ไม่ใช่ใบกำกับภาษี)" —
+ * the official receipt for a customer's paid import shipments).
+ * D1 / ADR-0017 · faithful-port transcription · runbook
+ * `docs/runbook/faithful-port-transcription.md`.
  *
  * This is a transcription, NOT a reinterpretation. The JSX below is
  * the exact HTML markup `printReceiptF.php` builds into its mPDF
@@ -25,20 +26,19 @@ import { PrintButton } from "@/components/print-button";
  * it (receipt-f-hs.php L121 / L138 / the bulk-print JS L238-246):
  *   printReceiptF.php?id=<rID>            — one receipt
  *   printReceiptF.php?type=1&id=<csv>     — bulk print (comma list)
- * Pacred has transcribed `receipt-f-hs.php` → `/service-import/
- * receipts`; until now that page kept a `LEGACY_PRINT_BASE`
- * placeholder URL for the un-ported print endpoint (its FLAG (A)).
- * THIS page is that endpoint, so the receipts-list links now resolve
- * inside Pacred — see the companion edit to receipt-f-hs's page.tsx.
+ * Pacred has transcribed `receipt-f-hs.php` →
+ * `/freight/receipts/history`; THIS page is its print sub-route, so
+ * the receipts-list links resolve inside Pacred.
  *
- * Pacred route: `/service-import/receipts/print` (a sub-route of the
- * receipt-history screen). The legacy `?id` and `?type` GET params
- * become Next.js `searchParams` — faithful to the legacy URL
- * contract. `?id` is a comma-joined list, exactly like the PHP
- * `explode(",", $_GET['id'])`. `?type=1` is the legacy bulk-print
- * marker; printReceiptF.php only ever branches `$nameDocs` on it and
- * both branches produce the same '<br/>' — so it is read but has no
- * visible effect, reproduced 1:1.
+ * Pacred route: `/freight/receipts/print/[id]` (a dynamic-segment
+ * sub-route of the receipt-history screen). The legacy `?id` GET
+ * param becomes the dynamic `[id]` path segment — the bulk-print
+ * comma-joined list of rIDs is supported as one segment value
+ * (Next.js encodes the comma; the page splits it the same way the
+ * PHP `explode(",", $_GET['id'])` does). The legacy `?type=1` bulk
+ * marker is read from `searchParams` for fidelity — printReceiptF.php
+ * only ever branches `$nameDocs` on it and both branches produce the
+ * same '<br/>', so it is read but has no visible effect.
  *
  * ── Data — every printReceiptF.php mysqli query transcribed 1:1 ───
  * `tb_*` is RLS-locked to service_role, so reads go through the
@@ -61,8 +61,10 @@ import { PrintButton } from "@/components/print-button";
  *                         rDatePrint=NOW() WHERE rID
  * marking the receipt printed by the customer. A Next.js Server
  * Component render MUST stay a pure read (runbook §9.4), so this
- * write is NOT performed here — it is a DEFERRED Server Action
- * (see the report).
+ * write is NOT performed here — it is a DEFERRED Server Action.
+ *
+ * TODO(server-action): port the `UPDATE tb_receipt SET statusPrint`
+ *   mutation to actions/*.ts when reviewed by เดฟ.
  *
  * ── Notes on faithful reproduction ───────────────────────────────
  *  - The WHT-1% block (printReceiptF.php L375-392) only fires for a
@@ -88,7 +90,6 @@ import { PrintButton } from "@/components/print-button";
  * legacy prints in the document are kept verbatim (interim brand
  * split — runbook §3 / the PCS-scrub plan gates the rename).
  */
-
 export const dynamic = "force-dynamic";
 
 // printReceiptF.php paginates 13 item rows per page (L138).
@@ -232,36 +233,38 @@ type ReceiptDoc = {
   totalPriceAll: number;
   amountPayAll: number;
   // WHT-1% block
-  reCorporate: number; // 0 = corporate-name receipt, 1 = personal
+  reCorporate: number; // 0 = personal-name receipt, 1 = corporate
   textPer1: string;
   pricPer1Visible: boolean;
   pricPer1Value: number;
   dis1per: number;
 };
 
-type SearchParams = {
-  id?: string;
-  type?: string;
-};
+type RouteParams = { id: string };
+type SearchParams = { type?: string };
 
-export default async function ServiceImportReceiptPrintPage({
+export default async function FreightReceiptPrintPage({
+  params,
   searchParams,
 }: {
+  params: Promise<RouteParams>;
   searchParams: Promise<SearchParams>;
 }) {
   // printReceiptF.php L6-10 — a logged-out visitor is redirected to /login.
   const { profile } = await requireAuth();
+  const { id } = await params;
   const sp = await searchParams;
 
-  // printReceiptF.php L11: `if(isset($_GET['id']))`.
-  if (sp.id === undefined || sp.id === "") notFound();
+  // printReceiptF.php L11: `if(isset($_GET['id']))`. The dynamic
+  // segment value comes in URL-decoded (Next.js handles %2C → ',').
+  if (!id || id === "") notFound();
 
   // $userID — the customer's member code ("PR<n>" === tb_*.userid).
   const userID = profile?.member_code ?? "";
 
   // printReceiptF.php L39-43 — $arrID = explode(",", $_GET['id']);
-  // $dataTitle = the comma-joined list (used in the <title>).
-  const arrID = sp.id.split(",").filter((s) => s !== "");
+  // The new dynamic [id] segment accepts the same comma-joined list.
+  const arrID = id.split(",").filter((s) => s !== "");
   const dataTitle = arrID.join(", ");
   void dataTitle; // legacy uses it only in <title>; Next sets <title> elsewhere
 
@@ -344,6 +347,7 @@ export default async function ServiceImportReceiptPrintPage({
 
     // printReceiptF.php L58 — the render-time UPDATE statusPrint='1'
     // is DEFERRED (a render is a pure read; see the file header FLAG).
+    // TODO(server-action): port to actions/*.ts when reviewed by เดฟ.
 
     // ── Customer-name resolution — printReceiptF.php L62-113 ──
     // $fName = userID . ' ' . corporateName  (corporate path).

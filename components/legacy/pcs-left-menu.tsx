@@ -76,7 +76,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           id="main-menu-navigation"
           data-menu="menu-navigation"
         >
-          <li className="nav-item itop">
+          <li className="nav-item itop has-sub">
             <a href="#">
               <img
                 src={data.userPicture}
@@ -190,7 +190,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               </span>
             </Link>
           </li>
-          <li className="nav-item">
+          <li className="nav-item has-sub">
             <a href="#">
               <img
                 src={`${A}/images/icon/pcs-shops.png`}
@@ -235,7 +235,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               </li>
             </ul>
           </li>
-          <li className="nav-item">
+          <li className="nav-item has-sub">
             <a href="#">
               <img
                 src={`${A}/images/icon/pcs-forwarder.png`}
@@ -288,7 +288,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               </li>
             </ul>
           </li>
-          <li className="nav-item">
+          <li className="nav-item has-sub">
             <a href="#">
               <img
                 src={`${A}/images/icon/pcs-payment.png`}
@@ -327,7 +327,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
               </li>
             </ul>
           </li>
-          <li className="nav-item">
+          <li className="nav-item has-sub">
             <a href="#">
               <img
                 src={`${A}/images/icon/pcs-wallet.png`}
@@ -360,7 +360,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             </ul>
           </li>
           {data.creditUser && (
-            <li className="nav-item">
+            <li className="nav-item has-sub">
               <a href="#">
                 <img
                   src={`${A}/images/icon/pcs-wallet.png`}
@@ -394,7 +394,7 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             </li>
           )}
           {isAgent && (
-            <li className="nav-item">
+            <li className="nav-item has-sub">
               <a href="#">
                 <img
                   src={`${A}/images/icon/pcs-sales.png`}

@@ -35,14 +35,12 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
       <div className="sidenav-overlay"></div>
       <div className="drag-target"></div>
       <div id="google_translate_element2"></div>
-      {/* BEGIN: Footer */}
-      <footer className="footer footer-static footer-light navbar-border navbar-shadow">
-        <p className="clearfix blue-grey lighten-2 text-sm-center mb-0 px-2">
-          <span className="float-md-left d-block d-md-inline-block">
-            Copyright &copy; {year} PCS Cargo <span id="scroll-top"></span>
-          </span>
-        </p>
-      </footer>
+      {/* Legacy `all-script.php` L6-8 had a "Copyright © PCS Cargo" footer
+          here. Owner directive (2026-05-21): customer back-office + admin
+          NEVER show a footer — removed verbatim. (The legacy mobile bottom-
+          nav `.nav-footer-pcs` + desktop right-rail `.nav-right-pcs` BELOW
+          are kept — those are navigation, not footers.) */}
+      {void year}
       <nav className="nav-footer-pcs notranslate">
         <Link href="/" className="nav__link">
           <img

@@ -20,6 +20,16 @@ const BODY_CLASSES = [
   "vertical-menu-modern",
   "2-columns",
   "fixed-navbar",
+  // `menu-expanded` is normally toggled by Modern-Admin's `app-menu.min.js`
+  // at runtime (between menu-expanded ↔ menu-collapsed) based on viewport +
+  // user interaction. In our port the toggle JS sometimes fails to add it
+  // on initial mount → the legacy chevron CSS rule
+  //   `body.vertical-layout.vertical-menu-modern.menu-expanded .navigation li.has-sub > a:after`
+  // never fires. Pinning to `menu-expanded` here makes the desktop default
+  // explicit and the chevrons render reliably. The user can still collapse
+  // the menu by clicking the chevron-toggle in the topbar (the theme JS
+  // swaps the class on click).
+  "menu-expanded",
   "pcs-legacy-body",
 ];
 

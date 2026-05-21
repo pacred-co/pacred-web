@@ -232,12 +232,15 @@ const TAG_PRO: Record<string, { label: string; href?: string }> = {
   "4": { label: "Pro 5.5" },
   "5": { label: "Pro 5.15" },
   "6": { label: "Pro 6.6" },
-  "7": { label: "Pro 6.25", href: "https://pcscargo.co.th/โปรโมชัน-6-25" },
-  "8": { label: "Pro 7.7", href: "https://pcscargo.co.th/โปรโมชัน-7-7" },
-  "9": { label: "Pro 7.25", href: "https://pcscargo.co.th/โปรโมชัน-7-25" },
-  "10": { label: "Pro 8.8", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-8-8" },
-  "11": { label: "Pro 8.25", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-8-25" },
-  "12": { label: "Pro 9.9", href: "https://pcscargo.co.th/โปรโมชัน/โปรโมชัน-9-9" },
+  // Legacy promo pages on pcscargo.co.th — rewritten to the internal
+  // Pacred import-china landing page (closest equivalent until Pacred
+  // ships its own promo pages). Customer stays inside Pacred.
+  "7": { label: "Pro 6.25", href: "/services/import-china" },
+  "8": { label: "Pro 7.7", href: "/services/import-china" },
+  "9": { label: "Pro 7.25", href: "/services/import-china" },
+  "10": { label: "Pro 8.8", href: "/services/import-china" },
+  "11": { label: "Pro 8.25", href: "/services/import-china" },
+  "12": { label: "Pro 9.9", href: "/services/import-china" },
 };
 function TagPro({ id }: { id: string | null }) {
   if (!id || !TAG_PRO[id]) return null;
@@ -984,7 +987,7 @@ export default async function ServiceImportPage({
               <h4 className="modal-title">สร้างออเดอร์ฝากนำเข้าสินค้า</h4>
               <div className="float-right text-right">
                 <a
-                  href="https://pcscargo.co.th/ที่อยู่โกดังจีน"
+                  href="/china-address"
                   target="_blank"
                   rel="noreferrer"
                   className="p-05 text-white badge badge-sale badge-pill font-1rem"
@@ -992,7 +995,7 @@ export default async function ServiceImportPage({
                   ที่อยู่โกดังจีน
                 </a>
                 <a
-                  href="https://pcscargo.co.th/เรทนำเข้า"
+                  href="/services/import-china"
                   target="_blank"
                   rel="noreferrer"
                   className="p-05 text-white badge badge-warning badge-pill font-1rem"
@@ -1238,14 +1241,16 @@ export default async function ServiceImportPage({
                         ที่อยู่ในการจัดส่งในไทย{" "}
                         <i className="flag-icon flag-icon-th"></i>
                       </b>{" "}
-                      <a
-                        href="https://pcscargo.co.th/member/address/add/"
+                      {/* Legacy linked to pcscargo.co.th/member/address/add/
+                          — rewritten to the internal Pacred /addresses
+                          page so the customer stays inside Pacred. */}
+                      <Link
+                        href="/addresses"
                         target="_blank"
-                        rel="noreferrer"
                         className="text-info font-0_85rem"
                       >
                         เพิ่มที่อยู่ใหม่ <i className="fa fa-plus"></i>
-                      </a>
+                      </Link>
                     </h5>
                     <select className="form-control" name="addressID" id="addressID" required>
                       <option value="">กรุณาเลือกที่อยู่ในการจัดส่ง</option>
@@ -1268,7 +1273,7 @@ export default async function ServiceImportPage({
                     <div className="text-danger font-0_85rem">
                       หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
                       <a
-                        href="https://pcscargo.co.th/freearea/"
+                        href="/services/import-china"
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -1303,7 +1308,7 @@ export default async function ServiceImportPage({
                             />
                             <br />
                             <a
-                              href="https://pcscargo.co.th/freearea/"
+                              href="/services/import-china"
                               target="_blank"
                               rel="noreferrer"
                             >

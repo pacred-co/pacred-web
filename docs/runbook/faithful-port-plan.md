@@ -178,6 +178,80 @@ half-built work to `faithful-port`. Spawned worktree agents must
 
 ---
 
+## Status — 2026-05-21 evening (paid-ads + LIFF wave)
+
+🟢 **Shipped this session:**
+
+**Customer portal — 15 / ~24 screens transcribed 1:1.** Added since 2026-05-19:
+`shops`→`/service-order` · `forwarder`→`/service-import` · `payment`→`/service-payment` ·
+`profile`→`/profile` · `receipt-f-hs`→`/service-import/receipts` · plus the
+follow-on transcriptions by the team (`pay`, `invoiceF`, sales-report screens,
+`printReceiptF`/`printShop`, `map`, `forwarder-table`).
+
+**Bootstrap-4 + jQuery + FontAwesome vendor bundle staged** — `data-toggle`
+modals/tabs/dropdowns + DataTables now work 1:1 on every transcribed screen.
+
+**ปอน's compact register + auth polish → `main`** (`87226dd`): smaller
+register form (multi-select services dropdown, side-by-side service+source).
+
+**🟢 Paid-ads tracking — 5 platforms wired in root `<head>`** (the owner's
+"blind ads" P0 — fixed):
+- Google Ads gtag (`AW-17941254120`)
+- Google Ads "purchase" conversion (`…/9c-FCOq1h68cEOifh-tC`) — helper
+  `trackGoogleAdsConversion(GOOGLE_ADS_CONVERSIONS.purchase, {…})` + the
+  click variant `reportConversionAndNavigate(url)` in `lib/analytics.ts`.
+- GA4 + Google Tag (`G-62J8PEVJLZ` + `GT-KFHGBVK9`)
+- Meta (Facebook) Pixel (`27209891118650099`)
+- Microsoft Clarity (`ws2tje8x24`)
+
+Every ID is **hardcoded as a default** in `components/analytics/<X>Script` —
+the tag fires on Vercel even with no env override (owner directive 2026-05-20).
+Env overrides supported for dev/staging.
+
+**LIFF link page** — `app/[locale]/liff/link/page.tsx` now hardcodes the LIFF
+ID `2010105778-SaSkkGza` (channel `2010105778`, Pacred Login). Customer →
+profile linkage via `liff.getProfile()` + `actions/profile.ts:linkLineAccount()`
+writes `profiles.line_user_id`.
+
+**Sentry deprecation cleaned** — `disableLogger` + `automaticVercelMonitors`
+moved under the new `webpack` key in `next.config.ts`. Vercel build warnings
+gone. `SENTRY_AUTH_TOKEN` still optional (source-map upload — manual step:
+sentry.io → Settings → Developer Settings → **Organization Tokens**).
+
+🟢 **Production Supabase — verified 2026-05-21:**
+- Core customer data **LOADED**: 8,898 customers · 104,591 wallet history ·
+  21,950 orders · 47,626 forwarders · 13,789 receipts · 37,252 receipt items ·
+  4,154 addresses · 181 admins · 15,477 cart rows.
+- Legacy `tb_users` → bridge: end-to-end mechanism verified on dev (find user
+  → `passTam` verify → provision Supabase Auth → sign in). Same mechanism on
+  prod once a customer logs in.
+
+🟡 **ภูม's post-Pro-upgrade backfill — NOT complete:**
+- Empty on prod: `tb_history` · `tb_history_key` · `tas_historydataold` ·
+  `tas_historydataold_tmp` (table exists, 0 rows).
+- Partial on prod: `tas_historydata_mobile` (45 rows — suspicious).
+- Schema missing on prod: `tb_users_hs` · `tb_pcs_log` · `tb_log`.
+- Storage buckets: only `member-docs` has objects; `slips`, `forwarder-covers`,
+  `carts`, `avatars`, `resumes`, `tax-invoices`, `wht-certs`, `freight-payment-slips`,
+  `commission-slips`, `disbursement-receipts`, `qa-inspection-photos`,
+  `csv-imports` — empty. Customer image files NOT migrated yet.
+
+🟡 **Hybrid `main` deployed (team merged podeng → main).** `main` now carries
+the 1:1 portal alongside the rebuilt screens — unwired actions (cart add/remove ·
+order cancel · address edit) ship to customers as a known regression while the
+mutations are wired. Production-launch hardening remains the next gate.
+
+🔔 **Still to install when owner sends snippets** — TikTok Pixel · LINE Tag
+(LAP) · Bing UET · Pinterest · X · Snapchat · Hotjar. The memory file
+`tracking_codes_embed_rule.md` auto-prompts the next session to ask.
+
+📦 **Master env handoff for Mac:** `~/Desktop/PACRED-ENV-MASTER.env` —
+complete inventory: Section [A] hardcoded fallbacks · [B] DEV `.env.local`
+contents · [C] PROD vars for Vercel · [D] LINE/brand IDs · [E] DB admin
+connection · [F] TODO list.
+
+---
+
 ## Work-split — parallel, no collision
 
 | Who | Owns | Branch |

@@ -1,0 +1,313 @@
+/* =============================================================
+ * print-overlay.css — wraps `.pcs-legacy.print-shop` (and similar
+ * print/receipt documents) in a fullscreen overlay so the legacy
+ * (protected) chrome (top-menu / left-sidebar / right-rail) does
+ * NOT bleed through.
+ *
+ * The legacy printShop.php + printReceiptF.php were STANDALONE PHP
+ * pages — they had their OWN <head>/<body> and did NOT include
+ * header.php's chrome. In the Next.js port every (protected) route
+ * is wrapped by `(protected)/layout.tsx` which renders the chrome,
+ * so a print page rendered as a normal Server Component would show
+ * the legacy navbar/sidebar covering the receipt content.
+ *
+ * Fix: every print page wrapper gets the `.print-fullscreen` class
+ * (in addition to its own `.print-shop` / `.print-receipt-f` /
+ * `.receipt-f-hs` class). This file makes that class cover the
+ * viewport (chrome stays in DOM but is hidden underneath), so the
+ * receipt renders cleanly — and on actual print (Ctrl+P), the
+ * @media print rule below drops the fixed positioning so mPDF /
+ * the browser print engine treats the document as a normal page.
+ *
+ * Scoped to `.pcs-legacy.print-fullscreen` so non-print pages on
+ * the customer portal are unaffected.
+ * ============================================================= */
+
+/* Outer fullscreen overlay — covers viewport so legacy chrome hides.
+   Uses flex centering + overflow:hidden so the scaled A4 sheet sits
+   centered in the viewport with NO scroll bar — the user sees the
+   whole receipt at once. */
+.print-fullscreen-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 99999;
+  background: #555;  /* darker gutter for contrast against white A4 */
+  overflow: hidden;  /* no scroll — A4 is scaled to fit */
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0;
+}
+
+/* The on-screen "พิมพ์ / Save PDF" button — keep visible above the
+   scaled A4 sheet via absolute positioning so it doesn't get scaled. */
+.print-fullscreen-overlay > .no-print {
+  position: fixed !important;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100000;
+}
+
+/* Inner A4 sheet (`.print-shop` / `.print-receipt-f`). True A4 width
+   (210mm) but height = AUTO so the sheet shrinks to content — no empty
+   space below the receipt. On screen we shrink via transform: scale()
+   to fit viewport; on print, real A4 paper handles the layout. */
+.print-fullscreen-overlay .pcs-legacy.print-shop,
+.print-fullscreen-overlay .pcs-legacy.print-receipt-f {
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: block;
+  text-align: left;
+  width: 210mm !important;
+  min-width: 210mm !important;
+  max-width: 210mm !important;
+  height: auto !important;
+  min-height: 0 !important;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* 10mm padding === the print @page margin (10mm) so screen-preview
+     side gaps match the printed-paper side gaps. Owner directive
+     2026-05-21: side margins must be equal + visible. */
+  padding: 10mm;
+  /* shrink-to-fit viewport using width OR a generous height budget */
+  transform: scale(min(1, calc(95vh / 1200px), calc(95vw / 210mm)));
+  transform-origin: top center;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* Status banner img (the 5-circle progress tracker) + thank-you stamp
+   img — center them explicitly by file name in case selector specificity
+   loses elsewhere. */
+.print-fullscreen-overlay .pcs-legacy.print-shop img[src*="status"],
+.print-fullscreen-overlay .pcs-legacy.print-shop img[src*="stamp"],
+.print-fullscreen-overlay .pcs-legacy.print-receipt-f img[src*="status"],
+.print-fullscreen-overlay .pcs-legacy.print-receipt-f img[src*="stamp"] {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* The receipt table sits inside an `<article>` wrapper (one article per
+   doc id — printShop builds one mPDF page per id). The legacy hard-coded
+   `<table style="width:200mm">` inline; here we make the table fill the
+   sheet's content area (210mm − 2×10mm padding = 190mm) with margin
+   auto for symmetric layout. Override print-shop.css's `table-layout:
+   fixed` with AUTO — the legacy PHP relied on mPDF's column-width
+   calculation that respects colspan; browser fixed-layout treats
+   first-row cell intrinsic widths (the 100mm logo image) as gospel and
+   shrinks customer-info to ~25mm. Auto-layout measures content width
+   per col, which gives the address-cell the room it needs.
+   Selectors cover BOTH structures: print-shop has `> article > table`
+   per the JSX; print-receipt-f also nests through `<article>` from
+   ReceiptDocPages — use the descendant combinator so both match. */
+.print-fullscreen-overlay .pcs-legacy.print-shop > article > table,
+.print-fullscreen-overlay .pcs-legacy.print-receipt-f > article > table,
+.print-fullscreen-overlay .pcs-legacy.print-shop > table,
+.print-fullscreen-overlay .pcs-legacy.print-receipt-f > table {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  margin: 0 auto !important;
+}
+
+/* Force ALL descendant cells + their inline content to wrap on word
+   boundaries — the legacy Thai address (single line of no-space text)
+   bursts out of its colspan column otherwise. */
+.print-fullscreen-overlay .pcs-legacy td,
+.print-fullscreen-overlay .pcs-legacy th,
+.print-fullscreen-overlay .pcs-legacy .h-sub,
+.print-fullscreen-overlay .pcs-legacy div {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  max-width: 100%;
+}
+
+/* CRITICAL: the legacy printShop.php JSX has `style={{ float: "left" }}`
+   on `<th colspan=4>` cells. mPDF interpreted this as a column-floated
+   header; modern browsers interpret it literally and SHRINK the cell to
+   floated-content width (~25mm). Override to `float: none` so the cell
+   honors its colspan width within the table. Same for the small-col
+   `style={{ float: "right" }}` siblings. */
+.print-fullscreen-overlay .pcs-legacy th[style*="float"],
+.print-fullscreen-overlay .pcs-legacy td[style*="float"] {
+  float: none !important;
+}
+
+/* When the user invokes Ctrl+P (or the in-page print button), drop
+   the fixed positioning so the document flows naturally onto the
+   printed page — and hide any leftover chrome rendered behind it. */
+/* Fix the legacy `.h-title2 { line-height: 0.5em }` rule — mPDF rendered
+   that as compressed-but-spaced lines; browser stacks them so they
+   overlap. Override to a sensible line-height + center it (legacy was
+   inside a `text-center` parent that lost its centering somewhere). */
+.print-fullscreen-overlay .pcs-legacy .h-title2 {
+  line-height: 1.2em !important;
+  text-align: center !important;
+  font-size: 1em !important;
+}
+
+/* Compact font-size — legacy 20px is too big for a 1-page A4 receipt.
+   Reducing to 13px keeps it readable + fits everything in one page. */
+.print-fullscreen-overlay .pcs-legacy.print-shop {
+  font-size: 13px !important;
+}
+
+/* Center ALL images inside any `.text-center` cell — status banner,
+   thank-you stamp, etc. The legacy mPDF treated `<img>` as inline
+   centered; modern browsers don't unless `display: block + margin:auto`.
+   This catches both `<th class="text-center">` and `<td class="text-center">`. */
+.print-fullscreen-overlay .pcs-legacy .text-center > img,
+.print-fullscreen-overlay .pcs-legacy th.text-center img,
+.print-fullscreen-overlay .pcs-legacy td.text-center img,
+.print-fullscreen-overlay .pcs-legacy .text-center img {
+  display: block !important;
+  margin: 0 auto !important;
+}
+
+/* Tighten cell padding so everything fits in 1 page. */
+.print-fullscreen-overlay .pcs-legacy.print-shop td,
+.print-fullscreen-overlay .pcs-legacy.print-shop th {
+  padding: 4px 6px !important;
+  line-height: 1.3 !important;
+}
+
+/* Customer-info + order-info side-by-side cells — they have inline
+   `.h-sub` divs with the field labels. Tighten the line-height +
+   bottom-spacing so the 4-line address doesn't blow up the row. */
+.print-fullscreen-overlay .pcs-legacy.print-shop .h-sub {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  margin-bottom: 2px !important;
+}
+
+/* Header title sizing — the legacy h1.h-title is 1.9em (≈25px at
+   the legacy 20px base). At our 13px base that becomes ~24.7px which
+   is too big for the small header column. Bring down to 1.5em. */
+.print-fullscreen-overlay .pcs-legacy.print-shop .h-title,
+.print-fullscreen-overlay .pcs-legacy.print-shop .h-title-danger {
+  font-size: 1.5em !important;
+}
+
+@media print {
+  /* Hide ALL chrome on print — the (protected) layout's top-menu /
+     left-sidebar / right-rail / mobile-bottom-nav must NOT appear on
+     a printed receipt. */
+  html, body {
+    background: #fff !important;
+  }
+  body > *:not(.print-fullscreen-overlay) {
+    display: none !important;
+  }
+  .print-fullscreen-overlay {
+    position: static !important;
+    /* padding is set below to 10mm — survives Chrome's "Margins: None"
+       in the print dialog. DON'T zero it here. */
+    background: #fff !important;
+    overflow: visible !important;
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    /* DON'T force text-align here — let the legacy `.text-center !important`
+       on rows containing the status banner + stamp logo win. The earlier
+       `text-align: left !important` was overriding those. */
+  }
+  .print-fullscreen-overlay .pcs-legacy.print-shop,
+  .print-fullscreen-overlay .pcs-legacy.print-receipt-f {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    /* No transform on print — real A4 paper. */
+    transform: none !important;
+    /* Shrink the legacy 20px base font slightly on print to fit one page. */
+    font-size: 14px !important;
+    /* Top-anchored — owner directive (2026-05-21): content sticks
+       to the top of the A4 page; horizontal centering (below) handles
+       left/right; DON'T vertical-center (was wrong on 2026-05-21 night). */
+    display: block !important;
+  }
+  /* Horizontal-only side margins on print. Owner directive 2026-05-21:
+     - sides 10mm equal (user confirmed OK on second iteration)
+     - TOP tight — content sticks close to paper top (was too much
+       space because Chrome adds its own default top margin on top of
+       wrapper padding). Zero top/bottom padding lets the receipt
+       hug the paper top with only the @page / browser margin
+     - bottom flexible — content flows naturally, user accepts the
+       trailing empty space for short receipts
+     IMPORTANT: this padding is part of the document body, NOT the
+     @page margin — so it survives "ระยะขอบ: ไม่มี" in Chrome's
+     print dialog. */
+  .print-fullscreen-overlay {
+    padding: 0 10mm !important;
+    box-sizing: border-box !important;
+  }
+  .print-fullscreen-overlay .pcs-legacy.print-shop > article > table,
+  .print-fullscreen-overlay .pcs-legacy.print-receipt-f > article > table,
+  .print-fullscreen-overlay .pcs-legacy.print-shop > table,
+  .print-fullscreen-overlay .pcs-legacy.print-receipt-f > table {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    /* CRITICAL: print-shop.css L94 sets `table-layout: fixed` which makes
+       the first row's cell widths gospel — the 100mm logo cell shrinks
+       customer-info to ~25mm and the table never reaches 100% width.
+       Force AUTO so column widths flow from content + the 100% width
+       fills the available 190mm content area. */
+    table-layout: auto !important;
+    margin: 0 auto !important;
+  }
+  /* Status banner img + stamp img inside `<th colspan=7>` rows — ensure
+     they center properly inside the full-width row even if text-align
+     loses to some inherited rule. */
+  .print-fullscreen-overlay .pcs-legacy .text-center img {
+    display: block;
+    margin: 0 auto !important;
+  }
+  /* Hide the legacy chrome entirely on print. */
+  #header-navbar,
+  #pcs-left-menu,
+  .nav-right-pcs,
+  .nav-footer-pcs,
+  .no-print {
+    display: none !important;
+  }
+  /* Page setup — A4 portrait. @page margin = 0 because:
+     1. Chrome's print dialog "ระยะขอบ: ไม่มี" (None) overrides @page
+        margin to 0 anyway — we can't rely on it.
+     2. We control side margins via `.print-fullscreen-overlay { padding:
+        10mm }` above — that's part of the document, always applied,
+        regardless of the print dialog's "Margins" pick. Result: a
+        consistent 10mm visible margin on every side, every time. */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  /* Multi-item pagination — match legacy mPDF behavior:
+     · Tables CAN paginate (legacy `shrink_tables_to_fit=1` + natural mPDF
+       page-break). DON'T set page-break-inside:avoid on the table itself.
+     · `<thead>` repeats on each printed page (browser default for
+       `display: table-header-group`) — re-state explicitly here so it
+       survives any inherited override.
+     · Each `<article>` (one PrintDoc per `?id[]=`) breaks AFTER, so
+       multi-id prints get one A4 page per id (= legacy mPDF AddPage loop).
+     · Each `<tr>` (item row) avoids splitting mid-row. */
+  .print-fullscreen-overlay .pcs-legacy.print-shop > table > thead,
+  .print-fullscreen-overlay .pcs-legacy.print-receipt-f > table > thead {
+    display: table-header-group !important;
+  }
+  .print-fullscreen-overlay .pcs-legacy.print-shop tr,
+  .print-fullscreen-overlay .pcs-legacy.print-receipt-f tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}

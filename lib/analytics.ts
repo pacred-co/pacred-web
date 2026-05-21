@@ -175,3 +175,109 @@ export function trackExperimentExposure(
   // Also tag the Clarity session so recordings filter by variant
   clarityTag(`exp_${experimentKey}`, variant);
 }
+
+// ─── Google Ads conversions ──────────────────────────────────────────────
+// The gtag runtime is loaded from `components/analytics/google-ads-script.tsx`
+// (the `AW-17941254120` account). These helpers wrap `gtag('event','conversion')`
+// for the conversion IDs the owner registers in Google Ads. Hardcoded labels
+// per the owner directive (tracking IDs are embedded in code).
+
+/**
+ * Registered conversion send_to IDs — `<account>/<label>`. Add an entry
+ * each time the owner sets up a new conversion in Google Ads.
+ */
+export const GOOGLE_ADS_CONVERSIONS = {
+  /** Purchase / "การซื้อ" — fires on the order-confirmation page once
+   *  payment succeeds (owner-provided 2026-05-21). */
+  purchase: "AW-17941254120/9c-FCOq1h68cEOifh-tC",
+} as const;
+
+export type GoogleAdsConversionParams = {
+  /** transaction_id — must be unique per real conversion (e.g. the order
+   *  ID), else Google Ads dedupes repeat fires. Omit/leave empty when the
+   *  event isn't tied to a specific transaction. */
+  transactionId?: string;
+  /** Monetary value of the conversion (defaults currency to THB). */
+  value?: number;
+  /** Currency code, e.g. "THB" / "USD" — only used when `value` is set. */
+  currency?: string;
+  /** Whether this customer is new (true/false), for the new-customer
+   *  conversion segment. Compute dynamically; don't hardcode. */
+  newCustomer?: boolean;
+  /** Fires after gtag has sent the conversion — used by the click-then-
+   *  navigate pattern (see `reportConversionAndNavigate` below). */
+  eventCallback?: () => void;
+};
+
+/**
+ * Fire a Google Ads conversion. Pass one of `GOOGLE_ADS_CONVERSIONS.*`.
+ *
+ * Page-load pattern (e.g. on the order-confirmation page) — fire once
+ * the order is committed, inside a `useEffect`:
+ *
+ *   useEffect(() => {
+ *     trackGoogleAdsConversion(GOOGLE_ADS_CONVERSIONS.purchase, {
+ *       transactionId: order.id,
+ *       value:         order.total,
+ *       newCustomer:   isFirstOrder,
+ *     });
+ *   }, [order.id]);
+ */
+export function trackGoogleAdsConversion(
+  sendTo: string,
+  params: GoogleAdsConversionParams = {},
+): void {
+  if (!isClient()) return;
+  const w = window as Window & { gtag?: (...args: unknown[]) => void };
+  if (typeof w.gtag !== "function") {
+    // gtag loader not present (env w/o the GoogleAdsScript). Dev-loud, prod-silent.
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[ads] gtag not loaded — would have sent:", sendTo, params);
+    }
+    return;
+  }
+
+  const payload: Record<string, unknown> = {
+    send_to:        sendTo,
+    transaction_id: params.transactionId ?? "",
+  };
+  if (params.value !== undefined) {
+    payload.value    = params.value;
+    payload.currency = params.currency ?? "THB";
+  }
+  if (params.newCustomer !== undefined) payload.new_customer  = params.newCustomer;
+  if (params.eventCallback)             payload.event_callback = params.eventCallback;
+
+  w.gtag("event", "conversion", payload);
+}
+
+/**
+ * Click-then-navigate pattern — fires the conversion, then navigates to
+ * `url` once gtag's callback runs (Google's recommended sequence so the
+ * conversion is captured before the page unloads). Mirrors the legacy
+ * `gtag_report_conversion(url)` snippet Google's docs hand out for
+ * "ส่ง" / Submit buttons. Returns `false` so callers can use it as
+ *  `onClick={() => reportConversionAndNavigate(url)}` and the parent
+ *  click handler's default action is consistent.
+ *
+ *   <button onClick={(e) => { e.preventDefault();
+ *     reportConversionAndNavigate("/thank-you"); }}>
+ *     ส่ง
+ *   </button>
+ *
+ * Defaults to the `purchase` conversion; pass another `GOOGLE_ADS_CONVERSIONS.*`
+ * when registering more conversions.
+ */
+export function reportConversionAndNavigate(
+  url?: string,
+  sendTo: string = GOOGLE_ADS_CONVERSIONS.purchase,
+): boolean {
+  trackGoogleAdsConversion(sendTo, {
+    eventCallback: () => {
+      if (typeof url !== "undefined" && isClient()) {
+        window.location.href = url;
+      }
+    },
+  });
+  return false;
+}
