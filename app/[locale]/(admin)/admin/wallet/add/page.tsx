@@ -1,112 +1,102 @@
 /**
- * Admin > Wallet > "เพิ่มรายการเติมเงิน" (legacy /wallet/add).
+ * /admin/wallet/add — admin-initiated manual topup (Wave 8 backlog).
  *
- * Legacy source: pcs-admin/wallet.php with $_GET['page']=='add' branch
- * (L8-... — uploads slip + INSERT into tb_wallet_hs + recompute balance).
+ * Wave 7.2 (2026-05-21 night): the original form queried + mutated the
+ * rebuilt `profiles` + `wallet_transactions` tables which are empty on
+ * prod. Posting the form would INSERT into a table no other surface
+ * reads → the credit wouldn't show in /admin/wallet, /admin/wallet/[id],
+ * dashboard, or the customer's own /wallet page. Silently breaks the
+ * legacy ledger.
  *
- * Pacred mapping: a focused form that calls
- * `adminCreateManualWalletEntry` (actions/admin/wallet.ts) — inserts one
- * wallet_transactions row with status='completed', the balance trigger
- * auto-recomputes wallet.balance for the chosen bucket.
+ * Replaced with a clear "Wave 8 backlog" banner so accounting doesn't
+ * try to use a broken admin-topup form. Wave 8 will rebuild against
+ * tb_wallet_hs (the same table the new /admin/wallet list + /[id]
+ * detail page read).
  *
- * Restricted to accounting/super (money page · audit-logged).
- * Sidebar item `wallet.add` was dead before this commit (route 404).
+ * Until Wave 8: manual topups are entered via legacy PHP admin
+ * (`pcs-admin/wallet.php?page=add`).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { AdminWalletAddForm } from "./form";
 
 export const dynamic = "force-dynamic";
 
-type ProfileLite = {
-  id: string;
-  member_code: string | null;
-  first_name:  string | null;
-  last_name:   string | null;
-  phone:       string | null;
-};
-
-export default async function AdminWalletAddPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ profile?: string; q?: string }>;
-}) {
+export default async function AdminWalletAddPage() {
   await requireAdmin(["accounting"]);
 
-  const sp = await searchParams;
-  const admin = createAdminClient();
-
-  // Pre-fill candidate: if ?profile=<uuid> or ?q=<member_code|phone> is set,
-  // resolve the matching profile so the form can default the customer.
-  let preset: ProfileLite | null = null;
-  if (sp.profile) {
-    const { data } = await admin
-      .from("profiles")
-      .select("id, member_code, first_name, last_name, phone")
-      .eq("id", sp.profile)
-      .maybeSingle<ProfileLite>();
-    preset = data ?? null;
-  } else if (sp.q) {
-    // search by member_code (exact) or phone (exact) — keep it simple
-    const term = sp.q.trim();
-    const { data } = await admin
-      .from("profiles")
-      .select("id, member_code, first_name, last_name, phone")
-      .or(`member_code.eq.${term},phone.eq.${term}`)
-      .limit(1)
-      .maybeSingle<ProfileLite>();
-    preset = data ?? null;
-  }
-
-  // Recent active members to suggest in the autocomplete dropdown.
-  const { data: recent } = await admin
-    .from("profiles")
-    .select("id, member_code, first_name, last_name, phone")
-    .not("member_code", "is", null)
-    .order("last_login_at", { ascending: false, nullsFirst: false })
-    .limit(20)
-    .returns<ProfileLite[]>();
-
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-      <title>เพิ่มรายการเติมเงิน | PR Admin</title>
+    <main className="p-6 lg:p-8 space-y-5 max-w-3xl">
+      <div className="text-sm text-muted space-x-2">
+        <Link href="/admin" className="hover:underline">
+          หน้าแรก
+        </Link>
+        <span>›</span>
+        <Link href="/admin/wallet" className="hover:underline">
+          กระเป๋าสตางค์
+        </Link>
+        <span>›</span>
+        <span className="font-semibold">เพิ่มรายการเติมเงินด้วยมือ</span>
+      </div>
 
-      <main className="p-6 lg:p-8 space-y-5 max-w-3xl">
-        {/* Breadcrumb */}
-        <div className="text-sm text-muted space-x-2">
-          <Link href="/admin" className="hover:underline">หน้าแรก</Link>
-          <span>›</span>
-          <Link href="/admin/wallet" className="hover:underline">เป๋าตัง</Link>
-          <span>›</span>
-          <span className="font-semibold">เพิ่มรายการเติมเงิน</span>
-        </div>
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">
+          ADMIN · WALLET · เพิ่ม Topup ด้วยมือ
+        </p>
+        <h1 className="mt-1 text-2xl font-bold">ยังไม่เปิดให้แอดมินเพิ่ม Topup</h1>
+      </div>
 
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">WALLET</p>
-          <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการเติมเงิน</h1>
-          <p className="mt-1 text-sm text-muted">
-            บันทึกรายการเข้า wallet โดยตรง (เช่น สลิปลูกค้าที่ระบบ auto-verify ไม่ผ่าน)<br />
-            สถานะจะตั้งเป็น <span className="font-semibold">สำเร็จ</span> ทันที — ยอดในกระเป๋าจะปรับตามอัตโนมัติผ่าน trigger
-          </p>
-        </div>
+      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3 text-sm">
+        <p className="font-medium text-yellow-900">
+          ฟีเจอร์นี้อยู่ใน Wave 8 backlog (admin-initiated topup against tb_wallet_hs).
+        </p>
+        <p className="text-yellow-800">
+          การเพิ่มรายการเติมเงินด้วยมือ ยังไม่ ship เพราะต้องเขียน server action ใหม่ที่
+          INSERT ลง{" "}
+          <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_wallet_hs</code>{" "}
+          (ไม่ใช่ rebuilt{" "}
+          <code className="rounded bg-yellow-100 px-1.5 py-0.5">wallet_transactions</code>{" "}
+          ที่หน้าเดิมเขียน) + อัปเดต{" "}
+          <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_wallet.wallettotal</code>{" "}
+          ของลูกค้าให้ตรงกัน
+        </p>
+        <p className="text-yellow-800 font-medium">วิธีทำชั่วคราว:</p>
+        <ol className="list-decimal pl-6 text-yellow-800 space-y-1">
+          <li>
+            ใช้ legacy PHP admin (
+            <code className="rounded bg-yellow-100 px-1.5 py-0.5">
+              pcs-admin/wallet.php?page=add
+            </code>
+            ) สำหรับเพิ่ม manual topup ชั่วคราว
+          </li>
+          <li>
+            หรือให้ลูกค้าเติมเงินผ่าน{" "}
+            <code className="rounded bg-yellow-100 px-1.5 py-0.5">/wallet</code> ฝั่งลูกค้า
+            แล้วแอดมินกด "อนุมัติ" ใน{" "}
+            <Link
+              href="/admin/wallet?kind=topup&status=1"
+              className="font-medium text-yellow-900 underline"
+            >
+              คิวรอตรวจ
+            </Link>
+          </li>
+        </ol>
+      </div>
 
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-6">
-          <AdminWalletAddForm
-            preset={preset}
-            recent={recent ?? []}
-          />
-        </div>
-
-        {/* Quick link back to the list views */}
-        <div className="flex gap-3 text-xs">
-          <Link href="/admin/wallet" className="text-primary-500 hover:underline">← กลับหน้ารายการ wallet</Link>
-          <span className="text-muted">·</span>
-          <Link href="/admin/wallet/history" className="text-primary-500 hover:underline">ดูประวัติรายการ</Link>
-        </div>
-      </main>
-    </div>
+      <div className="flex gap-2 flex-wrap">
+        <Link
+          href="/admin/wallet"
+          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
+        >
+          ← กลับรายการกระเป๋า
+        </Link>
+        <Link
+          href="/admin/wallet?kind=topup&status=1"
+          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
+        >
+          ไปคิวรอตรวจเติม →
+        </Link>
+      </div>
+    </main>
   );
 }
