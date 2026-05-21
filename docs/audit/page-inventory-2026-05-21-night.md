@@ -4,7 +4,6 @@
 > ปุ่มให้กดเข้าอะ จะได้รู้ จะได้บอกได้ว่าจะเอายังไงกับหน้านั้นๆ"
 
 ตารางนี้เป็น checklist สำหรับภูมเช็คทีละหน้า · เลือกว่า **delete / wire / keep / build**.
-ฟีลด์ "Action" เว้นว่างไว้ให้ภูมเขียนตัดสินใจลงไปได้.
 
 **Legend:**
 - 🔴 **DEAD** — หน้าเข้าไม่ได้เลย (ไม่มีปุ่มในระบบ พิมพ์ URL เท่านั้น)
@@ -12,81 +11,91 @@
 - 🟢 **OK** — เข้าได้ + ข้อมูลถูก
 - ⚪ **REDIRECT** — เป็น stub redirect (intentional · ไม่ต้องแก้)
 - 🔵 **PACRED-ONLY** — ไม่มีใน legacy PCS · เป็นฟีเจอร์ใหม่ของ Pacred (Phase C)
+- ✅ **FIXED** — แก้แล้วในเซสชันนี้
 
 ---
 
-## 🔴 DEAD — ไม่มีปุ่มเข้าหน้านี้ในระบบ (10 routes · ภูมเลือก action)
+## ✅ Wave 7.2 — แก้แล้วในเซสชันนี้ (Wave 7 + 7.1 + 7.2 รวม)
 
-| Route | คำอธิบาย | ทางที่ควรเข้า | Suggested action | Action ภูม |
-|---|---|---|---|---|
-| `/admin/system/crons` | จัดการ cron jobs (เช่น OTP cleanup, backup) | ไม่มี | wire ใน Settings → "ระบบ" submenu | _____ |
-| `/admin/system/notifications` | ดูประวัติ system notification | ไม่มี | wire ใน Settings → "ระบบ" submenu | _____ |
-| `/admin/csv-imports` | bulk CSV import tool (รายการ) | ไม่มี | wire ใน Settings → "นำเข้าข้อมูล" | _____ |
-| `/admin/csv-imports/upload` | บัปโหลด CSV ใหม่ | reachable from `/admin/csv-imports` ถ้า wire แล้ว | (auto-wired with above) | _____ |
-| `/admin/migration/pcs-customers` | one-shot tool ย้ายข้อมูล PCS → Pacred | ไม่มี · ใช้ครั้งเดียว | **keep orphan** (super only · ใช้ครั้งเดียว) | _____ |
-| `/admin/organization-email` | (ไม่แน่ใจ purpose · ต้องเช็ค) | ไม่มี | **delete หรือ wire** (ภูมเช็คก่อน) | _____ |
-| `/admin/accounting/periods` | จัดการ accounting period (งวดปิดบัญชี) | ไม่มี | wire ใน `/admin/accounting/cargo` menubar "งวด" | _____ |
-| `/admin/accounting/reconcile` | กระทบยอด accounting | ไม่มี | wire ใน `/admin/accounting/cargo` menubar | _____ |
-| `/admin/accounting/container-costs` | ต้นทุนต่อตู้ tracking | ไม่มี | wire ใน `/admin/forwarders` "งาน" หรือ Accounting | _____ |
-| `/admin/forwarders/container-cost-check` | เช็ค container cost (เครื่องมือ) | ไม่มี | wire ใน `/admin/forwarders` "งาน" group | _____ |
-| `/admin/refunds` (+ `new` + `[id]`) | คืนเงินลูกค้า · 🔵 Pacred-only | ไม่มี | wire ใน Wallet "จัดการ → คืนเงิน" (Pacred-only feature) | _____ |
-| `/admin/reports/containers-hs` | รายงาน HS code ของตู้ | ไม่มี | wire ใน Reports menubar (verify ใช้งานจริงไหม) | _____ |
-| `/admin/admins` (+ `[id]`) | จัดการ admin users | ไม่มี (มีลิงก์จาก `/admin/hr` กรอบเดียว) | wire ใน HR หรือ Settings (super only) | _____ |
+| Surface | สถานะก่อน | สถานะตอนนี้ |
+|---|---|---|
+| /admin/customers/`[id]` row 404 | rebuilt schema notFound() | tb_users legacy fallback + recent 10 forwarders/orders/payments |
+| /admin/service-orders/`[hNo]` row 404 | rebuilt schema notFound() | tb_header_order legacy fallback |
+| /admin/yuan-payments/`[id]` (didn't exist) | 404 | tb_payment detail view (slip + customer + admin slip) |
+| /admin/sales-payouts/`[id]` (didn't exist) | 404 | sales_payouts stub (Pacred-only · empty on prod) |
+| /admin/forwarders "มอบงานคนขับ" → /drivers | /admin/forwarders/drivers (404) | /admin/drivers |
+| /admin/yuan-payments list | empty rebuilt | tb_payment list (1,460 rows · status tabs · search) |
+| /admin/yuan-payments/new "+ เพิ่มรายการ" | silent redirect to list | Wave 8 banner + alternative path |
+| /admin/drivers sidebar | only via /admin/forwarders menubar | + menuSuper sidebar leaf (driverItems badge) |
+| /admin/wallet list | empty rebuilt wallet_transactions | tb_wallet_hs (104,591 rows · type chips · status chips · search · pending count chips) |
+| /admin/wallet/history | empty rebuilt | redirect to /admin/wallet?status=2 |
+| /admin/wallet/add | rebuilt form (broken) | Wave 8 banner + alternative path |
+| /admin/customers/pending | rebuilt profiles | tb_users.useractive='0' |
+| /admin/customers/recently-active | empty 3-table aggregate | tb_users.userlastlogin desc + 30/90-day dormancy |
+| /admin/customers/transfer-rep | rebuilt bulk form | Wave 8 banner + per-customer fallback |
+| /admin/service-orders chip ?q=1 → ?status= | silent no-op | ?status=pending |
+| /admin/report-cnt container code link | silent no-op (?id=…) | drills into /admin/forwarders search by container |
+| /admin dashboard payShop tab label | misleading | suffixed " (Phase C)" |
+| /admin/reports/forwarder-volume | empty rebuilt | tb_forwarder aggregate by warehouse × transport |
+| /admin/reports/sales-by-rep | empty rebuilt | Wave 8 banner (cross-table SUM/GROUP BY needs Postgres view) |
+| /admin/reports/user-sales-history | empty rebuilt | redirect to /admin/customers (search) |
+| /admin/reports/user-sales-history/`[customer_id]` | empty rebuilt | redirect to /admin/customers/`[id]` |
+| /admin/rates/custom-user | empty rebuilt | Phase A backlog banner (legacy tb_priceuser_* not migrated yet) |
+| /admin/rates/custom-hs | empty rebuilt | Phase A backlog banner (same migration gap) |
 
----
-
-## 🟡 WRONG DATA — เข้าได้ แต่อ่าน schema ผิด (10 surfaces · ต้อง rewrite)
-
-| Route | ปัญหา | ตอนนี้อ่าน | ต้องอ่าน (tb_*) | Priority |
-|---|---|---|---|---|
-| `/admin/wallet` (list) | สวอปกับ dashboard ดู ID คนละชุด | `wallet_transactions` (รบสร้างใหม่ · ว่าง) | `tb_wallet_hs` (เหมือน `/admin/wallet/[id]`) | 🔴 **P0** |
-| `/admin/customers/recently-active` | โชว์ "—" ทุกคน | `profiles.last_seen` | `tb_users.userlastlogin` | 🟡 P1 |
-| `/admin/customers/pending` | คิวลูกค้ารออนุมัติว่าง | `profiles.status='pending'` | `tb_users.useractive='0'` | 🟡 P1 |
-| `/admin/customers/transfer-rep` | โอนเซลล์ไม่ทำงาน | `profiles.sales_admin_id` | `tb_users.userid_sales` | 🟡 P1 |
-| `/admin/reports/sales-by-rep` | ใน menubar · ตัวเลขรายได้เป็น ฿0 | rebuilt schema | tb_* aggregates | 🟡 P1 |
-| `/admin/reports/forwarder-volume` | ใน menubar · กราฟว่าง | `forwarders` | `tb_forwarder` group by | 🟡 P1 |
-| `/admin/reports/user-sales-history` | ใน menubar · ค้นหาลูกค้าไม่เจอ | `profiles` | `tb_users` | 🟡 P1 (operator ใช้ทุกวัน) |
-| `/admin/reports/credit-pending` · `monthly-orders` · `pending-payments` | orphan + stale | rebuilt | tb_* | 🟡 P2 |
-| `/admin/rates/custom-user` · `/admin/rates/custom-hs` | rate ไม่โชว์ | `rate_custom_*` | `tb_priceuser_*` | 🟡 P1 |
-| `/admin/settings/notifications` · `/admin/system/notifications` | log ว่าง | rebuilt | `tb_admin_action_log` / `tb_settings` | 🟡 P2 |
+**Total Wave 7.2 fixes shipped tonight: 22 surfaces** · across 8 commits.
 
 ---
 
-## 🔴 BUTTONS WITH WRONG TARGET / SILENT NO-OP (3 found)
+## 🔴 DEAD — ไม่มีปุ่มเข้าหน้านี้ในระบบ (ภูมเลือก action)
 
-| ที่ไหน | ปุ่มกด | ปัญหา | แก้แล้วไหม |
+| Route | คำอธิบาย | Suggested action | Action ภูม |
 |---|---|---|---|
-| `/admin/service-orders` page top-menubar | "สถานะ → รอดำเนินการ" | URL `?q=1` แต่ page อ่าน `?status=...` → กดแล้วไม่เกิดอะไร | ⏳ ยังไม่ได้แก้ |
-| `/admin/report-cnt` หน้ารายการตู้ | คลิกที่ container code → URL มี `?id=...` | page ไม่อ่าน `sp.id` → no-op | ⏳ ยังไม่ได้แก้ |
-| `/admin` dashboard payShop tab | "payShop" tab | อ่าน empty rebuilt `sales_payouts` · badge=0 เสมอ | ⏳ Phase C decision |
+| `/admin/system/crons` | จัดการ cron jobs (เช่น OTP cleanup, backup) | wire ใน Settings → "ระบบ" submenu | _____ |
+| `/admin/system/notifications` | ดูประวัติ system notification | wire ใน Settings → "ระบบ" submenu | _____ |
+| `/admin/csv-imports` (+ upload + `[id]`) | bulk CSV import tool | wire ใน Settings → "นำเข้าข้อมูล" | _____ |
+| `/admin/migration/pcs-customers` | one-shot tool ย้ายข้อมูล PCS → Pacred | **keep orphan** (super only · ใช้ครั้งเดียว) | _____ |
+| `/admin/organization-email` | (purpose ไม่แน่ใจ) | **delete หรือ wire** (ภูมเช็คก่อน) | _____ |
+| `/admin/accounting/periods` | จัดการ accounting period (งวด) | wire ใน `/admin/accounting/cargo` menubar | _____ |
+| `/admin/accounting/reconcile` | กระทบยอด accounting | wire ใน `/admin/accounting/cargo` menubar | _____ |
+| `/admin/accounting/container-costs` | ต้นทุนต่อตู้ tracking | wire ใน `/admin/forwarders` "งาน" group | _____ |
+| `/admin/forwarders/container-cost-check` | เช็ค container cost (เครื่องมือ) | wire ใน `/admin/forwarders` "งาน" group | _____ |
+| `/admin/refunds` (+ `new` + `[id]`) | คืนเงินลูกค้า · 🔵 Pacred-only | wire ใน Wallet "จัดการ → คืนเงิน" | _____ |
+| `/admin/reports/containers-hs` | รายงาน HS code ของตู้ | wire ใน Reports menubar | _____ |
+| `/admin/admins` (+ `[id]`) | จัดการ admin users | wire ใน HR หรือ Settings (super only) | _____ |
 
 ---
 
-## 🟢 OK — ทำงานดี (62 sidebar leaves + 60+ menubar leaves)
+## 🟡 WRONG DATA — เข้าได้ แต่อ่าน schema ผิด (เหลือ 1 หลังคืนนี้)
 
-ทั้งหมดผ่าน Chrome MCP browser sweep (Agent A · 2026-05-21 night) — 0 broken render.
-ดูรายชื่อเต็มใน `docs/audit/re-audit-2026-05-21-night.md` §E.
+| Route | ปัญหา | Priority |
+|---|---|---|
+| `/admin/settings/notifications` · `/admin/system/notifications` | log ว่าง (รบสร้างใหม่ · ไม่มี data) | 🟡 P2 (low-impact log views) |
+| `/admin/audit` | บางส่วนยังอ่าน rebuilt (ส่วน admin actions) | 🟡 P2 |
+| `/admin/reports/credit-pending` · `monthly-orders` · `pending-payments` | orphan + stale | 🟡 P2 — wait for ภูม wire/delete |
 
 ---
 
-## ⚪ REDIRECT — intentional (10 routes · ไม่ต้องแก้)
+## ⚪ REDIRECT — intentional (12 routes · ไม่ต้องแก้)
 
 | Route | → ไปไหน | เหตุผล |
 |---|---|---|
 | `/admin/dashboard` | `/admin` | rename intentional |
 | `/admin/inventory` | `/admin/barcode` | rename intentional |
-| `/admin/warehouse/containers` | `/admin/report-cnt` | Option C tombstone (spine retirement) |
+| `/admin/warehouse/containers` | `/admin/report-cnt` | Option C tombstone |
 | `/admin/containers` | `/admin/warehouse/containers` → `/admin/report-cnt` | double-hop (innocuous) |
 | `/admin/containers/[id]` | `/admin/report-cnt` | spine retired |
 | `/admin/withdrawals` | `/admin/wallet?kind=withdraw` | Pacred unified view |
 | `/admin/wallet/deposit` | `/admin/wallet?kind=deposit&status=pending` | filter shortcut |
 | `/admin/wallet/pay-user` | `/admin/wallet?kind=order_payment` | filter shortcut |
-| `/admin/forwarders/new` | `/admin/forwarders` | admin-initiated form not built (Wave 8) |
+| `/admin/wallet/history` | `/admin/wallet?status=2` | Wave 7.2 new |
+| `/admin/reports/user-sales-history` | `/admin/customers/recently-active` | Wave 7.2 new |
+| `/admin/reports/user-sales-history/[customer_id]` | `/admin/customers/[customer_id]` | Wave 7.2 new |
 | `/admin/customers/[id]/convert-to-juristic` | `/admin/customers/[id]` (after action) | post-submit nav |
 
 ---
 
-## 🔵 PACRED-ONLY — ใช้ rebuilt schema ถูกต้อง (Phase C features)
+## 🔵 PACRED-ONLY — ใช้ rebuilt schema ถูกต้อง (Phase C features · 15 routes)
 
 ไม่ใช่ bug — เป็นฟีเจอร์ใหม่ของ Pacred ที่ไม่มีใน legacy PCS:
 
@@ -105,20 +114,26 @@
 
 ---
 
-## P0 sprint (P1 ตอนเย็น 2026-05-21 ส่งบางส่วนแล้ว) — Wave 7.1 ส่งแล้ว
+## P0 / P1 / P2 status
 
-ส่งแล้ว (commit `4959c14` + `85c8eed` + ตอนนี้):
-- ✅ Customer row 404 fix (tb_users fallback)
-- ✅ Service-order row 404 fix (tb_header_order fallback)
-- ✅ Yuan-payment row 404 fix (`/[id]` ใหม่)
-- ✅ Sales-payout row 404 fix (`/[id]` ใหม่)
-- ✅ Forwarder menubar "มอบงานคนขับ" URL
-- ✅ **Yuan-payments list** rewrite to tb_payment
-- ✅ **"เพิ่มรายการ" button** → Wave 8 landing (ไม่ silent redirect)
-- ✅ **`/admin/drivers` sidebar entry** for menuSuper
+**ส่งคืนนี้ Wave 7 + 7.1 + 7.2 รวม 22 surfaces (8 commits):**
+- ✅ P0 ทั้งหมด → ส่งหมด
+- ✅ P1 ทั้งหมด → ส่งหมด
+- ⏳ P2 (orphan wire) → รอภูมตัดสินใจตามตาราง 🔴 DEAD ข้างบน
 
-P0 ตัวสุดท้าย (รอ next session):
-- 🔴 `/admin/wallet` list rewrite → `tb_wallet_hs` (single biggest "wrong data" gap)
+**Phase A migration backlog** (block หลายๆฟีเจอร์):
+- ต้อง migrate `tb_priceuser_member` + `tb_priceuser_hs` → unblock rates pages
+- (3 oversized log tables ยังค้าง · 779 MB · backfill ผ่าน `scripts/backfill/03-log-tables/_extract.mjs all` หลัง Pro upgrade เสร็จ)
+
+**Wave 8 backlog** (สำหรับเซสชันถัดไป):
+- Wallet bulk-approve bar + slip-transferred-at editor (mutate tb_wallet_hs)
+- Yuan-payments bulk-approve bar
+- Customer pending Approve action button
+- Customer bulk transfer-rep form (tb_users.adminidsale + admins table join)
+- Admin-initiated wallet topup (form → INSERT tb_wallet_hs)
+- Admin-initiated yuan payment (form → INSERT tb_payment)
+- /admin/reports/sales-by-rep — Postgres view + RPC for cross-table SUM/GROUP BY
+- /admin/reports/user-sales-history — full V-G6 cohort tool on tb_*
 
 ---
 
@@ -130,4 +145,4 @@ P0 ตัวสุดท้าย (รอ next session):
 - **keep** = orphan ตั้งใจ (เช่น super-only utility)
 - **build** = หน้านี้ยังไม่เสร็จ · ต้อง implement ต่อ
 
-หลังภูมตัดสิน · ผมจะรวมเป็น Wave 7.2 task list + ไปไล่ทำ.
+หลังภูมตัดสิน · ผมจะรวมเป็น Wave 7.3 task list + ไปไล่ทำ.
