@@ -1,72 +1,128 @@
 /**
- * /admin/yuan-payments/new — admin-initiated yuan payment (Wave 8 backlog).
+ * /admin/yuan-payments/new — admin-initiated yuan payment (Wave 8).
  *
- * Legacy lets admin create a yuan-payment request on a customer's behalf
- * (CNY amount + recipient details + supporting docs · `pcs-admin/payment-add.php`).
- * Pacred-current = customer-initiated only — admin approves via the queue.
+ * Faithful port of the legacy `pcs-admin/payment-add.php` flow. Writes
+ * to legacy `tb_payment` via `adminCreateYuanPaymentManual` in
+ * actions/admin/yuan-payments-tb.ts.
  *
- * Wave 7.1 (ภูม flagged 2026-05-21 night): the previous stub did a
- * silent `redirect("/admin/yuan-payments")` which made the "+ เพิ่มรายการ"
- * button feel broken (clicking it bounces back to the same list with
- * zero feedback). Replaced with a real "ยังไม่เปิด" page so staff know
- * what's going on + what to do instead.
+ * Replaces the Wave 7.1 "ยังไม่เปิด" banner. The previous version did
+ * a silent redirect to /admin/yuan-payments which made "+ เพิ่มรายการ"
+ * feel broken. The new flow uses the same `tb_payment` table the list
+ * + detail page read.
  *
- * Wave 8 will build the actual form (customer picker + CNY/recipient
- * fields + slip upload + tb_payment INSERT + wallet auto-credit on
- * approve).
+ * Query-param prefill: `?q=PR1234` to pre-select a customer.
+ * Default rate pulled from tb_settings.rsdefault (sell-rate default).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { AdminYuanPaymentNewForm, type CustomerLite } from "./form";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminYuanPaymentNewPage() {
-  await requireAdmin(["ops", "accounting"]);
+type SP = { q?: string };
+
+export default async function AdminYuanPaymentNewPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
+  await requireAdmin(["accounting"]);
+
+  const sp = await searchParams;
+  const admin = createAdminClient();
+
+  // Preselect customer from ?q=PR1234.
+  let preset: CustomerLite | null = null;
+  const qRaw = (sp.q ?? "").trim();
+  if (qRaw) {
+    const candidate = qRaw.toUpperCase();
+    const { data } = await admin
+      .from("tb_users")
+      .select("userid, username, userlastname, usertel, useremail")
+      .eq("userid", candidate)
+      .maybeSingle<CustomerLite>();
+    preset = data ?? null;
+  }
+
+  // Recent customers (cap 20).
+  const { data: recentRaw } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, useremail")
+    .eq("userstatus", "1")
+    .order("userregistered", { ascending: false })
+    .limit(20);
+  const recent = (recentRaw ?? []) as unknown as CustomerLite[];
+
+  // Default rate from tb_settings (single-row config). rsdefault = sell-rate default.
+  const { data: settingsRaw } = await admin
+    .from("tb_settings")
+    .select("rsdefault")
+    .limit(1)
+    .maybeSingle<{ rsdefault: number | null }>();
+  const defaultRate = Number(settingsRaw?.rsdefault ?? 5);
 
   return (
-    <main className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
-          ADMIN · ฝากโอนหยวน · เพิ่มรายการ
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">ยังไม่เปิดให้แอดมินเพิ่มรายการ</h1>
-      </div>
+    <div className="pcs-legacy">
+      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
 
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3 text-sm">
-        <p className="font-medium text-yellow-900">
-          ฟีเจอร์นี้อยู่ใน Wave 8 backlog (admin-initiated payment).
-        </p>
-        <p className="text-yellow-800">
-          ขั้นตอนการสร้างรายการฝากโอน ปัจจุบันลูกค้าสร้างเองผ่านหน้า{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">/wallet</code> ฝั่งลูกค้า · แอดมินจะเข้ามา
-          อนุมัติ/ปฏิเสธ ผ่านหน้า{" "}
-          <Link href="/admin/yuan-payments" className="font-medium text-yellow-900 underline">
-            /admin/yuan-payments
-          </Link>{" "}
-          แทน
-        </p>
-        <p className="text-yellow-800">
-          ถ้าจำเป็นต้องสร้างรายการแทนลูกค้าด่วน → ใช้ legacy PHP admin
-          (<code className="rounded bg-yellow-100 px-1.5 py-0.5">payment-add.php</code>) ชั่วคราว
-          จนกว่า Wave 8 จะ ship.
-        </p>
-      </div>
+      <title>เพิ่มรายการฝากโอนหยวน | PR Admin</title>
 
-      <div className="flex gap-2 flex-wrap">
-        <Link
-          href="/admin/yuan-payments"
-          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
-        >
-          ← กลับรายการ
-        </Link>
-        <Link
-          href="/admin/yuan-payments?status=1"
-          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-        >
-          ไปคิวรอตรวจ →
-        </Link>
+      <div className="app-content content">
+        <div className="content-overlay"></div>
+        <div className="content-wrapper">
+          {/* Breadcrumb */}
+          <div className="content-header row">
+            <div className="content-header-left col-12 mb-2">
+              <div className="row breadcrumbs-top ">
+                <div className="breadcrumb-wrapper col-12">
+                  <ol className="breadcrumb ">
+                    <li className="breadcrumb-item">
+                      <Link href="/admin">
+                        <span className="menu-home">หน้าแรก</span>
+                      </Link>
+                    </li>
+                    <li className="breadcrumb-item">
+                      <Link href="/admin/yuan-payments">ฝากโอนหยวน</Link>
+                    </li>
+                    <li className="breadcrumb-item active">เพิ่มรายการ</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="content-body body-new">
+            <section>
+              <div className="row">
+                <div className="col-md-12 col-sm-12">
+                  <div className="card">
+                    <div className="card-content">
+                      <div className="card-body">
+                        <h2 className="text-color-main">เพิ่มรายการฝากโอนหยวน</h2>
+                        <div className="pcs-sequence">
+                          <ol>
+                            <li>ใช้เมื่อต้องสร้างรายการแทนลูกค้า (เช่นลูกค้าโทรมาขอ admin บันทึก)</li>
+                            <li>เรทดีฟอลต์อ่านจาก <code>tb_settings.rsdefault</code> — เปลี่ยนได้</li>
+                            <li>เมื่อบันทึก รายการจะอยู่ในสถานะ &quot;อนุมัติ&quot; ทันที (admin เป็นผู้ยืนยัน)</li>
+                          </ol>
+                        </div>
+
+                        <AdminYuanPaymentNewForm
+                          preset={preset}
+                          recent={recent}
+                          defaultRate={defaultRate}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

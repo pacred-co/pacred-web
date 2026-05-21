@@ -1,105 +1,147 @@
 /**
- * /admin/customers/transfer-rep — ย้ายเซลล์ผู้ดูแลลูกค้า
+ * /admin/customers/transfer-rep — ย้ายเซลล์ผู้ดูแลลูกค้า (bulk).
  *
- * Wave 7.2 (2026-05-21 night): the original bulk-edit form read
- * profiles.sales_admin_id (rebuilt · empty) + listed customers from
- * profiles (rebuilt · empty) → was silently broken.
+ * Faithful port of the legacy `pcs-admin/user-transfer-sales.php` flow
+ * (D1 / ADR-0017 Phase-B). Replaces the Wave 7.2 "ยังไม่เปิด" banner.
  *
- * The faithful port needs:
- *   - Customer list from tb_users (with `adminidsale` field)
- *   - Admins list from the rebuilt `admins` table (Pacred-only — staff
- *     log into the Pacred admin app, not the legacy PHP)
- *   - A bulk UPDATE that writes `tb_users.adminidsale = '<new_admin_userid>'`
+ * The bulk form lets a sales-admin/super UPDATE `tb_users.adminidsale`
+ * across many customers in one shot via `adminBulkTransferSalesRepTb`.
  *
- * Wave 8 will rebuild the form. For now this page shows a clear
- * "ยังไม่เปิด" banner so ops don't try to use the broken bulk-edit.
- * Staff who need to reassign a customer's sales rep TODAY can do it
- * one-by-one from the customer detail page (`/admin/customers/[id]`).
+ * Reads:
+ *   - Recent customers (cap 100, optionally filtered by ?currentRep=PR0001)
+ *     for the multi-select source list.
+ *   - All active admins from `tb_admin` (the legacy source-of-truth for
+ *     sales-rep assignment) for the target dropdown.
+ *
+ * Query-params:
+ *   - ?currentRep=PR0001 → filter the source list to customers currently
+ *     assigned to that admin (useful when reassigning a leaving rep's
+ *     portfolio).
+ *   - ?q=John → free-text filter on customer name / member code.
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { ArrowLeftRight, ChevronRight, Home } from "lucide-react";
+import {
+  TransferRepForm,
+  type CustomerLite,
+  type TbAdminLite,
+} from "./transfer-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function TransferSalesRepPage() {
-  await requireAdmin(["ops", "sales_admin"]);
+type SP = { q?: string; currentRep?: string };
+
+export default async function TransferSalesRepPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
+  await requireAdmin(["sales_admin", "super"]);
+
+  const sp = await searchParams;
+  const admin = createAdminClient();
+
+  // Build the customer list query.
+  let q = admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, adminidsale")
+    .eq("userstatus", "1")
+    .order("userregistered", { ascending: false })
+    .limit(100);
+
+  if (sp.currentRep) {
+    q = q.eq("adminidsale", sp.currentRep.toUpperCase());
+  }
+
+  const qFree = (sp.q ?? "").trim();
+  if (qFree) {
+    // Free-text: try userid match first (case-insensitive), else fall back to name ilike.
+    if (/^PR\d+$/i.test(qFree)) {
+      q = q.eq("userid", qFree.toUpperCase());
+    } else {
+      const pat = `%${qFree.replace(/[%_]/g, "\\$&")}%`;
+      q = q.or(`username.ilike.${pat},userlastname.ilike.${pat},usertel.ilike.${pat}`);
+    }
+  }
+
+  const { data: customersRaw } = await q;
+  const customers = (customersRaw ?? []) as unknown as CustomerLite[];
+
+  // Active admins from tb_admin for the target dropdown.
+  const { data: adminsRaw } = await admin
+    .from("tb_admin")
+    .select("adminid, adminnickname, adminname, adminlastname, department, section")
+    .eq("adminstatusa", "1")
+    .order("adminnickname", { ascending: true })
+    .limit(500);
+  const admins = (adminsRaw ?? []) as unknown as TbAdminLite[];
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-3xl">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600 inline-flex items-center gap-1">
-          <Home className="w-3.5 h-3.5" /> Admin
-        </Link>
-        <ChevronRight className="w-3 h-3" />
-        <Link href="/admin/customers" className="hover:text-primary-600">
-          ลูกค้า
-        </Link>
-        <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-medium">ย้ายเซลล์ผู้ดูแล</span>
-      </nav>
+    <div className="pcs-legacy">
+      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600">
-          <ArrowLeftRight className="h-6 w-6" />
+      <title>ย้ายเซลล์ผู้ดูแลลูกค้า | PR Admin</title>
+
+      <div className="app-content content">
+        <div className="content-overlay"></div>
+        <div className="content-wrapper">
+          {/* Breadcrumb */}
+          <div className="content-header row">
+            <div className="content-header-left col-12 mb-2">
+              <div className="row breadcrumbs-top ">
+                <div className="breadcrumb-wrapper col-12">
+                  <ol className="breadcrumb ">
+                    <li className="breadcrumb-item">
+                      <Link href="/admin">
+                        <span className="menu-home">หน้าแรก</span>
+                      </Link>
+                    </li>
+                    <li className="breadcrumb-item">
+                      <Link href="/admin/customers">ลูกค้า</Link>
+                    </li>
+                    <li className="breadcrumb-item active">ย้ายเซลล์ผู้ดูแล (bulk)</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="content-body body-new">
+            <section>
+              <div className="row">
+                <div className="col-md-12 col-sm-12">
+                  <div className="card">
+                    <div className="card-content">
+                      <div className="card-body">
+                        <h2 className="text-color-main">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h2>
+                        <div className="pcs-sequence">
+                          <ol>
+                            <li>
+                              ตัวกรองรายชื่อ — กรอกชื่อ/รหัส PR หรือใส่
+                              <code>?currentRep=PR0001</code> ใน URL เพื่อกรองตามเซลล์ปัจจุบัน
+                            </li>
+                            <li>เลือกลูกค้า (multi-select) แล้วเลือก admin ปลายทาง</li>
+                            <li>กด &quot;ยืนยันการย้าย&quot; → <code>tb_users.adminidsale</code> จะถูกอัปเดตทุกราย</li>
+                          </ol>
+                        </div>
+
+                        <TransferRepForm
+                          customers={customers}
+                          admins={admins}
+                          initialQuery={qFree}
+                          initialCurrentRep={sp.currentRep ?? ""}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
-            ADMIN · ลูกค้า · ย้ายเซลล์
-          </p>
-          <h1 className="mt-1 text-xl sm:text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า</h1>
-        </div>
       </div>
-
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3 text-sm">
-        <p className="font-medium text-yellow-900">
-          ฟีเจอร์นี้อยู่ใน Wave 8 backlog (bulk reassignment to tb_users.adminidsale).
-        </p>
-        <p className="text-yellow-800">
-          การย้ายเซลล์ผู้ดูแลแบบครั้งละหลายราย ยังไม่ ship เพราะต้องเชื่อม{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_users.adminidsale</code>
-          {" "}กับ Pacred admin users (table{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">admins</code>) ซึ่งเป็น
-          mapping ใหม่ของ Pacred ที่ legacy PCS ไม่มี
-        </p>
-        <p className="text-yellow-800 font-medium">วิธีทำชั่วคราว — ย้ายทีละราย:</p>
-        <ol className="list-decimal pl-6 text-yellow-800 space-y-1">
-          <li>
-            เข้า{" "}
-            <Link
-              href="/admin/customers"
-              className="font-medium text-yellow-900 underline"
-            >
-              /admin/customers
-            </Link>{" "}
-            → ค้นหาลูกค้าด้วยรหัสหรือเบอร์
-          </li>
-          <li>กด "ดู" เข้า customer detail page</li>
-          <li>เลือก "เซลล์ผู้ดูแล" → save (เปลี่ยนทีละราย)</li>
-        </ol>
-        <p className="text-yellow-800">
-          ถ้าต้องย้ายเป็นจำนวนมาก ใช้ legacy PHP admin tool (
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">user-transfer-sales.php</code>
-          ) ชั่วคราว จนกว่า Wave 8 จะ ship form ที่นี่
-        </p>
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        <Link
-          href="/admin/customers"
-          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
-        >
-          ← รายการลูกค้า
-        </Link>
-        <Link
-          href="/admin/customers?focus=search"
-          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-        >
-          ค้นหาลูกค้า →
-        </Link>
-      </div>
-    </main>
+    </div>
   );
 }

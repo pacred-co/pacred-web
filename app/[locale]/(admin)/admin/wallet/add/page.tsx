@@ -1,102 +1,115 @@
 /**
- * /admin/wallet/add — admin-initiated manual topup (Wave 8 backlog).
+ * /admin/wallet/add — admin-initiated manual wallet entry (Wave 8).
  *
- * Wave 7.2 (2026-05-21 night): the original form queried + mutated the
- * rebuilt `profiles` + `wallet_transactions` tables which are empty on
- * prod. Posting the form would INSERT into a table no other surface
- * reads → the credit wouldn't show in /admin/wallet, /admin/wallet/[id],
- * dashboard, or the customer's own /wallet page. Silently breaks the
- * legacy ledger.
+ * Faithful port of the legacy `pcs-admin/wallet.php?page=add` admin
+ * branch. Writes to `tb_wallet_hs` (with side-effect on `tb_wallet`)
+ * via `adminCreateWalletHsManual` in actions/admin/wallet-hs.ts.
  *
- * Replaced with a clear "Wave 8 backlog" banner so accounting doesn't
- * try to use a broken admin-topup form. Wave 8 will rebuild against
- * tb_wallet_hs (the same table the new /admin/wallet list + /[id]
- * detail page read).
+ * Replaces the Wave 7.2 "ยังไม่เปิด" banner stub. The previous version
+ * of this page wrote to the rebuilt `wallet_transactions` table which
+ * is empty on prod; the new flow uses the same `tb_wallet_hs` table
+ * the dashboard / /admin/wallet list / /admin/wallet/[id] detail read.
  *
- * Until Wave 8: manual topups are entered via legacy PHP admin
- * (`pcs-admin/wallet.php?page=add`).
+ * Query-param prefill: pass `?q=PR1234` to pre-select a customer.
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { AdminWalletAddForm, type CustomerLite } from "./form";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminWalletAddPage() {
+type SP = { q?: string };
+
+export default async function AdminWalletAddPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
   await requireAdmin(["accounting"]);
 
+  const sp = await searchParams;
+  const admin = createAdminClient();
+
+  // Preselect from ?q=PR1234 (case-insensitive)
+  let preset: CustomerLite | null = null;
+  const qRaw = (sp.q ?? "").trim();
+  if (qRaw) {
+    const candidate = qRaw.toUpperCase();
+    const { data } = await admin
+      .from("tb_users")
+      .select("userid, username, userlastname, usertel, useremail")
+      .eq("userid", candidate)
+      .maybeSingle<CustomerLite>();
+    preset = data ?? null;
+  }
+
+  // Recent customers — order by registered desc · cap 20 for the dropdown.
+  const { data: recentRaw } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, useremail")
+    .eq("userstatus", "1")
+    .order("userregistered", { ascending: false })
+    .limit(20);
+  const recent = (recentRaw ?? []) as unknown as CustomerLite[];
+
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-3xl">
-      <div className="text-sm text-muted space-x-2">
-        <Link href="/admin" className="hover:underline">
-          หน้าแรก
-        </Link>
-        <span>›</span>
-        <Link href="/admin/wallet" className="hover:underline">
-          กระเป๋าสตางค์
-        </Link>
-        <span>›</span>
-        <span className="font-semibold">เพิ่มรายการเติมเงินด้วยมือ</span>
-      </div>
+    <div className="pcs-legacy">
+      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
 
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
-          ADMIN · WALLET · เพิ่ม Topup ด้วยมือ
-        </p>
-        <h1 className="mt-1 text-2xl font-bold">ยังไม่เปิดให้แอดมินเพิ่ม Topup</h1>
-      </div>
+      <title>เพิ่ม Topup ด้วยมือ | PR Admin</title>
 
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3 text-sm">
-        <p className="font-medium text-yellow-900">
-          ฟีเจอร์นี้อยู่ใน Wave 8 backlog (admin-initiated topup against tb_wallet_hs).
-        </p>
-        <p className="text-yellow-800">
-          การเพิ่มรายการเติมเงินด้วยมือ ยังไม่ ship เพราะต้องเขียน server action ใหม่ที่
-          INSERT ลง{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_wallet_hs</code>{" "}
-          (ไม่ใช่ rebuilt{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">wallet_transactions</code>{" "}
-          ที่หน้าเดิมเขียน) + อัปเดต{" "}
-          <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_wallet.wallettotal</code>{" "}
-          ของลูกค้าให้ตรงกัน
-        </p>
-        <p className="text-yellow-800 font-medium">วิธีทำชั่วคราว:</p>
-        <ol className="list-decimal pl-6 text-yellow-800 space-y-1">
-          <li>
-            ใช้ legacy PHP admin (
-            <code className="rounded bg-yellow-100 px-1.5 py-0.5">
-              pcs-admin/wallet.php?page=add
-            </code>
-            ) สำหรับเพิ่ม manual topup ชั่วคราว
-          </li>
-          <li>
-            หรือให้ลูกค้าเติมเงินผ่าน{" "}
-            <code className="rounded bg-yellow-100 px-1.5 py-0.5">/wallet</code> ฝั่งลูกค้า
-            แล้วแอดมินกด "อนุมัติ" ใน{" "}
-            <Link
-              href="/admin/wallet?kind=topup&status=1"
-              className="font-medium text-yellow-900 underline"
-            >
-              คิวรอตรวจ
-            </Link>
-          </li>
-        </ol>
-      </div>
+      <div className="app-content content">
+        <div className="content-overlay"></div>
+        <div className="content-wrapper">
+          {/* Breadcrumb */}
+          <div className="content-header row">
+            <div className="content-header-left col-12 mb-2">
+              <div className="row breadcrumbs-top ">
+                <div className="breadcrumb-wrapper col-12">
+                  <ol className="breadcrumb ">
+                    <li className="breadcrumb-item">
+                      <Link href="/admin">
+                        <span className="menu-home">หน้าแรก</span>
+                      </Link>
+                    </li>
+                    <li className="breadcrumb-item">
+                      <Link href="/admin/wallet">กระเป๋าสตางค์</Link>
+                    </li>
+                    <li className="breadcrumb-item active">เพิ่มรายการด้วยมือ</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <Link
-          href="/admin/wallet"
-          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
-        >
-          ← กลับรายการกระเป๋า
-        </Link>
-        <Link
-          href="/admin/wallet?kind=topup&status=1"
-          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-        >
-          ไปคิวรอตรวจเติม →
-        </Link>
+          <div className="content-body body-new">
+            <section>
+              <div className="row">
+                <div className="col-md-12 col-sm-12">
+                  <div className="card">
+                    <div className="card-content">
+                      <div className="card-body">
+                        <h2 className="text-color-main">เพิ่มรายการ Wallet ด้วยมือ</h2>
+                        <div className="pcs-sequence">
+                          <ol>
+                            <li>ใช้เมื่อ auto-verify จับสลิปลูกค้าไม่ได้ · หรือต้องการปรับยอดด้วยมือ</li>
+                            <li>เลือกประเภท เติมเงิน / ถอนเงิน / ปรับยอด แล้วใส่จำนวนเงินที่ตรงกับสลิป</li>
+                            <li>เมื่อบันทึกสำเร็จ ยอด <code>tb_wallet.wallettotal</code> ของลูกค้าจะถูกอัปเดตอัตโนมัติ</li>
+                          </ol>
+                        </div>
+
+                        <AdminWalletAddForm preset={preset} recent={recent} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

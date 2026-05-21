@@ -390,3 +390,124 @@ export async function adminBulkTransferSalesRep(
     return { ok: true, data: { updated: count ?? d.customer_ids.length } };
   });
 }
+
+// ────────────────────────────────────────────────────────────
+// Bulk transfer sales rep on the LEGACY `tb_users.adminidsale` column
+// (D1 / ADR-0017 Phase-B faithful port).
+//
+// Why a separate action from adminBulkTransferSalesRep above:
+//   The earlier action updates the REBUILT `profiles.sales_admin_id`
+//   column which is empty on prod. The legacy column-of-truth is
+//   `tb_users.adminidsale` (varchar holding the admin's legacy
+//   `tb_admin.adminid` username, e.g. "PR0001"). The new `/admin/
+//   customers/transfer-rep` bulk page writes against the legacy column
+//   so the assignment is visible to PHP staff + the new Pacred admin
+//   surfaces that join tb_users.adminidsale.
+//
+// Target admin id is the legacy varchar `tb_admin.adminid` (NOT a
+// Pacred profile UUID) — passing the raw legacy adminid keeps the
+// foreign-key shape PHP expects.
+// ────────────────────────────────────────────────────────────
+const bulkTransferRepTbSchema = z.object({
+  user_ids:          z.array(z.string().trim().regex(/^PR\d+$/i, "user_ids ต้องเป็นรหัส PR####"))
+                       .min(1, "เลือกอย่างน้อย 1 ลูกค้า")
+                       .max(500, "เลือกได้สูงสุด 500 รายต่อรอบ"),
+  new_admin_userid:  z.string().trim().min(1, "เลือก admin ปลายทาง").max(20),
+});
+export type AdminBulkTransferSalesRepTbInput = z.infer<typeof bulkTransferRepTbSchema>;
+
+export async function adminBulkTransferSalesRepTb(
+  input: AdminBulkTransferSalesRepTbInput,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const parsed = bulkTransferRepTbSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{ updated: number }>(
+    ["sales_admin", "super"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // Validate target admin: must exist in tb_admin + be active.
+      const { data: target } = await admin
+        .from("tb_admin")
+        .select("adminid, adminstatusa, adminnickname")
+        .eq("adminid", d.new_admin_userid)
+        .maybeSingle<{ adminid: string; adminstatusa: string; adminnickname: string | null }>();
+      if (!target) return { ok: false, error: "ไม่พบ admin ปลายทาง (tb_admin.adminid ไม่ตรง)" };
+      if (target.adminstatusa !== "1") return { ok: false, error: "admin ปลายทางไม่ใช่ active" };
+
+      // Normalise user ids to upper-case (PR uses upper case in prod).
+      const userIds = d.user_ids.map((u) => u.toUpperCase());
+
+      // Validate the customers exist (filter so partial-bad input doesn't
+      // silently update 0 rows; surface the bad list).
+      const { data: validRows, error: readErr } = await admin
+        .from("tb_users")
+        .select("userid, adminidsale")
+        .in("userid", userIds);
+      if (readErr) return { ok: false, error: readErr.message };
+      const validIds = (validRows ?? []).map((r) => (r as { userid: string }).userid);
+      if (validIds.length === 0) {
+        return { ok: false, error: "ไม่พบลูกค้าตาม userid ที่เลือก" };
+      }
+
+      const { error: updErr, count } = await admin
+        .from("tb_users")
+        .update({ adminidsale: target.adminid }, { count: "exact" })
+        .in("userid", validIds);
+      if (updErr) return { ok: false, error: updErr.message };
+
+      await logAdminAction(adminId, "tb_users.bulk_transfer_rep", "tb_users", validIds.join(","), {
+        new_admin_userid: target.adminid,
+        new_admin_nick:   target.adminnickname,
+        affected_userids: validIds,
+        requested_count:  userIds.length,
+        valid_count:      validIds.length,
+      });
+
+      revalidatePath("/admin/customers");
+      revalidatePath("/admin/customers/transfer-rep");
+      return { ok: true, data: { updated: count ?? validIds.length } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// listActiveTbAdmins — for the transfer-rep target dropdown
+// ────────────────────────────────────────────────────────────
+//
+// Returns active admins from `tb_admin` (the legacy source-of-truth
+// for sales-rep assignment). Used by /admin/customers/transfer-rep
+// to populate the "Target admin" select.
+//
+// Filter: adminstatusa='1' (active) — the same gate the legacy PHP
+// admin list uses.
+export type TbAdminLite = {
+  adminid:        string;
+  adminnickname:  string | null;
+  adminname:      string | null;
+  adminlastname:  string | null;
+  adminpicture:   string | null;
+  department:     string | null;
+  section:        string | null;
+};
+
+export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: TbAdminLite[] }>> {
+  return withAdmin<{ rows: TbAdminLite[] }>(
+    ["sales_admin", "super"],
+    async () => {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from("tb_admin")
+        .select("adminid, adminnickname, adminname, adminlastname, adminpicture, department, section")
+        .eq("adminstatusa", "1")
+        .order("adminnickname", { ascending: true })
+        .limit(500);
+      if (error) return { ok: false, error: error.message };
+      return { ok: true, data: { rows: (data ?? []) as unknown as TbAdminLite[] } };
+    },
+  );
+}
