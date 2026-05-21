@@ -2,6 +2,7 @@
 import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/actions/auth";
 import { countText, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
+import { SOCIAL } from "@/components/seo/site";
 
 /** Legacy basePath."assets" — the staged Modern-Admin theme bundle. */
 const A = "/legacy/pcs/assets";
@@ -86,15 +87,26 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                       <span className="lang-follow-us-on">ติดตามเราบน </span>
                     </a>
                   </li>
+                  {/* Social icons — legacy top-menu.php L34-37 had 3 (Line/FB/YT);
+                      Pacred has 5 (added IG + TikTok per owner 2026-05-21). All
+                      URLs sourced from `components/seo/site.ts` SOCIAL constant.
+                      `mr-1` adds 0.25rem gap between icons — legacy renders gaps
+                      via inter-tag whitespace which JSX strips. */}
                   <li className="nav-item">
-                    <a href="https://line.me/ti/p/@PCSCARGO">
+                    <a href={SOCIAL.line} className="mr-1" target="_blank" rel="noreferrer">
                       <i className="font-18 fab fa-line"></i>
                     </a>
-                    <a href="https://www.facebook.com/PacredShippingCustomsClearanceImportExport/">
+                    <a href={SOCIAL.facebook} className="mr-1" target="_blank" rel="noreferrer">
                       <i className="font-18 fab fa-facebook"></i>
                     </a>
-                    <a href="https://www.youtube.com/@PacredShipping">
+                    <a href={SOCIAL.youtube} className="mr-1" target="_blank" rel="noreferrer">
                       <i className="font-18 fab fa-youtube"></i>
+                    </a>
+                    <a href={SOCIAL.instagram} className="mr-1" target="_blank" rel="noreferrer">
+                      <i className="font-18 fab fa-instagram"></i>
+                    </a>
+                    <a href={SOCIAL.tiktok} target="_blank" rel="noreferrer">
+                      <i className="font-18 fab fa-tiktok"></i>
                     </a>
                   </li>
                 </ul>

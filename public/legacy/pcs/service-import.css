@@ -1053,3 +1053,40 @@
 .pcs-legacy .app-content { position: relative; }
 .pcs-legacy .content-wrapper { padding: 1.5rem; }
 .pcs-legacy .content-body { position: relative; }
+
+/* =============================================================
+ * Process-model tracker — the 8-step status row on the detail page
+ * (.process-model.pro2). Legacy assets/css/style.css L693-697 had the
+ * pro2 variant at width:14.28% per li (7 steps × 14.28 = ~100%); the
+ * Pacred port inserted "กำลังจัดส่ง" between step 6 and step 7 → 8
+ * steps. Width becomes 100/8 = 12.5% per li.
+ * BASE rules (.process-model li i, ::after, color states) live in
+ * shops.css and are loaded GLOBALLY by the layout — so just need the
+ * pro2-specific width override + the line position adjustment here.
+ * ============================================================= */
+.pcs-legacy .process-model.pro2 {
+  list-style: none;
+  padding: 0;
+  position: relative;
+  margin: 0 auto;
+  border: none;
+  z-index: 0;
+  margin-bottom: -20px;
+  min-width: 0;
+  text-align: center;
+  width: 100%;
+}
+.pcs-legacy .process-model.pro2 li {
+  display: inline-block;
+  vertical-align: top;
+  width: 12.5%;     /* 100/8 = 12.5% — 8-step grid (legacy 7-step was 14.28%) */
+  text-align: center;
+  float: none;
+  position: relative;
+}
+.pcs-legacy .process-model.pro2 li p {
+  font-size: 13px;
+  margin: 7px 5px;
+  /* reserve 2 lines for labels that wrap ("รอเข้าโกดังจีน", "สินค้าถึงไทย" etc.) */
+  min-height: 2.4em;
+}
