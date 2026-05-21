@@ -1,26 +1,51 @@
+/**
+ * /admin/wallet — รายการกระเป๋าสตางค์ (faithful port · Wave 7.2 · 2026-05-21 night)
+ *
+ * Rewrite from `wallet_transactions` (rebuilt · empty on prod) → `tb_wallet_hs`
+ * (104,591 rows · 1,470 pending). Dashboard + `/admin/wallet/[id]` already
+ * read tb_wallet_hs; the list was the only surface still reading the rebuilt
+ * schema → operators saw "no pending approvals" while customers' top-ups
+ * piled up. ภูม flagged this as the single biggest "wrong data" gap.
+ *
+ * Legacy `tb_wallet_hs` columns (verified 2026-05-21 via REST):
+ *   id, date, dateslip, amount, status, type, typenew, typeservice,
+ *   paydeposit, admincreate, imagesslip, depositnamebank, nameuserbank,
+ *   nouserbank, note, adminid, adminidupdate, lockdate, session, reforder,
+ *   reforder2, whno, wusercredit, userid, adminidcrate.
+ *
+ * type taxonomy (legacy):
+ *   1 = topup (customer paid in)             — positive amount, needs slip approval
+ *   2 = topup (manual · admin adds)          — positive, super only
+ *   4 = wallet-pay for an order              — positive (auto, no approval)
+ *   7 = withdrawal (customer requests money out) — negative, needs approval
+ *
+ * Wave 8 backlog: bulk-approve bar + slip-transferred-at editor +
+ * admin-initiated topup form (`/admin/wallet/add`) + พายแทนลูกค้า
+ * (`/admin/wallet/pay-user`).
+ */
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { WalletTxActions } from "./actions-cell";
-import { WalletBulkApproveBar, WalletRowCheckbox } from "./bulk-approve-bar";
-import { SlipTransferredAtCell } from "@/components/admin/slip-transferred-at-cell";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 
+export const dynamic = "force-dynamic";
+
 // ─────────────────────────────────────────────────────────────────────
-// Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
-// The sidebar `กระเป๋าสตางค์` now lands a single leaf here; all kind/
-// status filters + work actions live in this horizontal menubar so the
-// sidebar stays slim (Pacred-is-one-company pattern · matches
-// /admin/customers + /admin/accounting/cargo pattern).
+// Page top-menubar — same shape as Wave 7 (ภูม brief 2026-05-20 ค่ำ).
+// URLs updated for the new tb_wallet_hs filter params (status=1/2/3 +
+// kind=topup/withdraw instead of the rebuilt schema's kind=deposit/withdraw
+// + status=pending/completed).
 // ─────────────────────────────────────────────────────────────────────
 const WALLET_MENUBAR: MenubarItem[] = [
   { label: "หน้าหลัก", href: "/admin/wallet" },
   {
     label: "กรองรายการ",
     children: [
-      { label: "ทั้งหมด",     href: "/admin/wallet" },
-      { label: "รอเติมเงิน",  href: "/admin/wallet?kind=deposit&status=pending" },
-      { label: "รอถอน",       href: "/admin/wallet?kind=withdraw&status=pending" },
+      { label: "ทั้งหมด",    href: "/admin/wallet" },
+      { label: "รอเติมเงิน", href: "/admin/wallet?kind=topup&status=1" },
+      { label: "รอถอน",      href: "/admin/wallet?kind=withdraw&status=1" },
+      { label: "อนุมัติแล้ว", href: "/admin/wallet?status=2" },
     ],
   },
   {
@@ -33,188 +58,381 @@ const WALLET_MENUBAR: MenubarItem[] = [
   },
 ];
 
-const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  completed: "bg-green-50 text-green-700 border-green-200",
-  failed: "bg-red-50 text-red-700 border-red-200",
-  cancelled: "bg-gray-50 text-gray-600 border-gray-200",
+const STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ",
+  "2": "อนุมัติแล้ว",
+  "3": "ปฏิเสธ",
 };
-const KIND_LABEL: Record<string, string> = {
-  deposit: "เติมเงิน", withdraw: "ถอนเงิน", refund: "คืนเงิน", adjustment: "ปรับยอด",
-  order_payment: "ชำระฝากสั่ง", order_top_up: "เติม+ชำระฝากสั่ง",
-  import_payment: "ชำระฝากนำเข้า", import_top_up: "เติม+ชำระฝากนำเข้า",
-  yuan_payment: "ชำระฝากโอนหยวน",
-  cashback_earn: "ได้รับ cashback", cashback_redeem: "ใช้ cashback",
+const STATUS_CLS: Record<string, string> = {
+  "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
+  "2": "bg-green-100 text-green-700 border-green-200",
+  "3": "bg-red-100 text-red-700 border-red-200",
 };
 
-export default async function AdminWalletPage({ searchParams }: { searchParams: Promise<{ kind?: string; status?: string }> }) {
+// type → kind label + colour (legacy taxonomy · see header docblock)
+const TYPE_LABEL: Record<string, string> = {
+  "1": "เติมเงิน",
+  "2": "เติม (manual)",
+  "4": "ชำระจากกระเป๋า",
+  "7": "ถอนเงิน",
+};
+const TYPE_CLS: Record<string, string> = {
+  "1": "bg-green-50 text-green-700 border-green-200",
+  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "4": "bg-blue-50 text-blue-700 border-blue-200",
+  "7": "bg-red-50 text-red-700 border-red-200",
+};
+
+const KIND_TABS: { key: string | null; label: string; types: string[] | null }[] = [
+  { key: null,       label: "ทั้งหมด", types: null },
+  { key: "topup",    label: "เติมเงิน (รอตรวจ + manual)", types: ["1", "2"] },
+  { key: "withdraw", label: "ถอนเงิน", types: ["7"] },
+  { key: "orderpay", label: "ชำระจากกระเป๋า", types: ["4"] },
+];
+
+const STATUS_TABS: { key: string | null; label: string }[] = [
+  { key: null, label: "ทุกสถานะ" },
+  { key: "1",  label: "รอตรวจ" },
+  { key: "2",  label: "อนุมัติ" },
+  { key: "3",  label: "ปฏิเสธ" },
+];
+
+type WhsRow = {
+  id: number;
+  date: string | null;
+  dateslip: string | null;
+  amount: number | null;
+  status: string | null;
+  type: string | null;
+  imagesslip: string | null;
+  depositnamebank: string | null;
+  note: string | null;
+  userid: string | null;
+  adminid: string | null;
+  adminidcrate: string | null;
+};
+
+type URow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
+
+type SP = { kind?: string; status?: string; q?: string };
+
+export default async function AdminWalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
   // W-1 (gap-admin H-1): page-level role gate. The (admin) layout only
   // proves "some admin"; this page reads every customer's wallet PII
   // (bank, account no., slips) via createAdminClient (RLS-bypass), so a
   // low-trust driver/warehouse admin must be refused here, not just in
-  // the nav. Money page → accounting (super implicit).
-  await requireAdmin(["accounting"]);
+  // the nav. Money page → accounting + ops (super implicit).
+  await requireAdmin(["ops", "accounting"]);
 
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  let q = admin.from("wallet_transactions")
-    .select(`
-      id, profile_id, bucket, amount, kind, status, slip_url, bank_name,
-      account_name, account_number, note, created_at, slip_transferred_at,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone )
-    `)
-    .order("created_at", { ascending: false })
+  // Map ?kind=... to the matching `type` values.
+  const kindTab = KIND_TABS.find((t) => t.key === sp.kind);
+  const typeFilter = kindTab?.types ?? null;
+  // Back-compat: legacy menubar URLs used kind=deposit, kind=withdraw,
+  // status=pending. Translate those silently.
+  const legacyKindMap: Record<string, string[]> = {
+    deposit: ["1", "2"],
+    withdraw: ["7"],
+  };
+  const legacyTypeFilter = sp.kind && legacyKindMap[sp.kind] ? legacyKindMap[sp.kind] : null;
+  const effectiveTypeFilter = typeFilter ?? legacyTypeFilter;
+
+  const statusFilter = sp.status === "pending" ? "1" : sp.status ?? "";
+
+  let q = admin
+    .from("tb_wallet_hs")
+    .select(
+      "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate",
+    )
+    .order("date", { ascending: false })
     .limit(200);
 
-  if (sp.kind)   q = q.eq("kind", sp.kind);
-  if (sp.status) q = q.eq("status", sp.status);
+  if (effectiveTypeFilter && effectiveTypeFilter.length > 0) {
+    q = q.in("type", effectiveTypeFilter);
+  }
+  if (statusFilter && /^[123]$/.test(statusFilter)) {
+    q = q.eq("status", statusFilter);
+  }
+  if (sp.q) {
+    const term = sp.q.trim();
+    if (/^\d+$/.test(term)) q = q.eq("id", Number(term));
+    else q = q.eq("userid", term.toUpperCase());
+  }
 
-  const { data } = await q;
-  type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
-  type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
-    profile: ProfileShape | ProfileShape[] | null;
-  };
-  const rows = ((data ?? []) as RawRow[]).map((r) => ({
-    ...r,
-    profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-  }));
+  const { data: rowsRaw, error } = await q;
+  const rows = (rowsRaw ?? []) as unknown as WhsRow[];
+
+  // 2nd query — merge customer names from tb_users (same pattern as
+  // /admin/forwarders + /admin/yuan-payments)
+  const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
+  let userMap = new Map<string, URow>();
+  if (userIds.length > 0) {
+    const { data: usersRaw } = await admin
+      .from("tb_users")
+      .select("userid,username,userlastname,usertel")
+      .in("userid", userIds);
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+  }
+
+  // Header counts (3 separate queries · cheap because they use the indexed status column)
+  const [{ count: pendingTopupCount }, { count: pendingWithdrawCount }, { count: totalPending }] =
+    await Promise.all([
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).in("type", ["1", "2"]).eq("status", "1"),
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("type", "7").eq("status", "1"),
+      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1"),
+    ]);
 
   return (
     <>
       <PageTopMenubar items={WALLET_MENUBAR} activeHref="/admin/wallet" />
       <main className="p-6 lg:p-8 space-y-5">
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">กระเป๋าเงิน — รายการ</h1>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <FilterChips currentKind={sp.kind} currentStatus={sp.status} />
-      </div>
-
-      <WalletBulkApproveBar />
-
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        {rows.length === 0 ? (
-          <div className="p-12 text-center space-y-2">
-            <div className="text-4xl" aria-hidden>👛</div>
-            <p className="text-sm font-medium text-foreground">ไม่มีรายการ wallet ตามตัวกรองนี้</p>
-            <p className="text-xs text-muted max-w-md mx-auto">
-              ลองล้าง/เปลี่ยน kind หรือ status ด้านบน เพื่อดูทุก deposit / withdraw / order_payment / refund ของลูกค้า
+        <div className="flex items-baseline justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+            <div className="mt-1 flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold">กระเป๋าสตางค์ — รายการ</h1>
+              {totalPending ? (
+                <span className="rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-700">
+                  {totalPending} รอตรวจรวม
+                </span>
+              ) : null}
+              {pendingTopupCount ? (
+                <Link
+                  href="/admin/wallet?kind=topup&status=1"
+                  className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                >
+                  เติม {pendingTopupCount}
+                </Link>
+              ) : null}
+              {pendingWithdrawCount ? (
+                <Link
+                  href="/admin/wallet?kind=withdraw&status=1"
+                  className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  ถอน {pendingWithdrawCount}
+                </Link>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted mt-1">
+              Wave 7.2 · อ่านจาก tb_wallet_hs · approve/reject bulk + slip-time editor → Wave 8
             </p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-2 py-3 w-8"></th>
-                  <th className="px-4 py-3">วันที่ระบบ / โอนจริง</th>
-                  <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3">ประเภท</th>
-                  <th className="px-4 py-3 text-right">จำนวน</th>
-                  <th className="px-4 py-3">บัญชี/หลักฐาน</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3">การจัดการ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border align-top">
-                    <td className="px-2 py-3">
-                      {/* T-P3: bulk-select checkbox shown only for rows that
-                          adminBulkApproveDeposits can actually act on */}
-                      {r.kind === "deposit" && r.status === "pending" ? (
-                        <WalletRowCheckbox id={r.id} />
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap">
-                      <div className="text-muted">{new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</div>
-                      <div className="mt-1 text-[10px] text-muted">⏱ โอน:</div>
-                      <SlipTransferredAtCell
-                        kind="wallet_tx"
-                        id={r.id}
-                        currentValue={(r as { slip_transferred_at: string | null }).slip_transferred_at ?? null}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
-                      <div>{r.profile?.first_name} {r.profile?.last_name}</div>
-                      <div className="text-muted">{r.profile?.phone}</div>
-                    </td>
-                    <td className="px-4 py-3 text-xs">{KIND_LABEL[r.kind] ?? r.kind}</td>
-                    <td className={`px-4 py-3 text-right font-mono ${r.amount < 0 ? "text-red-600" : "text-green-700"}`}>
-                      {r.amount > 0 ? "+" : ""}{Number(r.amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-xs space-y-1 max-w-[200px]">
-                      {r.bank_name && <div>{r.bank_name}</div>}
-                      {r.account_name && <div className="text-muted">{r.account_name}</div>}
-                      {r.account_number && <div className="font-mono text-muted">{r.account_number}</div>}
-                      {r.slip_url && <div className="text-[10px] text-primary-500 truncate">{r.slip_url.slice(-22)}</div>}
-                      {r.note && <div className="text-[10px] text-muted">📝 {r.note}</div>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[r.status]}`}>{r.status}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <WalletTxActions
-                        id={r.id}
-                        status={r.status}
-                        kind={r.kind}
-                        slipUrl={r.slip_url}
-                        amount={Number(r.amount)}
-                        bank_name={r.bank_name}
-                        account_name={r.account_name}
-                        account_number={r.account_number}
-                        note={r.note}
-                        slip_transferred_at={(r as { slip_transferred_at: string | null }).slip_transferred_at ?? null}
-                        created_at={r.created_at}
-                        member_code={r.profile?.member_code ?? null}
-                        customer_name={`${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() || "—"}
-                        phone={r.profile?.phone ?? null}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <Link
+            href="/admin/wallet/add"
+            className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
+          >
+            + เพิ่ม Topup ด้วยมือ
+          </Link>
+        </div>
+
+        {/* Kind tabs */}
+        <div className="flex flex-wrap gap-1 border-b border-border">
+          {KIND_TABS.map((t) => {
+            const isActive = (t.key ?? "") === (sp.kind ?? "");
+            const params = new URLSearchParams();
+            if (t.key) params.set("kind", t.key);
+            if (sp.status && /^[123]$/.test(sp.status)) params.set("status", sp.status);
+            const qs = params.toString();
+            const href = qs ? `/admin/wallet?${qs}` : `/admin/wallet`;
+            return (
+              <Link
+                key={t.label}
+                href={href}
+                className={
+                  "px-3 py-1.5 text-xs rounded-t-md border-b-2 -mb-px " +
+                  (isActive
+                    ? "border-primary-600 text-primary-600 font-semibold"
+                    : "border-transparent text-muted hover:text-foreground")
+                }
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Status chips */}
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TABS.map((t) => {
+            const isActive = (t.key ?? "") === (sp.status ?? "");
+            const params = new URLSearchParams();
+            if (sp.kind) params.set("kind", sp.kind);
+            if (t.key) params.set("status", t.key);
+            const qs = params.toString();
+            const href = qs ? `/admin/wallet?${qs}` : `/admin/wallet`;
+            return (
+              <Link
+                key={t.label}
+                href={href}
+                className={
+                  "rounded-full border px-3 py-1 text-xs " +
+                  (isActive
+                    ? "border-primary-500 bg-primary-50 text-primary-700 font-medium"
+                    : "border-border bg-white text-muted hover:bg-surface-alt")
+                }
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Search box */}
+        <form className="flex gap-2 flex-wrap" action="/admin/wallet">
+          {sp.kind ? <input type="hidden" name="kind" value={sp.kind} /> : null}
+          {sp.status ? <input type="hidden" name="status" value={sp.status} /> : null}
+          <input
+            name="q"
+            defaultValue={sp.q ?? ""}
+            placeholder="ค้นหา รหัสลูกค้า (PR…) / หมายเลขรายการ"
+            className="rounded-lg border border-border px-3 py-2 text-sm w-72"
+          />
+          <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 text-sm">
+            ค้นหา
+          </button>
+        </form>
+
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            โหลดข้อมูลไม่สำเร็จ: {error.message}
           </div>
         )}
-      </div>
-    </main>
-    </>
-  );
-}
 
-function Chip({ active, href, children }: { active: boolean; href: string; children: React.ReactNode }) {
-  return (
-    <Link href={href} className={`rounded-full border px-3 py-1 text-xs ${active ? "bg-primary-500 text-white border-primary-500" : "bg-white border-border hover:bg-surface-alt"}`}>
-      {children}
-    </Link>
-  );
-}
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+          {rows.length === 0 ? (
+            <div className="p-12 text-center space-y-2">
+              <div className="text-4xl" aria-hidden>👛</div>
+              <p className="text-sm font-medium text-foreground">ไม่มีรายการตามตัวกรองนี้</p>
+              <p className="text-xs text-muted max-w-md mx-auto">
+                ลองล้าง/เปลี่ยนตัวกรองด้านบนเพื่อดูทุก deposit / withdraw / payment ของลูกค้า
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-3 py-3">วันที่สร้าง</th>
+                    <th className="px-3 py-3">ลูกค้า</th>
+                    <th className="px-3 py-3">ประเภท</th>
+                    <th className="px-3 py-3 text-right">จำนวน (THB)</th>
+                    <th className="px-3 py-3">ธนาคาร</th>
+                    <th className="px-3 py-3">สถานะ</th>
+                    <th className="px-3 py-3">สลิป</th>
+                    <th className="px-3 py-3">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const u = r.userid ? userMap.get(r.userid) : undefined;
+                    const status = r.status ?? "1";
+                    const type = r.type ?? "";
+                    const amount = Number(r.amount ?? 0);
+                    const isNeg = amount < 0;
+                    const customerName = u
+                      ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
+                      : r.userid ?? "—";
+                    return (
+                      <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                        <td className="px-3 py-3 text-xs whitespace-nowrap">
+                          {r.date
+                            ? new Date(r.date).toLocaleString("th-TH", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          <div className="font-mono">{r.userid ?? "—"}</div>
+                          <div>{customerName}</div>
+                          {u?.usertel ? <div className="text-muted">{u.usertel}</div> : null}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                              TYPE_CLS[type] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}
+                          >
+                            {TYPE_LABEL[type] ?? `type ${type}`}
+                          </span>
+                        </td>
+                        <td
+                          className={`px-3 py-3 text-right font-mono text-xs ${isNeg ? "text-red-600" : "text-foreground"}`}
+                        >
+                          {isNeg ? "−" : ""}฿
+                          {Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          {r.depositnamebank ? (
+                            <span className="font-mono text-[11px]">{r.depositnamebank}</span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                              STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}
+                          >
+                            {STATUS_LABEL[status] ?? `status ${status}`}
+                          </span>
+                          {(r.adminid || r.adminidcrate) ? (
+                            <div className="text-muted text-[10px] mt-1 font-mono">
+                              {r.adminid ?? r.adminidcrate}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          {r.imagesslip ? (
+                            <a
+                              href={
+                                r.imagesslip.startsWith("http")
+                                  ? r.imagesslip
+                                  : `/legacy/uploads/${r.imagesslip}`
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary-600 hover:underline"
+                            >
+                              ดู
+                            </a>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-xs">
+                          <Link
+                            href={`/admin/wallet/${r.id}`}
+                            className="text-primary-600 hover:underline"
+                          >
+                            ดู / แก้ไข
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-function FilterChips({ currentKind, currentStatus }: { currentKind?: string; currentStatus?: string }) {
-  const params = (kind?: string, status?: string) => {
-    const u = new URLSearchParams();
-    if (kind)   u.set("kind", kind);
-    if (status) u.set("status", status);
-    return u.toString() ? `?${u}` : "";
-  };
-  return (
-    <>
-      <div className="flex flex-wrap gap-2">
-        <Chip active={!currentKind} href="/admin/wallet">ทุกประเภท</Chip>
-        <Chip active={currentKind === "deposit"}  href={`/admin/wallet${params("deposit", currentStatus)}`}>เติมเงิน</Chip>
-        <Chip active={currentKind === "withdraw"} href={`/admin/wallet${params("withdraw", currentStatus)}`}>ถอนเงิน</Chip>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Chip active={!currentStatus}                  href={`/admin/wallet${params(currentKind)}`}>ทุกสถานะ</Chip>
-        <Chip active={currentStatus === "pending"}     href={`/admin/wallet${params(currentKind, "pending")}`}>รอ</Chip>
-        <Chip active={currentStatus === "completed"}   href={`/admin/wallet${params(currentKind, "completed")}`}>สำเร็จ</Chip>
-        <Chip active={currentStatus === "cancelled"}   href={`/admin/wallet${params(currentKind, "cancelled")}`}>ยกเลิก</Chip>
-      </div>
+        <p className="text-[11px] text-muted">
+          แสดงไม่เกิน 200 แถวต่อหน้า (ใช้ตัวกรอง / ค้นหาด้านบนเพื่อกรองเพิ่ม)
+        </p>
+      </main>
     </>
   );
 }
