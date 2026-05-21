@@ -95,10 +95,23 @@ type AddressRow = {
   addressnote: string | null;
 };
 
-export default async function AddressesPage() {
+export default async function AddressesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+
+  // The legacy "เพิ่มที่อยู่" button links to `/addresses?page=1`, and the
+  // legacy jQuery's URL-rewrite handler then opens the add-address modal
+  // via `$('#add-address').modal('show')`. We replicate by reading the
+  // searchParam server-side + rendering the modal with `show` class +
+  // inline `display: block` + a `.modal-backdrop` div so it shows on
+  // load without any JS.
+  const sp = await searchParams;
+  const isAddModalOpen = sp?.page === "1" || sp?.page === "add";
 
   const admin = createAdminClient();
   const userID = profile.member_code ?? "";
@@ -312,15 +325,22 @@ export default async function AddressesPage() {
                       </div>
                     </div>
 
-                    {/* L489-573 — the add-address modal. Transcribed 1:1;
-                        with no jQuery `.modal('show')` it stays hidden at
-                        its CSS default (the legacy pre-trigger state). */}
+                    {/* L489-573 — the add-address modal. Transcribed 1:1.
+                        Legacy opens it via jQuery `.modal('show')` (URL
+                        ?page=1 → page.address.js hook). Without jQuery,
+                        we toggle .show + inline display: block based on
+                        the searchParam so the modal opens on direct URL
+                        navigation (e.g. clicking "เพิ่มที่อยู่"). */}
+                    {isAddModalOpen && (
+                      <div className="modal-backdrop fade show" />
+                    )}
                     <div
                       id="add-address"
-                      className="modal fade in"
+                      className={`modal fade ${isAddModalOpen ? "in show" : "in"}`}
                       tabIndex={-1}
                       role="dialog"
-                      aria-hidden="true"
+                      aria-hidden={!isAddModalOpen}
+                      style={isAddModalOpen ? { display: "block" } : undefined}
                     >
                       <div className="modal-dialog">
                         <div className="modal-content header-from">

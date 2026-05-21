@@ -548,6 +548,7 @@
 }
 .pcs-legacy .process-model li {
   display: inline-block;
+  vertical-align: top;       /* equal-height alignment when labels wrap */
   width: 20%;
   text-align: center;
   float: none;
@@ -614,6 +615,11 @@
 .pcs-legacy .process-model li p {
   font-size: 14px;
   margin: 7px 5px;
+  /* Reserve 2 lines so step #5 ("สำเร็จ (เช็คในรายการฝากนำเข้า)") which
+   * wraps to two lines doesn't push its <li> taller than the others —
+   * legacy line at top:33px then stays at the same y-position across
+   * all 5 li's, giving a symmetric horizontal stripe. */
+  min-height: 2.4em;
 }
 .pcs-legacy .process-model li.active,
 .pcs-legacy .process-model li.visited {
