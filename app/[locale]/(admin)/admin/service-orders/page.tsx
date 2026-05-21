@@ -15,7 +15,7 @@ const PURCHASING_MENUBAR: MenubarItem[] = [
     label: "สถานะ",
     children: [
       { label: "ทั้งหมด",                href: "/admin/service-orders" },
-      { label: "รอดำเนินการ",            href: "/admin/service-orders?q=1" },
+      { label: "รอดำเนินการ",            href: "/admin/service-orders?status=pending" },
       { label: "cart",                  href: "/admin/service-orders/cart" },
       { label: "เพิ่มสินค้าใน cart",     href: "/admin/service-orders/cart/add" },
     ],

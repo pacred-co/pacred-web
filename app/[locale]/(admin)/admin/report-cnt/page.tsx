@@ -377,7 +377,17 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
                   return (
                     <tr key={g.fcabinetnumber} className={`border-t border-border ${g.isPaid ? "bg-green-50/30" : ""}`}>
                       <td className="px-2 py-2 font-mono">
-                        <Link href={`/admin/report-cnt?id=${encodeURIComponent(g.fcabinetnumber)}`} className="text-primary-600 hover:underline">
+                        <Link
+                          /* Wave 7.2 fix (ภูม audit) — previously linked to
+                             /admin/report-cnt?id=… but the page never read
+                             sp.id → silent no-op. Now drills into the
+                             container's forwarders via the search box of
+                             /admin/forwarders so staff can see every line in
+                             the container. */
+                          href={`/admin/forwarders?focus=search&q=${encodeURIComponent(g.fcabinetnumber)}`}
+                          className="text-primary-600 hover:underline"
+                          title="ดูทุกรายการในตู้นี้"
+                        >
                           {g.fcabinetnumber}
                         </Link>
                       </td>
