@@ -42,8 +42,9 @@
 | /admin/reports/user-sales-history/`[customer_id]` | empty rebuilt | redirect to /admin/customers/`[id]` |
 | /admin/rates/custom-user | empty rebuilt | Phase A backlog banner (legacy tb_priceuser_* not migrated yet) |
 | /admin/rates/custom-hs | empty rebuilt | Phase A backlog banner (same migration gap) |
+| sidebar "ระบบบัญชี" | 2-child dropdown (Cargo/Freight) | **single leaf** → `/admin/accounting/cargo` + Cargo/Freight pills ในหน้า head (mirrors `/admin/forwarders` pattern) |
 
-**Total Wave 7.2 fixes shipped tonight: 22 surfaces** · across 8 commits.
+**Total Wave 7.2 fixes shipped tonight: 23 surfaces** · across 9 commits.
 
 ---
 
@@ -56,9 +57,9 @@
 | `/admin/csv-imports` (+ upload + `[id]`) | bulk CSV import tool | wire ใน Settings → "นำเข้าข้อมูล" | _____ |
 | `/admin/migration/pcs-customers` | one-shot tool ย้ายข้อมูล PCS → Pacred | **keep orphan** (super only · ใช้ครั้งเดียว) | _____ |
 | `/admin/organization-email` | (purpose ไม่แน่ใจ) | **delete หรือ wire** (ภูมเช็คก่อน) | _____ |
-| `/admin/accounting/periods` | จัดการ accounting period (งวด) | wire ใน `/admin/accounting/cargo` menubar | _____ |
-| `/admin/accounting/reconcile` | กระทบยอด accounting | wire ใน `/admin/accounting/cargo` menubar | _____ |
-| `/admin/accounting/container-costs` | ต้นทุนต่อตู้ tracking | wire ใน `/admin/forwarders` "งาน" group | _____ |
+| `/admin/accounting/periods` | จัดการ accounting period (งวด) | wire ใน CARGO_MENUBAR (Cargo accounting hub) — "การบัญชี → งวด" group | _____ |
+| `/admin/accounting/reconcile` | กระทบยอด accounting | wire ใน CARGO_MENUBAR — "การบัญชี → กระทบยอด" group | _____ |
+| `/admin/accounting/container-costs` | ต้นทุนต่อตู้ tracking | wire ใน `/admin/forwarders` "งาน" group หรือ CARGO_MENUBAR "รายจ่าย → ต้นทุนตู้" | _____ |
 | `/admin/forwarders/container-cost-check` | เช็ค container cost (เครื่องมือ) | wire ใน `/admin/forwarders` "งาน" group | _____ |
 | `/admin/refunds` (+ `new` + `[id]`) | คืนเงินลูกค้า · 🔵 Pacred-only | wire ใน Wallet "จัดการ → คืนเงิน" | _____ |
 | `/admin/reports/containers-hs` | รายงาน HS code ของตู้ | wire ใน Reports menubar | _____ |
@@ -73,6 +74,21 @@
 | `/admin/settings/notifications` · `/admin/system/notifications` | log ว่าง (รบสร้างใหม่ · ไม่มี data) | 🟡 P2 (low-impact log views) |
 | `/admin/audit` | บางส่วนยังอ่าน rebuilt (ส่วน admin actions) | 🟡 P2 |
 | `/admin/reports/credit-pending` · `monthly-orders` · `pending-payments` | orphan + stale | 🟡 P2 — wait for ภูม wire/delete |
+
+---
+
+## 🆕 Sidebar patterns ที่ใช้แล้ว (2 หน้า · ภูมยืนยัน 2026-05-21 night)
+
+หน้าที่ใช้ pattern "single leaf + Segmented Control ในหน้า head":
+
+| Sidebar leaf | URL | Segmented Control ในหน้า | Component |
+|---|---|---|---|
+| บริการนำเข้า | `/admin/forwarders` | บริการ (Cargo/Freight) · ตู้ (FCL/LCL) | inline `SegmentedPills` ในหน้า |
+| ระบบบัญชี | `/admin/accounting/cargo` | Cargo / Freight | `components/admin/accounting-segment-pills.tsx` |
+
+**Candidate ต่อไปที่อาจใช้ pattern นี้** (ภูมเลือก):
+- HR (`hr/humanresource` ↔ `hr/assets` — 2 hubs)
+- Settings (`settings/general` ↔ `settings/business-config` ↔ `settings/tos-versions`)
 
 ---
 
