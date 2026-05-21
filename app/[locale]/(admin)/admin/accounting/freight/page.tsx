@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
 
 /**
  * Admin > ระบบบัญชี Freight (hub)
@@ -201,9 +202,15 @@ export default async function AdminAccountingFreightHubPage() {
       {/* Header */}
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-        <h1 className="mt-1 text-2xl font-bold">ระบบบัญชี Freight</h1>
-        <p className="mt-1 text-sm text-muted">
-          เมนูบัญชี Freight (FCL · LCL · เคลียร์ศุลกากร · ใบขนสินค้า · ฟูมิเกชัน · ส่งออก) —
+        <div className="mt-1 flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
+          {/* 2026-05-21 ภูม brief — sidebar dropdown removed; Cargo/Freight
+              split moved here as a Segmented Control (mirrors the
+              /admin/forwarders pattern). */}
+          <AccountingSegmentPills active="freight" />
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          Freight · FCL · LCL · เคลียร์ศุลกากร · ใบขนสินค้า · ฟูมิเกชัน · ส่งออก —
           รายรับ · รายจ่าย · ผู้ติดต่อ · การเงิน · การบัญชี
         </p>
       </div>

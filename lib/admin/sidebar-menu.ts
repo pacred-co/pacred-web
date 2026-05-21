@@ -243,25 +243,30 @@ const itemReportsAll: MenuItem = {
   icon: "BarChart3",
 };
 
-/** Unified "ระบบบัญชี" sidebar entry — Pacred is ONE company, so the
- * legacy 3-companies-split (CargoAndFreight + Freight + Cargo) collapses
- * to a single Accounting parent with 2 children (ภูม brief 2026-05-20 ค่ำ).
+/** Unified "ระบบบัญชี" sidebar entry — single leaf (ภูม brief 2026-05-21
+ *  night: mirror the /admin/forwarders pattern; move Cargo/Freight split
+ *  out of the sidebar dropdown into a Segmented Control inside the page
+ *  header).
  *
- * Click "ระบบบัญชี" → dropdown lists Cargo + Freight. Each child lands
- * on its hub (`/admin/accounting/{cargo,freight}`) which carries the
- * page top-menubar legacy-style (PageTopMenubar items={CARGO_MENUBAR | FREIGHT_MENUBAR}).
+ *  Sidebar lands on /admin/accounting/cargo by default; the pill at the
+ *  top of that page flips to /admin/accounting/freight without leaving
+ *  the header. Both hub pages render their own page-top-menubar legacy-
+ *  style (PageTopMenubar items={CARGO_MENUBAR | FREIGHT_MENUBAR}).
  *
- * The two stand-alone blocks (`blockAccCargo` + `blockAccFreight`) used
- * by the pre-2026-05-20-evening sidebars are RETIRED — use this single
- * `blockAccounting` everywhere.
+ *  Tombstone — the previous shape was a 2-child dropdown:
+ *    children: [
+ *      { labelKey: "accounting.cargo",   href: "/admin/accounting/cargo",   icon: "Package" },
+ *      { labelKey: "accounting.freight", href: "/admin/accounting/freight", icon: "Truck" },
+ *    ]
+ *  Removed 2026-05-21 night so the sidebar stays slim + every cross-
+ *  page split lives in head menubars (Pacred-is-one-company pattern).
+ *
+ *  Component: components/admin/accounting-segment-pills.tsx
  */
 const blockAccounting: MenuItem = {
   labelKey: "accounting.title",
+  href: "/admin/accounting/cargo",
   icon: "Landmark",
-  children: [
-    { labelKey: "accounting.cargo",   href: "/admin/accounting/cargo",   icon: "Package" },
-    { labelKey: "accounting.freight", href: "/admin/accounting/freight", icon: "Truck" },
-  ],
 };
 
 /** legacy OOP/Cargo/menu-settings.php — ตั้งค่าระบบ Cargo */
