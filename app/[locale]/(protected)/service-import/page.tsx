@@ -739,10 +739,29 @@ export default async function ServiceImportPage({
                             <div className="content-header-right col-md-4 col-12">
                               <div className="float-md-right">
                                 <div className="text-center text-md-right">
-                                  <a href="#add-forwarder" data-toggle="modal" data-target="#add-forwarder">
-                                    <button className="btn btn-sm btn-circle btn-success text-white">
+                                  {/* Legacy forwarder.php L488 nests <button>
+                                      inside <a> — invalid HTML5 (interactive
+                                      inside interactive). Browsers render the
+                                      nested button at wrong size + skip the
+                                      anchor's modal-trigger on click. Owner
+                                      flagged it 2026-05-22 as "ไม่สมมาตร".
+                                      Fix: drop the inner <button>, style the
+                                      anchor itself as the green circle pill —
+                                      same visual, valid HTML, single click
+                                      target for the data-toggle modal trigger. */}
+                                  <a
+                                    href="#add-forwarder"
+                                    data-toggle="modal"
+                                    data-target="#add-forwarder"
+                                    className="d-inline-flex align-items-center"
+                                    style={{ gap: "0.5rem" }}
+                                  >
+                                    <span
+                                      className="btn btn-sm btn-circle btn-success text-white d-inline-flex align-items-center justify-content-center"
+                                      role="presentation"
+                                    >
                                       <i className="ft-plus"></i>
-                                    </button>
+                                    </span>
                                     <span className="font-normal text-dark lang-add-forwarder">
                                       เพิ่มรายการนำเข้า
                                     </span>

@@ -200,10 +200,24 @@ export default async function AddressesPage({
                                 so the link stays on /addresses, carrying the
                                 legacy `?page` flag that the modal-open JS
                                 keyed off. */}
-                            <Link href="/addresses?page=1">
-                              <button className="btn btn-sm btn-circle btn-success text-white">
+                            {/* Legacy nested <button> inside the <Link>
+                                anchor is invalid HTML5 (interactive nested in
+                                interactive) → browser renders the inner button
+                                wrong size + may swallow the parent's nav click.
+                                Drop the inner <button>; style the anchor body
+                                directly. Same visual, valid HTML, single click
+                                target for the Next.js Link nav. */}
+                            <Link
+                              href="/addresses?page=1"
+                              className="d-inline-flex align-items-center"
+                              style={{ gap: "0.5rem" }}
+                            >
+                              <span
+                                className="btn btn-sm btn-circle btn-success text-white d-inline-flex align-items-center justify-content-center"
+                                role="presentation"
+                              >
                                 <i className="ft-plus"></i>
-                              </button>
+                              </span>
                               <span className="font-normal text-dark">เพิ่มที่อยู่</span>
                             </Link>
                           </div>
