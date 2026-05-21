@@ -58,7 +58,7 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
     children: [
       { label: "รวมบิลสินค้า",         href: "/admin/forwarders/combine-bill" },
       { label: "ประวัติเข้าโกดังไทย", href: "/admin/forwarders/warehouse-history" },
-      { label: "มอบงานคนขับ",         href: "/admin/forwarders/drivers" },
+      { label: "มอบงานคนขับ",         href: "/admin/drivers" },
     ],
   },
   {

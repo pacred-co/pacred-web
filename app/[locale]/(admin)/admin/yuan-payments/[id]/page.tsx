@@ -1,0 +1,226 @@
+/**
+ * /admin/yuan-payments/[id] — read-only yuan payment detail (Wave 7 fix · 2026-05-21 night).
+ *
+ * The /admin dashboard's "payment" tab "ดู/แก้ไข" link pointed at
+ * `/admin/yuan-payments/${row.id}` but no route existed → 404. This page
+ * resolves the row id against `tb_payment` + `tb_users` and renders the
+ * basics + the slip image (if any).
+ *
+ * Wave 8 backlog: approve/reject buttons + auto-credit wallet on approve
+ * (mirrors the legacy `tb_payment.paystatus '1' → '2' → '3'` flow). For
+ * now read-only; ops uses the legacy PHP admin if urgent.
+ *
+ * Verified prod schema 2026-05-21 via REST: tb_payment(id, paydate,
+ *   paydeposit, paystatus, paytype, paydetail, payyuan, payrate, payratecost,
+ *   paythb, paythbcost, payprofitthb, paydateadmin, userid, adminid,
+ *   adminidupdate, payadminidcreator, paylockdate, imagesslip,
+ *   certifiedtruecopy, imagesslipadmin).
+ */
+
+import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+
+export const dynamic = "force-dynamic";
+
+const STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ",
+  "2": "อนุมัติแล้ว",
+  "3": "ปฏิเสธ",
+};
+const STATUS_CLS: Record<string, string> = {
+  "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
+  "2": "bg-green-100 text-green-700 border-green-200",
+  "3": "bg-red-100 text-red-700 border-red-200",
+};
+// paytype legacy values: 1=alipay 2=wechat 3=union 4=usdt ... (per legacy `payment.php`)
+const PAYTYPE_LABEL: Record<string, string> = {
+  "1": "Alipay",
+  "2": "Wechat",
+  "3": "Union",
+  "4": "USDT",
+};
+
+type PaymentRow = {
+  id: number;
+  paydate: string | null;
+  paystatus: string | null;
+  paytype: string | null;
+  paydetail: string | null;
+  payyuan: number | null;
+  payrate: number | null;
+  paythb: number | null;
+  paythbcost: number | null;
+  payprofitthb: number | null;
+  paydateadmin: string | null;
+  userid: string;
+  adminid: string | null;
+  imagesslip: string | null;
+  imagesslipadmin: string | null;
+};
+type UserRow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+  useremail: string | null;
+};
+
+export default async function AdminYuanPaymentDetail({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  await requireAdmin(["ops", "accounting", "super"]);
+  const { id: idParam } = await params;
+  const id = Number(idParam);
+  if (!Number.isFinite(id) || id <= 0) notFound();
+
+  const admin = createAdminClient();
+  const { data: rowRaw } = await admin
+    .from("tb_payment")
+    .select(
+      "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!rowRaw) notFound();
+  const row = rowRaw as unknown as PaymentRow;
+
+  const { data: userRaw } = await admin
+    .from("tb_users")
+    .select("userid,username,userlastname,usertel,useremail")
+    .eq("userid", row.userid)
+    .maybeSingle();
+  const user = userRaw as unknown as UserRow | null;
+
+  const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";
+  const status = row.paystatus ?? "1";
+  const paytype = row.paytype ?? "";
+
+  return (
+    <main className="p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">
+            ADMIN · ฝากโอนหยวน
+          </p>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <h1 className="text-2xl font-bold font-mono">#{row.id}</h1>
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                STATUS_CLS[status] ?? "bg-gray-100 text-gray-600 border-gray-200"
+              }`}
+            >
+              {STATUS_LABEL[status] ?? `status ${status}`}
+            </span>
+            {paytype ? (
+              <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs">
+                {PAYTYPE_LABEL[paytype] ?? `type ${paytype}`}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted mt-1">
+            Wave 7 read-only · ปุ่ม approve/reject + auto-credit wallet → Wave 8
+          </p>
+        </div>
+        <Link href="/admin/yuan-payments" className="text-xs text-primary-600 hover:underline">
+          ← รายการ
+        </Link>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
+        <KV label="ลูกค้า" value={`${customerName} (${row.userid})`} />
+        <KV label="โทร · อีเมล" value={`${user?.usertel ?? "-"} · ${user?.useremail ?? "-"}`} />
+        <KV
+          label="ยอดหยวน (¥)"
+          value={`¥${Number(row.payyuan ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          mono
+        />
+        <KV label="เรท" value={String(row.payrate ?? 0)} mono />
+        <KV
+          label="ยอดโอน (THB)"
+          value={`฿${Number(row.paythb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          mono
+        />
+        <KV
+          label="ทุน (THB)"
+          value={`฿${Number(row.paythbcost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          mono
+        />
+        <KV
+          label="กำไร (THB)"
+          value={`฿${Number(row.payprofitthb ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          mono
+        />
+        {row.paydetail ? <KV label="รายละเอียดผู้รับ" value={row.paydetail} /> : null}
+        <KV
+          label="วันที่สร้าง"
+          value={row.paydate ? new Date(row.paydate).toLocaleString("th-TH") : "-"}
+        />
+        <KV
+          label="วันที่อนุมัติ"
+          value={row.paydateadmin ? new Date(row.paydateadmin).toLocaleString("th-TH") : "-"}
+        />
+        {row.adminid ? <KV label="ผู้อนุมัติ" value={row.adminid} mono /> : null}
+      </div>
+
+      {row.imagesslip && (
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+          <p className="text-xs font-semibold text-muted mb-2">สลิป (ลูกค้าอัปโหลด)</p>
+          <a
+            href={row.imagesslip}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={row.imagesslip} alt="สลิป" className="max-w-full max-h-[600px]" />
+          </a>
+          <p className="text-xs text-muted mt-2 break-all">{row.imagesslip}</p>
+        </div>
+      )}
+
+      {row.imagesslipadmin && (
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+          <p className="text-xs font-semibold text-muted mb-2">สลิป (แอดมินอัปโหลด)</p>
+          <a
+            href={row.imagesslipadmin}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={row.imagesslipadmin} alt="สลิปแอดมิน" className="max-w-full max-h-[600px]" />
+          </a>
+          <p className="text-xs text-muted mt-2 break-all">{row.imagesslipadmin}</p>
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap pt-2">
+        <Link
+          href="/admin/yuan-payments"
+          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
+        >
+          ← รายการ
+        </Link>
+        <Link
+          href={`/admin/customers/${encodeURIComponent(row.userid)}`}
+          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
+        >
+          ดูโปรไฟล์ลูกค้า →
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+function KV({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between border-b border-border/40 py-1.5 gap-3">
+      <span className="text-muted shrink-0">{label}</span>
+      <span className={mono ? "font-mono text-right" : "text-right"}>{value}</span>
+    </div>
+  );
+}

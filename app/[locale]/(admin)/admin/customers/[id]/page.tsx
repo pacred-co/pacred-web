@@ -6,6 +6,7 @@ import { AssignRepForm } from "./assign-rep";
 import { CustomerActions } from "./customer-actions";
 import { CreditLineForm } from "./credit-line-form";
 import { ViewAsCustomerButton } from "./view-as-customer-button";
+import { renderLegacyCustomerView } from "./legacy-view";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [id]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
@@ -68,7 +69,17 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
       .limit(15),
   ]);
 
-  if (!profile) notFound();
+  if (!profile) {
+    // Wave 7 (2026-05-21 night): the /admin/customers list + dashboard
+    // "ลูกค้าไม่ใช้งาน" tab both pass the legacy text userid (PR10691 /
+    // PCS10843), not a uuid. The rebuilt-schema `profiles` table is
+    // essentially empty post-D1 → without this fallback every row click
+    // 404'd. Resolve against `tb_users.userid` and render a faithful
+    // legacy customer card from the migrated tb_* tables.
+    const legacy = await renderLegacyCustomerView(id);
+    if (legacy) return legacy;
+    notFound();
+  }
   type Profile = typeof profile & {
     member_code: string | null;
     account_type: string;

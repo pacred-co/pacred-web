@@ -3,11 +3,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { AdminServiceOrderUpdateForm } from "./update-form";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+import { renderLegacyServiceOrderView } from "./legacy-view";
 
 // Wave 3 cleanup (2026-05-20 ค่ำ): the "Cargo shipments (spine)" section
 // was removed when cargo_shipments/cargo_containers were retired under
 // D1 Option A. The container view lives at `/admin/report-cnt` (faithful
 // port of report-cnt.php) which reads tb_forwarder GROUP BY fCabinetNumber.
+//
+// Wave 7 (2026-05-21 night): added legacy fallback that reads `tb_header_order`
+// when the rebuilt `service_orders` row is missing. Pattern mirrors
+// `forwarders/[fNo]/page.tsx` legacy fallback. Without this fallback every
+// click from the /admin dashboard tabs + /admin/service-orders list 404'd
+// because the rebuilt schema is empty on prod (the real customer data lives
+// in `tb_header_order` after the D1 pivot).
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminServiceOrderDetail({ params }: { params: Promise<{ hNo: string }> }) {
   const { hNo } = await params;
@@ -27,7 +37,12 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
     .eq("h_no", hNo)
     .maybeSingle();
 
-  if (!data) notFound();
+  if (!data) {
+    // Wave 7 legacy fallback — read tb_header_order by hno
+    const legacy = await renderLegacyServiceOrderView(hNo);
+    if (legacy) return legacy;
+    notFound();
+  }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; account_type: "personal" | "juristic" | null };
   const o = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(o.profile) ? o.profile[0] ?? null : o.profile;
