@@ -8,6 +8,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
+import { logger, redactId } from "@/lib/logger";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -440,6 +441,118 @@ export async function adminMarkForwarderPaid(
     revalidatePath(`/admin/forwarders/${forwarder.f_no}`);
     revalidatePath("/admin/wallet");
     return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+  });
+}
+
+// ── Bulk status update — tb_forwarder (Wave 5 P0) ────────────────────────────
+//
+// Mirrors `adminBulkUpdateForwarderStatus` (above, REBUILT `forwarders` table
+// path) but mutates the legacy `tb_forwarder` table that the rewritten
+// /admin/forwarders page actually reads from (Wave 3 P0 #1).
+//
+// Legacy columns (per migration 0081):
+//   fstatus           varchar(2)  — '1'..'7' · '99'
+//   fdateadminstatus  timestamp   — UPDATE on every admin status change
+//   fdatestatusN      timestamp   — stamp the matching column for the new status
+//   userid            varchar(10) — legacy text id (joins tb_users)
+//
+// Notification: the legacy `tb_users.userid` is a text key, not a `profile_id`
+// uuid that sendNotification() expects. The bridge from userid → profile_id
+// (`tb_user_id_to_profile`) is not yet built; for now we just log the intent
+// and add a TODO. Status change still lands in the DB + audit log; customer
+// just doesn't get an in-app push yet. This matches the trade-off in the
+// page comments (`forwarders-table.tsx` L24-25).
+//
+// Keep the existing rebuilt-table `adminBulkUpdateForwarderStatus` until the
+// last consumer migrates — both lanes coexist during the D1 transition.
+
+const TB_FORWARDER_STATUSES = ["1", "2", "3", "4", "5", "6", "7", "99"] as const;
+type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
+
+const bulkTbSchema = z.object({
+  fids:    z.array(z.number().int().positive()).min(1).max(100),
+  fstatus: z.enum(TB_FORWARDER_STATUSES),
+});
+
+// `fdatestatusN` map — only stamp a column for statuses that have one
+// (status '1' has no dedicated date column · '99' is "special" too).
+const TB_STATUS_DATE_COL: Record<TbForwarderStatus, string | null> = {
+  "1":  null,
+  "2":  "fdatestatus2",
+  "3":  "fdatestatus3",
+  "4":  "fdatestatus4",
+  "5":  "fdatestatus5",
+  "6":  "fdatestatus6",
+  "7":  "fdatestatus7",
+  "99": null,
+};
+
+export async function adminBulkUpdateForwarderTbStatus(
+  input: z.infer<typeof bulkTbSchema>,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const parsed = bulkTbSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fids, fstatus } = parsed.data;
+
+  return withAdmin<{ updated: number }>(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Snapshot before — for audit log + change detection (skip notify on no-op).
+    const { data: before, error: readErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, userid, fidorco")
+      .in("id", fids);
+    if (readErr) return { ok: false, error: readErr.message };
+    if (!before || before.length === 0) return { ok: false, error: "not_found" };
+
+    const beforeRows = before as unknown as Array<{
+      id: number;
+      fstatus: string;
+      userid: string;
+      fidorco: string | null;
+    }>;
+
+    const nowIso = new Date().toISOString();
+    const dateCol = TB_STATUS_DATE_COL[fstatus];
+    const update: Record<string, unknown> = {
+      fstatus,
+      fdateadminstatus: nowIso,
+      adminidupdate:    adminId,
+      ...(dateCol ? { [dateCol]: nowIso } : {}),
+    };
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update(update)
+      .in("id", fids);
+    if (updErr) return { ok: false, error: updErr.message };
+
+    await logAdminAction(adminId, "forwarder.bulk_update_tb", "tb_forwarder", "bulk", {
+      fids,
+      before_statuses: beforeRows.map((r) => ({ id: r.id, fstatus: r.fstatus })),
+      after:           { fstatus },
+    });
+
+    // TODO: notify each customer. The bridge from legacy `tb_users.userid`
+    // (text e.g. "PCS10843") → Supabase `profiles.id` (uuid) is not yet
+    // wired (see `lib/auth/pcs-legacy-bridge.ts` — currently only mints a
+    // profile at first login, no reverse lookup). For now we log the
+    // intended notifications so they surface in the audit trail; once the
+    // userid→profile_id resolver exists, swap the log line for the actual
+    // sendNotification(profileId, notify.forwarderStatusChanged(...)).
+    const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
+    if (changed.length > 0) {
+      logger.info("forwarder.bulk_update_tb", `would notify ${changed.length} customers (no userid→profile_id resolver yet)`, {
+        adminId:       redactId(adminId),
+        fstatus,
+        userids_count: changed.length,
+      });
+    }
+
+    revalidatePath("/admin/forwarders");
+    return { ok: true, data: { updated: beforeRows.length } };
   });
 }
 

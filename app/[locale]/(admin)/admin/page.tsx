@@ -1,14 +1,61 @@
+/**
+ * /admin — Home dashboard (faithful port · Wave 6 P0 — 2026-05-21)
+ *
+ * Rewritten from the rebuilt-schema reads (service_orders / forwarders /
+ * yuan_payments / profiles / wallet / wallet_transactions / sales_payouts
+ * / containers) — which on production are EMPTY (the rebuilt tables were
+ * never backfilled). Result before this rewrite: every revenue card showed
+ * ฿0.00 and "ลูกค้าที่ยังไม่ใช้งาน: 10" (10 test profiles), instead of
+ * the REAL 8,898 migrated PCS customers + 47,626 tb_forwarder rows +
+ * 958 tb_cnt + thousands of tb_header_order / tb_payment / tb_wallet_hs.
+ *
+ * Same pattern as Wave 3 P0 #1 (`/admin/forwarders` rewrite) — every
+ * stat card and every tab queue now reads the legacy `tb_*` tables
+ * loaded by migration 0081. Tab labels + JSX layout are kept intact;
+ * the tab keys are renamed where the rebuilt-app term no longer makes
+ * sense in the legacy model (e.g. forwarder6 = fstatus='4' arrived).
+ *
+ * Legacy column reference:
+ *   tb_users          — userid, username, userlastname, usertel, useremail,
+ *                       userregistered, useractive ('1'=ใช้งานแล้ว)
+ *   tb_forwarder      — fdate, fstatus ('1'..'7','99'), ftotalprice, userid,
+ *                       fidorco, fcabinetnumber, fcredit, paydeposit,
+ *                       fwarehousename, ftransporttype, fweight
+ *   tb_header_order   — hdate, hstatus ('1'..'6'), hno, htitle, userid,
+ *                       htotalpriceuser ('ราคาขายลูกค้า' THB)
+ *   tb_payment        — paydate, paystatus ('1'..), paythb, payyuan, userid,
+ *                       paytype ('1'=alipay '2'=wechat '3'=bank?), imagesslip
+ *   tb_wallet         — userid, wallettotal (running balance)
+ *   tb_wallet_hs      — date, status ('1'=รอ '2'=อนุมัติ '3'=ปฏิเสธ),
+ *                       amount (>0 deposit, <0 withdraw), userid
+ *   tb_cnt            — cntstatus ('1'=รอจ่าย), cntamount, date
+ *   tb_settings       — rgdefault (เรทสั่งซื้อ), rsdefault (sale), rpdefault (โอน)
+ */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
 
+// Tab keys = the 13 bottom queues. Renamed where the legacy concept
+// diverges from the rebuilt-app terminology (e.g. forwarder6 = arrived).
 type TabKey =
-  | "topup" | "withdraw" | "payShop" | "shop1" | "shop2" | "shop4"
-  | "forwarder1" | "forwarder5" | "forwarderC" | "forwarder6" | "forwarder62"
-  | "payment" | "inactiveCustomers";
+  | "topup"               // tb_wallet_hs status='1' amount>0
+  | "withdraw"            // tb_wallet_hs status='1' amount<0
+  | "payShop"             // sales_payouts pending (Pacred-original — no legacy equivalent)
+  | "shop1"               // tb_header_order hstatus='1' (รอดำเนินการ)
+  | "shop2"               // tb_header_order hstatus='2' (รอชำระเงิน)
+  | "shop4"               // tb_header_order hstatus='4' (รอร้านจีนจัดส่ง)
+  | "forwarder1"          // tb_forwarder fstatus='1' (รอเข้าโกดังจีน)
+  | "forwarder5"          // tb_forwarder fstatus='5' (รอชำระเงิน)
+  | "forwarderC"          // tb_forwarder fcredit='1'
+  | "forwarder6"          // tb_forwarder fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
+  | "forwarder62"         // tb_forwarder fstatus='6' (เตรียมส่ง / กำลังจัดส่ง)
+  | "payment"             // tb_payment paystatus='1' (รอตรวจสอบ)
+  | "inactiveCustomers";  // tb_users useractive='0'
 
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
@@ -27,90 +74,129 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const monthLabel = `${THAI_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`;
 
+  // Stat cards — revenue & user totals. ALL queries fan-out in parallel.
+  // Cancelled status (legacy):
+  //   tb_forwarder.fstatus='7' = ยกเลิก
+  //   tb_header_order.hstatus='6' = ยกเลิกออเดอร์
+  // Note: tb_payment has no explicit cancelled state (paystatus 1=รอ);
+  // we treat paystatus='2' (อนุมัติ) as the "completed" set per legacy
+  // comment on the column.
   const [
     settings,
     revShopMonth, revShopToday,
     revForwarderMonth, revForwarderToday,
     revYuanMonth, revYuanToday,
     walletTotal,
-    inactiveCustomers,
-    activeCustomerProfiles,
-    totalProfiles,
-    cancelledOrders,
+    inactiveCustomersCount,
+    activeCustomersCount,
+    totalCustomersCount,
+    cancelledOrdersCount,
     walletDepositsPending,
     walletWithdrawsPending,
     salesPayoutsPending,
     yuanPending,
-    serviceOrdersPending, serviceOrdersAwaitPay, serviceOrdersOrdered, serviceOrdersChnDispatch,
-    forwardersPending, forwardersCredit, forwardersDelivery, forwardersInDelivery,
-    containersActive,
+    shop1Count, shop2Count, shop4Count,
+    forwarder1Count, forwarder5Count, forwarderCreditCount,
+    forwarder6Count, forwarder62Count,
+    containersInTransitRows,
   ] = await Promise.all([
-    admin.from("settings").select("yuan_rate, service_fee").eq("id", 1).maybeSingle<{ yuan_rate: number; service_fee: number }>(),
-    admin.from("service_orders").select("total_thb").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("service_orders").select("total_thb").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", monthStart).eq("status", "completed"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", todayStart).eq("status", "completed"),
-    admin.from("wallet").select("balance"),
-    // "used a service" vs "registered but never used" — keyed on
-    // `profiles.is_active` (the cron `/api/cron/refresh-active-customers`
-    // flips false→true when a profile has real order/forwarder/yuan
-    // activity). NOT `profiles.status` — that is the *account* state
-    // (active/incomplete/suspended) and would count every fresh signup
-    // as "ใช้งานแล้ว" even though they've never transacted.
-    admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", false),
-    admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
-    admin.from("profiles").select("id", { count: "exact", head: true }),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "cancelled").gte("created_at", monthStart),
-    admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "deposit").eq("status", "pending"),
-    admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "withdraw").eq("status", "pending"),
+    admin.from("tb_settings").select("rgdefault,rsdefault,rpdefault").eq("id", 1).maybeSingle<{
+      rgdefault: number | string | null;
+      rsdefault: number | string | null;
+      rpdefault: number | string | null;
+    }>(),
+    // ฝากสั่งซื้อ (shop) revenue — htotalpriceuser is the THB the customer pays.
+    admin.from("tb_header_order").select("htotalpriceuser").gte("hdate", monthStart).neq("hstatus", "6"),
+    admin.from("tb_header_order").select("htotalpriceuser").gte("hdate", todayStart).neq("hstatus", "6"),
+    // ฝากนำเข้า (forwarder) revenue — ftotalprice is the THB charged.
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", monthStart).neq("fstatus", "7"),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", todayStart).neq("fstatus", "7"),
+    // ฝากโอน (yuan transfer) revenue — paythb is THB equivalent · paystatus='2'=อนุมัติ.
+    admin.from("tb_payment").select("paythb").gte("paydate", monthStart).eq("paystatus", "2"),
+    admin.from("tb_payment").select("paythb").gte("paydate", todayStart).eq("paystatus", "2"),
+    // Wallet total — running balance per customer (`wallettotal`); summed in app.
+    admin.from("tb_wallet").select("wallettotal").limit(50_000),
+    // Customer counts — useractive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
+    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "0"),
+    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "1"),
+    admin.from("tb_users").select("id", { count: "exact", head: true }),
+    // Cancelled orders this month — hstatus='6' on tb_header_order.
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
+    // Pending queues (tab badge counts).
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").gt("amount", 0),
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").lt("amount", 0),
+    // sales_payouts — Pacred-original module (no legacy equivalent).
+    // Keep the rebuilt-app read; on prod the table is empty so the badge = 0.
+    // TODO Phase C: decide whether to retire this tab or wire it to a real
+    // legacy commission table (tb_user_sales_admin_pay status='1' looks closest).
     admin.from("sales_payouts").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("yuan_payments").select("id", { count: "exact", head: true }).in("status", ["pending", "processing"]),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_payment"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "ordered"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_chn_dispatch"),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment"),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment").eq("credit_used", true),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).in("status", ["arrived_thailand"]),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "out_for_delivery"),
-    admin.from("containers").select("id", { count: "exact", head: true }).in("status", ["preparing", "sealed", "in_transit"]),
+    // tb_payment paystatus '1' = pending (รอตรวจสอบ).
+    admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("paystatus", "1"),
+    // ฝากสั่งซื้อ tabs.
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "1"),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "2"),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "4"),
+    // ฝากนำเข้า tabs — match Wave 3 forwarders rewrite + sidebar-counts.
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "1"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fcredit", "1"),
+    // forwarder6 = "เตรียมส่ง" tab → legacy fstatus='4' (ถึงไทยแล้ว · need to deliver).
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "4"),
+    // forwarder62 = "กำลังจัดส่ง" tab → legacy fstatus='6' (เตรียมส่ง / on-truck).
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "6"),
+    // Active containers — DISTINCT fcabinetnumber from tb_forwarder where
+    // pre-arrival (fstatus 1..3). Pull rows (PostgREST has no COUNT DISTINCT).
+    admin.from("tb_forwarder")
+      .select("fcabinetnumber")
+      .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
+      .lt("fstatus", "4")
+      .limit(50_000),
   ]);
 
   const sumNum = <T extends Record<string, unknown>>(rows: T[] | null, key: keyof T): number =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
 
-  const shopMonth      = sumNum(revShopMonth.data, "total_thb");
-  const shopToday      = sumNum(revShopToday.data, "total_thb");
-  const forwarderMonth = sumNum(revForwarderMonth.data, "total_price");
-  const forwarderToday = sumNum(revForwarderToday.data, "total_price");
-  const yuanMonth      = sumNum(revYuanMonth.data, "thb_amount");
-  const yuanToday      = sumNum(revYuanToday.data, "thb_amount");
-  const walletAll      = sumNum(walletTotal.data, "balance");
+  const shopMonth      = sumNum(revShopMonth.data, "htotalpriceuser");
+  const shopToday      = sumNum(revShopToday.data, "htotalpriceuser");
+  const forwarderMonth = sumNum(revForwarderMonth.data, "ftotalprice");
+  const forwarderToday = sumNum(revForwarderToday.data, "ftotalprice");
+  const yuanMonth      = sumNum(revYuanMonth.data, "paythb");
+  const yuanToday      = sumNum(revYuanToday.data, "paythb");
+  const walletAll      = sumNum(walletTotal.data, "wallettotal");
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
-  const yuanRate   = Number(settings.data?.yuan_rate ?? 5);
+  // Settings rates — default to 5.00 (parity with legacy default constants
+  // when tb_settings row id=1 is missing). rgdefault = เรทสั่งซื้อ;
+  // rsdefault = เรท Sale (cost); rpdefault = เรทโอน.
+  const settingsRow = settings.data;
+  const rateShop     = Number(settingsRow?.rgdefault ?? 5);
+  const rateSale     = Number(settingsRow?.rsdefault ?? 5);
+  const ratePayment  = Number(settingsRow?.rpdefault ?? 5);
 
-  const totalProfilesCount = totalProfiles.count ?? 0;
-  const activeUsers        = activeCustomerProfiles.count ?? 0;
-  const inactiveUsers      = inactiveCustomers.count ?? 0;
-  const activePct          = totalProfilesCount > 0 ? Math.round((activeUsers / totalProfilesCount) * 100) : 0;
-  const inactivePct        = totalProfilesCount > 0 ? 100 - activePct : 0;
+  // DISTINCT fcabinetnumber count (1 ตู้ = 1 count, many shipments share).
+  const activeContainersCount = new Set(
+    (containersInTransitRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber),
+  ).size;
+
+  const totalUsers    = totalCustomersCount.count ?? 0;
+  const activeUsers   = activeCustomersCount.count ?? 0;
+  const inactiveUsers = inactiveCustomersCount.count ?? 0;
+  const activePct     = totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0;
+  const inactivePct   = totalUsers > 0 ? 100 - activePct : 0;
 
   // Tab counts
   const tabCounts: Record<TabKey, number> = {
     topup:              walletDepositsPending.count ?? 0,
     withdraw:           walletWithdrawsPending.count ?? 0,
     payShop:            salesPayoutsPending.count ?? 0,
-    shop1:              serviceOrdersPending.count ?? 0,
-    shop2:              serviceOrdersAwaitPay.count ?? 0,
-    shop4:              serviceOrdersOrdered.count ?? 0,
-    forwarder1:         serviceOrdersChnDispatch.count ?? 0,
-    forwarder5:         forwardersPending.count ?? 0,
-    forwarderC:         forwardersCredit.count ?? 0,
-    forwarder6:         forwardersDelivery.count ?? 0,
-    forwarder62:        forwardersInDelivery.count ?? 0,
+    shop1:              shop1Count.count ?? 0,
+    shop2:              shop2Count.count ?? 0,
+    shop4:              shop4Count.count ?? 0,
+    forwarder1:         forwarder1Count.count ?? 0,
+    forwarder5:         forwarder5Count.count ?? 0,
+    forwarderC:         forwarderCreditCount.count ?? 0,
+    forwarder6:         forwarder6Count.count ?? 0,
+    forwarder62:        forwarder62Count.count ?? 0,
     payment:            yuanPending.count ?? 0,
     inactiveCustomers:  inactiveUsers,
   };
@@ -175,9 +261,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       {/* ── Row 2: Rate strip (4 rates) ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={yuanRate.toFixed(2)} />
-          <RateChip color="red"     label="เรท Sale"   value={(yuanRate - 0.02).toFixed(2)} />
-          <RateChip color="purple"  label="เรทโอน"     value={(yuanRate - 0.04).toFixed(2)} />
+          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={rateShop.toFixed(2)} />
+          <RateChip color="red"     label="เรท Sale"   value={rateSale.toFixed(2)} />
+          <RateChip color="purple"  label="เรทโอน"     value={ratePayment.toFixed(2)} />
           <RateChip color="amber"   label="ยอดรวม"     value={formatTHB(grandTotal, true)} />
         </div>
       </section>
@@ -206,7 +292,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           tone="danger"
           icon={<XCircle />}
           label="ออเดอร์ที่ลูกค้ายกเลิก"
-          value={cancelledOrders.count ?? 0}
+          value={cancelledOrdersCount.count ?? 0}
           progress={100}
           subtitle={`เดือน ${THAI_MONTHS[now.getMonth()]}`}
           href="/admin/service-orders?status=cancelled"
@@ -242,9 +328,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
               className="inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50 whitespace-nowrap"
             >
               🚛 รายการตู้
-              {(containersActive.count ?? 0) > 0 && (
+              {activeContainersCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold px-1.5">
-                  {containersActive.count}
+                  {activeContainersCount}
                 </span>
               )}
             </Link>
@@ -268,7 +354,7 @@ function formatTHB(n: number, compact = false): string {
 type RowShape = {
   id: string;
   created_at: string;
-  member_code: string | null;
+  member_code: string | null;     // legacy userid (e.g. "PCS10843")
   customer_name: string | null;
   amount: number;
   detail: string;
@@ -276,197 +362,256 @@ type RowShape = {
   status: string;
 };
 
+type RawUserRow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
+
+/**
+ * Resolve a set of legacy userid → display name + phone in a single
+ * tb_users query. Returns an empty Map if no ids. PostgREST `.in()` is
+ * the only reliable join — the legacy FK is by `userid` text not a
+ * proper relational FK (same constraint as /admin/forwarders rewrite).
+ */
+async function loadUsersByUserId(
+  admin: ReturnType<typeof createAdminClient>,
+  userIds: string[],
+): Promise<Map<string, RawUserRow>> {
+  const unique = Array.from(new Set(userIds.filter(Boolean)));
+  if (unique.length === 0) return new Map();
+  const { data } = await admin
+    .from("tb_users")
+    .select("userid,username,userlastname,usertel")
+    .in("userid", unique);
+  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]));
+}
+
+function nameOf(u: RawUserRow | undefined): string {
+  if (!u) return "—";
+  const n = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim();
+  return n || "—";
+}
+
 async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
   const admin = createAdminClient();
   switch (tab) {
-    case "topup": {
-      const { data } = await admin.from("wallet_transactions")
-        .select(`
-          id, amount, created_at, slip_url, status,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
-        .eq("kind", "deposit").eq("status", "pending")
-        .order("created_at", { ascending: false }).limit(50);
-      return mapWalletRows(data as RawTxRow[], "/admin/wallet");
-    }
+    // ── Wallet queues (tb_wallet_hs) ───────────────────────────────────────
+    // Deposit pending = status='1' AND amount > 0
+    // Withdraw pending = status='1' AND amount < 0
+    // (legacy stores the two as same table, signed on `amount`).
+    case "topup":
     case "withdraw": {
-      const { data } = await admin.from("wallet_transactions")
-        .select(`
-          id, amount, created_at, slip_url, status,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
-        .eq("kind", "withdraw").eq("status", "pending")
-        .order("created_at", { ascending: false }).limit(50);
-      return mapWalletRows(data as RawTxRow[], "/admin/wallet");
+      let q = admin
+        .from("tb_wallet_hs")
+        .select("id,date,amount,status,imagesslip,userid")
+        .eq("status", "1")
+        .order("date", { ascending: false, nullsFirst: false })
+        .limit(50);
+      q = tab === "topup" ? q.gt("amount", 0) : q.lt("amount", 0);
+      const { data } = await q;
+      const rows = (data ?? []) as unknown as RawWalletHsRow[];
+      const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      return rows.map((r) => {
+        const u = users.get(r.userid);
+        return {
+          id: String(r.id),
+          created_at: r.date ?? "",
+          member_code: r.userid,
+          customer_name: nameOf(u),
+          amount: Math.abs(Number(r.amount ?? 0)),
+          detail: r.imagesslip
+            ? `สลิป: <a class="text-blue-600 underline" href="${r.imagesslip}" target="_blank">ดูสลิป</a>`
+            : "ไม่มีสลิป",
+          link: `/admin/wallet/${r.id}`,
+          status: r.status ?? "1",
+        };
+      });
     }
-    case "shop1": case "shop2": case "shop4": case "forwarder1": {
-      const statusMap: Record<string, string> = { shop1: "pending", shop2: "awaiting_payment", shop4: "ordered", forwarder1: "awaiting_chn_dispatch" };
-      const { data } = await admin.from("service_orders")
-        .select(`
-          id, h_no, status, total_thb, created_at, title,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
-        .eq("status", statusMap[tab])
-        .order("created_at", { ascending: false }).limit(50);
-      return mapOrderRows(data as RawOrderRow[]);
+
+    // ── ฝากสั่งซื้อ (tb_header_order) ──────────────────────────────────────
+    // shop1 = hstatus='1' (รอดำเนินการ)
+    // shop2 = hstatus='2' (รอชำระเงิน)
+    // shop4 = hstatus='4' (รอร้านจีนจัดส่ง)
+    // forwarder1 (label "รอเข้าโกดังจีน") = tb_forwarder fstatus='1' — handled below.
+    case "shop1":
+    case "shop2":
+    case "shop4": {
+      const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop4: "4" };
+      const { data } = await admin
+        .from("tb_header_order")
+        .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid")
+        .eq("hstatus", statusMap[tab])
+        .order("hdate", { ascending: false, nullsFirst: false })
+        .limit(50);
+      const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
+      const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      return rows.map((r) => {
+        const u = users.get(r.userid);
+        return {
+          id: String(r.id),
+          created_at: r.hdate ?? "",
+          member_code: r.userid,
+          customer_name: nameOf(u),
+          amount: Number(r.htotalpriceuser ?? 0),
+          detail: `${r.hno ?? "—"} · ${r.htitle ?? "ไม่มีชื่อ"}`,
+          link: r.hno ? `/admin/service-orders/${encodeURIComponent(r.hno)}` : "/admin/service-orders",
+          status: r.hstatus ?? "1",
+        };
+      });
     }
-    case "forwarder5": case "forwarderC": case "forwarder6": case "forwarder62": {
-      let query = admin.from("forwarders")
-        .select(`
-          id, f_no, status, total_price, created_at,
-          source_warehouse, transport_type, weight_kg,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
-        .order("created_at", { ascending: false }).limit(50);
-      if (tab === "forwarder5")       query = query.eq("status", "pending_payment");
-      else if (tab === "forwarderC")  query = query.eq("status", "pending_payment").eq("credit_used", true);
-      else if (tab === "forwarder6")  query = query.eq("status", "arrived_thailand");
-      else                            query = query.eq("status", "out_for_delivery");
-      const { data } = await query;
-      return mapForwarderRows(data as RawForwarderRow[]);
+
+    // ── ฝากนำเข้า (tb_forwarder) ───────────────────────────────────────────
+    // forwarder1   = fstatus='1' (รอเข้าโกดังจีน)
+    // forwarder5   = fstatus='5' (รอชำระเงิน)
+    // forwarderC   = fcredit='1'
+    // forwarder6   = fstatus='4' (ถึงไทยแล้ว · "เตรียมส่ง" queue)
+    // forwarder62  = fstatus='6' (กำลังจัดส่ง)
+    case "forwarder1":
+    case "forwarder5":
+    case "forwarderC":
+    case "forwarder6":
+    case "forwarder62": {
+      let q = admin
+        .from("tb_forwarder")
+        .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,userid,fcabinetnumber,fcredit")
+        .order("fdate", { ascending: false, nullsFirst: false })
+        .limit(50);
+      if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
+      else if (tab === "forwarder5")  q = q.eq("fstatus", "5");
+      else if (tab === "forwarderC")  q = q.eq("fcredit", "1");
+      else if (tab === "forwarder6")  q = q.eq("fstatus", "4");
+      else                            q = q.eq("fstatus", "6");
+      const { data } = await q;
+      const rows = (data ?? []) as unknown as RawForwarderRow[];
+      const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      return rows.map((r) => {
+        const u = users.get(r.userid);
+        const transportLabel =
+          r.ftransporttype === "1" ? "🚛 รถ"
+          : r.ftransporttype === "2" ? "🚢 เรือ"
+          : r.ftransporttype === "3" ? "✈️ แอร์"
+          : r.ftransporttype ?? "—";
+        const fno = r.fidorco ?? String(r.id);
+        return {
+          id: String(r.id),
+          created_at: r.fdate ?? "",
+          member_code: r.userid,
+          customer_name: nameOf(u),
+          amount: Number(r.ftotalprice ?? 0),
+          detail: `${fno} · ${transportLabel} · ${Number(r.fweight ?? 0).toFixed(2)} kg`,
+          link: `/admin/forwarders/${encodeURIComponent(fno)}`,
+          status: r.fstatus ?? "1",
+        };
+      });
     }
+
+    // ── ฝากโอน (tb_payment) ────────────────────────────────────────────────
+    // paystatus '1' = รอตรวจสอบ; legacy paytype 1=alipay 2=wechat 3=bank.
     case "payment": {
-      const { data } = await admin.from("yuan_payments")
-        .select(`
-          id, yuan_amount, thb_amount, channel, status, created_at,
-          profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
-        `)
-        .in("status", ["pending", "processing"])
-        .order("created_at", { ascending: false }).limit(50);
-      return mapPaymentRows(data as RawPaymentRow[]);
+      const { data } = await admin
+        .from("tb_payment")
+        .select("id,paydate,paystatus,paytype,payyuan,paythb,userid")
+        .eq("paystatus", "1")
+        .order("paydate", { ascending: false, nullsFirst: false })
+        .limit(50);
+      const rows = (data ?? []) as unknown as RawPaymentRow[];
+      const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      return rows.map((r) => {
+        const u = users.get(r.userid);
+        const channelLabel =
+          r.paytype === "1" ? "Alipay"
+          : r.paytype === "2" ? "WeChat"
+          : r.paytype === "3" ? "Bank"
+          : (r.paytype ?? "—");
+        return {
+          id: String(r.id),
+          created_at: r.paydate ?? "",
+          member_code: r.userid,
+          customer_name: nameOf(u),
+          amount: Number(r.paythb ?? 0),
+          detail: `${channelLabel} · ¥${Number(r.payyuan ?? 0).toFixed(2)}`,
+          link: `/admin/yuan-payments/${r.id}`,
+          status: r.paystatus ?? "1",
+        };
+      });
     }
+
+    // ── เบิกเงินค่าสินค้า (sales_payouts — Pacred-original) ────────────────
+    // No 1:1 legacy table. Closest legacy is tb_user_sales_admin_pay
+    // (status='1' = รออนุมัติ) but it pays the SALES STAFF, not the
+    // customer — semantically different. Keep the rebuilt read for now;
+    // on prod the table is empty so the tab will say "no rows" until
+    // Phase C decides whether to retire the tab or re-wire it.
+    // TODO Phase C — see file header.
     case "payShop": {
-      const { data } = await admin.from("sales_payouts")
+      const { data } = await admin
+        .from("sales_payouts")
         .select(`
           id, amount, status, created_at,
           profile:profiles!profile_id ( member_code, first_name, last_name, company_name )
         `)
         .eq("status", "pending")
-        .order("created_at", { ascending: false }).limit(50);
-      return mapPayoutRows(data as RawPayoutRow[]);
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return ((data ?? []) as RawPayoutRow[]).map((r) => {
+        const p = pickProfile(r.profile);
+        return {
+          id: String(r.id),
+          created_at: r.created_at,
+          member_code: p?.member_code ?? null,
+          customer_name: p ? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.company_name || "—" : "—",
+          amount: Number(r.amount),
+          detail: "เบิกค่าคอม / commission",
+          link: `/admin/sales-payouts/${r.id}`,
+          status: r.status,
+        };
+      });
     }
+
+    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users useractive='0') ───────────────────
     case "inactiveCustomers": {
-      // Registered profiles that have never used a service (is_active=false).
-      // NOT status='incomplete' — that is mid-registration juristic accounts.
-      const { data } = await admin.from("profiles")
-        .select("id, member_code, first_name, last_name, company_name, phone, email, created_at, account_type")
-        .eq("is_active", false)
-        .order("created_at", { ascending: false }).limit(50);
-      return ((data ?? []) as RawProfileRow[]).map((p) => ({
-        id: p.id,
-        created_at: p.created_at,
-        member_code: p.member_code,
-        customer_name: customerNameOf(p),
+      const { data } = await admin
+        .from("tb_users")
+        .select("id,userid,username,userlastname,usertel,useremail,userregistered,usercompany")
+        .eq("useractive", "0")
+        .order("userregistered", { ascending: false, nullsFirst: false })
+        .limit(50);
+      const rows = (data ?? []) as unknown as RawUserListRow[];
+      return rows.map((u) => ({
+        id: String(u.id),
+        created_at: u.userregistered ?? "",
+        member_code: u.userid,
+        customer_name: `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—",
         amount: 0,
-        detail: `${p.phone ?? "—"}${p.email ? ` · ${p.email}` : ""}`,
-        link: `/admin/customers/${p.id}`,
+        detail: `${u.usertel ?? "—"}${u.useremail ? ` · ${u.useremail}` : ""}`,
+        link: `/admin/customers/${u.userid}`,
         status: "registered",
       }));
     }
+
     default:
       return [];
   }
 }
 
-type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };
-type ProfileMaybeArray = ProfileShape | ProfileShape[] | null;
+// ── Raw row types ──────────────────────────────────────────────────────────
 
-function customerNameOf(p: { first_name?: string | null; last_name?: string | null; company_name?: string | null }): string {
-  return `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.company_name || "—";
-}
+type RawWalletHsRow   = { id: number | string; date: string | null; amount: number | string; status: string | null; imagesslip: string | null; userid: string };
+type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string };
+type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null };
+type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string };
+type RawUserListRow   = { id: number | string; userid: string; username: string | null; userlastname: string | null; usertel: string | null; useremail: string | null; userregistered: string | null; usercompany: string | null };
+
+// sales_payouts (rebuilt schema · the one tab without a legacy equivalent)
+type ProfileShape       = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };
+type ProfileMaybeArray  = ProfileShape | ProfileShape[] | null;
+type RawPayoutRow       = { id: string; amount: number; status: string; created_at: string; profile: ProfileMaybeArray };
 
 function pickProfile(p: ProfileMaybeArray): ProfileShape | null {
   if (!p) return null;
   return Array.isArray(p) ? (p[0] ?? null) : p;
-}
-
-type RawTxRow      = { id: string; amount: number; created_at: string; slip_url: string | null; status: string; profile: ProfileMaybeArray };
-type RawOrderRow   = { id: string; h_no: string | null; status: string; total_thb: number; created_at: string; title: string | null; profile: ProfileMaybeArray };
-type RawForwarderRow = { id: string; f_no: string | null; status: string; total_price: number; created_at: string; source_warehouse: string; transport_type: string; weight_kg: number; profile: ProfileMaybeArray };
-type RawPaymentRow = { id: string; yuan_amount: number; thb_amount: number; channel: string; status: string; created_at: string; profile: ProfileMaybeArray };
-type RawPayoutRow  = { id: string; amount: number; status: string; created_at: string; profile: ProfileMaybeArray };
-type RawProfileRow = { id: string; member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null; phone: string | null; email: string | null; created_at: string; account_type: string };
-
-function mapWalletRows(rows: RawTxRow[] | null, baseLink: string): RowShape[] {
-  return (rows ?? []).map((r) => {
-    const p = pickProfile(r.profile);
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      member_code: p?.member_code ?? null,
-      customer_name: p ? customerNameOf(p) : "—",
-      amount: Number(r.amount),
-      detail: r.slip_url ? `สลิป: <a class="text-blue-600 underline" href="${r.slip_url}" target="_blank">ดูสลิป</a>` : "ไม่มีสลิป",
-      link: `${baseLink}/${r.id}`,
-      status: r.status,
-    };
-  });
-}
-
-function mapOrderRows(rows: RawOrderRow[] | null): RowShape[] {
-  return (rows ?? []).map((r) => {
-    const p = pickProfile(r.profile);
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      member_code: p?.member_code ?? null,
-      customer_name: p ? customerNameOf(p) : "—",
-      amount: Number(r.total_thb),
-      detail: `${r.h_no ?? "—"} · ${r.title ?? "ไม่มีชื่อ"}`,
-      link: r.h_no ? `/admin/service-orders/${r.h_no}` : "/admin/service-orders",
-      status: r.status,
-    };
-  });
-}
-
-function mapForwarderRows(rows: RawForwarderRow[] | null): RowShape[] {
-  return (rows ?? []).map((r) => {
-    const p = pickProfile(r.profile);
-    const transportLabel = r.transport_type === "truck" ? "รถ" : r.transport_type === "ship" ? "เรือ" : "อากาศ";
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      member_code: p?.member_code ?? null,
-      customer_name: p ? customerNameOf(p) : "—",
-      amount: Number(r.total_price),
-      detail: `${r.f_no ?? "—"} · ${transportLabel} · ${Number(r.weight_kg).toFixed(2)} kg`,
-      link: r.f_no ? `/admin/forwarders/${r.f_no}` : "/admin/forwarders",
-      status: r.status,
-    };
-  });
-}
-
-function mapPaymentRows(rows: RawPaymentRow[] | null): RowShape[] {
-  return (rows ?? []).map((r) => {
-    const p = pickProfile(r.profile);
-    const channelLabel = r.channel === "alipay" ? "Alipay" : r.channel === "wechat" ? "WeChat" : "Bank";
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      member_code: p?.member_code ?? null,
-      customer_name: p ? customerNameOf(p) : "—",
-      amount: Number(r.thb_amount),
-      detail: `${channelLabel} · ¥${Number(r.yuan_amount).toFixed(2)}`,
-      link: `/admin/yuan-payments/${r.id}`,
-      status: r.status,
-    };
-  });
-}
-
-function mapPayoutRows(rows: RawPayoutRow[] | null): RowShape[] {
-  return (rows ?? []).map((r) => {
-    const p = pickProfile(r.profile);
-    return {
-      id: r.id,
-      created_at: r.created_at,
-      member_code: p?.member_code ?? null,
-      customer_name: p ? customerNameOf(p) : "—",
-      amount: Number(r.amount),
-      detail: "เบิกค่าคอม / commission",
-      link: `/admin/sales-payouts/${r.id}`,
-      status: r.status,
-    };
-  });
 }
 
 // ── Cards ──────────────────────────────────────────────────────────────────
@@ -593,13 +738,19 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
         </thead>
         <tbody className="divide-y divide-border">
           {rows.map((r, i) => {
-            const created = new Date(r.created_at);
+            const created = r.created_at ? new Date(r.created_at) : null;
             return (
               <tr key={r.id} className="hover:bg-surface-alt/30 transition-colors">
                 <td className="px-4 py-3 text-center text-sm font-mono">{i + 1}</td>
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                  <div>{created.toLocaleDateString("th-TH")}</div>
-                  <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                  {created ? (
+                    <>
+                      <div>{created.toLocaleDateString("th-TH")}</div>
+                      <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                    </>
+                  ) : (
+                    <div>—</div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <Link href={r.link} className="text-blue-600 hover:underline font-mono text-xs">
