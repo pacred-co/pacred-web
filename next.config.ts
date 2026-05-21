@@ -92,8 +92,12 @@ const sentryBuildOptions = {
   silent: !process.env.CI,
   widenClientFileUpload: true,
   tunnelRoute: "/api/monitoring",
-  disableLogger: true,
-  automaticVercelMonitors: false,
+  // Sentry deprecated `disableLogger` and `automaticVercelMonitors` as
+  // top-level options 2026-05-21; both now live under `webpack`.
+  webpack: {
+    treeshake: { removeDebugLogging: true },
+    automaticVercelMonitors: false,
+  },
 };
 
 export default withSentryConfig(withNextIntl(nextConfig), sentryBuildOptions);
