@@ -2,10 +2,6 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  ForwarderInteractivity,
-  type ForwarderRowMeta,
-} from "./forwarder-interactivity";
 
 /**
  * Customer ฝากนำเข้าสินค้า (import / forwarder) screen — a FAITHFUL
@@ -598,35 +594,7 @@ export default async function ServiceImportPage({
     const tb = b.fdate ? new Date(b.fdate.replace(" ", "T")).getTime() : 0;
     return tb - ta;
   });
-  // legacy `$countID` (forwarder.php L671) — the row count used by
-  // the DataTables countID comparator at L1403. The pay-bar in the
-  // <ForwarderInteractivity> client component derives this from
-  // `rowsMeta.length` directly; the legacy variable is kept here as
-  // a comment for the fidelity record.
-
-  // ── Pre-compute the row meta passed to <ForwarderInteractivity> ──
-  // The client checkbox needs `eligibleForPay` (matches calPrice.php
-  // L21 `fStatus='5' OR fCredit=1`) + `totalPriceNet` (the legacy
-  // per-row total — calPriceForwarderSumCompany; the live pay-bar
-  // shows the SUM of selected eligible rows). The action server-side
-  // re-computes the canonical figure with the +50฿ + -1% adjustments
-  // (calPrice.php L40-45); these client-side numbers are only the
-  // optimistic display while the action call is in flight.
-  const rowsMeta: ForwarderRowMeta[] = rows.map((r) => ({
-    id: r.id,
-    totalPriceNet: calPriceForwarderSumCompany(
-      r.fusercompany,
-      r.fpriceupdate,
-      r.ftotalprice,
-      r.ftransportprice,
-      r.fshippingservice,
-      r.fdiscount,
-      r.pricecrate,
-      r.ftransportpricechnthb,
-      r.priceother,
-    ),
-    eligibleForPay: r.fstatus === "5" || r.fcredit === "1",
-  }));
+  const countID = rows.length;
 
   // ── forwarder.php L979-997 — the modal address <select> ──
   // main address first, then the rest; legacy ⋈ tb_address_main.
@@ -739,16 +707,11 @@ export default async function ServiceImportPage({
                             <div className="content-header-right col-md-4 col-12">
                               <div className="float-md-right">
                                 <div className="text-center text-md-right">
-                                  {/* Legacy forwarder.php L488 nests <button>
-                                      inside <a> — invalid HTML5 (interactive
-                                      inside interactive). Browsers render the
-                                      nested button at wrong size + skip the
-                                      anchor's modal-trigger on click. Owner
-                                      flagged it 2026-05-22 as "ไม่สมมาตร".
-                                      Fix: drop the inner <button>, style the
-                                      anchor itself as the green circle pill —
-                                      same visual, valid HTML, single click
-                                      target for the data-toggle modal trigger. */}
+                                  {/* Legacy nests <button> inside <a> — invalid
+                                      HTML5; browser renders the inner button at
+                                      wrong size + can swallow the modal trigger.
+                                      Use <span role="presentation"> styled as
+                                      the green pill instead. */}
                                   <a
                                     href="#add-forwarder"
                                     data-toggle="modal"
@@ -884,79 +847,126 @@ export default async function ServiceImportPage({
                               <div className="p-m-0">
                                 <div className="hr-dashed"></div>
                                 {/* forwarder.php L595 <form id="frm-example2">.
-                                    Row checkboxes + the live pay-bar
-                                    (forwarder.php L1280-1409) are
-                                    delegated to <ForwarderInteractivity>
-                                    — the table head + pre/post strips
-                                    stay SSR. Selected-id form submit
-                                    behaviour (the legacy POST id[])
-                                    is NOT wired (FLAGGED in file
-                                    header §4); the "ชำระเงิน" button
-                                    on the bottom bar currently no-ops
-                                    and the per-row "ชำระเงิน" link in
-                                    the row's ตัวเลือก column is the
-                                    working fallback. */}
-                                <ForwarderInteractivity
-                                  rowsMeta={rowsMeta}
-                                  columnCount={q === "c" ? 10 : 8}
-                                  q={q}
-                                  showPayBar={showPayBar}
-                                  showPayStrip={countStatusF5 > 0}
-                                  tableHead={
-                                    <thead>
-                                      <tr className="text-center bg-danger2">
-                                        <th className="all add-text-all">ID</th>
-                                        <th className="none">วันที่สร้าง</th>
-                                        <th className="all">รายละเอียด</th>
-                                        <th className="none">ค่าขนส่ง</th>
-                                        <th className="none">เลขแทรคกิ้งจีน</th>
-                                        <th className="none">เลขพัสดุ (ไทย)</th>
-                                        <th className="none">สถานะ</th>
-                                        {q === "c" && (
-                                          <>
-                                            <th className="bg-danger3">วันที่ให้เครดิต</th>
-                                            <th className="bg-danger3">วันที่ครบกำหนด</th>
-                                          </>
-                                        )}
-                                        <th className="none">ตัวเลือก</th>
-                                      </tr>
-                                    </thead>
-                                  }
-                                  aboveTable={
-                                    showMaoStrip && (
-                                      <div className="row">
-                                        <div className="col-md-6 offset-md-3">
-                                          <div className="p-1 bg-main text-center text-white animate__animated animate__infinite animate__headShake">
-                                            โปรเหมาๆ
+                                    Legacy: the row-select checkboxes are
+                                    DataTables-driven and the form posts the
+                                    selected ids to the payment flow — the
+                                    DataTables JS + that POST are NOT wired
+                                    here (see file header §4). The form +
+                                    table render 1:1. */}
+                                <form id="frm-example2">
+                                  {countStatusF5 > 0 && (
+                                    <div className="pt-1 text-center text-md-left">
+                                      <div style={{ position: "relative" }} className="btn-pay-pc"></div>
+                                    </div>
+                                  )}
+                                  {showMaoStrip && (
+                                    <div className="row">
+                                      <div className="col-md-6 offset-md-3">
+                                        <div className="p-1 bg-main text-center text-white animate__animated animate__infinite animate__headShake">
+                                          โปรเหมาๆ
+                                          <br />
+                                          “หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง”
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="table-responsive p-2">
+                                    <table
+                                      id="myTable"
+                                      className="table display table-bordered table-striped dataTable no-footer dtr-inline"
+                                    >
+                                      <thead>
+                                        <tr className="text-center bg-danger2">
+                                          <th className="all add-text-all">ID</th>
+                                          <th className="none">วันที่สร้าง</th>
+                                          <th className="all">รายละเอียด</th>
+                                          <th className="none">ค่าขนส่ง</th>
+                                          <th className="none">เลขแทรคกิ้งจีน</th>
+                                          <th className="none">เลขพัสดุ (ไทย)</th>
+                                          <th className="none">สถานะ</th>
+                                          {q === "c" && (
+                                            <>
+                                              <th className="bg-danger3">วันที่ให้เครดิต</th>
+                                              <th className="bg-danger3">วันที่ครบกำหนด</th>
+                                            </>
+                                          )}
+                                          <th className="none">ตัวเลือก</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {rows.map((row) => (
+                                          <ForwarderRowView
+                                            key={row.id}
+                                            row={row}
+                                            q={q}
+                                            arrFidDriver={arrFidDriver}
+                                          />
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                  <div id="example-console-rows"></div>
+                                </form>
+                                {countStatusF5 > 0 &&
+                                  (countPricePCSFDatabase ?? 0) > 1 && (
+                                    <div className="m-1 p-1 bg-main text-white animate__animated animate__infinite animate__headShake">
+                                      คุณมีรายการรอชำระเงินที่ใช้ PR เหมาๆ มากกว่า 1 รายการ การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
+                                    </div>
+                                  )}
+                              </div>
+
+                              {/* ── bottom fixed pay-bar — L840-862 ── */}
+                              <div
+                                className="p-1 p-m-0"
+                                style={{
+                                  position: "fixed",
+                                  bottom: 0,
+                                  width: "80%",
+                                  zIndex: 999,
+                                }}
+                              >
+                                {showPayBar && (
+                                  <div className="b-pay ">
+                                    <div className="row">
+                                      <div className="col-md-6 offset-md-3">
+                                        <div className="row">
+                                          <div className="col-3 p-05 text-center">
+                                            <input
+                                              type="checkbox"
+                                              className="dt-checkboxes check-all c6"
+                                              defaultChecked
+                                            />
                                             <br />
-                                            “หากลูกค้าชำระค่าขนส่งในไทยก่อนเวลา 00.00 น. บริษัทฯ จะจัดส่งสินค้าให้ภายใน 1-3 วันทำการ นับจากวันที่ชำค่าขนส่ง”
+                                            เลือกทั้งหมด
+                                          </div>
+                                          <div className="col-6 p-05">
+                                            จำนวนรายการ : <span className="countPay">0</span>
+                                            <br />
+                                            <b>
+                                              ยอดชำระรวม :{" "}
+                                              <span className="notranslate text-danger price-all">
+                                                0
+                                              </span>{" "}
+                                              บ.
+                                            </b>
+                                          </div>
+                                          <div
+                                            className="col-3 p-05 text-right"
+                                            style={{ marginLeft: "-25px" }}
+                                          >
+                                            <button
+                                              type="button"
+                                              className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
+                                              id="select"
+                                            >
+                                              ชำระเงิน
+                                            </button>
                                           </div>
                                         </div>
                                       </div>
-                                    )
-                                  }
-                                  belowTable={
-                                    countStatusF5 > 0 &&
-                                    (countPricePCSFDatabase ?? 0) > 1 && (
-                                      <div className="m-1 p-1 bg-main text-white animate__animated animate__infinite animate__headShake">
-                                        คุณมีรายการรอชำระเงินที่ใช้ PR เหมาๆ มากกว่า 1 รายการ การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
-                                      </div>
-                                    )
-                                  }
-                                  renderRow={(rowId, firstCellPrefix) => {
-                                    const row = rows.find((r) => r.id === rowId);
-                                    if (!row) return null;
-                                    return (
-                                      <ForwarderRowView
-                                        key={row.id}
-                                        row={row}
-                                        q={q}
-                                        arrFidDriver={arrFidDriver}
-                                        firstCellPrefix={firstCellPrefix}
-                                      />
-                                    );
-                                  }}
-                                />
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1438,19 +1448,10 @@ function ForwarderRowView({
   row,
   q,
   arrFidDriver,
-  firstCellPrefix,
 }: {
   row: ForwarderRow;
   q: string;
   arrFidDriver: Set<number>;
-  /** Client-injected leading content for the first `<td>` (the ID
-      cell — column 0 in the legacy DataTables `columnDefs targets:0
-      checkboxes selectRow:true` config). The legacy DataTables JS
-      overlays a row-select checkbox INTO column 0 at runtime; the
-      <ForwarderInteractivity> client wrapper passes that checkbox
-      here so the rendered <td> still matches the legacy markup
-      structure (checkbox sits next to the ID number). */
-  firstCellPrefix?: React.ReactNode;
 }) {
   // L672 — fTrackingCHN2 overrides fTrackingCHN when present.
   const trackingChn =
@@ -1502,10 +1503,7 @@ function ForwarderRowView({
 
   return (
     <tr>
-      <td className="text-center tr1 cursor-pointer">
-        {firstCellPrefix}
-        {row.id}
-      </td>
+      <td className="text-center tr1 cursor-pointer">{row.id}</td>
       <td className="text-center font-12">
         {dmy(row.fdate)}
         <br /> {hms(row.fdate)} น.
