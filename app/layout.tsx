@@ -3,6 +3,7 @@ import { Prompt } from "next/font/google";
 import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
 import { GtmScript, GtmNoscript } from "@/components/analytics/gtm-script";
 import { ClarityScript } from "@/components/analytics/clarity-script";
+import { GoogleAdsScript } from "@/components/analytics/google-ads-script";
 import { SITE_NAME, SITE_URL } from "@/components/seo/site";
 import "./globals.css";
 
@@ -94,6 +95,7 @@ export default function RootLayout({
         />
         <GtmScript />
         <ClarityScript />
+        <GoogleAdsScript />
       </head>
       <body
         suppressHydrationWarning
