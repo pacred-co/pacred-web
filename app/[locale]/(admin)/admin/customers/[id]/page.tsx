@@ -28,6 +28,21 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   const { id } = await params;
   const admin = createAdminClient();
 
+  // Wave 7 (2026-05-21 night): the /admin/customers list + dashboard
+  // "ลูกค้าไม่ใช้งาน" tab both pass the legacy text userid (PR10691 /
+  // PCS10843), not a uuid. The rebuilt-schema queries below all hit
+  // uuid columns — feeding them "PR10691" causes Postgres "invalid input
+  // syntax for type uuid" and the Promise.all surfaces a server error
+  // instead of letting the fallback fire. Short-circuit BEFORE the
+  // Promise.all when the id has a legacy prefix so we go straight to
+  // the tb_users-backed view.
+  const isLegacyId = /^(PR|PCS)\d+$/i.test(id);
+  if (isLegacyId) {
+    const legacy = await renderLegacyCustomerView(id);
+    if (legacy) return legacy;
+    notFound();
+  }
+
   const [
     { data: profile }, { data: corporate }, { data: addresses }, { data: wallet }, { data: repProfiles },
     { data: customRatesUser }, { data: customRatesHs },

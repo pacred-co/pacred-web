@@ -35,15 +35,15 @@ type URow = {
   usertel: string | null;
   useractive: string | null;
   userregistered: string | null;
-  lastlogindate: string | null;
+  userlastlogin: string | null;   // ← correct column (legacy schema)
   adminidsale: string | null;
-  userusername: string | null;
+  usernote: string | null;
 };
 
 type FRow = {
   id: number;
   fdate: string | null;
-  fno: string | null;
+  fidorco: string | null;          // ← legacy uses fidorco as the customer-facing F-no
   fcabinetnumber: string | null;
   fstatus: string | null;
   ftotalprice: number | null;
@@ -77,7 +77,7 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,lastlogindate,adminidsale,userusername",
+      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote",
     )
     .eq("userid", id)
     .maybeSingle();
@@ -94,8 +94,8 @@ export async function renderLegacyCustomerView(id: string) {
     admin.from("tb_wallet").select("wallettotal").eq("userid", u.userid).maybeSingle(),
     admin
       .from("tb_forwarder")
-      .select("id,fdate,fno,fcabinetnumber,fstatus,ftotalprice")
-      .eq("wusercreate", u.userid)
+      .select("id,fdate,fidorco,fcabinetnumber,fstatus,ftotalprice")
+      .eq("userid", u.userid)
       .order("fdate", { ascending: false })
       .limit(10),
     admin
@@ -156,7 +156,6 @@ export async function renderLegacyCustomerView(id: string) {
       <div className="grid md:grid-cols-3 gap-4">
         <div className="md:col-span-2 rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
           <KV label="ชื่อ" value={fullName} />
-          <KV label="username" value={u.userusername ?? "-"} mono />
           <KV label="โทรศัพท์" value={u.usertel ?? "-"} />
           <KV label="อีเมล" value={u.useremail ?? "-"} />
           <KV
@@ -165,8 +164,9 @@ export async function renderLegacyCustomerView(id: string) {
           />
           <KV
             label="ล่าสุดล็อกอิน"
-            value={u.lastlogindate ? new Date(u.lastlogindate).toLocaleString("th-TH") : "-"}
+            value={u.userlastlogin ? new Date(u.userlastlogin).toLocaleString("th-TH") : "-"}
           />
+          {u.usernote ? <KV label="หมายเหตุ" value={u.usernote} /> : null}
         </div>
         <div className="rounded-2xl border border-border bg-primary-50 dark:bg-surface p-5 text-sm">
           <p className="text-xs font-semibold text-muted">ยอดกระเป๋า (THB)</p>
@@ -202,7 +202,7 @@ export async function renderLegacyCustomerView(id: string) {
               {fws.map((r) => (
                 <tr key={r.id} className="border-t border-border">
                   <Td>{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</Td>
-                  <Td mono>{r.fno ?? "-"}</Td>
+                  <Td mono>{r.fidorco ?? "-"}</Td>
                   <Td mono>{r.fcabinetnumber ?? "-"}</Td>
                   <Td>{r.fstatus ?? "-"}</Td>
                   <Td right>
@@ -213,7 +213,7 @@ export async function renderLegacyCustomerView(id: string) {
                   </Td>
                   <Td>
                     <Link
-                      href={`/admin/forwarders/${encodeURIComponent(r.fno ?? String(r.id))}`}
+                      href={`/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`}
                       className="text-primary-600 hover:underline"
                     >
                       ดู
