@@ -33,6 +33,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -221,7 +222,8 @@ export type Row = {
   paydeposit: string | null;   // '1' = paid · null/'' = ยอดค้างชำระ remaining
   note: string | null;
   detail: string | null;
-  cover: string | null;        // product thumbnail (fcover)
+  cover: string | null;        // product thumbnail filename (fcover) — bare
+  coverUrl: string | null;     // Wave 13 — server-resolved signed Supabase URL
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -366,6 +368,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       note: r.fnote,
       detail: r.fdetail,
       cover: r.fcover,
+      coverUrl: null,            // filled in after the URL-resolve step below
       customer: user
         ? {
             userid: user.userid,
@@ -410,6 +413,17 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       (r.cabinet_number ?? "").toLowerCase().includes(keyword)
     );
   }
+
+  // ─── Wave 13 — resolve cover filenames to signed Supabase URLs ────────
+  // `fcover` is a bare filename (e.g. "PR10691_67e0..._8c1735.jpg"). Legacy
+  // covers live at `forwarder-covers/legacy-shops/<file>`; newer admin-
+  // initiated uploads already use a bucket-relative path (`admin/...`).
+  // Batch-resolve all in parallel — much faster than per-row await.
+  const coverMap = await resolveLegacyUrlMap(
+    rows.map((r) => ({ id: r.id, filename: r.cover })),
+    "cover",
+  );
+  rows = rows.map((r) => ({ ...r, coverUrl: coverMap[String(r.id)] ?? null }));
 
   // ─── Per-tab counts (head queries against tb_forwarder) ──────────────
   // We run these in parallel; each returns the global count for that

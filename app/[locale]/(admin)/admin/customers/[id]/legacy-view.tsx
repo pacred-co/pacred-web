@@ -24,6 +24,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 
 type URow = {
@@ -38,6 +39,7 @@ type URow = {
   userlastlogin: string | null;   // ← correct column (legacy schema)
   adminidsale: string | null;
   usernote: string | null;
+  userimage: string | null;       // Wave 13: legacy avatar filename (resolved via legacy-resolver)
 };
 
 type FRow = {
@@ -77,12 +79,18 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote",
+      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote,userimage",
     )
     .eq("userid", id)
     .maybeSingle();
   if (!userRaw) return null;
   const u = userRaw as unknown as URow;
+
+  // Wave 13: resolve the legacy customer-portrait filename → signed URL.
+  // Bare filenames live under `member-docs/legacy-images/users/` after
+  // backfill 06. Empty / null → null → header renders the initial-letter
+  // fallback instead of the avatar.
+  const userImageUrl = await resolveLegacyUrl(u.userimage, "profile");
 
   // Wallet balance + recent activity (parallel)
   const [
@@ -128,24 +136,40 @@ export async function renderLegacyCustomerView(id: string) {
   return (
     <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
-            ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
-          </p>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <h1 className="text-2xl font-bold font-mono">{u.userid}</h1>
-            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
-              {statusCfg.label}
-            </span>
-            {u.adminidsale ? (
-              <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-mono">
-                ดูแลโดย {u.adminidsale}
+        <div className="flex items-start gap-4">
+          {/* Wave 13: legacy avatar — resolved signed URL or initial-letter
+              fallback when no portrait was uploaded. */}
+          {userImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={userImageUrl}
+              alt={fullName}
+              className="w-14 h-14 rounded-full object-cover border border-border shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-lg border border-border shrink-0">
+              {(u.username ?? u.userid).trim().charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-500">
+              ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
+            </p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <h1 className="text-2xl font-bold font-mono">{u.userid}</h1>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusCfg.cls}`}>
+                {statusCfg.label}
               </span>
-            ) : null}
+              {u.adminidsale ? (
+                <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-mono">
+                  ดูแลโดย {u.adminidsale}
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted mt-1">
+              Wave 7 read-only · status mutate + rate-custom editor → Wave 8
+            </p>
           </div>
-          <p className="text-xs text-muted mt-1">
-            Wave 7 read-only · status mutate + rate-custom editor → Wave 8
-          </p>
         </div>
         <Link href="/admin/customers" className="text-xs text-primary-600 hover:underline">
           ← รายการลูกค้า

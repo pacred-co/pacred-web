@@ -36,6 +36,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { CntActionButtons } from "./action-buttons";
 import { CntSlipUploadForm } from "./slip-upload-form";
 
@@ -97,13 +98,28 @@ type URow = {
  *
  * Returns null if a signed URL couldn't be created (caller renders fallback).
  */
+/**
+ * Resolve cnt-hs slip/file filenames to signed URLs.
+ *
+ * Wave 13 — extended to fall through to `resolveLegacyUrl` for bare
+ * filenames (legacy backfill 06 lives in `slips/legacy/` and
+ * `member-docs/legacy-uploads/file/`). Behaviour:
+ *   - http(s)://...       → pass-through
+ *   - admin/<...>         → slips bucket (Wave 12 admin upload path)
+ *   - bare filename       → resolveLegacyUrl: `slips/legacy/<file>` for
+ *                            images, `member-docs/legacy-uploads/file/<file>`
+ *                            for PDFs (caller picks `kind`)
+ */
 async function slipUrl(filename: string): Promise<string | null> {
   if (!filename) return null;
   if (filename.startsWith("http")) return filename;
   if (filename.startsWith("admin/")) {
     return getSignedBucketUrl("slips", filename);
   }
-  return `/legacy/uploads/${filename}`;
+  // Bare filename — route by extension. PDFs live in legacy-uploads/file/,
+  // images live in slips/legacy/.
+  const isPdf = filename.toLowerCase().endsWith(".pdf");
+  return resolveLegacyUrl(filename, isPdf ? "file" : "slip");
 }
 
 export default async function CntHsDetailPage({

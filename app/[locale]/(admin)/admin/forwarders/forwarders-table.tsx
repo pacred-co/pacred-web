@@ -53,6 +53,12 @@ export type Row = {
   note: string | null;
   detail: string | null;
   cover: string | null;
+  /**
+   * Wave 13 — server-resolved signed Supabase URL for `cover`. The Server
+   * Component on page.tsx fans out `resolveLegacyUrlMap("cover")` and
+   * fills this in before passing rows down; the client just renders it.
+   */
+  coverUrl: string | null;
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -257,10 +263,10 @@ export function ForwardersTable({
                               fast "is this the right box" recognition. Empty
                               cover renders a neutral placeholder so the row
                               height stays consistent. */}
-                          {r.cover ? (
+                          {r.coverUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={r.cover.startsWith("http") ? r.cover : `/legacy/uploads/${r.cover}`}
+                              src={r.coverUrl}
                               alt={`ออเดอร์ ${r.id}`}
                               className="h-12 w-12 rounded border border-border object-cover bg-surface-alt shrink-0"
                               loading="lazy"

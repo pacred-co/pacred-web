@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,13 @@ export default async function AdminWalletDetail({ params }: { params: Promise<{ 
 
   const amount = Number(row.amount ?? 0);
   const isWithdraw = amount < 0;
+
+  // Wave 13 — `imagesslip` stores a bare legacy filename. Resolve to a
+  // 1-hour signed Supabase URL on the server so the <img> below renders
+  // a real image rather than a 404. Bucket = `slips`, prefix = `legacy/`
+  // for pre-Pacred uploads; `admin/...` or `<userid>/...` paths pass
+  // through (Wave 12 + customer-side uploads).
+  const slipResolved = await resolveLegacyUrl(row.imagesslip, "slip");
   const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";
   const status = row.status ?? "1";
   const userid = row.userid;
@@ -126,19 +134,26 @@ export default async function AdminWalletDetail({ params }: { params: Promise<{ 
         {row.note && <KV label="หมายเหตุ" value={row.note} />}
       </div>
 
-      {row.imagesslip && (
+      {slipResolved && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
           <p className="text-xs font-semibold text-muted mb-2">สลิป</p>
           <a
-            href={row.imagesslip}
+            href={slipResolved}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={row.imagesslip} alt="สลิป" className="max-w-full max-h-[600px]" />
+            <img src={slipResolved} alt="สลิป" className="max-w-full max-h-[600px]" />
           </a>
-          <p className="text-xs text-muted mt-2 break-all">{row.imagesslip}</p>
+          <p className="text-[10px] text-muted mt-2 break-all font-mono">{row.imagesslip}</p>
+        </div>
+      )}
+      {row.imagesslip && !slipResolved && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <p className="text-xs font-semibold text-amber-900 mb-1">⚠ ไม่สามารถสร้างลิงก์สลิปได้</p>
+          <p className="text-[10px] text-amber-800 break-all font-mono">filename = {row.imagesslip}</p>
+          <p className="text-[10px] text-amber-700 mt-1">(legacy filename อาจไม่อยู่บน Supabase Storage หรือ bucket ไม่มีไฟล์นี้)</p>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import {
   WarehouseHistoryRelinkButton,
   WarehouseHistoryDeleteButton,
@@ -566,22 +567,20 @@ export default async function AdminForwardersWarehouseHistoryPage({
       : "ผลลัพธ์การค้นหาวันนี้ ";
 
   // ── Cover-image URL — L283-288 ──────────────────────────────────
-  // The legacy resolves three cases: empty → default.png, absolute URL
-  // → keep + _150x150.jpg thumbnail, else → basePath + 'images/shops/'.
-  const resolveCover = (fCover: string | null): { thumb: string; full: string } => {
-    if (!fCover || fCover.trim() === "") {
-      return {
-        thumb: "https://pcscargo.co.th/member/images/shops/default.png",
-        full:  "https://pcscargo.co.th/member/images/shops/default.png",
-      };
-    }
-    if (/https?:/i.test(fCover)) {
-      return { thumb: `${fCover}_150x150.jpg`, full: fCover };
-    }
-    return {
-      thumb: `https://pcscargo.co.th/member/images/shops/${fCover}`,
-      full:  `https://pcscargo.co.th/member/images/shops/${fCover}`,
-    };
+  // Wave 13: batch-resolve every forwarder cover filename in parallel.
+  // Legacy schema stores bare filenames in `tb_forwarder.fcover`; after
+  // backfill 06 those live under `forwarder-covers/legacy-shops/`. The
+  // resolver passes through full URLs (legacy mixed both shapes).
+  // Empty / null → null → render the default-cover placeholder image.
+  const coverUrlByRowId = await resolveLegacyUrlMap(
+    matchedRows.map((r) => ({ id: r.id, filename: r.f_fcover })),
+    "cover",
+  );
+  const DEFAULT_COVER = "/legacy/pcs/admin/forwarder-default.png";
+  const resolveCover = (rowId: number): { thumb: string; full: string } => {
+    const url = coverUrlByRowId[String(rowId)];
+    if (!url) return { thumb: DEFAULT_COVER, full: DEFAULT_COVER };
+    return { thumb: url, full: url };
   };
 
   // ── Helpers for the date/time split (L202-203, L263) ────────────
@@ -866,7 +865,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                         const over    = row.f_famount != null && row.fi2amount > row.f_famount;
                                         const dupeIds = row.f_ftrackingchn ? (dupeMap.get(row.f_ftrackingchn) ?? []) : [];
                                         const hasDupes = dupeIds.length > 1;
-                                        const cover = resolveCover(row.f_fcover);
+                                        const cover = resolveCover(row.id);
                                         const sumPrice =
                                           (Number(row.f_ftotalprice ?? 0) +
                                             Number(row.f_ftransportprice ?? 0) +

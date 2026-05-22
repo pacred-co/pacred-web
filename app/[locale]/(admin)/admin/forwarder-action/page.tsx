@@ -26,6 +26,7 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { Link } from "@/i18n/navigation";
 
@@ -270,6 +271,18 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
 
   const { data: rows, error } = await q;
 
+  // Wave 13: batch-resolve every forwarder-cover filename in parallel
+  // so the row template can render the thumbnail next to the F-id.
+  // Empty / null → null → row shows no thumbnail.
+  type ForwarderListRow = {
+    id: number;
+    fcover: string | null;
+  };
+  const coverUrlByRowId = await resolveLegacyUrlMap(
+    ((rows ?? []) as unknown as ForwarderListRow[]).map((r) => ({ id: r.id, filename: r.fcover })),
+    "cover",
+  );
+
   return (
     <>
       <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
@@ -302,6 +315,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                 <thead className="bg-surface-alt/50 text-[10px] uppercase text-muted">
                   <tr>
                     <th className="px-2 py-2 text-left">ID</th>
+                    <th className="px-2 py-2 text-left">รูป</th>
                     <th className="px-2 py-2 text-left">วันที่</th>
                     <th className="px-2 py-2 text-left">เบอร์ตู้</th>
                     <th className="px-2 py-2 text-left">tracking จีน</th>
@@ -318,9 +332,25 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.map((r) => {
+                    const coverUrl = coverUrlByRowId[String(r.id as number)];
+                    return (
                     <tr key={r.id as number} className="border-t border-border">
                       <td className="px-2 py-2 font-mono">{r.id as number}</td>
+                      <td className="px-2 py-2">
+                        {coverUrl ? (
+                          <a href={coverUrl} target="_blank" rel="noopener noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={coverUrl}
+                              alt={`cover-${r.id as number}`}
+                              className="w-10 h-10 rounded object-cover border border-border"
+                            />
+                          </a>
+                        ) : (
+                          <span className="text-muted text-[10px]">—</span>
+                        )}
+                      </td>
                       <td className="px-2 py-2">{r.fdate ? String(r.fdate).slice(0, 10) : "-"}</td>
                       <td className="px-2 py-2 font-mono">{(r.fcabinetnumber as string) || "-"}</td>
                       <td className="px-2 py-2 font-mono">{(r.ftrackingchn as string) || "-"}</td>
@@ -339,7 +369,8 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                         </Link>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

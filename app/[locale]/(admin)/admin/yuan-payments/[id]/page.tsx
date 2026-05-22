@@ -20,6 +20,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
 
 export const dynamic = "force-dynamic";
@@ -99,6 +100,15 @@ export default async function AdminYuanPaymentDetail({
   const status = row.paystatus ?? "1";
   const paytype = row.paytype ?? "";
 
+  // Wave 13: resolve legacy slip filenames → Supabase signed URLs in
+  // parallel. Bare filenames (`PCS9122_…jpg`) live under `slips/legacy/`
+  // after backfill 06; the resolver also passes through full URLs and
+  // Wave-12 admin uploads at `admin/cnt-slip/…` unchanged.
+  const [slipUrl, slipAdminUrl] = await Promise.all([
+    resolveLegacyUrl(row.imagesslip, "slip"),
+    resolveLegacyUrl(row.imagesslipadmin, "slip"),
+  ]);
+
   return (
     <main className="p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
@@ -166,33 +176,33 @@ export default async function AdminYuanPaymentDetail({
         {row.adminid ? <KV label="ผู้อนุมัติ" value={row.adminid} mono /> : null}
       </div>
 
-      {row.imagesslip && (
+      {slipUrl && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
           <p className="text-xs font-semibold text-muted mb-2">สลิป (ลูกค้าอัปโหลด)</p>
           <a
-            href={row.imagesslip}
+            href={slipUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={row.imagesslip} alt="สลิป" className="max-w-full max-h-[600px]" />
+            <img src={slipUrl} alt="สลิป" className="max-w-full max-h-[600px]" />
           </a>
           <p className="text-xs text-muted mt-2 break-all">{row.imagesslip}</p>
         </div>
       )}
 
-      {row.imagesslipadmin && (
+      {slipAdminUrl && (
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
           <p className="text-xs font-semibold text-muted mb-2">สลิป (แอดมินอัปโหลด)</p>
           <a
-            href={row.imagesslipadmin}
+            href={slipAdminUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={row.imagesslipadmin} alt="สลิปแอดมิน" className="max-w-full max-h-[600px]" />
+            <img src={slipAdminUrl} alt="สลิปแอดมิน" className="max-w-full max-h-[600px]" />
           </a>
           <p className="text-xs text-muted mt-2 break-all">{row.imagesslipadmin}</p>
         </div>
