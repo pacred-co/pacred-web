@@ -2,6 +2,39 @@
 
 ---
 
+# 🌙 2026-05-24 EVENING — WAVE 14 COMPLETE (read FIRST · supersedes 2026-05-22 below)
+
+ภูม session ที่บ้านวันนี้. **1 new commit** บน `Poom-pacred` (`d287992`).
+พักก่อน · พรุ่งนี้ว่ากันใหม่.
+
+**📦 What landed tonight (Wave 14 · 3 parallel streams):**
+- **Agent D** — Wave 12-C ภาค 2: forwarder edit dimensions (4 files · ~860 LOC ·
+  `actions/admin/forwarders-edit.ts` + `[fNo]/edit/{page,edit-form}.tsx` +
+  detail page entry button). Pure Tailwind UI per §0a — admin กรอก weight/CBM/
+  crate AFTER goods arrive China warehouse.
+- **Agent B** — Fidelity audit: `docs/audit/fidelity-gap-2026-05-24.md` (282 LOC ·
+  **47 gaps** documented: 18 🔴 workflow · 22 🟠 polish · 7 🟢 keep). Top 3 P0
+  ranked with file paths + LOC estimates.
+- **Me (orchestration)** — 10 routes smoke + 3 Chrome screenshots verified
+  brand-red theme + Wave 12-D inline edit + Wave 12-C v2 form. **Phantom
+  discovered:** Phase A migration `tb_priceuser_*` ไม่เคยมี · Wave 9 ภูมิรู้แล้ว ·
+  ของจริง `tb_rate_vip_*` + `tb_hs_rate_custom_*` ทั้งหมดบน prod แล้ว.
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-24-night.md`](docs/research/poom-save-point-2026-05-24-night.md) — canonical resume (1-commit summary · top 3 P0 queue · 6 decision options)
+2. 📋 [`docs/audit/fidelity-gap-2026-05-24.md`](docs/audit/fidelity-gap-2026-05-24.md) — 47-gap inventory with line citations to legacy PHP
+3. 📝 [`docs/research/poom-save-point-2026-05-23-night.md`](docs/research/poom-save-point-2026-05-23-night.md) — yesterday's context (Wave 9-13 details)
+
+**⚠️ Pending ภูม manual actions (carried over):**
+1. 🔴 ROTATE S3 access key (security · `e913d7da34ca0089638f100afb74c972` leaked)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` via Supabase dashboard
+3. (Optional) แจ้งลูกค้า 4 คน PR เปลี่ยน
+
+**Top pickup ลำดับแนะนำ:** D (5 นาที cleanup) → B (yuan date filter, 30 นาที)
+→ A (Top 3 P0, 3 ชม). หรือเลือก option อื่นจาก 6 ตัวเลือกใน save-point §"พรุ่งนี้ตัดสิน".
+
+---
+
 # 🚨 2026-05-22 EVENING — WAVE 7.3 + WAVE 8 COMPLETE (read FIRST · supersedes 2026-05-20 below)
 
 ภูม ran tonight's session at the home computer. **4 new commits**
