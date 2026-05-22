@@ -29,6 +29,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { TbWalletBulkBar, TbWalletRowCheckbox } from "./tb-bulk-bar";
+import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +179,16 @@ export default async function AdminWalletPage({
 
   const { data: rowsRaw, error } = await q;
   const rows = (rowsRaw ?? []) as unknown as WhsRow[];
+
+  // Wave 13.1 — resolve every imagesslip → signed Supabase URL in parallel
+  // (legacy `imagesslip` is a bare filename like `FCL_68f5...jpg`; live
+  // location after backfill 06 is `slips/legacy/<file>`). The map is keyed
+  // by tb_wallet_hs.id so we can look up per row when rendering the "ดู"
+  // button below.
+  const slipUrlMap = await resolveLegacyUrlMap(
+    rows.map((r) => ({ id: r.id, filename: r.imagesslip })),
+    "slip",
+  );
 
   // 2nd query — merge customer names from tb_users (same pattern as
   // /admin/forwarders + /admin/yuan-payments)
@@ -408,22 +419,32 @@ export default async function AdminWalletPage({
                           ) : null}
                         </td>
                         <td className="px-3 py-3 text-xs">
-                          {r.imagesslip ? (
-                            <a
-                              href={
-                                r.imagesslip.startsWith("http")
-                                  ? r.imagesslip
-                                  : `/legacy/uploads/${r.imagesslip}`
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary-600 hover:underline"
-                            >
-                              ดู
-                            </a>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
+                          {(() => {
+                            const url = slipUrlMap[String(r.id)];
+                            if (url) {
+                              return (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary-600 hover:underline"
+                                >
+                                  ดู
+                                </a>
+                              );
+                            }
+                            if (r.imagesslip) {
+                              return (
+                                <span
+                                  className="text-amber-600"
+                                  title={`สลิป upload แล้วแต่หา URL ไม่ได้ — filename: ${r.imagesslip}`}
+                                >
+                                  ⚠ ไม่พบ
+                                </span>
+                              );
+                            }
+                            return <span className="text-muted">—</span>;
+                          })()}
                         </td>
                         <td className="px-3 py-3 text-xs">
                           <Link

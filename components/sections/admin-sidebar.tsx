@@ -100,7 +100,7 @@ const ICONS: Record<string, LucideIcon> = {
 function Icon({ name, active }: { name?: string; active: boolean }) {
   const Cmp = name ? ICONS[name] : undefined;
   if (!Cmp) return <span className="w-[18px] h-[18px] shrink-0" />;
-  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-white/55"}`} />;
+  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-muted"}`} />;
 }
 
 // ── Role badge label (legacy nameAdminType + dept/section). ────────────
@@ -217,8 +217,8 @@ function MenuRow({
   const padLeft = depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : "pl-10";
   const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
     active
-      ? "bg-primary-600 text-white font-semibold"
-      : "text-white/75 hover:bg-white/10 hover:text-white"
+      ? "bg-primary-600 text-white font-semibold shadow-sm"
+      : "text-foreground/75 hover:bg-primary-50 hover:text-primary-700"
   }`;
 
   // Accordion parent (no own href, or a parent with children).
@@ -235,8 +235,8 @@ function MenuRow({
           <span className="truncate">{t(item.labelKey)}</span>
           {badgeVal > 0 && <CountBadge value={badgeVal} />}
           {open
-            ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />
-            : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-60 shrink-0`} />}
+            ? <ChevronDown className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />
+            : <ChevronRight className={`${badgeVal > 0 ? "ml-1.5" : "ml-auto"} w-3.5 h-3.5 opacity-50 shrink-0`} />}
         </button>
         {open && (
           <ul className="mt-0.5 space-y-0.5">
@@ -281,37 +281,37 @@ function SidebarHeader({
   const [open, setOpen] = useState(false);
   const initial = adminLabel.trim().charAt(0).toUpperCase() || "P";
   return (
-    <div className="px-4 py-4 border-b border-white/10">
+    <div className="px-4 py-4 border-b border-border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-white/5 px-1 py-1 transition-colors"
+        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-surface-alt px-1 py-1 transition-colors"
         aria-expanded={open}
       >
         <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
           {initial}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-white truncate">{adminLabel}</span>
+          <span className="block text-sm font-semibold text-foreground truncate">{adminLabel}</span>
           {roleKey && (
-            <span className="block text-[11px] text-white/55 truncate">{t(roleKey)}</span>
+            <span className="block text-[11px] text-muted truncate">{t(roleKey)}</span>
           )}
         </span>
         {open
-          ? <ChevronDown className="w-4 h-4 text-white/50 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />}
+          ? <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-muted shrink-0" />}
       </button>
       {open && (
         <div className="mt-2 space-y-0.5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <User className="w-4 h-4" />
             <span>{t("account.profile")}</span>
           </Link>
-          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <Settings className="w-4 h-4" />
             <span>{t("account.settings")}</span>
           </Link>
-          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-foreground/70 hover:bg-primary-50 hover:text-primary-700 transition-colors">
             <ArrowRightLeft className="w-4 h-4" />
             <span>{t("account.logout")}</span>
           </Link>
@@ -366,21 +366,22 @@ export function AdminSidebar({
       </button>
 
       {/*
-        Dark fixed accordion sidebar — the owner's reference is the legacy
-        PCS dark `menu-fixed menu-dark menu-accordion`
-        (docs/research/d1-fidelity-admin.md §1.3 — "Default to dark to
-        match"). Slate-950 base, primary-600 accents.
+        White accordion sidebar (ภูม brief 2026-05-23 — "เปลี่ยนสี Sidebar
+        เป็นสีขาว ทำให้สมูทๆ ตัดกับหน้าทำงานข้างๆ"). Light surface keeps the
+        rail visually distinct from the main content via the right-edge
+        border + soft shadow; active item stays in Pacred primary-red so the
+        brand cue carries through.
       */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-slate-950 text-white border-r border-white/10 shadow-xl
+          bg-white text-foreground border-r border-border shadow-[2px_0_8px_-2px_rgba(0,0,0,0.06)]
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
         {/* Brand */}
-        <div className="px-4 pt-4 pb-3 border-b border-white/10">
+        <div className="px-4 pt-4 pb-3 border-b border-border">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-lg font-black tracking-tight text-white">PR</h2>
-            <span className="text-[10px] uppercase tracking-widest text-white/45">Admin</span>
+            <h2 className="text-lg font-black tracking-tight text-primary-600">PR</h2>
+            <span className="text-[10px] uppercase tracking-widest text-muted">Admin</span>
           </div>
         </div>
 
@@ -399,7 +400,7 @@ export function AdminSidebar({
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (
-                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-white/35 font-bold">
+                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-muted/70 font-bold">
                   {sec.header}
                 </p>
               )}
@@ -421,11 +422,11 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        <div className="px-2.5 py-3 border-t border-white/10">
+        <div className="px-2.5 py-3 border-t border-border">
           <Link
             href="/dashboard"
             onClick={closeMobile}
-            className="block rounded-md px-3 py-2 text-xs text-white/55 hover:bg-white/10 hover:text-white transition-colors"
+            className="block rounded-md px-3 py-2 text-xs text-muted hover:bg-primary-50 hover:text-primary-700 transition-colors"
           >
             {t("backToCustomer")}
           </Link>
