@@ -148,10 +148,9 @@ pnpm dev                  # localhost:3000
 ## ⏭ งานต่อไป (ลำดับ priority)
 
 1. **Rotate S3 key** (security · do first)
-2. (Optional) แจ้งลูกค้า 4 คน
-3. Capture learning เรื่อง PgBouncer sequence trap → `docs/learnings/supabase-rls-patterns.md`
-4. Deploy `Poom-pacred` → `main` (ก๊อต review)
-5. Wave 14 (next) — เลือกจาก:
+2. ✅ แจ้งลูกค้า 4 คน — done
+3. ✅ Capture learning เรื่อง PgBouncer sequence trap → `docs/learnings/supabase-rls-patterns.md` + `_index.md` updated
+4. Wave 14 (next) — เลือกจาก:
    - QA flow simulator บน prod (test register → wallet topup → forwarder create → cnt-hs end-to-end)
    - Fidelity gap audit ที่ค้าง (ตาม `docs/audit/fidelity-gap-2026-05-23.md` ที่เขียนไว้ก่อนหน้านี้)
    - Phase A migration backlog (`tb_priceuser_*` unblock rates pages)
