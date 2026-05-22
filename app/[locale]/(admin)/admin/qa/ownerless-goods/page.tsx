@@ -55,7 +55,10 @@ export default async function OwnerlessGoodsPage() {
   // one filter cleanly without breaking type-safe column references.
   // Fetch fstatus='4' rows with empty userid, then merge with the null
   // case via a 2nd query — cheap, both subsets are small.
-  const [emptyRes, nullRes] = await Promise.all([
+  // Wave 10 bug-fix 2026-05-23: add 2 separate exact counts (one per
+  // sub-query) — the previous {rows.length} display capped at 200.
+  // Total breach = count where userid IS NULL OR userid = ''.
+  const [emptyRes, nullRes, emptyCntRes, nullCntRes] = await Promise.all([
     admin
       .from("tb_forwarder")
       .select(
@@ -76,7 +79,18 @@ export default async function OwnerlessGoodsPage() {
       .is("userid", null)
       .order("fdate", { ascending: true })
       .limit(100),
+    admin
+      .from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .eq("fstatus", "4")
+      .eq("userid", ""),
+    admin
+      .from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .eq("fstatus", "4")
+      .is("userid", null),
   ]);
+  const breachCount = (emptyCntRes.count ?? 0) + (nullCntRes.count ?? 0);
 
   const error = emptyRes.error ?? nullRes.error;
   const rows = [
@@ -99,7 +113,7 @@ export default async function OwnerlessGoodsPage() {
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">สินค้าไม่มีเจ้าของ</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {rows.length} รายการ
+            {breachCount || rows.length} รายการ
           </span>
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub

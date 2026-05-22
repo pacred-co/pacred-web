@@ -64,6 +64,13 @@ export default async function PrepareOverduePage() {
   // result set.
   const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Exact total — Wave 10 bug-fix 2026-05-23 (was using rows.length).
+  const { count: breachCount } = await admin
+    .from("tb_forwarder")
+    .select("id", { count: "exact", head: true })
+    .eq("fstatus", "4")
+    .lt("fdatestatus4", cutoff);
+
   const { data: rowsRaw, error } = await admin
     .from("tb_forwarder")
     .select(
@@ -97,7 +104,7 @@ export default async function PrepareOverduePage() {
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">เตรียมส่งเกินกำหนด</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {rows.length} รายการ
+            {breachCount ?? rows.length} รายการ
           </span>
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub

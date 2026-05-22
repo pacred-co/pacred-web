@@ -68,15 +68,33 @@ export default async function TransitOverduePage() {
   // small in practice (active transit is ~weeks of inventory).
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: rowsRaw, error } = await admin
-    .from("tb_forwarder")
-    .select(
-      "id,fdate,fdatestatus3,fstatus,fcabinetnumber,ftrackingchn,ftrackingth," +
-        "fwarehousechina,ftransporttype,fweight,fvolume,ftotalprice,fnote,userid",
-    )
-    .eq("fstatus", "3")
-    .order("fdate", { ascending: true })
-    .limit(500);
+  // Wave 10 bug-fix 2026-05-23: 2 separate exact counts (one per branch
+  // of the (fdate3 OR fdate)-based fallback condition). Previous display
+  // used rows.length which capped at 200.
+  const [{ data: rowsRaw, error }, { count: countWithStatus3 }, { count: countNoStatus3 }] = await Promise.all([
+    admin
+      .from("tb_forwarder")
+      .select(
+        "id,fdate,fdatestatus3,fstatus,fcabinetnumber,ftrackingchn,ftrackingth," +
+          "fwarehousechina,ftransporttype,fweight,fvolume,ftotalprice,fnote,userid",
+      )
+      .eq("fstatus", "3")
+      .order("fdate", { ascending: true })
+      .limit(500),
+    admin
+      .from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .eq("fstatus", "3")
+      .not("fdatestatus3", "is", null)
+      .lt("fdatestatus3", cutoff),
+    admin
+      .from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .eq("fstatus", "3")
+      .is("fdatestatus3", null)
+      .lt("fdate", cutoff),
+  ]);
+  const breachCount = (countWithStatus3 ?? 0) + (countNoStatus3 ?? 0);
 
   const all = (rowsRaw ?? []) as unknown as FwdRow[];
 
@@ -109,7 +127,7 @@ export default async function TransitOverduePage() {
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">กำลังมาไทยเกินกำหนด</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {rows.length} รายการ
+            {breachCount || rows.length} รายการ
           </span>
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub

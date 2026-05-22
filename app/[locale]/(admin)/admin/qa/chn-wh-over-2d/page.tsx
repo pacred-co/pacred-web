@@ -64,6 +64,14 @@ export default async function ChnWhOver2dPage() {
   // within 2 days" SLA).
   const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
+  // Exact total count (head:true is cheap · accurate even when > 200 breaches)
+  // Wave 10 bug-fix 2026-05-23 — was using rows.length (capped at 200).
+  const { count: breachCount } = await admin
+    .from("tb_forwarder")
+    .select("id", { count: "exact", head: true })
+    .eq("fstatus", "1")
+    .lt("fdate", cutoff);
+
   const { data: rowsRaw, error } = await admin
     .from("tb_forwarder")
     .select(
@@ -97,7 +105,7 @@ export default async function ChnWhOver2dPage() {
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">รอเข้าโกดังจีนเกิน 2 วัน</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {rows.length} รายการ
+            {breachCount ?? rows.length} รายการ
           </span>
           <Link
             href="/admin/qa"

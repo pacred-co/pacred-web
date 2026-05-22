@@ -57,17 +57,23 @@ export default async function NewClientNoContactPage() {
     )
     .eq("useractive", "1")
     .gt("userregistered", registerCutoff)
+    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`)
     .order("userregistered", { ascending: true })
     .limit(500);
 
-  const all = (rowsRaw ?? []) as unknown as URow[];
+  // Exact total count — push the same .or() filter into PostgREST so the
+  // count is accurate even when > 200 breaches. Wave 10 bug-fix 2026-05-23
+  // (ภูม flagged in driver/work · same pattern across QA queues).
+  const { count: breachCount } = await admin
+    .from("tb_users")
+    .select("userid", { count: "exact", head: true })
+    .eq("useractive", "1")
+    .gt("userregistered", registerCutoff)
+    .or(`userlastlogin.is.null,userlastlogin.lt.${loginCutoff}`);
 
-  const rows = all
-    .filter((u) => {
-      if (!u.userlastlogin) return true; // never logged in
-      return new Date(u.userlastlogin).getTime() < new Date(loginCutoff).getTime();
-    })
-    .slice(0, 200);
+  // Same .or() pushed into the data query (above) makes the in-memory
+  // filter redundant; keep the slice(0, 200) cap for the display window.
+  const rows = ((rowsRaw ?? []) as unknown as URow[]).slice(0, 200);
 
   const now = Date.now();
 
@@ -78,7 +84,7 @@ export default async function NewClientNoContactPage() {
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-            {rows.length} รายการ
+            {breachCount ?? rows.length} รายการ
           </span>
           <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
             ← กลับ QA hub
