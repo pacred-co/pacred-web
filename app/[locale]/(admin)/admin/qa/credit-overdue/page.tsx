@@ -1,0 +1,231 @@
+/**
+ * /admin/qa/credit-overdue — เครดิตเกินกำหนด (Wave 10 · Group A · SLA-breach queue)
+ *
+ * Surfaces tb_forwarder credit-line orders (fcredit='1') whose fcreditdate
+ * (the agreed pay-back deadline) is in the past. Each breach = a customer
+ * we extended credit to who has missed their settlement window.
+ *
+ * This is a direct port of the same condition powering legacy
+ * forwarder-action.php fCreditError + the matching /admin/forwarder-action
+ * "fCreditError" queue (kept) — surfaced here as a top-level SLA-breach
+ * queue so an accountant can hit it from /admin/qa without drilling into
+ * the catch-all forwarder-action menu.
+ *
+ * SLA rule:  fcredit = '1' (credit-line) AND fcreditdate < NOW()
+ * Data:      tb_forwarder list + tb_users merge.
+ * Order:     fcreditdate ASC — most-overdue first.
+ * Limit:     200 rows.
+ * Drill-in:  ดู / แก้ไข → /admin/forwarders/<fidorco or id>
+ *
+ * Auth: requireAdmin(["ops","accounting"]). Super implicit.
+ */
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+
+export const dynamic = "force-dynamic";
+
+type FRow = {
+  id: number;
+  fdate: string | null;
+  fidorco: string | null;
+  fcabinetnumber: string | null;
+  fstatus: string | null;
+  fcredit: string | null;
+  fcreditdate: string | null;
+  ftotalprice: number | null;
+  fnote: string | null;
+  userid: string | null;
+};
+
+type URow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  "1": "รอเข้าโกดังจีน",
+  "2": "ถึงโกดังจีนแล้ว",
+  "3": "กำลังส่งมาไทย",
+  "4": "ถึงไทยแล้ว",
+  "5": "รอชำระเงิน",
+  "6": "เตรียมส่ง",
+  "7": "ส่งแล้ว",
+  "99": "พิเศษ",
+};
+
+export default async function AdminQaCreditOverduePage() {
+  await requireAdmin(["ops", "accounting"]);
+
+  const admin = createAdminClient();
+
+  const now = new Date().toISOString();
+
+  const { data: rowsRaw, error } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id,fdate,fidorco,fcabinetnumber,fstatus,fcredit,fcreditdate,ftotalprice,fnote,userid",
+    )
+    .eq("fcredit", "1")
+    .lt("fcreditdate", now)
+    .order("fcreditdate", { ascending: true })
+    .limit(200);
+
+  const rows = (rowsRaw ?? []) as unknown as FRow[];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
+  let userMap = new Map<string, URow>();
+  if (userIds.length > 0) {
+    const { data: usersRaw } = await admin
+      .from("tb_users")
+      .select("userid,username,userlastname,usertel")
+      .in("userid", userIds);
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+  }
+
+  const { count: breachCount } = await admin
+    .from("tb_forwarder")
+    .select("id", { count: "exact", head: true })
+    .eq("fcredit", "1")
+    .lt("fcreditdate", now);
+
+  // Total exposure = sum of overdue ftotalprice (the money on the line)
+  const totalExposure = rows.reduce((acc, r) => acc + Number(r.ftotalprice ?? 0), 0);
+
+  return (
+    <main className="p-6 lg:p-8 space-y-5">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA · SLA-BREACH</p>
+        <div className="mt-1 flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold">เครดิตเกินกำหนด</h1>
+          {breachCount ? (
+            <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+              {breachCount} รายการเกินกำหนด
+            </span>
+          ) : (
+            <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+              ทันเวลา
+            </span>
+          )}
+          {totalExposure > 0 ? (
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
+              เงินค้าง ≈ ฿{totalExposure.toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </span>
+          ) : null}
+          <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
+            ← กลับหน้า QA
+          </Link>
+        </div>
+        <p className="text-xs text-muted mt-1">
+          tb_forwarder · fcredit = &apos;1&apos; AND fcreditdate &lt; NOW() · เรียงเก่าสุดก่อน
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          โหลดข้อมูลไม่สำเร็จ: {error.message}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>✅</div>
+            <p className="text-sm font-medium text-foreground">ไม่มีรายการ — ทุกอย่างทันเวลา!</p>
+            <p className="text-xs text-muted">ลูกค้าเครดิตทุกคนชำระเงินภายในกำหนดแล้ว</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-3 py-3">เลขที่ F</th>
+                  <th className="px-3 py-3">ลูกค้า</th>
+                  <th className="px-3 py-3">วันที่สร้าง</th>
+                  <th className="px-3 py-3">ครบกำหนด</th>
+                  <th className="px-3 py-3 text-right">เลทไป</th>
+                  <th className="px-3 py-3">เบอร์ตู้</th>
+                  <th className="px-3 py-3">สถานะ</th>
+                  <th className="px-3 py-3 text-right">ยอด (THB)</th>
+                  <th className="px-3 py-3">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const u = r.userid ? userMap.get(r.userid) : undefined;
+                  const customerName = u
+                    ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
+                    : r.userid ?? "—";
+                  const lateDays = r.fcreditdate
+                    ? Math.floor((Date.now() - new Date(r.fcreditdate).getTime()) / (1000 * 60 * 60 * 24))
+                    : 0;
+                  const drillKey = r.fidorco ?? String(r.id);
+                  return (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-3 font-mono text-xs">
+                        <Link
+                          href={`/admin/forwarders/${encodeURIComponent(drillKey)}`}
+                          className="text-primary-600 hover:underline"
+                        >
+                          {r.fidorco ?? `#${r.id}`}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        <div className="font-mono">{r.userid ?? "—"}</div>
+                        <div>{customerName}</div>
+                        {u?.usertel ? <div className="text-muted">{u.usertel}</div> : null}
+                      </td>
+                      <td className="px-3 py-3 text-xs whitespace-nowrap">
+                        {r.fdate ? new Date(r.fdate).toLocaleDateString("th-TH") : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-xs whitespace-nowrap text-red-700 font-medium">
+                        {r.fcreditdate
+                          ? new Date(r.fcreditdate).toLocaleDateString("th-TH")
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                            lateDays >= 30
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : lateDays >= 7
+                                ? "bg-orange-100 text-orange-700 border-orange-200"
+                                : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                          }`}
+                        >
+                          เลท {lateDays} วัน
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-xs">{r.fcabinetnumber || "—"}</td>
+                      <td className="px-3 py-3 text-xs">
+                        {STATUS_LABEL[r.fstatus ?? ""] ?? r.fstatus ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-xs">
+                        ฿{Number(r.ftotalprice ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        <Link
+                          href={`/admin/forwarders/${encodeURIComponent(drillKey)}`}
+                          className="text-primary-600 hover:underline"
+                        >
+                          ดู / แก้ไข
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted">
+        แสดงไม่เกิน 200 แถว · เรียง <code>fcreditdate</code> ASC (เลทสุดขึ้นก่อน) · ตามลูกค้าทาง LINE / โทร / ตัดสินใจปรับเป็นไม่ใช่เครดิต
+      </p>
+    </main>
+  );
+}
