@@ -40,11 +40,34 @@
 | /admin/reports/sales-by-rep | empty rebuilt | Wave 8 banner (cross-table SUM/GROUP BY needs Postgres view) |
 | /admin/reports/user-sales-history | empty rebuilt | redirect to /admin/customers (search) |
 | /admin/reports/user-sales-history/`[customer_id]` | empty rebuilt | redirect to /admin/customers/`[id]` |
-| /admin/rates/custom-user | empty rebuilt | Phase A backlog banner (legacy tb_priceuser_* not migrated yet) |
-| /admin/rates/custom-hs | empty rebuilt | Phase A backlog banner (same migration gap) |
+| /admin/rates/custom-user | empty rebuilt | Phase A backlog banner (legacy tb_priceuser_* not migrated yet) → **Wave 9 fixed** (เห็นด้านล่าง) |
+| /admin/rates/custom-hs | empty rebuilt | Phase A backlog banner (same migration gap) → **Wave 9 fixed** |
 | sidebar "ระบบบัญชี" | 2-child dropdown (Cargo/Freight) | **single leaf** → `/admin/accounting/cargo` + Cargo/Freight pills ในหน้า head (mirrors `/admin/forwarders` pattern) |
 
 **Total Wave 7.2 fixes shipped tonight: 23 surfaces** · across 9 commits.
+
+---
+
+## ✅ Wave 9 (2026-05-23 morning) — rate pages rewritten
+
+**Discovery: Phase A wasn't actually a migration gap.** I named legacy tables
+WRONG in the Wave 7.2 banners — `tb_priceuser_member` / `tb_priceuser_hs`
+don't exist anywhere. The real legacy names are different + ALL already on prod:
+
+| Real legacy table | Rows on prod | Purpose |
+|---|---|---|
+| `tb_rate_vip_kg` | 192 | KG rate per VIP tier (coid) |
+| `tb_rate_vip_cbm` | 192 | CBM rate per VIP tier |
+| `tb_customrate_hs` | 463 | History log per-customer rate overrides |
+| `tb_hs_rate_custom_kg` | 1,481 | KG override per customer-cell |
+| `tb_hs_rate_custom_cbm` | 1,537 | CBM override per customer-cell |
+
+Pages rewritten:
+- **`/admin/rates/custom-user`** — VIP tier rate matrix (12 groups: VIP1-5 + OOAEOM.VIP + THADA.VIP + SWAN + PRO3.15 + ...) · cards w/ customer count per group · click → 24-cell matrix (2 warehouses × 3 transport × 4 product) with KG + CBM
+- **`/admin/rates/custom-hs`** — per-customer override history (200 latest) · search by PR id · drill into one customer → full matrix with "ก่อน → ใหม่" diff
+- Read-only for now; Wave 10 = edit forms (UPSERT + insert history row)
+
+✅ Browser-verified both pages render real prod data.
 
 ---
 
