@@ -3,27 +3,37 @@
 import { useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 
 /**
- * Forwarders table — renders tb_forwarder rows (faithful port, Wave 3 P0 #1).
+ * Forwarders table — Wave 11 fidelity port to legacy `forwarder.php`
+ * L508-707 (the 12-column list layout).
  *
- * Wave 5 (2026-05-21) — bulk-status-update bar RESTORED. The new
- * `adminBulkUpdateForwarderTbStatus` Server Action mutates `tb_forwarder`
- * (matches the read path) instead of the rebuilt `forwarders` table the
- * deferred V3-era helper still targets. The bar appears only when ≥1 row
- * is selected (legacy-style fixed-bottom strip). Customer notifications
- * are TODO until the `tb_users.userid → profiles.id` bridge lands.
+ * Wave 11 changes vs Wave 5:
+ *   - Column shape mirrors legacy 1:1: ID · วันที่สร้าง · รหัสลูกค้า ·
+ *     รายละเอียด · ยอดค้างชำระ · เลขพัสดุ(จีน) · เลขพัสดุ(ไทย) ·
+ *     เข้าโกดัง · ออกโกดัง · ถึงไทย · สถานะ · อัปเดต · ตัวเลือก
+ *   - "ออเดอร์ #<id>" link instead of "f_no" (was wrongly showing
+ *     Cargo API tracking `fidorco`)
+ *   - "ฝากนำเข้าจาก: users" / "จาก: admin_X" badge under product detail
+ *   - 3 stage-date columns (fdatestatus2/3/4) for warehouse pipeline visibility
+ *   - Inline ดู / อัปเดต button cluster in the ตัวเลือก column
+ *
+ * Wave 5 carry-over (still works · same Server Action):
+ *   - Checkbox column + indeterminate header check
+ *   - Fixed-bottom bulk-update bar with 8-status dropdown
+ *   - window.confirm dialog before mutation
  */
 
 export type Row = {
   id: number;
-  f_no: string;
+  order_no: string;             // "ออเดอร์ #<id>"
+  f_no_cargo: string | null;    // fidorco (Cargo API tracking · separate from order id)
   status: string;
   warehouse_china: string;
   partner_warehouse: string;
   transport_type: string;
+  amount_count: number;
   weight_kg: number;
   volume_cbm: number;
   total_price: number;
@@ -31,9 +41,18 @@ export type Row = {
   tracking_th: string | null;
   cabinet_number: string | null;
   created_at: string;
+  date_status2: string | null;
+  date_status3: string | null;
+  date_status4: string | null;
+  date_admin_status: string | null;
+  admin_id_last: string | null;
+  admin_creator: string | null;
+  ref_order: string | null;
   fcredit: string;
+  paydeposit: string | null;
   note: string | null;
   detail: string | null;
+  cover: string | null;
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -63,6 +82,31 @@ const BULK_STATUS_OPTIONS: ReadonlyArray<{ v: BulkStatusValue; l: string }> = [
   { v: "7",  l: "7 · ส่งแล้ว" },
   { v: "99", l: "99 · สถานะพิเศษ" },
 ];
+
+function fmtDate(iso: string | null | undefined, withTime = false): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  if (withTime) {
+    return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+  }
+  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
+function relativeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Math.max(0, now - then);
+  const d = Math.floor(diff / 86_400_000);
+  if (d > 0) return `${d} วัน`;
+  const h = Math.floor(diff / 3_600_000);
+  if (h > 0) return `${h} ชม`;
+  const m = Math.floor(diff / 60_000);
+  if (m > 0) return `${m} นาที`;
+  return "เมื่อกี้";
+}
 
 export function ForwardersTable({
   rows,
@@ -132,10 +176,10 @@ export function ForwardersTable({
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการที่ตรงกัน</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+            <table className="w-full text-[11px]">
+              <thead className="bg-surface-alt/50 text-left text-[10px] uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-3 py-3 w-8">
+                  <th className="px-2 py-3 w-8">
                     <input
                       type="checkbox"
                       checked={allChecked}
@@ -146,84 +190,161 @@ export function ForwardersTable({
                       aria-label="เลือกทั้งหมด"
                     />
                   </th>
-                  <th className="px-4 py-3">
-                    <Glossary term="เลขที่ (F-no)" definition={GLOSSARY_DEFS.f_no} />
-                  </th>
-                  <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3">โกดัง / ขนส่ง</th>
-                  <th className="px-4 py-3">ตู้</th>
-                  <th className="px-4 py-3 text-right">
-                    น้ำหนัก / <Glossary term="ปริมาตร (CBM)" definition={GLOSSARY_DEFS.cbm} />
-                  </th>
-                  <th className="px-4 py-3 text-right">ราคา</th>
-                  <th className="px-4 py-3">Tracking</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3">วันที่</th>
+                  <th className="px-2 py-3">ID</th>
+                  <th className="px-2 py-3">วันที่สร้าง</th>
+                  <th className="px-2 py-3">รหัสลูกค้า</th>
+                  <th className="px-2 py-3">รายละเอียด</th>
+                  <th className="px-2 py-3 text-right">ยอดค้างชำระ</th>
+                  <th className="px-2 py-3">เลขพัสดุ (จีน)</th>
+                  <th className="px-2 py-3">เลขพัสดุ (ไทย)</th>
+                  <th className="px-2 py-3">เข้าโกดัง</th>
+                  <th className="px-2 py-3">ออกโกดัง</th>
+                  <th className="px-2 py-3">ถึงไทย</th>
+                  <th className="px-2 py-3">สถานะ</th>
+                  <th className="px-2 py-3">อัปเดต</th>
+                  <th className="px-2 py-3">ตัวเลือก</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  // Show "เครติด" badge on top of fstatus badge for credit orders
-                  const statusKey = r.fcredit === "1" ? "c" : r.status;
+                  const statusKey = r.status;
                   const badgeCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
-                  const label = r.fcredit === "1"
+                  const sLabel = r.fcredit === "1"
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
                   const isOn = selected.has(r.id);
+                  const isSystem = r.ref_order && r.ref_order !== "";
+                  const isAdminInitiated = r.admin_creator && r.admin_creator !== "" && !isSystem;
+                  const sourceLabel = isSystem
+                    ? "ฝากนำเข้า : ระบบ"
+                    : isAdminInitiated
+                      ? `ฝากนำเข้า : ${r.admin_creator}`
+                      : "ฝากนำเข้าจาก : users";
+                  const sourceBadgeCls = isSystem
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : isAdminInitiated
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-gray-50 text-gray-600 border-gray-200";
+
                   return (
                     <tr
                       key={r.id}
                       className={`border-t border-border hover:bg-surface-alt/30 ${isOn ? "bg-primary-50/40" : ""}`}
                     >
-                      <td className="px-3 py-3 w-8">
+                      <td className="px-2 py-2.5 w-8">
                         <input
                           type="checkbox"
                           checked={isOn}
                           onChange={() => toggleRow(r.id)}
-                          aria-label={`เลือก ${r.f_no}`}
+                          aria-label={`เลือก ออเดอร์ #${r.id}`}
                         />
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">
-                          {r.f_no}
-                        </Link>
+                      <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
+                      <td className="px-2 py-2.5 whitespace-nowrap text-muted">
+                        {r.created_at ? new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-xs">
-                        <div className="font-mono">{r.customer?.userid ?? "—"}</div>
-                        <div>{r.customer?.name || "—"}</div>
-                        <div className="text-muted">{r.customer?.phone}</div>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <div>
-                          {warehouseLabel[r.partner_warehouse] ?? r.partner_warehouse}
-                          {" / "}
-                          {modeLabel[r.transport_type] ?? r.transport_type}
+                      <td className="px-2 py-2.5">
+                        <div className="font-mono font-semibold">{r.customer?.userid ?? "—"}</div>
+                        <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
+                          {r.customer?.name || "—"}
                         </div>
-                        <div className="text-muted">โกดังจีน: {r.warehouse_china}</div>
+                        <div className="text-muted text-[10px]">{r.customer?.phone}</div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {r.cabinet_number || <span className="text-muted">—</span>}
+                      <td className="px-2 py-2.5">
+                        <Link
+                          href={`/admin/forwarders/${r.id}`}
+                          className="font-semibold text-primary-600 hover:underline"
+                        >
+                          ออเดอร์ #{r.id}
+                        </Link>
+                        {r.detail && (
+                          <div className="text-muted truncate max-w-[200px] mt-0.5" title={r.detail}>
+                            {r.detail}
+                          </div>
+                        )}
+                        <div className="mt-1 flex flex-wrap gap-1 items-center">
+                          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${sourceBadgeCls}`}>
+                            {sourceLabel}
+                          </span>
+                          {r.f_no_cargo && (
+                            <span className="text-[9px] text-muted font-mono" title="Cargo API tracking (fidorco)">
+                              {r.f_no_cargo}
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-right text-xs">
-                        {r.weight_kg.toFixed(2)} kg
-                        <br />
-                        <span className="text-muted">{r.volume_cbm.toFixed(3)} cbm</span>
+                      <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                        <div className="font-mono font-semibold">
+                          ฿{r.total_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="text-muted text-[10px]">{r.amount_count} กล่อง</div>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">
-                        ฿{r.total_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      <td className="px-2 py-2.5">
+                        {r.tracking_chn && r.tracking_chn !== "-" ? (
+                          <>
+                            <div className="font-mono text-[10px]">{r.tracking_chn}</div>
+                            <div className="mt-0.5">
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[9px]">
+                                {modeLabel[r.transport_type] ?? r.transport_type}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-xs">
-                        {r.tracking_th  && r.tracking_th  !== "-" && <div>TH: {r.tracking_th}</div>}
-                        {r.tracking_chn && r.tracking_chn !== "-" && <div>CN: {r.tracking_chn}</div>}
-                        {(!r.tracking_th || r.tracking_th === "-") && (!r.tracking_chn || r.tracking_chn === "-") && <span className="text-muted">—</span>}
+                      <td className="px-2 py-2.5 font-mono text-[10px]">
+                        {r.tracking_th && r.tracking_th !== "-" ? r.tracking_th : <span className="text-muted">—</span>}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeCls}`}>
-                          {label}
+                      <td className="px-2 py-2.5 whitespace-nowrap text-muted">
+                        {fmtDate(r.date_status2)}
+                      </td>
+                      <td className="px-2 py-2.5 whitespace-nowrap text-muted">
+                        {fmtDate(r.date_status3)}
+                      </td>
+                      <td className="px-2 py-2.5 whitespace-nowrap text-muted">
+                        {fmtDate(r.date_status4)}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <span className={`rounded-full border px-2 py-0.5 text-[9px] font-medium whitespace-nowrap ${badgeCls}`}>
+                          {sLabel}
                         </span>
+                        {r.cabinet_number && (
+                          <div className="mt-0.5 text-[9px] text-muted font-mono">ตู้ {r.cabinet_number}</div>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                        {r.created_at ? new Date(r.created_at).toLocaleDateString("th-TH") : "—"}
+                      <td className="px-2 py-2.5 whitespace-nowrap">
+                        {r.date_admin_status ? (
+                          <>
+                            <div className="text-muted text-[10px]">
+                              {fmtDate(r.date_admin_status, true)}
+                            </div>
+                            <div className="text-[9px] text-amber-700">
+                              ผ่านมา {relativeAgo(r.date_admin_status)}
+                            </div>
+                            {r.admin_id_last && (
+                              <div className="text-[9px] text-muted font-mono">{r.admin_id_last}</div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="flex flex-col gap-1">
+                          <Link
+                            href={`/admin/forwarders/${r.id}`}
+                            className="rounded border border-green-500 bg-green-50 text-green-700 text-[10px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"
+                          >
+                            ดูข้อมูล
+                          </Link>
+                          <Link
+                            href={`/admin/forwarders/${r.id}`}
+                            className="rounded border border-orange-500 bg-orange-50 text-orange-700 text-[10px] px-2 py-1 hover:bg-orange-100 text-center whitespace-nowrap"
+                          >
+                            อัปเดต
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -251,7 +372,7 @@ export function ForwardersTable({
         <div
           role="region"
           aria-label="บาร์เปลี่ยนสถานะกลุ่ม"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white dark:bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white dark:bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pcs-safe-area-bottom"
         >
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 lg:px-8">
             <span className="text-sm font-medium">

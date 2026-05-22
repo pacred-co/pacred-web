@@ -134,6 +134,7 @@ type SearchParams = {
   service?: string;     // 2026-05-21 segmented control · 'cargo' | 'freight' — label-only
   container?: string;   // 2026-05-21 segmented control · 'fcl' | 'lcl' — label-only
   mode?: string;        // transport mode chip ('1'/'2'/'3')
+  create?: string;      // Wave 11 — 'user'|'system'|'admin' (legacy ?create=)
 };
 
 // 2026-05-21 ภูม brief — Segmented Controls in head menu (NOT sidebar).
@@ -175,6 +176,15 @@ type RawForwarderRow = {
   faddresszipcode: string | null;
   fcredit: string | null;
   fdetail: string | null;
+  // Wave 11 fidelity port — extra fields the legacy `forwarder.php` list shows
+  adminidcreator: string | null;       // empty = customer · "admin_X" = admin-initiated
+  reforder: string | null;             // non-empty = replicated by system (refOrder in PHP)
+  fdatestatus2: string | null;         // เข้าโกดังจีน
+  fdatestatus3: string | null;         // ออกโกดังจีน → กำลังส่งมาไทย
+  fdatestatus4: string | null;         // ถึงไทย
+  fdateadminstatus: string | null;     // last admin status update
+  adminid: string | null;              // last admin who touched the row
+  paydeposit: string | null;           // "1" = paid · null/empty = ยอดค้างชำระ
 };
 
 type RawUserRow = {
@@ -185,12 +195,14 @@ type RawUserRow = {
 };
 
 export type Row = {
-  id: number;
-  f_no: string;                // fidorco (legacy F-no) or fallback to id
+  id: number;                  // primary key · legacy displays as "ออเดอร์ #<id>"
+  order_no: string;            // formatted "ออเดอร์ #<id>" string
+  f_no_cargo: string | null;   // fidorco — Cargo API tracking (separate from order id)
   status: string;              // fstatus
   warehouse_china: string;     // fwarehousechina
   partner_warehouse: string;   // fwarehousename
   transport_type: string;      // ftransporttype
+  amount_count: number;        // famount (number of boxes)
   weight_kg: number;
   volume_cbm: number;
   total_price: number;
@@ -198,9 +210,18 @@ export type Row = {
   tracking_th: string | null;
   cabinet_number: string | null;
   created_at: string;          // fdate (ISO)
+  date_status2: string | null; // เข้าโกดังจีน (fdatestatus2)
+  date_status3: string | null; // กำลังส่งมาไทย (fdatestatus3)
+  date_status4: string | null; // ถึงไทย (fdatestatus4)
+  date_admin_status: string | null; // last admin update
+  admin_id_last: string | null;     // last admin who touched
+  admin_creator: string | null;     // adminidcreator (empty=customer · set=admin-initiated)
+  ref_order: string | null;         // reforder (set = system-replicated)
   fcredit: string;             // '1' = credit order
+  paydeposit: string | null;   // '1' = paid · null/'' = ยอดค้างชำระ remaining
   note: string | null;
   detail: string | null;
+  cover: string | null;        // product thumbnail (fcover)
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -223,10 +244,29 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       "id,fdate,fstatus,ftransporttype,fwarehousechina,fwarehousename," +
       "fcabinetnumber,ftrackingchn,ftrackingth,fidorco,userid,fnote,fcover," +
       "fweight,fvolume,famount,ftotalprice,fcosttotalprice," +
-      "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail",
+      "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
+      // Wave 11 fidelity port — extra cols for the legacy 12-column layout
+      "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
+      "fdateadminstatus,adminid,paydeposit",
     )
     .order("fdate", { ascending: false, nullsFirst: false })
     .limit(300);
+
+  // Wave 11 — `create=` top-tab filter (legacy: ?create=user|system|admin).
+  //   user   = customer-initiated (adminidcreator empty AND reforder empty)
+  //   system = system-replicated (reforder non-empty)
+  //   admin  = admin-initiated   (adminidcreator non-empty AND reforder empty)
+  // Per sample data both fields default to "" (not NULL) on prod, so a
+  // plain .eq("", "") + .neq is reliable. PostgREST .or() with empty
+  // value didn't translate cleanly via supabase-js (returned unfiltered
+  // rows in browser even though raw curl with `eq.` worked).
+  if (sp.create === "user") {
+    q = q.eq("adminidcreator", "").eq("reforder", "");
+  } else if (sp.create === "system") {
+    q = q.neq("reforder", "");
+  } else if (sp.create === "admin") {
+    q = q.neq("adminidcreator", "").eq("reforder", "");
+  }
 
   // Status filter — legacy keys (1..7, 6.1, c, p).
   //
@@ -300,11 +340,13 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       : "";
     return {
       id: r.id,
-      f_no: r.fidorco ?? String(r.id),
+      order_no: `ออเดอร์ #${r.id}`,           // Wave 11 — legacy display label
+      f_no_cargo: r.fidorco,                  // Cargo API tracking (separate from order id)
       status: r.fstatus,
       warehouse_china: r.fwarehousechina,
       partner_warehouse: r.fwarehousename,
       transport_type: r.ftransporttype,
+      amount_count: Number(r.famount ?? 0),
       weight_kg: Number(r.fweight ?? 0),
       volume_cbm: Number(r.fvolume ?? 0),
       total_price: Number(r.ftotalprice ?? 0),
@@ -312,9 +354,18 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       tracking_th: r.ftrackingth,
       cabinet_number: r.fcabinetnumber,
       created_at: r.fdate ?? "",
+      date_status2: r.fdatestatus2,
+      date_status3: r.fdatestatus3,
+      date_status4: r.fdatestatus4,
+      date_admin_status: r.fdateadminstatus,
+      admin_id_last: r.adminid,
+      admin_creator: r.adminidcreator,
+      ref_order: r.reforder,
       fcredit: r.fcredit ?? "0",
+      paydeposit: r.paydeposit,
       note: r.fnote,
       detail: r.fdetail,
+      cover: r.fcover,
       customer: user
         ? {
             userid: user.userid,
@@ -336,7 +387,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     if (lines.length > 0) {
       rows = rows.filter((r) => {
         const fields = [
-          r.f_no.toLowerCase(),
+          String(r.id),
+          (r.f_no_cargo ?? "").toLowerCase(),
           (r.tracking_chn ?? "").toLowerCase(),
           (r.tracking_th  ?? "").toLowerCase(),
           (r.customer?.userid ?? "").toLowerCase(),
@@ -348,7 +400,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   } else if (sp.q) {
     const keyword = sp.q.toLowerCase();
     rows = rows.filter((r) =>
-      r.f_no.toLowerCase().includes(keyword) ||
+      String(r.id).includes(keyword) ||
+      (r.f_no_cargo ?? "").toLowerCase().includes(keyword) ||
       (r.tracking_chn ?? "").toLowerCase().includes(keyword) ||
       (r.tracking_th  ?? "").toLowerCase().includes(keyword) ||
       (r.customer?.userid ?? "").toLowerCase().includes(keyword) ||
@@ -401,18 +454,67 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">
-            ฝากนำเข้า — Ops{headerSuffix ? ` · ${headerSuffix}` : ""}
+            ฝากนำเข้า{headerSuffix ? ` · ${headerSuffix}` : ""}
           </h1>
           <p className="text-sm text-muted mt-0.5">
             {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด {counts.total.toLocaleString("th-TH")})
           </p>
         </div>
-        <Link
-          href="/admin/forwarders/bulk-search"
-          className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
-        >
-          🔍 ค้นหา tracking หลายเลข
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/admin/forwarders/bulk-search"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+          >
+            🔍 ค้นหา tracking หลายเลข
+          </Link>
+          {/* Wave 11 — legacy "+ เพิ่มรายการให้ลูกค้า" (forwarder.php L758).
+              Lands on the admin-initiated forwarder create flow ·
+              currently /admin/forwarders/new = redirect to list ·
+              full form is Wave 12 backlog (similar to wallet/add). */}
+          <Link
+            href="/admin/forwarders/new"
+            className="rounded-lg border border-green-500 bg-green-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600"
+          >
+            + เพิ่มรายการให้ลูกค้า
+          </Link>
+        </div>
+      </div>
+
+      {/* Wave 11 — top tabs (4): ทั้งหมด · จากลูกค้า · จากระบบ · จากแอดมิน
+          Legacy `forwarder.php` L267-280. Filter via ?create=. */}
+      <div className="flex flex-wrap gap-0 border-b border-border -mx-1">
+        {([
+          { v: undefined, l: "ฝากนำเข้าทั้งหมด" },
+          { v: "user",    l: "ฝากนำเข้าจากลูกค้า" },
+          { v: "system",  l: "ฝากนำเข้าจากระบบ" },
+          { v: "admin",   l: "ฝากนำเข้าจากแอดมิน" },
+        ] as const).map((t) => {
+          const params = new URLSearchParams();
+          if (t.v) params.set("create", t.v);
+          // preserve other filters across tab switches
+          if (sp.status)    params.set("status", sp.status);
+          if (sp.q)         params.set("q", sp.q);
+          if (sp.date_from) params.set("date_from", sp.date_from);
+          if (sp.date_to)   params.set("date_to", sp.date_to);
+          if (sp.mode)      params.set("mode", sp.mode);
+          if (service)      params.set("service", service);
+          if (container)    params.set("container", container);
+          const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
+          const active = (sp.create ?? "") === (t.v ?? "");
+          return (
+            <Link
+              key={t.v ?? "all"}
+              href={href}
+              className={`mx-1 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                active
+                  ? "border-primary-600 text-primary-700 bg-primary-50/50"
+                  : "border-transparent text-muted hover:text-foreground hover:bg-surface-alt"
+              }`}
+            >
+              {t.l}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Advanced search */}
