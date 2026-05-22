@@ -4,7 +4,7 @@
  * OTP server actions — request + verify.
  *
  * `OTP_BYPASS=true` (dev): skip SMS + accept any code.
- * Production: 6-digit code, hashed with SHA-256 + pepper, TTL 5 min, max 5 attempts,
+ * Production: 6-digit code, hashed with SHA-256 + pepper, TTL 15 min, max 5 attempts,
  *             rate-limited 3 requests/hour/phone.
  */
 
@@ -16,7 +16,13 @@ import { normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { logger, redactPhone } from "@/lib/logger";
 
-const OTP_TTL_MS = 5 * 60 * 1000;
+// 15 min — must comfortably exceed real SMS delivery time. 2026-05-22: prod
+// ThaiBulkSMS was observed delivering an OTP SMS ~5 min 13s after submit; a
+// 5-min TTL meant the code expired the instant the SMS landed → every
+// registration failed with invalid_otp. The slow delivery itself is a
+// ThaiBulkSMS sender/route issue (fix it provider-side); this longer TTL
+// just stops the code dying before a still-slow SMS arrives.
+const OTP_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
 const MAX_ATTEMPTS = 5;
 
@@ -93,7 +99,7 @@ export async function requestOtp(
   // no SMS at all. A failed send now leaves no row and no quota consumed.
   const sms = await sendSms(
     phone,
-    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 5 นาที)`,
+    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 15 นาที)`,
   );
   if (!sms.ok) {
     // Capture the actual gateway reason — without this, every prod

@@ -14,9 +14,28 @@ export interface SmsResult {
   error?: string;
 }
 
+/**
+ * Is the SMS dev-bypass in effect? `OTP_BYPASS=true` skips the real
+ * ThaiBulkSMS send so local dev / Vercel preview don't burn credit.
+ *
+ * HARD-DISABLED on Vercel production regardless of OTP_BYPASS: 2026-05-22 the
+ * prod deployment was found running with OTP_BYPASS=true (the .env.example
+ * default, copied into Vercel). With bypass on, `sendSms` returns a fake
+ * { ok:true, messageId:"bypass" } and never calls ThaiBulkSMS — registration
+ * "succeeds" but the OTP SMS never reaches the customer, and OTP verify
+ * accepts ANY code (an account-takeover hole). A dev default must never
+ * silently do that in production.
+ *
+ * VERCEL_ENV is auto-set by Vercel ("production" only on the production
+ * deployment); it is undefined under `pnpm dev`, so local dev still bypasses.
+ */
+export function isSmsBypassed(): boolean {
+  return process.env.OTP_BYPASS === "true" && process.env.VERCEL_ENV !== "production";
+}
+
 export async function sendSms(phone: string, message: string): Promise<SmsResult> {
   // Dev bypass — log a redacted line so we can see in dev without leaking PII
-  if (process.env.OTP_BYPASS === "true") {
+  if (isSmsBypassed()) {
     logger.info("sms", "bypass — would send SMS", {
       phone: redactPhone(phone),
       length: message.length,
@@ -50,7 +69,7 @@ export interface SmsBalanceResult {
 }
 
 export async function checkSmsBalance(): Promise<SmsBalanceResult> {
-  if (process.env.OTP_BYPASS === "true") {
+  if (isSmsBypassed()) {
     return { ok: true, balance: 9999, unit: "messages" };  // dev bypass — fake healthy balance
   }
 
@@ -155,10 +174,16 @@ async function sendThaiBulkSms(
   // the v2 API defaults to the Standard pool (0 credits) when `force` is not
   // set. Pacred's "Pacred" sender ID approval is in the Corporate pool.
   //
-  // DEFAULT TO "premium" since Pacred's whole account uses Corporate.
-  // Override via THAIBULKSMS_FORCE=standard|corporate if needed.
-  // ThaiBulkSMS docs call this `force` with values `premium`/`standard`/`corporate`.
-  const force = process.env.THAIBULKSMS_FORCE ?? "premium";
+  // ThaiBulkSMS v2 `force` values (per provider docs): `standard` → Standard
+  // credit pool · `premium` → Corporate credit pool. DEFAULT TO "premium" —
+  // Pacred's whole account credit lives in Corporate; the Standard pool is
+  // empty in prod, so an unforced send fails with ERROR_INSUFFICIENT_CREDIT.
+  //
+  // `|| "premium"` (NOT `??`) on purpose: if THAIBULKSMS_FORCE is ever added
+  // to Vercel env but left BLANK, `??` would pass force="" through → the API
+  // treats empty as unset → Standard pool → OTP fails again. `||` makes a
+  // set-but-empty value still fall back to premium.
+  const force = process.env.THAIBULKSMS_FORCE || "premium";
 
   const params = new URLSearchParams({ msisdn, message, sender, force });
 
