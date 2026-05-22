@@ -50,6 +50,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { DriverItemActionButtons } from "./action-buttons";
 
 export const dynamic = "force-dynamic";
@@ -277,7 +278,7 @@ export default async function DriverWorkPage({
   const forwarderById = new Map(forwarders.map((f) => [f.id, f]));
 
   // 5. Materialise card rows (item + batch + forwarder).
-  const cards = items
+  const baseCards = items
     .map((it) => {
       const batch = batchById.get(it.fdid);
       const fwd   = forwarderById.get(it.fid);
@@ -290,6 +291,20 @@ export default async function DriverWorkPage({
       const bd = b.batch.fddate ? Date.parse(b.batch.fddate) : 0;
       return bd - ad;
     });
+
+  // 6. Resolve signed URLs for the uploaded photos (Wave 12-B).
+  //    Bucket is private; render-time signed URLs (1 hour) are cheap to
+  //    mint here in parallel and let us pass plain <img src> to the
+  //    Card. Only generates URLs for items that have an uploaded photo.
+  const cards = await Promise.all(
+    baseCards.map(async (c) => {
+      const [onUrl, offUrl] = await Promise.all([
+        c.item.fdipictureon  ? getSignedBucketUrl("forwarder-covers", c.item.fdipictureon)  : Promise.resolve(null),
+        c.item.fdipictureoff ? getSignedBucketUrl("forwarder-covers", c.item.fdipictureoff) : Promise.resolve(null),
+      ]);
+      return { ...c, photoOnUrl: onUrl, photoOffUrl: offUrl };
+    }),
+  );
 
   const driverDirectory = isAdminOverride ? await loadDriverDirectory(admin) : [];
 
@@ -331,6 +346,14 @@ async function loadDriverDirectory(admin: ReturnType<typeof createAdminClient>) 
 // Shell — header + tabs + cards. Pulled out so the empty-batches path
 // can short-circuit without losing the chrome.
 // ─────────────────────────────────────────────────────────────────────
+type CardData = {
+  item:        Item;
+  batch:       Batch;
+  forwarder:   Forwarder;
+  photoOnUrl:  string | null;
+  photoOffUrl: string | null;
+};
+
 function renderShell(props: {
   tab:              TabKey;
   filterDriver:     string | null;
@@ -339,7 +362,7 @@ function renderShell(props: {
   myUserid:         string | null;
   counters:         { pending: number; loaded: number; done: number };
   driverDirectory:  { userid: string; label: string }[];
-  cards:            { item: Item; batch: Batch; forwarder: Forwarder }[];
+  cards:            CardData[];
 }) {
   const { tab, filterDriver, isAdminOverride, myName, myUserid, counters, driverDirectory, cards } = props;
   const today = new Date().toLocaleDateString("th-TH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -434,15 +457,21 @@ function renderShell(props: {
         <ul className="space-y-3">
           {cards.map((c) => (
             <li key={c.item.id}>
-              <Card item={c.item} batch={c.batch} forwarder={c.forwarder} />
+              <Card
+                item={c.item}
+                batch={c.batch}
+                forwarder={c.forwarder}
+                photoOnUrl={c.photoOnUrl}
+                photoOffUrl={c.photoOffUrl}
+              />
             </li>
           ))}
         </ul>
       )}
 
       <p className="text-[10px] text-muted pt-3">
-        Wave 10 · อ่านจาก legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code> ·
-        อัพโหลดรูปขึ้นรถ / ลงรถ → Wave 11
+        Wave 12-B · อ่านจาก legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code> ·
+        อัปโหลดรูป ขึ้นรถ / ส่งสำเร็จ พร้อมใช้งาน
       </p>
     </main>
   );
@@ -451,8 +480,25 @@ function renderShell(props: {
 // ─────────────────────────────────────────────────────────────────────
 // One delivery card. Mobile-first — full-width on phone, never wider
 // than the 768px container above. Tap targets ≥ 48px. Body ≥ 16px.
+//
+// Wave 12-B: shows uploaded photos as click-to-zoom thumbnails. The
+// thumbnails use a <details>/<summary> "lightbox" — native, no JS state,
+// and works inside a Server Component. Clicking the thumbnail expands
+// the full image inline; clicking again collapses.
 // ─────────────────────────────────────────────────────────────────────
-function Card({ item, batch, forwarder }: { item: Item; batch: Batch; forwarder: Forwarder }) {
+function Card({
+  item,
+  batch,
+  forwarder,
+  photoOnUrl,
+  photoOffUrl,
+}: {
+  item: Item;
+  batch: Batch;
+  forwarder: Forwarder;
+  photoOnUrl: string | null;
+  photoOffUrl: string | null;
+}) {
   const fNo        = forwarder.fidorco ?? `#${forwarder.id}`;
   const customer   = `${forwarder.faddressname ?? ""} ${forwarder.faddresslastname ?? ""}`.trim() || "—";
   const fullAddr   = [
@@ -560,9 +606,65 @@ function Card({ item, batch, forwarder }: { item: Item; batch: Batch; forwarder:
         {batch.fddate ? ` · ${new Date(batch.fddate).toLocaleDateString("th-TH")}` : ""}
       </p>
 
+      {/* Uploaded photos (Wave 12-B) — collapsed lightbox via native <details> */}
+      {(photoOnUrl || photoOffUrl) && (
+        <div className="flex flex-wrap gap-2 pt-1">
+          {photoOnUrl && (
+            <PhotoThumb url={photoOnUrl} label="📦 รูปตอนขึ้นรถ" tone="blue" />
+          )}
+          {photoOffUrl && (
+            <PhotoThumb url={photoOffUrl} label="✅ รูปตอนส่ง" tone="green" />
+          )}
+        </div>
+      )}
+
       {/* Action buttons */}
       <DriverItemActionButtons itemId={item.id} status={item.fdistatus} />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PhotoThumb — small clickable chip + thumbnail. Uses native <details>
+// so the expand/collapse needs zero client JS (the page is otherwise
+// a pure Server Component except for the action buttons).
+//
+// Closed state = 64×64 thumbnail + label chip (tap target ≥ 44px high).
+// Open state   = full-width image up to 600px tall + caption.
+// ─────────────────────────────────────────────────────────────────────
+function PhotoThumb({
+  url, label, tone,
+}: { url: string; label: string; tone: "blue" | "green" }) {
+  const chipCls =
+    tone === "blue"
+      ? "border-blue-200 bg-blue-50 text-blue-700"
+      : "border-green-200 bg-green-50 text-green-700";
+
+  return (
+    <details className="group">
+      <summary className={`flex items-center gap-2 cursor-pointer list-none rounded-lg border px-2 py-1.5 min-h-[44px] ${chipCls}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={label}
+          className="w-10 h-10 object-cover rounded border border-border"
+          loading="lazy"
+        />
+        <span className="text-xs font-medium">{label}</span>
+        <span className="text-xs text-muted ml-auto group-open:hidden">แตะเพื่อขยาย</span>
+        <span className="text-xs text-muted ml-auto hidden group-open:inline">ย่อ</span>
+      </summary>
+      <div className="mt-2 rounded-lg border border-border bg-gray-50 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={label}
+          className="w-full h-auto max-h-[600px] object-contain"
+          loading="lazy"
+        />
+        <p className="text-xs text-muted text-center py-1.5 px-2 border-t border-border">{label}</p>
+      </div>
+    </details>
   );
 }
 

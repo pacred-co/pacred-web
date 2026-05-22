@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * actions/admin/driver-work.ts — Wave 10
+ * actions/admin/driver-work.ts — Wave 10 + Wave 12-B (photo upload)
  *
  * Mobile driver work-list status transitions. Backs the action buttons
  * on /admin/drivers/work — the page drivers open on their phone to
@@ -16,18 +16,29 @@
  *   They will coexist during the D1 transition; this is the path drivers
  *   actually use today.
  *
- * Legacy reference: `pcs-admin/forwarder-driver-w.php` lines 957-961
- * (`UPDATE tb_forwarder_driver_item SET fdiStatus='2' WHERE fID IN ...`)
- * + the related `UPDATE ... fdiStatus='3'` on the expiry path.
+ * Legacy reference: `pcs-admin/forwarder-driver-w.php`
+ *   - status flip: lines 957-961 (`UPDATE tb_forwarder_driver_item
+ *     SET fdiStatus='2' WHERE fID IN ...`)
+ *   - photo upload: legacy lets the driver snap a photo on each transition
+ *     — the file lands in storage and the filename is written into
+ *     `fdipictureon` (loaded) or `fdipictureoff` (delivered).
  *
- * Photo upload (`fdipictureon` / `fdipictureoff`) is intentionally
- * deferred to Wave 11 — Wave 10 ships the status-only transitions so
- * drivers stop being completely blocked from the platform today.
+ * Wave 12-B (2026-05-23):
+ *   - The load + deliver Server Actions now accept an optional photo
+ *     (FormData submission so the File survives the client→server hop).
+ *   - Photos land in `forwarder-covers/driver/<itemId>-on-<ts>-<safeName>`
+ *     (and `-off-` on delivery). The bucket is private; the page reads
+ *     them back via signed URLs.
+ *   - Status transition + photo column write happen in the SAME UPDATE
+ *     so a successful upload that fails to record is not possible (if
+ *     the UPDATE errors, we leave the storage object orphaned — Wave 13
+ *     can sweep those).
  */
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // fdistatus values are CHAR(1) strings per the legacy schema
@@ -83,15 +94,15 @@ async function loadItemAndAuthorise(
   callerProfileId: string,
   callerRoles: readonly string[],
 ): Promise<
-  | { ok: true; row: { id: number; fdid: number; fid: number; fdistatus: string }; batchOwner: string }
+  | { ok: true; row: { id: number; fdid: number; fid: number; fdistatus: string; fdipictureon: string | null; fdipictureoff: string | null }; batchOwner: string }
   | { ok: false; error: string }
 > {
   const admin = createAdminClient();
   const { data: itemRow } = await admin
     .from("tb_forwarder_driver_item")
-    .select("id, fdid, fid, fdistatus")
+    .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
     .eq("id", itemId)
-    .maybeSingle<{ id: number; fdid: number; fid: number; fdistatus: string }>();
+    .maybeSingle<{ id: number; fdid: number; fid: number; fdistatus: string; fdipictureon: string | null; fdipictureoff: string | null }>();
   if (!itemRow) return { ok: false, error: "ไม่พบรายการ" };
 
   const { data: batchRow } = await admin
@@ -116,10 +127,20 @@ async function loadItemAndAuthorise(
   return { ok: true, row: itemRow, batchOwner: batchRow.fdadminid };
 }
 
+/**
+ * Shared transition body — used by both the JSON entrypoint
+ * (`markDriverItemLoaded` / `markDriverItemDelivered` when called without
+ * a photo) and the FormData entrypoint (`markDriverItemLoadedFromForm`).
+ *
+ * `photoColumn` controls which column receives the uploaded filename:
+ *   - "fdipictureon"  for "ขึ้นรถ" (load)
+ *   - "fdipictureoff" for "ส่งสำเร็จ" (deliver)
+ */
 async function transitionItemStatus(
   input: IdInput,
   nextStatus: Exclude<DriverItemStatus, "">,
   action: "load" | "deliver",
+  photoFile?: File | null,
 ): Promise<AdminActionResult> {
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) {
@@ -153,9 +174,33 @@ async function transitionItemStatus(
       return { ok: false, error: "ต้องกดขึ้นรถก่อน จึงจะส่งสำเร็จได้" };
     }
 
+    // ── (a) If a photo came along, upload it FIRST. The uploaded
+    //         filename lives in the same UPDATE as the status flip
+    //         so a successful upload that fails to record is not possible.
+    //         If the upload itself fails, abort before mutating status.
+    //
+    //   Path: forwarder-covers/driver/<itemId>-<on|off>/<unix-ms>-<safe-name>
+    //   (Group A's helper auto-appends `${Date.now()}-${safeName}` to the
+    //   prefix; we just give it the per-item / per-action folder.)
+    let uploadedFilename: string | null = null;
+    if (photoFile && photoFile.size > 0) {
+      const suffix = action === "load" ? "on" : "off";
+      const prefix = `driver/${itemId}-${suffix}`;
+      const up = await uploadToBucket(photoFile, "forwarder-covers", prefix);
+      if (!up.ok) {
+        return { ok: false, error: `อัปโหลดรูปไม่สำเร็จ: ${up.error}` };
+      }
+      uploadedFilename = up.filename;
+    }
+
+    // ── (b) Status flip + (optional) photo write in one UPDATE.
+    const updatePayload: Record<string, string> = { fdistatus: nextStatus };
+    if (uploadedFilename) {
+      updatePayload[action === "load" ? "fdipictureon" : "fdipictureoff"] = uploadedFilename;
+    }
     const { error } = await admin
       .from("tb_forwarder_driver_item")
-      .update({ fdistatus: nextStatus })
+      .update(updatePayload)
       .eq("id", itemId);
     if (error) return { ok: false, error: error.message };
 
@@ -170,6 +215,7 @@ async function transitionItemStatus(
         batch_owner:   authz.batchOwner,
         before_status: authz.row.fdistatus,
         after_status:  nextStatus,
+        photo_uploaded: uploadedFilename ?? null,
       },
     );
 
@@ -179,24 +225,62 @@ async function transitionItemStatus(
 }
 
 /**
+ * Extract `(itemId, photoFile?)` from a FormData payload. Returns an
+ * error if `itemId` is missing or not a positive integer.
+ *
+ * Used by the FormData entrypoints below — FormData is the only way to
+ * smuggle a `File` through a "use server" Server Action invocation from
+ * the client.
+ */
+function parseLoadOrDeliverForm(
+  formData: FormData,
+): { ok: true; itemId: number; photo: File | null } | { ok: false; error: string } {
+  const idRaw = formData.get("itemId");
+  const itemId = typeof idRaw === "string" ? Number.parseInt(idRaw, 10) : NaN;
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    return { ok: false, error: "invalid_item_id" };
+  }
+  const fileVal = formData.get("photo");
+  // The browser submits an empty File when the <input> wasn't touched —
+  // treat zero-size as "no photo".
+  const photo = fileVal instanceof File && fileVal.size > 0 ? fileVal : null;
+  return { ok: true, itemId, photo };
+}
+
+/**
  * Mark a driver item as loaded onto the truck (fdistatus '' → '1').
  *
- * Wave 11 backlog: accept a `pictureon` file → upload to storage → write
- * the URL to `tb_forwarder_driver_item.fdipictureon`. For now the column
- * stays empty; legacy data has it populated for old rows.
+ * Two call signatures supported:
+ *   - markDriverItemLoaded(itemId)               — JSON (no photo) — legacy callers
+ *   - markDriverItemLoaded(formData)             — FormData (with `itemId` + optional `photo`)
+ *
+ * The FormData variant is what the mobile camera flow uses (Wave 12-B).
  */
-export async function markDriverItemLoaded(itemId: number): Promise<AdminActionResult> {
-  return transitionItemStatus({ itemId }, "1", "load");
+export async function markDriverItemLoaded(
+  input: number | FormData,
+): Promise<AdminActionResult> {
+  if (input instanceof FormData) {
+    const parsed = parseLoadOrDeliverForm(input);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    return transitionItemStatus({ itemId: parsed.itemId }, "1", "load", parsed.photo);
+  }
+  return transitionItemStatus({ itemId: input }, "1", "load");
 }
 
 /**
  * Mark a driver item as delivered (fdistatus '1' → '2').
  *
- * Wave 11 backlog: same photo-upload deferral as markDriverItemLoaded
- * (this one writes to `fdipictureoff` = "ลงรถ" picture).
+ * Same dual-signature pattern as `markDriverItemLoaded`.
  */
-export async function markDriverItemDelivered(itemId: number): Promise<AdminActionResult> {
-  return transitionItemStatus({ itemId }, "2", "deliver");
+export async function markDriverItemDelivered(
+  input: number | FormData,
+): Promise<AdminActionResult> {
+  if (input instanceof FormData) {
+    const parsed = parseLoadOrDeliverForm(input);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    return transitionItemStatus({ itemId: parsed.itemId }, "2", "deliver", parsed.photo);
+  }
+  return transitionItemStatus({ itemId: input }, "2", "deliver");
 }
 
 /**
@@ -204,8 +288,10 @@ export async function markDriverItemDelivered(itemId: number): Promise<AdminActi
  *
  * Legacy `tb_forwarder_driver_item` has NO column for the failure reason.
  * Wave 10 logs the reason to the admin audit log payload (queryable via
- * `admin_audit_log.payload.reason`); Wave 11 should extend the schema with
+ * `admin_audit_log.payload.reason`); Wave 13+ should extend the schema with
  * a `fdinote` text column so the reason is visible inline on the row.
+ *
+ * No photo for the failure path — legacy doesn't capture one here.
  */
 export async function markDriverItemFailed(input: MarkFailedInput): Promise<AdminActionResult> {
   const parsed = failSchema.safeParse(input);
@@ -251,7 +337,7 @@ export async function markDriverItemFailed(input: MarkFailedInput): Promise<Admi
         batch_owner:   authz.batchOwner,
         before_status: authz.row.fdistatus,
         after_status:  "3",
-        reason,            // Wave 11: move into a fdinote column on the row.
+        reason,            // Wave 13+: move into a fdinote column on the row.
       },
     );
 
