@@ -1,5 +1,5 @@
 /**
- * /admin/cnt-hs/[id] — รายละเอียดการเบิกเงินค่าตู้ (Wave 10 · 2026-05-23)
+ * /admin/cnt-hs/[id] — รายละเอียดการเบิกเงินค่าตู้ (Wave 10 · Wave 12-A 2026-05-23)
  *
  * Legacy: pcs-admin/cnt-hs.php?page=detail&id=<ID> (L486+ · ~350 LOC).
  *
@@ -16,26 +16,28 @@
  *   '2' = อนุมัติ/จ่ายแล้ว (legacy: cnt-hs.php?page=detail uploads slip → sets status=2)
  *   '3' = ปฏิเสธ (cancelled by admin)
  *
- * Wave 10 (this commit):
- *   - Full read-only view of all fields + linked cabinets + their forwarders
- *   - Approve/Reject buttons that mutate tb_cnt.cntstatus (only for status='1')
- *   - Slip image + PDF file VIEW (renders + opens in new tab) — but
- *     UPLOAD of new slip/file → Wave 11
+ * Wave 10:
+ *   - Full read-only view + Approve/Reject buttons (status='1' only)
+ *   - Slip image + PDF file VIEW (renders + opens in new tab)
  *
- * Wave 11 backlog:
- *   - cntImagesSlip upload form (set status=2)
+ * Wave 12-A (this commit):
+ *   - Slip upload form → uploads to `slips` bucket + auto-flips status='2'
+ *     (matches legacy upload-and-auto-approve at cnt-hs.php L572)
+ *   - Slip viewer now reads from signed-URL when filename has no `/` (admin
+ *     bucket-stored) and falls back to /legacy/uploads/ for legacy paths
+ *
+ * Wave 13 backlog:
  *   - cntFile (quotation/invoice PDF) upload
- *   - Multi-row "select cabinets" form for creating a new cnt from existing
- *     unpaid forwarders (legacy cnt-hs.php default branch L3-484 already
- *     ported in /admin/cnt-hs page; this is the inverse "edit which
- *     cabinets are in this cnt" flow)
+ *   - Edit-which-cabinets-are-in-this-cnt flow
  */
 
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { CntActionButtons } from "./action-buttons";
+import { CntSlipUploadForm } from "./slip-upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -87,8 +89,21 @@ type URow = {
   userlastname: string | null;
 };
 
-function slipUrl(filename: string): string {
-  return filename.startsWith("http") ? filename : `/legacy/uploads/${filename}`;
+/**
+ * Resolve a slip URL.
+ *   - Full http(s) URL → return as-is
+ *   - Starts with "admin/" → signed URL from `slips` bucket (Wave 12-A uploads)
+ *   - Otherwise → legacy file under /legacy/uploads/ (pre-port slip filenames)
+ *
+ * Returns null if a signed URL couldn't be created (caller renders fallback).
+ */
+async function slipUrl(filename: string): Promise<string | null> {
+  if (!filename) return null;
+  if (filename.startsWith("http")) return filename;
+  if (filename.startsWith("admin/")) {
+    return getSignedBucketUrl("slips", filename);
+  }
+  return `/legacy/uploads/${filename}`;
 }
 
 export default async function CntHsDetailPage({
@@ -156,6 +171,11 @@ export default async function CntHsDetailPage({
   const status = cnt.cntstatus ?? "1";
   const canAct = status === "1" && (roles.includes("super") || roles.includes("accounting"));
 
+  // Resolve slip + file URLs once on the server (signed-URL fetch is async
+  // for admin-bucket uploads — must complete before render).
+  const slipResolved = cnt.cntimagesslip ? await slipUrl(cnt.cntimagesslip) : null;
+  const fileResolved = cnt.cntfile ? await slipUrl(cnt.cntfile) : null;
+
   // Sum across linked forwarders (sanity vs cnt.amount)
   const linkedTotal = forwarders.reduce((s, f) => s + Number(f.ftotalprice ?? 0), 0);
   const linkedCount = forwarders.length;
@@ -182,7 +202,7 @@ export default async function CntHsDetailPage({
             </span>
           </div>
           <p className="text-xs text-muted mt-1">
-            Wave 10 read-only · approve/reject · slip + file upload → Wave 11
+            Wave 12-A · slip-upload + auto-approve เปิดใช้งานแล้ว · cntFile upload → Wave 13
           </p>
         </div>
         <Link href="/admin/cnt-hs" className="text-xs text-primary-600 hover:underline">
@@ -226,44 +246,70 @@ export default async function CntHsDetailPage({
           {cnt.cntimagesslip && (
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
               <p className="text-xs font-semibold text-muted mb-2">สลิปการโอน</p>
-              <a
-                href={slipUrl(cnt.cntimagesslip)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={slipUrl(cnt.cntimagesslip)} alt="สลิป" className="max-w-full max-h-[400px]" />
-              </a>
+              {slipResolved ? (
+                <a
+                  href={slipResolved}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block rounded-md border border-border overflow-hidden hover:border-primary-500"
+                >
+                  {cnt.cntimagesslip.toLowerCase().endsWith(".pdf") ? (
+                    <span className="inline-flex items-center gap-2 px-3 py-2 text-sm text-primary-700">
+                      📄 เปิดสลิป PDF →
+                    </span>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={slipResolved} alt="สลิป" className="max-w-full max-h-[400px]" />
+                  )}
+                </a>
+              ) : (
+                <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์สลิปได้</p>
+              )}
               <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntimagesslip}</p>
             </div>
           )}
           {cnt.cntfile && (
             <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
               <p className="text-xs font-semibold text-muted mb-2">เอกสารแนบ (PDF)</p>
-              <a
-                href={slipUrl(cnt.cntfile)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-md border border-primary-500 bg-primary-50 px-3 py-2 text-sm text-primary-700 hover:bg-primary-100"
-              >
-                📄 เปิดเอกสาร →
-              </a>
+              {fileResolved ? (
+                <a
+                  href={fileResolved}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md border border-primary-500 bg-primary-50 px-3 py-2 text-sm text-primary-700 hover:bg-primary-100"
+                >
+                  📄 เปิดเอกสาร →
+                </a>
+              ) : (
+                <p className="text-xs text-muted italic">ไม่สามารถสร้างลิงก์เอกสารได้</p>
+              )}
               <p className="text-[10px] text-muted mt-2 break-all">{cnt.cntfile}</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Action buttons (only for pending status='1') */}
+      {/* Action buttons + slip upload (only for pending status='1') */}
       {canAct && (
-        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3">
-          <p className="text-sm font-medium text-yellow-900">รายการนี้ยังอยู่ในสถานะ "รอตรวจ"</p>
-          <p className="text-xs text-yellow-800">
-            อนุมัติ = เปลี่ยน cntstatus เป็น '2' (จ่ายแล้ว) ·
-            ปฏิเสธ = '3' · การ upload สลิปจริง → Wave 11
-          </p>
-          <CntActionButtons cntId={cnt.id} />
+        <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-4">
+          <div>
+            <p className="text-sm font-medium text-yellow-900">รายการนี้ยังอยู่ในสถานะ &quot;รอตรวจ&quot;</p>
+            <p className="text-xs text-yellow-800 mt-1">
+              เลือกวิธีปิดงาน: อัปโหลดสลิปการโอน (จะ auto-approve เป็น &quot;จ่ายแล้ว&quot;) · หรือ
+              อนุมัติ/ปฏิเสธโดยตรง (ไม่บันทึกสลิป)
+            </p>
+          </div>
+
+          {/* Slip-upload card — primary path mirrors legacy */}
+          <div className="rounded-xl border border-border bg-white p-4">
+            <CntSlipUploadForm cntId={cnt.id} />
+          </div>
+
+          {/* Fallback: status-only mutation (no slip) */}
+          <div className="rounded-xl border border-border bg-white/60 p-4 space-y-2">
+            <p className="text-xs font-medium text-muted">หรือเปลี่ยนสถานะโดยไม่อัปโหลดสลิป</p>
+            <CntActionButtons cntId={cnt.id} />
+          </div>
         </div>
       )}
       {status === "1" && !canAct && (
