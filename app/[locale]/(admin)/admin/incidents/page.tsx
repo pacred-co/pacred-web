@@ -116,28 +116,45 @@ export default async function AdminIncidentsPage({
     .order("last_seen", { ascending: false })
     .limit(limit);
 
+  // Exact total count — Wave 10.1 follow-up. Mirror the same filters into
+  // a head:true count query so the chip shows TRUE total when results
+  // exceed `limit`. Pattern: docs/learnings/supabase-rls-patterns.md.
+  let countQ = admin
+    .from("platform_incidents")
+    .select("id", { count: "exact", head: true });
+
   if (statusMode === "live") {
     q = q.in("status", [...LIVE_INCIDENT_STATUSES]);
+    countQ = countQ.in("status", [...LIVE_INCIDENT_STATUSES]);
   } else if (statusMode !== "all" && (INCIDENT_STATUSES as readonly string[]).includes(statusMode)) {
     q = q.eq("status", statusMode);
+    countQ = countQ.eq("status", statusMode);
   }
   if (sp.source && (INCIDENT_SOURCES as readonly string[]).includes(sp.source)) {
     q = q.eq("source", sp.source);
+    countQ = countQ.eq("source", sp.source);
   }
   if (sp.kind && (INCIDENT_KINDS as readonly string[]).includes(sp.kind)) {
     q = q.eq("kind", sp.kind);
+    countQ = countQ.eq("kind", sp.kind);
   }
   if (sp.severity && (INCIDENT_SEVERITIES as readonly string[]).includes(sp.severity)) {
     q = q.eq("severity", sp.severity);
+    countQ = countQ.eq("severity", sp.severity);
   }
-  if (sp.from) q = q.gte("last_seen", sp.from.trim());
+  if (sp.from) {
+    q = q.gte("last_seen", sp.from.trim());
+    countQ = countQ.gte("last_seen", sp.from.trim());
+  }
   if (sp.to) {
     const toS = sp.to.trim();
     const padded = /^\d{4}-\d{2}-\d{2}$/.test(toS) ? `${toS}T23:59:59` : toS;
     q = q.lte("last_seen", padded);
+    countQ = countQ.lte("last_seen", padded);
   }
 
   const { data } = await q;
+  const { count: totalCount } = await countQ;
   const rows = (data ?? []) as Row[];
 
   // Quick counts for the header summary.
@@ -166,7 +183,10 @@ export default async function AdminIncidentsPage({
       {/* Summary chips */}
       <div className="flex flex-wrap gap-2 text-xs">
         <span className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5">
-          แสดง <strong>{rows.length}</strong> รายการ
+          ทั้งหมด <strong>{totalCount ?? rows.length}</strong> รายการ
+          {totalCount && totalCount > rows.length ? (
+            <span className="text-muted ml-1">· แสดง {rows.length} ล่าสุด</span>
+          ) : null}
         </span>
         <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-red-700">
           ยังไม่ปิด <strong>{liveCount}</strong>

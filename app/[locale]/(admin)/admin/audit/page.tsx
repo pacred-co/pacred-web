@@ -65,17 +65,28 @@ export default async function AdminAuditPage({
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (adminFilterId)    q = q.eq("admin_id", adminFilterId);
-  if (sp.action)        q = q.like("action", `${sp.action.trim()}%`);
-  if (sp.target_type)   q = q.eq("target_type", sp.target_type.trim());
-  if (sp.target_id)     q = q.eq("target_id", sp.target_id.trim());
-  if (sp.from)          q = q.gte("created_at", sp.from.trim());
+  // Exact total count — Wave 10.1 follow-up (the count-bug audit pattern
+  // from docs/learnings/supabase-rls-patterns.md). Re-apply the same
+  // filters to a head:true count query so the chip shows TRUE total when
+  // results exceed `limit`.
+  let countQ = admin
+    .from("admin_audit_log")
+    .select("id", { count: "exact", head: true });
+
+  if (adminFilterId)    { q = q.eq("admin_id", adminFilterId); countQ = countQ.eq("admin_id", adminFilterId); }
+  if (sp.action)        { q = q.like("action", `${sp.action.trim()}%`); countQ = countQ.like("action", `${sp.action.trim()}%`); }
+  if (sp.target_type)   { q = q.eq("target_type", sp.target_type.trim()); countQ = countQ.eq("target_type", sp.target_type.trim()); }
+  if (sp.target_id)     { q = q.eq("target_id", sp.target_id.trim()); countQ = countQ.eq("target_id", sp.target_id.trim()); }
+  if (sp.from)          { q = q.gte("created_at", sp.from.trim()); countQ = countQ.gte("created_at", sp.from.trim()); }
   if (sp.to) {
     // End-of-day inclusive — pad if it's a bare date.
     const toS = sp.to.trim();
     const padded = /^\d{4}-\d{2}-\d{2}$/.test(toS) ? `${toS}T23:59:59` : toS;
     q = q.lte("created_at", padded);
+    countQ = countQ.lte("created_at", padded);
   }
+
+  const { count: totalCount } = await countQ;
 
   const { data } = await q;
   const rows = ((data ?? []) as Row[]).map((r) => ({ ...r, _admin: normAdmin(r.admin) }));
