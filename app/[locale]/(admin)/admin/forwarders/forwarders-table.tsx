@@ -251,26 +251,54 @@ export function ForwardersTable({
                         <div className="text-muted text-[10px]">{r.customer?.phone}</div>
                       </td>
                       <td className="px-2 py-2.5">
-                        <Link
-                          href={`/admin/forwarders/${r.id}`}
-                          className="font-semibold text-primary-600 hover:underline"
-                        >
-                          ออเดอร์ #{r.id}
-                        </Link>
-                        {r.detail && (
-                          <div className="text-muted truncate max-w-[200px] mt-0.5" title={r.detail}>
-                            {r.detail}
-                          </div>
-                        )}
-                        <div className="mt-1 flex flex-wrap gap-1 items-center">
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${sourceBadgeCls}`}>
-                            {sourceLabel}
-                          </span>
-                          {r.f_no_cargo && (
-                            <span className="text-[9px] text-muted font-mono" title="Cargo API tracking (fidorco)">
-                              {r.f_no_cargo}
-                            </span>
+                        <div className="flex gap-2 items-start">
+                          {/* Product thumbnail · legacy forwarder.php shows the
+                              fcover image inline in the รายละเอียด column for
+                              fast "is this the right box" recognition. Empty
+                              cover renders a neutral placeholder so the row
+                              height stays consistent. */}
+                          {r.cover ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.cover.startsWith("http") ? r.cover : `/legacy/uploads/${r.cover}`}
+                              alt={`ออเดอร์ ${r.id}`}
+                              className="h-12 w-12 rounded border border-border object-cover bg-surface-alt shrink-0"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div
+                              aria-hidden
+                              className="h-12 w-12 rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[10px] text-muted"
+                              title="ไม่มีรูปสินค้า"
+                            >
+                              ไม่มี
+                              <br />
+                              รูป
+                            </div>
                           )}
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={`/admin/forwarders/${r.id}`}
+                              className="font-semibold text-primary-600 hover:underline"
+                            >
+                              ออเดอร์ #{r.id}
+                            </Link>
+                            {r.detail && (
+                              <div className="text-muted truncate max-w-[200px] mt-0.5" title={r.detail}>
+                                {r.detail}
+                              </div>
+                            )}
+                            <div className="mt-1 flex flex-wrap gap-1 items-center">
+                              <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${sourceBadgeCls}`}>
+                                {sourceLabel}
+                              </span>
+                              {r.f_no_cargo && (
+                                <span className="text-[9px] text-muted font-mono" title="Cargo API tracking (fidorco)">
+                                  {r.f_no_cargo}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td className="px-2 py-2.5 text-right whitespace-nowrap">

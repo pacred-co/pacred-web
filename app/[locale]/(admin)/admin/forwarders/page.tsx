@@ -480,6 +480,21 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         </div>
       </div>
 
+      {/* Wave 11 status banner — proactive transparency for ภูม.
+          Per the 2026-05-23 design-philosophy learning: tell the operator
+          which features are live vs deferred IN THE UI, don't make them
+          discover by clicking. */}
+      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+        <span aria-hidden>ℹ️</span>
+        <div className="flex-1">
+          <span className="font-medium">Wave 11 status:</span>{" "}
+          ✅ 4 top tabs · 14-column legacy layout · ดู/อัปเดต links · product thumbnail ·
+          source badges (users / admin_X / ระบบ) ·{" "}
+          <span className="opacity-75">⏳ Wave 12: "+ เพิ่มรายการให้ลูกค้า" form ·
+          slip upload (ต้อง Supabase Storage bucket จาก ก๊อต)</span>
+        </div>
+      </div>
+
       {/* Wave 11 — top tabs (4): ทั้งหมด · จากลูกค้า · จากระบบ · จากแอดมิน
           Legacy `forwarder.php` L267-280. Filter via ?create=. */}
       <div className="flex flex-wrap gap-0 border-b border-border -mx-1">
