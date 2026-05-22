@@ -132,18 +132,107 @@ local dump is missing a directory, do NOT silently skip it — report up to
 
 ---
 
+## Entry — 2026-05-23 evening · ภูม + Claude (worktree `adoring-chandrasekhar-0f8ad7`)
+
+### Context — "newrealdatapcs" misread
+
+After morning's backfill 03 + 04 ภูม pointed out I had the wrong source:
+**`C:\Users\Admin\Downloads\newrealdatapcs\newrealdatapcs\`** is the
+"snapshot ล่าสุด" (latest snapshot) — not `C:/Users/Admin/pcscargo/` which I
+had been working from. Direct quote: *"ไม่ใช่ไฟล์ C:/Users/Admin/pcscargo/
+นี้แล้ว เป็นไฟล์ C:\Users\Admin\Downloads\newrealdatapcs\newrealdatapcs
+นี้ที่ภูมิส่งให้เมื่อวานไงมันคืออัพเดตล่าสุด"*.
+
+### What's actually in newrealdatapcs
+
+Verified by 7z list + selective extract:
+
+| Asset | Size | Contents |
+|---|---|---|
+| 3 SQL dumps (Feb · Apr · May 18) | 834 + 884 + 898 MB | `pcsc_main` MySQL dumps |
+| `database-member-*.zip` (×2) | 348 MB | Just the same SQL dumps zipped |
+| `database-backoffice-*.zip` | 40 KB | `backoffice_pcsc_main.sql` |
+| `database-wordpress-*.zip` | 36 MB | 3 wp SQL dumps |
+| `RealDataBackUpPCS/*.tar.gz` | 117 MB | 4 more gz-compressed SQL dumps |
+| **`pcscargo.rar`** | **2.1 GB** | **Source code repo + 154 customer images + WP media + shop demo** |
+
+**Key finding:** `pcscargo.rar` byte-equals the local `C:/Users/Admin/pcscargo/`
+copy (same source — just the rar version). NEITHER contains prod `images/cnt/`
+or `images/forwarder/` — those are on the live host only.
+
+### What we did
+
+ภูม clarified: *"มันเป็นไฟล์ประวัติย้อนหลัง ไม่ได้ครบตั้งแต่บริษัทเปิด
+ที่บอกให้เอามาครบทั้งหมดคือเอามาทั้งหมดที่มีตามที่ส่งไปให้ทั้งหมดนั้นแหละ"*
+— upload everything that IS in the snapshot, even if it isn't the full prod
+history. ภูม also asked to include WordPress media + shop demo photos (*"Upload
+ทั้งคู่ — เผื่อใช้ฟ้อง"*).
+
+Full-extract pcscargo.rar → 2.8 GB uncompressed → `_extracted_full/pcscargo/`.
+Wrote `scripts/backfill/05-upload-rar-extras.ts` that walks the rar tree with
+an explicit include-list (skip UI assets + WP core) and uploads to bucket
+prefixes that preserve the subdir layout:
+
+| Rar source | Bucket | Path prefix | Count | Size |
+|---|---|---|---|---|
+| `wp-content/uploads/` | `member-docs` | `legacy-wp/uploads/` | 694 | 99.1 MB |
+| `shop/<collection>/` | `member-docs` | `legacy-shop/` | 32 | 6.7 MB |
+| `member/pcs-admin/include/` | `member-docs` | `legacy-pcs-admin/include/` | 2 | 80 KB |
+| `member/pcs-admin/f-receipt/` | `member-docs` | `legacy-pcs-admin/f-receipt/` | 2 | 1.0 MB |
+| `member/img/` | `member-docs` | `legacy-misc/img/` | 1 | 308 KB |
+| `member/sms/` | `member-docs` | `legacy-misc/sms/` | 1 | 340 KB |
+| **TOTAL** | | | **732** | **107.6 MB** |
+
+Run: `pnpm tsx scripts/backfill/05-upload-rar-extras.ts --apply --concurrency 8`
+→ 732 / 732 uploaded · 0 failed · 24.4 s.
+
+### Skip-list rationale (explicit, so future agents don't re-add by accident)
+
+Excluded directories — UI assets / WP core / 3rd-party (not customer-facing,
+not legal-evidence material):
+
+- `member/assets/**` — Bootstrap-4 template assets (892 images = icons + chrome)
+- `member/PHPMailer/**` — mailer library example PNGs
+- `member/fonts/**` — Font Awesome flag-icon-css
+- `wp-admin/**`, `wp-includes/**` — WordPress core
+- `wp-content/plugins/**`, `wp-content/themes/**`, `wp-content/upgrade/**`,
+  `wp-content/maintenance/**` — WP plugin/theme/upgrade staging
+
+If a future ภูม request needs any of these, copy the `INCLUDE_RULES` pattern
+in `05-upload-rar-extras.ts` and add a new rule.
+
+### Backfill totals on prod (running tally)
+
+| Run | Files | Source | Bucket(s) |
+|---|---|---|---|
+| 02 | 150 | local `member/{images,storage}/` | `member-docs/legacy-images/*` + `legacy-uploads/file/` + `legacy-slips/` |
+| 03 | 8 | local `member/storage/slip/` | `slips/legacy/` |
+| 04 | 2 | local `member/storage/file/` | `member-docs/legacy/storage-file/` |
+| 05 | 732 | rar `wp-content/uploads` + `shop` + `pcs-admin` + `img` + `sms` | `member-docs/legacy-*` |
+| **TOTAL** | **892** | | |
+
+### The remaining gap (unchanged)
+
+`images/forwarder/`, `images/cnt/`, and the full historic slips archive
+still need to be fetched from the prod host (rsync/scp/PHP-dump). Today's
+work cleaned out the snapshot ภูม actually shipped — everything in there is
+now in Supabase.
+
+---
+
 ## Re-run commands
 
 ```bash
-# Re-run the slip upload (idempotent · 8 files)
+# Re-run any backfill — all idempotent via upsert:true.
 pnpm tsx scripts/backfill/03-upload-slips.ts
-
-# Re-run the storage/file upload (idempotent · 2 files)
 pnpm tsx scripts/backfill/04-upload-storage-file.ts
+pnpm tsx scripts/backfill/05-upload-rar-extras.ts --apply
 
-# Preview without uploading
-pnpm tsx scripts/backfill/03-upload-slips.ts --dry-run
-pnpm tsx scripts/backfill/04-upload-storage-file.ts --dry-run
+# Preview backfill 05 without uploading
+pnpm tsx scripts/backfill/05-upload-rar-extras.ts
+
+# Use a different rar extract root
+pnpm tsx scripts/backfill/05-upload-rar-extras.ts --root /other/path --apply
 ```
 
 ---
