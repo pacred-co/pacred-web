@@ -52,6 +52,21 @@ function numberFormat2(n: number): string {
   });
 }
 
+// Human-readable PromptPay id grouping — a 13-digit tax/national id
+// reads X-XXXX-XXXXX-XX-X; a 10-digit phone reads XXX-XXX-XXXX. Any
+// other length is shown as-is. Cosmetic only — `copyText` always
+// copies the raw digits so the customer's banking app gets a clean id.
+function formatPromptPayId(id: string): string {
+  const d = id.replace(/\D/g, "");
+  if (d.length === 13) {
+    return `${d[0]}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d[12]}`;
+  }
+  if (d.length === 10) {
+    return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+  return id;
+}
+
 // getListPayForwarder.php L116 — the per-row total (BEFORE the bill-
 // level +50฿ / -1% adjustments). The legacy formula verbatim:
 //   (fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService
@@ -122,6 +137,10 @@ export function ForwarderPayModal({
   // needed; `useState` initializers cover the fresh-mount reset.
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
+  // The Pacred PromptPay id the QR resolved to (from PROMPTPAY_ID env
+  // via getForwarderPaymentQr) — shown as the human-readable number.
+  // null until the action returns / when PROMPTPAY_ID is unconfigured.
+  const [promptPayId, setPromptPayId] = useState<string | null>(null);
 
   useEffect(() => {
     if (bill.payAmount <= 0) return;
@@ -130,10 +149,21 @@ export function ForwarderPayModal({
       if (cancelled) return;
       if (res.ok && res.data) {
         setQrDataUrl(res.data.dataUrl);
+        setPromptPayId(res.data.promptPayId);
         setQrError(null);
       } else {
         setQrDataUrl(null);
-        setQrError("ไม่สามารถสร้าง QR ได้ ใช้เลขพร้อมเพย์ด้านล่างแทน");
+        setPromptPayId(null);
+        // promptpay_not_configured → owner hasn't set PROMPTPAY_ID on
+        // Vercel yet; any other code → a transient QR-render failure.
+        // `res.ok ? null : res.error` narrows the ActionResult union —
+        // res.error only exists on the !ok variant.
+        const code = res.ok ? null : res.error;
+        setQrError(
+          code === "promptpay_not_configured"
+            ? "ยังไม่ได้ตั้งค่าพร้อมเพย์ของบริษัท กรุณาติดต่อแอดมินเพื่อชำระเงิน"
+            : "ไม่สามารถสร้าง QR ได้ กรุณาติดต่อแอดมิน",
+        );
       }
     });
     return () => {
@@ -556,54 +586,39 @@ export function ForwarderPayModal({
                             {numberFormat2(bill.payAmount)} บาท
                           </span>
                         </h4>
-                        {/* Faithful fallback — the legacy shows the
-                            PromptPay id as copyable text (L288-289). */}
-                        <div className="pt-1">
-                          พร้อมเพย์{" "}
-                          <span id="text-pp" className="font-2rem mr-0-3">
-                            0-1055-60160-69-4
-                          </span>
-                          <button
-                            type="button"
-                            className="btn btn-sm2 btn-rounded btn-secondary"
-                            onClick={() => copyText("0105560160694")}
-                          >
-                            คัดลอก
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* L280-300 — KBank account block (juristic). */}
-                      {isJuristic && (
-                        <div className="col-12">
-                          <div className="box-blank-kbank">
-                            <div className="row">
-                              <div className="col-12 col-md-9">
-                                <h2 className="text-white">ธนาคารกสิกรไทย</h2>
-                                <div className="text-center">
-                                  เลขที่บัญชี{" "}
-                                  <span
-                                    className="font-2rem mr-0-3"
-                                    id="text-kbank"
-                                  >
-                                    064-174-3836
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm2 btn-rounded btn-secondary"
-                                    onClick={() => copyText("0641743836")}
-                                  >
-                                    คัดลอก
-                                  </button>
-                                  <h5 className="text-white">
-                                    บริษัท พีอาร์ คาร์โก้
-                                  </h5>
-                                </div>
-                              </div>
-                            </div>
+                        {/* The PromptPay id as copyable text (legacy
+                            L288-289 showed it too). Resolved from the
+                            PROMPTPAY_ID env via getForwarderPaymentQr —
+                            Pacred's OWN collection id, not the legacy
+                            PCS Cargo account. Hidden until the action
+                            returns it (and absent when PROMPTPAY_ID is
+                            unconfigured — the QR-area notice covers
+                            that case). */}
+                        {promptPayId && (
+                          <div className="pt-1">
+                            พร้อมเพย์{" "}
+                            <span id="text-pp" className="font-2rem mr-0-3">
+                              {formatPromptPayId(promptPayId)}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-sm2 btn-rounded btn-secondary"
+                              onClick={() => copyText(promptPayId)}
+                            >
+                              คัดลอก
+                            </button>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      {/* NOTE — the legacy showed a hard-coded KBank
+                          account block (getListPayForwarder.php L280-300,
+                          acct 064-174-3836 = PCS Cargo's bank). That
+                          routes money to the predecessor company, so it
+                          is NOT reproduced. Pacred collects via the
+                          PromptPay QR above (the bank-agnostic channel).
+                          If Pacred later wants a named bank account
+                          shown, add it env-driven — never hard-code a
+                          collection account. */}
                     </div>
 
                     <div>

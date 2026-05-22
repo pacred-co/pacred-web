@@ -854,22 +854,24 @@ export async function payForwarderFromWallet(
 // LEGACY (D1 / ADR-0017) — getForwarderPaymentQr
 // ────────────────────────────────────────────────────────────
 //
-// Faithful transcription of the `#qrcode` PromptPay QR in the
-// `#list-payment2` modal (`getListPayForwarder.php` L276 + the
-// `makeCode()` JS L388-401). The legacy hard-codes the target
-// PromptPay id `0105560160694` (the company tax id — L389 + L410)
-// and renders a QR at the amount due.
+// The `#qrcode` PromptPay QR in the `#list-payment2` modal
+// (`getListPayForwarder.php` L276 + the `makeCode()` JS L388-401).
 //
-// IMPORTANT — this target differs from `PROMPTPAY_ID` (the env used
-// by /wallet/deposit). The forwarder bill is collected to the legacy
-// account `0105560160694`, so this action does NOT read env — it
-// builds the payload for that fixed id, exactly as the legacy does.
-// (Faithful: the customer transfers to the same account the legacy
-// PCS Cargo screen instructs.)
+// ⚠️ MONEY ROUTING — the legacy hard-coded `0105560160694` (PCS
+// Cargo's juristic tax id). Scanning that QR sends the customer's
+// payment to PCS Cargo's bank account — the OLD company. Pacred
+// MUST collect to ITS OWN account, so this action reads the Pacred
+// PromptPay id from the `PROMPTPAY_ID` env (the SAME id /wallet/
+// deposit already collects top-ups to, via `lib/promptpay.ts`).
+// This is NOT a brand-cosmetic scrub (AGENTS.md §3 — those wait for
+// ก๊อต) — it is where real customer money lands; it cannot route to
+// the predecessor company. `PROMPTPAY_ID` is empty in dev `.env.local`
+// + must be set on Vercel prod (Pacred's tax id is 0105564077716 per
+// the company DNA — the owner sets the registered PromptPay id).
 //
-// Returns a `data:image/png` URL the modal drops straight into <img>.
-const FORWARDER_PROMPTPAY_ID = "0105560160694";
-
+// Returns a `data:image/png` URL + the configured id (so the modal
+// can show the human-readable number) — or `promptpay_not_configured`
+// when the env is unset, which the modal degrades to a friendly notice.
 export async function getForwarderPaymentQr(
   amountThb: number,
 ): Promise<ActionResult<{ dataUrl: string; payload: string; promptPayId: string }>> {
@@ -881,17 +883,23 @@ export async function getForwarderPaymentQr(
   if (!Number.isFinite(amountThb) || amountThb <= 0) {
     return { ok: false, error: "promptpay_invalid_amount" };
   }
+  // PROMPTPAY_ID — Pacred's own PromptPay collection id (env-driven,
+  // shared with /wallet/deposit). NOT the legacy PCS Cargo id.
+  const promptPayId = process.env.PROMPTPAY_ID;
+  if (!promptPayId) {
+    return { ok: false, error: "promptpay_not_configured" };
+  }
   try {
     // `promptpay-qr` builds the EMVCo TLV payload; `qrcode` renders it.
     // Both are existing project deps (see lib/promptpay.ts) — no new
     // dependency added.
     const { default: promptpay } = await import("promptpay-qr");
     const { default: QRCode } = await import("qrcode");
-    const payload = promptpay(FORWARDER_PROMPTPAY_ID, { amount: amountThb });
+    const payload = promptpay(promptPayId, { amount: amountThb });
     const dataUrl = await QRCode.toDataURL(payload, { margin: 1, scale: 6 });
     return {
       ok: true,
-      data: { dataUrl, payload, promptPayId: FORWARDER_PROMPTPAY_ID },
+      data: { dataUrl, payload, promptPayId },
     };
   } catch {
     return { ok: false, error: "qr_failed" };
