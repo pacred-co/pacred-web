@@ -633,7 +633,7 @@ function RevenueCard({
   const tones = {
     info:    { text: "text-cyan-600",    bar: "from-cyan-400 to-cyan-600" },
     danger:  { text: "text-red-600",     bar: "from-red-400 to-red-600" },
-    primary: { text: "text-fuchsia-600", bar: "from-purple-400 to-fuchsia-600" },
+    primary: { text: "text-primary-600", bar: "from-primary-400 to-primary-600" },
     success: { text: "text-emerald-600", bar: "from-emerald-400 to-green-600" },
   }[tone];
 

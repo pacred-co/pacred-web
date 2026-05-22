@@ -46,7 +46,7 @@ export default async function PcsMigrationPage() {
       </nav>
 
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600">
           <Database className="h-6 w-6" />
         </div>
         <div>

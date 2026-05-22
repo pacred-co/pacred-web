@@ -98,7 +98,11 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
     <nav
       ref={rootRef}
       aria-label="ระบบบัญชี — เมนูหลัก"
-      className="rounded-xl shadow-md bg-gradient-to-r from-indigo-600 via-purple-600 to-purple-700 text-white"
+      // 2026-05-23 — re-themed from indigo→purple to Pacred red gradient
+      // to match the customer-side brand (per podeng). The legacy doc
+      // commentary "purple bar" is historic — we kept the cascading-dropdown
+      // behaviour, only the colours changed.
+      className="rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
     >
       {/* Desktop · md+ — full cascading menubar */}
       <ul className="hidden md:flex flex-wrap items-stretch">
@@ -246,8 +250,8 @@ function NestedItem({
           onClick={onLeafClick}
           className={`block px-4 py-2 text-sm transition-colors ${
             isActive
-              ? "bg-purple-100 text-purple-900 font-semibold"
-              : "text-gray-800 hover:bg-purple-50 hover:text-purple-900"
+              ? "bg-primary-50 text-primary-900 font-semibold"
+              : "text-gray-800 hover:bg-primary-50 hover:text-primary-900"
           }`}
         >
           {item.label}
@@ -265,7 +269,7 @@ function NestedItem({
           href={item.href}
           onClick={onLeafClick}
           aria-haspopup="true"
-          className="flex items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-purple-50 hover:text-purple-900"
+          className="flex items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
           <span>{item.label}</span>
           <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
@@ -274,7 +278,7 @@ function NestedItem({
         <button
           type="button"
           aria-haspopup="true"
-          className="flex w-full items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-purple-50 hover:text-purple-900"
+          className="flex w-full items-center justify-between px-4 py-2 text-sm text-gray-800 hover:bg-primary-50 hover:text-primary-900"
         >
           <span>{item.label}</span>
           <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />

@@ -171,12 +171,12 @@ export function BookingActionPanel({
               type="button"
               onClick={() => setShowQuoteForm(true)}
               disabled={pending}
-              className="inline-flex items-center justify-center min-h-[44px] rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="inline-flex items-center justify-center min-h-[44px] rounded-lg bg-primary-600 px-4 py-2 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-50"
             >
               📄 ทำใบเสนอราคาแล้ว → quoted
             </button>
           ) : (
-            <div className="rounded-lg border border-indigo-200 bg-white dark:bg-surface p-3 space-y-2">
+            <div className="rounded-lg border border-primary-200 bg-white dark:bg-surface p-3 space-y-2">
               <label className="text-xs font-semibold text-foreground">
                 freight_quote_id (UUID ของใบเสนอราคาที่สร้างแล้ว)
               </label>
@@ -200,7 +200,7 @@ export function BookingActionPanel({
                   type="button"
                   onClick={fireMarkQuoted}
                   disabled={pending || !quoteIdInput.trim()}
-                  className="flex-1 inline-flex items-center justify-center min-h-[40px] rounded bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="flex-1 inline-flex items-center justify-center min-h-[40px] rounded bg-primary-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {pending ? "กำลังบันทึก…" : "เชื่อมใบเสนอราคา"}
                 </button>
