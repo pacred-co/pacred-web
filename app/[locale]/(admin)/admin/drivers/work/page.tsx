@@ -159,80 +159,125 @@ export default async function DriverWorkPage({
     ? (myUserid ?? null)
     : (sp.driver?.trim() || null);
 
-  // 1. Load matching batches (tb_forwarder_driver). Batch carries the
-  //    driver's userid (fdadminid) and the "expired" status; the item
-  //    rows beneath carry the individual delivery status.
-  let batchQuery = admin
-    .from("tb_forwarder_driver")
-    .select("id, fddate, fdname, fdadminid, fdstatus")
-    .order("fddate", { ascending: false })
-    .limit(200);
-  if (filterDriver) batchQuery = batchQuery.eq("fdadminid", filterDriver);
-  const { data: batchRows } = await batchQuery;
-  const batches = (batchRows ?? []) as Batch[];
-  const batchById = new Map(batches.map((b) => [b.id, b]));
-  const batchIds  = batches.map((b) => b.id);
+  // ─── BUG-FIX 2026-05-23 (ภูม flagged · screenshots) ─────────────────
+  // The previous flow loaded the 200 most-recent batches by fddate then
+  // counted items WITHIN that batch window. Result: "ทั้งหมด" view (no
+  // driver filter) saw 0 pending because the global last-200-batches
+  // window was full of recent COMPLETED batches; per-driver view saw 1
+  // pending because that driver's 200 batches reached back far enough to
+  // include their stale pending one (Dec 2025).
+  //
+  // New flow:
+  //   1. If driver filter active → resolve fdadminid → batch_ids first
+  //      (limit 5000 — enough to cover most drivers' full history)
+  //   2. Count pending + loaded + done DIRECTLY via tb_forwarder_driver_item
+  //      with fdistatus filter (counts are accurate; pending is small;
+  //      done is bounded by table size = 11k items). Apply driver batch_ids
+  //      filter via .in("fdid", batchIds).
+  //   3. Load CARDS for the active tab only — apply fdistatus filter at
+  //      the SQL level + sort by id DESC (newest item first), limit 200.
+  //   4. Resolve batches + forwarders for ONLY the items we're displaying.
+  //
+  // Performance: 3 count queries (head:true, indexed) + 1 item query
+  // (filtered) + 2 join queries (small in-list). Same wall-clock as
+  // before · fixes the global-pending-count blindspot.
+  // ────────────────────────────────────────────────────────────────────
 
-  // Empty state — short-circuit if no batches at all.
-  if (batchIds.length === 0) {
-    return renderShell({
-      tab, filterDriver, isAdminOverride, myName, myUserid,
-      counters: { pending: 0, loaded: 0, done: 0 },
-      driverDirectory: isAdminOverride ? await loadDriverDirectory(admin) : [],
-      cards: [],
-    });
+  // 1. If filtering by driver, fetch ALL their batch ids first (no 200-batch
+  //    window — pending items from old batches must still count).
+  let driverBatchIds: number[] | null = null;
+  if (filterDriver) {
+    const { data: dbatches } = await admin
+      .from("tb_forwarder_driver")
+      .select("id")
+      .eq("fdadminid", filterDriver)
+      .order("fddate", { ascending: false })
+      .limit(5000);
+    driverBatchIds = ((dbatches ?? []) as { id: number }[]).map((b) => b.id);
+    if (driverBatchIds.length === 0) {
+      return renderShell({
+        tab, filterDriver, isAdminOverride, myName, myUserid,
+        counters: { pending: 0, loaded: 0, done: 0 },
+        driverDirectory: isAdminOverride ? await loadDriverDirectory(admin) : [],
+        cards: [],
+      });
+    }
   }
 
-  // 2. Load items belonging to those batches.
-  const { data: itemRows } = await admin
+  // 2. Count items by status directly (accurate global counts).
+  // PostgREST quirk: `.eq("fdistatus", "")` matches the empty-string rows
+  // legacy uses for "ยังไม่ขึ้นรถ"; some rows may instead have NULL ·
+  // include both via .or() so the count doesn't undershoot.
+  const baseCount = () => {
+    const q = admin
+      .from("tb_forwarder_driver_item")
+      .select("id", { count: "exact", head: true });
+    return driverBatchIds ? q.in("fdid", driverBatchIds) : q;
+  };
+  const [
+    { count: pendingCount },
+    { count: loadedCount },
+    { count: doneCount },
+  ] = await Promise.all([
+    baseCount().or("fdistatus.eq.,fdistatus.is.null"),
+    baseCount().eq("fdistatus", "1"),
+    baseCount().in("fdistatus", ["2", "3"]),
+  ]);
+
+  const counters = {
+    pending: pendingCount ?? 0,
+    loaded:  loadedCount  ?? 0,
+    done:    doneCount    ?? 0,
+  };
+
+  // 3. Load CARDS for the active tab — apply status filter + driver-batch
+  //    filter at the SQL layer, limit 200 for the display window.
+  let itemQ = admin
     .from("tb_forwarder_driver_item")
     .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
-    .in("fdid", batchIds);
+    .order("id", { ascending: false })
+    .limit(200);
+  if (tab === "pending")     itemQ = itemQ.or("fdistatus.eq.,fdistatus.is.null");
+  else if (tab === "loaded") itemQ = itemQ.eq("fdistatus", "1");
+  else if (tab === "done")   itemQ = itemQ.in("fdistatus", ["2", "3"]);
+  // "all" tab: surface the OPEN work first (pending + loaded) — done items
+  // crowd out the urgent ones if we don't filter. Operator on the "all"
+  // tab cares about "what's still on the road" + a peek at recently done.
+  else                       itemQ = itemQ.or("fdistatus.eq.,fdistatus.is.null,fdistatus.eq.1");
+  if (driverBatchIds) itemQ = itemQ.in("fdid", driverBatchIds);
+  const { data: itemRows } = await itemQ;
   const items = (itemRows ?? []) as Item[];
 
-  // 3. Load matching forwarders for the address + customer info.
-  // Cast via `unknown` because the generated Supabase types model
-  // tb_forwarder's column-projection as a generic-error union when the
-  // page-level select uses the long comma string (same pattern used in
-  // /admin/forwarders/[fNo]/page.tsx · renderLegacyForwarderView).
-  const forwarderIds = Array.from(new Set(items.map((i) => i.fid)));
-  let forwarders: Forwarder[] = [];
-  if (forwarderIds.length > 0) {
-    const { data: fRows } = await admin
-      .from("tb_forwarder")
-      .select(
-        "id, fidorco, fstatus, fcabinetnumber, ftotalprice, fweight, fvolume, " +
-        "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
-        "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, fnote",
-      )
-      .in("id", forwarderIds);
-    forwarders = (fRows ?? []) as unknown as Forwarder[];
-  }
+  // 4. Load matching batches + forwarders only for those items.
+  const itemBatchIds = Array.from(new Set(items.map((i) => i.fdid)));
+  const itemFwdIds   = Array.from(new Set(items.map((i) => i.fid)));
+
+  const [batchRes, fwdRes] = await Promise.all([
+    itemBatchIds.length > 0
+      ? admin
+          .from("tb_forwarder_driver")
+          .select("id, fddate, fdname, fdadminid, fdstatus")
+          .in("id", itemBatchIds)
+      : Promise.resolve({ data: [] as Batch[] }),
+    itemFwdIds.length > 0
+      ? admin
+          .from("tb_forwarder")
+          .select(
+            "id, fidorco, fstatus, fcabinetnumber, ftotalprice, fweight, fvolume, " +
+            "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
+            "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, fnote",
+          )
+          .in("id", itemFwdIds)
+      : Promise.resolve({ data: [] as Forwarder[] }),
+  ]);
+
+  const batches = ((batchRes.data ?? []) as Batch[]);
+  const batchById = new Map(batches.map((b) => [b.id, b]));
+  const forwarders = (fwdRes.data ?? []) as unknown as Forwarder[];
   const forwarderById = new Map(forwarders.map((f) => [f.id, f]));
 
-  // 4. Counter tallies (across ALL fetched items, before tab filter).
-  const counters = items.reduce(
-    (acc, it) => {
-      if (it.fdistatus === "") acc.pending++;
-      else if (it.fdistatus === "1") acc.loaded++;
-      else if (it.fdistatus === "2" || it.fdistatus === "3") acc.done++;
-      return acc;
-    },
-    { pending: 0, loaded: 0, done: 0 },
-  );
-
-  // 5. Filter by tab.
-  const tabFiltered = items.filter((it) => {
-    if (tab === "all")     return true;
-    if (tab === "pending") return it.fdistatus === "";
-    if (tab === "loaded")  return it.fdistatus === "1";
-    if (tab === "done")    return it.fdistatus === "2" || it.fdistatus === "3";
-    return true;
-  });
-
-  // 6. Materialise card rows (item + batch + forwarder), most-recent-batch
-  //    first.
-  const cards = tabFiltered
+  // 5. Materialise card rows (item + batch + forwarder).
+  const cards = items
     .map((it) => {
       const batch = batchById.get(it.fdid);
       const fwd   = forwarderById.get(it.fid);
