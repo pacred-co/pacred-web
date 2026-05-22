@@ -1,39 +1,51 @@
 /**
- * /admin/forwarders/new — admin-initiated forwarder create (Wave 12-C).
+ * /admin/forwarders/new — admin-initiated forwarder create.
  *
- * Wave 11.1 follow-up: the previous version of this page bannered "Wave
- * 12 backlog" + told staff to use legacy PHP or impersonate. Wave 12-C
- * replaces that with the REAL form — the operator picks a customer,
- * fills in tracking/dimensions/address, and submits.
+ * Wave 12-C v2 REWRITE (2026-05-23) — match legacy `pcs-admin/forwarder.php`
+ * create modal EXACTLY. v1 invented 14 form fields that aren't in the legacy
+ * modal (warehouseChina · tracking thai · weight · volume · address typing ·
+ * crate · admin note); ภูม rejected on review. Per the design philosophy
+ * (docs/learnings/pacred-design-philosophy.md): copy the LEGACY WORKFLOW,
+ * keep our Pacred TAILWIND UI.
  *
- * Faithful-port wiring:
- *   - Legacy ref: `pcs-admin/forwarder.php?page=add` (part of the 2,661-LOC
- *     god-page) — the admin branch of the customer-side /service-import/add
- *     form.
- *   - Writes via `adminCreateForwarder` in `actions/admin/forwarders-new.ts`
- *     → INSERT tb_forwarder with `adminidcreator=<this admin>` so the new
- *     row badges "ฝากนำเข้า · admin" in the list (matches Wave 11 source-badge
- *     convention).
- *   - Storage: optional cover image lands in the `forwarder-covers` Supabase
- *     bucket via `lib/storage/upload.ts` (Group A's helper, shipped Wave 12-A).
+ * Legacy modal (forwarder.php L754-852) fields = 9 total:
+ *   1. coID            (member tier · tb_co dropdown)
+ *   2. userID          (cascading user picker · tb_users WHERE coid=?)
+ *   3. fTrackingCHN    (text · max 50 · required)
+ *   4. fDetail         (textarea · max 500 · required)
+ *   5. fAmount         (number · 1-10000 · default 1)
+ *   6. fCover          (file · optional · max 9MB)
+ *   7. fShipBy         (shipping company dropdown · required)
+ *   8. addressID       (cascading address picker · only if fShipBy != 'PCS')
+ *   9. fTransportType  (1=รถ · 2=เรือ — legacy has only these two)
  *
- * UI design (per docs/learnings/pacred-design-philosophy.md):
- *   Tailwind cards + clean section headings — NOT the legacy plain-Bootstrap
- *   form. Customer picker is a combobox-style searchable dropdown (50 recent
- *   active customers). Sticky submit at the bottom of the form.
+ * Address is NEVER typed by the admin — it's looked up from the customer's
+ * tb_address rows (or hardcoded to PCS pickup when fShipBy='PCS').
  *
- * Query-param prefill: `?q=PR1234` to pre-select a customer (matches the
- * existing /admin/wallet/add + /admin/yuan-payments/new pattern).
+ * Server fetch (this page):
+ *   - tb_co list (all member tiers — small table)
+ *   - tb_settings.freeShipping flag (controls whether "PCSF · เหมาๆ 50บ." appears)
+ *   - Optional preset user from ?q=PR1234 (also fetch their coid + addresses
+ *     so the form opens at the right step).
+ *
+ * Cascading lookups happen client-side via server actions defined in
+ * actions/admin/forwarders-new.ts (fetchUsersByCoid + fetchAddressesByUserid).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { AdminForwarderNewForm, type CustomerLite } from "./form";
+import { AdminForwarderNewForm } from "./form";
+import type {
+  CustomerOption,
+  AddressOption,
+} from "@/actions/admin/forwarders-new";
 
 export const dynamic = "force-dynamic";
 
 type SP = { q?: string };
+
+type CoidOption = { coid: string; coname: string };
 
 export default async function AdminForwarderNewPage({
   searchParams,
@@ -45,41 +57,89 @@ export default async function AdminForwarderNewPage({
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  // Preselect from ?q=PR1234.
-  let preset: CustomerLite | null = null;
+  // ─── tb_co (member tiers) ────────────────────────────────────────────
+  const { data: coRaw } = await admin
+    .from("tb_co")
+    .select("coid, coname")
+    .eq("costatus", "1")
+    .order("coid", { ascending: true })
+    .limit(100);
+  const coidList = (coRaw ?? []) as CoidOption[];
+
+  // ─── tb_settings.freeShipping ───────────────────────────────────────
+  // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 50บ." option
+  // only when tb_settings.freeShipping = '1'. We pass the flag to the
+  // client form so it can branch the dropdown the same way.
+  const { data: settingsRow } = await admin
+    .from("tb_settings")
+    .select("freeshipping")
+    .eq("id", 1)
+    .maybeSingle<{ freeshipping: string | null }>();
+  const freeShipping = settingsRow?.freeshipping === "1";
+
+  // ─── Optional preset (?q=PR1234) ────────────────────────────────────
+  // Pre-loads the customer + their addresses so the form opens with the
+  // user already chosen + the address picker populated.
+  let presetUser:      CustomerOption | null  = null;
+  let presetCoid:      string | null          = null;
+  let presetAddresses: AddressOption[]        = [];
+
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
-    const { data } = await admin
+    const { data: userRow } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, useremail")
+      .select("userid, username, userlastname, usertel, coid")
       .eq("userid", candidate)
-      .maybeSingle<CustomerLite>();
-    preset = data ?? null;
+      .maybeSingle<CustomerOption & { coid: string | null }>();
+
+    if (userRow) {
+      presetUser = {
+        userid:       userRow.userid,
+        username:     userRow.username,
+        userlastname: userRow.userlastname,
+        usertel:      userRow.usertel,
+      };
+      presetCoid = userRow.coid;
+
+      // Preload addresses + main flag (mirrors fetchAddressesByUserid action).
+      const [{ data: addrRows }, { data: mainRow }] = await Promise.all([
+        admin
+          .from("tb_address")
+          .select(
+            "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote",
+          )
+          .eq("userid", userRow.userid)
+          .eq("addressstatus", "1")
+          .order("addressid", { ascending: true })
+          .limit(50),
+        admin
+          .from("tb_address_main")
+          .select("addressid")
+          .eq("userid", userRow.userid)
+          .maybeSingle<{ addressid: number }>(),
+      ]);
+
+      const mainId = mainRow?.addressid ?? null;
+      presetAddresses = ((addrRows ?? []) as Omit<AddressOption, "isMain">[]).map((r) => ({
+        ...r,
+        isMain: mainId !== null && r.addressid === mainId,
+      }));
+      presetAddresses.sort((a, b) => {
+        if (a.isMain && !b.isMain) return -1;
+        if (!a.isMain && b.isMain) return 1;
+        return a.addressid - b.addressid;
+      });
+    }
   }
 
-  // Recent active customers (cap 50 — bigger than wallet/add since
-  // forwarders are higher-volume and operators want a wider pick list
-  // before resorting to ?q=PR####).
-  const { data: recentRaw } = await admin
-    .from("tb_users")
-    .select("userid, username, userlastname, usertel, useremail")
-    .eq("userstatus", "1")
-    .order("userregistered", { ascending: false })
-    .limit(50);
-  const recent = (recentRaw ?? []) as unknown as CustomerLite[];
-
   return (
-    <main className="p-4 lg:p-8 max-w-4xl mx-auto space-y-6">
+    <main className="p-4 lg:p-8 max-w-4xl mx-auto space-y-5">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">
-          Admin
-        </Link>
+        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
         <span>›</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">
-          ฝากนำเข้า
-        </Link>
+        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
         <span>›</span>
         <span className="text-foreground font-medium">เพิ่มรายการให้ลูกค้า</span>
       </nav>
@@ -87,11 +147,11 @@ export default async function AdminForwarderNewPage({
       {/* Header */}
       <header>
         <p className="text-xs font-semibold tracking-widest text-primary-500">
-          ADMIN · ฝากนำเข้า · เพิ่มรายการให้ลูกค้า
+          ADMIN · ฝากนำเข้า · สร้างออเดอร์ใหม่
         </p>
-        <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการ ฝากนำเข้า ให้ลูกค้า</h1>
+        <h1 className="mt-1 text-2xl font-bold">สร้างออเดอร์ฝากนำเข้าสินค้า</h1>
         <p className="mt-1.5 text-sm text-muted">
-          ใช้เมื่อลูกค้าโทรมาขอให้แอดมินเพิ่มรายการให้ — รายการที่สร้างจะติด badge
+          ใช้เมื่อลูกค้าโทรมาขอให้แอดมินเพิ่มรายการให้ — รายการที่สร้างจะติด
           <span className="mx-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
             ฝากนำเข้า · admin
           </span>
@@ -99,20 +159,24 @@ export default async function AdminForwarderNewPage({
         </p>
       </header>
 
-      {/* Hint card */}
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-1.5">
-        <p className="font-medium">วิธีใช้:</p>
-        <ol className="list-decimal pl-5 space-y-0.5 text-blue-800">
-          <li>เลือก customer จากรายชื่อล่าสุด หรือใช้ <code className="rounded bg-blue-100 px-1.5 py-0.5">?q=PR1234</code> เพื่อระบุตรง</li>
-          <li>เลือกโกดังจีน + รูปแบบขนส่ง · กรอกเลข tracking</li>
-          <li>(ไม่บังคับ) แนบรูปสินค้า + ขนาด/น้ำหนัก</li>
-          <li>กรอกที่อยู่ปลายทางในไทย → กดบันทึก</li>
-        </ol>
+      {/* Legacy-fidelity banner */}
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 leading-relaxed">
+        <strong>✅ Wave 12-C v2 — ตรง legacy 100%:</strong>{" "}
+        ฟอร์มนี้ใช้ 9 ช่องเดียวกับ <code className="rounded bg-emerald-100 px-1">pcs-admin/forwarder.php</code> modal เปะๆ
+        (coID · userID · tracking · รายละเอียด · จำนวน · รูป · ขนส่ง · ที่อยู่ · รูปแบบขนส่งจีน-ไทย).
+        ที่อยู่ดึงจาก <code className="rounded bg-emerald-100 px-1">tb_address</code> ของลูกค้า ไม่ต้องพิมพ์.
+        น้ำหนัก/ปริมาตร/CBM ใส่ทีหลัง (รอบแก้ไข).
       </div>
 
-      <AdminForwarderNewForm preset={preset} recent={recent} />
+      <AdminForwarderNewForm
+        coidList={coidList}
+        freeShipping={freeShipping}
+        presetUser={presetUser}
+        presetCoid={presetCoid}
+        presetAddresses={presetAddresses}
+      />
 
-      {/* Footer back link — for operators who clicked into here by mistake */}
+      {/* Footer */}
       <div className="flex gap-2 flex-wrap pt-2">
         <Link
           href="/admin/forwarders"

@@ -1,37 +1,44 @@
 "use server";
 
 /**
- * Admin > "เพิ่มรายการให้ลูกค้า" — server action for /admin/forwarders/new.
+ * Admin > "เพิ่มรายการให้ลูกค้า" — server actions for /admin/forwarders/new.
  *
- * Faithful port of the legacy `pcs-admin/forwarder.php?page=add` admin
- * branch (D1 / ADR-0017 · Wave 12-C). Lets an operator create a
- * `tb_forwarder` row on a customer's behalf — the typical scenario is
- * a phone call where the customer asks the desk to log a parcel for them.
+ * Wave 12-C v2 REWRITE (2026-05-23) — match legacy `pcs-admin/forwarder.php`
+ * create modal EXACTLY (per docs/learnings/pacred-design-philosophy.md +
+ * AGENTS.md §0a). The v1 form invented 14 fields (warehouseChina · tracking
+ * thai · weight · volume · address typing · crate · admin note) that DON'T
+ * exist in the legacy modal — ภูม rejected it on review.
  *
- * Why admin-initiated INSERT is its own file (vs `actions/admin/forwarders.ts`):
- *   `forwarders.ts` mutates EXISTING rows on either the REBUILT `forwarders`
- *   table or legacy `tb_forwarder` (mostly status flips + payment marks).
- *   Mixing a fresh-INSERT path there would let someone import the wrong
- *   action from the same module. Keep them separate during the D1 transition.
+ * Legacy modal (forwarder.php L754-852) has exactly 9 fields:
+ *   1. coID                 (tb_co dropdown — member tier)
+ *   2. userID               (tb_users WHERE coid=<picked> — cascading)
+ *   3. fTrackingCHN         (text · max 50 · required)
+ *   4. fDetail              (textarea · max 500 · required)
+ *   5. fAmount              (number · 1-10000 · default 1)
+ *   6. fCover               (file · optional · max 9MB)
+ *   7. fShipBy              (shipping company dropdown — required)
+ *   8. addressID            (tb_address lookup — only when fShipBy != 'PCS')
+ *   9. fTransportType       (1=รถ · 2=เรือ — only these two in legacy modal)
+ *
+ * Address handling — KEY INSIGHT FROM LEGACY:
+ *   - When fShipBy='PCS' → use hardcoded "รับที่โกดัง PCS กทม" address
+ *     (12 ซอย เพชรเกษม 77 แยก 3-6 · หนองค้างพลู · หนองแขม · กทม · 10160 · 02-444-7046)
+ *   - Otherwise → look up tb_address WHERE addressID=<picked> (the user's
+ *     saved address) and unpack into the 11 fAddress* columns.
+ *   - The admin DOES NOT type the address — they pick from the customer's
+ *     saved addresses (or get "PCS pickup" if shipBy='PCS').
+ *
+ * Cascading data — provided by these helper actions:
+ *   - fetchUsersByCoid(coid)           → user picker repopulates
+ *   - fetchAddressesByUserid(userid)   → address picker populates (with main flag)
  *
  * Source-badge convention (Wave 11):
- *   - `adminidcreator = ''`       → customer-initiated (the customer used
- *     /service-import/add themselves)
- *   - `adminidcreator = <non-empty>` → admin-initiated (this action stamps
- *     the calling admin's legacy id here)
- *   - `reforder = ''`             → not system-replicated (one-shot create)
- *
- * The /admin/forwarders list filter `?create=admin` picks exactly the rows
- * with non-empty adminidcreator + empty reforder, so the new row appears
- * under the "ฝากนำเข้า · admin" tab the moment it lands.
+ *   adminidcreator=<non-empty> → badge "ฝากนำเข้า · admin" in /admin/forwarders
+ *   list. The legacy field is varchar(10) — clip the resolved id to fit.
  *
  * Schema reference: supabase/migrations/0081_pcs_legacy_schema.sql L1598
- * (tb_forwarder). The table has dozens of NOT NULL columns; this action
- * supplies the same blank/zero defaults the legacy PHP would (most of
- * them get re-stamped during status transitions or admin edits later).
- *
- * Status convention (matches Wave 11 STATUS_LABEL):
- *   '1' = รอเข้าโกดังจีน — the legacy initial state for a freshly-created row.
+ * (tb_forwarder · ~50 NOT-NULL columns — the rest get zero-filled here,
+ * matching legacy PHP behaviour).
  */
 
 import { revalidatePath } from "next/cache";
@@ -42,8 +49,8 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { uploadToBucket } from "@/lib/storage/upload";
 
 // ────────────────────────────────────────────────────────────
-// resolveLegacyAdminId — same helper as wallet-hs.ts (third+ caller;
-// extracting to actions/admin/common.ts is a separate refactor task).
+// resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
+// Same pattern as wallet-hs.ts; extracting to common.ts is a separate refactor.
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
@@ -64,50 +71,160 @@ async function resolveLegacyAdminId(): Promise<string> {
 }
 
 // ────────────────────────────────────────────────────────────
-// Input schema — what the client form posts.
+// fetchUsersByCoid — used by client form when coID changes.
+// Returns up to 500 users for the picked tier (more than enough for any
+// realistic coid — the largest tier in prod is ~2,000 but the picker has
+// type-ahead filtering for narrowing).
 // ────────────────────────────────────────────────────────────
 
-const WAREHOUSE_CHINA  = ["1", "2"] as const;             // 1=กวางโจว · 2=อี้อู
-const TRANSPORT_TYPES  = ["1", "2", "3"] as const;        // 1=รถ · 2=เรือ · 3=แอร์
+export type CustomerOption = {
+  userid:       string;
+  username:     string | null;
+  userlastname: string | null;
+  usertel:      string | null;
+};
+
+export async function fetchUsersByCoid(
+  coid: string,
+): Promise<AdminActionResult<{ users: CustomerOption[] }>> {
+  return withAdmin<{ users: CustomerOption[] }>(
+    ["ops", "accounting", "super"],
+    async () => {
+      const admin = createAdminClient();
+      const safeCoid = coid.trim().toUpperCase().slice(0, 10);
+      if (!safeCoid) {
+        return { ok: false, error: "coid empty" };
+      }
+
+      const { data, error } = await admin
+        .from("tb_users")
+        .select("userid, username, userlastname, usertel")
+        .eq("coid", safeCoid)
+        .eq("userstatus", "1")
+        .order("userid", { ascending: true })
+        .limit(2000);
+
+      if (error) return { ok: false, error: error.message };
+
+      return { ok: true, data: { users: (data ?? []) as CustomerOption[] } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// fetchAddressesByUserid — used by client form after a user is picked.
+// Returns the customer's tb_address rows + a flag marking which one is
+// the "main" address (joined via tb_address_main).
+// ────────────────────────────────────────────────────────────
+
+export type AddressOption = {
+  addressid:           number;
+  addressname:         string;
+  addresslastname:     string;
+  addressno:           string;
+  addresssubdistrict:  string;
+  addressdistrict:     string;
+  addressprovince:     string;
+  addresszipcode:      string;
+  addresstel:          string;
+  addresstel2:         string | null;
+  addressnote:         string;
+  isMain:              boolean;
+};
+
+export async function fetchAddressesByUserid(
+  userid: string,
+): Promise<AdminActionResult<{ addresses: AddressOption[] }>> {
+  return withAdmin<{ addresses: AddressOption[] }>(
+    ["ops", "accounting", "super"],
+    async () => {
+      const admin = createAdminClient();
+      const safe = userid.trim().toUpperCase();
+      if (!safe) return { ok: false, error: "userid empty" };
+
+      const [{ data: rows, error: rowsErr }, { data: mainRow }] = await Promise.all([
+        admin
+          .from("tb_address")
+          .select(
+            "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2, addressnote",
+          )
+          .eq("userid", safe)
+          .eq("addressstatus", "1")
+          .order("addressid", { ascending: true })
+          .limit(50),
+        admin
+          .from("tb_address_main")
+          .select("addressid")
+          .eq("userid", safe)
+          .maybeSingle<{ addressid: number }>(),
+      ]);
+
+      if (rowsErr) return { ok: false, error: rowsErr.message };
+      const mainId = mainRow?.addressid ?? null;
+      const addresses = (rows ?? []).map((r) => ({
+        ...(r as Omit<AddressOption, "isMain">),
+        isMain: mainId !== null && r.addressid === mainId,
+      })) as AddressOption[];
+
+      // Sort: main first, then by id asc (legacy behaviour).
+      addresses.sort((a, b) => {
+        if (a.isMain && !b.isMain) return -1;
+        if (!a.isMain && b.isMain) return 1;
+        return a.addressid - b.addressid;
+      });
+
+      return { ok: true, data: { addresses } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// PCS pickup address — exactly the legacy hardcoded values
+// (forwarder.php L77-87). Used when fShipBy='PCS' (รับเองโกดัง PCS กทม).
+// ────────────────────────────────────────────────────────────
+const PCS_PICKUP_ADDRESS = {
+  addressname:        "รับที่โกดัง PCS กทม",
+  addresslastname:    "",
+  addresstel:         "02-444-7046",
+  addresstel2:        "",
+  addressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
+  addresssubdistrict: "หนองค้างพลู",
+  addressdistrict:    "หนองแขม",
+  addressprovince:    "กรุงเทพมหานคร",
+  addresszipcode:     "10160",
+  addressnote:        "",
+} as const;
+
+// ────────────────────────────────────────────────────────────
+// adminCreateForwarder — INSERT tb_forwarder matching legacy SQL exactly.
+//
+// Legacy SQL (forwarder.php L115-120):
+//   INSERT INTO tb_forwarder (
+//     fTrackingCHN, fDetail, fAmount, fDate, userID, fShipBy, fTransportType,
+//     adminIDCreator, fAddressName, fAddressLastname, fAddressNo,
+//     fAddressSubDistrict, fAddressDistrict, fAddressProvince, fAddressZIPCode,
+//     fAddressNote, fAddressTel, fAddressTel2, fShippingService
+//   ) VALUES (...19 cols...)
+//
+// Other tb_forwarder NOT NULL columns get zero/blank defaults (matching
+// legacy PHP behaviour — fields like fweight/fvolume/ftotalprice are filled
+// in by later admin actions). The cover image is uploaded AFTER the INSERT
+// (legacy resizes to 450px first; we just upload as-is to the bucket).
+// ────────────────────────────────────────────────────────────
+
+const TRANSPORT_TYPES = ["1", "2"] as const;  // legacy modal: only รถ + เรือ (no AIR)
 
 const createForwarderSchema = z.object({
-  customerUserid:       z.string().trim().regex(/^PR\d+$/i, "userid ต้องเป็นรหัส PR####").max(20),
-  warehouseChina:       z.enum(WAREHOUSE_CHINA),
-  transportType:        z.enum(TRANSPORT_TYPES),
-  trackingChn:          z.string().trim().min(1, "กรอกเลข tracking จีน").max(50),
-  trackingTh:           z.string().trim().max(50).optional(),
-  detail:               z.string().trim().min(1, "กรอกรายละเอียดสินค้า").max(2000),
-  weight:               z.number().nonnegative("น้ำหนักต้องไม่ติดลบ"),
-  volume:               z.number().nonnegative("ปริมาตรต้องไม่ติดลบ"),
-  amount:               z.number().int().positive().max(10000).optional(),     // จำนวนกล่อง · default 1
-  addressName:          z.string().trim().min(1, "กรอกชื่อผู้รับ").max(200),
-  addressLastName:      z.string().trim().max(200).optional(),
-  addressNo:            z.string().trim().min(1, "กรอกที่อยู่").max(255),
-  addressSubdistrict:   z.string().trim().min(1, "กรอกตำบล/แขวง").max(255),
-  addressDistrict:      z.string().trim().min(1, "กรอกอำเภอ/เขต").max(255),
-  addressProvince:      z.string().trim().min(1, "กรอกจังหวัด").max(255),
-  addressZipcode:       z.string().trim().regex(/^\d{5}$/, "รหัสไปรษณีย์ 5 หลัก").max(5),
-  addressTel:           z.string().trim().min(1, "กรอกเบอร์ผู้รับ").max(10),
-  addressNote:          z.string().trim().max(2000).optional(),
-  crate:                z.enum(["1", "2"]).optional(),                          // 1=ตี · 2=ไม่ตี · default '2'
-  note:                 z.string().trim().max(2000).optional(),                 // admin internal note
+  coid:            z.string().trim().min(1, "เลือกประเภทสมาชิก").max(10),
+  customerUserid:  z.string().trim().regex(/^PR\d+$/i, "userid ต้องเป็น PR####").max(20),
+  trackingChn:     z.string().trim().min(1, "กรอกเลข Tracking").max(50),
+  detail:          z.string().trim().min(1, "กรอกรายละเอียด").max(500),
+  amount:          z.number().int().min(1).max(10000).default(1),
+  shipBy:          z.string().trim().min(1, "เลือกบริษัทขนส่ง").max(10),
+  addressId:       z.number().int().positive().nullable().optional(),
+  transportType:   z.enum(TRANSPORT_TYPES),
 });
 export type AdminCreateForwarderInput = z.infer<typeof createForwarderSchema>;
-
-// ────────────────────────────────────────────────────────────
-// adminCreateForwarder — INSERT tb_forwarder + (optional) cover upload.
-//
-// Flow:
-//   1. Validate input.
-//   2. Verify customer exists in tb_users.
-//   3. (Optional) upload cover image to `forwarder-covers/cover/<ts>-<name>`
-//      via lib/storage/upload.ts (Group A's helper).
-//   4. INSERT tb_forwarder with adminidcreator = <calling admin's legacy id>
-//      + safe defaults for every NOT NULL column the legacy doesn't
-//      capture at create-time.
-//   5. Audit log + revalidate paths.
-//   6. Return new row id so the page can redirect to /admin/forwarders/<id>.
-// ────────────────────────────────────────────────────────────
 
 export async function adminCreateForwarder(
   rawInput: AdminCreateForwarderInput,
@@ -124,74 +241,129 @@ export async function adminCreateForwarder(
     async ({ adminId }) => {
       const admin            = createAdminClient();
       const legacyAdminIdRaw = await resolveLegacyAdminId();
-      // tb_forwarder.adminid* columns are varchar(10), but tb_admin.adminid
-      // is varchar(20) and the email-fallback path is up to 30. Clip so an
-      // operator with a longer adminid doesn't blow up the INSERT.
-      const legacyAdminId    = legacyAdminIdRaw.slice(0, 10);
+      const legacyAdminId    = legacyAdminIdRaw.slice(0, 10);  // varchar(10) cap
 
-      // Verify the target customer exists in tb_users.
+      // Verify the target customer exists.
       const customerCode = d.customerUserid.toUpperCase();
       const { data: customer } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname")
+        .select("userid, coid")
         .eq("userid", customerCode)
-        .maybeSingle<{
-          userid: string;
-          username: string | null;
-          userlastname: string | null;
-        }>();
+        .maybeSingle<{ userid: string; coid: string | null }>();
       if (!customer) {
         return { ok: false, error: "ไม่พบสมาชิก (userid ไม่ตรงกับ tb_users)" };
       }
 
-      // (Optional) upload cover. The admin uploads to a private bucket.
-      // If Group A's `forwarder-covers` bucket doesn't exist yet on this
-      // Supabase project, surface a clear error but DON'T fail the whole
-      // create — the operator can submit again without an image. (We
-      // actually do fail it for now; if a bucket is missing the safer
-      // behaviour is to surface the infra error rather than write a row
-      // that references a missing file.)
-      let coverFilename = "";
-      if (coverFile && coverFile instanceof File && coverFile.size > 0) {
-        const upload = await uploadToBucket(coverFile, "forwarder-covers", "cover");
-        if (!upload.ok) {
-          return { ok: false, error: `อัปโหลดรูปสินค้าไม่สำเร็จ: ${upload.error}` };
+      // Resolve the delivery address.
+      // - fShipBy='PCS'  → hardcoded PCS pickup address (no addressID needed)
+      // - otherwise      → look up tb_address by addressID
+      let addr: {
+        addressname:        string;
+        addresslastname:    string;
+        addressno:          string;
+        addresssubdistrict: string;
+        addressdistrict:    string;
+        addressprovince:    string;
+        addresszipcode:     string;
+        addressnote:        string;
+        addresstel:         string;
+        addresstel2:        string;
+      };
+
+      if (d.shipBy === "PCS") {
+        addr = { ...PCS_PICKUP_ADDRESS };
+      } else {
+        if (!d.addressId) {
+          return { ok: false, error: "เลือกที่อยู่จัดส่ง" };
         }
-        coverFilename = upload.filename;
+        const { data: addrRow, error: addrErr } = await admin
+          .from("tb_address")
+          .select(
+            "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
+          )
+          .eq("addressid", d.addressId)
+          .eq("userid", customer.userid)
+          .eq("addressstatus", "1")
+          .maybeSingle<{
+            addressname:        string;
+            addresslastname:    string;
+            addressno:          string;
+            addresssubdistrict: string;
+            addressdistrict:    string;
+            addressprovince:    string;
+            addresszipcode:     string;
+            addressnote:        string;
+            addresstel:         string;
+            addresstel2:        string | null;
+          }>();
+        if (addrErr || !addrRow) {
+          return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
+        }
+        addr = {
+          addressname:        addrRow.addressname,
+          addresslastname:    addrRow.addresslastname,
+          addressno:          addrRow.addressno,
+          addresssubdistrict: addrRow.addresssubdistrict,
+          addressdistrict:    addrRow.addressdistrict,
+          addressprovince:    addrRow.addressprovince,
+          addresszipcode:     addrRow.addresszipcode,
+          addressnote:        addrRow.addressnote ?? "",
+          addresstel:         addrRow.addresstel,
+          addresstel2:        addrRow.addresstel2 ?? "",
+        };
       }
+
+      // fShippingService — legacy sets to 0 always at create-time (lines 111-114).
+      const fShippingService = 0;
 
       const nowIso = new Date().toISOString();
 
-      // INSERT tb_forwarder. Every NOT NULL column the legacy zero-fills
-      // at create-time is supplied here; status/price/dates get filled in
-      // by later admin actions (status flips · combine-bill · driver assign).
+      // INSERT — supplies the 19 legacy columns plus blank/zero defaults for
+      // every other NOT NULL column. Fields like fweight / fvolume /
+      // ftotalprice are filled in by later admin status flips + combine-bill.
       const { data: row, error: insErr } = await admin
         .from("tb_forwarder")
         .insert({
-          fdate:                 nowIso,
-          fstatus:               "1",                       // รอเข้าโกดังจีน — legacy initial state
-          paydeposit:            "0",
-          fwarehousechina:       d.warehouseChina,
-          fwarehousename:        "1",                       // default = แสง (per Wave 11 WAREHOUSE_LABEL)
-          ftransporttype:        d.transportType,
-          fcabinetnumber:        "",                        // assigned at combine-bill
+          // ─── 19 legacy INSERT columns ───
           ftrackingchn:          d.trackingChn,
-          ftrackingth:           d.trackingTh && d.trackingTh.length > 0 ? d.trackingTh : "-",
-          fshipby:               "",                        // shipping carrier — filled at เตรียมส่ง
-          ffreeshipping:         "0",
-          famount:               d.amount ?? 1,
           fdetail:               d.detail,
-          fnote:                 d.note ?? null,
+          famount:               d.amount,
+          fdate:                 nowIso,
+          userid:                customer.userid,
+          fshipby:               d.shipBy,
+          ftransporttype:        d.transportType,
+          adminidcreator:        legacyAdminId,
+          faddressname:          addr.addressname,
+          faddresslastname:      addr.addresslastname,
+          faddressno:            addr.addressno,
+          faddresssubdistrict:   addr.addresssubdistrict,
+          faddressdistrict:      addr.addressdistrict,
+          faddressprovince:      addr.addressprovince,
+          faddresszipcode:       addr.addresszipcode,
+          faddressnote:          addr.addressnote,
+          faddresstel:           addr.addresstel,
+          faddresstel2:          addr.addresstel2,
+          fshippingservice:      String(fShippingService),
+
+          // ─── safe defaults for the rest of the NOT NULL columns ───
+          fstatus:               "1",      // รอเข้าโกดังจีน — initial state
+          paydeposit:            "0",
+          fwarehousechina:       "1",      // กวางโจว default (admin can edit)
+          fwarehousename:        "1",
+          fcabinetnumber:        "",
+          ftrackingth:           "-",
+          ffreeshipping:         "0",
+          fnote:                 null,
           fnoteuser:             "0",
           fnoteuserread:         "0",
-          fcover:                coverFilename,             // empty string if no upload
+          fcover:                "",       // set AFTER insert if image uploaded
           fphotoend:             "",
-          fproductstype:         "1",                       // generic (admin can adjust later)
-          fweight:               d.weight,
+          fproductstype:         "1",
+          fweight:               0,
           fwidth:                0,
           flength:               0,
           fheight:               0,
-          fvolume:               d.volume,
+          fvolume:               0,
           customratekg:          0,
           customratecbm:         0,
           customrate:            "0",
@@ -201,38 +373,26 @@ export async function adminCreateForwarder(
           ftransportprice:       0,
           fpriceupdate:          0,
           fdiscount:             0,
-          ftotalprice:           0,                         // filled by combine-bill / pricing
+          ftotalprice:           0,
           fcosttotalprice:       0,
           fcosttotalpricesheet:  0,
           fprofittransportchn:   0,
           fprofitpriceupdate:    0,
           fprofittotal:          0,
-          faddressname:          d.addressName,
-          faddresslastname:      d.addressLastName ?? "",
-          faddressno:            d.addressNo,
-          faddresssubdistrict:   d.addressSubdistrict,
-          faddressdistrict:      d.addressDistrict,
-          faddressprovince:      d.addressProvince,
-          faddresszipcode:       d.addressZipcode,
-          faddressnote:          d.addressNote ?? "",
-          faddresstel:           d.addressTel,
-          faddresstel2:          "",
           faddresslatitude:      0,
           faddresslongitude:     0,
-          userid:                customer.userid,            // canonical-case from tb_users
-          adminid:               legacyAdminId,              // last toucher = creator at insert
-          adminidcreator:        legacyAdminId,              // ← THE source badge
+          adminid:               legacyAdminId,
           adminidkey:            "",
           adminidupdate:         legacyAdminId,
           session:               "admin-manual",
-          reforder:              "",                         // empty = not system-replicated
+          reforder:              "",
           fcredit:               "0",
           fusercompany:          "0",
           fsendsms1day:          "0",
           fsendsms3day:          "0",
           fsendsms3eday:         "0",
           paymethod:             "1",
-          crate:                 d.crate ?? "2",            // default = ไม่ตี
+          crate:                 "2",      // default = ไม่ตี (admin edit later)
           pricecrate:            0,
           fqc:                   "0",
           fqcprice:              0,
@@ -241,9 +401,6 @@ export async function adminCreateForwarder(
           priceother:            0,
           linkapiorder:          "0",
           subuserid:             "",
-          // The "fstatuscar*" columns govern truck-on/truck-off events.
-          // At create-time they're all blank — the desk hasn't loaded the
-          // parcel onto a truck yet.
           fstatuscaron:          "0",
           fstatuscaradminon:     "",
           fstatuscaroff:         "0",
@@ -260,6 +417,47 @@ export async function adminCreateForwarder(
         return { ok: false, error: insErr?.message ?? "insert failed" };
       }
 
+      // Optional cover upload — legacy flow: INSERT first, then UPDATE
+      // fCover='<filename>' WHERE id=...
+      let coverFilename = "";
+      if (coverFile && coverFile instanceof File && coverFile.size > 0) {
+        // Bucket `forwarder-covers` lives on prod. Path scoped to admin-create
+        // so it doesn't collide with customer-side uploads. Filename pattern
+        // mirrors legacy: <userid>_<unix-ms>.<ext>.
+        const upload = await uploadToBucket(
+          coverFile,
+          "forwarder-covers",
+          `admin/${customer.userid}`,
+        );
+        if (!upload.ok) {
+          // Don't roll back the INSERT — legacy doesn't either; the row is
+          // created and the cover is "missing" rather than the create failing.
+          // Surface the warning so the operator knows.
+          await logAdminAction(
+            adminId,
+            "forwarder.admin_create.cover_failed",
+            "tb_forwarder",
+            String(row.id),
+            { reason: upload.error },
+          );
+        } else {
+          coverFilename = upload.filename;
+          const { error: updErr } = await admin
+            .from("tb_forwarder")
+            .update({ fcover: coverFilename })
+            .eq("id", row.id);
+          if (updErr) {
+            await logAdminAction(
+              adminId,
+              "forwarder.admin_create.cover_link_failed",
+              "tb_forwarder",
+              String(row.id),
+              { reason: updErr.message, filename: coverFilename },
+            );
+          }
+        }
+      }
+
       await logAdminAction(
         adminId,
         "forwarder.admin_create",
@@ -267,14 +465,13 @@ export async function adminCreateForwarder(
         String(row.id),
         {
           userid:           customer.userid,
-          warehouse_china:  d.warehouseChina,
-          transport_type:   d.transportType,
+          coid:             d.coid,
           tracking_chn:     d.trackingChn,
-          tracking_th:      d.trackingTh ?? null,
+          ship_by:          d.shipBy,
+          transport_type:   d.transportType,
+          amount:           d.amount,
+          address_source:   d.shipBy === "PCS" ? "pcs_pickup" : `addressid:${d.addressId}`,
           cover_uploaded:   coverFilename ? true : false,
-          weight_kg:        d.weight,
-          volume_cbm:       d.volume,
-          amount:           d.amount ?? 1,
         },
       );
 
