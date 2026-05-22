@@ -75,7 +75,18 @@ interface Rule {
   purpose:   string;
 }
 
-const PROD_ROOT = "D:\\REALSHITDATAPCS\\pcsc\\public_html\\member";
+const PROD_ROOT     = "D:\\REALSHITDATAPCS\\pcsc\\public_html\\member";
+const PROD_WP_ROOT  = "D:\\REALSHITDATAPCS\\pcsc\\public_html\\wp-content\\uploads";
+const SF_WP_ROOT    = "D:\\REALSHITDATAPCS\\pcsc\\pcs-seafreight.com\\wp-content\\uploads";
+
+// 2026-05-23 night — added wp-prod + seafreight-wp + img rules after a
+// full D:\REALSHITDATAPCS audit (per ภูม request). Discovered the dev rar
+// snapshot only had 694 wp-content files vs 5,154 on prod (4,460 missed),
+// and pcs-seafreight.com sister-site WP media (268 files) was completely
+// absent. PCS→PR branding rule: the bucket PREFIX uses `legacy-` (historic
+// PCS data marker · OK to keep). The Pacred (PR) brand applies to NEW UI
+// text + paths we generate going forward — legacy filenames keep their
+// `PCSnnnn_*` form because tb_* DB rows reference them by that exact name.
 
 const RULES: Rule[] = [
   {
@@ -126,6 +137,20 @@ const RULES: Rule[] = [
     bucket:    "member-docs",
     prefix:    "legacy-uploads/csv",
     purpose:   "Bulk CSV uploads (admin imports)",
+  },
+  {
+    name:      "wp-prod",
+    sourceDir: PROD_WP_ROOT,
+    bucket:    "member-docs",
+    prefix:    "legacy-wp/uploads",
+    purpose:   "WordPress media library — pcscargo.com (5K · banners/blog/page hero/responsive sizes)",
+  },
+  {
+    name:      "seafreight-wp",
+    sourceDir: SF_WP_ROOT,
+    bucket:    "member-docs",
+    prefix:    "legacy-pcsfreight-wp/uploads",
+    purpose:   "WordPress media library — pcs-seafreight.com sister site (268)",
   },
 ];
 
