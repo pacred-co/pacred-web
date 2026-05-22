@@ -37,6 +37,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export type AdminCreateYuanPaymentManualInput = z.infer<typeof manualYuanPayment
 
 export async function adminCreateYuanPaymentManual(
   input: AdminCreateYuanPaymentManualInput,
+  slipFile?: File | null,
 ): Promise<AdminActionResult<{ id: number; paythb: number }>> {
   const parsed = manualYuanPaymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -113,6 +115,16 @@ export async function adminCreateYuanPaymentManual(
 
       const nowIso = new Date().toISOString();
 
+      // Wave 12-A — upload slip first (if provided) so the filename lands in
+      // tb_payment.imagesslipadmin (the "admin attached this" slot · NOT
+      // imagesslip which is the customer's slip).
+      let slipFilename = "";
+      if (slipFile) {
+        const up = await uploadToBucket(slipFile, "slips", `admin/yuan-payment/${customer.userid}`);
+        if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
+        slipFilename = up.filename;
+      }
+
       // INSERT tb_payment — all NOT NULL columns must be populated.
       const { data: row, error: insErr } = await admin
         .from("tb_payment")
@@ -134,9 +146,9 @@ export async function adminCreateYuanPaymentManual(
           adminidupdate:     legacyAdminId,
           payadminidcreator: legacyAdminId,
           session:           "admin-manual",
-          imagesslip:        "",                   // slip-upload = stretch goal
+          imagesslip:        "",                   // customer-supplied slip (empty for admin-add)
           certifiedtruecopy: "",
-          imagesslipadmin:   "",
+          imagesslipadmin:   slipFilename,         // Wave 12-A: admin-attached proof-of-payment
         })
         .select("id")
         .single<{ id: number }>();
