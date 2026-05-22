@@ -18,32 +18,24 @@
  *   13 coid groups × 2 wh × 3 transport × 4 product = 312 possible cells
  *   (ปัจจุบันมี 192 รวม — บางคู่ไม่ตั้ง = ใช้ default จาก tb_settings)
  *
- * Wave 9 (this commit): read-only view — ดูทุก VIP tier + matrix ของแต่ละ
- * Wave 10 backlog: form แก้ไข rate (UPDATE tb_rate_vip_kg/cbm) +
- *                  create-tier flow (เพิ่ม coid ใหม่ + ตั้ง matrix แรก)
+ * Wave 9 (initial commit): read-only view — ดูทุก VIP tier + matrix ของแต่ละ
+ * Wave 12-D (2026-05-23): inline-edit matrix · sticky save bar · before→after
+ *   diff preview · UPSERT-pair tb_rate_vip_kg + tb_rate_vip_cbm via
+ *   adminUpdateVipRateCells. Composite cell key = (coid, sourcewarehouse,
+ *   rtransporttype, rproductstype); no schema unique on the tuple so the
+ *   action does read-then-update-or-insert.
+ * Wave 13 backlog: create-tier flow (เพิ่ม coid ใหม่ + ตั้ง matrix แรกในรอบเดียว)
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { VipRateEditForm, type VipCellInitial } from "./edit-form";
 
 export const dynamic = "force-dynamic";
 
-const WAREHOUSE_LABEL: Record<string, string> = {
-  "1": "อี้อู (Yiwu)",
-  "2": "กวางโจว (Guangzhou)",
-};
-const TRANSPORT_LABEL: Record<string, string> = {
-  "1": "🚚 รถ",
-  "2": "🚢 เรือ",
-  "3": "✈️ เครื่องบิน",
-};
-const PRODUCT_LABEL: Record<string, string> = {
-  "1": "ทั่วไป",
-  "2": "มอก.",
-  "3": "อย.",
-  "4": "พิเศษ",
-};
+// Cell labels live with the client edit-form (edit-form.tsx) — single
+// source of truth so a label tweak there flows into the matrix.
 
 type KgRow = {
   id: number;
@@ -68,6 +60,47 @@ type SP = { coid?: string };
 
 function cellKey(r: { sourcewarehouse: string; rtransporttype: string; rproductstype: string }) {
   return `${r.sourcewarehouse}|${r.rtransporttype}|${r.rproductstype}`;
+}
+
+/**
+ * Fuse the per-coid KG + CBM lookups into the `VipCellInitial[]` the
+ * client form consumes. We emit one entry per cell that has EITHER a KG
+ * or CBM value (or both). Empty cells aren't passed — the form will seed
+ * them locally and let the operator type values to create them.
+ */
+function buildCellMatrix(kgRows: KgRow[], cbmRows: CbmRow[]): VipCellInitial[] {
+  const out = new Map<string, VipCellInitial>();
+  for (const r of kgRows) {
+    const k = cellKey(r);
+    out.set(k, {
+      sourcewarehouse: r.sourcewarehouse as "1" | "2",
+      rtransporttype: r.rtransporttype as "1" | "2" | "3",
+      rproductstype: r.rproductstype as "1" | "2" | "3" | "4",
+      rkg: r.rkg,
+      rcbm: null,
+      rkg_admin: r.adminidupdate,
+      rcbm_admin: null,
+    });
+  }
+  for (const r of cbmRows) {
+    const k = cellKey(r);
+    const existing = out.get(k);
+    if (existing) {
+      existing.rcbm = r.rcbm;
+      existing.rcbm_admin = r.adminidupdate;
+    } else {
+      out.set(k, {
+        sourcewarehouse: r.sourcewarehouse as "1" | "2",
+        rtransporttype: r.rtransporttype as "1" | "2" | "3",
+        rproductstype: r.rproductstype as "1" | "2" | "3" | "4",
+        rkg: null,
+        rcbm: r.rcbm,
+        rkg_admin: null,
+        rcbm_admin: r.adminidupdate,
+      });
+    }
+  }
+  return Array.from(out.values());
 }
 
 export default async function CustomUserRatesPage({
@@ -105,8 +138,6 @@ export default async function CustomUserRatesPage({
   const selectedCoid = sp.coid && coidList.includes(sp.coid) ? sp.coid : null;
   const selectedKg = selectedCoid ? kgRows.filter((r) => r.coid === selectedCoid) : [];
   const selectedCbm = selectedCoid ? cbmRows.filter((r) => r.coid === selectedCoid) : [];
-  const kgMap = new Map(selectedKg.map((r) => [cellKey(r), r]));
-  const cbmMap = new Map(selectedCbm.map((r) => [cellKey(r), r]));
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -116,8 +147,8 @@ export default async function CustomUserRatesPage({
         </p>
         <h1 className="mt-1 text-2xl font-bold">Rate Override ตามกลุ่ม VIP</h1>
         <p className="mt-1 text-sm text-muted">
-          Wave 9 read-only · อ่านจาก tb_rate_vip_kg + tb_rate_vip_cbm ·
-          แก้ไข rate + เพิ่มกลุ่มใหม่ → Wave 10
+          Wave 12-D inline edit · อ่าน-เขียน tb_rate_vip_kg + tb_rate_vip_cbm ·
+          เพิ่มกลุ่มใหม่ → Wave 13
         </p>
       </div>
 
@@ -154,9 +185,14 @@ export default async function CustomUserRatesPage({
       {selectedCoid && (
         <section className="space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-lg font-bold">
-              Matrix สำหรับ <span className="font-mono text-primary-600">{selectedCoid}</span>
-            </h2>
+            <div>
+              <h2 className="text-lg font-bold">
+                Matrix สำหรับ <span className="font-mono text-primary-600">{selectedCoid}</span>
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                {userCountByCoid.get(selectedCoid) ?? 0} ลูกค้าใน tier นี้ · แก้ไขแล้วกด &ldquo;บันทึก&rdquo; ที่แถบล่าง
+              </p>
+            </div>
             <Link
               href="/admin/rates/custom-user"
               className="text-xs text-muted hover:text-foreground"
@@ -165,57 +201,10 @@ export default async function CustomUserRatesPage({
             </Link>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-xs uppercase text-muted">
-                <tr>
-                  <th className="px-3 py-2 text-left">โกดังจีน</th>
-                  <th className="px-3 py-2 text-left">ขนส่ง</th>
-                  <th className="px-3 py-2 text-left">ประเภทสินค้า</th>
-                  <th className="px-3 py-2 text-right">KG (บาท)</th>
-                  <th className="px-3 py-2 text-right">CBM (บาท)</th>
-                  <th className="px-3 py-2 text-left">แก้ไขล่าสุด</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(["1", "2"] as const).flatMap((wh) =>
-                  (["1", "2", "3"] as const).flatMap((tr) =>
-                    (["1", "2", "3", "4"] as const).map((pr) => {
-                      const key = `${wh}|${tr}|${pr}`;
-                      const kg = kgMap.get(key);
-                      const cbm = cbmMap.get(key);
-                      const hasAny = !!kg || !!cbm;
-                      return (
-                        <tr
-                          key={key}
-                          className={`border-t border-border ${hasAny ? "" : "opacity-50"}`}
-                        >
-                          <td className="px-3 py-2">{WAREHOUSE_LABEL[wh]}</td>
-                          <td className="px-3 py-2">{TRANSPORT_LABEL[tr]}</td>
-                          <td className="px-3 py-2">{PRODUCT_LABEL[pr]}</td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {kg?.rkg != null ? `฿${Number(kg.rkg).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            {cbm?.rcbm != null ? `฿${Number(cbm.rcbm).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
-                          </td>
-                          <td className="px-3 py-2 text-xs font-mono text-muted">
-                            {kg?.adminidupdate ?? cbm?.adminidupdate ?? "—"}
-                          </td>
-                        </tr>
-                      );
-                    }),
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="text-[11px] text-muted">
-            จุดที่ไม่มี rate ตั้งไว้ (โปร่งจาง) → ใช้ default จาก{" "}
-            <code className="rounded bg-surface-alt px-1 py-0.5">tb_settings</code> แทน
-            (rgdefault / rsdefault / rpdefault)
-          </p>
+          <VipRateEditForm
+            coid={selectedCoid}
+            cells={buildCellMatrix(selectedKg, selectedCbm)}
+          />
         </section>
       )}
 
