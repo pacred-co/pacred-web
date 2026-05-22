@@ -43,6 +43,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ export type AdminCreateWalletHsManualInput = z.infer<typeof manualWalletHsSchema
 
 export async function adminCreateWalletHsManual(
   input: AdminCreateWalletHsManualInput,
+  slipFile?: File | null,
 ): Promise<AdminActionResult<{ id: number; new_balance: number }>> {
   const parsed = manualWalletHsSchema.safeParse(input);
   if (!parsed.success) {
@@ -147,6 +149,15 @@ export async function adminCreateWalletHsManual(
 
       const nowIso = new Date().toISOString();
 
+      // Upload slip first (if provided) — we want the filename in the
+      // tb_wallet_hs INSERT. On upload failure abort (no half-state).
+      let slipFilename = "";
+      if (slipFile) {
+        const up = await uploadToBucket(slipFile, "slips", `admin/wallet-hs/${customer.userid}`);
+        if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
+        slipFilename = up.filename;
+      }
+
       // INSERT tb_wallet_hs — match the column set the existing
       // bulk-approve action expects (id is auto-sequence; whno + wusercredit
       // + typenew + typeservice + userid + adminidcrate are NOT NULL per
@@ -162,7 +173,7 @@ export async function adminCreateWalletHsManual(
           typenew:         "1",                              // 1 = เติมเงิน (admin-add legacy default)
           typeservice:     d.typeservice ?? "1",             // default 1 = cargo
           paydeposit:      d.paydeposit ? "1" : "0",
-          imagesslip:      "",                               // slip-upload is a stretch goal
+          imagesslip:      slipFilename,                     // Wave 12-A: slip path in `slips` bucket (empty if no slip)
           depositnamebank: d.deposit_namebank ?? "",
           nameuserbank:    d.nameuserbank ?? "",
           nouserbank:      d.nouserbank ?? "",

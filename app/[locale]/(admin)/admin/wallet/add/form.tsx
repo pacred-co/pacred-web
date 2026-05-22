@@ -9,7 +9,7 @@
  * varchar), NOT a Pacred profile UUID.
  */
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { adminCreateWalletHsManual } from "@/actions/admin/wallet-hs";
 
@@ -63,8 +63,31 @@ export function AdminWalletAddForm({
   const [paydeposit, setPaydeposit] = useState<boolean>(false);
   const [note, setNote]             = useState<string>("");
 
+  // Wave 12-A — slip-file state (optional · uploads to slips bucket on submit)
+  const [slipFile, setSlipFile]       = useState<File | null>(null);
+  const [slipPreview, setSlipPreview] = useState<string | null>(null);
+  const slipInputRef = useRef<HTMLInputElement | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Revoke any in-flight ObjectURL when the file changes / component unmounts
+  useEffect(() => {
+    return () => {
+      if (slipPreview) URL.revokeObjectURL(slipPreview);
+    };
+  }, [slipPreview]);
+
+  function selectSlip(f: File | null) {
+    setError(null);
+    setSlipFile(f);
+    if (slipPreview) URL.revokeObjectURL(slipPreview);
+    if (f && f.type.startsWith("image/")) {
+      setSlipPreview(URL.createObjectURL(f));
+    } else {
+      setSlipPreview(null);
+    }
+  }
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,18 +106,21 @@ export function AdminWalletAddForm({
     }
 
     startTransition(async () => {
-      const result = await adminCreateWalletHsManual({
-        userid,
-        kind,
-        amount: amt,
-        deposit_namebank: bankName || undefined,
-        nameuserbank:     acctName || undefined,
-        nouserbank:       acctNumber || undefined,
-        dateslip:         slipDate || undefined,
-        paydeposit,
-        typeservice:      typeService,
-        note:             note || undefined,
-      });
+      const result = await adminCreateWalletHsManual(
+        {
+          userid,
+          kind,
+          amount: amt,
+          deposit_namebank: bankName || undefined,
+          nameuserbank:     acctName || undefined,
+          nouserbank:       acctNumber || undefined,
+          dateslip:         slipDate || undefined,
+          paydeposit,
+          typeservice:      typeService,
+          note:             note || undefined,
+        },
+        slipFile,                       // Wave 12-A — optional slip upload
+      );
 
       if (!result.ok) {
         setError(result.error);
@@ -107,6 +133,8 @@ export function AdminWalletAddForm({
       setAmount("");
       setNote("");
       setSlipDate("");
+      selectSlip(null);
+      if (slipInputRef.current) slipInputRef.current.value = "";
       router.refresh();
     });
   };
@@ -246,6 +274,86 @@ export function AdminWalletAddForm({
         </div>
       </div>
 
+      {/* Wave 12-A — slip upload (optional) */}
+      <div className="row mb-1">
+        <div className="col-md-12">
+          <label className="form-control-label">หลักฐานการโอน (สลิป) <small className="text-muted">— optional</small></label>
+          <label
+            style={{
+              display:      "block",
+              border:       slipFile ? "2px dashed #5cb85c" : "2px dashed #d1d5db",
+              borderRadius: 12,
+              padding:      14,
+              background:   slipFile ? "rgba(92,184,92,0.05)" : "rgba(241,243,247,0.4)",
+              cursor:       pending ? "not-allowed" : "pointer",
+              transition:   "all 0.15s",
+            }}
+          >
+            <input
+              ref={slipInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+              style={{ display: "none" }}
+              disabled={pending}
+              onChange={(e) => selectSlip(e.currentTarget.files?.[0] ?? null)}
+            />
+            {slipFile ? (
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                {slipPreview && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={slipPreview}
+                    alt="พรีวิวสลิป"
+                    style={{
+                      maxHeight: 120,
+                      maxWidth: 160,
+                      borderRadius: 6,
+                      border: "1px solid #e2e6ee",
+                      background: "#fff",
+                      objectFit: "contain",
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 500, wordBreak: "break-all" }}>{slipFile.name}</p>
+                  <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#6b7280" }}>
+                    {(slipFile.size / 1024).toFixed(1)} KB · {slipFile.type || "unknown"}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      selectSlip(null);
+                      if (slipInputRef.current) slipInputRef.current.value = "";
+                    }}
+                    style={{
+                      marginTop: 6,
+                      background: "transparent",
+                      border:     "none",
+                      color:      "#dc2626",
+                      fontSize:   12,
+                      cursor:     "pointer",
+                      padding:    0,
+                    }}
+                  >
+                    ลบไฟล์
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <div style={{ fontSize: 22 }}>📄</div>
+                <p style={{ margin: "4px 0 0 0", fontWeight: 500 }}>คลิกเพื่อเลือกไฟล์สลิป</p>
+                <p style={{ margin: "2px 0 0 0", fontSize: 11, color: "#6b7280" }}>
+                  JPG / PNG / PDF · ≤ 5 MB
+                </p>
+              </div>
+            )}
+          </label>
+        </div>
+      </div>
+
       {/* VIP credit flag */}
       <div className="row mb-1">
         <div className="col-md-12">
@@ -300,6 +408,8 @@ export function AdminWalletAddForm({
           onClick={() => {
             setAmount(""); setNote(""); setBankName(""); setAcctName("");
             setAcctNumber(""); setSlipDate(""); setError(null); setSuccess(null);
+            selectSlip(null);
+            if (slipInputRef.current) slipInputRef.current.value = "";
           }}
           disabled={pending}
         >
