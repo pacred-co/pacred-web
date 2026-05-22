@@ -97,9 +97,21 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ฝากนำเข้า</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{f.f_no}</h1>
         </div>
-        <Link href="/admin/forwarders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          ← กลับรายการ
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Wave 12-C ภาค 2 — แก้ไขขนาด/น้ำหนัก */}
+          <Link
+            href={`/admin/forwarders/${f.f_no}/edit`}
+            className="rounded-lg border border-primary-500 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 font-medium hover:bg-primary-100"
+          >
+            ✏️ แก้ไขขนาด/น้ำหนัก
+            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+              Wave 12-C ภาค 2 · ใหม่
+            </span>
+          </Link>
+          <Link href="/admin/forwarders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            ← กลับรายการ
+          </Link>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6">
@@ -365,6 +377,17 @@ async function renderLegacyForwarderView(
       <div className="flex gap-2 flex-wrap">
         <Link href="/admin/forwarders" className="rounded-md border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt">
           ← กลับรายการ
+        </Link>
+        {/* Wave 12-C ภาค 2 — works on the legacy tb_forwarder branch too
+            (uses fidorco when present, falls back to numeric id). */}
+        <Link
+          href={`/admin/forwarders/${encodeURIComponent(fNo)}/edit`}
+          className="rounded-md border border-primary-500 bg-primary-50 px-3 py-1.5 text-xs text-primary-700 font-medium hover:bg-primary-100"
+        >
+          ✏️ แก้ไขขนาด/น้ำหนัก
+          <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+            Wave 12-C ภาค 2 · ใหม่
+          </span>
         </Link>
         {r.fcabinetnumber && (
           <Link href={`/admin/report-cnt?id=${encodeURIComponent(r.fcabinetnumber)}`} className="rounded-md border border-primary-500 bg-primary-500 px-3 py-1.5 text-xs text-white hover:bg-primary-600">
