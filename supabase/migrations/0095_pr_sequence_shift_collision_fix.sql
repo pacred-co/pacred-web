@@ -67,48 +67,76 @@ update public.profiles set member_code = 'PR10903'
   where id = '4ea48414-070c-4c6b-ad00-e2226af79d27' and member_code = 'PR120';
 
 -- ──────────────────────────────────────────────────────────────────
--- 2) Shift the sequence past the legacy max
+-- 2) Replace the generator — abandon the sequence approach entirely
 -- ──────────────────────────────────────────────────────────────────
--- MAX(tb_users.userid::int after stripping prefix) = 10899 as of
--- 2026-05-23. Restart at 11000 → buffer of 100 above the legacy max +
--- room for the 4 just-renumbered profiles (PR10900..10903).
-alter sequence public.member_code_seq restart with 11000;
-
--- ──────────────────────────────────────────────────────────────────
--- 3) Replace the generator with a collision-safe version
--- ──────────────────────────────────────────────────────────────────
--- The new function: on each insert, claim a sequence value; if the
--- candidate PR<n> already exists in tb_users.userid, advance the
--- sequence and try again. Caps at 10 retries to avoid an infinite
--- loop on a misconfigured sequence (in practice never trips because
--- the sequence is now ahead of any legacy row).
+-- 2026-05-23 night incident: we initially tried `ALTER SEQUENCE
+-- member_code_seq RESTART WITH 11000` + a sequence-based generator.
+-- All Dashboard checks (`select last_value`, `select nextval()`)
+-- showed the sequence correctly at 11000+, but every trigger fire
+-- (both via supabase-js AND via Dashboard INSERT) kept emitting
+-- PR100..PR110 — the trigger walked 10 retries inside the legacy
+-- range, then errored. Root cause: PostgreSQL sequence values
+-- pre-allocated to PgBouncer pool sessions BEFORE the ALTER are not
+-- invalidated by ALTER/DROP+CREATE. Existing sessions keep emitting
+-- their cached batch (often 50 values pre-grabbed) until exhausted.
+-- A Supabase REST pool keeps these sessions alive for hours.
+--
+-- The fix: don't use a sequence at all. Compute MAX() across both
+-- tables + a configurable floor on every insert. No cache, no
+-- session state, no surprise. Slower-but-correct over fast-but-stale.
+--
+-- Race safety: profiles.member_code has a UNIQUE constraint, so two
+-- simultaneous inserts that pick the same number → one of them
+-- catches a uniqueness error + retries on its own (Supabase auth
+-- signup auto-retries; manual `actions/auth.ts` paths surface it).
+--
+-- Floor `11099` → guarantees minimum next code = PR11100 (well above
+-- MAX legacy tb_users.userid = PR10899 + buffer above the 4 renamed
+-- profiles PR10900..PR10903).
 create or replace function public.generate_member_code() returns trigger as $$
 declare
   next_num int;
   candidate text;
-  retries int := 0;
 begin
   if new.member_code is not null then
     return new;
   end if;
+
+  -- Compute MAX(numeric part) across BOTH tables + the safety floor.
+  -- coalesce()-wraps so an empty table yields 0 (no NULL contamination).
+  select greatest(
+    coalesce((select max((substring(member_code from 3))::int)
+              from public.profiles
+              where member_code ~ '^PR[0-9]+$'), 0),
+    coalesce((select max((substring(userid from 3))::int)
+              from public.tb_users
+              where userid ~ '^PR[0-9]+$'), 0),
+    coalesce((select max((substring(userid from 4))::int)
+              from public.tb_users
+              where userid ~ '^PCS[0-9]+$'), 0),
+    11099   -- floor: at least PR11100 for every new signup
+  ) + 1 into next_num;
+
+  -- Walk forward in case a concurrent insert grabbed the same number
+  -- (UNIQUE constraint on profiles.member_code would catch it but the
+  -- explicit walk is faster than a constraint-violation retry loop).
   loop
-    next_num := nextval('public.member_code_seq');
-    candidate := 'PR' || lpad(next_num::text, 3, '0');
-    if not exists (
-      select 1 from public.tb_users where userid = candidate
-    ) and not exists (
-      select 1 from public.profiles where member_code = candidate
-    ) then
+    candidate := 'PR' || next_num::text;
+    if not exists (select 1 from public.tb_users where userid = candidate)
+       and not exists (select 1 from public.profiles where member_code = candidate) then
       new.member_code := candidate;
       return new;
     end if;
-    retries := retries + 1;
-    if retries > 10 then
-      raise exception 'generate_member_code: could not find a free PR-code after 10 retries (last candidate %)', candidate;
-    end if;
+    next_num := next_num + 1;
   end loop;
 end;
 $$ language plpgsql;
+
+-- The sequence is intentionally left orphan after this — no DROP, no
+-- ALTER. Cheaper to leave a few KB of unused metadata than risk a
+-- mid-deploy invalidation. A later sweep can `drop sequence
+-- if exists public.member_code_seq` once nothing in the codebase
+-- references it.
 
 -- ──────────────────────────────────────────────────────────────────
 -- 4) Sanity-check the result (no rows expected to print on success)
