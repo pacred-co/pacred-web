@@ -101,6 +101,17 @@ export default async function CustomHsRatesPage({
   const { data: histRaw } = await historyQ;
   const history = (histRaw ?? []) as unknown as HistoryRow[];
 
+  // Exact total — Wave 10 follow-up fix 2026-05-23 (ภูม flagged similar
+  // .length-vs-exact-count bug across QA queues). The list is capped at
+  // 200 for display but the chip should show TRUE total.
+  let totalHistoryCount: number | null = null;
+  {
+    const q = admin.from("tb_customrate_hs").select("id", { count: "exact", head: true });
+    const q2 = sp.q ? q.eq("userid", sp.q.trim().toUpperCase()) : q;
+    const { count } = await q2;
+    totalHistoryCount = count ?? null;
+  }
+
   // Join customer names for the history list
   const userIds = Array.from(new Set(history.map((h) => h.userid).filter(Boolean)));
   let userMap = new Map<string, URow>();
@@ -163,7 +174,11 @@ export default async function CustomHsRatesPage({
       {/* History list */}
       <section>
         <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-2">
-          ประวัติการอัปเดต ({history.length} รายการ · ใหม่ → เก่า)
+          ประวัติการอัปเดต ({totalHistoryCount ?? history.length} รายการ
+          {totalHistoryCount && totalHistoryCount > history.length
+            ? ` · แสดง ${history.length} ล่าสุด`
+            : ""}
+          · ใหม่ → เก่า)
         </h2>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
           {history.length === 0 ? (
