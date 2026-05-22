@@ -2515,6 +2515,7 @@
       "cntReport": "รายงานตู้สินค้า",
       "whHistory": "ประวัติเข้าโกดังไทย",
       "assignDriver": "มอบงานคนขับรถ",
+      "driverWork": "ดูงานคนขับ (มือถือ)",
       "combineBill": "รวมบิลสินค้า"
     },
     "forwarderImport": {
@@ -2662,6 +2663,7 @@
       "qaInspect": "ตรวจสอบคุณภาพ (QA)"
     },
     "driver": {
+      "work": "งานวันนี้ (มือถือ)",
       "toDeliver": "งานที่ต้องส่ง",
       "history": "ประวัติงาน",
       "barcode": "สแกนบาร์โค้ด"

@@ -550,6 +550,11 @@ const menuSuper: MenuSection[] = [
       // on the driver-assignment queue in one click. Re-uses the existing
       // driverItems badge.
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
+      // 2026-05-23 (Wave 10 · Agent C) — driver mobile work-list /admin/drivers/work
+      // for super/ops to peek into any driver's mobile view (driver role auto-
+      // filters to self · ?driver=<userid> param for oversight). Useful when a
+      // dispatcher needs to see what a specific driver has on their phone today.
+      { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
       blockPayment,
       itemReportsAll,
       blockAccounting,
@@ -746,6 +751,11 @@ const menuDriver: MenuSection[] = [
     // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
     header: "Cargo & Freight",
     items: [
+      // 2026-05-23 (Wave 10 · Agent C) — mobile work-list FIRST. This is the
+      // page drivers open on their phone: today's deliveries + load/deliver/
+      // fail buttons. Self-row enforcement built into requireAdmin path so
+      // a driver only sees their own batch.
+      { labelKey: "driver.work",      href: "/admin/drivers/work",            icon: "Smartphone", badge: "driverItems" },
       // Phase 1 — operational driver items (CF-1 fix · ZZ 2026-05-20 ค่ำ).
       { labelKey: "driver.toDeliver", href: "/admin/driver-runs",             icon: "Truck", badge: "driverItems" },
       { labelKey: "driver.history",   href: "/admin/driver-runs?tab=history", icon: "Truck"                       },

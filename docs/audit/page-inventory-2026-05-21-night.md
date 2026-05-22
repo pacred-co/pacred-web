@@ -71,6 +71,57 @@ Pages rewritten:
 
 ---
 
+## ✅ Wave 10 (2026-05-23 late-morning) — P0 cnt-hs + 10 QA queues + driver mobile
+
+4-stream batch (main thread + 3 background agents · ~90 min wall clock).
+
+### Main: cnt-hs/[id] detail + approve/reject (P0 revenue path)
+- Was 98-LOC STUB · now full 535-LOC faithful port of legacy
+  cnt-hs.php?page=detail
+- Reads tb_cnt + tb_cnt_item + tb_forwarder (per cabinet) + tb_users
+- 5 cards: header chip · main detail (sanity-check linked total) · bank
+  info · slip + PDF viewer · cabinets table · forwarders detail (50 max)
+- Approve/Reject buttons → adminApproveCntHs / adminRejectCntHs
+  (mutates tb_cnt.cntstatus 1→2 or 1→3 + adminidupdate + dateupdate)
+- Browser-verified on cnt #958 (manapat changpoo + เอก ศรีรัตนไพฑูรย์)
+
+### Agent A + B: 10 QA SLA-breach queues
+- 10 new pages under `/admin/qa/<slug>` — every breach has its own
+  focused read-only list (was just URL contracts into generic reports
+  that didn't actually filter)
+- All read tb_forwarder · tb_header_order · or tb_users with the precise
+  SLA condition · 2-query tb_users merge for customer name/phone
+- `/admin/qa` hub URL contract updated to point at the 10 new pages
+- Browser-verified `/admin/qa/credit-overdue` renders 12+ overdue
+  credit rows with drill-in to /admin/forwarders/<fno>
+- Wave 11: cntDateETA join on transit-overdue · add "resolved" mark
+  action so handled rows fall off the queue
+
+### Agent C: /admin/drivers/work mobile work-list
+- Mobile-first card layout (no table) · ≥48px tap targets · text-base
+  body · tel: links · no horizontal scroll
+- Reads tb_forwarder_driver_item → tb_forwarder_driver (fdadminid +
+  fddate) → tb_forwarder (address + price + cabinet)
+- 3 server actions: markDriverItemLoaded · markDriverItemDelivered ·
+  markDriverItemFailed (mutates fdistatus '' → '1' → '2' or '3')
+- Self-row enforcement: driver role auto-filters to own batches via
+  fdadminid match · super/ops bypass for oversight
+- Sidebar leaves added: menuDriver "งานวันนี้ (มือถือ)" + menuSuper
+  "ดูงานคนขับ (มือถือ)" w/ i18n keys in both th.json + en.json
+- Wave 11: photo upload (fdipictureon / fdipictureoff) + fdinote text
+  column for fail reason
+
+### Commits in this wave
+| SHA | Stream |
+|---|---|
+| `4bf74c6` | Main: cnt-hs detail + approve/reject |
+| `a285c90` | Agent B: 5 QA queues (warehouse/transit) |
+| `3595d41` | Agent C: driver mobile work-list |
+| `0ea443d` | Agent A rescued: 5 QA queues (payments) |
+| (next) | Integrate: QA hub URLs + sidebar leaves + i18n |
+
+---
+
 ## 🔴 DEAD — ไม่มีปุ่มเข้าหน้านี้ในระบบ (ภูมเลือก action)
 
 | Route | คำอธิบาย | Suggested action | Action ภูม |

@@ -2515,6 +2515,7 @@
       "cntReport": "Container report",
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",
+      "driverWork": "Driver work-list (mobile)",
       "combineBill": "Combine bills"
     },
     "forwarderImport": {
@@ -2662,6 +2663,7 @@
       "qaInspect": "QA inspections"
     },
     "driver": {
+      "work": "Today's jobs (mobile)",
       "toDeliver": "Jobs to deliver",
       "history": "Job history",
       "barcode": "Barcode scan"

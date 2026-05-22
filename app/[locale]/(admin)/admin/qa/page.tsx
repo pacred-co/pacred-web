@@ -33,17 +33,20 @@ type QaQueue = {
 };
 
 const QA_QUEUES: QaQueue[] = [
-  // 10 SLA-breach alerts (คาดการณ์ล่าช้า)
-  { key: "payShopOver1d",      label: "รอชำระสินค้าเกิน 1 วัน",          href: "/admin/reports/pending-payments?kind=shop&over=1d",   kind: "alert" },
-  { key: "payFwdOver2d",       label: "รอชำระค่านำเข้าเกิน 2 วัน",        href: "/admin/reports/pending-payments?kind=forwarder&over=2d", kind: "alert" },
-  { key: "creditOverdue",      label: "เครดิตเกินกำหนด",                 href: "/admin/reports/credit-pending",                       kind: "alert" },
-  { key: "orderOver10min",     label: "สั่งซื้อรอเกิน 10 นาที",          href: "/admin/service-orders?status=pending&over=10min",     kind: "alert" },
-  { key: "chnShopOver2d",      label: "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",  href: "/admin/service-orders?status=ordered&over=2d",        kind: "alert" },
-  { key: "chnWhOver2d",        label: "รอเข้าโกดังจีนเกิน 2 วัน",        href: "/admin/forwarders?status=shipped_china&over=2d",      kind: "alert" },
-  { key: "transitOverdue",     label: "กำลังมาไทยเกินกำหนด",             href: "/admin/forwarders?status=in_transit&over=eta",        kind: "alert" },
-  { key: "ownerlessGoods",     label: "สินค้าไม่มีเจ้าของ",              href: "/admin/forwarders?status=arrived_thailand&owner=none", kind: "alert" },
-  { key: "prepareOverdue",     label: "เตรียมส่งเกินกำหนด",              href: "/admin/forwarders?status=arrived_thailand&over=prep",  kind: "alert" },
-  { key: "newClientNoContact", label: "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",   href: "/admin/customers/pending?over=2d",                    kind: "alert" },
+  // 10 SLA-breach alerts (คาดการณ์ล่าช้า) — Wave 10 (2026-05-23): each
+  // queue now has its own focused /admin/qa/<slug> page reading tb_* with
+  // the precise SLA condition (was stub URLs into generic reports/filters
+  // that didn't actually filter by "over" keys).
+  { key: "payShopOver1d",      label: "รอชำระสินค้าเกิน 1 วัน",          href: "/admin/qa/pay-shop-over-1d",     kind: "alert" },
+  { key: "payFwdOver2d",       label: "รอชำระค่านำเข้าเกิน 2 วัน",        href: "/admin/qa/pay-fwd-over-2d",      kind: "alert" },
+  { key: "creditOverdue",      label: "เครดิตเกินกำหนด",                 href: "/admin/qa/credit-overdue",       kind: "alert" },
+  { key: "orderOver10min",     label: "สั่งซื้อรอเกิน 10 นาที",          href: "/admin/qa/order-over-10min",     kind: "alert" },
+  { key: "chnShopOver2d",      label: "สั่งซื้อรอร้านจีนส่งเกิน 2 วัน",  href: "/admin/qa/chn-shop-over-2d",     kind: "alert" },
+  { key: "chnWhOver2d",        label: "รอเข้าโกดังจีนเกิน 2 วัน",        href: "/admin/qa/chn-wh-over-2d",       kind: "alert" },
+  { key: "transitOverdue",     label: "กำลังมาไทยเกินกำหนด",             href: "/admin/qa/transit-overdue",      kind: "alert" },
+  { key: "ownerlessGoods",     label: "สินค้าไม่มีเจ้าของ",              href: "/admin/qa/ownerless-goods",      kind: "alert" },
+  { key: "prepareOverdue",     label: "เตรียมส่งเกินกำหนด",              href: "/admin/qa/prepare-overdue",      kind: "alert" },
+  { key: "newClientNoContact", label: "ไม่ติดต่อลูกค้าใหม่เกิน 2 วัน",   href: "/admin/qa/new-client-no-contact", kind: "alert" },
   // 2 งาน (work)
   { key: "orderCancelled",  label: "รายการยกเลิกออเดอร์",          href: "/admin/service-orders?status=cancelled",        kind: "work" },
   { key: "transferSalesRep", label: "ย้ายพนักงานขายที่ดูแลลูกค้า", href: "/admin/customers/transfer-rep",                 kind: "work" },
