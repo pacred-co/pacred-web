@@ -12,10 +12,181 @@ import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — calculateForwarderTotal
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 transcription of the legacy AJAX endpoint
+// `member/include/pages/forwarder/calPrice.php` — called by
+// `/service-import` whenever the user toggles a row checkbox or
+// "เลือกทั้งหมด" on the bottom pay-bar (forwarder.php L1273-1409).
+// Reads the legacy `tb_forwarder` / `tb_users` schema; RLS is
+// service_role-locked so reads go through the admin client, but
+// `userid === profile.member_code` enforces ownership in code
+// (mirrors the legacy `WHERE userID='$userID'` predicate at
+// calPrice.php L11 + L21).
+//
+// Inputs:
+//   - ids: the row IDs selected on the pay-bar table (forwarder.php
+//          L1357 — `rows_selected.join(',')`)
+//
+// Outputs (mirrors calPrice.php L48-52 — `number_format($price,2)`):
+//   - count: selected eligible row count (calPrice.php L25 `$countID`)
+//   - price: ฿ total formatted to 2 decimals (calPrice.php L50)
+//
+// Legacy total per row (calPrice.php L26):
+//   fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService
+//   + priceCrate + fTransportPriceCHNTHB + priceOther - fDiscount
+//
+// Legacy adjustments (calPrice.php L29-45):
+//   - +50 ฿ flat fee when at least one row uses fShipBy='PCSF' with
+//     fTransportPrice=0 (the PCS เหมาๆ promo) AND that user isn't on
+//     the `user-not-50.json` allowlist.
+//   - -1% discount when userCompany==1 (juristic) AND price >= 1000.
+export type CalculateForwarderTotalInput = {
+  ids: number[];
+};
+
+export type CalculateForwarderTotalResult = {
+  ok: true;
+  count: number;
+  price: string;
+  priceRaw: number;
+} | { ok: false; error: string };
+
+export async function calculateForwarderTotal(
+  input: CalculateForwarderTotalInput,
+): Promise<CalculateForwarderTotalResult> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  // calPrice.php L4 — guard: empty/no IDs returns zero state.
+  if (input.ids.length === 0) {
+    return { ok: true, count: 0, price: numberFormatLegacy(0), priceRaw: 0 };
+  }
+
+  const admin = createAdminClient();
+
+  // calPrice.php L11-18 — SELECT userCompany, userName, userLastName
+  //                        FROM tb_users WHERE userID='$userID'
+  // We only need userCompany here (the juristic 1% discount lever);
+  // userName/userLastName are read but unused by the calc.
+  const { data: userRow } = await admin
+    .from("tb_users")
+    .select("usercompany")
+    .eq("userid", userID)
+    .maybeSingle<{ usercompany: string | number | null }>();
+  const userCompany = String(userRow?.usercompany ?? "");
+
+  // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
+  //   fTransportType, fDiscount, ID, fTrackingCHN, fRefRate, fTotalPrice,
+  //   fTransportPrice, fPriceUpdate, fRefPrice, priceOther,
+  //   fTransportPriceCHNTHB, priceCrate
+  //   FROM tb_forwarder WHERE userID='$userID' AND (fStatus='5' OR fCredit=1)
+  //   AND ID IN ('$ids')
+  // The legacy uses an OR over fStatus / fCredit. PostgREST: use .or().
+  const { data: rows } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, faddressdistrict, fshipby, fshippingservice, ftransporttype, fdiscount, ftotalprice, ftransportprice, fpriceupdate, priceother, ftransportpricechnthb, pricecrate",
+    )
+    .eq("userid", userID)
+    .or("fstatus.eq.5,fcredit.eq.1")
+    .in("id", input.ids);
+
+  let countID = 0;
+  let price = 0;
+  let countPricePCSF = 0;
+  // calPrice.php L34 — the per-user "no 50฿" allowlist. The legacy
+  // reads it from a static JSON; we mirror just the bare username
+  // membership check the legacy `in_array($userID, $userNotPCS50)` does.
+  const userNotPCS50: Set<string> = new Set([
+    "PCS50", "PCS3083", "PCS3983", "PCS999",
+    // PR equivalents (rebrand parity — D1 keeps the same identifiers
+    // mapped 1:1 from the legacy member-code numbering).
+    "PR50", "PR3083", "PR3983", "PR999",
+  ]);
+
+  for (const r of (rows ?? []) as Array<{
+    faddressdistrict: string | null;
+    fshipby: string | null;
+    fshippingservice: number | string | null;
+    ftransporttype: string | null;
+    fdiscount: number | string | null;
+    ftotalprice: number | string | null;
+    ftransportprice: number | string | null;
+    fpriceupdate: number | string | null;
+    priceother: number | string | null;
+    ftransportpricechnthb: number | string | null;
+    pricecrate: number | string | null;
+  }>) {
+    countID++;
+    // calPrice.php L26 — legacy per-row total formula (verbatim).
+    const totalPrice =
+      Number(r.ftotalprice ?? 0) +
+      Number(r.ftransportprice ?? 0) +
+      Number(r.fpriceupdate ?? 0) +
+      Number(r.fshippingservice ?? 0) +
+      Number(r.pricecrate ?? 0) +
+      Number(r.ftransportpricechnthb ?? 0) +
+      Number(r.priceother ?? 0) -
+      Number(r.fdiscount ?? 0);
+    price = price + totalPrice;
+
+    // calPrice.php L29-31 — PCSF rows with fTransportPrice=0 trigger
+    // the +50฿ flat fee (counted, then applied once below).
+    if (
+      r.fshipby === "PCSF" &&
+      Number(r.ftransportprice ?? 0) === 0
+    ) {
+      countPricePCSF++;
+    }
+
+    // calPrice.php L34-38 — the หนองแขม allowlist exemption: if the
+    // address district contains "หนองแขม" AND the user is on the
+    // userNotPCS50 list, the +50฿ doesn't apply for that row.
+    if (
+      r.faddressdistrict &&
+      r.faddressdistrict.indexOf("หนองแขม") !== -1 &&
+      userNotPCS50.has(userID)
+    ) {
+      countPricePCSF--;
+    }
+  }
+
+  // calPrice.php L40-42 — +50฿ flat when at least one PCSF row qualifies.
+  if (countPricePCSF >= 1) {
+    price = price + 50;
+  }
+  // calPrice.php L43-45 — juristic users with price>=1000 get a 1%
+  // discount (the legacy WHT-aligned reduction).
+  if (userCompany === "1" && price >= 1000) {
+    price = price - price * 0.01;
+  }
+
+  return {
+    ok: true,
+    count: countID,
+    price: numberFormatLegacy(price),
+    priceRaw: price,
+  };
+}
+
+// PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
+function numberFormatLegacy(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 export type ForwarderSummary = {
   id: string;

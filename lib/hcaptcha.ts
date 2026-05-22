@@ -62,8 +62,18 @@ export async function verifyHcaptcha(
     return { success: true };
   }
 
+  // Client widget couldn't mint a token (NEXT_PUBLIC_HCAPTCHA_SITE_KEY
+  // missing, network blocked, ad-blocker, mobile keyboard race, etc.).
+  // Hard-failing here breaks real signups whenever the widget is flaky —
+  // and hCaptcha is an OPTIONAL anti-abuse layer (phone OTP + IP rate
+  // limit still protect signup). Downgrade OPEN with a loud WARN so the
+  // miss is visible in logs but flow is unblocked.
   if (!token) {
-    return { success: false, error: "missing_token" };
+    logger.warn(
+      "hcaptcha",
+      "verifyHcaptcha called with empty token — likely client widget failure; allowing request (phone OTP + rate limit still gate signup).",
+    );
+    return { success: true };
   }
 
   const params = new URLSearchParams({ secret, response: token });

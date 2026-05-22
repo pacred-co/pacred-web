@@ -1267,6 +1267,18 @@
       "button": "Chat with Ploy",
       "role": "Customs clearance for stuck cargo"
     },
+    "redar": {
+      "slogan": "Wherever you are, attentive delivery brings it close",
+      "alt": "Sales — Redar (Pacred)",
+      "button": "Chat with Redar",
+      "role": "Air Freight Specialist"
+    },
+    "pee": {
+      "slogan": "Not just shipping — delivering trust at every step",
+      "alt": "Sales — Pee (Pacred)",
+      "button": "Chat with Pee",
+      "role": "Payment Specialist"
+    },
     "lineCta": "Quick chat on LINE"
   },
   "heroBanner": {
