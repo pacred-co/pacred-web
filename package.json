@@ -51,6 +51,8 @@
     ]
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1051.0",
+    "@aws-sdk/lib-storage": "^3.1051.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",

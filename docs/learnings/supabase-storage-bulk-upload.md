@@ -237,6 +237,83 @@ pnpm tsx scripts/backfill/05-upload-rar-extras.ts --root /other/path --apply
 
 ---
 
+## Entry — 2026-05-23 night · ภูม + Claude (worktree `adoring-chandrasekhar-0f8ad7`)
+
+### Context — full FTP backup arrives
+
+After morning's backfill 02-05 work, ภูม clarified that `newrealdatapcs/pcscargo.rar` was NOT the prod data — it's the source-code repo. The real prod backup arrived later as:
+
+- `D:\REALSHITDATAPCS\` (root) — SQL dumps + CoreFTP profiles (915 MB)
+- **`D:\REALSHITDATAPCS\pcsc\`** — the actual `/home/pcsc/` FTP backup (~34 GB)
+
+The customer files live under `D:\REALSHITDATAPCS\pcsc\public_html\member\{images,storage}\`. Total: **78,323 files / 10.08 GB**.
+
+### Critical finding — the `shops/` mystery
+
+Legacy `pcs-admin/forwarder.php` L166-168 uploads forwarder cover images to `member/images/shops/`, NOT to a hypothetical `images/forwarder/` directory. So **forwarder covers + shop logos are stored together in `images/shops/`** (40,686 files / 2.04 GB on prod). The dev sample had only 3 files which is why we assumed forwarder covers were missing — they're not, they're in `shops/`.
+
+### File counts (prod vs dev sample)
+
+| Dir | Prod | Dev sample | Multiplier |
+|---|---|---|---|
+| `images/admin/` | 119 | 99 | 1.2× |
+| `images/notify/` | 18 | 18 | 1.0× |
+| `images/users/` (incl. 50x50/) | 734 | 24 | **30×** |
+| `images/shops/` | **40,686** | 3 | **13,562×** |
+| `storage/slip/` | **35,515** | 8 | **4,439×** |
+| `storage/file/` | 1,199 | 1 | 1,199× |
+| `storage/csv/` | 52 | 0 | new |
+| **Total** | **78,323** | 153 | **512×** |
+
+The dev sample was ~0.2% of prod. We were upload-counting the floor.
+
+### S3 protocol vs supabase-js
+
+ภูม chose **S3 protocol** for backfill 06 (project preference). Required:
+
+1. Create a dedicated S3 access key in Supabase Dashboard → Project Settings → Storage → S3 Access Keys → "New access key".
+2. Stash `ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` in `.env.local` (gitignored). Never commit.
+3. Use `@aws-sdk/client-s3` with `forcePathStyle: true` — Supabase Storage requires path-style URLs (`/<bucket>/<key>`), not virtual-hosted-style (`<bucket>.s3.amazonaws.com/<key>`).
+4. **Rotate the access key as soon as the one-off backfill is done.** (Dashboard → Storage → S3 Access Keys → revoke.)
+
+```ts
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+const s3 = new S3Client({
+  endpoint:       "https://<ref>.storage.supabase.co/storage/v1/s3",
+  region:         "ap-southeast-1",
+  credentials:    { accessKeyId: KEY, secretAccessKey: SECRET },
+  forcePathStyle: true,
+});
+await s3.send(new PutObjectCommand({
+  Bucket: "slips", Key: "legacy/PCS9122_...png",
+  Body: buffer, ContentType: "image/png",
+}));
+```
+
+Throughput at concurrency 16 on ภูม's home connection: **~35 files/s** (csv smoke test, 52 files / 1.5 s). Estimated full run ~40-60 min.
+
+### Bucket mapping (backfill 06)
+
+| Source | Bucket | Path prefix |
+|---|---|---|
+| `images/admin/` | `member-docs` | `legacy-images/admin/` |
+| `images/notify/` | `member-docs` | `legacy-images/notify/` |
+| `images/users/` | `member-docs` | `legacy-images/users/` |
+| `images/shops/` (40k files) | `forwarder-covers` | `legacy-shops/` |
+| `storage/slip/` (35k files) | `slips` | `legacy/` |
+| `storage/file/` | `member-docs` | `legacy-uploads/file/` |
+| `storage/csv/` | `member-docs` | `legacy-uploads/csv/` |
+
+### Resumable progress
+
+Progress file at `scripts/backfill/.progress/06-<rule>.json` records each successful upload + each failure. Re-running the script after a crash / Ctrl+C skips files already in `done`. Gitignored (per `.gitignore` update in same commit).
+
+### Key principle for future bulk uploads
+
+**Never trust the dev sample as a proxy for prod scale.** Always cross-check with the table that names the files (`SELECT COUNT(*) FROM tb_wallet_hs WHERE imagesslip <> ''`) before claiming a backfill is "done". The 153-file dev sample was 0.2% of the real customer files; we shipped 4 backfills assuming we had the full set.
+
+---
+
 ## Cross-links
 
 - The original Phase A backfill (150 files) — `scripts/backfill/01-survey.ts` + `02-upload-files.ts`

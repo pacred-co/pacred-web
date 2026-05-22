@@ -44,3 +44,7 @@ next-env.d.ts
 # Claude Code session worktrees (separate git checkouts, not source)
 .claude/worktrees/
 .claude/settings.local.json
+
+# Backfill 06 progress files (contain target paths only · no secrets)
+# Keep gitignored to avoid leaking the backfill state across machines.
+scripts/backfill/.progress/
