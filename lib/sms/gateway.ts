@@ -155,10 +155,16 @@ async function sendThaiBulkSms(
   // the v2 API defaults to the Standard pool (0 credits) when `force` is not
   // set. Pacred's "Pacred" sender ID approval is in the Corporate pool.
   //
-  // DEFAULT TO "premium" since Pacred's whole account uses Corporate.
-  // Override via THAIBULKSMS_FORCE=standard|corporate if needed.
-  // ThaiBulkSMS docs call this `force` with values `premium`/`standard`/`corporate`.
-  const force = process.env.THAIBULKSMS_FORCE ?? "premium";
+  // ThaiBulkSMS v2 `force` values (per provider docs): `standard` → Standard
+  // credit pool · `premium` → Corporate credit pool. DEFAULT TO "premium" —
+  // Pacred's whole account credit lives in Corporate; the Standard pool is
+  // empty in prod, so an unforced send fails with ERROR_INSUFFICIENT_CREDIT.
+  //
+  // `|| "premium"` (NOT `??`) on purpose: if THAIBULKSMS_FORCE is ever added
+  // to Vercel env but left BLANK, `??` would pass force="" through → the API
+  // treats empty as unset → Standard pool → OTP fails again. `||` makes a
+  // set-but-empty value still fall back to premium.
+  const force = process.env.THAIBULKSMS_FORCE || "premium";
 
   const params = new URLSearchParams({ msisdn, message, sender, force });
 
