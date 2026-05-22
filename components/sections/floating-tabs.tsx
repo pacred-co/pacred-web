@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Phone } from "lucide-react";
+import { Phone, Menu } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import { Link } from "@/i18n/navigation";
 import { LineIcon } from "@/components/icons/social-icons";
@@ -18,9 +18,9 @@ const MOBILE_ICON = {
   logout:  "/images/home/iconfloating/pcs-log-out.png", // also used flipped for login
 } as const;
 
-// Pacred main office line — single number for mobile FAB (per ปอน 2026-05-17,
+// Pacred main office line — single number for mobile FAB (per ปอน 2026-05-22,
 // no random sales-rep rotation).
-const OFFICE_PHONE = "024213325";
+const OFFICE_PHONE = "0661310253";
 
 export function FloatingTabs() {
   const t = useTranslations("floatingTabs");
@@ -82,7 +82,7 @@ export function FloatingTabs() {
                 <img
                   src={item.icon}
                   alt={item.label}
-                  className={`w-7 h-7 object-contain transition-all duration-300 ${
+                  className={`w-8 h-8 object-contain transition-all duration-300 ${
                     active === i
                       ? "grayscale-0 brightness-100 opacity-100"
                       : "grayscale brightness-75 opacity-60 group-hover:grayscale-0 group-hover:brightness-100 group-hover:opacity-100"
@@ -104,151 +104,91 @@ export function FloatingTabs() {
         })}
       </div>
 
-      {/* Bottom navigation bar (mobile only) — per ปอน 2026-05-18 v2:
-          [หน้าหลัก] [บทความ] [📞 call FAB] [ข่าวสาร] [ล็อคอิน/ล็อคเอาท์]
-          The last tab flips between login/logout depending on session.
-          Icons sourced from /images/home/iconfloating/* (login state uses
-          the logout door icon mirrored via scaleX(-1)). */}
+      {/* Bottom navigation bar (mobile only)
+          Layout: [หน้าแรก] [บริการ] [ออเดอร์] [📞 FAB] [ชำระ] [แชท] [เมนู]
+          3 tabs | FAB | 3 tabs — per ปอน 2026-05-22 redesign */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {/* Symmetric 2|FAB|2 layout — original grid */}
-        <div className="grid grid-cols-[1fr_1fr_88px_1fr_1fr]">
-          {/* Tab 1 — หน้าหลัก → / */}
-          <Link
-            href="/"
-            onClick={() => setActive(0)}
-            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={MOBILE_ICON.home}
-              alt={t("homeMain")}
-              className={`w-7 h-7 object-contain transition-all duration-300 ${
-                active === 0 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
-              }`}
-            />
-            <span className={`text-[11px] leading-tight font-medium ${
-              active === 0 ? "text-primary-600 font-bold" : "text-muted"
-            }`}>
-              {t("homeMain")}
-            </span>
-          </Link>
+        {/*
+          Separate the tab row into its own `relative` wrapper so the FAB uses
+          `top-1/2` of the *content row only*, not the full nav height which
+          includes safe-area padding — that was causing the FAB to be cut off.
+        */}
+        <div className="relative">
+          <div className="grid grid-cols-[1fr_1fr_1fr_96px_1fr_1fr_1fr]">
 
-          {/* Tab 2 — บทความ → /knowledge */}
-          <Link
-            href="/knowledge"
-            onClick={() => setActive(1)}
-            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={MOBILE_ICON.blog}
-              alt={t("blog")}
-              className={`w-7 h-7 object-contain transition-all duration-300 ${
-                active === 1 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
-              }`}
-            />
-            <span className={`text-[11px] leading-tight font-medium ${
-              active === 1 ? "text-primary-600 font-bold" : "text-muted"
-            }`}>
-              {t("blog")}
-            </span>
-          </Link>
-
-          {/* Spacer — leaves room for the absolutely-positioned call FAB */}
-          <div aria-hidden />
-
-          {/* Tab 4 — ข่าวสาร → /news */}
-          <Link
-            href="/news"
-            onClick={() => setActive(2)}
-            className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={MOBILE_ICON.news}
-              alt={t("news")}
-              className={`w-7 h-7 object-contain transition-all duration-300 ${
-                active === 2 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
-              }`}
-            />
-            <span className={`text-[11px] leading-tight font-medium ${
-              active === 2 ? "text-primary-600 font-bold" : "text-muted"
-            }`}>
-              {t("news")}
-            </span>
-          </Link>
-
-          {/* Tab 5 — ล็อคอิน / ล็อคเอาท์ (dynamic on session) */}
-          {user ? (
-            <form
-              action="/auth/signout"
-              method="post"
-              onSubmit={() => trackSignOut()}
-              className="contents"
-            >
-              <button
-                type="submit"
-                className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
-                aria-label={t("logout")}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={MOBILE_ICON.logout}
-                  alt={t("logout")}
-                  className="w-7 h-7 object-contain grayscale brightness-75 opacity-75 transition-all duration-300"
-                />
-                <span className="text-[11px] leading-tight font-medium text-muted">
-                  {t("logout")}
-                </span>
-              </button>
-            </form>
-          ) : (
-            <Link
-              href="/login"
-              onClick={() => setActive(3)}
-              className="group flex flex-col items-center justify-center gap-1 py-3 transition-colors active:bg-primary-50/60 dark:active:bg-primary-900/20"
-            >
+            {/* 1 — หน้าแรก */}
+            <Link href="/" onClick={() => setActive(0)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={MOBILE_ICON.logout}
-                alt={t("login")}
-                className={`w-7 h-7 object-contain transition-all duration-300 [transform:scaleX(-1)] ${
-                  active === 3 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"
-                }`}
-              />
-              <span className={`text-[11px] leading-tight font-medium ${
-                active === 3 ? "text-primary-600 font-bold" : "text-muted"
-              }`}>
-                {t("login")}
-              </span>
+              <img src="/images/home/iconfloating/pacred-home-main.png" alt={t("homeMain")}
+                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 0 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 0 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("homeMain")}</span>
             </Link>
-          )}
-        </div>
 
-        {/* Center call FAB — lifts above the bar with a subtle pulsing red aura */}
-        <a
-          href={`tel:${OFFICE_PHONE}`}
-          aria-label={t("callAria")}
-          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[68px] h-[68px] rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-lg shadow-primary-600/35 ring-2 ring-white/40 dark:ring-primary-300/30 flex items-center justify-center active:scale-95 transition-transform"
-        >
-          {/* Subtle aura — theme-tinted soft halo that pulses in place (no scale, never reaches nav edge) */}
-          <span
-            aria-hidden
-            className="absolute -inset-1 rounded-full bg-primary-500/30 blur-[5px] animate-pulse [animation-duration:1.8s]"
-          />
-          <span
-            aria-hidden
-            className="absolute inset-0 rounded-full ring-2 ring-primary-200/50 dark:ring-primary-300/40 animate-pulse [animation-duration:1.8s] [animation-delay:0.45s]"
-          />
-          <Phone className="relative w-6 h-6" strokeWidth={2.4} fill="currentColor" />
-        </a>
+            {/* 2 — บริการ (toggle bottom sheet เมนู) */}
+            <button type="button" onClick={() => { setActive(1); window.dispatchEvent(new CustomEvent("toggle-mobile-menu")); }}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60 cursor-pointer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/home/iconfloating/pcs-shop.png" alt={t("services")}
+                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 1 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 1 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("services")}</span>
+            </button>
+
+            {/* 3 — ออเดอร์ */}
+            <Link href="/service-order" onClick={() => setActive(2)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/home/iconfloating/pcs-cart.png" alt={t("orders")}
+                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 2 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 2 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("orders")}</span>
+            </Link>
+
+            {/* Spacer — FAB sits here, positioned on the relative wrapper above */}
+            <div aria-hidden />
+
+            {/* 4 — ชำระ */}
+            <Link href="/dashboard" onClick={() => setActive(3)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/home/iconfloating/pcs-payment.png" alt={t("pay")}
+                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 3 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 3 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("pay")}</span>
+            </Link>
+
+            {/* 5 — แชท LINE */}
+            <a href="/line" target="_blank" rel="noopener noreferrer" onClick={() => setActive(4)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/home/iconfloating/pcs-line-notify.png" alt={t("chat")}
+                className={`w-8 h-8 object-contain transition-all duration-300 ${active === 4 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 4 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("chat")}</span>
+            </a>
+
+            {/* 6 — เมนู → หลังบ้านลูกค้า */}
+            <Link href="/dashboard" onClick={() => setActive(5)}
+              className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
+              <Menu className={`w-8 h-8 transition-all duration-300 ${active === 5 ? "text-primary-600 scale-110" : "text-muted opacity-75"}`} strokeWidth={2.2} />
+              <span className={`text-[11px] leading-tight font-medium ${active === 5 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("menu")}</span>
+            </Link>
+
+          </div>
+
+          {/* Center call FAB — bottom-[10px] pushes it 20px above the nav border
+              (row ~66px, FAB 76px → 10+76-66 = 20px protrusion) */}
+          <a href={`tel:${OFFICE_PHONE}`} aria-label={t("callAria")}
+            className="absolute left-1/2 -translate-x-1/2 bottom-[10px] w-[76px] h-[76px] rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-lg shadow-primary-600/35 ring-2 ring-white/40 dark:ring-primary-300/30 flex items-center justify-center active:scale-95 transition-transform">
+            <span aria-hidden className="absolute -inset-1 rounded-full bg-primary-500/30 blur-[5px] animate-pulse [animation-duration:1.8s]" />
+            <span aria-hidden className="absolute inset-0 rounded-full ring-2 ring-primary-200/50 dark:ring-primary-300/40 animate-pulse [animation-duration:1.8s] [animation-delay:0.45s]" />
+            <Phone className="relative w-7 h-7" strokeWidth={2.4} fill="currentColor" />
+          </a>
+        </div>
       </nav>
 
       {/* Floating LINE bubble — sits above mobile bottom nav */}
-      <div className="fixed bottom-[78px] right-3 md:bottom-6 md:right-6 z-[51] flex items-center gap-2 md:gap-3">
+      <div className="fixed bottom-[84px] right-3 md:bottom-6 md:right-6 z-[51] flex items-center gap-2 md:gap-3">
         <span className="hidden sm:block rounded-full bg-white dark:bg-surface shadow-md px-4 py-2 text-sm font-medium text-foreground border border-border">
           {t("askMore")}
         </span>

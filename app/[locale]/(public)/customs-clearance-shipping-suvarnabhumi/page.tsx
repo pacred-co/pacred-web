@@ -44,15 +44,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const base = await buildPageMetadata({ locale, path: PATH, namespace: NS });
-  // Per ปอน 2026-05-18 — page title must read exactly
-  // "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping"
+  // Per ปอน 2026-05-22 — page title updated to include import duties
   // (overrides the root `%s | Pacred` template). Keep the i18n
   // `seo.services.customsClearance.title` string as-is for JSON-LD
   // `name` + OG/Twitter title — only the <title> tag is forced.
   const absoluteTitle =
     locale === "en"
-      ? "Shipping & Customs Clearance | Pacred Shipping"
-      : "ชิปปิ้งเคลียร์ภาษี พิธีการศุลกากร | Pacred Shipping";
+      ? "Shipping, Customs Clearance & Import Duties | Pacred Shipping"
+      : "Shipping, Customs Clearance & Import Duties บริการชิปปิ้ง เคลียร์ภาษี และ พิธีการศุลกากร | Pacred Shipping";
   return {
     ...base,
     title: { absolute: absoluteTitle },
@@ -268,7 +267,7 @@ export default async function CustomsClearancePage({
         ]}
       />
       <NavBar />
-      <SearchBar hideOnMobile />
+      <SearchBar hideOnMobile defaultCollapsed />
       <main>
         <BookingCalculator landing="customs" />
 
@@ -304,7 +303,11 @@ export default async function CustomsClearancePage({
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <h1 className="text-[20px] md:text-[40px] leading-[1.25] md:leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white">
               <span className="md:block">บริการ <span className="text-primary-600">Customs Clearance</span> เคลียร์ภาษี (<span className="text-primary-600 text-[28px] md:text-[56px]">สินค้าติดด่าน</span>)</span>{" "}
-              <span className="md:block md:mt-1">สุวรรณภูมิ คลองเตย แหลมฉบัง <span className="text-primary-600">| Pacred Shipping</span></span>
+              <span className="md:block md:mt-1">
+                <span className="block md:inline">สุวรรณภูมิ คลองเตย แหลมฉบัง</span>
+                <br className="hidden md:block" />
+                <span className="text-primary-600">Pacred Shipping</span>
+              </span>
             </h1>
 
             {/* ─── Service scope banner — tappable LINE link, headline only (per เดฟ 2026-05-18) ─── */}
