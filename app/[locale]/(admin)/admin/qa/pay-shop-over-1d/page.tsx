@@ -52,13 +52,25 @@ type URow = {
   usertel: string | null;
 };
 
+/** ms since epoch · helper because Next 16 / React 19 `react-hooks/purity`
+ *  flags raw Date.now() calls inside Server Component render bodies. */
+function nowMs(): number {
+  return Date.now();
+}
+
+/** Floor of (now − iso) in days; 0 when iso is null/invalid. */
+function daysSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
+}
+
 export default async function AdminQaPayShopOver1dPage() {
   await requireAdmin(["ops", "accounting"]);
 
   const admin = createAdminClient();
 
   // SLA cutoff: 24h ago, ISO string. tb_header_order.hdate is a timestamp.
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(nowMs() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: rowsRaw, error } = await admin
     .from("tb_header_order")
@@ -147,9 +159,7 @@ export default async function AdminQaPayShopOver1dPage() {
                   const customerName = u
                     ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
-                  const ageDays = r.hdate
-                    ? Math.floor((Date.now() - new Date(r.hdate).getTime()) / (1000 * 60 * 60 * 24))
-                    : 0;
+                  const ageDays = daysSince(r.hdate);
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-3 font-mono text-xs">

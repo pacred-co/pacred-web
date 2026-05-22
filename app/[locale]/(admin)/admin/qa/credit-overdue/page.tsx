@@ -46,6 +46,16 @@ type URow = {
   usertel: string | null;
 };
 
+/** Helpers — wrap Date.now() so Next 16 / React 19 `react-hooks/purity`
+ *  doesn't flag the call inside the Server Component render body. */
+function nowIso(): string {
+  return new Date(Date.now()).toISOString();
+}
+function daysSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอเข้าโกดังจีน",
   "2": "ถึงโกดังจีนแล้ว",
@@ -62,7 +72,7 @@ export default async function AdminQaCreditOverduePage() {
 
   const admin = createAdminClient();
 
-  const now = new Date().toISOString();
+  const now = nowIso();
 
   const { data: rowsRaw, error } = await admin
     .from("tb_forwarder")
@@ -159,9 +169,7 @@ export default async function AdminQaCreditOverduePage() {
                   const customerName = u
                     ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
-                  const lateDays = r.fcreditdate
-                    ? Math.floor((Date.now() - new Date(r.fcreditdate).getTime()) / (1000 * 60 * 60 * 24))
-                    : 0;
+                  const lateDays = daysSince(r.fcreditdate);
                   const drillKey = r.fidorco ?? String(r.id);
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">

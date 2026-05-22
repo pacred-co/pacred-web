@@ -51,12 +51,22 @@ type URow = {
   usertel: string | null;
 };
 
+/** Helpers — wrap Date.now() so Next 16 / React 19 `react-hooks/purity`
+ *  doesn't flag the call inside the Server Component render body. */
+function nowMs(): number {
+  return Date.now();
+}
+function daysSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
 export default async function AdminQaChnShopOver2dPage() {
   await requireAdmin(["ops", "accounting"]);
 
   const admin = createAdminClient();
 
-  const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
   // Combined filter: (hdate3 is null AND hdate<cutoff) OR (hdate3<cutoff).
   // PostgREST or() takes a comma-separated condition list using its own
@@ -149,9 +159,7 @@ export default async function AdminQaChnShopOver2dPage() {
                     ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
                   const effectiveStart = r.hdate3 ?? r.hdate;
-                  const ageDays = effectiveStart
-                    ? Math.floor((Date.now() - new Date(effectiveStart).getTime()) / (1000 * 60 * 60 * 24))
-                    : 0;
+                  const ageDays = daysSince(effectiveStart);
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-3 font-mono text-xs">

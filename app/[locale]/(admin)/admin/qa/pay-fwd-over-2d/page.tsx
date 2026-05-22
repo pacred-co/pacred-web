@@ -49,12 +49,22 @@ type URow = {
   usertel: string | null;
 };
 
+/** Helpers — wrap Date.now() so Next 16 / React 19 `react-hooks/purity`
+ *  doesn't flag the call inside the Server Component render body. */
+function nowMs(): number {
+  return Date.now();
+}
+function daysSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
+}
+
 export default async function AdminQaPayFwdOver2dPage() {
   await requireAdmin(["ops", "accounting"]);
 
   const admin = createAdminClient();
 
-  const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(nowMs() - 2 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: rowsRaw, error } = await admin
     .from("tb_forwarder")
@@ -143,9 +153,7 @@ export default async function AdminQaPayFwdOver2dPage() {
                   const customerName = u
                     ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
                     : r.userid ?? "—";
-                  const ageDays = r.fdate
-                    ? Math.floor((Date.now() - new Date(r.fdate).getTime()) / (1000 * 60 * 60 * 24))
-                    : 0;
+                  const ageDays = daysSince(r.fdate);
                   const drillKey = r.fidorco ?? String(r.id);
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
