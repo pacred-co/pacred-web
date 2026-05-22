@@ -1,44 +1,77 @@
 /**
- * /admin/forwarders/new — admin-initiated forwarder create (Wave 12 backlog).
+ * /admin/forwarders/new — admin-initiated forwarder create (Wave 12-C).
  *
- * Wave 11 follow-up 2026-05-23 (ภูม flagged): the previous stub did a
- * silent `redirect("/admin/forwarders")` which made the "+ เพิ่มรายการ
- * ให้ลูกค้า" button feel broken (click → bounce back to list with zero
- * feedback). Replaced with an explicit "Wave 12 backlog" page so staff
- * know the feature is on the roadmap + how to do it today.
+ * Wave 11.1 follow-up: the previous version of this page bannered "Wave
+ * 12 backlog" + told staff to use legacy PHP or impersonate. Wave 12-C
+ * replaces that with the REAL form — the operator picks a customer,
+ * fills in tracking/dimensions/address, and submits.
  *
- * Why it's a heavy port:
- *   Legacy `pcs-admin/forwarder.php?page=add` is a 2,661-line god-page
- *   with the full customer-side /service-import/add form duplicated
- *   under admin auth — select customer · warehouse · transport · items ·
- *   dimensions · add-ons · delivery · slip upload · bypass user-side
- *   validations + audit log.
+ * Faithful-port wiring:
+ *   - Legacy ref: `pcs-admin/forwarder.php?page=add` (part of the 2,661-LOC
+ *     god-page) — the admin branch of the customer-side /service-import/add
+ *     form.
+ *   - Writes via `adminCreateForwarder` in `actions/admin/forwarders-new.ts`
+ *     → INSERT tb_forwarder with `adminidcreator=<this admin>` so the new
+ *     row badges "ฝากนำเข้า · admin" in the list (matches Wave 11 source-badge
+ *     convention).
+ *   - Storage: optional cover image lands in the `forwarder-covers` Supabase
+ *     bucket via `lib/storage/upload.ts` (Group A's helper, shipped Wave 12-A).
  *
- * Wave 12 plan (when prioritised):
- *   1. Customer picker (autocomplete from tb_users)
- *   2. Reuse the customer-side /service-import/add form under admin gate
- *   3. Server action that INSERTs tb_forwarder with adminidcreator=<admin>
- *      so the row badges "ฝากนำเข้า : admin_X" in the list (matches
- *      legacy filter convention used by ?create=admin)
- *   4. Slip upload (needs Supabase Storage bucket from ก๊อต)
+ * UI design (per docs/learnings/pacred-design-philosophy.md):
+ *   Tailwind cards + clean section headings — NOT the legacy plain-Bootstrap
+ *   form. Customer picker is a combobox-style searchable dropdown (50 recent
+ *   active customers). Sticky submit at the bottom of the form.
  *
- * Until that ships — 2 alternatives:
- *   a) Use legacy PHP admin (forwarder.php?page=add) — same DB, fully
- *      functional, no retraining needed
- *   b) "View as customer" (G-4 impersonation) → create on the customer's
- *      own /service-import/add page
+ * Query-param prefill: `?q=PR1234` to pre-select a customer (matches the
+ * existing /admin/wallet/add + /admin/yuan-payments/new pattern).
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { AdminForwarderNewForm, type CustomerLite } from "./form";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminForwarderNewPage() {
-  await requireAdmin(["ops", "accounting"]);
+type SP = { q?: string };
+
+export default async function AdminForwarderNewPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
+  await requireAdmin(["ops", "accounting", "super"]);
+
+  const sp = await searchParams;
+  const admin = createAdminClient();
+
+  // Preselect from ?q=PR1234.
+  let preset: CustomerLite | null = null;
+  const qRaw = (sp.q ?? "").trim();
+  if (qRaw) {
+    const candidate = qRaw.toUpperCase();
+    const { data } = await admin
+      .from("tb_users")
+      .select("userid, username, userlastname, usertel, useremail")
+      .eq("userid", candidate)
+      .maybeSingle<CustomerLite>();
+    preset = data ?? null;
+  }
+
+  // Recent active customers (cap 50 — bigger than wallet/add since
+  // forwarders are higher-volume and operators want a wider pick list
+  // before resorting to ?q=PR####).
+  const { data: recentRaw } = await admin
+    .from("tb_users")
+    .select("userid, username, userlastname, usertel, useremail")
+    .eq("userstatus", "1")
+    .order("userregistered", { ascending: false })
+    .limit(50);
+  const recent = (recentRaw ?? []) as unknown as CustomerLite[];
 
   return (
-    <main className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
+    <main className="p-4 lg:p-8 max-w-4xl mx-auto space-y-6">
+      {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-muted">
         <Link href="/admin" className="hover:text-primary-600">
           Admin
@@ -51,55 +84,41 @@ export default async function AdminForwarderNewPage() {
         <span className="text-foreground font-medium">เพิ่มรายการให้ลูกค้า</span>
       </nav>
 
-      <div>
+      {/* Header */}
+      <header>
         <p className="text-xs font-semibold tracking-widest text-primary-500">
           ADMIN · ฝากนำเข้า · เพิ่มรายการให้ลูกค้า
         </p>
-        <h1 className="mt-1 text-2xl font-bold">ยังไม่เปิดให้แอดมินเพิ่ม forwarder</h1>
-      </div>
+        <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการ ฝากนำเข้า ให้ลูกค้า</h1>
+        <p className="mt-1.5 text-sm text-muted">
+          ใช้เมื่อลูกค้าโทรมาขอให้แอดมินเพิ่มรายการให้ — รายการที่สร้างจะติด badge
+          <span className="mx-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+            ฝากนำเข้า · admin
+          </span>
+          ในรายการ
+        </p>
+      </header>
 
-      <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 space-y-3 text-sm">
-        <p className="font-medium text-yellow-900">
-          ฟีเจอร์นี้อยู่ใน Wave 12 backlog (admin-initiated forwarder · 2,661 LOC legacy port).
-        </p>
-        <p className="text-yellow-800">
-          ตัว form เพิ่มรายการให้ลูกค้า เป็น page หนัก — ต้องเลือกลูกค้า · เลือกโกดัง ·
-          กรอกสินค้า · ขนาด · ตัวเลือกขนส่ง · อัพโหลดสลิป + เขียน adminidcreator
-          ลง <code className="rounded bg-yellow-100 px-1.5 py-0.5">tb_forwarder</code>{" "}
-          เพื่อให้แถวขึ้น badge "ฝากนำเข้า : admin_X" ในรายการ. การอัพโหลดสลิปก็ต้องรอ
-          Supabase Storage bucket จาก ก๊อต ก่อน.
-        </p>
-        <p className="text-yellow-800 font-medium">วิธีเพิ่มรายการให้ลูกค้าชั่วคราว:</p>
-        <ol className="list-decimal pl-6 text-yellow-800 space-y-1">
-          <li>
-            ใช้ legacy PHP admin (
-            <code className="rounded bg-yellow-100 px-1.5 py-0.5">
-              pcs-admin/forwarder.php?page=add
-            </code>
-            ) — เป็น form ที่ใช้งานได้อยู่ · ลูกค้าจะเห็นแถวใหม่ทันทีเหมือนเดิม
-          </li>
-          <li>
-            หรือ "ดูในมุมลูกค้า" (G-4 impersonation) จาก{" "}
-            <Link href="/admin/customers" className="font-medium text-yellow-900 underline">
-              /admin/customers
-            </Link>{" "}
-            → เลือกลูกค้า → "เข้าระบบในมุมลูกค้า" → ไป /service-import/add ในนามลูกค้า
-          </li>
+      {/* Hint card */}
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 space-y-1.5">
+        <p className="font-medium">วิธีใช้:</p>
+        <ol className="list-decimal pl-5 space-y-0.5 text-blue-800">
+          <li>เลือก customer จากรายชื่อล่าสุด หรือใช้ <code className="rounded bg-blue-100 px-1.5 py-0.5">?q=PR1234</code> เพื่อระบุตรง</li>
+          <li>เลือกโกดังจีน + รูปแบบขนส่ง · กรอกเลข tracking</li>
+          <li>(ไม่บังคับ) แนบรูปสินค้า + ขนาด/น้ำหนัก</li>
+          <li>กรอกที่อยู่ปลายทางในไทย → กดบันทึก</li>
         </ol>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <AdminForwarderNewForm preset={preset} recent={recent} />
+
+      {/* Footer back link — for operators who clicked into here by mistake */}
+      <div className="flex gap-2 flex-wrap pt-2">
         <Link
           href="/admin/forwarders"
           className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
         >
           ← กลับรายการฝากนำเข้า
-        </Link>
-        <Link
-          href="/admin/customers?focus=search"
-          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-        >
-          ไปค้นหาลูกค้า (สำหรับ impersonate) →
         </Link>
       </div>
     </main>
