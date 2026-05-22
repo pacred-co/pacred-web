@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { X, Phone, Check } from "lucide-react";
+import { X, Phone, Check, ArrowRight, MousePointerClick } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { trackCtaClick } from "@/lib/analytics";
@@ -39,13 +39,92 @@ export function PurchaseBanner() {
 
   return (
     <>
-      <section className="py-5">
+      <section className="py-3 md:py-5">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
-          {/* Banner card */}
-          <div className="relative w-full min-h-[220px] md:min-h-[220px] rounded-[28px] overflow-hidden bg-[#06c755] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
+          {/* ── MOBILE — clean gradient card (like GuaranteeBanner) ── */}
+          <div
+            className="md:hidden relative overflow-hidden rounded-[14px] text-white shadow-[0_12px_32px_rgba(6,199,85,0.30)] transition-all duration-300 group hover:shadow-[0_18px_44px_rgba(6,199,85,0.45)] hover:-translate-y-0.5"
+            style={{ background: "linear-gradient(135deg, #07D55F 0%, #06C755 45%, #059944 100%)" }}
+          >
+            {/* Dot pattern */}
+            <span aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.10]"
+              style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1.4px)", backgroundSize: "16px 16px" }} />
+            {/* Sheen */}
+            <span aria-hidden className="pointer-events-none absolute inset-0 opacity-35 mix-blend-overlay"
+              style={{ background: "radial-gradient(circle at 20% 50%, rgba(255,255,255,0.35) 0%, transparent 60%)" }} />
 
-            {/* Background */}
+            {/* Full-banner LINE click overlay */}
+            <TrackedExternalLink
+              href={LINE_URL}
+              cta="line_consult"
+              surface="purchase_banner"
+              ctaProps={{ position: "banner_mobile" }}
+              aria-label={t("lineAria")}
+              className="absolute inset-0 z-10"
+            >
+              <span className="sr-only">{t("lineAria")}</span>
+            </TrackedExternalLink>
+
+            <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-2 pl-4 pr-1 min-h-[110px]">
+              {/* Left: text + buttons */}
+              <div className="py-1.5 min-w-0">
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.3)] whitespace-nowrap overflow-hidden">
+                    <span className="text-[clamp(15px,4.5vw,19px)] font-black leading-tight tracking-tight">{t("titlePart1")} {t("titlePart2")}</span>
+                  </p>
+                  <p className="flex items-center gap-1.5">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-[#059944] text-[17px] font-black tracking-tight shadow-[0_3px_10px_rgba(0,0,0,0.18)]">
+                      {t("titleBrand")}
+                    </span>
+                    <ArrowRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
+                  </p>
+                  {/* Action buttons */}
+                  <div className="mt-1 flex items-center gap-2 pointer-events-auto relative z-20">
+                    <a
+                      href="tel:0661310253"
+                      onClick={() => trackCtaClick("banner_phone", "home_purchase_banner", { surface: "mobile_cta" })}
+                      className="inline-flex items-center gap-1 h-[28px] px-3 rounded-full bg-white text-[#059944] text-[12px] font-black shadow-sm whitespace-nowrap"
+                    >
+                      <Phone className="w-3 h-3 shrink-0" strokeWidth={2.8} />
+                      โทร
+                    </a>
+                    <a
+                      href={LINE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 h-[28px] px-3 rounded-full bg-white/20 border border-white/50 text-white text-[12px] font-black whitespace-nowrap"
+                    >
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
+                      </svg>
+                      ติดต่อไลน์
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: character photo — taller than card so it pops out */}
+              <div className="relative w-[140px] h-[128px] shrink-0">
+                <Image
+                  src="/images/Character_Icon/visitmobileshop02.png"
+                  alt="เซลล์ Pacred"
+                  fill
+                  sizes="140px"
+                  className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)]"
+                />
+              </div>
+            </div>
+
+            {/* "คลิ๊กเลย!" badge */}
+            <div className="pointer-events-none absolute top-1 right-1 z-20 flex flex-col items-center -rotate-[6deg] transition-transform duration-300 group-hover:-rotate-[10deg] group-hover:scale-105">
+              <span className="text-white text-[11px] font-black tracking-tight [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] whitespace-nowrap">คลิ๊กเลย!</span>
+              <MousePointerClick className="mt-0.5 w-4 h-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" strokeWidth={2.6} />
+            </div>
+          </div>
+
+          {/* ── DESKTOP — image card with overlay (unchanged) ── */}
+          <div className="hidden md:block relative w-full min-h-[220px] rounded-[28px] overflow-hidden bg-[#06c755] shadow-[0_14px_34px_rgba(0,0,0,0.08)] group">
             <TrackedExternalLink
               href={LINE_URL}
               cta="line_consult"
@@ -55,43 +134,29 @@ export function PurchaseBanner() {
               className="absolute inset-0 z-[1] block"
             >
               <Image
-                src="/images/banner/popimportbo.png"
+                src="/images/bannerdesktop/shoppingbanner02.png"
                 alt="Order Worldwide Pacred Shipping"
                 fill
-                className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.035] hidden md:block"
-                priority
-              />
-              <Image
-                src="/images/banner/clearancebanboym.png"
-                alt="Order Worldwide Pacred Shipping"
-                fill
-                className="object-cover object-center block md:hidden"
+                sizes="(min-width: 1200px) 1140px, 100vw"
+                quality={100}
+                className="object-cover object-center transition-transform duration-700 group-hover:scale-[1.035]"
                 priority
               />
             </TrackedExternalLink>
-
-            {/* Dark gradient overlay — left side for text readability */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 z-[2]"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.40) 40%, rgba(0,0,0,0.12) 70%, rgba(0,0,0,0) 95%)",
-              }}
-            />
-
-            {/* Content overlay */}
-            <div className="relative z-[3] min-h-[220px] md:min-h-[220px] w-[72%] md:w-[64%] flex flex-col justify-center px-[14px] py-[16px] md:px-[34px] md:py-[32px]">
-
-              <h2 className="text-[20px] md:text-[clamp(30px,3.1vw,44px)] font-black text-white leading-[1.15] tracking-[-0.04em] mb-[8px] md:mb-[10px]"
-                style={{ textShadow: "0 3px 12px rgba(0,0,0,0.16)" }}>
-                {t("titlePart1")}{" "}
-                <span className="text-white">{t("titleBrand")}</span>{" "}
+            <div aria-hidden className="pointer-events-none absolute inset-0 z-[2]"
+              style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.40) 40%, rgba(0,0,0,0.12) 70%, rgba(0,0,0,0) 95%)" }} />
+            <div className="relative z-[3] flex min-h-[220px] w-[64%] flex-col justify-center px-[34px] py-[32px]">
+              <h2 className="text-[clamp(30px,3.1vw,44px)] font-black text-white leading-[1.15] tracking-[-0.04em] mb-[10px] [-webkit-text-stroke:2px_#7f1d1d] [paint-order:stroke_fill]"
+                style={{ textShadow: "0 2px 8px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.25)" }}>
+                <span className="text-yellow-300 [-webkit-text-stroke:2.5px_#7f1d1d] [paint-order:stroke_fill]"
+                  style={{ textShadow: "0 3px 10px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.3)" }}>
+                  {t("titlePart1Yellow")}
+                </span>
+                {t("titlePart1Rest")}{" "}
+                <span className="text-white">{t("titleBrandDesktop")}</span>{" "}
                 {t("titlePart2")}
               </h2>
-
-              {/* Features — desktop only */}
-              <div className="hidden md:flex flex-wrap gap-x-4 gap-y-2 mb-[14px]">
+              <div className="flex flex-wrap gap-x-4 gap-y-2 mb-[14px]">
                 {features.map((f) => (
                   <div key={f} className="flex items-center gap-[7px] text-white text-[13px] font-bold"
                     style={{ textShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
@@ -100,53 +165,30 @@ export function PurchaseBanner() {
                   </div>
                 ))}
               </div>
-
-              {/* Contact phone */}
-              <a
-                href="tel:0661253007"
+              <a href="tel:0661310253"
                 onClick={() => trackCtaClick("banner_phone", "home_purchase_banner", { surface: "inline_phone" })}
-                className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
-                style={{ textShadow: "1px 1px 0 rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.28)" }}
-              >
-                <Phone
-                  className="w-3 h-3 md:w-4 md:h-4 shrink-0"
-                  strokeWidth={3}
-                  style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
-                />
-                {t("contactPrefix")}: 066-125-3007
+                className="inline-flex items-center gap-1.5 text-white text-[13px] font-extrabold leading-[1.25] mb-3 hover:text-yellow-200 transition-colors w-fit"
+                style={{ textShadow: "1px 1px 0 rgba(0,0,0,0.65), 0 2px 6px rgba(0,0,0,0.28)" }}>
+                <Phone className="w-4 h-4 shrink-0" strokeWidth={3} style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }} />
+                {t("contactPrefix")}: 066-131-0253
               </a>
-
-              {/* Buttons */}
-              <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    trackCtaClick("banner_select_sales", "home_purchase_banner", { surface: "primary_cta" });
-                    setOpen(true);
-                  }}
+              <div className="flex items-center gap-3 flex-wrap">
+                <button type="button"
+                  onClick={() => { trackCtaClick("banner_select_sales", "home_purchase_banner", { surface: "primary_cta" }); setOpen(true); }}
                   suppressHydrationWarning
-                  className="inline-flex items-center gap-[7px] h-[34px] md:h-[42px] px-4 md:px-5 rounded-[9px] md:rounded-[11px] text-[11.5px] md:text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
-                  style={{ background: "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)", boxShadow: "0 8px 18px rgba(185,28,28,0.25)" }}
-                >
-                  <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
+                  className="inline-flex items-center gap-[7px] h-[42px] px-5 rounded-[11px] text-[14px] font-black text-white cursor-pointer border-0 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+                  style={{ background: "linear-gradient(135deg,#dc2626 0%,#b91c1c 100%)", boxShadow: "0 8px 18px rgba(185,28,28,0.25)" }}>
+                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
                   {t("ctaSales")}
                 </button>
-
-                <Link
-                  href="/register"
+                <Link href="/register"
                   onClick={() => trackCtaClick("banner_register", "home_purchase_banner", { surface: "secondary_cta" })}
-                  className="inline-flex items-center gap-[7px] h-[34px] md:h-[42px] px-4 md:px-5 rounded-[9px] md:rounded-[11px] text-[11.5px] md:text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
-                  style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}
-                >
-                  <svg className="w-[14px] h-[14px] md:w-[18px] md:h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
-                  </svg>
+                  className="inline-flex items-center gap-[7px] h-[42px] px-5 rounded-[11px] text-[14px] font-black text-[#06C755] bg-white border border-white/70 transition-all duration-300 hover:-translate-y-0.5 whitespace-nowrap"
+                  style={{ boxShadow: "0 8px 18px rgba(0,0,0,0.14)" }}>
+                  <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
                   {t("ctaRegister")}
                 </Link>
               </div>
-
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { ChevronDown, LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
@@ -10,8 +11,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { LineIcon, FacebookIcon, YouTubeIcon, TikTokIcon, InstagramIcon } from "@/components/icons/social-icons";
-import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 import { NotificationBell } from "@/components/notification-bell";
 import { CartBadge } from "@/components/cart-badge";
 import { TopMenu, TopMenuMobile } from "@/components/sections/top-menu";
@@ -28,9 +27,29 @@ type ProfileLite = {
 export function NavBar() {
   const t = useTranslations("nav");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [authReady, setAuthReady] = useState(false);
+
+  // Listen for open / toggle events fired by FloatingTabs
+  useEffect(() => {
+    const openHandler   = () => setMenuOpen(true);
+    const toggleHandler = () => setMenuOpen((v) => !v);
+    window.addEventListener("open-mobile-menu",   openHandler);
+    window.addEventListener("toggle-mobile-menu", toggleHandler);
+    return () => {
+      window.removeEventListener("open-mobile-menu",   openHandler);
+      window.removeEventListener("toggle-mobile-menu", toggleHandler);
+    };
+  }, []);
+
+  // Sync chevron state when SearchBar on a page starts collapsed by default
+  useEffect(() => {
+    const handler = () => setSearchOpen(false);
+    window.addEventListener("search-bar-default-collapsed", handler);
+    return () => window.removeEventListener("search-bar-default-collapsed", handler);
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -64,41 +83,23 @@ export function NavBar() {
 
       {/* ── Main navbar ── */}
       <div className="bg-[#B91C1C]">
-        <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between gap-4 px-4 xl:px-6">
+        <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between gap-4 px-4 xl:pl-2 xl:pr-6">
 
-          {/* Social follow */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden lg:inline text-white/70 text-[12px] font-medium mr-0.5 whitespace-nowrap">{t("followUs")}</span>
-            <TrackedExternalLink
-              href="/line"
-              cta="line_consult"
-              surface="navbar"
-              aria-label="LINE Official"
-              className="text-white hover:opacity-70 transition-opacity"
-            >
-              <LineIcon className="h-[18px] w-[18px]" />
-            </TrackedExternalLink>
-            <a href="https://www.facebook.com/PacredShippingCustomsClearanceImportExport/" target="_blank" rel="noopener noreferrer"
-              aria-label="Facebook"
-              className="hover:opacity-70 transition-opacity">
-              <FacebookIcon className="h-[18px] w-[18px] [&_path]:fill-white" />
-            </a>
-            <a href="https://www.youtube.com/@PacredShipping" target="_blank" rel="noopener noreferrer"
-              aria-label="YouTube"
-              className="text-white hover:opacity-70 transition-opacity">
-              <YouTubeIcon className="h-[18px] w-[18px]" />
-            </a>
-            <a href="https://www.tiktok.com/@pacred.co" target="_blank" rel="noopener noreferrer"
-              aria-label="TikTok"
-              className="text-white hover:opacity-70 transition-opacity">
-              <TikTokIcon className="h-[18px] w-[18px]" />
-            </a>
-            <a href="https://www.instagram.com/pacred.co/" target="_blank" rel="noopener noreferrer"
-              aria-label="Instagram"
-              className="text-white hover:opacity-70 transition-opacity">
-              <InstagramIcon className="h-[18px] w-[18px]" />
-            </a>
-          </div>
+          {/* Logo — clicks back to home (replaces former social cluster, per ปอน 2026-05-22) */}
+          <Link
+            href="/"
+            aria-label="Pacred Shipping — กลับหน้าแรก"
+            className="shrink-0 flex items-center hover:opacity-90 transition-opacity"
+          >
+            <Image
+              src="/images/iconfloattabs/pacgrey.png"
+              alt="Pacred Shipping"
+              width={400}
+              height={160}
+              priority
+              className="h-10 md:h-12 w-auto object-contain"
+            />
+          </Link>
 
           {/* Desktop nav — TopMenu with dropdowns */}
           <div className="hidden xl:flex flex-1 justify-center">
@@ -127,37 +128,37 @@ export function NavBar() {
             <ThemeToggle variant="on-primary" />
           </div>
 
-          {/* Mobile: controls + hamburger */}
+          {/* Mobile: controls only — hamburger moved to FloatingTabs "เมนู" */}
           <div className="flex xl:hidden items-center gap-2">
             <LocaleSwitcher variant="on-primary" />
             <ThemeToggle variant="on-primary" />
             <button
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Toggle menu"
+              type="button"
+              onClick={() => { setSearchOpen((v) => !v); window.dispatchEvent(new CustomEvent("toggle-search-bar")); }}
+              aria-label="Toggle search"
               className="flex items-center justify-center w-9 h-9 rounded-lg border border-white/30 text-white hover:bg-white/15 transition-colors"
             >
-              {menuOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="4" x2="20" y1="6" y2="6" />
-                  <line x1="4" x2="20" y1="12" y2="12" />
-                  <line x1="4" x2="20" y1="18" y2="18" />
-                </svg>
-              )}
+              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${searchOpen ? "" : "rotate-180"}`} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Mobile dropdown ── */}
-      {menuOpen && (
-        <div className="xl:hidden border-t border-white/20 bg-[#991b1b]">
-          {/* SearchBar (mobile only — desktop has its own sticky SearchBar below NavBar) */}
-          <div className="md:hidden border-b border-white/20">
-            <SearchBar embedded />
+      {/* ── Mobile menu — bottom sheet (slides up from bottom) ── */}
+      {/* Backdrop */}
+      <div
+        className={`xl:hidden fixed inset-0 z-[59] bg-black/50 transition-opacity duration-300 ${menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setMenuOpen(false)}
+      />
+      {/* Sheet */}
+      <div
+        className={`xl:hidden fixed inset-x-0 bottom-0 z-[60] transition-transform duration-300 ease-out ${menuOpen ? "translate-y-0" : "translate-y-full"}`}
+      >
+        <div className="bg-[#991b1b] rounded-t-2xl max-h-[75vh] overflow-y-auto"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 78px)" }}>
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-white/30" />
           </div>
           <nav className="flex w-full flex-col px-4 py-3 gap-0.5">
             <TopMenuMobile onClose={() => setMenuOpen(false)} />
@@ -176,7 +177,7 @@ export function NavBar() {
             )}
           </nav>
         </div>
-      )}
+      </div>
     </header>
   );
 }
