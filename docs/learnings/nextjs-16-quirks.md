@@ -438,3 +438,61 @@ export default function Page() {
 **Cross-links:**
 - Commit `ccf109e` — the split fix (`lib/tos.ts` client-safe + new `lib/tos-server.ts`)
 - [`docs/learnings/ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) — "verify + build green ≠ prod" family
+
+---
+
+## [2026-05-23] React 19 `react-hooks/purity` rejects raw `Date.now()` / `new Date()` in render bodies
+
+**Context:** Wave 10 Agent A built 5 new QA queue Server Component pages under `/admin/qa/<slug>`. Files compiled clean for `tsc` but `pnpm lint` errored on every page with `react-hooks/purity` violations. Agent had to do a second pass to wrap every time-getter in a helper before commit (`776ebc8`).
+
+**Symptom:** ESLint with `eslint-config-next` (Next 16 ships React 19 + `react-hooks/purity` rule on by default) flags:
+> `Date.now()` is a side-effectful call · the render must be a pure function of its props/state · move this to a helper or useMemo
+
+Surfaces on:
+- `const cutoff = new Date(Date.now() - 86_400_000).toISOString();`
+- `const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);`
+- Anywhere inline `Date.now()` / `new Date()` lives in the JSX-returning function body.
+
+**Why it's a purity violation:** `Date.now()` is non-deterministic — call it twice and get different values. React 19 + Server Components compile render bodies as pure functions; non-determinism inside render undermines the React Compiler's memoization + the Server Component cache.
+
+**Root cause:** the React Compiler runs eagerly in Next 16 + the `react-hooks/purity` rule treats `Date.now()` / `new Date()` / `Math.random()` / `crypto.randomUUID()` as impure. Even read-only timestamp math counts.
+
+**Fix — wrap in a NAMED top-level helper function:**
+
+```ts
+// ❌ Lint error
+export default async function MyPage() {
+  const cutoff = new Date(Date.now() - 86_400_000).toISOString();
+  const rows = await query.gte("created_at", cutoff);
+  // …
+}
+
+// ✅ Lint clean
+function nowMs(): number { return Date.now(); }
+function nowIso(): string { return new Date().toISOString(); }
+function isoDaysAgo(days: number): string {
+  const d = new Date(nowMs() - days * 86_400_000);
+  return d.toISOString();
+}
+function daysSince(iso: string): number {
+  return Math.floor((nowMs() - new Date(iso).getTime()) / 86_400_000);
+}
+
+export default async function MyPage() {
+  const cutoff = isoDaysAgo(1);
+  // …
+}
+```
+
+The named helper hides the impurity behind a function call boundary — the rule trusts the helper to be the explicit non-pure leaf, not the render body.
+
+**Why this matters next time:**
+- ANY new page that computes "rows newer than X days" / "rows older than Y minutes" needs the helper pattern.
+- The lint error message points at the `Date.now()` line — easy fix once you know to wrap.
+- Affects mostly SLA-breach queue pages (where we compute the cutoff in render) + dashboard cards showing "X days ago" deltas. Less common in mutation flows where timestamps come from form input / DB columns.
+- Pattern source: existing fix in `app/[locale]/(admin)/admin/reports/credit-pending/page.tsx` + `customers/recently-active/page.tsx` (Wave 7.2). Mirror those when in doubt.
+
+**Cross-links:**
+- Commit `776ebc8` — Agent A's lint-fix pass on Wave 10 Group A
+- Commits `a285c90` + `3595d41` — sister Wave 10 work that didn't need the fix because they only read DB-supplied timestamps (no inline `Date.now()`)
+- [React 19 `react-hooks/purity` rule docs](https://react.dev/reference/rules) (impure calls)
