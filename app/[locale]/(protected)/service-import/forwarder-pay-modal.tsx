@@ -258,21 +258,14 @@ export function ForwarderPayModal({
               </button>
             </div>
             <div className="modal-body header-from">
-              {/* getListPayForwarder.php L63-72 — wallet-disabled banner. */}
-              <div className="card-body border-wallet p-1">
-                <div className="media d-flex">
-                  <div className="media-body text-left">
-                    <h3 className="warning mb-0">
-                      <div className="bg-danger p05 text-white font-14">
-                        ระบบกระเป๋าตังไม่สามารถใช้งานได้กับบริการนี้แล้ว
-                      </div>
-                      <div className="bg-danger p05 text-white font-14">
-                        หากต้องการนำเงินออกจากกระเป๋า ให้ไปยังระบบถอนเงิน
-                      </div>
-                    </h3>
-                  </div>
-                </div>
-              </div>
+              {/* NOTE — the legacy getListPayForwarder.php L63-72 showed a
+                  red "ระบบกระเป๋าตังใช้กับบริการนี้ไม่ได้แล้ว / ไปที่ระบบ
+                  ถอนเงิน" banner. That banner only made sense in the legacy
+                  where this modal still had a wallet-pay control to disable.
+                  The Pacred port never renders a wallet-pay option here at
+                  all (forwarder bills are PromptPay-QR + slip only), so the
+                  banner is pure noise — removed (owner directive 2026-05-22).
+                  Reaching the wallet is the /wallet screen's job. */}
 
               {done ? (
                 /* forwarder.php 'sPay' success state. */
@@ -314,18 +307,29 @@ export function ForwarderPayModal({
                     </div>
                   )}
 
-                  {/* ── per-forwarder itemized blocks — L118-173 ── */}
+                  {/* ── per-forwarder itemized blocks — L118-173.
+                      Each block is one clean bordered card (the legacy
+                      stacked 3 hr-dashed lines per item which read as
+                      visual noise — owner flagged 2026-05-22). One card
+                      = one item, even 8px gap between, header centered. */}
                   {rows.map((row) => {
                     const rowTotal = perRowTotal(row);
                     return (
-                      <div key={row.id}>
-                        <div className="hr-dashed pb-1" />
+                      <div
+                        key={row.id}
+                        style={{
+                          border: "1px solid #e5e5e5",
+                          borderRadius: "8px",
+                          padding: "10px 14px",
+                          marginBottom: "10px",
+                        }}
+                      >
                         {row.fcredit === "1" && (
-                          <div className="text-color text-center">
+                          <div className="text-color text-center font-12">
                             ชำระรายการเครดิต
                           </div>
                         )}
-                        <h5 className="text-center">
+                        <h5 className="text-center mb-0">
                           เลขออเดอร์ :{" "}
                           <span className="text-color-main">
                             <b>{row.id}</b>
@@ -339,7 +343,7 @@ export function ForwarderPayModal({
                         </h5>
                         <div className="hr-dashed" />
                         <div
-                          className={`row pt-1 ${row.fcredit === "1" ? "bg-danger3" : ""}`}
+                          className={`row ${row.fcredit === "1" ? "bg-danger3" : ""}`}
                         >
                           {/* L125-126 — ราคานำเข้าจีน-ไทย. */}
                           <div className="col-6">
@@ -467,17 +471,16 @@ export function ForwarderPayModal({
                           )}
                           {/* L171-172 — ราคารวม (per row). */}
                           <div className="col-6">
-                            <h5 className="text-right">
+                            <h5 className="text-right mb-0">
                               <b>ราคารวม : </b>
                             </h5>
                           </div>
                           <div className="col-6">
-                            <h5 className="text-right">
+                            <h5 className="text-right mb-0">
                               <span>{numberFormat2(rowTotal)}</span> บาท
                             </h5>
                           </div>
                         </div>
-                        <div className="hr-dashed" />
                       </div>
                     );
                   })}
@@ -621,52 +624,67 @@ export function ForwarderPayModal({
                           collection account. */}
                     </div>
 
-                    <div>
-                      <hr />
-                    </div>
-
-                    {/* L304-309 — slip upload. */}
-                    <div>
-                      <label className="form-control-label" htmlFor="imagesSlip">
-                        หลักฐานการโอน (สลิปรายการ)
-                      </label>
-                      <div className="fallback">
+                    {/* L304-309 — slip upload + the optional transfer
+                        date, grouped in one bordered panel so the form
+                        controls read as a coherent block (owner flagged
+                        the bare inputs 2026-05-22). */}
+                    <div
+                      style={{
+                        border: "1px solid #e5e5e5",
+                        borderRadius: "8px",
+                        padding: "12px 14px",
+                        marginTop: "12px",
+                      }}
+                    >
+                      <div>
+                        <label
+                          className="form-control-label"
+                          htmlFor="imagesSlip"
+                          style={{ fontWeight: 600 }}
+                        >
+                          หลักฐานการโอน (สลิปรายการ){" "}
+                          <span className="text-danger">*</span>
+                        </label>
                         <input
                           ref={fileRef}
                           id="imagesSlip"
                           type="file"
                           name="imagesSlip"
-                          className="dropify"
+                          className="form-control"
                           accept="image/*"
                           onChange={onSlipChange}
                         />
+                        {slipUploading && (
+                          <div className="font-12 pt-05 text-warning">
+                            กำลังอัปโหลดสลิป...
+                          </div>
+                        )}
+                        {slipPath && !slipUploading && (
+                          <div className="font-12 pt-05 text-success">
+                            ✓ แนบสลิปเรียบร้อยแล้ว
+                          </div>
+                        )}
                       </div>
-                      {slipUploading && (
-                        <div className="font-12 pt-1">กำลังอัปโหลดสลิป...</div>
-                      )}
-                      {slipPath && !slipUploading && (
-                        <div className="font-12 pt-1 text-success">
-                          แนบสลิปเรียบร้อยแล้ว
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Optional transfer date (legacy stores it as
-                        tb_wallet_hs.dateslip). */}
-                    <div className="pt-1">
-                      <label
-                        className="form-control-label"
-                        htmlFor="slipDate"
-                      >
-                        วันเวลาที่โอน (ไม่บังคับ)
-                      </label>
-                      <input
-                        id="slipDate"
-                        type="datetime-local"
-                        className="form-control"
-                        value={slipDate}
-                        onChange={(e) => setSlipDate(e.target.value)}
-                      />
+                      {/* Optional transfer date (legacy stores it as
+                          tb_wallet_hs.dateslip). */}
+                      <div className="pt-1">
+                        <label
+                          className="form-control-label"
+                          htmlFor="slipDate"
+                          style={{ fontWeight: 600 }}
+                        >
+                          วันเวลาที่โอน{" "}
+                          <span className="font-12 text-muted">(ไม่บังคับ)</span>
+                        </label>
+                        <input
+                          id="slipDate"
+                          type="datetime-local"
+                          className="form-control"
+                          value={slipDate}
+                          onChange={(e) => setSlipDate(e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
 
