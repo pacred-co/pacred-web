@@ -121,6 +121,18 @@ export default async function ServiceImportPage({
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
 
+  // ── getListPayForwarder.php L23 — userCompany ──
+  // The `#list-payment2` payment modal renders the 1% WITHHOLDING TAX
+  // line + the KBank account block only for juristic customers
+  // (`userCompany==1`). Read the legacy flag so the modal stays on the
+  // legacy data path (not the rebuilt-app `profiles.account_type`).
+  const { data: userRow } = await admin
+    .from("tb_users")
+    .select("usercompany")
+    .eq("userid", memberCode)
+    .maybeSingle<{ usercompany: string | number | null }>();
+  const isJuristic = String(userRow?.usercompany ?? "") === "1";
+
   // ── forwarder.php L450 — corporate check ──
   // SELECT ID FROM tb_corporate WHERE userID=… AND corporateStatus=1
   // (the screen renders fully only if NO row OR the row is approved).
@@ -581,6 +593,7 @@ export default async function ServiceImportPage({
                                   rowsData={rows}
                                   arrFidDriver={Array.from(arrFidDriver)}
                                   q={q}
+                                  isJuristic={isJuristic}
                                   showPayBar={showPayBar}
                                   showMaoStrip={showMaoStrip}
                                   showPayStrip={

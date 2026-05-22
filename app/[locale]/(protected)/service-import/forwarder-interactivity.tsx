@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { calculateForwarderTotal } from "@/actions/forwarder";
 import {
   ForwarderRowView,
   calPriceForwarderSumCompany,
   type ForwarderRow,
 } from "./forwarder-row-view";
+import { ForwarderPayModal } from "./forwarder-pay-modal";
 
 /**
  * Client-side interactivity for `/service-import` — faithful port of
@@ -64,6 +64,10 @@ export type ForwarderInteractivityProps = {
   /** Current `?q=` value — controls extra credit columns + helper
    *  predicates. */
   q: string;
+  /** Whether the customer is a juristic account — passed through to
+   *  the `<ForwarderPayModal>` (drives the 1% WHT line + KBank block,
+   *  legacy `userCompany==1`). */
+  isJuristic: boolean;
   /** Whether to render the bottom pay-bar (legacy L841 condition). */
   showPayBar: boolean;
   /** Whether to render the "โปรเหมาๆ" headShake strip above the
@@ -81,6 +85,7 @@ export function ForwarderInteractivity({
   rowsData,
   arrFidDriver,
   q,
+  isJuristic,
   showPayBar,
   showMaoStrip,
   showPayStrip,
@@ -166,31 +171,28 @@ export function ForwarderInteractivity({
     recompute(ns);
   }
 
-  // The legacy `<input id="select">` (forwarder.php L860) submits
-  // the selected ids to the bulk-pay flow — wired UNLESS empty.
-  // Bulk-bill submit Server Action ยังไม่ลง (cross-cutting, needs
-  // tb_wallet + tb_wallet_hs + LINE Notify orchestration); per-row
-  // /service-import/[fNo]?pay=true flow IS working end-to-end via
-  // the existing pay-from-wallet-button component. Bridge: clicking
-  // the pay-bar button navigates to the FIRST selected row's pay
-  // page so the customer can finish the transaction. If multiple
-  // are selected, a confirm dialog explains that bulk-pay will be
-  // added shortly — until then, pay one-by-one.
+  // The legacy `<input id="select">` (forwarder.php L860) submits the
+  // selected ids to the bulk-bill payment flow — wired UNLESS empty.
+  // Pressing "ชำระเงิน" opens the `<ForwarderPayModal>` (`#list-payment2`
+  // — getListPayForwarder.php) with the selected rows' price data. The
+  // modal shows the itemized bill + PromptPay QR + slip upload and, on
+  // submit, records a pending-verification payment via the
+  // `submitForwarderPayment` Server Action — the faithful 1:1 of the
+  // legacy `paymentForwarderNew` POST handler. (This replaces the prior
+  // bridge that just `router.push`-ed to the first selected row.)
   const submitDisabled = selectedIds.size === 0;
-  const router = useRouter();
+  const [payModalOpen, setPayModalOpen] = useState(false);
   function handleBulkPay() {
     if (selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
-    const firstId = ids[0];
-    if (ids.length === 1) {
-      router.push(`/service-import/${firstId}?pay=true`);
-      return;
-    }
-    const ok = window.confirm(
-      `คุณเลือก ${ids.length} รายการ ยอดรวม ฿${displayTotal}\n\nระบบกำลังเตรียมการชำระแบบรวมบิลพร้อมกันทุกรายการ — ระหว่างนี้ระบบจะนำคุณไปยังรายการแรก (#${firstId}) เพื่อชำระทีละรายการ\n\nกด OK เพื่อไปต่อ`,
-    );
-    if (ok) router.push(`/service-import/${firstId}?pay=true`);
+    setPayModalOpen(true);
   }
+
+  // The selected rows' full price data — the `<ForwarderPayModal>`
+  // needs the primitive-only subset of rowsData the customer ticked.
+  const selectedRows = useMemo(
+    () => enrichedRows.filter((r) => selectedIds.has(r.id)),
+    [enrichedRows, selectedIds],
+  );
   const allChecked =
     eligibleIds.length > 0 && selectedIds.size === eligibleIds.length;
 
@@ -358,6 +360,25 @@ export function ForwarderInteractivity({
           </div>
         )}
       </div>
+
+      {/* ── `#list-payment2` multi-bill payment modal ──
+          getListPayForwarder.php — opened by the pay-bar "ชำระเงิน"
+          button. Renders the itemized bill + PromptPay QR + slip
+          upload; submit records a pending-verification payment.
+          `key` = the selected-id set, so the modal remounts fresh
+          (clearing slip / QR / done state) whenever the customer
+          changes the selection and reopens it. */}
+      <ForwarderPayModal
+        key={
+          Array.from(selectedIds)
+            .sort((a, b) => a - b)
+            .join(",")
+        }
+        rows={selectedRows}
+        isJuristic={isJuristic}
+        open={payModalOpen}
+        onClose={() => setPayModalOpen(false)}
+      />
     </>
   );
 }
