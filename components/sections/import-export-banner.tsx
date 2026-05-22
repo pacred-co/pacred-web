@@ -51,7 +51,7 @@ export function ImportExportBanner() {
 
   return (
     <>
-      <section className="py-5">
+      <section className="py-3 md:py-5">
         <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
           {/* Banner card */}
@@ -139,7 +139,7 @@ export function ImportExportBanner() {
 
               {/* Contact phone */}
               <a
-                href="tel:0661253007"
+                href="tel:0661310253"
                 className="inline-flex items-center gap-1.5 text-white text-[11px] md:text-[13px] font-extrabold leading-[1.25] mb-2 md:mb-3 hover:text-yellow-200 transition-colors w-fit"
                 style={{ textShadow: FEATURE_TEXT_SHADOW }}
               >
@@ -148,7 +148,7 @@ export function ImportExportBanner() {
                   strokeWidth={3}
                   style={{ filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.55))" }}
                 />
-                ติดต่อ: 066-125-3007
+                ติดต่อ: 066-131-0253
               </a>
 
               {/* Price + Buttons */}

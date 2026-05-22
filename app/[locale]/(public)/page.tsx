@@ -10,8 +10,8 @@ import { OurService } from "@/components/sections/our-service";
 import { ProductCategories } from "@/components/sections/product-categories";
 import { PurchaseBanner } from "@/components/sections/purchase-banner";
 import { PricingSection } from "@/components/sections/pricing-section";
-import { ClearanceBanner } from "@/components/sections/clearance-banner";
-import { ClearanceCards } from "@/components/sections/clearance-cards";
+import { GuaranteeBanner } from "@/components/sections/guarantee-banner";
+import { CustomsModeCards } from "@/components/sections/customs-mode-cards";
 import { WhyPacred } from "@/components/sections/why-pacred";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { ContactSales } from "@/components/sections/contact-sales";
@@ -107,8 +107,12 @@ export default async function Home({
         <ProductCategories />
         <PurchaseBanner />
         <PricingSection />
-        <ClearanceBanner />
-        <ClearanceCards />
+        <GuaranteeBanner />
+        <section className="relative pt-3 md:pt-5 pb-1 md:pb-2">
+          <div className="mx-auto w-full max-w-[1140px] px-[10px] md:px-5">
+            <CustomsModeCards />
+          </div>
+        </section>
         <WhyPacred />
         <ContactSales />
         <ImportExportBanner />

@@ -35,7 +35,7 @@ export function ProductCategories() {
   }));
 
   return (
-    <section className="pt-6 pb-5">
+    <section className="pt-3 md:pt-6 pb-3 md:pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}

@@ -25,8 +25,8 @@ export const DEFAULT_LOCALE: SiteLocale = "th";
  */
 export const CONTACT = {
   /** Default phone shown to customers (= sales primary). Back-compat alias for old `phone`/`phoneDisplay`. */
-  phone:               "+66661253007",
-  phoneDisplay:        "066-125-3007",
+  phone:               "+66661310253",
+  phoneDisplay:        "066-131-0253",
   /** Company main line — for footer / receipts / official invoices. */
   phoneCompany:        "+6624213325",
   phoneCompanyDisplay: "02-421-3325",
@@ -34,7 +34,7 @@ export const CONTACT = {
   phoneCs:             "+66660901217",
   phoneCsDisplay:      "066-090-1217",
   /** Sales reps — used by booking-data + sales-carousel + cards. */
-  phoneSalesDisplay:   ["066-125-3007", "066-125-3006"],
+  phoneSalesDisplay:   ["066-131-0253", "066-125-3006"],
   /**
    * Customer-facing default — shown in footer / JSON-LD ContactPoint / signup
    * confirmation. Per เดฟ 2026-05-15: pair `sales` + `docs` side-by-side on

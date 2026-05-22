@@ -24,7 +24,7 @@ export function WhyPacred() {
   const t = useTranslations("whyPacred");
 
   return (
-    <section id="why-pacred" className="relative py-8 md:py-12">
+    <section id="why-pacred" className="relative py-4 md:py-12">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* ─── Header ─── */}
