@@ -169,7 +169,7 @@ export const TEMPLATES: Record<
 
 const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -178,7 +178,7 @@ const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
     ],
   },
   {
-    icon: "📦",
+    icon: "/images/hero-section/icon-draf/box.png",
     heading: "ค่าใช้จ่ายสายการบิน / Port",
     items: [
       { label: "D/O",                  value: "รอเช็ค" },
@@ -191,7 +191,7 @@ const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าขนส่งในไทย (ถ้ามี)",
     items: [
       { label: "รถ 4-6 ล้อ (BKK + ปริมณฑล)", value: "500-5,000 บาท" },
@@ -199,7 +199,7 @@ const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
@@ -210,7 +210,7 @@ const AIR_PRICE_SECTIONS_BKK: PriceSection[] = [
 
 const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -219,7 +219,7 @@ const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
     ],
   },
   {
-    icon: "📦",
+    icon: "/images/hero-section/icon-draf/box.png",
     heading: "ค่าใช้จ่ายสายการบิน / Port",
     items: [
       { label: "D/O",                  value: "รอเช็ค" },
@@ -231,7 +231,7 @@ const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าขนส่งในไทย (ถ้ามี)",
     items: [
       { label: "รถ 4-6 ล้อ (BKK + ปริมณฑล)", value: "500-5,000 บาท" },
@@ -239,7 +239,7 @@ const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
@@ -250,7 +250,7 @@ const AIR_PRICE_SECTIONS_DMK: PriceSection[] = [
 
 const POSTAL_PRICE_SECTIONS: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -270,7 +270,7 @@ const POSTAL_PRICE_SECTIONS: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าจัดส่ง (ถ้ามี)",
     items: [
       { label: "Messenger / Lalamove", value: "180-1,200 บาท" },
@@ -278,7 +278,7 @@ const POSTAL_PRICE_SECTIONS: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },
@@ -289,7 +289,7 @@ const POSTAL_PRICE_SECTIONS: PriceSection[] = [
 
 const SEA_PRICE_SECTIONS_KLONG: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -311,7 +311,7 @@ const SEA_PRICE_SECTIONS_KLONG: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าขนส่งในไทย (ถ้ามี)",
     items: [
       { label: "รถบรรทุก 10 ล้อ / ตู้",  value: "4,000-15,000 บาท" },
@@ -319,7 +319,7 @@ const SEA_PRICE_SECTIONS_KLONG: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
@@ -330,7 +330,7 @@ const SEA_PRICE_SECTIONS_KLONG: PriceSection[] = [
 
 const SEA_PRICE_SECTIONS_LAEM: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -352,7 +352,7 @@ const SEA_PRICE_SECTIONS_LAEM: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าขนส่งในไทย (ถ้ามี)",
     items: [
       { label: "ค่ารถลาก (LCBT → BKK)", value: "3,500-6,500 บาท" },
@@ -360,7 +360,7 @@ const SEA_PRICE_SECTIONS_LAEM: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
@@ -371,7 +371,7 @@ const SEA_PRICE_SECTIONS_LAEM: PriceSection[] = [
 
 const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -380,7 +380,7 @@ const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
     ],
   },
   {
-    icon: "📦",
+    icon: "/images/hero-section/icon-draf/box.png",
     heading: "ค่าใช้จ่ายสายเรือ / Port",
     items: [
       { label: "D/O (สายเรือ)",          value: "2,500-3,500 บาท" },
@@ -393,7 +393,7 @@ const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
     ],
   },
   {
-    icon: "🚚",
+    icon: "/images/hero-section/icon-draf/caricon.png",
     heading: "ค่าขนส่งในไทย (ถ้ามี)",
     items: [
       { label: "รถบรรทุก (BKK metro)",   value: "4,500-12,000 บาท" },
@@ -401,7 +401,7 @@ const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าตู้สกปรก / ซ่อมตู้",     value: "ตามจริง" },
@@ -412,7 +412,7 @@ const SEA_PRICE_SECTIONS_ICD: PriceSection[] = [
 
 const BORDER_PRICE_SECTIONS: PriceSection[] = [
   {
-    icon: "💰",
+    icon: "/images/hero-section/icon-draf/ongkorn.png",
     heading: "ค่าบริการหลัก",
     items: [
       { label: "ลงทะเบียนกรมศุลกากร",      value: "1,500 บาท" },
@@ -440,7 +440,7 @@ const BORDER_PRICE_SECTIONS: PriceSection[] = [
     ],
   },
   {
-    icon: "⚠️",
+    icon: "/images/hero-section/icon-draf/alert.png",
     heading: "เพิ่มเติม (ขึ้นกับสินค้า)",
     items: [
       { label: "ค่าบริการพิเศษศุลกากร", value: "รอเช็ค" },

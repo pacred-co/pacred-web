@@ -61,7 +61,7 @@ export function OurService() {
   ];
 
   return (
-    <section className="relative z-[5] bg-transparent pt-3 md:pt-6 pb-4 md:pb-5">
+    <section className="relative z-[5] bg-transparent pt-3 md:pt-6 pb-3 md:pb-5">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Header */}
