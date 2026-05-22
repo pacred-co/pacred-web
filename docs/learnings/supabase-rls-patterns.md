@@ -222,3 +222,75 @@ Then in the action, keep the cheap SELECT as a fast path but catch the unique-vi
 - Out of scope here (separately tracked): money-audit P0-2 (yuan debit RLS-blocked) and P1-1 (concurrent pay-from-wallet on `completed` rows)
 
 ---
+
+## [2026-05-23] `{rows.length}` is a LIE when the query has `.limit(N)` — use `count: "exact", head: true`
+
+**Context:** ภูม flagged a screenshot showing `/admin/drivers/work` "ทั้งหมด" view at 0 รอขึ้นรถ but the per-driver filter showed 1 รอขึ้นรถ. Wider audit found 5 more QA-queue pages with the same family of bug, plus 1 in `/admin/rates/custom-hs` (Wave 9 my work) and 7 pre-existing.
+
+**Symptom:** Counter chips on admin lists show capped/wrong totals:
+- "200 รายการ" when there are actually 463 (the 200 limit hit the display window cap)
+- "0 รายการ" when there are actually 72 (the limit window didn't reach far enough back to include the rare-status items)
+
+**Root cause:** Two patterns both feed the same bug:
+
+1. **Window-from-related-table** (worst case — `drivers/work`):
+   ```ts
+   const batches = await db.from("tb_forwarder_driver")
+     .select(...).order("fddate", desc).limit(200);  // last 200 batches by date
+   const items = await db.from("tb_forwarder_driver_item")
+     .select(...).in("fdid", batches.map(b => b.id));
+   const pending = items.filter(i => i.fdistatus === "").length;  // ❌ tiny number
+   ```
+   The 200-batch window slides forward in time as new batches arrive — old pending items fall off the back. A `{pending}` count built from this is window-bound, not global.
+
+2. **Display-window-as-count** (most common — QA queues):
+   ```ts
+   const rows = await db.from("tb_forwarder")
+     .select(...).eq("fstatus", "1").limit(200);
+   return <div>{rows.length} รายการ</div>;  // ❌ caps at 200 even if 1000 breaching
+   ```
+
+**Fix:**
+```ts
+// Counter chip → separate exact-count query (head:true is index-only · cheap)
+const { count: breachCount } = await db
+  .from("tb_forwarder")
+  .select("id", { count: "exact", head: true })
+  .eq("fstatus", "1")
+  .lt("fdate", cutoff);
+
+// Display list → keep the limit · operator scrolls top 200 most-urgent
+const { data: rows } = await db
+  .from("tb_forwarder")
+  .select(/* full row */)
+  .eq("fstatus", "1")
+  .lt("fdate", cutoff)
+  .order("fdate", { ascending: true })  // most-overdue first
+  .limit(200);
+
+return (
+  <>
+    <span>{breachCount ?? rows.length} รายการ</span>
+    {breachCount && breachCount > rows.length && (
+      <span>· แสดง {rows.length} ล่าสุด</span>
+    )}
+    {/* … table */}
+  </>
+);
+```
+
+**Why this matters next time:** Anytime you write a count chip on a list page, ask "does my data query have `.limit(N)` AND can the real total exceed N?" If both yes → add a separate `count: "exact", head: true` query before the chip. The cost is one extra index-only query (sub-millisecond). The bug shape is invisible until prod data crosses the limit threshold — your dev DB with 50 rows looks fine.
+
+For `.or()` conditions (e.g. `userid IS NULL OR userid = ''`), push the OR into BOTH queries so the count matches the data shape:
+```ts
+const [{ data }, { count }] = await Promise.all([
+  db.from("t").select(...).or("a.eq.,a.is.null").limit(200),
+  db.from("t").select("id", { count: "exact", head: true }).or("a.eq.,a.is.null"),
+]);
+```
+
+**Cross-links:**
+- Commits `39c1407` (drivers/work) + `9303994` (5 QA queues Group B) + `546e835` (rates/custom-hs) — all part of the same fix wave
+- Existing good pattern: `/admin/qa/credit-overdue` (Agent A Group A) — see how it does the separate count query alongside the data query
+- Still-buggy pre-existing pages (deferred · tech debt): `accounting/container-costs` · `audit` · `forwarders/notes` · `incidents` · `juristic-check` · `reports/monthly-orders` · `service-orders/notes`
+- Related family of "verify green ≠ prod" — this bug passes tsc/lint/build cleanly + only surfaces with real-volume data
