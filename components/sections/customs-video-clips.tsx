@@ -73,7 +73,7 @@ export function CustomsVideoClips() {
             </div>
             <h2 className="text-[22px] md:text-[30px] leading-[1.2] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
               รู้ลึก รู้จริง ชิปปิ้งเคลียร์ภาษี นำเข้า-ส่งออก{" "}
-              <span className="text-primary-600">P ! ดิวะ Pacred</span>
+              <span className="text-primary-600">Pacred Shipping</span>
             </h2>
           </div>
           <a

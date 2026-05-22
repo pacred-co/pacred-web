@@ -125,12 +125,42 @@ async function sendThaiBulkSms(
   const sender = process.env.THAIBULKSMS_SENDER ?? "Pacred";
 
   if (!apiKey || !apiSecret) {
+    // Surface in Sentry — `requestOtp` swallows this to `sms_failed`
+    // for the user, so without this log a missing key on Vercel looks
+    // identical to an account-credit issue or a network blip.
+    logger.error("sms", "ThaiBulkSMS credentials missing", undefined, {
+      hasKey:    Boolean(apiKey),
+      hasSecret: Boolean(apiSecret),
+      phone:     redactPhone(phone),
+    });
     return { ok: false, error: "missing_credentials" };
+  }
+
+  // Detect placeholder values that crept in from .env.example — they parse
+  // as truthy above but ThaiBulkSMS will 401. Catch this loud-and-early.
+  if (apiKey.startsWith("YOUR_") || apiSecret.startsWith("YOUR_")) {
+    logger.error("sms", "ThaiBulkSMS credentials look like placeholders", undefined, {
+      keyPrefix: apiKey.slice(0, 5),
+      phone:     redactPhone(phone),
+    });
+    return { ok: false, error: "placeholder_credentials" };
   }
 
   // ThaiBulkSMS expects msisdn without leading "+"
   const msisdn = phone.replace(/^\+/, "");
   const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString("base64");
+
+  // 2026-05-20 incident — `prod register` returned ERROR_INSUFFICIENT_CREDIT
+  // even though the ThaiBulkSMS account had 7,302 Corporate credits — because
+  // the v2 API defaults to the Standard pool (0 credits) when `force` is not
+  // set. Pacred's "Pacred" sender ID approval is in the Corporate pool.
+  //
+  // DEFAULT TO "premium" since Pacred's whole account uses Corporate.
+  // Override via THAIBULKSMS_FORCE=standard|corporate if needed.
+  // ThaiBulkSMS docs call this `force` with values `premium`/`standard`/`corporate`.
+  const force = process.env.THAIBULKSMS_FORCE ?? "premium";
+
+  const params = new URLSearchParams({ msisdn, message, sender, force });
 
   try {
     const res = await fetch("https://api-v2.thaibulksms.com/sms", {
@@ -139,16 +169,23 @@ async function sendThaiBulkSms(
         Authorization: `Basic ${auth}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        msisdn,
-        message,
-        sender,
-      }),
+      body: params,
     });
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      return { ok: false, error: `http_${res.status}:${body.slice(0, 200)}` };
+      const errorString = `http_${res.status}:${body.slice(0, 200)}`;
+      // Log the real gateway response so we can tell apart 401 (bad keys),
+      // 402 (insufficient credit), 400 (bad msisdn / unapproved sender),
+      // and 5xx (provider outage) in Vercel logs / Sentry. Without this
+      // the user-facing `sms_failed` is a black hole.
+      logger.error("sms", "ThaiBulkSMS send failed (HTTP)", undefined, {
+        status: res.status,
+        body:   body.slice(0, 200),
+        sender,
+        phone:  redactPhone(phone),
+      });
+      return { ok: false, error: errorString };
     }
 
     const data = (await res.json().catch(() => ({}))) as {
@@ -157,6 +194,9 @@ async function sendThaiBulkSms(
     };
     return { ok: true, messageId: data.messageId ?? data.id };
   } catch (err) {
+    logger.error("sms", "ThaiBulkSMS send threw", err, {
+      phone: redactPhone(phone),
+    });
     return { ok: false, error: String(err) };
   }
 }

@@ -26,7 +26,7 @@ const SALES: SalesPerson[] = [
     role: "Freight Specialist",
     tagline: "นำเข้าทุก Port ทุก Term ปิดดีลให้จบในที่เดียว",
     phone: "062-603-0456",
-    image: "/images/Character_Icon/win.png",
+    image: "/images/Character_Icon/win01.png",
     badge: "FCL / LCL Expert",
     badgeIcon: Award,
     alt: "เซลล์วิน Pacred ผู้เชี่ยวชาญ Freight",
@@ -47,7 +47,7 @@ const SALES: SalesPerson[] = [
     role: "Customs Specialist",
     tagline: "เคลียร์สินค้าติดด่าน เร็ว ปลอดภัย การันตีจบ",
     phone: "066-090-1217",
-    image: "/images/Character_Icon/ploy.png",
+    image: "/images/Character_Icon/ploy01.png",
     badge: "Customs Clearance",
     badgeIcon: Headset,
     alt: "เซลล์พลอย Pacred ผู้เชี่ยวชาญด่านศุลกากร",
@@ -57,7 +57,7 @@ const SALES: SalesPerson[] = [
     role: "Air Freight Specialist",
     tagline: "ไกลแค่ไหนก็เหมือนใกล้ เมื่อการจัดส่งใส่ใจทุกรายละเอียด",
     phone: "099-444-9978",
-    image: "/images/Character_Icon/redar.png",
+    image: "/images/Character_Icon/redar01.png",
     badge: "Air Freight Expert",
     badgeIcon: Award,
     alt: "เซลล์เรดาห์ Pacred ผู้เชี่ยวชาญ Air Freight",
@@ -67,7 +67,7 @@ const SALES: SalesPerson[] = [
     role: "Payment Specialist",
     tagline: "ไม่ใช่แค่การส่งของ แต่คือการส่งมอบความไว้วางใจ",
     phone: "061-779-9299",
-    image: "/images/Character_Icon/pee.png",
+    image: "/images/Character_Icon/pee01.png",
     badge: "Yuan Transfer Expert",
     badgeIcon: Sparkles,
     alt: "เซลล์พี Pacred ผู้เชี่ยวชาญฝากโอนเงินจีน",
@@ -103,6 +103,15 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
+  // The "active" card — the one closest to the viewport centre — gets the
+  // red featured styling. Updates on scroll (swipe on mobile, chevron click
+  // on desktop) so the red follows wherever the user is looking. Per ปอน
+  // 2026-05-20: "ไม่อยากให้แดงอยู่คนเดียว".
+  // Initial value = the static-featured card so first paint matches the
+  // legacy single-red look until the user moves.
+  const initialActiveIdx = Math.max(0, orderedSales.findIndex((s) => s.name === featuredName));
+  const [activeIdx, setActiveIdx] = useState(initialActiveIdx);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -111,6 +120,25 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
       // use a 16px buffer to keep the prev button hidden until the user actually scrolls.
       setCanScrollLeft(el.scrollLeft > 16);
       setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 16);
+
+      // Find the card whose centre is closest to the viewport centre. offsetLeft
+      // reads the rendered position so it Just Works™ even with mobile CSS
+      // `order` reshuffling (DOM index ≠ visual position but offsetLeft is the
+      // visual coordinate, and DOM index aligns 1:1 with the orderedSales map
+      // iteration, so the returned idx is the right one to highlight).
+      const viewportCentre = el.scrollLeft + el.clientWidth / 2;
+      let closestIdx = 0;
+      let closestDist = Infinity;
+      const cards = Array.from(el.children) as HTMLElement[];
+      cards.forEach((card, idx) => {
+        const cardCentre = card.offsetLeft + card.clientWidth / 2;
+        const dist = Math.abs(cardCentre - viewportCentre);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestIdx = idx;
+        }
+      });
+      setActiveIdx(closestIdx);
     };
     update();
     el.addEventListener("scroll", update, { passive: true });
@@ -176,9 +204,14 @@ export function ContactSales({ featuredName = "แนท", hideAssuranceStrip = 
         <div ref={scrollRef} className="flex gap-3 md:gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 -mx-[10px] px-[10px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedSales.map((s, i) => {
             const BadgeIcon = s.badgeIcon;
-            const featured = s.name === featuredName;
-            // Mobile flex order — featured card swipes first, others keep array order
-            const mobileOrder = featured ? "order-1" : MOBILE_ORDER[i];
+            // staticFeatured = the "default" featured card (พลอย on customs
+            // page) — controls the mobile flex `order-1` so swipe starts on
+            // that card; locked at render time so swiping doesn't reshuffle.
+            // featured (active) = the card the user is currently looking at;
+            // controls the red gradient styling. Updates on every scroll.
+            const staticFeatured = s.name === featuredName;
+            const featured = i === activeIdx;
+            const mobileOrder = staticFeatured ? "order-1" : MOBILE_ORDER[i];
             return (
               <div
                 key={s.name}
