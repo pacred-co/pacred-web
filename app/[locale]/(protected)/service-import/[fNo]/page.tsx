@@ -255,7 +255,7 @@ function TagPro({ id }: { id: string | null }) {
 // photo URL/filename → displayable URL.
 function convertIMGCHN(url: string | null): string {
   if (!url || url === "") return "/legacy/pcs/shops/default.png";
-  let u = url
+  const u = url
     .replace("?x-oss-process=style/alsy", "")
     .replace("?x-oss-process=style/tbsy", "")
     .replace("_250x250.jpg", "");
