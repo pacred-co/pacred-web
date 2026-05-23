@@ -135,3 +135,56 @@ MySQL `pcsc_main` schema. The durable business-logic synthesis is in
 **Why this matters:** when porting a shopping/forwarder/payment/wallet screen,
 the legacy column names + their numeric-string status values are the contract.
 Reconcile against `docs/research/pcs-legacy/` before designing the Pacred table.
+
+---
+
+## 2026-05-20 — A legacy PHP page = shared chrome + per-screen body: port BOTH (เดฟ/Claude)
+
+**Context:** the D1 customer-portal transcription was reviewed by the owner as
+"ไม่เหมือน 1:1 เลย" (looks nothing like the original), "บัคกระจาย" (bugs
+everywhere). Root-caused — and it is a trap any agent porting the 187-screen
+admin back-office will hit the same way.
+
+**A legacy PCS `member/*.php` page is TWO layers:**
+1. **Shared chrome** — `include/header.php` (`<head>` + a **21-file** Modern-Admin
+   Bootstrap-4 theme CSS bundle) + `header-theme.php` (the `<body>` classes) +
+   `top-menu.php` (the fixed navbar) + `left-menu.php` (the sidebar) +
+   `all-script.php` (footer + mobile bottom-nav + the jQuery/BS4/theme JS
+   bundle). EVERY screen `require_once`s these.
+2. **Per-screen body** — the `<div class="app-content content">…</div>` block
+   between the `header-theme.php` and `all-script.php` includes.
+
+**The bug:** the first transcription pass ported the per-screen *bodies*
+faithfully but **never built the chrome layer** — no theme bundle staged, the
+route-group `layout.tsx` was a bare auth wrapper. Result: every screen rendered
+as unstyled raw Bootstrap markup with no navbar/sidebar/nav. The bodies were
+fine; the page looked 100% broken. A per-screen `.css` (the page's inline
+`<style>`) CANNOT substitute — `.card`/`.row`/`.col-*`/`.btn`/gradients are all
+**theme** classes from `bootstrap.min.css` + `components.min.css` + `style.css`.
+
+**The fix (the pattern for any PCS section — customer AND admin):**
+- Stage the legacy `assets/` theme bundle **verbatim** under
+  `public/legacy/pcs/assets/` (CSS + JS + fonts + icons; skip the PHP-only
+  plugin dirs `mpdf*` / `api-spreadsheets` / `barcode` / `face-detection`).
+- Make the **route-group `layout.tsx` BE the chrome** — load the exact CSS
+  bundle `header.php` loads, in order; render the navbar + sidebar + footer
+  components; load the JS bundle last. Then each `page.tsx` is *body only*.
+- Responsive is **free**: `header.php`'s bundle already includes
+  `custom-mobile-2023.css` / `custom-tablet-2023.css` / `pcs-group/custom-mobile.css`
+  — load the bundle and the mobile + desktop layouts both render 1:1. Do NOT
+  hand-build responsive.
+- `<body>` classes (`vertical-layout vertical-menu-modern …`) — Next owns
+  `<body>` in the root layout; set them from a small `"use client"` component
+  in the protected layout (add on mount, remove on unmount).
+- Order the JS bundle with plain `<script src async={false}>` (jQuery must load
+  before the theme JS); render it last so the full chrome DOM exists.
+
+**Also — "the database is wrong" was a false alarm.** The owner also flagged
+the DB as "ไม่ตรง ไม่มีความต่อเนื่อง". Probed it with `psql` (count + max-date):
+both the dev and prod Supabase hold the **full current** dataset — 8,898 users /
+21,950 orders / 47,626 forwarders / 104,591 wallet-history rows, all through the
+latest `2026-05-18` dump; migration `0081` matches the dump table-for-table and
+column-for-column. The data only *looked* discontinuous because the unstyled
+screens were unreadable. **Lesson:** before "reload the DB", probe it —
+`psql … -c "SELECT count(*), max(<date>) FROM <t>"` — the pgloader load may
+already be correct, and the real bug is elsewhere (here: the chrome layer).

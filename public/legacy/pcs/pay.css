@@ -1,0 +1,265 @@
+/* =============================================================
+ * pay.css — legacy PCS Cargo `member/pay.php` stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription (the PromptPay
+ * "สร้าง QR Code รับเงิน" QR-generator utility screen).
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php pilot — see
+ * public/legacy/pcs/menu.css): to be 100% visually identical to
+ * the legacy PHP we do NOT re-implement the look in Tailwind — we
+ * BRING THE LEGACY CSS. `pay.php` ships NO inline <style> block;
+ * every rule below is copied verbatim from the legacy theme
+ * stylesheets the page loads via include/header.php:
+ *   - assets/css/bootstrap.min.css / bootstrap-extended.min.css
+ *                              (the BS4 grid / card / breadcrumb /
+ *                               form-control / button / modal subset
+ *                               pay.php's markup uses)
+ *   - assets/css/style.css     (.content-body / .card-content /
+ *                               typography reset)
+ *   - assets/css/custom.css    (.content-body padding)
+ *
+ * The BS4 subset here is the SAME verbatim BS4 4.x values already
+ * proven in public/legacy/pcs/payment.css — copied across so this
+ * screen is self-contained (one CSS file per screen, the runbook
+ * pattern).
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ * collide with — the rest of the Tailwind app. The page renders the
+ * legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/pay.css and loaded
+ * with a plain <link rel="stylesheet"> from page.tsx — it must
+ * bypass the app's Tailwind v4 / PostCSS pipeline, which rejects
+ * verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid + card subset (exact BS4 4.x values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-8,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-8  { flex: 0 0 66.666667%; max-width: 66.666667%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%;       max-width: 100%; }
+}
+/* the `mx-auto` centring helper pay.php uses on the form column */
+.pcs-legacy .mx-auto { margin-right: auto; margin-left: auto; }
+
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* ---- Bootstrap-4 breadcrumb subset (verbatim BS4 values) ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: transparent;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item {
+  padding-left: 0.5rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  color: #6b6f82;
+  content: "/";
+}
+.pcs-legacy .breadcrumb-item.active { color: #6b6f82; }
+
+/* ---- spacing + alignment helpers used by pay.php ---- */
+.pcs-legacy .mb-2         { margin-bottom: 1rem !important; }
+.pcs-legacy .text-center  { text-align: center !important; }
+
+/* ---- Bootstrap-4 form-control subset (the QR-generator form) ---- */
+.pcs-legacy .form-group { margin-bottom: 1rem; }
+.pcs-legacy .form-control {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #6b6f82;
+  background-color: #fff;
+  background-clip: padding-box;
+  border: 1px solid #babfc7;
+  border-radius: 0.25rem;
+}
+/* style.css — form labels */
+.pcs-legacy label {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+/* BS4 — the `is-invalid` validation state pay.php's jQuery toggles */
+.pcs-legacy .form-control.is-invalid {
+  border-color: #ff4961;
+}
+/* the `.form-group.error` wrapper pay.php puts on the amount field */
+.pcs-legacy .form-group.error label { color: #ff4961; }
+
+/* ---- Bootstrap-4 buttons (the theme btn base + pay.php variants) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.pcs-legacy .btn-lg {
+  padding: 0.5rem 1rem;
+  font-size: 1.25rem;
+  border-radius: 0.3rem;
+}
+/* style.css — the theme primary button (the red brand button) */
+.pcs-legacy .btn-primary {
+  background-color: #E9091F;
+  border-color: #E9091F;
+  color: #fff;
+}
+/* BS4 — the default (light) button used by the modal "Close" */
+.pcs-legacy .btn-default {
+  background-color: #fff;
+  border-color: #babfc7;
+  color: #6b6f82;
+}
+
+/* ---- BS4 modal subset (the #myModal QR-code modal markup) ----
+ * pay.php renders the modal markup inline; it stays hidden until the
+ * Bootstrap-4 JS `.modal()` shows it (vendor JS is staged globally —
+ * the modal opens 1:1). Reproduce the BS4 default hidden state +
+ * chrome so the markup is present + styled identically. */
+.pcs-legacy .modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  display: none;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: 0;
+}
+.pcs-legacy .modal-dialog {
+  position: relative;
+  width: auto;
+  margin: 0.5rem;
+  pointer-events: none;
+}
+@media (min-width: 576px) {
+  .pcs-legacy .modal-dialog {
+    max-width: 500px;
+    margin: 1.75rem auto;
+  }
+}
+.pcs-legacy .modal-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  background-color: #fff;
+  background-clip: padding-box;
+  border-radius: 0.3rem;
+  outline: 0;
+}
+.pcs-legacy .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #ECEFF5;
+}
+.pcs-legacy .modal-title {
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+.pcs-legacy .modal-body {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+.pcs-legacy .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem;
+  border-top: 1px solid #ECEFF5;
+}
+.pcs-legacy .modal-footer > * { margin: 0.25rem; }
+.pcs-legacy .close {
+  float: right;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+  opacity: 0.5;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/* ---- Theme: typography reset (assets/css/style.css) ----
+ * heading reset so the legacy <h4> matches the theme, not Tailwind
+ * preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h4 { font-size: 1.5rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy a  { color: #E9091F; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally. The legacy pay.php modal places the PromptPay logo +
+ * the QR canvas centred inline. Restore the legacy/browser-default
+ * inline rendering. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+
+/* ---- content shell (assets/css/style.css + custom.css) ---- */
+.pcs-legacy .app-content { position: relative; }
+.pcs-legacy .content-wrapper { padding: 1.5rem 2rem 0; }
+.pcs-legacy .content-header { margin-bottom: 0; }
+
+/* ===== Responsive — content padding drops on small screens ===== */
+@media (max-width: 992px) {
+  .pcs-legacy .content-wrapper { padding: 1rem 1rem 0; }
+}

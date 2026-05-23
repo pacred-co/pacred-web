@@ -1,0 +1,9 @@
+@media (max-width: 576px){
+    #pcs-terms-of-service ol {
+        padding-inline-start: 10px;
+    }
+    #popup-linenotify h1{
+        font-size: 1.4rem !important;
+    }
+
+}

@@ -1,0 +1,371 @@
+/* =============================================================
+ * report-user-sales.css — legacy PCS Cargo sales-rep report cluster
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription.
+ *
+ * THE shared stylesheet for the legacy sales-rep report screens
+ *   - report-user-sales.php           -> /sales/report
+ *   - report-user-sales-add.php       -> /sales/report/add
+ *   - report-user-sales-history.php   -> /sales/history (+ /[id])
+ *   - user-sales.php                  -> /sales
+ * They share `include/header.php` + `header-theme.php` chrome and the
+ * same plugins (DataTables Bootstrap-4, responsive, daterangepicker,
+ * dropify), so one stylesheet covers all four.
+ *
+ * THE CSS-HANDLING PATTERN (same as the menu.php / wallet.php pilots —
+ * see public/legacy/pcs/wallet.css): to be 100% visually identical to
+ * the legacy PHP we do NOT re-implement the look in Tailwind — we
+ * BRING THE LEGACY CSS. This file holds the exact rules these screens
+ * render with, copied verbatim from the legacy stylesheets:
+ *   - assets/css/bootstrap.min.css / bootstrap-extended.min.css
+ *                                  (BS4 grid · card · breadcrumb ·
+ *                                   table · badge · buttons · btn-group)
+ *   - assets/css/style.css         (theme colours · badge-vip · font
+ *                                   helpers · btn-color-main · form)
+ *   - assets/css/custom.css        (.content-body.pr110)
+ *   - assets/plugins/datatables/css/dataTables.bootstrap4.css
+ *   - assets/plugins/datatables/css/responsive.dataTables.min.css
+ *   - assets/plugins/daterangepicker/daterangepicker.css
+ *     (only the input chrome — the JS calendar is staged separately)
+ *   - the inline <style> block each screen carries
+ *     (`.table td,.table th { padding:0.25rem 0.5rem }` etc.)
+ *
+ * EVERY selector is scoped under the `.pcs-legacy` wrapper class so
+ * the legacy rules + the Bootstrap-4 classes cannot leak into — or
+ * collide with — the rest of the Tailwind app. Each page renders the
+ * legacy markup 1:1 inside <div class="pcs-legacy">.
+ *
+ * Served as the STATIC asset public/legacy/pcs/report-user-sales.css
+ * and loaded with a plain <link rel="stylesheet"> from each page —
+ * it must bypass the app's Tailwind v4 / PostCSS pipeline, which
+ * rejects verbatim legacy CSS.
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- Bootstrap-4 grid subset (exact BS4 4.x values) ---- */
+.pcs-legacy .row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-md-6,
+.pcs-legacy .col-md-12,
+.pcs-legacy .col-sm-12 {
+  position: relative;
+  width: 100%;
+  padding-right: 15px;
+  padding-left: 15px;
+}
+.pcs-legacy .col-12,
+.pcs-legacy .col-sm-12 { flex: 0 0 100%; max-width: 100%; }
+@media (min-width: 768px) {
+  .pcs-legacy .col-md-6  { flex: 0 0 50%;  max-width: 50%; }
+  .pcs-legacy .col-md-12 { flex: 0 0 100%; max-width: 100%; }
+  .pcs-legacy .offset-md-3 { margin-left: 25%; }
+}
+
+.pcs-legacy .card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-wrap: break-word;
+  background-color: #fff;
+  background-clip: border-box;
+  border: none;
+  border-radius: 0.45rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 20px 1px rgba(69, 90, 100, 0.08);
+}
+.pcs-legacy .card-content { position: relative; }
+.pcs-legacy .card-header {
+  padding: 1.5rem 1.5rem;
+  margin-bottom: 0;
+  background-color: transparent;
+}
+.pcs-legacy .card-body {
+  flex: 1 1 auto;
+  padding: 1.5rem;
+}
+
+/* ---- Bootstrap-4 spacing scale helpers used by these screens ---- */
+.pcs-legacy .p-1   { padding: 0.25rem !important; }
+.pcs-legacy .pt-0  { padding-top: 0 !important; }
+.pcs-legacy .pt-1  { padding-top: 0.25rem !important; }
+.pcs-legacy .pl-1  { padding-left: 0.25rem !important; }
+.pcs-legacy .pr-1  { padding-right: 0.25rem !important; }
+.pcs-legacy .mb-1  { margin-bottom: 0.5rem !important; }
+.pcs-legacy .mb-2  { margin-bottom: 1rem !important; }
+
+/* ---- display + alignment helpers ---- */
+.pcs-legacy .text-center { text-align: center !important; }
+.pcs-legacy .text-right  { text-align: right !important; }
+.pcs-legacy .text-left   { text-align: left !important; }
+.pcs-legacy .text-white  { color: #fff !important; }
+.pcs-legacy .d-inline-block  { display: inline-block !important; }
+.pcs-legacy .d-inline-block2 { display: inline-block; }
+.pcs-legacy .rounded-circle  { border-radius: 50% !important; }
+.pcs-legacy .float-md-right  { }
+@media (min-width: 768px) {
+  .pcs-legacy .float-md-right { float: right !important; }
+  .pcs-legacy .text-md-left   { text-align: left !important; }
+  .pcs-legacy .text-md-right  { text-align: right !important; }
+}
+.pcs-legacy .cursor-pointer { cursor: pointer; }
+
+/* ---- Bootstrap-4 breadcrumb (verbatim BS4 values) ---- */
+.pcs-legacy .breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: #f5f5f5;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .breadcrumb-item + .breadcrumb-item { padding-left: 0.5rem; }
+.pcs-legacy .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  color: #6b6f82;
+  content: "/";
+}
+.pcs-legacy .breadcrumb-item.active { color: #6b6f82; }
+.pcs-legacy .breadcrumbs-top { margin-bottom: 0; }
+
+/* ---- Bootstrap-4 table subset (verbatim BS4 values) ---- */
+.pcs-legacy .table {
+  width: 100%;
+  margin-bottom: 1rem;
+  color: #6b6f82;
+  border-collapse: collapse;
+}
+.pcs-legacy .table th,
+.pcs-legacy .table td {
+  /* the inline <style> block carried by every report screen */
+  padding: 0.25rem 0.5rem;
+  vertical-align: top;
+  border-top: 1px solid #ebe9f1;
+}
+.pcs-legacy .table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid #ebe9f1;
+}
+.pcs-legacy .table-bordered { border: 1px solid #ebe9f1; }
+.pcs-legacy .table-bordered th,
+.pcs-legacy .table-bordered td { border: 1px solid #ebe9f1; }
+.pcs-legacy .table-striped tbody tr:nth-of-type(odd) {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+.pcs-legacy .table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- DataTables Bootstrap-4 chrome (dataTables.bootstrap4.css).
+ * The legacy `#myTable` is a DataTable; we render the table statically
+ * (the runbook §8/§9 pattern — the vendor DataTables JS is a follow-up)
+ * but keep the `.dataTables_wrapper` / `#myTable` class hooks so the
+ * resting look is identical. ---- */
+.pcs-legacy table.dataTable {
+  clear: both;
+  margin-top: 6px !important;
+  margin-bottom: 6px !important;
+  max-width: none !important;
+  border-collapse: separate !important;
+  border-spacing: 0;
+}
+.pcs-legacy table.dataTable thead th { position: relative; }
+.pcs-legacy table.dataTable.no-footer { border-bottom: 1px solid #ebe9f1; }
+.pcs-legacy .dataTables_wrapper { position: relative; clear: both; }
+
+/* ---- Bootstrap-4 badge subset (verbatim BS4 values) ---- */
+.pcs-legacy .badge {
+  display: inline-block;
+  padding: 0.35em 0.4em;
+  font-size: 80%;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .badge-pill {
+  padding-right: 0.6em;
+  padding-left: 0.6em;
+  border-radius: 10rem;
+}
+.pcs-legacy .badge-warning { color: #2a2e30; background-color: #ff9149; }
+.pcs-legacy .badge-info    { color: #fff;     background-color: #1e9ff2; }
+.pcs-legacy .badge-danger  { color: #fff;     background-color: #ff4961; }
+.pcs-legacy .badge-success { color: #2a2e30; background-color: #28d094; }
+.pcs-legacy .badge-primary { color: #fff;     background-color: #5a8dee; }
+/* style.css — the VIP / corporate badge (badgeVIP2 helper) */
+.pcs-legacy .badge-vip {
+  color: #fff;
+  background-image: linear-gradient(45deg, #cc3333, #f15a24);
+  background-repeat: repeat-x;
+}
+
+/* ---- Bootstrap-4 button subset (verbatim BS4 values) ---- */
+.pcs-legacy .btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+  border: 1px solid transparent;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.pcs-legacy .btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  border-radius: 0.2rem;
+}
+.pcs-legacy .btn-rounded { border-radius: 1.5rem; }
+.pcs-legacy .btn-circle  { border-radius: 50%; padding: 0.5rem 0.7rem; }
+.pcs-legacy .btn-info {
+  color: #fff;
+  background-color: #1e9ff2;
+  border-color: #1e9ff2;
+}
+.pcs-legacy .btn-success {
+  color: #fff;
+  background-color: #28d094;
+  border-color: #28d094;
+}
+.pcs-legacy .btn-outline-success {
+  color: #28d094;
+  background-color: transparent;
+  border-color: #28d094;
+}
+.pcs-legacy .btn-outline-success:hover {
+  color: #fff;
+  background-color: #28d094;
+}
+.pcs-legacy .btn-outline-secondary {
+  color: #6b6f82;
+  background-color: transparent;
+  border-color: #6b6f82;
+}
+.pcs-legacy .btn-outline-info {
+  color: #1e9ff2;
+  background-color: transparent;
+  border-color: #1e9ff2;
+}
+/* style.css — the theme primary "main" button */
+.pcs-legacy .btn-color-main {
+  color: #fff;
+  background-image: linear-gradient(45deg, #cc3333, #f15a24);
+  background-repeat: repeat-x;
+  border: 0;
+}
+.pcs-legacy .round { border-radius: 1.5rem; }
+.pcs-legacy .waves-effect { position: relative; overflow: hidden; }
+/* Bootstrap-4 btn-group (the fixed "ทำรายการเบิกเงิน" bar) */
+.pcs-legacy .btn-group {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* ---- Bootstrap-4 form-control + the theme `form-control2` ---- */
+.pcs-legacy .form-control-label {
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.pcs-legacy .form-control {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  color: #6b6f82;
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 0.25rem;
+}
+.pcs-legacy .form-control-lg {
+  padding: 0.94rem 1.25rem;
+  font-size: 1.25rem;
+  border-radius: 0.35rem;
+}
+/* style.css — the legacy inline-style picker input used by the
+ * report filter row (`form-control2`) */
+.pcs-legacy .form-control2 {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+  color: #6b6f82;
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 0.25rem;
+  margin: 0.25rem 0.25rem 0.25rem 0;
+}
+.pcs-legacy .form-horizontal { }
+.pcs-legacy .form-group { margin-bottom: 1rem; }
+
+/* ---- theme: typography + colour helpers (assets/css/style.css) ---- */
+.pcs-legacy .font-12   { font-size: 12px; }
+.pcs-legacy .font-13   { font-size: 13px; }
+.pcs-legacy .font-14   { font-size: 14px; }
+.pcs-legacy .font-16   { font-size: 16px; }
+.pcs-legacy .font-30   { font-size: 30px; }
+.pcs-legacy .font-normal { font-weight: 400; }
+.pcs-legacy .text-dark    { color: #2a2e30 !important; }
+.pcs-legacy .text-danger  { color: #ff4961 !important; }
+.pcs-legacy .text-info    { color: #1e9ff2 !important; }
+.pcs-legacy .text-muted   { color: #6b6f82 !important; }
+
+/* heading reset so the legacy <h3>/<h4>/<h5> match the theme, not
+ * Tailwind preflight (which zeroes heading margin + font-size). */
+.pcs-legacy h3 { font-size: 1.75rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h4 { font-size: 1.5rem;  font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy h5 { font-size: 1.25rem; font-weight: 500; margin: 0 0 0.5rem; line-height: 1.2; }
+.pcs-legacy ol { margin-top: 0; margin-bottom: 1rem; }
+.pcs-legacy hr {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+.pcs-legacy a  { color: #1e9ff2; text-decoration: none; }
+.pcs-legacy a:hover { text-decoration: none; }
+.pcs-legacy ul { margin: 0; }
+.pcs-legacy .list-inline { padding-left: 0; list-style: none; }
+.pcs-legacy .list-inline-item { display: inline-block; }
+/* IMPORTANT — Tailwind v4 preflight forces `img { display: block }`
+ * globally; the legacy user-photo thumbnails sit inline in the table
+ * cells. Restore the legacy/browser-default inline rendering. */
+.pcs-legacy img {
+  display: inline-block;
+  vertical-align: middle;
+  border-style: none;
+}
+.pcs-legacy .img-fluid { max-width: 100%; height: auto; }
+
+/* ---- custom.css — the desktop content-body right padding (the
+ * legacy fixed sidebar gutter) ---- */
+.pcs-legacy .content-body.pr110 { padding-right: 100px; }
+@media (max-width: 992px) {
+  .pcs-legacy .content-body.pr110 { padding-right: 15px; }
+}
+
+/* ---- Bootstrap-4 FontAwesome / line-awesome icon helpers used
+ * inline (`ft-plus` / `ft-users` / `fas fa-search`). FA itself is
+ * the CDN <link> in the (protected) layout; these are the legacy
+ * spacing tweaks. ---- */
+.pcs-legacy .ft-plus::before  { content: "+"; font-weight: 700; }
+.pcs-legacy .ft-users::before { content: ""; }

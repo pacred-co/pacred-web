@@ -50,13 +50,69 @@ The chain meant: even with OTP+captcha bypassed, every profile insert blew up at
 | PR8 | Amintra Kraikittiwut | 66926616199 |
 | PR9 | Win Wat | 66626030456 |
 
+## Second wave (2026-05-23 evening — same incident, second cause)
+
+After (1)-(5) above shipped, the customer "ช้อ ครั้ง / 0800588746" reported the SAME `บันทึกโปรไฟล์ไม่สำเร็จ` error. The smoke test (`scripts/test-signup-trigger.mts`) had earlier succeeded with PR201, so we suspected a live-payload shape difference.
+
+**Diagnosis chain:**
+1. `scripts/test-signup-trigger-live-shape.mts` — reproduced with full payload (phone, how_know, Thai name) → confirmed: `Key (member_code)=(PR201) already exists`.
+2. `scripts/check-pr201.mts` — confirmed PR201 occupied by สุรเสกข์ (one of the remapped recoveries).
+3. `scripts/probe-trigger-algorithm.mts` — 5 inserts in a row all picked PR201. Not a race; the algorithm consistently picks an occupied slot.
+4. `scripts/check-tb-users.mts` — ruled out `tb_users` as the source. The trigger reads `profiles`.
+5. Read of `supabase/migrations/0060_member_code_3digit.sql` — the active trigger is `nextval('member_code_seq') + lpad(…, 3, '0')`. **The lowest-vacant scanner I gave the user earlier never took** — the dollar-quote `$$` collided with the regex `$` end-anchor in markdown, producing broken SQL the user pasted.
+
+**Root cause:** `member_code_seq` was setval'd to ~200 during recovery → `nextval` returns 201 every transaction (failed inserts don't advance) → PR201 is taken → unique violation every signup.
+
+**Fix:** `supabase/migrations/0090_lowest_vacant_member_code.sql` — new generator function (advisory-locked, regex-anchored both ends as `^PR[0-9]+$`, bare integer no lpad). Uses `$fn$` dollar-quote tag so the regex `$` doesn't terminate the block.
+
+**Apply path (Studio):**
+```sql
+create or replace function public.generate_member_code() returns trigger
+language plpgsql
+as $fn$
+declare
+  v_max_n integer;
+  v_n     integer;
+begin
+  if new.member_code is null then
+    perform pg_advisory_xact_lock(hashtext('public.profiles.member_code'));
+
+    select coalesce(max((substring(member_code from 3))::int), 0)
+      into v_max_n
+      from public.profiles
+     where member_code ~ '^PR[0-9]+$';
+
+    select min(g)
+      into v_n
+      from generate_series(1, v_max_n + 1) as g
+     where ('PR' || g) not in (
+       select member_code
+         from public.profiles
+        where member_code ~ '^PR[0-9]+$'
+     );
+
+    new.member_code := 'PR' || v_n;
+  end if;
+  return new;
+end;
+$fn$;
+
+drop trigger if exists trg_generate_member_code on public.profiles;
+create trigger trg_generate_member_code
+  before insert on public.profiles
+  for each row execute function public.generate_member_code();
+```
+
+**Verify:** `pnpm exec tsx --env-file=.env.recovery-prod scripts/verify-fix-and-probe.mts` → expect 5 ascending low PR codes (PR10, PR11, …) and no errors.
+
 ## Outstanding (post-emergency — do NEXT)
 
+- [ ] **Apply migration 0090 to prod** — paste the SQL block above in Supabase Studio, then run `verify-fix-and-probe.mts`.
 - [ ] **Provision DV-1c** — hCaptcha account, set `HCAPTCHA_SECRET_KEY` + `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` on Vercel (real values).
 - [ ] **Provision DV-3** — ThaiBulkSMS account, set `THAIBULKSMS_API_KEY/SECRET` on Vercel + buy credit.
 - [ ] **Revert `EMERGENCY_OTP_BYPASS`** → `false` in `actions/otp.ts` after DV-3 confirmed working.
 - [ ] **Revert `EMERGENCY_HCAPTCHA_BYPASS`** → `false` in `lib/hcaptcha.ts` after DV-1c confirmed working.
-- [ ] **Codify the trigger fix as a migration** (`0084_lowest_vacant_member_code.sql`) so it survives future project switches.
+- [x] ~~**Codify the trigger fix as a migration**~~ → done: `supabase/migrations/0090_lowest_vacant_member_code.sql`.
 - [ ] **Rotate exposed secrets** — Supabase service-role keys (dev + prod), LINE channel secret + access token, LINE Login client secret, Supabase S3 keys — they landed in chat during the emergency.
 
 ## Reproducing the trigger fix (if needed again)

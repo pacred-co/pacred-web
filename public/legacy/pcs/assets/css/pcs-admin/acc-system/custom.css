@@ -1,0 +1,95 @@
+*{
+    --color-main: #ca2127;
+}
+.acc .nav-item {
+    padding: 0rem 1rem;
+}
+
+.acc {
+    min-height: 4rem !important;
+}
+
+.navbar-horizontal .dropdown-menu .dropdown-submenu>a:after, .navbar-horizontal .dropdown-menu .dropdown-submenu>button:after {
+    right: 5px;
+    top: 11px !important;
+}
+
+.dropdown .dropdown-menu .dropdown-item {
+    padding: 10px 30px 10px 17px;
+    width: 100%;
+}
+
+.acc .nav-link {
+    font-size: 1.2rem;
+}
+
+.acc {
+    background-color: #44e5e6 !important;
+    background: -webkit-linear-gradient(linear, left top, right top, from(#6c6df2), to(#44e5e6)) !important;
+    background: linear-gradient(90deg, #6c6df2 0, #44e5e6) !important;
+}
+.bg-acc {
+    background-color: #44e5e6 !important;
+    background: -webkit-linear-gradient(linear, left top, right top, from(#6c6df2), to(#44e5e6)) !important;
+    background: linear-gradient(90deg, #6c6df2 0, #44e5e6) !important;
+    color: #fff !important;
+}
+
+.table-responsive .dataTables_filter {
+    text-align: right;
+    display: block !important;
+    width: 100% !important;
+}
+
+.pcs-tabs .active {
+    font-weight: 700 !important;
+    font-size: 1.2rem;
+}
+
+.pcs-sequence ol {
+    counter-reset: item;
+}
+
+.pcs-sequence li {
+    display: block;
+}
+
+.pcs-sequence li:before {
+    content: counters(item, ".") " ";
+    counter-increment: item;
+    font-weight: 700 !important;
+}
+.popover, .tooltip {
+    font-family: "Prompt", "Open Sans", -apple-system;
+}
+thead{
+    height: 35px;
+    background: #ee7411;
+    background: -webkit-linear-gradient(to right, #ee7411, #c24e4e);
+    background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+    color: #fff;
+}
+.bg-color {
+    background: #35b842;
+    background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+    background: linear-gradient(to right, #27b836, #1f81b3);
+    color: #fff;
+}
+.bg-color-select {
+    background: #35b842;
+    background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+    background: linear-gradient(to right, #27b836, #1f81b3);
+    color: #fff;
+}
+#myTable_filter{
+    display: inline-block !important;
+    width: 50% !important;
+}
+#myTable_length {
+    display: inline-block;
+    width: 50%;
+}
+.dt-buttons {
+    width: 100% !important;
+    display: inline-block !important;
+}

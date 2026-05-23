@@ -1,5 +1,5 @@
 // Audits every markdown file in the repo for broken local links.
-// Skips node_modules, .next, .git, .claude.
+// Skips node_modules, .next, .git, .claude, and vendored legacy assets.
 //
 // Usage: node scripts/md-link-audit.mjs
 //
@@ -9,6 +9,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const SKIP_DIRS = new Set(["node_modules", ".next", ".git", ".claude"]);
+// Vendored third-party plugins staged for the 1:1 legacy transcription
+// (datatables / cropper / owl-carousel). Their bundled READMEs link to
+// upstream repo files we never vendor — not our docs, not our audit.
+const SKIP_PATH_PREFIXES = [path.join("public", "legacy", "pcs", "assets")];
 const root = process.cwd();
 
 /** @param {string} dir @param {string[]} acc */
@@ -16,6 +20,8 @@ function walk(dir, acc = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP_DIRS.has(e.name)) continue;
     const p = path.join(dir, e.name);
+    const rel = path.relative(root, p);
+    if (SKIP_PATH_PREFIXES.some((pre) => rel === pre || rel.startsWith(pre + path.sep))) continue;
     if (e.isDirectory()) walk(p, acc);
     else if (e.name.endsWith(".md")) acc.push(p);
   }

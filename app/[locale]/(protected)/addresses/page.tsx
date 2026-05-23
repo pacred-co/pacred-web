@@ -53,8 +53,8 @@ import { addAddressAction } from "./add-address-action";
  * tb_address_main) is transcribed 1:1 into the Server Action
  * `addAddressAction` (`./add-address-action.ts`).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. Nothing else changed.
  *
  * Not strictly 1:1 — documented, never silently diverged:
  *   - jQuery DataTables (#myTable search/sort/paginate), jQuery.Thailand
@@ -95,10 +95,23 @@ type AddressRow = {
   addressnote: string | null;
 };
 
-export default async function AddressesPage() {
+export default async function AddressesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) redirect("/complete-profile");
   const { profile } = data;
+
+  // The legacy "เพิ่มที่อยู่" button links to `/addresses?page=1`, and the
+  // legacy jQuery's URL-rewrite handler then opens the add-address modal
+  // via `$('#add-address').modal('show')`. We replicate by reading the
+  // searchParam server-side + rendering the modal with `show` class +
+  // inline `display: block` + a `.modal-backdrop` div so it shows on
+  // load without any JS.
+  const sp = await searchParams;
+  const isAddModalOpen = sp?.page === "1" || sp?.page === "add";
 
   const admin = createAdminClient();
   const userID = profile.member_code ?? "";
@@ -157,7 +170,7 @@ export default async function AddressesPage() {
 
       {/* address.php <title> L127 (Next.js owns <head> — kept here as a
           comment for the fidelity record):
-          ที่อยู่จัดส่งสินค้าในไทย | PR Cargo */}
+          ที่อยู่จัดส่งสินค้าในไทย | Pacred */}
 
       {/* BEGIN: Content — address.php L410 */}
       <div className="app-content content">
@@ -187,10 +200,24 @@ export default async function AddressesPage() {
                                 so the link stays on /addresses, carrying the
                                 legacy `?page` flag that the modal-open JS
                                 keyed off. */}
-                            <Link href="/addresses?page=1">
-                              <button className="btn btn-sm btn-circle btn-success text-white">
+                            {/* Legacy nested <button> inside the <Link>
+                                anchor is invalid HTML5 (interactive nested in
+                                interactive) → browser renders the inner button
+                                wrong size + may swallow the parent's nav click.
+                                Drop the inner <button>; style the anchor body
+                                directly. Same visual, valid HTML, single click
+                                target for the Next.js Link nav. */}
+                            <Link
+                              href="/addresses?page=1"
+                              className="d-inline-flex align-items-center"
+                              style={{ gap: "0.5rem" }}
+                            >
+                              <span
+                                className="btn btn-sm btn-circle btn-success text-white d-inline-flex align-items-center justify-content-center"
+                                role="presentation"
+                              >
                                 <i className="ft-plus"></i>
-                              </button>
+                              </span>
                               <span className="font-normal text-dark">เพิ่มที่อยู่</span>
                             </Link>
                           </div>
@@ -312,15 +339,22 @@ export default async function AddressesPage() {
                       </div>
                     </div>
 
-                    {/* L489-573 — the add-address modal. Transcribed 1:1;
-                        with no jQuery `.modal('show')` it stays hidden at
-                        its CSS default (the legacy pre-trigger state). */}
+                    {/* L489-573 — the add-address modal. Transcribed 1:1.
+                        Legacy opens it via jQuery `.modal('show')` (URL
+                        ?page=1 → page.address.js hook). Without jQuery,
+                        we toggle .show + inline display: block based on
+                        the searchParam so the modal opens on direct URL
+                        navigation (e.g. clicking "เพิ่มที่อยู่"). */}
+                    {isAddModalOpen && (
+                      <div className="modal-backdrop fade show" />
+                    )}
                     <div
                       id="add-address"
-                      className="modal fade in"
+                      className={`modal fade ${isAddModalOpen ? "in show" : "in"}`}
                       tabIndex={-1}
                       role="dialog"
-                      aria-hidden="true"
+                      aria-hidden={!isAddModalOpen}
+                      style={isAddModalOpen ? { display: "block" } : undefined}
                     >
                       <div className="modal-dialog">
                         <div className="modal-content header-from">

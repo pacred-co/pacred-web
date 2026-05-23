@@ -1,0 +1,323 @@
+.sticky-search {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    z-index: 999;
+    background: #fff;
+    height: 70px;
+    left: 0;
+}
+
+.pt-05 {
+    padding-top: 7px;
+}
+
+.loading-pcs {
+    position: absolute;
+    top: 47vh;
+    left: 50%;
+    color: #fff;
+}
+
+.owl-carousel .owl-item img {
+    max-height: 250px;
+}
+
+@media only screen and (max-width: 578px) {
+    .content-wrapper {
+        padding: 0 !important;
+    }
+
+    .row.bg-white {
+        display: none;
+    }
+
+    .content-header.row {
+        display: none;
+    }
+
+    html body.fixed-navbar {
+        padding-top: 0rem;
+    }
+
+    .main {
+        padding-top: 45px;
+    }
+
+    .loading-pcs {
+        left: 30%;
+    }
+
+    .ptm-3 {
+        padding-top: 3rem !important;
+    }
+
+    .pm05 {
+        padding: 0.5rem 1rem 0rem 1.2rem !important;
+    }
+
+    .name-product {
+        padding-top: 0rem !important;
+    }
+
+    .owl-carousel .owl-item img {
+        max-height: 169px;
+    }
+}
+
+.display-7 {
+    font-size: 2rem;
+}
+
+.display-8 {
+    font-size: 1.5rem;
+}
+
+video {
+    max-height: 380px;
+}
+
+.sku-price::before {
+    content: '';
+}
+
+.sku-price::after {
+    content: "¥";
+}
+
+.card.border-black {
+    background: #f2f2f2;
+}
+
+.item-product {
+    background-color: #fff;
+    border-radius: 15px;
+    box-shadow: 0px 0px 10px 0px rgb(0 0 0 / 30%);
+}
+
+.item-product:hover {
+    border-radius: 10px;
+    box-shadow: 1px 1px 5px 1px #cc3333;
+}
+
+.col-6.col-md-2.text-center {
+    padding-bottom: 10px;
+    padding-right: 7px;
+    padding-left: 7px;
+}
+
+.pImages {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.font-12rem {
+    font-size: 1.1rem;
+}
+
+.page-item.active .page-link {
+    background-color: #cc3333;
+    border-color: #cc3333;
+}
+
+.nav-link img {
+    height: 30px;
+}
+
+.item-product img:hover {
+    -webkit-transform: scale(1.05);
+    -ms-transform: scale(1.05);
+    transform: scale(1.05);
+    -webkit-transform-origin: center;
+    -ms-transform-origin: center;
+    transform-origin: center;
+}
+
+.item-pro-pre {
+    background-color: #fff;
+    border-radius: 15px;
+    box-shadow: 0px 0px 10px 0px rgb(0 0 0 / 30%);
+}
+
+.nav-search .btn-main {
+    padding: 0.7rem 0.9rem 0.92rem 0.53rem !important;
+}
+
+.sortable-handler {
+    touch-action: none;
+}
+
+.sku-line-price {
+    font-size: 0px;
+}
+
+.owl-carousel .owl-item {
+    min-height: unset !important;
+}
+
+.load-more-container {
+    background: #fff;
+    min-height: 300px;
+    margin: 20px auto;
+    position: relative;
+}
+
+.load-more-container .line-sku:nth-child(1n + 6) {
+    max-height: 0;
+    opacity: 0;
+    transition: 0.1s ease-in;
+}
+
+.load-more-container .load-more-btn {
+    width: 120px;
+    line-height: 40px;
+    border-radius: 2px;
+    margin: 0 auto;
+    display: block;
+    cursor: pointer;
+    text-align: center;
+    position: absolute;
+    border: 0px solid #fff;
+    border-image-source: linear-gradient(45deg, #cc3333, #f15a24);
+    border-image-slice: 1;
+    background: linear-gradient(to right, #cc3333, #f15a24);
+    color: #fff;
+    -webkit-border-radius: 1.875rem !important;
+    -moz-border-radius: 1.875rem !important;
+    -ms-border-radius: 1.875rem !important;
+    -o-border-radius: 1.875rem !important;
+    border-radius: 1.875rem !important;
+    bottom: -10px;
+}
+
+.load-more-container .load-more-btn:hover {
+    background: #333;
+}
+
+.load-more-container .load-more-btn .loaded {
+    display: none;
+}
+
+.load-more-container #load-more {
+    display: none;
+}
+
+.load-more-container #load-more:checked~.line-sku:nth-child(1n + 5) {
+    max-height: 999px;
+    opacity: 1;
+    transition: 0.2s ease-in;
+}
+
+.load-more-container #load-more:checked~.load-more-btn .loaded {
+    display: block;
+}
+
+.load-more-container #load-more:checked~.load-more-btn .unloaded {
+    display: none;
+}
+
+input[type="file"].upload-images {
+    display: none;
+}
+
+.custom-file-upload {
+    border: 1px solid #ccc;
+    display: inline-block;
+    padding: 10px 12px;
+    cursor: pointer;
+    border: 0px solid #fff;
+    border-image-source: linear-gradient(45deg, #f15a24, #c1272d);
+    border-image-slice: 1;
+    background: linear-gradient(to right, #f15a24, #c1272d);
+    color: #fff;
+    width: 35px;
+    border-radius: 3rem;
+    position: absolute;
+    top: 4px;
+    right: 65px;
+}
+
+.nav.nav-tabs.nav-underline .nav-item a.nav-link {
+    padding: 0.3rem 0.3rem !important;
+}
+
+.nav.nav-tabs.nav-underline .nav-item a.nav-link.active {
+    border-radius: 0.5rem;
+}
+
+.avatar-online img {
+    height: auto !important;
+}
+
+.load-more-container .load-more-btn {
+    width: 98px !important;
+    line-height: 26px !important;
+}
+
+/* Animation effect */
+@keyframes placeHolderShimmer {
+    0% {
+        background-position: -400px 0
+    }
+
+    100% {
+        background-position: 400px 0
+    }
+}
+
+.pro-preload-effect {
+    animation-duration: 1s;
+    animation-fill-mode: forwards;
+    animation-iteration-count: infinite;
+    animation-name: placeHolderShimmer;
+    animation-timing-function: linear;
+    background: #c2c2c2;
+    background: linear-gradient(to right, #eeeeee 8%, #dddddd 18%, #eeeeee 33%);
+    background-size: 800px 104px;
+    min-height: 12px;
+    display: block;
+    clear: both;
+}
+
+.title-pro.pro-preload-effect{
+    display: inline-block;
+    width: 600px;
+    height: 16px;
+}
+.nick-pro.pro-preload-effect{
+    display: inline-block;
+    width: 300px;
+    height: 16px;
+}
+.procover.pro-preload-effect{
+    height: 360px;
+}
+
+@media (max-width: 992px){
+    .title-pro.pro-preload-effect{
+        display: inline-block;
+        width: 400px;
+        height: 16px;
+    }
+    .nick-pro.pro-preload-effect{
+        display: inline-block;
+        width: 150px;
+        height: 16px;
+    }
+}
+
+@media (max-width: 576px){
+    .title-pro.pro-preload-effect{
+        display: inline-block;
+        width: 240px;
+        height: 16px;
+    }
+    .procover.pro-preload-effect{
+        height: 200px;
+    }
+    .nick-pro.pro-preload-effect{
+        display: inline-block;
+        width: 100px;
+        height: 16px;
+    }
+}

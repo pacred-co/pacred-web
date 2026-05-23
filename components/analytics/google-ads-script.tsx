@@ -1,27 +1,39 @@
 import Script from "next/script";
 
-const GOOGLE_ADS_ID = "AW-17941254120";
-
 /**
- * Google Ads conversion tag for the customs-clearance landing page (per ปอน
- * 2026-05-20 — paid traffic points at this page, conversions need to fire on
- * phone-tap + LINE-tap).
+ * Google Ads conversion / remarketing tag (gtag.js).
  *
- * Loads `gtag.js`, configures the AW- account, and installs a single click
- * delegation listener that fires `event: conversion` when the user taps:
- *   - any `<a href="tel:…">` (phone CTA)
- *   - any `<a href="/line">` or LINE-URL anchor
+ * Fires on EVERY page for ad-conversion + remarketing measurement, AND
+ * fires an explicit `conversion` event on phone (tel:) + LINE link clicks
+ * for paid-traffic conversion attribution.
  *
- * Centralising via delegation means new phone/LINE buttons on the page get
- * tracked automatically — no per-button wiring + no need to make the page a
- * Client Component.
+ * **THE ID IS HARDCODED BY DIRECTIVE** (เดฟ, 2026-05-20): every page must
+ * embed the tracking tag in CODE, not in GTM or any external dashboard.
+ * The owner is running paid ads (Google + Facebook) right now and was
+ * "blind" because the tag was missing from production HTML. The ID
+ * `AW-17941254120` is Pacred's Google Ads account. Env override
+ * `NEXT_PUBLIC_GOOGLE_ADS_ID` is supported for dev/staging swaps; the
+ * hardcoded default ensures the tag fires on Vercel regardless of env
+ * config. Do NOT remove the hardcoded default.
+ *
+ * Per ปอน 2026-05-20: paid traffic points at the customs-clearance landing
+ * — conversions need to fire on phone-tap + LINE-tap. Click delegation
+ * (capture phase, idempotent via `window.__pacredAdsClickArmed`) means new
+ * phone/LINE buttons added later are auto-tracked.
+ *
+ * Place inside the root `<head>` (Server Component). Reuses the same
+ * `window.dataLayer` GTM sets up — both can coexist; `gtag('config')`
+ * pushes to the shared queue.
  */
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || "AW-17941254120";
+
 export function GoogleAdsScript() {
+  if (!GOOGLE_ADS_ID) return null;
+
   return (
     <>
       <link rel="preconnect" href="https://www.googletagmanager.com" />
       <Script
-        id="google-ads-gtag"
         src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
         strategy="afterInteractive"
       />
@@ -35,11 +47,6 @@ export function GoogleAdsScript() {
             gtag('js', new Date());
             gtag('config', '${GOOGLE_ADS_ID}');
 
-            // Fire conversion on phone (tel:) + LINE link clicks. Use capture
-            // phase so the event lands even if a child element's handler calls
-            // stopPropagation. Idempotent: re-arming on re-mount is harmless
-            // because the listener key is the same anonymous function — but
-            // we still gate with a window flag to be safe.
             if (!window.__pacredAdsClickArmed) {
               window.__pacredAdsClickArmed = true;
               document.addEventListener('click', function(e) {

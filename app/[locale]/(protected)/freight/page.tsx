@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LINE_OA } from "@/components/seo/site";
@@ -307,7 +306,6 @@ export default async function CustomerFreightHubPage() {
           </a>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

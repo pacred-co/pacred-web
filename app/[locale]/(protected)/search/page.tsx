@@ -73,8 +73,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - tb_history_key INSERT (the search-log row, L370-372) is
  *     FLAGGED below — see the note at the INSERT site.
  *
- * Rebrand: legacy `PCS` → `PR` (branding text) — search.php has no
- * `PCS<n>` member codes in its markup.
+ * Rebrand DONE: legacy `PCS` brand → `PR` (branding text) — search.php
+ * has no `PCS<n>` member codes in its markup.
  */
 
 // search.php L305 — $no_of_records_per_page = 24

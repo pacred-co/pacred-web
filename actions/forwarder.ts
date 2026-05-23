@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { BANK } from "@/components/seo/site";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
@@ -12,10 +13,182 @@ import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { validateStoredFile } from "@/lib/file-validation";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
   | { ok: false; error: string };
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — calculateForwarderTotal
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 transcription of the legacy AJAX endpoint
+// `member/include/pages/forwarder/calPrice.php` — called by
+// `/service-import` whenever the user toggles a row checkbox or
+// "เลือกทั้งหมด" on the bottom pay-bar (forwarder.php L1273-1409).
+// Reads the legacy `tb_forwarder` / `tb_users` schema; RLS is
+// service_role-locked so reads go through the admin client, but
+// `userid === profile.member_code` enforces ownership in code
+// (mirrors the legacy `WHERE userID='$userID'` predicate at
+// calPrice.php L11 + L21).
+//
+// Inputs:
+//   - ids: the row IDs selected on the pay-bar table (forwarder.php
+//          L1357 — `rows_selected.join(',')`)
+//
+// Outputs (mirrors calPrice.php L48-52 — `number_format($price,2)`):
+//   - count: selected eligible row count (calPrice.php L25 `$countID`)
+//   - price: ฿ total formatted to 2 decimals (calPrice.php L50)
+//
+// Legacy total per row (calPrice.php L26):
+//   fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService
+//   + priceCrate + fTransportPriceCHNTHB + priceOther - fDiscount
+//
+// Legacy adjustments (calPrice.php L29-45):
+//   - +50 ฿ flat fee when at least one row uses fShipBy='PCSF' with
+//     fTransportPrice=0 (the PCS เหมาๆ promo) AND that user isn't on
+//     the `user-not-50.json` allowlist.
+//   - -1% discount when userCompany==1 (juristic) AND price >= 1000.
+export type CalculateForwarderTotalInput = {
+  ids: number[];
+};
+
+export type CalculateForwarderTotalResult = {
+  ok: true;
+  count: number;
+  price: string;
+  priceRaw: number;
+} | { ok: false; error: string };
+
+export async function calculateForwarderTotal(
+  input: CalculateForwarderTotalInput,
+): Promise<CalculateForwarderTotalResult> {
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  // calPrice.php L4 — guard: empty/no IDs returns zero state.
+  if (input.ids.length === 0) {
+    return { ok: true, count: 0, price: numberFormatLegacy(0), priceRaw: 0 };
+  }
+
+  const admin = createAdminClient();
+
+  // calPrice.php L11-18 — SELECT userCompany, userName, userLastName
+  //                        FROM tb_users WHERE userID='$userID'
+  // We only need userCompany here (the juristic 1% discount lever);
+  // userName/userLastName are read but unused by the calc.
+  const { data: userRow } = await admin
+    .from("tb_users")
+    .select("usercompany")
+    .eq("userid", userID)
+    .maybeSingle<{ usercompany: string | number | null }>();
+  const userCompany = String(userRow?.usercompany ?? "");
+
+  // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
+  //   fTransportType, fDiscount, ID, fTrackingCHN, fRefRate, fTotalPrice,
+  //   fTransportPrice, fPriceUpdate, fRefPrice, priceOther,
+  //   fTransportPriceCHNTHB, priceCrate
+  //   FROM tb_forwarder WHERE userID='$userID' AND (fStatus='5' OR fCredit=1)
+  //   AND ID IN ('$ids')
+  // The legacy uses an OR over fStatus / fCredit. PostgREST: use .or().
+  const { data: rows } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, faddressdistrict, fshipby, fshippingservice, ftransporttype, fdiscount, ftotalprice, ftransportprice, fpriceupdate, priceother, ftransportpricechnthb, pricecrate",
+    )
+    .eq("userid", userID)
+    .or("fstatus.eq.5,fcredit.eq.1")
+    .in("id", input.ids);
+
+  let countID = 0;
+  let price = 0;
+  let countPricePCSF = 0;
+  // calPrice.php L34 — the per-user "no 50฿" allowlist. The legacy
+  // reads it from a static JSON; we mirror just the bare username
+  // membership check the legacy `in_array($userID, $userNotPCS50)` does.
+  const userNotPCS50: Set<string> = new Set([
+    "PCS50", "PCS3083", "PCS3983", "PCS999",
+    // PR equivalents (rebrand parity — D1 keeps the same identifiers
+    // mapped 1:1 from the legacy member-code numbering).
+    "PR50", "PR3083", "PR3983", "PR999",
+  ]);
+
+  for (const r of (rows ?? []) as Array<{
+    faddressdistrict: string | null;
+    fshipby: string | null;
+    fshippingservice: number | string | null;
+    ftransporttype: string | null;
+    fdiscount: number | string | null;
+    ftotalprice: number | string | null;
+    ftransportprice: number | string | null;
+    fpriceupdate: number | string | null;
+    priceother: number | string | null;
+    ftransportpricechnthb: number | string | null;
+    pricecrate: number | string | null;
+  }>) {
+    countID++;
+    // calPrice.php L26 — legacy per-row total formula (verbatim).
+    const totalPrice =
+      Number(r.ftotalprice ?? 0) +
+      Number(r.ftransportprice ?? 0) +
+      Number(r.fpriceupdate ?? 0) +
+      Number(r.fshippingservice ?? 0) +
+      Number(r.pricecrate ?? 0) +
+      Number(r.ftransportpricechnthb ?? 0) +
+      Number(r.priceother ?? 0) -
+      Number(r.fdiscount ?? 0);
+    price = price + totalPrice;
+
+    // calPrice.php L29-31 — PCSF rows with fTransportPrice=0 trigger
+    // the +50฿ flat fee (counted, then applied once below).
+    if (
+      r.fshipby === "PCSF" &&
+      Number(r.ftransportprice ?? 0) === 0
+    ) {
+      countPricePCSF++;
+    }
+
+    // calPrice.php L34-38 — the หนองแขม allowlist exemption: if the
+    // address district contains "หนองแขม" AND the user is on the
+    // userNotPCS50 list, the +50฿ doesn't apply for that row.
+    if (
+      r.faddressdistrict &&
+      r.faddressdistrict.indexOf("หนองแขม") !== -1 &&
+      userNotPCS50.has(userID)
+    ) {
+      countPricePCSF--;
+    }
+  }
+
+  // calPrice.php L40-42 — +50฿ flat when at least one PCSF row qualifies.
+  if (countPricePCSF >= 1) {
+    price = price + 50;
+  }
+  // calPrice.php L43-45 — juristic users with price>=1000 get a 1%
+  // discount (the legacy WHT-aligned reduction).
+  if (userCompany === "1" && price >= 1000) {
+    price = price - price * 0.01;
+  }
+
+  return {
+    ok: true,
+    count: countID,
+    price: numberFormatLegacy(price),
+    priceRaw: price,
+  };
+}
+
+// PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
+function numberFormatLegacy(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 
 export type ForwarderSummary = {
   id: string;
@@ -676,6 +849,371 @@ export async function payForwarderFromWallet(
   revalidatePath("/wallet/history");
 
   return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+}
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — getForwarderPaymentQr
+// ────────────────────────────────────────────────────────────
+//
+// The `#qrcode` PromptPay QR in the `#list-payment2` modal
+// (`getListPayForwarder.php` L276 + the `makeCode()` JS L388-401).
+//
+// ⚠️ MONEY ROUTING — the legacy hard-coded `0105564077716` (PCS
+// Cargo's juristic tax id). Scanning that QR sends the customer's
+// payment to PCS Cargo's bank account — the OLD company. Pacred
+// MUST collect to ITS OWN account, so this action reads the Pacred
+// PromptPay id from the `PROMPTPAY_ID` env (the SAME id /wallet/
+// deposit already collects top-ups to, via `lib/promptpay.ts`).
+// This is NOT a brand-cosmetic scrub (AGENTS.md §3 — those wait for
+// ก๊อต) — it is where real customer money lands; it cannot route to
+// the predecessor company. `PROMPTPAY_ID` is empty in dev `.env.local`
+// + must be set on Vercel prod (Pacred's tax id is 0105564077716 per
+// the company DNA — the owner sets the registered PromptPay id).
+//
+// Returns a `data:image/png` URL + the configured id (so the modal
+// can show the human-readable number) — or `promptpay_not_configured`
+// when the env is unset, which the modal degrades to a friendly notice.
+export async function getForwarderPaymentQr(
+  amountThb: number,
+): Promise<ActionResult<{ dataUrl: string; payload: string; promptPayId: string }>> {
+  // Cheap auth gate — the QR is customer-facing; no need to leak it
+  // to anonymous callers.
+  const { data: { user } } = await (await createClient()).auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  if (!Number.isFinite(amountThb) || amountThb <= 0) {
+    return { ok: false, error: "promptpay_invalid_amount" };
+  }
+  // PROMPTPAY_ID — Pacred's own PromptPay collection id (env-driven,
+  // shared with /wallet/deposit). NOT the legacy PCS Cargo id.
+  const promptPayId = process.env.PROMPTPAY_ID;
+  if (!promptPayId) {
+    return { ok: false, error: "promptpay_not_configured" };
+  }
+  try {
+    // `promptpay-qr` builds the EMVCo TLV payload; `qrcode` renders it.
+    // Both are existing project deps (see lib/promptpay.ts) — no new
+    // dependency added.
+    const { default: promptpay } = await import("promptpay-qr");
+    const { default: QRCode } = await import("qrcode");
+    const payload = promptpay(promptPayId, { amount: amountThb });
+    const dataUrl = await QRCode.toDataURL(payload, { margin: 1, scale: 6 });
+    return {
+      ok: true,
+      data: { dataUrl, payload, promptPayId },
+    };
+  } catch {
+    return { ok: false, error: "qr_failed" };
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — uploadForwarderSlip
+// ────────────────────────────────────────────────────────────
+//
+// Faithful transcription of the slip-upload half of the legacy
+// `paymentForwarderNew` handler (`member/forwarder.php` L274-289):
+// the customer attaches a transfer slip, the legacy `exif_imagetype`
+// gate accepts only PNG/JPEG, then `move_uploaded_file` stores it
+// under `storage/slip/`.
+//
+// Pacred equivalent — the slip lands in the private `slips` bucket
+// foldered by `auth.uid()` (the bucket RLS enforces the `{uid}/…`
+// prefix; same bucket + folder convention as the /wallet/deposit
+// slip upload — `lib/storage-upload.ts`). The image bytes are
+// validated server-side with `validateStoredFile` AGAIN inside
+// `submitForwarderPayment` (defence-in-depth — mirrors `createDeposit`
+// re-validating the deposit slip).
+//
+// Returns the stored object path; the modal stashes it in state and
+// passes it to `submitForwarderPayment`.
+export async function uploadForwarderSlip(
+  formData: FormData,
+): Promise<ActionResult<{ path: string }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "not_signed_in" };
+
+  const file = formData.get("slip");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "slip_missing — กรุณาแนบไฟล์สลิป" };
+  }
+  // forwarder.php L275-279 — the legacy accepts only PNG/JPEG image
+  // slips. We accept image/* + PDF (the /wallet/deposit slip flow does
+  // the same — a PDF slip is common from mobile banking apps).
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) {
+    return { ok: false, error: "slip_type — ต้องเป็นรูปภาพหรือ PDF" };
+  }
+  // forwarder.php L307 — `data-max-file-size="9M"`. We cap at 5 MB to
+  // match the `slips` bucket + `validateStoredFile` default ceiling.
+  if (file.size > 5 * 1024 * 1024) {
+    return { ok: false, error: "slip_too_large — ไฟล์ใหญ่เกิน 5 MB" };
+  }
+
+  // forwarder.php L282-286 — the legacy names the file
+  // `<userID>_<uniqid><time>.<ext>` under `storage/slip/`. Pacred
+  // foldering: `{auth.uid()}/forwarder_payment/<time>.<ext>` so the
+  // `slips` bucket RLS (`{uid}/…` prefix) authorises the write.
+  const ext = (file.name.split(".").pop() ?? "bin").toLowerCase();
+  const path = `${user.id}/forwarder_payment/${Date.now()}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from("slips")
+    .upload(path, file, { upsert: false, contentType: file.type });
+  if (upErr) return { ok: false, error: `slip_upload: ${upErr.message}` };
+
+  return { ok: true, data: { path } };
+}
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — submitForwarderPayment
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 transcription of the `paymentForwarderNew` POST
+// handler (`member/forwarder.php` L161-427) — the multi-bill
+// forwarder payment the `#list-payment2` modal submits.
+//
+// IMPORTANT — wallet is DISABLED for this service (getListPayForwarder
+// .php L67-68 red banner + forwarder.php L244 `$walletTotal = 0;`).
+// The customer pays the full amount by PromptPay-QR + slip; the
+// handler ONLY records pending-verification rows in `tb_wallet_hs`.
+// It does NOT touch `tb_wallet` and does NOT flip `tb_forwarder
+// .fstatus` — the legacy keeps fStatus=5 and an admin confirms the
+// slip later (the legacy's own status→6 flip lives behind the admin
+// verification screen, not this customer path; faithful = record-only
+// here). Wallet movement / status flip stays an admin-side action.
+//
+// Inputs:
+//   - ids:         the forwarder row IDs ticked on the pay-bar
+//   - slipPath:    the `slips`-bucket path returned by uploadForwarderSlip
+//   - slipDate:    optional transfer date/time from the slip
+//   - cashBackKey: optional cash-back amount (legacy `#cashBackKey`,
+//                  L203). The legacy disables cash-back here
+//                  (`$cbTotal=0` at L22) so it is accepted but not
+//                  applied — kept for faithful input parity.
+//
+// Idempotency (forwarder.php L189-191): if `tb_wallet_hs` already has
+// a pending/processing row (typeNew 5/6, status 1/2, typeService='2')
+// referencing every selected id, the payment was already submitted —
+// return ok with an already-submitted note instead of double-inserting.
+const submitForwarderPaymentSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(50),
+  slipPath: z.string().trim().min(1).max(300),
+  slipDate: z.string().trim().max(40).optional(),
+  cashBackKey: z.number().nonnegative().optional(),
+});
+export type SubmitForwarderPaymentInput = z.infer<
+  typeof submitForwarderPaymentSchema
+>;
+
+export async function submitForwarderPayment(
+  input: SubmitForwarderPaymentInput,
+): Promise<ActionResult<{ submitted: number[]; alreadySubmitted: boolean }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations
+  // (same guard the legacy lacks but Pacred requires — payForwarder
+  // FromWallet above uses the identical pattern).
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const parsed = submitForwarderPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { ids, slipPath, slipDate } = parsed.data;
+
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  // Slip ownership + magic-byte validation — the path must sit under
+  // this customer's storage folder AND be a real image/PDF (mirrors
+  // createDeposit's `validateStoredFile` re-check; never trust the
+  // client-passed path).
+  const { data: { user: authUser } } = await (await createClient()).auth.getUser();
+  if (!authUser) return { ok: false, error: "not_signed_in" };
+  if (!slipPath.startsWith(`${authUser.id}/`)) {
+    return { ok: false, error: "slip_path_mismatch" };
+  }
+  const slipCheck = await validateStoredFile("slips", slipPath, ["image", "pdf"]);
+  if (!slipCheck.ok) {
+    return { ok: false, error: `slip_invalid:${slipCheck.error}` };
+  }
+
+  const admin = createAdminClient();
+
+  // forwarder.php L189-191 — idempotency. A pending/processing
+  // `tb_wallet_hs` row for ANY selected id means a payment is already
+  // in flight; the legacy aborts the whole submit ('ePayRe'). We mirror
+  // that: if EVERY selected id is already covered, return ok; otherwise
+  // (defensive) refuse so the customer can't half-double-pay.
+  const { data: existingHs } = await admin
+    .from("tb_wallet_hs")
+    .select("reforder")
+    .eq("userid", userID)
+    .eq("typeservice", "2")
+    .in("typenew", ["5", "6"])
+    .in("status", ["1", "2"])
+    .in("reforder", ids.map(String));
+  const alreadyPaidIds = new Set(
+    (existingHs ?? []).map((r) => String((r as { reforder: string | null }).reforder)),
+  );
+  if (alreadyPaidIds.size > 0) {
+    // forwarder.php L408-410 — 'ePayRe': at least one row already paid.
+    if (alreadyPaidIds.size >= ids.length) {
+      return { ok: true, data: { submitted: ids, alreadySubmitted: true } };
+    }
+    return {
+      ok: false,
+      error: "payment_partially_submitted — บางรายการชำระเงินไปแล้ว กรุณารีเฟรชหน้าจอแล้วเลือกเฉพาะรายการที่ยังไม่ชำระ",
+    };
+  }
+
+  // forwarder.php L207-215 — corporate flag (the juristic 1% reduction
+  // lever). The handler reads `tb_corporate` existence; if a row exists
+  // `$corporate=1`.
+  const { data: corpRow } = await admin
+    .from("tb_corporate")
+    .select("id")
+    .eq("userid", userID)
+    .maybeSingle<{ id: number }>();
+  const isCorporate = !!corpRow;
+
+  // forwarder.php L252-253 — re-fetch the selected eligible rows
+  // server-side (trust nothing from the client). The legacy predicate:
+  //   userID=$userID AND (fStatus='5' OR fCredit='1') AND ID IN (ids)
+  const { data: rows } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, fshipby, fcredit, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
+    )
+    .eq("userid", userID)
+    .or("fstatus.eq.5,fcredit.eq.1")
+    .in("id", ids);
+
+  const eligible = (rows ?? []) as Array<{
+    id: number;
+    fshipby: string | null;
+    fcredit: string | null;
+    fpriceupdate: number | string | null;
+    ftotalprice: number | string | null;
+    ftransportprice: number | string | null;
+    fdiscount: number | string | null;
+    pricecrate: number | string | null;
+    ftransportpricechnthb: number | string | null;
+    priceother: number | string | null;
+    fshippingservice: number | string | null;
+  }>;
+  if (eligible.length === 0) {
+    // getListPayForwarder.php L321 — 'ไม่พบรายการที่ต้องชำระเงิน'.
+    return { ok: false, error: "no_payable_rows — ไม่พบรายการที่ต้องชำระเงิน กรุณาตรวจสอบ" };
+  }
+  // Every requested id must be a real eligible row — refuse if the
+  // client smuggled an id that isn't owned / isn't fStatus=5/fCredit=1.
+  const eligibleIds = new Set(eligible.map((r) => r.id));
+  if (ids.some((id) => !eligibleIds.has(id))) {
+    return { ok: false, error: "ineligible_row — มีรายการที่ชำระเงินไม่ได้ปะปนมา" };
+  }
+
+  // forwarder.php L193 — count PCSF rows (fShipBy='PCSF' AND
+  // fTransportPrice=0) that trigger the +50฿ flat fee.
+  const countPricePCSF = eligible.filter(
+    (r) => r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0,
+  ).length;
+
+  // forwarder.php L256-257 — per-row total + the bill grand total.
+  const num = (v: number | string | null) => Number(v ?? 0);
+  const perRowTotal = (r: (typeof eligible)[number]) =>
+    num(r.ftotalprice) +
+    num(r.ftransportprice) +
+    num(r.fpriceupdate) +
+    num(r.fshippingservice) +
+    num(r.pricecrate) +
+    num(r.ftransportpricechnthb) +
+    num(r.priceother) -
+    num(r.fdiscount);
+
+  let pricePayAll = eligible.reduce((s, r) => s + perRowTotal(r), 0);
+  // forwarder.php L263-266 — +50฿ flat when ≥1 PCSF row qualifies.
+  if (countPricePCSF >= 1) pricePayAll += 50;
+  // forwarder.php L268-270 — juristic 1% reduction when total ≥ 1000.
+  const applyNiti = isCorporate && pricePayAll >= 1000;
+
+  const datetimeNow = new Date().toISOString();
+
+  // forwarder.php L335-342 — one `tb_wallet_hs` row per forwarder id.
+  // The legacy writes: date, status='1' (pending admin verify), amount
+  // = the per-row total, type='4' (ชำระฝากนำเข้า), userID, refOrder=ID,
+  // typeService='2', typeNew='6'. Wallet stays untouched.
+  //   NOT-NULL columns the legacy lets MySQL default to '' — Postgres
+  //   needs them explicit: whno / wusercredit / adminidcrate / typenew
+  //   / typeservice (the 0081 schema marks these NOT NULL).
+  const hsRows = eligible.map((r) => {
+    let amount = perRowTotal(r);
+    // forwarder.php L316-318 — a PCSF row carries the +50฿ inside its
+    // own amount (the legacy bumps the FIRST PCSF row). We attribute
+    // the +50 to each qualifying PCSF row's amount so the per-row sum
+    // still reconciles to pricePayAll. Faithful net: the bill total is
+    // identical; the per-row split differs only cosmetically.
+    if (countPricePCSF >= 1 && r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0) {
+      amount += 50 / countPricePCSF;
+    }
+    // forwarder.php L329-331 — juristic 1% reduction applied per row.
+    if (applyNiti) amount = amount * 0.99;
+    return {
+      date: datetimeNow,
+      dateslip: slipDate ? slipDate : null,
+      status: "1",
+      type: "4",
+      typenew: "6",
+      typeservice: "2",
+      amount: Number(amount.toFixed(2)),
+      imagesslip: slipPath,
+      depositnamebank: `KBANK-${BANK.accountNumber}`,
+      userid: userID,
+      reforder: String(r.id),
+      whno: "",
+      wusercredit: r.fcredit === "1" ? "1" : "",
+      adminidcrate: "",
+    };
+  });
+
+  const { error: insErr } = await admin.from("tb_wallet_hs").insert(hsRows);
+  if (insErr) {
+    return { ok: false, error: `wallet_hs insert: ${insErr.message}` };
+  }
+
+  // Faithful: do NOT flip tb_forwarder.fstatus (legacy keeps fStatus=5
+  // until the admin verifies the slip) and do NOT mutate tb_wallet
+  // (wallet disabled for this service).
+
+  revalidatePath("/service-import");
+  revalidatePath("/service-import/pending");
+
+  // Pacred addition — surface the pending payment in the notification
+  // feed (the legacy fires a LINE Notify to admin here; Pacred's admin
+  // LINE wiring is a separate channel, the customer-facing record is
+  // the in-app notification).
+  void sendNotification(authUser.id, {
+    category: "forwarder",
+    severity: "info",
+    title: "แจ้งชำระเงินฝากนำเข้าแล้ว",
+    body: `ส่งหลักฐานการชำระเงิน ${eligible.length} รายการ รวม ฿${pricePayAll.toLocaleString("th-TH", { minimumFractionDigits: 2 })} — รอเจ้าหน้าที่ตรวจสอบ`,
+    link_href: "/service-import",
+    reference_type: "forwarder",
+    reference_id: String(eligible[0]?.id ?? ""),
+  });
+
+  return {
+    ok: true,
+    data: { submitted: eligible.map((r) => r.id), alreadySubmitted: false },
+  };
 }
 
 // ────────────────────────────────────────────────────────────

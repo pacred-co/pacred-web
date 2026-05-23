@@ -2,6 +2,11 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ADDRESSES } from "@/components/seo/site";
+import {
+  CartInteractivity,
+  type CartInteractiveProvider,
+} from "./cart-interactivity";
 
 /**
  * Customer shopping-cart screen for the ฝากสั่งซื้อ (China shop-order)
@@ -46,8 +51,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - cart rows     → DISTINCT(cProvider) → DISTINCT(cNameShop)
  *                     → SELECT * FROM tb_cart                (cart.php L522-586)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + `PCS` → `PR`
- * branding text only. Legacy hardcoded phone "02-055-6063" and the
+ * Rebrand DONE: legacy `PCS<n>` member codes + `PCS` brand → `PR<n>` +
+ * `PR` / Pacred. Legacy hardcoded phone "02-055-6063" and the
  * warehouse address are copied verbatim (borrowed-API / company
  * facts — not scrubbed per runbook §3).
  *
@@ -86,14 +91,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *      `/legacy/pcs/shop-2-300x300.png`.
  */
 
+// Server Components reading cookies/auth under a layout must be dynamic.
+export const dynamic = "force-dynamic";
+
 // cart.php L17 / L76 — cart capacity cap: countFor = 151 - countCart.
 // Kept for parity (the legacy add-flow uses it; the read view does not).
 const CART_CAPACITY = 151;
 
-// Legacy warehouse pickup address — cart.php L471 / L486 (verbatim).
-const PCS_WAREHOUSE_ADDRESS =
-  "รับเองที่โกดัง PR บ้านเลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160";
-const PCS_WAREHOUSE_MAP_URL = "https://goo.gl/maps/MJd56S6saebaDBQr7";
+// "รับเองที่โกดัง" (self pick-up) — wired to Pacred's TH receiving warehouse
+// (ADDRESSES.warehouseTh — สมุทรสาคร). Legacy PCS hardcoded a Bangkok address;
+// under D1 the actual Pacred warehouse is in Samut Sakhon (the canonical SOT).
+const PCS_WAREHOUSE_ADDRESS = `รับเองที่โกดัง Pacred · ${ADDRESSES.warehouseTh.full}`;
+// Map URL pending — when พี่ป๊อปส่ง Google Maps pin for the Samut Sakhon
+// warehouse, drop it here (replaces the legacy PCS map link). Empty string
+// hides the "ดูแผนที่" CTA via the && short-circuit in the template.
+const PCS_WAREHOUSE_MAP_URL = "";
 
 type CartRow = {
   id: number;
@@ -109,17 +121,6 @@ type CartRow = {
   csize: string | null;
   userid: string | null;
 };
-
-/**
- * Transcribes the legacy `number_format($n, 2)` PHP money formatter
- * cart.php uses for the per-piece price and the per-line total.
- */
-function numberFormat(n: number): string {
-  return n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 /**
  * Transcribes the legacy `imgProvider()` helper
@@ -297,6 +298,56 @@ export default async function CartPage() {
   // cart.php L841 — $('#countID').html(noRow-1); the total row count.
   const totalRowCount = noRow - 1;
 
+  // ── Build the serializable tree passed to <CartInteractivity> ──
+  // The client component owns the cart-list rendering + the order-
+  // summary card, so it needs the same pre-grouped tree but with the
+  // SSR-computed `imgProvider()` / `convertIMGCHN()` resolutions
+  // baked in (those helpers reference legacy paths the server holds
+  // canonical knowledge of). Producing the resolved props here keeps
+  // the client component free of legacy URL guessing.
+  const interactiveProviders: CartInteractiveProvider[] =
+    groupedProviders.map((p) => ({
+      providerCode: p.providerCode,
+      providerImg: imgProvider(p.providerCode).kind === "img"
+        ? {
+            kind: "img" as const,
+            src: imgProvider(p.providerCode).src ?? "",
+          }
+        : {
+            kind: "text" as const,
+            text: imgProvider(p.providerCode).text ?? "",
+          },
+      shops: p.shops.map((s) => ({
+        shopName: s.shopName,
+        rows: s.rows.map(({ row, count }) => ({
+          id: row.id,
+          cdetails: row.cdetails,
+          curl: row.curl,
+          ctitle: row.ctitle,
+          cnameshop: row.cnameshop,
+          cprovider: row.cprovider,
+          cimages: row.cimages,
+          cprice: Number(row.cprice ?? 0),
+          camount: Number(row.camount ?? 0),
+          ccolor: row.ccolor,
+          csize: row.csize,
+          imageThumbUrl: convertIMGCHN(row.cimages, "_80x80.jpg"),
+          imageFullUrl: convertIMGCHN(row.cimages, ""),
+          providerImg:
+            imgProvider(row.cprovider).kind === "img"
+              ? {
+                  kind: "img" as const,
+                  src: imgProvider(row.cprovider).src ?? "",
+                }
+              : {
+                  kind: "text" as const,
+                  text: imgProvider(row.cprovider).text ?? "",
+                },
+          count,
+        })),
+      })),
+    }));
+
   // cart.php L667 — the time-boxed 3.3 promotion window check.
   const now = new Date();
   const promo33Active =
@@ -373,17 +424,19 @@ export default async function CartPage() {
                                   <span className="ml-1 btn-add-address-thai cursor-pointer">
                                     เปลี่ยนที่อยู่
                                   </span>
-                                  <div>
-                                    <a
-                                      href={PCS_WAREHOUSE_MAP_URL}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-info"
-                                    >
-                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง PR Cargo
-                                      ในไทย
-                                    </a>
-                                  </div>
+                                  {PCS_WAREHOUSE_MAP_URL && (
+                                    <div>
+                                      <a
+                                        href={PCS_WAREHOUSE_MAP_URL}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-info"
+                                      >
+                                        <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
+                                        ในไทย
+                                      </a>
+                                    </div>
+                                  )}
                                 </span>
                               </>
                             )}
@@ -398,15 +451,17 @@ export default async function CartPage() {
                                 />
                                 <span className="address-select-now">
                                   {PCS_WAREHOUSE_ADDRESS}
-                                  <a
-                                    href={PCS_WAREHOUSE_MAP_URL}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-info"
-                                  >
-                                    <i className="fa fa-map"></i> ดูแผนที่โกดัง PR Cargo
-                                    ในไทย
-                                  </a>
+                                  {PCS_WAREHOUSE_MAP_URL && (
+                                    <a
+                                      href={PCS_WAREHOUSE_MAP_URL}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-info"
+                                    >
+                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
+                                      ในไทย
+                                    </a>
+                                  )}
                                 </span>
                                 <span className="btn-change-address-thai cursor-pointer">
                                   เปลี่ยนที่อยู่
@@ -424,7 +479,7 @@ export default async function CartPage() {
                                 />
                                 <span className="address-select-now"></span>
                                 <span className="btn-add-address-thai cursor-pointer">
-                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง PR กทม
+                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง Pacred กทม
                                 </span>
                               </>
                             )}
@@ -433,9 +488,9 @@ export default async function CartPage() {
                             <div id="selectShipBy"></div>
                           </div>
                           <div className="text-danger font-0_85rem">
-                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo
+                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
                             ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
-                            <a href="https://pcscargo.co.th/freearea" target="_blank" rel="noreferrer">
+                            <a href="/services/import-china" target="_blank" rel="noreferrer">
                               (เช็คพื้นที่ได้ที่นี่)
                             </a>
                           </div>
@@ -443,153 +498,190 @@ export default async function CartPage() {
                       </div>
                     )}
 
-                    {/* ── Shopping-cart item list — cart.php L510-600 ── */}
-                    <div className="ele-shopping-cart mb-2">
-                      <div className="shopping-cart">
-                        {/* cart.php L512-521 — the column-label header row */}
-                        <div className="ele-item-3 column-labels">
-                          <label className="product-check">
-                            <input
-                              type="checkbox"
-                              name="checkAll"
-                              className="dt-checkboxes check-all"
-                              value="all"
-                            />
-                          </label>
-                          <label className="product-count"></label>
-                          <label className="product-image"></label>
-                          <label className="product-details">รายละเอียดสินค้า</label>
-                          <label className="product-price">ราคาต่อชิ้น</label>
-                          <label className="product-quantity">จำนวน</label>
-                          <label className="product-removal">ตัวเลือก</label>
-                          <label className="product-line-price">ราคารวม</label>
-                        </div>
-                        {/* cart.php L522-598 — provider → shop → rows */}
-                        {cartRows.length > 0 ? (
-                          groupedProviders.map((provider) => {
-                            const prov = imgProvider(provider.providerCode);
-                            return (
-                              <div key={provider.providerCode || "p"}>
-                                <div className="text-center bg-white box-shadow2">
-                                  <h5 className="p-0">
-                                    <b>
-                                      {prov.kind === "img" ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
+                    {/* ── Shopping-cart item list — cart.php L510-600 ──
+                        Empty-cart state renders SSR (no interactivity
+                        needed); when rows exist, the rendering + the
+                        promo + order-summary card are delegated to
+                        the `<CartInteractivity>` client component so
+                        checkboxes, the per-row quantity, the live
+                        totals, and the "เลือกทั้งหมด" toggle drive
+                        state. cart.php L510-600 / L652-727. */}
+                    {cartRows.length > 0 ? (
+                      <CartInteractivity
+                        groupedProviders={interactiveProviders}
+                        totalRowCount={totalRowCount}
+                        initialRsDefault={rsDefault}
+                        promo33Active={promo33Active}
+                        shippingCard={
+                          <div className="ele-addressCHN-cart box-shadow mb-1 p-1">
+                            <h3 className="text-color">
+                              <span className="fa fa-map"></span> การขนส่งจากจีนมาไทย{" "}
+                              <i className="flag-icon flag-icon-ch"></i>
+                            </h3>
+                            <div className="row">
+                              <div className="col-md-6">
+                                <label
+                                  className="form-control-label mb-0 font-1_2rem"
+                                  htmlFor="hTransportType"
+                                >
+                                  รูปแบบการขนส่งจีน-ไทย
+                                </label>
+                                <div className="row">
+                                  <div className="col-md-6">
+                                    <fieldset
+                                      className="border-checkbox-transportType border-checkbox cursor-pointer box-shadow"
+                                      data-for="transportType-ek"
+                                    >
+                                      <input
+                                        type="radio"
+                                        className="radio-custom radio-custom-transportType cursor-pointer"
+                                        name="hTransportType"
+                                        value="1"
+                                        id="transportType-ek"
+                                        defaultChecked={userTransportType === 1}
+                                      />
+                                      <label
+                                        htmlFor="transportType-ek"
+                                        className="cursor-pointer radio-custom-label"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
-                                          src={prov.src}
-                                          style={{ height: "30px" }}
+                                          className="img-fluid"
+                                          src="/legacy/pcs/theme/transport-car-v3.png"
+                                          style={{ maxHeight: "35px" }}
                                           alt=""
                                         />
-                                      ) : (
-                                        prov.text
-                                      )}
-                                    </b>
-                                  </h5>
-                                </div>
-                                {provider.shops.map((shop) => (
-                                  <div
-                                    className="ele-item-2"
-                                    key={shop.shopName || "s"}
-                                  >
-                                    <div className="text-center bg-light box-shadow2">
-                                      <h5 className="p-05">
-                                        <b>{"ชื่อร้าน : " + shop.shopName}</b>
-                                      </h5>
-                                    </div>
-                                    {shop.rows.map(({ row, count }) => (
-                                      <div className="product" key={row.id}>
-                                        <input
-                                          type="hidden"
-                                          className="product-id"
-                                          value={row.id}
-                                          readOnly
-                                        />
-                                        <div className="product-check text-center cursor-pointer">
-                                          <input
-                                            type="checkbox"
-                                            name="ID[]"
-                                            className="dt-checkboxes"
-                                            value={row.id}
-                                          />
-                                        </div>
-                                        <div className="product-count text-center">
-                                          {count}
-                                        </div>
-                                        <div className="product-image">
-                                          <a
-                                            className="image-popup-vertical-fit el-link"
-                                            href={convertIMGCHN(row.cimages, "")}
-                                          >
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img
-                                              className="img-fluid imageClass"
-                                              src={convertIMGCHN(
-                                                row.cimages,
-                                                "_80x80.jpg",
-                                              )}
-                                              alt=""
-                                            />
-                                          </a>
-                                        </div>
-                                        <div className="product-details">
-                                          <div className="product-title">
-                                            <a
-                                              href={row.curl ?? ""}
-                                              className="text-info"
-                                              target="_blank"
-                                              rel="noreferrer"
-                                            >
-                                              {row.ctitle
-                                                ? row.ctitle
-                                                : row.curl}
-                                            </a>
-                                          </div>
-                                          <p className="mb-0">
-                                            <b>
-                                              <span>{row.ccolor}</span> :{" "}
-                                              <span>{row.csize}</span>
-                                            </b>
-                                          </p>
-                                          <p className="product-description">
-                                            <b>หมายเหตุ :</b> {row.cdetails}
-                                          </p>
-                                        </div>
-                                        <div className="product-price notranslate">
-                                          {numberFormat(Number(row.cprice ?? 0))}
-                                        </div>
-                                        <div className="product-quantity">
-                                          <input
-                                            type="number"
-                                            className="input-product-quantity"
-                                            defaultValue={row.camount ?? 0}
-                                            name="cAmount[]"
-                                            min="1"
-                                            step="1"
-                                          />
-                                        </div>
-                                        <div className="product-removal">
-                                          <button
-                                            type="button"
-                                            className="remove-product font-12 btn btn-outline-danger round"
-                                          >
-                                            <i className="ft-trash"></i> ลบ{" "}
-                                          </button>
-                                        </div>
-                                        <div className="product-line-price notranslate">
-                                          {numberFormat(
-                                            Number(row.cprice ?? 0) *
-                                              Number(row.camount ?? 0),
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
+                                        ทางรถ (EK) 5-7 วัน
+                                      </label>
+                                    </fieldset>
                                   </div>
-                                ))}
+                                  <div className="col-md-6">
+                                    <fieldset
+                                      className="border-checkbox-transportType border-checkbox cursor-pointer"
+                                      data-for="transportType-sea"
+                                    >
+                                      <input
+                                        type="radio"
+                                        className="radio-custom radio-custom-transportType cursor-pointer"
+                                        name="hTransportType"
+                                        value="2"
+                                        id="transportType-sea"
+                                        defaultChecked={userTransportType !== 1}
+                                      />
+                                      <label
+                                        htmlFor="transportType-sea"
+                                        className="cursor-pointer radio-custom-label"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          className="img-fluid"
+                                          src="/legacy/pcs/theme/transport-sea-v3.png"
+                                          style={{ maxHeight: "35px" }}
+                                          alt=""
+                                        />
+                                        ทางเรือ (SEA) 12-16 วัน
+                                      </label>
+                                    </fieldset>
+                                  </div>
+                                </div>
                               </div>
-                            );
-                          })
-                        ) : (
-                          // cart.php L588-597 — the empty-cart card.
+                              <div className="col-md-6">
+                                <label
+                                  className="form-control-label mb-0 font-1_2rem"
+                                  htmlFor="hTransportType"
+                                >
+                                  การตีลังไม้สินค้า
+                                </label>
+                                <div className="row">
+                                  <div className="col-md-6">
+                                    <fieldset
+                                      className="border-checkbox-crate border-checkbox cursor-pointer active box-shadow"
+                                      data-for="crate-1"
+                                    >
+                                      <input
+                                        type="radio"
+                                        className="radio-custom radio-custom-crate cursor-pointer"
+                                        name="crate"
+                                        value="2"
+                                        id="crate-1"
+                                        defaultChecked
+                                      />
+                                      <label
+                                        htmlFor="crate-1"
+                                        className="cursor-pointer radio-custom-label"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          className="img-fluid"
+                                          src="/legacy/pcs/theme/uncrate-v3.png"
+                                          style={{ maxHeight: "35px" }}
+                                          alt=""
+                                        />
+                                        ไม่ตีลังไม้
+                                      </label>
+                                    </fieldset>
+                                  </div>
+                                  <div className="col-md-6">
+                                    <fieldset
+                                      className="border-checkbox-crate border-checkbox cursor-pointer"
+                                      data-for="crate-2"
+                                    >
+                                      <input
+                                        type="radio"
+                                        className="radio-custom radio-custom-crate cursor-pointer"
+                                        name="crate"
+                                        value="1"
+                                        id="crate-2"
+                                      />
+                                      <label
+                                        htmlFor="crate-2"
+                                        className="cursor-pointer radio-custom-label"
+                                      >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          className="img-fluid"
+                                          src="/legacy/pcs/theme/crate-v3.png"
+                                          style={{ maxHeight: "35px" }}
+                                          alt=""
+                                        />
+                                        ตีลังไม้ (มีค่าบริการ)
+                                      </label>
+                                    </fieldset>
+                                  </div>
+                                  <div className="col-md-12 p05">
+                                    <span className="text-danger font-0_85rem">
+                                      **หากต้องการตีลังไม้สินค้าบางร้าน
+                                      ให้ทำการเลือกสั่งออเดอร์แยกรายการกัน
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      />
+                    ) : (
+                      // cart.php L588-597 — the empty-cart card.
+                      <div className="ele-shopping-cart mb-2">
+                        <div className="shopping-cart">
+                          {/* cart.php L512-521 — the column-label header row */}
+                          <div className="ele-item-3 column-labels">
+                            <label className="product-check">
+                              <input
+                                type="checkbox"
+                                name="checkAll"
+                                className="dt-checkboxes check-all"
+                                value="all"
+                              />
+                            </label>
+                            <label className="product-count"></label>
+                            <label className="product-image"></label>
+                            <label className="product-details">รายละเอียดสินค้า</label>
+                            <label className="product-price">ราคาต่อชิ้น</label>
+                            <label className="product-quantity">จำนวน</label>
+                            <label className="product-removal">ตัวเลือก</label>
+                            <label className="product-line-price">ราคารวม</label>
+                          </div>
                           <div className="text-center bg-light box-shadow2">
                             <h5 className="p-1">
                               <b>ไม่มีพบสินค้าในรถเข็น</b>
@@ -608,318 +700,20 @@ export default async function CartPage() {
                               </Link>
                             </h5>
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-
-                    {/* ── China→Thailand shipping card — cart.php L601-651 ──
-                        (only rendered when there are cart items) */}
-                    {countCart > 0 && (
-                      <>
-                        <div className="ele-addressCHN-cart box-shadow mb-1 p-1">
-                          <h3 className="text-color">
-                            <span className="fa fa-map"></span> การขนส่งจากจีนมาไทย{" "}
-                            <i className="flag-icon flag-icon-ch"></i>
-                          </h3>
-                          <div className="row">
-                            <div className="col-md-6">
-                              <label
-                                className="form-control-label mb-0 font-1_2rem"
-                                htmlFor="hTransportType"
-                              >
-                                รูปแบบการขนส่งจีน-ไทย
-                              </label>
-                              <div className="row">
-                                <div className="col-md-6">
-                                  <fieldset
-                                    className="border-checkbox-transportType border-checkbox cursor-pointer box-shadow"
-                                    data-for="transportType-ek"
-                                  >
-                                    <input
-                                      type="radio"
-                                      className="radio-custom radio-custom-transportType cursor-pointer"
-                                      name="hTransportType"
-                                      value="1"
-                                      id="transportType-ek"
-                                      defaultChecked={userTransportType === 1}
-                                    />
-                                    <label
-                                      htmlFor="transportType-ek"
-                                      className="cursor-pointer radio-custom-label"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        className="img-fluid"
-                                        src="/legacy/pcs/theme/transport-car-v3.png"
-                                        style={{ maxHeight: "35px" }}
-                                        alt=""
-                                      />
-                                      ทางรถ (EK) 5-7 วัน
-                                    </label>
-                                  </fieldset>
-                                </div>
-                                <div className="col-md-6">
-                                  <fieldset
-                                    className="border-checkbox-transportType border-checkbox cursor-pointer"
-                                    data-for="transportType-sea"
-                                  >
-                                    <input
-                                      type="radio"
-                                      className="radio-custom radio-custom-transportType cursor-pointer"
-                                      name="hTransportType"
-                                      value="2"
-                                      id="transportType-sea"
-                                      defaultChecked={userTransportType !== 1}
-                                    />
-                                    <label
-                                      htmlFor="transportType-sea"
-                                      className="cursor-pointer radio-custom-label"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        className="img-fluid"
-                                        src="/legacy/pcs/theme/transport-sea-v3.png"
-                                        style={{ maxHeight: "35px" }}
-                                        alt=""
-                                      />
-                                      ทางเรือ (SEA) 12-16 วัน
-                                    </label>
-                                  </fieldset>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-6">
-                              <label
-                                className="form-control-label mb-0 font-1_2rem"
-                                htmlFor="hTransportType"
-                              >
-                                การตีลังไม้สินค้า
-                              </label>
-                              <div className="row">
-                                <div className="col-md-6">
-                                  <fieldset
-                                    className="border-checkbox-crate border-checkbox cursor-pointer active box-shadow"
-                                    data-for="crate-1"
-                                  >
-                                    <input
-                                      type="radio"
-                                      className="radio-custom radio-custom-crate cursor-pointer"
-                                      name="crate"
-                                      value="2"
-                                      id="crate-1"
-                                      defaultChecked
-                                    />
-                                    <label
-                                      htmlFor="crate-1"
-                                      className="cursor-pointer radio-custom-label"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        className="img-fluid"
-                                        src="/legacy/pcs/theme/uncrate-v3.png"
-                                        style={{ maxHeight: "35px" }}
-                                        alt=""
-                                      />
-                                      ไม่ตีลังไม้
-                                    </label>
-                                  </fieldset>
-                                </div>
-                                <div className="col-md-6">
-                                  <fieldset
-                                    className="border-checkbox-crate border-checkbox cursor-pointer"
-                                    data-for="crate-2"
-                                  >
-                                    <input
-                                      type="radio"
-                                      className="radio-custom radio-custom-crate cursor-pointer"
-                                      name="crate"
-                                      value="1"
-                                      id="crate-2"
-                                    />
-                                    <label
-                                      htmlFor="crate-2"
-                                      className="cursor-pointer radio-custom-label"
-                                    >
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        className="img-fluid"
-                                        src="/legacy/pcs/theme/crate-v3.png"
-                                        style={{ maxHeight: "35px" }}
-                                        alt=""
-                                      />
-                                      ตีลังไม้ (มีค่าบริการ)
-                                    </label>
-                                  </fieldset>
-                                </div>
-                                <div className="col-md-12 p05">
-                                  <span className="text-danger font-0_85rem">
-                                    **หากต้องการตีลังไม้สินค้าบางร้าน
-                                    ให้ทำการเลือกสั่งออเดอร์แยกรายการกัน
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* ── Promotion + order-summary card — cart.php L652-727 ── */}
-                        <div className="ele-price-cart p-1 mb-2">
-                          <div className="row">
-                            <div className="col-md-7">
-                              <div className="ele-promotion-cart box-shadow">
-                                <div className="p-1">
-                                  <h3 className="text-color mb-1">
-                                    <i className="fa fa-shopping-bag"></i>{" "}
-                                    โปรโมชันสำหรับคุณ
-                                  </h3>
-                                  <div className="row">
-                                    <div className="col-12 col-md-4 text-center maomao">
-                                      <fieldset className="border-main12-de cursor-pointer">
-                                        <div className="">
-                                          <input
-                                            type="checkbox"
-                                            className="checkboxes-color"
-                                            style={{ display: "block" }}
-                                            name="pro"
-                                            id="input-12"
-                                            value="f"
-                                          />
-                                        </div>
-                                        <label
-                                          htmlFor="input-12"
-                                          className="text-center"
-                                        >
-                                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img
-                                            className="img-fluid cursor-pointer card-promotion"
-                                            src="/legacy/pcs/theme/free50-3.png"
-                                            alt=""
-                                          />
-                                          <br />
-                                          <a href="https://pcscargo.co.th/freearea">
-                                            <span className="text-info">
-                                              ดูพื้นที่จัดส่งและรายละเอียด
-                                            </span>
-                                          </a>
-                                        </label>
-                                      </fieldset>
-                                    </div>
-                                    {/* cart.php L667-676 — the time-boxed 3.3 promo */}
-                                    {promo33Active && (
-                                      <div className="col-12 col-md-4 text-center">
-                                        <fieldset className="border-main19-de cursor-pointer">
-                                          <div className="">
-                                            <input
-                                              type="checkbox"
-                                              className="checkboxes-color"
-                                              style={{ display: "block" }}
-                                              name="pro2"
-                                              id="input-19"
-                                              value="77"
-                                            />
-                                          </div>
-                                          <label
-                                            htmlFor="input-19"
-                                            className="text-center"
-                                          >
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img
-                                              className="img-fluid cursor-pointer card-promotion"
-                                              src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-07-768x477.jpg"
-                                              alt=""
-                                            />
-                                            <br />
-                                            <a href="https://pcscargo.co.th/โปรโมชัน/นำเข้าจีน260303/">
-                                              <span className="text-info">
-                                                ดูรายละเอียดโปรโมชัน
-                                              </span>
-                                            </a>
-                                          </label>
-                                        </fieldset>
-                                      </div>
-                                    )}
-                                    <div
-                                      className="col-12 col-md-8 note-ship"
-                                      style={{}}
-                                    >
-                                      {/* cart.php L677-688 — the per-user
-                                          "no 50฿" list (include/pages/oop/
-                                          user-not-50.json). FLAGGED: that
-                                          legacy JSON file is a static config
-                                          asset, not a tb_* table; it is not
-                                          ported. The block renders nothing
-                                          for users not in the file — the
-                                          exact legacy behaviour for the
-                                          common case. */}
-                                      <div className="pr-1 text-right" style={{}}>
-                                        <span className="text-danger">
-                                          *หากสินค้ามีขนาดเล็กบริษัทแนะนำให้เลือกขนส่งเป็น
-                                          Flash Express (เริ่มต้น 30 บ.)
-                                          <br />
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="col-md-5 ele-total-price box-shadow p-1">
-                              <div className="float-right">
-                                <label>
-                                  เลือกทั้งหมด <span id="countID"></span> รายการ
-                                </label>
-                              </div>
-                              <h3 className="text-color mb-1">
-                                <i className="fa fa-shopping-bag"></i>{" "}
-                                สรุปรายการสั่งซื้อ
-                              </h3>
-                              <div className="row">
-                                <div className="col-6 col-md-8 text-right">
-                                  <h4>รวม : </h4>
-                                </div>
-                                <div className="col-6 col-md-4 text-right">
-                                  <div
-                                    className="totals-value cart-subtotal notranslate"
-                                    id="cart-subtotal"
-                                  ></div>
-                                </div>
-                                <div className="col-6 col-md-8 text-right">
-                                  <h4>เรทแลกเปลี่ยน : </h4>
-                                </div>
-                                <div className="col-6 col-md-4">
-                                  <div
-                                    className="totals-value4 notranslate"
-                                    id="rsDefault"
-                                  >
-                                    {rsDefault}
-                                  </div>
-                                </div>
-                                <div className="col-6 col-md-8 text-right">
-                                  <h4>ราคารวมสุทธิ : </h4>
-                                </div>
-                                <div className="col-6 col-md-4">
-                                  <b>
-                                    <div
-                                      className="totals-value2 font-18 text-danger cart-total notranslate"
-                                      id="cart-total"
-                                    ></div>
-                                  </b>
-                                </div>
-                              </div>
-                              <div className="float-right pt-1">
-                                <button
-                                  type="submit"
-                                  className="checkout2 btn btn-main round btn-min-width waves-effect submit-wait animate__animated animate__infinite animate__headShake"
-                                  name="addOrder"
-                                >
-                                  สั่งซื้อสินค้า
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </>
                     )}
+
+                    {/* The legacy cart-list / shipping-card /
+                        price-card markup (cart.php L510-727) is now
+                        owned by the <CartInteractivity> client
+                        component above — interactivity that the
+                        legacy ran via jQuery is now React state,
+                        backed by the calculateCartTotal Server Action
+                        in actions/cart.ts. */}
+                    {/* (legacy ele-addressCHN-cart + ele-price-cart
+                        markup deleted — now rendered by the
+                        <CartInteractivity> client component above) */}
                   </div>
                 </div>
               </form>
@@ -946,7 +740,7 @@ export default async function CartPage() {
           >
             <div className="modal-header">
               <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน PR เหมา ๆ{" "}
+                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
               </span>
               <button
                 type="button"
