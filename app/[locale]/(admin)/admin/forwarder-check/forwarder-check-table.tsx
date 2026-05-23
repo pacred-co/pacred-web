@@ -26,7 +26,8 @@
  * The confirm modal before billing surfaces:
  *   - Total amount being billed (sum of outstanding across selected rows)
  *   - Count of distinct customers receiving SMS
- *   - Channels: SMS (real) · LINE/email (deferred — see action TODO)
+ *   - Channels: SMS · LINE OA · email — all three live after Wave 16
+ *     follow-up A wired the tb_users.userid → profiles.id resolver.
  */
 
 import { useMemo, useState, useTransition, type ChangeEvent } from "react";
@@ -192,8 +193,23 @@ export function ForwarderCheckTable({
           `✅ แจ้งชำระเงินสำเร็จ ${d.processed} รายการ`,
         ];
         if (d.failed > 0) parts.push(`· ผิดพลาด ${d.failed} รายการ`);
-        if (d.sms_sent > 0) parts.push(`· SMS ส่ง ${d.sms_sent}`);
-        if (d.sms_failed > 0) parts.push(`(SMS ส่งไม่สำเร็จ ${d.sms_failed} ราย — เช็คใน Sentry)`);
+
+        // Channel breakdown — show only channels that actually moved data so
+        // the banner stays compact. SMS · LINE · email all surface side-by-side
+        // now that Wave 16 follow-up A wired the resolver.
+        const channels: string[] = [];
+        if (d.sms_sent > 0)   channels.push(`SMS ${d.sms_sent}`);
+        if (d.line_sent > 0)  channels.push(`LINE ${d.line_sent}`);
+        if (d.email_sent > 0) channels.push(`Email ${d.email_sent}`);
+        if (channels.length > 0) parts.push(`· ส่ง ${channels.join(" / ")}`);
+
+        const failNotes: string[] = [];
+        if (d.sms_failed > 0)   failNotes.push(`SMS ${d.sms_failed}`);
+        if (d.line_failed > 0)  failNotes.push(`LINE ${d.line_failed}`);
+        if (d.email_failed > 0) failNotes.push(`Email ${d.email_failed}`);
+        if (d.no_profile > 0)   failNotes.push(`ไม่มีโปรไฟล์ ${d.no_profile}`);
+        if (failNotes.length > 0) parts.push(`(ส่งไม่สำเร็จ: ${failNotes.join(" / ")} — เช็คใน Sentry)`);
+
         setResultBanner({ kind: "ok", text: parts.join(" ") });
         setSelected(new Set());
         router.refresh();
@@ -649,12 +665,12 @@ export function ForwarderCheckTable({
               </div>
             </dl>
 
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
               <div className="font-medium">ช่องทางแจ้งเตือน:</div>
               <ul className="mt-1 list-disc list-inside space-y-0.5">
                 <li>📱 SMS — เปิดใช้งาน (ThaiBulkSMS gateway)</li>
-                <li>💬 LINE OA — เลื่อนออกไปก่อน (รอ resolver userid → profile_id)</li>
-                <li>📧 Email — เลื่อนออกไปก่อน (เหตุผลเดียวกัน)</li>
+                <li>💬 LINE OA — เปิดใช้งาน (push ผ่าน @pacred · เฉพาะลูกค้าที่ link LINE แล้ว)</li>
+                <li>📧 Email — เปิดใช้งาน (fallback เมื่อไม่มี LINE · ต้องมี email ใน tb_users)</li>
               </ul>
             </div>
 

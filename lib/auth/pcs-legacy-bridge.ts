@@ -19,6 +19,20 @@
  * provision-on-first-login with the customer's own password, no shared
  * secret. Provisional pending ก๊อต ratification before this ships to prod.
  *
+ * Wave 16 follow-up A (2026-05-23) — pre-provisioned-customer handling:
+ *   `scripts/data/02-provision-profiles-for-tb-users.ts` pre-creates auth.users
+ *   for EVERY tb_users orphan using a synthetic email
+ *   (`legacySyntheticEmail(userid)` → `.invalid` TLD) + random password, so
+ *   notifications can resolve `userid → profiles.id`. On the customer's FIRST
+ *   real sign-in, the bridge needs to (a) detect that pre-provisioned account
+ *   by synthetic email, (b) reset its password to what the customer typed
+ *   (verified against the legacy hash), and (c) sign in via synthetic email.
+ *   This keeps the customer pointed at the pre-existing profile row — so
+ *   `getCurrentUserWithProfile()` finds their profile and the protected
+ *   layout renders. Without this branch, the old createUser(phone) path would
+ *   make a SECOND auth.user with a different uuid and ensureLegacyProfile
+ *   would log "manual reconcile" → broken protected-route access.
+ *
  * Server-only.
  */
 import "server-only";
@@ -138,11 +152,61 @@ export async function bridgeLegacyLogin(
       usertel: redactPhone(row.usertel),
     });
   }
-  const credential = usePhone
-    ? { phone: e164 }
-    : { email: legacySyntheticEmail(row.userid) };
 
   const admin = createAdminClient();
+
+  // ── Wave 16 follow-up A — Pre-provisioned-customer path ───────────────
+  //   If `scripts/data/02-provision-profiles-for-tb-users.ts` ran, every
+  //   migrated customer already has an auth.user keyed to a synthetic email.
+  //   Look that up FIRST — if found, reset its password to what the customer
+  //   typed (now verified against the legacy hash) and sign in via the
+  //   synthetic email. This keeps the customer's auth.uid stable across the
+  //   bridge run so their pre-existing profile row continues to match.
+  const syntheticEmail = legacySyntheticEmail(row.userid);
+  const preProvisionedId = await findAuthUserBySyntheticEmail(admin, syntheticEmail);
+
+  if (preProvisionedId) {
+    // Reset the password to what the customer typed (and confirmed legacy).
+    const { error: updateErr } = await admin.auth.admin.updateUserById(preProvisionedId, {
+      password,
+    });
+    if (updateErr) {
+      logger.warn(SCOPE, "updateUserById failed for pre-provisioned customer", {
+        userid: row.userid,
+        reason: updateErr.message,
+      });
+      return { ok: false };
+    }
+
+    const supabase = await createClient();
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: syntheticEmail,
+      password,
+    });
+    if (signInErr || !signInData.user) {
+      logger.warn(SCOPE, "pre-provisioned customer sign-in failed after password reset", {
+        userid: row.userid,
+        reason: signInErr?.message,
+      });
+      return { ok: false };
+    }
+
+    // Profile already exists (created by the backfill script) — ensure is
+    // still a no-op (idempotent). Belt-and-braces.
+    await ensureLegacyProfile(signInData.user.id, row);
+
+    logger.info(SCOPE, "pre-provisioned legacy customer signed in via PCS bridge", {
+      userid: row.userid,
+    });
+    return { ok: true };
+  }
+
+  // ── Original first-login path (kept for letter-only handles + any tb_users
+  //    row added after the most recent backfill run) ─────────────────────
+  const credential = usePhone
+    ? { phone: e164 }
+    : { email: syntheticEmail };
+
   const { error: createErr } = await admin.auth.admin.createUser({
     ...credential,
     password,
@@ -187,6 +251,30 @@ export async function bridgeLegacyLogin(
 
   logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userid: row.userid });
   return { ok: true };
+}
+
+/** Page through auth.users to find one with the given email. Returns null when
+ *  no match exists. Used by the pre-provisioned-customer branch of
+ *  bridgeLegacyLogin — bounded by the size of auth.users (post-backfill
+ *  expected to be ~9k for prod). */
+async function findAuthUserBySyntheticEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+): Promise<string | null> {
+  const PER = 1000;
+  for (let page = 1; page <= 100; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER });
+    if (error) {
+      logger.warn(SCOPE, "auth.users listUsers failed", { reason: error.message });
+      return null;
+    }
+    if (!data?.users?.length) return null;
+    for (const u of data.users) {
+      if (u.email && u.email.toLowerCase() === email.toLowerCase()) return u.id;
+    }
+    if (data.users.length < PER) return null;
+  }
+  return null;
 }
 
 /**
