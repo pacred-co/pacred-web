@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -584,7 +585,7 @@ export default async function ServiceImportAddPage() {
                                 <img
                                   data-for="input-12"
                                   className="img-fluid cursor-pointer card-promotion"
-                                  src="/legacy/pcs/assets/images/theme/free50-3.png"
+                                  src="/images/customertheme/free50-3.png"
                                   alt=""
                                 />
                                 <br />
@@ -676,7 +677,7 @@ export default async function ServiceImportAddPage() {
                   <div className="bg-pro-valentine">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src="/legacy/pcs/assets/images/theme/free50-3.png"
+                      src="/images/customertheme/free50-3.png"
                       className="img-fluid"
                       alt=""
                     />
@@ -702,7 +703,9 @@ export default async function ServiceImportAddPage() {
       {/* forwarder.php L1061-1069 — the `?page=='add'` auto-show <script>.
           Re-emitted verbatim so the modal opens once Bootstrap-4 + jQuery
           (staged globally by (protected)/layout.tsx) have resolved. */}
-      <script
+      <Script
+        id="service-import-add-auto-open"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `if (window.jQuery) { window.jQuery(function ($) { $("#add-forwarder").modal("show"); }); } else { document.addEventListener("DOMContentLoaded", function () { if (window.jQuery) window.jQuery("#add-forwarder").modal("show"); }); }`,
         }}

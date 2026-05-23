@@ -97,67 +97,11 @@ export function PcsFooterNav({ data }: { data: PcsChromeData }) {
           <span className="nav__text lang-menu">เมนู</span>
         </Link>
       </nav>
-      <div className="nav-right-pcs notranslate">
-        <ul className="list-group">
-          <li className="list-group-item p-05 text-center">
-            <Link href="/">
-              <img
-                src={`${A}/images/icon/pcs-home-main.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <br />
-              <span className="menu-home">หน้าแรก</span>
-            </Link>
-          </li>
-          <li className="list-group-item p-05 text-center">
-            <Link href="/wallet">
-              <img
-                src={`${A}/images/icon/pcs-wallet.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <br />
-              <span className="lang-wallet">กระเป๋าตัง</span>
-            </Link>
-          </li>
-          <li className="list-group-item p-05 text-center">
-            <Link href="/wallet/deposit">
-              <img
-                src={`${A}/images/icon/pcs-wallet-add.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <br />
-              <span className="lang-top-up">เติมเงิน</span>
-            </Link>
-          </li>
-          <li className="list-group-item p-05 text-center">
-            <Link href="/service-order?q=2">
-              <img
-                src={`${A}/images/icon/pcs-payment.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <br />
-              <span className="lang-shop-pay2">ชำระค่าสินค้า</span>
-            </Link>
-            <FooterBadge n={data.countShops2} />
-          </li>
-          <li className="list-group-item p-05 text-center">
-            <Link href="/service-import?q=5">
-              <img
-                src={`${A}/images/icon/pcs-forwarder-pay.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <br />
-              <span className="lang-forwarder-pay">ชำระค่าขนส่ง</span>
-            </Link>
-            <FooterBadge n={data.countForwarder5} />
-          </li>
-        </ul>
-      </div>
+      {/* Desktop right rail (`.nav-right-pcs`) removed per ปอน 2026-05-24 —
+          <FloatingTabs /> from the marketing site (rendered globally by
+          app/[locale]/layout.tsx) already covers the desktop right side with
+          identical styling, and ปอน wants it to be that exact public
+          component (no duplicate / no legacy variant). */}
       {/* END: Footer */}
     </>
   );

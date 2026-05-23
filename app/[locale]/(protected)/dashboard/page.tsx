@@ -1,26 +1,24 @@
 /* eslint-disable @next/next/no-img-element */
 import { redirect } from "next/navigation";
+import { ShoppingCart, Package, CreditCard, Wallet } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { PcsCarousel } from "@/components/legacy/pcs-carousel";
 
 /**
- * Customer member home — a faithful 1:1 transcription of the legacy PCS Cargo
- * `member/index.php` (the page a customer lands on after login, served at
- * `pcscargo.co.th/member/`).
+ * Customer member home — Tailwind-pure rebuild of the legacy PCS Cargo
+ * `member/index.php` body (the page a customer lands on after login).
  *
- * The `index.php` body is: the promo carousel (`.single-item-member`, slick)
- * + 2 side banners + the 4 `.tam-counter` statistic cards (ฝากสั่ง / ฝากนำเข้า
- * / ฝากชำระ / กระเป๋าเงิน). The shared chrome (navbar / sidebar / footer /
- * mobile-nav) is rendered once by `(protected)/layout.tsx` — this page is the
- * `<div class="app-content content">` body only.
+ * Layout preserves the original Bootstrap-4 arrangement (carousel + side
+ * banners + 4 stat-cards) but every legacy class (`.card`, `.col-md-*`,
+ * `.tam-counter`, `.bg-gradient-x-*`, `.ft-*` icon fonts, `.pull-up`,
+ * `.box-shadow-2`) is gone — ปอน 2026-05-24 dropped the Bootstrap CSS from
+ * `(protected)/layout.tsx` because it leaked global rules into the marketing
+ * chrome. We render against Tailwind v4 + lucide-react now.
  *
- * Thai text is hardcoded verbatim from `index.php`. Every legacy mysqli SELECT
- * is transcribed to the ported `tb_*` schema via the service-role admin client.
- *
- * NOTE — the legacy `menu.php` 9-icon launchpad is a DIFFERENT page (served at
- * `member/menu/`); it belongs at a `/menu` route, not here.
+ * Thai text + every Supabase SELECT + every href + every variable name stays
+ * verbatim from `index.php` — no rebranding, no logic change.
  */
 export const dynamic = "force-dynamic";
 
@@ -79,259 +77,155 @@ export default async function DashboardPage() {
     now >= new Date("2026-03-04T00:00:01") &&
     now <= new Date("2026-03-06T23:59:59");
 
-  return (
-    <>
-      <link rel="stylesheet" href="/legacy/pcs/assets/plugins/slick/slick.css" />
-      <link
-        rel="stylesheet"
-        href="/legacy/pcs/assets/plugins/slick/slick-theme.css"
-      />
-      <link rel="stylesheet" href="/legacy/pcs/index.css" />
-
-      {/* BEGIN: Content — index.php L34 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {!isJuristicPending ? (
-            <div className="content-body pr110">
-              <div className="container bander-index pl-1 pt-1 pr-1">
-                <div className="row">
-                  <div className="col-sm-12 col-md-8">
-                    <PcsCarousel>
-                      {showMarchPromo && (
-                        <div>
-                          <a href="#">
-                            <img
-                              className="img-fluid"
-                              src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg"
-                              alt="โปรโมชัน"
-                            />
-                          </a>
-                        </div>
-                      )}
-                      <div>
-                        <img
-                          className="img-fluid"
-                          src="/legacy/pcs/assets/images/theme/pcs50-900x270.jpg"
-                          alt=""
-                        />
-                      </div>
-                      <div>
-                        <img
-                          className="img-fluid"
-                          src="/legacy/pcs/assets/images/theme/search-900x270.jpg"
-                          alt=""
-                        />
-                      </div>
-                    </PcsCarousel>
-                  </div>
-                  <div className="col-md-4 d-none d-sm-block">
-                    <Link href="/service-order">
-                      <img
-                        className="img-fluid pr-05 pl-05 pb-05"
-                        src="/legacy/pcs/assets/images/theme/bill-shop-900x270.jpg"
-                        alt=""
-                      />
-                    </Link>
-                    {/* Legacy linked to pcscargo.co.th/line-notify/ —
-                        rewritten to internal /line-notify. */}
-                    <Link href="/line-notify">
-                      <img
-                        className="img-fluid pr-05 pl-05 pt-05"
-                        src="/legacy/pcs/assets/images/theme/line-notify-900x270.jpg"
-                        alt=""
-                      />
-                    </Link>
-                  </div>
-                </div>
-              </div>
-
-              {/* eCommerce statistic */}
-              <div className="row">
-                {/* 1 — ฝากสั่งซื้อสินค้า */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center d-none d-sm-block col-sm-6">
-                  <Link href="/service-order">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2
-                                className="info tam-counter"
-                                data-count={countShops}
-                              >
-                                {countShops}
-                              </h2>
-                              <h4>
-                                <span className="menu-shop">ฝากสั่งซื้อสินค้า</span>
-                              </h4>
-                            </div>
-                            <div>
-                              <i className="icon-basket-loaded info font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-info"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-
-                {/* 2 — ฝากนำเข้าสินค้า */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center d-none d-sm-block col-sm-6">
-                  <Link href="/service-import">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2
-                                className="warning tam-counter"
-                                data-count={countForwarder}
-                              >
-                                {countForwarder}
-                              </h2>
-                              <h4>
-                                <span className="menu-forwarder">
-                                  ฝากนำเข้าสินค้า
-                                </span>
-                              </h4>
-                            </div>
-                            <div>
-                              <i className="ft-box warning font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-warning"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-
-                {/* 3 — ฝากชำระเงิน */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center d-none d-sm-block col-sm-6">
-                  <Link href="/service-payment">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2
-                                className="purple tam-counter"
-                                data-count={countPayment}
-                              >
-                                {countPayment}
-                              </h2>
-                              <h4 className="menu-payment">ฝากชำระเงิน</h4>
-                            </div>
-                            <div>
-                              <i className="purple font-large-2 float-right">
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  width="35"
-                                  height="35"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  className="css-i6dzq1 font-large-2"
-                                >
-                                  <line x1="12" y1="1" x2="12" y2="23"></line>
-                                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                </svg>
-                              </i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-purple"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-
-                {/* 4 — กระเป๋าสตางค์ (shown on mobile too — no d-none) */}
-                <div className="col-xl-3 col-lg-6 col-12 align-self-center col-sm-6">
-                  <Link href="/wallet">
-                    <div className="card pull-up">
-                      <div className="card-content">
-                        <div className="card-body">
-                          <div className="media d-flex">
-                            <div className="media-body text-left">
-                              <h2 className="success">
-                                <span
-                                  className="tam-counter"
-                                  data-count={walletText}
-                                >
-                                  {walletText}
-                                </span>
-                                <span className="font-14 lang-baht"> บาท</span>
-                              </h2>
-                              <h4 className="menu-cash-wallet">กระเป๋าสตางค์</h4>
-                            </div>
-                            <div>
-                              <i className="icon-wallet success font-large-2 float-right"></i>
-                            </div>
-                          </div>
-                          <div className="progress progress-sm mt-1 mb-0 box-shadow-2">
-                            <div
-                              className="progress-bar bg-gradient-x-success"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* index.php L154-156 — juristic-person application pending */
-            <div className="text-center">
-              <h2
-                style={{ maxWidth: "670px", margin: "auto", marginTop: "10%" }}
-                className="text-white bg-danger p-1"
-              >
-                รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. <br />{" "}
-                (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
-              </h2>
-            </div>
-          )}
+  // Juristic-pending takes the page over — every other element is suppressed
+  // until staff approve (legacy index.php L154-156).
+  if (isJuristicPending) {
+    return (
+      <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+        <div className="max-w-[670px] mx-auto">
+          <div className="rounded-2xl bg-primary-600 text-white px-6 py-8 text-center shadow-md">
+            รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+          </div>
         </div>
       </div>
-      {/* END: Content */}
-    </>
+    );
+  }
+
+  return (
+    <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+      {/* Top section — 2/3 carousel + 1/3 side-banner stack (md+); banners
+          hidden < sm to match legacy `d-none d-sm-block`. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+        <div className="md:col-span-2">
+          <PcsCarousel>
+            {showMarchPromo && (
+              <div>
+                <a href="#">
+                  <img
+                    className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 cursor-pointer"
+                    src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg"
+                    alt="โปรโมชัน"
+                  />
+                </a>
+              </div>
+            )}
+            <div>
+              <img
+                className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
+                src="/images/customertheme/drive.png"
+                alt=""
+              />
+            </div>
+            <div>
+              <img
+                className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 ease-out cursor-pointer"
+                src="/images/customertheme/shop.png"
+                alt=""
+              />
+            </div>
+          </PcsCarousel>
+        </div>
+        <div className="hidden sm:block md:col-span-1">
+          <Link href="/service-order" className="block group mb-2">
+            <img
+              className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
+              src="/images/customertheme/bill.png"
+              alt=""
+            />
+          </Link>
+          {/* Legacy linked to pcscargo.co.th/line-notify/ — rewritten internal. */}
+          <Link href="/line-notify" className="block group">
+            <img
+              className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
+              src="/images/customertheme/line.png"
+              alt=""
+            />
+          </Link>
+        </div>
+      </div>
+
+      {/* Stat-card row — push down so the carousel above has breathing room
+          (ปอน 2026-05-24: "โดนแบนเนอร์เบียด"). */}
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+        {/* 1 — ฝากสั่งซื้อสินค้า */}
+        <Link
+          href="/service-order"
+          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <div className="text-3xl font-bold text-primary-600">{countShops}</div>
+              <div className="mt-1 text-sm font-medium text-foreground/80">
+                ฝากสั่งซื้อสินค้า
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30">
+              <ShoppingCart className="h-6 w-6 text-primary-600" />
+            </div>
+          </div>
+          <div className="mt-4 h-[1.5px] w-full rounded-full bg-primary-600" />
+        </Link>
+
+        {/* 2 — ฝากนำเข้าสินค้า */}
+        <Link
+          href="/service-import"
+          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <div className="text-3xl font-bold text-amber-500">{countForwarder}</div>
+              <div className="mt-1 text-sm font-medium text-foreground/80">
+                ฝากนำเข้าสินค้า
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30">
+              <Package className="h-6 w-6 text-amber-500" />
+            </div>
+          </div>
+          <div className="mt-4 h-[1.5px] w-full rounded-full bg-amber-500" />
+        </Link>
+
+        {/* 3 — ฝากชำระเงิน */}
+        <Link
+          href="/service-payment"
+          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <div className="text-3xl font-bold text-violet-500">{countPayment}</div>
+              <div className="mt-1 text-sm font-medium text-foreground/80">
+                ฝากชำระเงิน
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/30">
+              <CreditCard className="h-6 w-6 text-violet-500" />
+            </div>
+          </div>
+          <div className="mt-4 h-[1.5px] w-full rounded-full bg-violet-500" />
+        </Link>
+
+        {/* 4 — กระเป๋าสตางค์เงินสด */}
+        <Link
+          href="/wallet"
+          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-left">
+              <div className="text-3xl font-bold text-emerald-500">
+                {walletText}
+                <span className="ml-1 text-sm font-normal text-foreground/70">บาท</span>
+              </div>
+              <div className="mt-1 text-sm font-medium text-foreground/80">
+                กระเป๋าสตางค์เงินสด
+              </div>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
+              <Wallet className="h-6 w-6 text-emerald-500" />
+            </div>
+          </div>
+          <div className="mt-4 h-[1.5px] w-full rounded-full bg-emerald-500" />
+        </Link>
+      </div>
+    </div>
   );
 }

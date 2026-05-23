@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -602,7 +603,9 @@ export default async function WalletDepositPage() {
       {/* wallet.php L294-302 — auto-open the #wallet-add modal because
           ?page=='add' (Pacred routes this URL at /wallet/deposit, which
           matches the legacy `?page=add` branch). */}
-      <script
+      <Script
+        id="wallet-deposit-auto-open"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             $(document).ready(function() {

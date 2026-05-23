@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Prompt } from "next/font/google";
-import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/theme-provider";
 import { GtmScript, GtmNoscript } from "@/components/analytics/gtm-script";
 import { ClarityScript } from "@/components/analytics/clarity-script";
 import { GoogleAdsScript } from "@/components/analytics/google-ads-script";
@@ -85,19 +85,14 @@ export default function RootLayout({
     >
       <head>
         {/*
-          Pre-hydration theme script — runs synchronously inside the
-          server-rendered <head> BEFORE first paint to prevent FOUC.
-          Per Part P review (เดฟ, 2026-05-14): inline <script> in a
-          Server Component <head> is the only path that actually blocks
-          paint — next/script strategy="beforeInteractive" preloads but
-          does not block hydration for inline children (Next 16 docs).
-          React 19's "script in component" warning fires only on Client
-          Component re-render, not Server-rendered head content.
+          Pre-hydration theme script — paints `light` before first paint to
+          prevent FOUC. Lives in public/theme-init.js as an external file so
+          React 19 hoists it via the script-resource pipeline (any inline
+          `<script>` in a Server Component output trips a dev warning in
+          Next 16, even with `async` + `id` or via next/script). React 19
+          also handles preload + dedup for `<script src async />`.
         */}
-        <script
-          suppressHydrationWarning
-          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
-        />
+        <script async src="/theme-init.js" />
         <GtmScript />
         <ClarityScript />
         <GoogleAdsScript />
