@@ -42,6 +42,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CntListTable, type CntListRow } from "./cnt-list-table";
 
 export const dynamic = "force-dynamic";
 
@@ -144,21 +145,8 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
   });
 }
 
-function diffDateNow(closeDate: string | null): string {
-  if (!closeDate) return "-";
-  const d = new Date(closeDate);
-  const now = new Date();
-  const days = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
-  return `${days} วัน`;
-}
-
-function diffDateCNT(closeDate: string | null, arrivedDate: string | null): string {
-  if (!closeDate || !arrivedDate) return "-";
-  const c = new Date(closeDate);
-  const a = new Date(arrivedDate);
-  const days = Math.floor((a.getTime() - c.getTime()) / 86_400_000);
-  return `${days} วัน`;
-}
+// Wave 17 ux-fix: diffDateNow + diffDateCNT moved to cnt-list-table.tsx
+// (now the only consumer · client-side rendering after table extraction).
 
 export default async function AdminReportCntPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { roles } = await requireAdmin(["super", "ops", "accounting", "warehouse"]);
@@ -230,18 +218,8 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   if (actionPay === "1") grouped = grouped.filter((g) => !g.isPaid);
   if (actionPay === "2") grouped = grouped.filter((g) =>  g.isPaid);
 
-  // Aggregate totals row
-  const total = grouped.reduce(
-    (acc, g) => ({
-      trackCount: acc.trackCount + g.trackCount,
-      volumeSum:  acc.volumeSum  + g.volumeSum,
-      weightSum:  acc.weightSum  + g.weightSum,
-      costSum:    acc.costSum    + g.costSum,
-      priceSum:   acc.priceSum   + g.priceSum,
-      profitSum:  acc.profitSum  + (g.priceSum - g.costSum),
-    }),
-    { trackCount: 0, volumeSum: 0, weightSum: 0, costSum: 0, priceSum: 0, profitSum: 0 },
-  );
+  // Wave 17 ux-fix: totals computation moved to <CntListTable> client
+  // component (alongside rendering) — keeps the server query minimal.
 
   // Header counts (independent of date filter — match legacy)
   const counts = await loadHeaderCounts(admin, startDate, endDate);
@@ -340,112 +318,27 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             ไม่มีตู้ที่ตรงกับ filter
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-2 py-2 text-left">หมายเลขตู้</th>
-                  <th className="px-2 py-2 text-left">โกดัง</th>
-                  <th className="px-2 py-2 text-left">วันที่ปิดตู้</th>
-                  <th className="px-2 py-2 text-center">ขนส่ง</th>
-                  <th className="px-2 py-2 text-right">{isWaiting ? "รอเข้าโกดัง" : "เดินทาง"}</th>
-                  <th className="px-2 py-2 text-right">{isWaiting ? "วันที่รอเข้าโกดัง" : "วันที่เดินทาง"}</th>
-                  <th className="px-2 py-2 text-right">จำนวนแทรคกิ้ง</th>
-                  <th className="px-2 py-2 text-right">ปริมาตร</th>
-                  <th className="px-2 py-2 text-right">น้ำหนัก</th>
-                  {showMoney && <th className="px-2 py-2 text-right">ต้นทุนตู้</th>}
-                  {showMoney && <th className="px-2 py-2 text-right">ราคาขาย</th>}
-                  {showMoney && <th className="px-2 py-2 text-right">กำไร</th>}
-                  <th className="px-2 py-2 text-center">สถานะตู้</th>
-                  <th className="px-2 py-2 text-center">สถานะจ่ายค่าตู้</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* Totals row (bg-color in legacy) */}
-                <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-white font-medium">
-                  <td className="px-2 py-2" colSpan={6}>รวม ({grouped.length} ตู้)</td>
-                  <td className="px-2 py-2 text-right">{total.trackCount.toLocaleString()}</td>
-                  <td className="px-2 py-2 text-right">{total.volumeSum.toFixed(2)}</td>
-                  <td className="px-2 py-2 text-right">{total.weightSum.toFixed(2)}</td>
-                  {showMoney && <td className="px-2 py-2 text-right">{total.costSum.toFixed(2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{total.priceSum.toFixed(2)}</td>}
-                  {showMoney && <td className="px-2 py-2 text-right">{total.profitSum.toFixed(2)}</td>}
-                  <td className="px-2 py-2" colSpan={2}></td>
-                </tr>
-                {grouped.map((g) => {
-                  const badge = STATUS_BADGE[g.fstatus] ?? { label: g.fstatus, cls: "bg-gray-100" };
-                  return (
-                    <tr key={g.fcabinetnumber} className={`border-t border-border ${g.isPaid ? "bg-green-50/30" : ""}`}>
-                      <td className="px-2 py-2 font-mono">
-                        <Link
-                          /* Wave 16 P0-1 — now links to the dedicated per-
-                             container detail page (replaces the Wave 7.2
-                             search-box fallback). The new page renders
-                             the full container summary + 25-column
-                             DataTable + cost-rate modal + bulk-check
-                             button — i.e. the faithful port of the
-                             report-cnt.php ?id=<cnt> mode. */
-                          href={`/admin/report-cnt/${encodeURIComponent(g.fcabinetnumber)}`}
-                          className="text-primary-600 hover:underline"
-                          title="ดูรายละเอียดตู้นี้"
-                        >
-                          {g.fcabinetnumber}
-                        </Link>
-                      </td>
-                      <td className="px-2 py-2">{WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename}</td>
-                      <td className="px-2 py-2 text-right">
-                        {g.fdatecontainerclose ? g.fdatecontainerclose.slice(0, 10) : "-"}
-                      </td>
-                      <td className="px-2 py-2 text-center">{TRANSPORT_LABEL[g.ftransporttype] ?? g.ftransporttype}</td>
-                      <td className="px-2 py-2 text-right">
-                        {isWaiting ? diffDateNow(g.fdatecontainerclose) : diffDateCNT(g.fdatecontainerclose, g.fdatestatus4)}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {g.fdatestatus4 ? g.fdatestatus4.slice(0, 10) : "-"}
-                      </td>
-                      <td className="px-2 py-2 text-right">{g.trackCount.toLocaleString()}</td>
-                      <td className="px-2 py-2 text-right">{g.volumeSum.toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{g.weightSum.toFixed(2)}</td>
-                      {showMoney && <td className="px-2 py-2 text-right">{g.costSum.toFixed(2)}</td>}
-                      {showMoney && <td className="px-2 py-2 text-right">{g.priceSum.toFixed(2)}</td>}
-                      {showMoney && <td className="px-2 py-2 text-right">{(g.priceSum - g.costSum).toFixed(2)}</td>}
-                      <td className="px-2 py-2 text-center">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${badge.cls}`}>{badge.label}</span>
-                      </td>
-                      <td className="px-2 py-2 text-center">
-                        {g.isPaid ? (
-                          <span className="inline-block rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px]">จ่ายแล้ว</span>
-                        ) : (
-                          <span className="inline-block rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px]">ยังไม่จ่าย</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          /* Wave 17 fix (2026-05-25 ค่ำ): table moved to <CntListTable>
+             (client component) so admin can tick containers + open the
+             "ทำรายการเบิกเงินค่าตู้" modal inline — matching the legacy
+             AJAX flow at report-cnt.php L502-505. Old fixed-bottom Link
+             that navigated to /admin/report-cnt/pay is replaced by the
+             client component's floating bar. */
+          <CntListTable
+            rows={grouped as CntListRow[]}
+            showMoney={showMoney}
+            isWaiting={isWaiting}
+            warehouseLabel={WAREHOUSE_LABEL}
+            transportLabel={TRANSPORT_LABEL}
+            statusBadge={STATUS_BADGE}
+          />
         )}
-
-        {/* Action buttons — only visible to money-tier roles.
-            Faithful port of `report-cnt.php` L502-505 — the fixed-bottom
-            "ทำรายการจ่ายเงินตู้" + "ประวัติรายการจ่ายเงินตู้" pair. */}
-        {showMoney && (
-          <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50">
-            <Link
-              href="/admin/report-cnt/pay"
-              className="rounded-full bg-green-600 text-white px-4 py-2 text-xs font-medium shadow-lg hover:bg-green-700"
-            >
-              ทำรายการจ่ายเงินตู้
-            </Link>
-            <Link
-              href="/admin/cnt-hs"
-              className="rounded-full bg-primary-500 text-white px-4 py-2 text-xs font-medium shadow-lg hover:bg-primary-600"
-            >
-              ประวัติรายการจ่ายเงินตู้
-            </Link>
-          </div>
-        )}
+        {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons
+            ("ทำรายการเบิกเงินค่าตู้" + "ประวัติรายการ") are now rendered
+            inside <CntListTable> so they only show on the succeed tab and
+            wire up to the per-row checkbox selection (matching the legacy
+            AJAX flow at report-cnt.php L502-505). No more navigating to
+            /admin/report-cnt/pay — the modal opens inline. */}
       </main>
     </>
   );
