@@ -91,16 +91,18 @@ export function BookingHero({ activeTab, seaMode }: BookingHeroProps) {
             mbr: () => <br aria-hidden className={isDefault ? "hidden" : undefined} />,
           })}
         </h1>
-        <p className={`${isDefault ? "hidden" : ""} mt-1 md:mt-6 text-[14px] sm:text-[18px] md:text-[22px] font-extrabold text-white [-webkit-text-stroke:0.5px_#7f1d1d] sm:[-webkit-text-stroke:1px_#7f1d1d] md:[-webkit-text-stroke:4px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.8),0_4px_12px_rgba(0,0,0,0.55)] leading-tight md:leading-snug px-1`}>
-          {t.rich(keys.subKey, {
-            em: (chunks: ReactNode) => (
-              <em className="not-italic text-white text-[22px] sm:text-[34px] md:text-[clamp(44px,5vw,66px)] font-black tracking-tight md:ml-2 sm:relative sm:top-[24px] md:top-[40px] [-webkit-text-stroke:1px_#7f1d1d] sm:[-webkit-text-stroke:1.5px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_10px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.55)]">
-                {chunks}
-              </em>
-            ),
-            hl: (chunks: ReactNode) => <span className="text-yellow-300 sm:relative sm:top-[8px] md:top-[40px] [em_&]:!top-0">{chunks}</span>,
-          })}
-        </p>
+        {t(keys.subKey).trim() !== "" && (
+          <p className={`${isDefault ? "hidden" : ""} mt-1 md:mt-6 text-[14px] sm:text-[18px] md:text-[22px] font-extrabold text-white [-webkit-text-stroke:0.5px_#7f1d1d] sm:[-webkit-text-stroke:1px_#7f1d1d] md:[-webkit-text-stroke:4px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_2px_6px_rgba(0,0,0,0.8),0_4px_12px_rgba(0,0,0,0.55)] leading-tight md:leading-snug px-1`}>
+            {t.rich(keys.subKey, {
+              em: (chunks: ReactNode) => (
+                <em className="not-italic text-white text-[22px] sm:text-[34px] md:text-[clamp(44px,5vw,66px)] font-black tracking-tight md:ml-2 sm:relative sm:top-[24px] md:top-[40px] [-webkit-text-stroke:1px_#7f1d1d] sm:[-webkit-text-stroke:1.5px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_10px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.55)]">
+                  {chunks}
+                </em>
+              ),
+              hl: (chunks: ReactNode) => <span className="text-yellow-300 sm:relative sm:top-[8px] md:top-[40px] [em_&]:!top-0">{chunks}</span>,
+            })}
+          </p>
+        )}
         {/* Desktop default: เคลียร์ภาษี (left) | พิธีการศุลกากร (right) — avoids person's head in centre */}
         {isDefault && (
           <div className="flex justify-between items-baseline mt-2 md:mt-3">
