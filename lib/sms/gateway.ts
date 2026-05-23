@@ -155,10 +155,15 @@ async function sendThaiBulkSms(
   // the v2 API defaults to the Standard pool (0 credits) when `force` is not
   // set. Pacred's "Pacred" sender ID approval is in the Corporate pool.
   //
-  // DEFAULT TO "premium" since Pacred's whole account uses Corporate.
-  // Override via THAIBULKSMS_FORCE=standard|corporate if needed.
+  // 2026-05-22 — default now `"corporate"` to match the Corporate sender
+  // approval (Vercel env `THAIBULKSMS_FORCE=corporate` set in parallel). The
+  // previous default `"premium"` (`8155d74`) contradicted the comment above
+  // and kept routing wrong — customers still couldn't sign up, so prod was
+  // running on `OTP_BYPASS=true` as an emergency workaround (the
+  // `docs/env.md` §3 "production blocker" security hole). Both fixed.
+  // Override via `THAIBULKSMS_FORCE=standard|premium` if a different pool needed.
   // ThaiBulkSMS docs call this `force` with values `premium`/`standard`/`corporate`.
-  const force = process.env.THAIBULKSMS_FORCE ?? "premium";
+  const force = process.env.THAIBULKSMS_FORCE ?? "corporate";
 
   const params = new URLSearchParams({ msisdn, message, sender, force });
 
