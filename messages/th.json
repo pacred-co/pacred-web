@@ -2528,8 +2528,12 @@
       "sea": "เรือ",
       "air": "แอร์"
     },
-    "apiSheets": {
+    "apiForwarderUpdate": {
       "title": "อัปเดตฝากนำเข้า",
+      "momo": "MOMO",
+      "cn": "CargoCenter"
+    },
+    "apiSheets": {
       "adjustGroup": "ปรับรายการ Sheet",
       "ctt": "CTT",
       "sang": "แสง (Sang)",

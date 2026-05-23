@@ -218,23 +218,24 @@ const blockForwarderImport: MenuItem = {
   badge: "forwarderArrived",
 };
 
-/** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า → ปรับรายการ Sheet"
- *  (sub-group holding the 4 per-carrier manual-entry forms).
- *
- *  Wave 17 P1-3..6: the 4 carriers each have a `/admin/api-sheets-<key>`
- *  page that ports the legacy `pcs-admin/api-sheets-<key>.php` file.
- *  Despite the legacy filename pattern, these are NOT Google-Sheets API
- *  consumers — they are manual forwarder-entry forms (one per warehouse
- *  code 1..4). All 4 share one client component (CarrierManualForm)
- *  parameterised via lib/carrier/registry.ts.
- *
- *  Wave 17 P1-1+2 (parallel agent) is expected to add MOMO/CN entries
- *  to the same dropdown — append them here when their PR lands.
+/** legacy pcs-admin menu L162-167 — "อัปเดตฝากนำเข้า" (top-level group)
+ *  Combines BOTH Wave 17 P1 streams into the single legacy parent:
+ *   - P1-1+2 — MOMO + CargoCenter (manualUpdate sub-page only · Phase B
+ *     scope; dashboard/updateAPI/APICheckSM/hisAutomation deferred Phase C
+ *     pending upstream token + retry design)
+ *   - P1-3..6 — "ปรับรายการ Sheet" sub-group holding the 4 per-carrier
+ *     manual-entry forms (CTT/Sang/MK/MX). Despite the legacy filename
+ *     pattern these are NOT Google-Sheets API consumers — they are manual
+ *     forwarder-entry forms (one per warehouse code 1..4). All 4 share
+ *     one client component (CarrierManualForm) parameterised via
+ *     lib/carrier/registry.ts.
  */
-const blockApiSheets: MenuItem = {
-  labelKey: "apiSheets.title",
-  icon: "Upload",
+const blockApiForwarderUpdate: MenuItem = {
+  labelKey: "apiForwarderUpdate.title",
+  icon: "Wand2",
   children: [
+    { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
+    { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
     {
       labelKey: "apiSheets.adjustGroup",
       icon: "SlidersHorizontal",
@@ -574,7 +575,7 @@ const menuSuper: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
-      blockApiSheets,
+      blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
       // "งาน → มอบงานคนขับ". Added as a top-level leaf so super can land
@@ -633,7 +634,7 @@ const menuOps: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
-      blockApiSheets,
+      blockApiForwarderUpdate,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -745,7 +746,7 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
         ],
       },
-      blockApiSheets,
+      blockApiForwarderUpdate,
       // Option C (ภูม 2026-05-20 ค่ำ) — point at the faithful port of legacy
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).

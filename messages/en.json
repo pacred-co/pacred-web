@@ -2528,8 +2528,12 @@
       "sea": "Sea",
       "air": "Air"
     },
-    "apiSheets": {
+    "apiForwarderUpdate": {
       "title": "Update import entries",
+      "momo": "MOMO",
+      "cn": "CargoCenter"
+    },
+    "apiSheets": {
       "adjustGroup": "Adjust sheet entries",
       "ctt": "CTT",
       "sang": "Sang",
