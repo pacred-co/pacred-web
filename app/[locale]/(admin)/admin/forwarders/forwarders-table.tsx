@@ -59,6 +59,17 @@ export type Row = {
    * fills this in before passing rows down; the client just renders it.
    */
   coverUrl: string | null;
+  /**
+   * Wave 15 P0-3 — outstanding balance (ยอดค้างชำระ) in THB. Computed
+   * by `calcForwarderOutstanding()` on the server. Zero when row is
+   * paid in full (paydeposit='1').
+   */
+  outstanding_thb: number;
+  /**
+   * Wave 15 P0-3 — admin id who measured dimensions/weight
+   * (`adminidkey`). Empty when not yet measured.
+   */
+  measured_by_admin: string | null;
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -200,7 +211,7 @@ export function ForwardersTable({
                   <th className="px-2 py-3">วันที่สร้าง</th>
                   <th className="px-2 py-3">รหัสลูกค้า</th>
                   <th className="px-2 py-3">รายละเอียด</th>
-                  <th className="px-2 py-3 text-right">ยอดค้างชำระ</th>
+                  <th className="px-2 py-3 text-right" title="คำนวณจาก calPriceForwarderMain (legacy formula)">ยอดค้างชำระ</th>
                   <th className="px-2 py-3">เลขพัสดุ (จีน)</th>
                   <th className="px-2 py-3">เลขพัสดุ (ไทย)</th>
                   <th className="px-2 py-3">เข้าโกดัง</th>
@@ -308,10 +319,39 @@ export function ForwardersTable({
                         </div>
                       </td>
                       <td className="px-2 py-2.5 text-right whitespace-nowrap">
-                        <div className="font-mono font-semibold">
-                          ฿{r.total_price.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        {/* Wave 15 P0-3 — ยอดค้างชำระ replaces raw total_price
+                            here. The outstanding number is what operators chase
+                            (legacy column 5 = calPriceForwarderMain result · paid
+                            rows fall to 0 so they don't distract). Weight + CBM
+                            + measurer's admin-id stack below for the same
+                            money-chasing context as the legacy layout. */}
+                        {r.outstanding_thb > 0 ? (
+                          <div className="font-mono font-semibold text-red-700">
+                            ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                          </div>
+                        ) : r.paydeposit === "1" ? (
+                          <div className="font-mono text-[11px] font-medium text-green-600">
+                            ชำระแล้ว
+                          </div>
+                        ) : (
+                          <div className="font-mono text-muted text-[11px]">—</div>
+                        )}
+                        <div className="text-muted text-[10px] mt-0.5">
+                          {r.amount_count} กล่อง
+                          {r.weight_kg > 0 && (
+                            <> · {r.weight_kg.toLocaleString("th-TH", { maximumFractionDigits: 2 })} Kg</>
+                          )}
                         </div>
-                        <div className="text-muted text-[10px]">{r.amount_count} กล่อง</div>
+                        {r.volume_cbm > 0 && (
+                          <div className="text-muted text-[10px]">
+                            {(r.volume_cbm * (r.amount_count || 1)).toLocaleString("th-TH", { maximumFractionDigits: 4 })} CBM
+                          </div>
+                        )}
+                        {r.measured_by_admin && (
+                          <div className="text-[9px] text-muted/70 font-mono mt-0.5" title="แอดมินที่วัดขนาด/ชั่งน้ำหนัก">
+                            วัด: {r.measured_by_admin}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2.5">
                         {r.tracking_chn && r.tracking_chn !== "-" ? (

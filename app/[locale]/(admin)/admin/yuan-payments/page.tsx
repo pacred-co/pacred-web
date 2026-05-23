@@ -77,7 +77,32 @@ type URow = {
   usertel: string | null;
 };
 
-type SP = { status?: string; q?: string };
+type SP = { status?: string; q?: string; from?: string; to?: string; all?: string };
+
+// Wave 15 P0-2 — Default date window helpers.
+//
+// Legacy `pcs-admin/payment.php` L176-178 defaults the list view to the
+// LAST 60 DAYS so paid rows from earlier months don't drown today's
+// pending queue. Pacred was loading "newest 200 of all time" which made
+// the รอตรวจ tab look quiet while old paid rows hogged the window.
+//
+// Rule: if neither `?from` nor `?to` is in the URL AND `?all=1` is
+// absent → apply the 60-day default. `?all=1` is the escape hatch for
+// the "ค้นหาข้อมูลทั้งหมด" button matching legacy.
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+function resolveDateWindow(sp: SP): { from: string | null; to: string | null; isDefault: boolean } {
+  if (sp.all === "1") return { from: null, to: null, isDefault: false };
+  if (sp.from || sp.to) return { from: sp.from ?? null, to: sp.to ?? null, isDefault: false };
+  // Default 60-day window per legacy.
+  return { from: isoDaysAgo(60), to: todayIsoDate(), isDefault: true };
+}
 
 export default async function AdminYuanPaymentsPage({
   searchParams,
@@ -91,6 +116,9 @@ export default async function AdminYuanPaymentsPage({
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // Wave 15 P0-2 — apply default 60-day window (legacy parity).
+  const window = resolveDateWindow(sp);
 
   let q = admin
     .from("tb_payment")
@@ -107,6 +135,10 @@ export default async function AdminYuanPaymentsPage({
     if (/^\d+$/.test(term)) q = q.eq("id", Number(term));
     else q = q.eq("userid", term.toUpperCase());
   }
+  // Date filter applies to BOTH the data query and pending count below
+  // so the count chip reflects what the user is actually viewing.
+  if (window.from) q = q.gte("paydate", window.from);
+  if (window.to)   q = q.lte("paydate", window.to + "T23:59:59");
 
   const { data: rowsRaw, error } = await q;
   const rows = (rowsRaw ?? []) as unknown as PaymentRow[];
@@ -122,11 +154,16 @@ export default async function AdminYuanPaymentsPage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 
-  // Pending count for the page header chip
-  const { count: pendingCount } = await admin
+  // Pending count for the page header chip — scoped to the SAME date window
+  // so the chip matches the visible data (per the "{rows.length} is a lie"
+  // pattern in docs/learnings/supabase-rls-patterns.md).
+  let pendingCountQ = admin
     .from("tb_payment")
     .select("id", { count: "exact", head: true })
     .eq("paystatus", "1");
+  if (window.from) pendingCountQ = pendingCountQ.gte("paydate", window.from);
+  if (window.to)   pendingCountQ = pendingCountQ.lte("paydate", window.to + "T23:59:59");
+  const { count: pendingCount } = await pendingCountQ;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -175,19 +212,69 @@ export default async function AdminYuanPaymentsPage({
         })}
       </div>
 
-      {/* Search box */}
-      <form className="flex gap-2 flex-wrap" action="/admin/yuan-payments">
+      {/* Wave 15 P0-2 — Search + date-range filter (default last 60 days) */}
+      <form className="flex gap-2 flex-wrap items-end" action="/admin/yuan-payments">
         {sp.status ? <input type="hidden" name="status" value={sp.status} /> : null}
-        <input
-          name="q"
-          defaultValue={sp.q ?? ""}
-          placeholder="ค้นหา รหัสลูกค้า (PR…) / หมายเลข payment"
-          className="rounded-lg border border-border px-3 py-2 text-sm w-72"
-        />
-        <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted">ค้นหา</span>
+          <input
+            name="q"
+            defaultValue={sp.q ?? ""}
+            placeholder="รหัสลูกค้า (PR…) / หมายเลข payment"
+            className="rounded-lg border border-border px-3 py-2 text-sm w-72"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+          <input
+            type="date"
+            name="from"
+            defaultValue={sp.from ?? (window.isDefault ? window.from ?? "" : "")}
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+          <input
+            type="date"
+            name="to"
+            defaultValue={sp.to ?? (window.isDefault ? window.to ?? "" : "")}
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </label>
+        <button type="submit" className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm">
           ค้นหา
         </button>
+        {!window.isDefault && (
+          <Link
+            href="/admin/yuan-payments"
+            className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt self-end"
+          >
+            กลับ 60 วัน
+          </Link>
+        )}
+        {window.isDefault && (
+          <Link
+            href="/admin/yuan-payments?all=1"
+            className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt self-end"
+            title="แสดงทั้งหมด ไม่จำกัดช่วงวัน"
+          >
+            ดูทั้งหมด
+          </Link>
+        )}
       </form>
+
+      {/* Date-window status chip — explicit feedback for what's loaded */}
+      <p className="text-[11px] text-muted">
+        {window.isDefault ? (
+          <>📅 แสดง <strong className="text-foreground">60 วันล่าสุด</strong> ({window.from} → {window.to}) ·{" "}
+          <Link href="/admin/yuan-payments?all=1" className="text-primary-600 hover:underline">ดูทั้งหมด</Link></>
+        ) : sp.all === "1" ? (
+          <>📅 แสดง <strong className="text-foreground">ทั้งหมด</strong> · <Link href="/admin/yuan-payments" className="text-primary-600 hover:underline">กลับ 60 วัน</Link></>
+        ) : (
+          <>📅 ช่วง: <strong className="text-foreground">{window.from ?? "ตั้งแต่เริ่ม"} → {window.to ?? "ปัจจุบัน"}</strong></>
+        )}
+      </p>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

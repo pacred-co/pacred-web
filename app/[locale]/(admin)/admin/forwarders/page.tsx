@@ -34,6 +34,7 @@ import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 
 export const dynamic = "force-dynamic";
 
@@ -186,6 +187,16 @@ type RawForwarderRow = {
   fdateadminstatus: string | null;     // last admin status update
   adminid: string | null;              // last admin who touched the row
   paydeposit: string | null;           // "1" = paid · null/empty = ยอดค้างชำระ
+  // Wave 15 P0-3 — price-component columns required by calcForwarderOutstanding()
+  fpriceupdate: number | null;
+  ftransportprice: number | null;
+  fshippingservice: string | number | null;  // legacy varchar
+  pricecrate: number | null;
+  ftransportpricechnthb: number | null;
+  priceother: number | null;
+  fdiscount: number | null;
+  fusercompany: string | number | null;       // legacy varchar; '1' = juristic
+  adminidkey: string | null;                   // admin who measured weight/CBM
 };
 
 type RawUserRow = {
@@ -224,6 +235,18 @@ export type Row = {
   detail: string | null;
   cover: string | null;        // product thumbnail filename (fcover) — bare
   coverUrl: string | null;     // Wave 13 — server-resolved signed Supabase URL
+  /**
+   * Wave 15 P0-3 — ยอดค้างชำระ (outstanding balance) in THB.
+   * Computed via `calcForwarderOutstanding()` (port of legacy
+   * `calPriceForwarderMain()`). Zero when paydeposit='1' (paid in full).
+   */
+  outstanding_thb: number;
+  /**
+   * Wave 15 P0-3 — admin who entered the dimensions/weight (`adminidkey`).
+   * Shown next to weight/CBM so accounting knows who to ask if the
+   * measurement looks off.
+   */
+  measured_by_admin: string | null;
   customer: { userid: string; name: string; phone: string } | null;
 };
 
@@ -249,7 +272,11 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
       // Wave 11 fidelity port — extra cols for the legacy 12-column layout
       "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
-      "fdateadminstatus,adminid,paydeposit",
+      "fdateadminstatus,adminid,paydeposit," +
+      // Wave 15 P0-3 — extra cols required by calcForwarderOutstanding()
+      // (port of legacy calPriceForwarderMain · shows ยอดค้างชำระ in the list)
+      "fpriceupdate,ftransportprice,fshippingservice,pricecrate," +
+      "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey",
     )
     .order("fdate", { ascending: false, nullsFirst: false })
     .limit(300);
@@ -369,6 +396,10 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       detail: r.fdetail,
       cover: r.fcover,
       coverUrl: null,            // filled in after the URL-resolve step below
+      // Wave 15 P0-3 — outstanding balance computed from legacy formula.
+      // paydeposit='1' = paid in full → outstanding = 0; otherwise compute.
+      outstanding_thb: r.paydeposit === "1" ? 0 : calcForwarderOutstanding(r),
+      measured_by_admin: r.adminidkey ?? null,
       customer: user
         ? {
             userid: user.userid,
