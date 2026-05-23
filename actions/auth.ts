@@ -183,7 +183,25 @@ export async function registerPersonal(
     how_know: data.howKnow ?? null,
     status: "active",
   });
-  if (profileErr) return { ok: false, error: "profile_failed" };
+  if (profileErr) {
+    // EMERGENCY 2026-05-23 — surface the real reason in Vercel logs (was
+    // swallowed as the opaque "profile_failed") + DELETE the orphan
+    // auth.user so the customer can retry with the same phone instead of
+    // hitting "phone already registered" forever (the bug in the screenshot
+    // — auth.admin.createUser succeeded but profile insert failed,
+    // leaving the user half-registered).
+    console.error("[auth/registerPersonal] profile insert failed:", {
+      message: profileErr.message,
+      code:    profileErr.code,
+      details: profileErr.details,
+      hint:    profileErr.hint,
+    });
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      console.error("[auth/registerPersonal] orphan auth.user cleanup failed:", delErr);
+    }
+    return { ok: false, error: "profile_failed" };
+  }
 
   // Sign in to set session cookies
   const supabase = await createClient();
@@ -240,7 +258,21 @@ export async function registerJuristicStep1(
     how_know: data.howKnow ?? null,
     status: "incomplete",
   });
-  if (profileErr) return { ok: false, error: "profile_failed" };
+  if (profileErr) {
+    // EMERGENCY 2026-05-23 — same handling as registerPersonal: surface
+    // the reason in Vercel logs + delete the orphan auth.user.
+    console.error("[auth/registerJuristicStep1] profile insert failed:", {
+      message: profileErr.message,
+      code:    profileErr.code,
+      details: profileErr.details,
+      hint:    profileErr.hint,
+    });
+    const { error: delErr } = await admin.auth.admin.deleteUser(created.user.id);
+    if (delErr) {
+      console.error("[auth/registerJuristicStep1] orphan auth.user cleanup failed:", delErr);
+    }
+    return { ok: false, error: "profile_failed" };
+  }
 
   // Sign in (session needed for step 2/3 since they use server client + RLS)
   const supabase = await createClient();
