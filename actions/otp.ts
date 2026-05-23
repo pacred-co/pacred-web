@@ -26,6 +26,21 @@ const OTP_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
 const MAX_ATTEMPTS = 5;
 
+// ⚠️ EMERGENCY 2026-05-22 — OTP bypass HARDCODED ON.
+// prod ThaiBulkSMS gateway broken, customers couldn't sign up, sales losing
+// leads. Switched from env-gated (`process.env.OTP_BYPASS === "true"`) to a
+// hardcoded constant so it stays on regardless of the Vercel env state.
+//
+// Effect: `requestOtp` returns {ok:true, bypass:true} without sending an SMS,
+// and `verifyOtp` short-circuits to true. The register page UI already
+// handles `bypass:true` by skipping the OTP entry step + submitting the form
+// directly (`app/[locale]/(auth)/register/page.tsx:290` + `:543`).
+//
+// SECURITY HOLE: anyone can register with any phone, no verification. The
+// docs/env.md §3 "production blocker" warning. Restore the env check below
+// (and revert this constant to `false`) the moment SMS routing is fixed.
+const EMERGENCY_OTP_BYPASS = true;
+
 type Purpose = "register" | "login" | "reset" | "change_phone";
 
 function hashCodeWith(code: string, pepper: string): string {
@@ -61,7 +76,7 @@ export async function requestOtp(
   phoneRaw: string,
   purpose: Purpose,
 ): Promise<{ ok: true; bypass?: boolean } | { ok: false; error: string }> {
-  if (process.env.OTP_BYPASS === "true") {
+  if (EMERGENCY_OTP_BYPASS || process.env.OTP_BYPASS === "true") {
     return { ok: true, bypass: true };
   }
 
@@ -130,7 +145,7 @@ export async function verifyOtp(
   code: string,
   purpose: Purpose,
 ): Promise<boolean> {
-  if (process.env.OTP_BYPASS === "true") return true;
+  if (EMERGENCY_OTP_BYPASS || process.env.OTP_BYPASS === "true") return true;
 
   const phone = normalizePhone(phoneRaw);
   const admin = createAdminClient();
