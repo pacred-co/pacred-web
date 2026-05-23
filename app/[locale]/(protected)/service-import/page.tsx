@@ -54,8 +54,8 @@ import { type ForwarderRow } from "./forwarder-row-view";
  *   - the address <select> → tb_address ⋈ tb_address_main (L979)
  *   - header.php counts   → tb_forwarder (header.php L100-101)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred. Nothing else changed.
  *
  * ── NOT transcribed 1:1 (deliberate · flagged for the integrator) ──
  *  1. forwarder.php L9-427 is a large POST handler — `save` (INSERT
@@ -914,7 +914,7 @@ export default async function ServiceImportPage({
                             {a.full}
                           </option>
                         ))}
-                      <option value="PCS">รับเองหน้าโกดัง PCS กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง PR กทม</option>
                     </select>
                     <div className="shipBy-select pt-1 mb-05">
                       <div id="selectShipBy"></div>

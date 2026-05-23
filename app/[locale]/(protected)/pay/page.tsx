@@ -66,9 +66,9 @@ import { requireAuth } from "@/lib/auth/require-auth";
  * A Server Component render is a PURE READ — `pay.php` has no
  * render-time INSERT/UPDATE, so there is nothing to defer.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. `pay.php` carries no PCS branding
- * text in its visible markup, so nothing changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred. `pay.php` carries no PCS branding
+ * text in its visible markup, so nothing changed there.
  *
  * ── FLAGGED — binary asset + brand asset (documented, never silently
  *    diverged) ──

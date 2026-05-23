@@ -77,12 +77,11 @@ import { Link } from "@/i18n/navigation";
  * (the PHP fills them from DataTables footer-callback JS); port it when
  * that client-side total is wired.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text
- * only. The legacy borrowed-API / `PCS` strings in the address-pickup
- * option ("รับเองหน้าโกดัง PCS กทม") are kept verbatim — per the
- * runbook the PCS→PR change is branding + member codes only and the
- * scrub is gated on ก๊อต's API switchover; the legacy warehouse-pickup
- * label is a literal address, not a member code.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred — incl. the address-pickup option
+ * ("รับเองหน้าโกดัง PR กทม"). The `value="PCS"` data value on the
+ * pickup option stays (it's the DB-stored fShipBy value the legacy
+ * tb_*.fshipby rows persist).
  */
 
 export const dynamic = "force-dynamic";
@@ -1168,7 +1167,7 @@ export default async function ForwarderTablePage({
                           {a.fullAddress}
                         </option>
                       ))}
-                      <option value="PCS">รับเองหน้าโกดัง PCS กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง PR กทม</option>
                     </select>
                   </div>
                   <div id="selectShipBy"></div>

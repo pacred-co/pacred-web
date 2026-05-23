@@ -50,8 +50,8 @@ import { resolveSalesAgent } from "./team-map";
  * codes; that gate is in `layout.tsx` (`resolveSalesAgent`). This page
  * re-resolves the agent for the per-account `$userIDMain` / `$urlRecom`.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `include/header.php` L75-85 runs an `UPDATE tb_header_order` on

@@ -47,7 +47,8 @@ import { nameStatusUserPay, numberFormat } from "../helpers";
  * whitelisted member codes; that gate is in `../layout.tsx`
  * (`resolveSalesAgent`).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `report-user-sales-history.php` L14-111 — the `$_POST['add']`

@@ -57,7 +57,8 @@ import { fStatusBadge, nameStatusUserPay, numberFormat } from "../../helpers";
  * (`resolveSalesAgent`). The `AND userIDMain` in the L298 query is the
  * per-row ownership check (a payout from another team → notFound()).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `include/header.php` L75-85 `UPDATE tb_header_order` — a

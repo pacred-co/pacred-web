@@ -2592,14 +2592,14 @@
     "manageCustomers": {
       "title": "จัดการลูกค้า",
       "titleSales": "ระบบจัดการลูกค้า",
-      "cargo": "ลูกค้า PCS Cargo",
-      "freight": "ลูกค้า PCS Freight",
+      "cargo": "ลูกค้า PR Cargo",
+      "freight": "ลูกค้า PR Freight",
       "freightAll": "ลูกค้า Freight ทั้งหมด"
     },
     "withdrawal": {
       "title": "รายการเบิกเงิน",
       "titleSales": "รายการเบิกเงิน",
-      "cargo": "PCS Cargo",
+      "cargo": "PR Cargo",
       "freight": "ค่าคอม Freight",
       "shopGoods": "เบิกเงินค่าสินค้า",
       "cntCost": "ค่าตู้สินค้า",

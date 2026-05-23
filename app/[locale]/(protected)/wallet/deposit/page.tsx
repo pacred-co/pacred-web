@@ -34,8 +34,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - $cbTotal         → tb_cash_back.cbtotal           (wallet.php L59-66)
  *   - history rows     → tb_wallet_hs                   (load_wallet_hs.php)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet.php L3-51 (the `addData` POST handler — INSERT tb_wallet_hs,
@@ -514,7 +514,7 @@ export default async function WalletDepositPage() {
                                 height: "250px",
                               }}
                             ></div>
-                            <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
+                            <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
                               <a href="/wallet/deposit" target="_blank">

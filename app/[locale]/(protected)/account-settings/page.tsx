@@ -44,8 +44,8 @@ import { PasswordForm } from "./password-form";
  * (`./actions.ts`); the form + its jQuery behaviours + SweetAlert result
  * popups (L79-247) are the `<PasswordForm>` client component.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred. Nothing else changed.
  */
 
 export default async function AccountSettingsPage() {

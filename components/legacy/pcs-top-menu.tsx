@@ -53,7 +53,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                   src={`${A}/images/theme/logo.png`}
                 />
                 <h3 className="brand-text d-n-991 notranslate" id="brand-text">
-                  PCS Cargo
+                  PR Cargo
                 </h3>
               </Link>
             </li>
@@ -165,7 +165,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                         <span>โปรโมชัน</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>พื้นที่จัดส่ง PCS เหมาๆ</span>
+                        <span>พื้นที่จัดส่ง PR เหมาๆ</span>
                       </a>
                       <a className="dropdown-item" href="#">
                         <span>วิธีการสั่งซื้อ</span>

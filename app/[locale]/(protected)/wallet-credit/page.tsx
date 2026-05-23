@@ -59,8 +59,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * replaced by a server-side render of every credit row; the
  * scroll-to-load-more behaviour itself is not reproduced.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet-credit.php L4-51 (the deposit POST handler — INSERT
@@ -477,7 +477,7 @@ export default async function WalletCreditPage() {
                                     คัดลอก
                                   </button>
                                   <h5 className="text-white">
-                                    บริษัท พีซีเอส คาร์โก้
+                                    บริษัท แพคเรด (ประเทศไทย) จำกัด
                                   </h5>
                                 </div>
                               </div>
@@ -546,7 +546,7 @@ export default async function WalletCreditPage() {
                               <span id="pp-id-show2">0-1055-60160-69-4</span>
                             </div>
                             <h5 className="text-center">
-                              บริษัท พีซีเอส คาร์โก้
+                              บริษัท แพคเรด (ประเทศไทย) จำกัด
                             </h5>
                             <div
                               id="amount-show"

@@ -87,7 +87,8 @@ import { Link } from "@/i18n/navigation";
  * A Server Component render is a PURE READ — receipt-f-hs.php has no
  * render-time INSERT/UPDATE, so there is nothing to defer.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  */
 
 // receipt-f-hs.php has no <img> raster assets — the icons are the

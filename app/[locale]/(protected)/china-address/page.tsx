@@ -48,8 +48,9 @@ import { Link } from "@/i18n/navigation";
  * "must be a logged-in member" check (redirect to /complete-profile
  * when the profile row is missing, as the menu.php pilot does).
  *
- * Rebrand: legacy `PCS Cargo` -> `PR Cargo` (the <title> branding);
- * the legacy `basePath` home href -> Pacred `/`. Nothing else.
+ * Rebrand DONE: legacy `PCS Cargo` brand -> `PR Cargo` / Pacred (the
+ * <title> branding); the legacy `basePath` home href -> Pacred `/`.
+ * Nothing else.
  */
 
 export const metadata: Metadata = {

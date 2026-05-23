@@ -146,8 +146,8 @@ const NAME_SHIP_BY: Record<string, string> = {
   "34": "ทวีทรัพย์ระยอง", "35": "ศิริสมบูรณ์", "36": "นิวสอง อัศวินขนส่ง",
   "37": "โชคสถาพรขนส่ง", "38": "ทรัพย์สมบูรณ์ถาวร", "39": "MNB Transport",
   "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014", "41": "สิรินครขนส่ง", "42": "พาณิชย์การขนส่ง KSD",
-  PCS: "รับเองโกดัง PCS กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
-  PCSF: "PCS เหมาเหมา", PCSE: "PCS Express",
+  PCS: "รับเองโกดัง PR กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
+  PCSF: "PR เหมาเหมา", PCSE: "PR Express",
 };
 export function nameShipBy(fShipBy: string | null): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? "ไม่พบข้อมูล";

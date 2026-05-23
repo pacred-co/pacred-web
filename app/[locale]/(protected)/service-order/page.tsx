@@ -36,7 +36,8 @@ import { Link } from "@/i18n/navigation";
  * so reads go through the admin client; the join key is
  * `tb_*.userid === profile.member_code` (the customer's "PR<n>" code).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + "PR Cargo" / Pacred.
  *
  * ── PURE-READ NOTE (runbook rule) ────────────────────────────
  * `shops.php` performs INSERT/UPDATE only inside `$_POST` branches

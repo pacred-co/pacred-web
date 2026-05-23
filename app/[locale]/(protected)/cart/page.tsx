@@ -50,8 +50,8 @@ import {
  *   - cart rows     → DISTINCT(cProvider) → DISTINCT(cNameShop)
  *                     → SELECT * FROM tb_cart                (cart.php L522-586)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + `PCS` → `PR`
- * branding text only. Legacy hardcoded phone "02-055-6063" and the
+ * Rebrand DONE: legacy `PCS<n>` member codes + `PCS` brand → `PR<n>` +
+ * `PR` / Pacred. Legacy hardcoded phone "02-055-6063" and the
  * warehouse address are copied verbatim (borrowed-API / company
  * facts — not scrubbed per runbook §3).
  *

@@ -2592,14 +2592,14 @@
     "manageCustomers": {
       "title": "Manage customers",
       "titleSales": "Customer management",
-      "cargo": "PCS Cargo customers",
-      "freight": "PCS Freight customers",
+      "cargo": "PR Cargo customers",
+      "freight": "PR Freight customers",
       "freightAll": "All Freight customers"
     },
     "withdrawal": {
       "title": "Disbursement requests",
       "titleSales": "Disbursement requests",
-      "cargo": "PCS Cargo",
+      "cargo": "PR Cargo",
       "freight": "Freight commission",
       "shopGoods": "Goods-cost disbursement",
       "cntCost": "Container cost",

@@ -63,13 +63,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   ?type=…              → adminType filter (1..7 + 3and4)
  *   ?position=…          → section filter (messenger/driver/shipping-*)
  *
- * Rebrand: legacy `PCS<n>` member-code style → `PR<n>` (mirrors the
- * customer pilot). The legacy company-type 2 + 3 labels stay
- * literal ("PCS Freight", "PCS Cargo") because those are
- * legacy-company brand names recorded in `tb_admin.companytype` —
- * per CLAUDE.md / ADR-0017, the PCS scrub is API-switchover-gated,
- * NOT a faithful-port concern; the rebrand is "branding text +
- * member codes only".
+ * Rebrand DONE: legacy `PCS<n>` member-code style → `PR<n>` + the
+ * visible company-type badge labels ("PCS Freight" / "PCS Cargo")
+ * → "PR Freight" / "PR Cargo" per the 2026-05-22 owner directive
+ * ("เปลี่ยนหมดเลย ถ้าเรื่อง rebrand"). The underlying
+ * `tb_admin.companytype` integer column ("2" / "3") is data and
+ * unchanged.
  *
  * Not transcribed (deliberate · documented for the pilot):
  *   - The legacy edit-user (`editUser()`) + delete-user
@@ -107,8 +106,8 @@ export const dynamic = "force-dynamic";
 function nameCompanyType(t: string | null): { label: string; cls: string } | null {
   switch (t) {
     case "1": return { label: "Freight & Cargo", cls: "badge badge-danger badge-pill" };
-    case "2": return { label: "PCS Freight",     cls: "badge badge-success badge-pill" };
-    case "3": return { label: "PCS Cargo",       cls: "badge badge-warning badge-pill" };
+    case "2": return { label: "PR Freight",      cls: "badge badge-success badge-pill" };
+    case "3": return { label: "PR Cargo",        cls: "badge badge-warning badge-pill" };
     default:  return null;
   }
 }
