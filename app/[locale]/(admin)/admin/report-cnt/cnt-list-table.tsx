@@ -12,9 +12,16 @@
  * pattern via `getListCNTPay.php`) — match the legacy click→modal flow
  * exactly so admin doesn't navigate twice to file a withdrawal request.
  *
- * Checkbox visibility rules (legacy `report-cnt.php` L1898 region):
- *   - ONLY on "เข้าโกดังไทยแล้ว" tab (page=succeed)
- *   - ONLY for unpaid containers (g.isPaid === false)
+ * Checkbox visibility rules (corrected 2026-05-25 ค่ำ after browser-test):
+ * Legacy `report-cnt.php` L501-505 actually renders the `#select-pay`
+ * button + DataTables checkbox column on BOTH tabs (waiting + succeed) ·
+ * filtered only by money-tier role gate. The initial implementation
+ * wrongly assumed "succeed tab only" — ภูม caught it via screenshot.
+ *
+ *   - On BOTH tabs (waiting + succeed) — admin may pre-bill before
+ *     containers arrive in Thailand (rare but valid)
+ *   - ONLY for unpaid containers (g.isPaid === false) — paid rows have
+ *     a placeholder dash · checkbox disabled
  *   - HIDDEN entirely for non-money-tier roles (warehouse)
  */
 
@@ -78,11 +85,15 @@ export function CntListTable({
   transportLabel,
   statusBadge,
 }: Props) {
-  // Checkboxes only available on succeed tab + only for unpaid + only to money tier.
-  // (Warehouse role doesn't see this whole client component because parent
-  // page conditionally renders the floating button; we still hide checkboxes
-  // defensively here.)
-  const canSelect = showMoney && !isWaiting;
+  // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
+  // roles, hidden per-row for already-paid containers. Matches legacy
+  // report-cnt.php L501-505 which renders the bottom "ทำรายการจ่ายเงินตู้"
+  // button + DataTables checkbox column without any tab filter — only
+  // gated by `$departmentKey IN (CEO|Manager|QAAndQC|Accounting|ITDT)`.
+  // `isWaiting` is kept in the signature for future divergence but no
+  // longer gates visibility.
+  const canSelect = showMoney;
+  void isWaiting; // explicit — silences unused-var lint without behavior change
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
