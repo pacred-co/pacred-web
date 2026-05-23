@@ -29,7 +29,7 @@ import { requireAuth } from "@/lib/auth/require-auth";
  *        > section#generate > .generate-section > .container
  *        > .row.generate-form > .col-md-8.mx-auto > <form>:
  *          - "พร้อมเพย์ ไอดี" number input (#pp-id), pre-filled with the
- *            company PromptPay ID `0105560160694` (verbatim — pay.php
+ *            company PromptPay ID `0105564077716` (verbatim — pay.php
  *            L43)
  *          - "จำนวนเงิน" number input (#amount)
  *          - "สร้าง QR Code รับเงิน" button (#myBtn)
@@ -161,7 +161,7 @@ export default async function PayPage() {
                                         type="number"
                                         inputMode="numeric"
                                         pattern="\d*"
-                                        defaultValue="0105560160694"
+                                        defaultValue="0105564077716"
                                         className="form-control"
                                         id="pp-id"
                                         placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"

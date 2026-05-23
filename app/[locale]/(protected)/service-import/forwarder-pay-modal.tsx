@@ -25,7 +25,7 @@ import type { ForwarderRow } from "./forwarder-row-view";
  *     เลขแทรคกิ้ง / the price breakdown rows / ราคารวม (legacy L120-173)
  *   - the bill summary: ยอดรวม + PCSF +50฿ + LESS WITHHOLDING TAX 1%
  *     (juristic) (legacy L207-248)
- *   - a PromptPay QR at the amount due, target id `0105560160694`
+ *   - a PromptPay QR at the amount due, target id `0105564077716`
  *     (legacy L276 + makeCode() L388) + a copyable account number
  *     fallback (legacy L277/L288-289)
  *   - the KBank account block for juristic customers (legacy L280-300)

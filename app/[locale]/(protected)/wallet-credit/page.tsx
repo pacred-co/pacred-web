@@ -466,7 +466,7 @@ export default async function WalletCreditPage() {
                                   </button>
                                   <br />
                                   พร้อมเพย์{" "}
-                                  <span id="text1">0-1055-60160-69-4 </span>
+                                  <span id="text1">0-1055-64077-71-6 </span>
                                   <button
                                     data-toggle="tooltip"
                                     data-placement="top"
@@ -543,7 +543,7 @@ export default async function WalletCreditPage() {
                             </div>
                             <div style={{ textAlign: "center" }}>
                               พร้อมเพย์ :{" "}
-                              <span id="pp-id-show2">0-1055-60160-69-4</span>
+                              <span id="pp-id-show2">0-1055-64077-71-6</span>
                             </div>
                             <h5 className="text-center">
                               บริษัท แพคเรด (ประเทศไทย) จำกัด

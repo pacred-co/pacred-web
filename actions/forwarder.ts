@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
@@ -857,7 +856,7 @@ export async function payForwarderFromWallet(
 // The `#qrcode` PromptPay QR in the `#list-payment2` modal
 // (`getListPayForwarder.php` L276 + the `makeCode()` JS L388-401).
 //
-// ⚠️ MONEY ROUTING — the legacy hard-coded `0105560160694` (PCS
+// ⚠️ MONEY ROUTING — the legacy hard-coded `0105564077716` (PCS
 // Cargo's juristic tax id). Scanning that QR sends the customer's
 // payment to PCS Cargo's bank account — the OLD company. Pacred
 // MUST collect to ITS OWN account, so this action reads the Pacred

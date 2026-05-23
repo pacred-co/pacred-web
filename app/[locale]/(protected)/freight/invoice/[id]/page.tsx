@@ -723,7 +723,7 @@ function ReceiptPage({
             </th>
             <th colSpan={3} className="text-left v-a-t">
               <div>บริษัท แพคเรด (ประเทศไทย) จำกัด</div>
-              <div>0105560160694</div>
+              <div>0105564077716</div>
               {/* invoiceF.php L292-296 — the issuer address switched
                   on 2025-03-20. Reproduced 1:1. */}
               <div>{issuerAddress()}</div>
