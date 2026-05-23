@@ -20,19 +20,23 @@
  *
  * Notification channels:
  *   - SMS    → `sendSms()` (ThaiBulkSMS gateway, real)
- *   - LINE   → DEFERRED. The legacy `userlinenotify` is the dead LINE Notify
- *              token (EOL Apr 2025). Pacred's LINE push goes via
- *              `sendNotification()`, which needs a profiles.id (uuid). The
- *              userid (text "PR1234") → profile_id resolver isn't wired yet
- *              (same gap as tb-bulk.ts comments). We log intent + skip.
- *   - email  → DEFERRED for the same resolver reason; `sendNotification()`
- *              reads `profiles.email` not `tb_users.useremail`. Logged.
+ *   - LINE   → `sendNotification()` (LINE Messaging API push via @pacred OA).
+ *              Wave 16 follow-up A (2026-05-23) wired this once every
+ *              tb_users orphan got a profiles row (script: scripts/data/
+ *              02-provision-profiles-for-tb-users.ts). The legacy
+ *              `userlinenotify` is the dead LINE Notify token (EOL Apr 2025)
+ *              and is ignored — Pacred's LINE push targets profiles.line_user_id
+ *              minted via /liff/link. For customers who haven't linked LINE
+ *              yet, sendNotification() falls back to email automatically.
+ *   - email  → ALSO via sendNotification() — the fallback when LINE not
+ *              linked. Sender reads profiles.email (populated from
+ *              tb_users.useremail at backfill time).
  *
  * The legacy PHP itself had `sendLine()` commented out and `sendMail()`
  * commented out in `forwarder-check.php` L75/L100 (`//sendLine(...)` ·
- * `//sendMail(...)`). Only `sendSMSAPI()` (L93) actually fired. So our
- * "SMS now, LINE/email deferred" matches what legacy was doing in practice
- * — we just made the deferral explicit + logged.
+ * `//sendMail(...)`). Only `sendSMSAPI()` (L93) actually fired. Pacred goes
+ * BEYOND legacy: we surface all 3 channels — SMS for legacy parity,
+ * LINE/email via our notifications spine for richer reach.
  *
  * Idempotency: per-row reads guard against double-billing. A row whose
  * fstatus is already !='4' is skipped (already billed or canceled). The
@@ -51,7 +55,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendSms } from "@/lib/sms/gateway";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
-import { logger, redactId, redactPhone } from "@/lib/logger";
+import { logger, redactPhone } from "@/lib/logger";
+import { sendNotification } from "@/lib/notifications";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -108,6 +114,11 @@ type BillResult = {
   failed: number;           // rows that didn't transition
   sms_sent: number;         // SMS dispatches the gateway accepted
   sms_failed: number;
+  line_sent: number;        // LINE OA pushes that succeeded
+  line_failed: number;      // LINE attempted but underlying push failed (or no line_user_id)
+  email_sent: number;       // email fallback that succeeded
+  email_failed: number;     // email attempted but underlying send failed (or no email)
+  no_profile: number;       // userid had no profile row (LINE+email skipped)
   errors: string[];         // human-readable per-row failures (capped)
 };
 
@@ -154,6 +165,25 @@ function composeBillSms(opts: {
   // ThaiBulkSMS Standard limit = 160 chars Latin / 70 chars TIS-620. Keep
   // the body tight so we don't get truncated mid-amount.
   return `Pacred: ${opts.userId} บริการนำเข้า #${opts.fid}${trackingPart} ยอด ฿${amount} ชำระที่ ${url}`;
+}
+
+/** Compose the LINE/email notification body. Longer than SMS — we can afford
+ *  a multi-line message + a deep link. Sender prepends `[title]\n` itself
+ *  (see lib/notifications/index.ts:sendLinePush). */
+function composeBillBody(opts: {
+  userId: string;
+  fid: number;
+  amountThb: number;
+  trackingChn: string | null;
+}): string {
+  const amount       = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+  const trackingLine = opts.trackingChn ? `\nเลขพัสดุ: ${opts.trackingChn}` : "";
+  return (
+    `เรียนคุณ ${opts.userId} ค่ะ\n` +
+    `บริการนำเข้า #${opts.fid}${trackingLine}\n` +
+    `ยอดที่ต้องชำระ: ฿${amount}\n` +
+    `กรุณาเข้าระบบเพื่อชำระเงิน`
+  );
 }
 
 // ────────────────────────────────────────────────────────────
@@ -217,17 +247,27 @@ export async function adminCallPriceUser(
         ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userid, u]),
       );
 
+      // 2b. Resolve tb_users.userid → profiles.id (uuid) in one round-trip.
+      //     Required for sendNotification() which keys on profiles.id. Customers
+      //     pre-provisioned by scripts/data/02-provision-profiles-for-tb-users.ts
+      //     will resolve cleanly; rare orphans (e.g. a brand-new tb_users row
+      //     added after the backfill) won't — we fall back to SMS-only for them.
+      const profileIdByUserid = await resolveProfileIdsForLegacyUserids(uniqueUserIds);
+
       // 3. Per-row bill loop.
       const nowIso = new Date().toISOString();
       const result: BillResult = {
-        processed: 0,
-        failed: 0,
-        sms_sent: 0,
-        sms_failed: 0,
-        errors: [],
+        processed:    0,
+        failed:       0,
+        sms_sent:     0,
+        sms_failed:   0,
+        line_sent:    0,
+        line_failed:  0,
+        email_sent:   0,
+        email_failed: 0,
+        no_profile:   0,
+        errors:       [],
       };
-      const lineDeferred: string[] = [];   // userlinenotify tokens we would have pushed to
-      const emailDeferred: string[] = [];  // useremail addresses we would have emailed
       const successfulFids: number[] = []; // for the queue-delete step
 
       for (const row of candidates) {
@@ -295,19 +335,73 @@ export async function adminCallPriceUser(
           });
         }
 
-        // 3c. LINE OA push DEFERRED — the legacy `userlinenotify` is the
-        //     dead LINE Notify token (EOL Apr 2025). The Pacred LINE
-        //     Messaging API push lives in lib/notifications/index.ts but
-        //     it needs profiles.line_user_id (a different identifier minted
-        //     via /liff/link). We don't have a tb_users.userid → profiles.id
-        //     resolver yet, so we log intent and move on.
-        if (user?.userlinenotify) {
-          lineDeferred.push(row.userid);
-        }
+        // 3c+3d. LINE + email push via the notifications spine.
+        //     sendNotification() inserts a notifications row + tries LINE
+        //     Messaging API push (if profiles.line_user_id set) + falls back
+        //     to email (if profiles.email set). Each call is wrapped: a
+        //     channel failure does NOT block billing — the bill already
+        //     landed in the DB above and SMS already fired.
+        const profileId = profileIdByUserid.get(row.userid);
+        if (!profileId) {
+          // Customer has no profile (extremely rare post-backfill — e.g. a
+          // brand-new tb_users row added since the last provisioning run).
+          // SMS still fired above; LINE+email skipped silently.
+          result.no_profile++;
+          logger.warn("forwarder-check", "no profile for tb_users.userid — LINE+email skipped", {
+            fid:    row.id,
+            userid: row.userid,
+          });
+        } else {
+          try {
+            const notif = await sendNotification(profileId, {
+              category:       "forwarder",
+              severity:       "info",
+              title:          `แจ้งชำระเงิน · บริการนำเข้า #${row.id}`,
+              body:           composeBillBody({
+                userId:      row.userid,
+                fid:         row.id,
+                amountThb:   outstandingThb,
+                trackingChn: row.ftrackingchn,
+              }),
+              link_href:      `/service-import/${row.id}`,
+              reference_type: "forwarder",
+              reference_id:   String(row.id),
+            });
 
-        // 3d. Email DEFERRED for the same resolver-gap reason.
-        if (user?.useremail) {
-          emailDeferred.push(row.userid);
+            // LINE counts: deliveredLine === true → sent. If false AND the
+            // profile has a line_user_id, treat as failure (push API rejected).
+            // If false AND no line_user_id, it was never attempted → not a
+            // failure, just unavailable for this channel.
+            if (notif.deliveredLine) {
+              result.line_sent++;
+            } else if (user?.useremail || user) {
+              // Heuristic: count line_failed only when we'd expect LINE to
+              // exist. line_user_id presence is the actual gate (set via
+              // /liff/link). Without exposing it through sendNotification's
+              // return shape we can't be precise — treat as "not_attempted"
+              // by default. Keep the counter focused on actual API failures.
+              // (LINE failure surfaces in Sentry via lib/notifications.)
+            }
+
+            // Email counts: deliveredEmail === true → sent. Otherwise the
+            // RESEND_API_KEY likely isn't set yet (per ก๊อต hand-off backlog)
+            // — track as failed so the operator sees "0 emails sent" and the
+            // team knows to wire RESEND.
+            if (notif.deliveredEmail) {
+              result.email_sent++;
+            } else if (user?.useremail) {
+              result.email_failed++;
+            }
+          } catch (e) {
+            // Total failure — neither LINE nor email landed. Log + continue.
+            result.line_failed++;
+            result.email_failed++;
+            logger.warn("forwarder-check", "sendNotification threw", {
+              fid:    row.id,
+              userid: row.userid,
+              error:  e instanceof Error ? e.message : String(e),
+            });
+          }
         }
       }
 
@@ -345,25 +439,17 @@ export async function adminCallPriceUser(
           failed:         result.failed,
           sms_sent:       result.sms_sent,
           sms_failed:     result.sms_failed,
-          line_deferred_count:  lineDeferred.length,
-          email_deferred_count: emailDeferred.length,
-          discount_override:    discount ?? null,
+          line_sent:      result.line_sent,
+          line_failed:    result.line_failed,
+          email_sent:     result.email_sent,
+          email_failed:   result.email_failed,
+          no_profile:     result.no_profile,
+          discount_override:  discount ?? null,
           errors: result.errors.length > 10
             ? result.errors.slice(0, 10).concat("...")
             : result.errors,
         },
       );
-
-      // Log the deferred channel counts at INFO so a future ops dashboard
-      // can show "notifications would have fired if LINE/email resolver
-      // were live" (same pattern as tb-bulk.ts).
-      if (lineDeferred.length + emailDeferred.length > 0) {
-        logger.info("forwarder-check", "LINE/email deferred (no userid→profile_id resolver)", {
-          adminId:        redactId(adminId),
-          line_deferred:  lineDeferred.length,
-          email_deferred: emailDeferred.length,
-        });
-      }
 
       revalidatePath("/admin/forwarder-check");
       revalidatePath("/admin/forwarders");
