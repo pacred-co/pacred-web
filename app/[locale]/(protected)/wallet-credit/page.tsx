@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { BANK } from "@/components/seo/site";
 
 /**
  * Customer "กระเป๋าสตางค์เครดิต" (credit wallet) screen — a FAITHFUL 1:1
@@ -448,12 +449,12 @@ export default async function WalletCreditPage() {
                             <div className="row">
                               <div className="col-12 col-md-9">
                                 <h2 className="text-white">
-                                  ธนาคารกสิกรไทย
+                                  {BANK.name}
                                 </h2>
                                 <div className="text-center">
                                   เลขที่บัญชี{" "}
                                   <span className="font-2rem mr-0-3" id="text2">
-                                    064-174-3836
+                                    {BANK.accountNumber}
                                   </span>
                                   <button
                                     data-toggle="tooltip"
@@ -539,7 +540,7 @@ export default async function WalletCreditPage() {
                               }}
                             ></div>
                             <div style={{ textAlign: "center", marginTop: "10px" }}>
-                              เลขที่บัญชี : <span>064-174-3836</span>
+                              เลขที่บัญชี : <span>{BANK.accountNumber}</span>
                             </div>
                             <div style={{ textAlign: "center" }}>
                               พร้อมเพย์ :{" "}

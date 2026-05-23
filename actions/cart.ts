@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { cartItemSchema, type CartItemInput, type Provider } from "@/lib/validators/cart";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { ADDRESSES, CONTACT } from "@/components/seo/site";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -290,16 +291,21 @@ export async function submitCartOrder(input: {
     addressNote: input.hNote ?? "",
   };
   if (hShipBy === "PCS") {
+    // "รับที่โกดัง" (pick-up at warehouse) — wired to Pacred's TH receiving
+    // warehouse (ADDRESSES.warehouseTh — สมุทรสาคร, the actual cargo intake
+    // point). Legacy PHP hard-coded a Bangkok PCS Cargo address; under D1
+    // Pacred's warehouse is in Samut Sakhon. Label kept short for the
+    // address-card UI (the full address is in addressNo/...).
     addr = {
-      addressName: "รับที่โกดัง PR กทม",
+      addressName: "รับที่โกดัง Pacred",
       addressLastname: "",
-      addressTel: "02-444-704",
+      addressTel: CONTACT.phoneCompanyDisplay,
       addressTel2: "",
-      addressNo: "12 ซอย เพชรเกษม 77 แยก 3-6",
-      addressSubDistrict: "หนองค้างพลู",
-      addressDistrict: "หนองแขม",
-      addressProvince: "กรุงเทพมหานคร",
-      addressZIPCode: "10160",
+      addressNo: ADDRESSES.warehouseTh.line,
+      addressSubDistrict: ADDRESSES.warehouseTh.subDistrict,
+      addressDistrict: ADDRESSES.warehouseTh.district,
+      addressProvince: ADDRESSES.warehouseTh.province,
+      addressZIPCode: ADDRESSES.warehouseTh.postcode,
       addressNote: input.hNote ?? "",
     };
   } else {

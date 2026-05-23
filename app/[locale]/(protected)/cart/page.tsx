@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ADDRESSES } from "@/components/seo/site";
 import {
   CartInteractivity,
   type CartInteractiveProvider,
@@ -97,10 +98,14 @@ export const dynamic = "force-dynamic";
 // Kept for parity (the legacy add-flow uses it; the read view does not).
 const CART_CAPACITY = 151;
 
-// Legacy warehouse pickup address — cart.php L471 / L486 (verbatim).
-const PCS_WAREHOUSE_ADDRESS =
-  "รับเองที่โกดัง PR บ้านเลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160";
-const PCS_WAREHOUSE_MAP_URL = "https://goo.gl/maps/MJd56S6saebaDBQr7";
+// "รับเองที่โกดัง" (self pick-up) — wired to Pacred's TH receiving warehouse
+// (ADDRESSES.warehouseTh — สมุทรสาคร). Legacy PCS hardcoded a Bangkok address;
+// under D1 the actual Pacred warehouse is in Samut Sakhon (the canonical SOT).
+const PCS_WAREHOUSE_ADDRESS = `รับเองที่โกดัง Pacred · ${ADDRESSES.warehouseTh.full}`;
+// Map URL pending — when พี่ป๊อปส่ง Google Maps pin for the Samut Sakhon
+// warehouse, drop it here (replaces the legacy PCS map link). Empty string
+// hides the "ดูแผนที่" CTA via the && short-circuit in the template.
+const PCS_WAREHOUSE_MAP_URL = "";
 
 type CartRow = {
   id: number;
@@ -419,17 +424,19 @@ export default async function CartPage() {
                                   <span className="ml-1 btn-add-address-thai cursor-pointer">
                                     เปลี่ยนที่อยู่
                                   </span>
-                                  <div>
-                                    <a
-                                      href={PCS_WAREHOUSE_MAP_URL}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-info"
-                                    >
-                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                      ในไทย
-                                    </a>
-                                  </div>
+                                  {PCS_WAREHOUSE_MAP_URL && (
+                                    <div>
+                                      <a
+                                        href={PCS_WAREHOUSE_MAP_URL}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-info"
+                                      >
+                                        <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
+                                        ในไทย
+                                      </a>
+                                    </div>
+                                  )}
                                 </span>
                               </>
                             )}
@@ -444,15 +451,17 @@ export default async function CartPage() {
                                 />
                                 <span className="address-select-now">
                                   {PCS_WAREHOUSE_ADDRESS}
-                                  <a
-                                    href={PCS_WAREHOUSE_MAP_URL}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-info"
-                                  >
-                                    <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                    ในไทย
-                                  </a>
+                                  {PCS_WAREHOUSE_MAP_URL && (
+                                    <a
+                                      href={PCS_WAREHOUSE_MAP_URL}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-info"
+                                    >
+                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
+                                      ในไทย
+                                    </a>
+                                  )}
                                 </span>
                                 <span className="btn-change-address-thai cursor-pointer">
                                   เปลี่ยนที่อยู่

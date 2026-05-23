@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { BANK } from "@/components/seo/site";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
@@ -1174,7 +1175,7 @@ export async function submitForwarderPayment(
       typeservice: "2",
       amount: Number(amount.toFixed(2)),
       imagesslip: slipPath,
-      depositnamebank: "KBANK-064-174-3836",
+      depositnamebank: `KBANK-${BANK.accountNumber}`,
       userid: userID,
       reforder: String(r.id),
       whno: "",
