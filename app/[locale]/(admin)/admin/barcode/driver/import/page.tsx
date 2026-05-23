@@ -4,46 +4,42 @@ import { ImportScannerPanel } from "./import-scanner-panel";
 import { TopMenuBarcode } from "@/components/admin/top-menu-barcode";
 
 /**
- * Admin > สแกนบาร์โค้ดเข้าโกดังไทย (เครื่องสแกน) — a FAITHFUL
- * 1:1 TRANSCRIPTION of the legacy PCS Cargo admin
- * `pcs-admin/barcode-d-import.php` (L1-258), per D1 / ADR-0017 +
+ * Admin > สแกนบาร์โค้ดเข้าโกดังไทย (เครื่องสแกน) — Wave 17 P1-7.
+ *
+ * Faithful port of the legacy PCS Cargo admin
+ * `pcs-admin/barcode-d-import.php` (L1-258) per D1 / ADR-0017 +
  * the faithful-port transcription runbook (`docs/runbook/
  * faithful-port-transcription.md` §8 — admin pattern).
  *
  * Unlike the other 3 `barcode-d-*.php` siblings (which simply GET-
- * redirect to the gateway), this one is the warehouse-intake
+ * redirect to the gateway), this is the warehouse-intake
  * workstation form:
  *
  *   1. `fPallet` (LOCATION) input — sticky via cookie. Required
  *      before any scan is accepted. Set by typing one of the 46
  *      hardcoded location codes (`A1`..`Z6`) — legacy L192-199.
  *   2. `search-tracking` (TRACKING) input — auto-focused; fires
- *      on Enter (USB scanner) or button-click. Legacy AJAX-POSTs
- *      to `include/pages/barcode-import/index.php` returning a
- *      JSON `{HTML, statusData, statusSave}` payload that's
- *      injected into `#result` + plays a success/notFound sound
- *      (`assets/audio/sSave.mp4` or `notFoundSave.mp4`).
+ *      on Enter (USB scanner) or button-click. Wave 17 wires this
+ *      to the `adminBarcodeImportScan` Server Action (the port of
+ *      `include/pages/barcode-import/index.php`) which:
+ *        - UPSERTs `tb_forwarder_import2` (scan event row)
+ *        - Auto-flips `tb_forwarder.fstatus='4'` when fi2amount
+ *          reaches the parcel-count threshold
+ *      The panel then renders a green / orange / red Tailwind card
+ *      and plays `sSave.mp4` (matched / location) or
+ *      `notFoundSave.mp4` (orphan-saved) per legacy behaviour.
  *   3. A "คำอธิบายระบบ" modal (`#recom`) explaining the 8-rule
  *      flow (L143-156).
  *
- * Per the Agent 2 brief, we GET-redirect the scan to
- * `/admin/barcode/gateway?type=4&device=scanner&tracking=…&
- * pallet=…` (Agent 3's gateway is the single funnel). The legacy
- * AJAX result-panel + cookie-sticky location + sound + modal are
- * preserved as faithful UI shell; the actual scan-handling
- * (status mutation + JSON result render + audio playback) is the
- * Wave 3 follow-up that swaps the redirect for an AJAX call to a
- * `tb_forwarder` mutate endpoint — see "Wave 3 TODO" comments in
- * `import-scanner-panel.tsx`.
- *
- * Auth — legacy gate is implicit; narrow to warehouse/driver/ops/
- * super (the parcel-handling roles).
+ * Auth — narrow to super/ops/warehouse (the parcel-handling roles
+ * for the WRITE path; driver no longer needed since the write
+ * touches money-status fields).
  */
 
 export const dynamic = "force-dynamic";
 
 export default async function BarcodeDriverImportPage() {
-  await requireAdmin(["super", "ops", "warehouse", "driver"]);
+  await requireAdmin(["super", "ops", "warehouse"]);
 
   return (
     <div className="pcs-legacy">
