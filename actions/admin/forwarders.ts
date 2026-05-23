@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
 import { logger, redactId } from "@/lib/logger";
@@ -535,20 +536,50 @@ export async function adminBulkUpdateForwarderTbStatus(
       after:           { fstatus },
     });
 
-    // TODO: notify each customer. The bridge from legacy `tb_users.userid`
-    // (text e.g. "PCS10843") → Supabase `profiles.id` (uuid) is not yet
-    // wired (see `lib/auth/pcs-legacy-bridge.ts` — currently only mints a
-    // profile at first login, no reverse lookup). For now we log the
-    // intended notifications so they surface in the audit trail; once the
-    // userid→profile_id resolver exists, swap the log line for the actual
-    // sendNotification(profileId, notify.forwarderStatusChanged(...)).
+    // Wave 16 follow-up A (2026-05-25): resolver wired. Bulk-resolve every
+    // changed row's legacy userid → profiles.id, then fire status-change
+    // notifications. Each call wrapped in try/catch so one failed delivery
+    // doesn't block the bulk operation. (Same pattern as forwarder-check
+    // action — uses `lib/auth/tb-users-resolver.ts` + sendNotification.)
     const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
     if (changed.length > 0) {
-      logger.info("forwarder.bulk_update_tb", `would notify ${changed.length} customers (no userid→profile_id resolver yet)`, {
-        adminId:       redactId(adminId),
-        fstatus,
-        userids_count: changed.length,
-      });
+      try {
+        const profileMap = await resolveProfileIdsForLegacyUserids(
+          changed.map((r) => r.userid),
+        );
+        let notified = 0;
+        let noProfile = 0;
+        for (const row of changed) {
+          const profileId = profileMap.get(row.userid);
+          if (!profileId) { noProfile++; continue; }
+          try {
+            await sendNotification(profileId, notify.forwarderStatusChanged({
+              fNo:         row.fidorco ?? String(row.id),
+              status:      fstatus,
+              forwarderId: String(row.id),
+            }));
+            notified++;
+          } catch (err) {
+            logger.warn("forwarder.bulk_update_tb", "notification failed (continuing bulk)", {
+              fid:       row.id,
+              profileId,
+              error:     err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        logger.info("forwarder.bulk_update_tb", `notifications fired ${notified}/${changed.length} (no profile: ${noProfile})`, {
+          adminId:       redactId(adminId),
+          fstatus,
+          notified,
+          no_profile:    noProfile,
+        });
+      } catch (err) {
+        // Resolver-level failure (e.g. DB error during bulk lookup) —
+        // log + continue. The bulk UPDATE already succeeded.
+        logger.warn("forwarder.bulk_update_tb", "notification resolver failed (bulk update OK, notifications skipped)", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     revalidatePath("/admin/forwarders");

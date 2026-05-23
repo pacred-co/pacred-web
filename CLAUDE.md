@@ -2,27 +2,28 @@
 
 ---
 
-# 🚨 2026-05-25 ค่ำ — WAVE 15 DONE · WAVE 16 PREP (deep audit) · read FIRST (supersedes 2026-05-24 below)
+# 🚨 2026-05-25 ค่ำ — WAVE 15 + 16 + 17 ALL DONE · read FIRST (supersedes 2026-05-24 below)
 
-ภูม session วันนี้. **1 commit Wave 15 + 1 commit Wave 16 prep บน `Poom-pacred`.** ภูม catch ผมว่า fidelity audit เก่า audit **ผิวเกินไป** (compare แค่จาก HTML ที่ paste มา ไม่ได้เปิด legacy PHP source) — ผมพลาด 2 หน้าใหญ่ (`report-cnt.php?id=` + `forwarder-check.php`). สั่งให้ "ไล่ deep audit เพิ่มด่วน — อยากส่งงานแล้วโดน Owner ไล่กลับบ้านหรือไง". Dispatch 4 parallel agents เทียบ 44 legacy PHP vs ~70 Pacred routes.
+ภูม **mega-session วันนี้ · 18 commits บน `Poom-pacred`** (16:00 → 23:30). ภูม catch ผม audit ผิวเกินไป (compared HTML paste only · missed 2 huge pages) → dispatched 4+3+3 parallel agents ในชุดต่างๆ. ผลลัพธ์: 5 P0 + 3 P0 follow-ups + UX fix + 3 P1 + close-out · **~7,200 LOC** ลง production-ready Cargo flow.
 
-**📦 Commits วันนี้:**
-- `152add3 feat(wave-15): Top 3 P0 fixes from fidelity audit (wallet + yuan + forwarders)` — Wave 15 ครบ + browser-verified · 3 fixes (per-customer balance summary view · default 60-day yuan window · ยอดค้างชำระ column with `lib/forwarder/outstanding.ts`)
-- **(pending push)** `feat(wave-16-prep): cargo flow deep audit + Wave 16/17 plan` — audit doc + save-point + 8 Tasks + new learning + AGENTS rule
+**📦 18 commits today (16:00 → 23:30):**
+- **Wave 15** — 3 P0 fidelity fixes (wallet balance summary · yuan 60d filter · forwarders ยอดค้างชำระ)
+- **Wave 16 prep** — `docs/audit/cargo-flow-deep-audit-2026-05-25.md` (44 legacy PHP vs ~70 Pacred · 47 gaps) + new `AGENTS.md §0b` rule + `docs/learnings/audit-discipline.md`
+- **Wave 16 P0 (5)** — `/admin/report-cnt/[fNo]` per-container detail (1601 LOC) · `/admin/forwarder-check` bulk-bill (1572) · inline cost-edit modal · stub cleanup · barcode schema-split
+- **Wave 16 follow-ups (3)** — **8,886 profiles UUIDs provisioned** (LINE+email channels enabled) · internal cost-update tab (no Sheets) · dual-mode cost-rate modal (CBM+Weight all carriers)
+- **Wave 17 ux-fix** — report-cnt inline checkbox + modal + "ทำรายการเบิกเงินค่าตู้" wording (legacy used "เบิก" in cnt-hs.php · our "บันทึก" was wrong)
+- **Wave 17 P1 (3)** — MOMO + CN manual entry · api-sheets quartet (CTT/Sang/MK/MX) · barcode AJAX writer (auto-flips fStatus=4 when fi2Amount >= fAmount)
+- **Close-out** — wired deferred LINE in `actions/admin/forwarders.ts:538` (Agent A side-finding)
 
-**🎯 Wave 16 P0 queue (5 items · ~10 ชม · Tasks #76-80):**
-1. **P0-1** `/admin/report-cnt/[fNo]/page.tsx` — per-container detail (cost summary · cost-edit modal · 6 status filters · 25-col DT · bulk-check button) — port of `report-cnt.php?id=` mode-b (2502 LOC) · 2-3 ชม
-2. **P0-2** `/admin/forwarder-check/page.tsx` — 3 tabs ทั้งหมด/เครดิต/ปกติ + bulk "แจ้งชำระเงินลูกค้า" → SMS+LINE+email · status 4→5 — port of `forwarder-check.php` (728 LOC) · 2 ชม
-3. **P0-3** Inline cost-edit modal (editCost / editCost2 from S / editCostSheet) บน forwarder rows · 45 นาที
-4. **P0-4** DELETE `/admin/forwarder-import-warehouse` (89-LOC stub) → redirect → `/admin/forwarders/warehouse-history` (1140-LOC faithful Wave 12) · 15 นาที
-5. **P0-5** Schema-split reconciliation — barcode gateway query `forwarders` vs `tb_forwarder` · 1 ชม
+**🟢 Browser-test queue (~30 min next session):**
+1. `/admin/report-cnt?page=succeed` — ติ๊กตู้ + เปิด modal เบิกเงิน
+2. `/admin/report-cnt/<fNo>` — drill-down + cost-edit + cost-update tab
+3. `/admin/forwarder-check` — 3 tabs + bulk-bill
+4. `/admin/api-forwarder-momo/manual` + `/admin/api-forwarder-cn/manual`
+5. `/admin/api-sheets-sang` (live preview ค่าขนส่ง · Sang's PCSE rule)
+6. `/admin/barcode/driver/import` — USB scanner · auto-flip status
 
-**🟠 Wave 17 P1 queue (3 items · ~10-12 ชม · Tasks #81-83):**
-- P1-1+2 MOMO + CN manual-entry forms (defer API call sub-pages to Phase C) · 3 ชม
-- P1-3..6 api-sheets quartet (CTT/Sang/MK/MX — ⚠️ misnomer · เป็น carrier manual entry forms ไม่ใช่ Sheets API) · 6 ชม
-- P1-7 Finish `barcode/driver/import` AJAX wiring (UI shell มี · scan handler ยัง GET-redirect) · 1.5 ชม
-
-**🟡 P2 — defer to Phase C:** JMF/GOGO API · real Sheets API (check-sang-cost) · MOMO/CN/JMF cron jobs · standalone forwarder-driver · MOMO Sack API · CargoCenter containerReport (legacy เองยังไม่เคยทำ).
+**🟡 Phase C — Defer:** JMF/GOGO API · real Sheets API (`check-sang-cost`) · MOMO/CN/JMF cron jobs · standalone `forwarder-driver` · MOMO Sack API · CargoCenter `containerReport` (legacy ยังไม่เคยทำ).
 
 **🎯 SOTs for tomorrow's resume — read in order:**
 1. 🚨 [`docs/research/poom-save-point-2026-05-25-night.md`](docs/research/poom-save-point-2026-05-25-night.md) — canonical resume (Wave 15 done + Wave 16 plan + branch state + resume commands)
@@ -50,10 +51,14 @@
 
 **dave-pacred has 12 commits Poom-pacred doesn't** = customer-side D1 (cart end-to-end · OTP TTL · PromptPay QR fix). **ไม่ต้อง merge** — parallel lanes per `docs/runbook/faithful-port-plan.md`.
 
-**Recommended P0 sequencing (Task #89):**
-- **🟢 Option A: Lุย P0-3 + P0-4 ก่อน** (1 ชม รวม — เริ่มเร็ว ได้ momentum) แล้วค่อย P0-1+2
-- **🔴 Option B: Lุย P0-1+2 เลย** (4-5 ชม — 2 หน้าใหญ่ที่ owner รอดู ก่อน)
-- **🟠 Option C: ส่ง agents ทำ parallel** (~2 ชม wall-clock · ภูม approve ก่อน)
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-25-night.md         # canonical resume
+# Then: browser-test 7 surfaces above OR start Phase C (JMF/GOGO/cron)
+```
 
 ---
 
