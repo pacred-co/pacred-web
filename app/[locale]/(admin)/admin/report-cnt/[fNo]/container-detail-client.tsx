@@ -26,6 +26,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminReportCntAddCheck } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
+import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape
@@ -45,6 +46,8 @@ export type DetailRow = {
   fvolume: number | null;
   fweight: number | null;
   fproductstype: string | null;
+  /** Secondary product-type enum used for cost calc (Wave 16 P0-3 modal target) */
+  fproductstype2: string | null;
   /** rate per product type (legacy `nameColumn` lookup or tb_cost_container) */
   rate: number;
   /** "นำเข้าสุทธิ" — fTotalPrice */
@@ -170,11 +173,9 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
     });
   }
 
-  function onEditCost(fid: number, mode: "P" | "S" | "Sheet") {
-    // P0-1 stub. Wave 16 P0-3 in parallel is building the real modal —
-    // this is the call site they'll wire when that lands.
-    alert(`P0-3 (parallel) จะสร้าง modal "แก้ไขราคาต้นทุน (${mode})" สำหรับ fID=${fid}`);
-  }
+  // Wave 16 integration (post-P0-3): cost-edit modal is now `<ForwarderCostEditButton>`
+  // (see components/admin/forwarder-cost-edit-button.tsx). Removed the placeholder
+  // `onEditCost` callback — each button row now wires its own state via the button.
 
   return (
     <div className="space-y-3">
@@ -348,10 +349,46 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                       <br />
                       <span title="ต้นทุน แสง" className="text-muted text-[10px]">S: {fmt(r.fcosttotalpricesheet, 2)}</span>
                       <br />
-                      <div className="flex gap-1 mt-0.5">
-                        <button type="button" onClick={() => onEditCost(r.id, "P")} className="text-sky-600 hover:text-sky-700 text-[10px]" title="แก้ไขราคาต้นทุน PCS">edit</button>
-                        <button type="button" onClick={() => onEditCost(r.id, "S")} className="text-sky-600 hover:text-sky-700 text-[10px]" title="รับค่าจาก Sheet แสง">edit2</button>
-                        <button type="button" onClick={() => onEditCost(r.id, "Sheet")} className="text-sky-600 hover:text-sky-700 text-[10px]" title="แก้ไขราคา Sheet">editS</button>
+                      <div className="flex gap-2 mt-0.5">
+                        <ForwarderCostEditButton
+                          mode="editCost"
+                          forwarder={{
+                            fid: r.id,
+                            fNo: r.fidorco || String(r.id),
+                            fCostTotalPrice: r.fcosttotalprice,
+                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                            fProductsType2: r.fproductstype2,
+                            fVolume: r.fvolume ?? 0,
+                            fWeight: r.fweight ?? 0,
+                            fTrackingCHN: r.ftrackingchn,
+                          }}
+                        />
+                        <ForwarderCostEditButton
+                          mode="editCost2"
+                          forwarder={{
+                            fid: r.id,
+                            fNo: r.fidorco || String(r.id),
+                            fCostTotalPrice: r.fcosttotalprice,
+                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                            fProductsType2: r.fproductstype2,
+                            fVolume: r.fvolume ?? 0,
+                            fWeight: r.fweight ?? 0,
+                            fTrackingCHN: r.ftrackingchn,
+                          }}
+                        />
+                        <ForwarderCostEditButton
+                          mode="editCostSheet"
+                          forwarder={{
+                            fid: r.id,
+                            fNo: r.fidorco || String(r.id),
+                            fCostTotalPrice: r.fcosttotalprice,
+                            fCostTotalPriceSheet: r.fcosttotalpricesheet,
+                            fProductsType2: r.fproductstype2,
+                            fVolume: r.fvolume ?? 0,
+                            fWeight: r.fweight ?? 0,
+                            fTrackingCHN: r.ftrackingchn,
+                          }}
+                        />
                       </div>
                     </td>
                   )}

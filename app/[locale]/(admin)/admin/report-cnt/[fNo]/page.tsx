@@ -330,6 +330,11 @@ export default async function AdminReportCntDetailPage({
       fvolume: Number(r.fvolume ?? 0),
       fweight: Number(r.fweight ?? 0),
       fproductstype: pType || null,
+      fproductstype2:
+        // Wave 16 P0-3 modal target — raw secondary product-type for cost calc
+        (r as Record<string, unknown>).fproductstype2 == null
+          ? null
+          : String((r as Record<string, unknown>).fproductstype2),
       rate,
       ftotalprice: fTotalPrice,
       frefprice: r.frefprice == null ? null : String(r.frefprice),
