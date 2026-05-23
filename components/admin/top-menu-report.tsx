@@ -33,6 +33,7 @@ import { Link } from "@/i18n/navigation";
 
 type CountKey =
   | "waiting"
+  | "checkQueue"
   | "noteShop"
   | "note"
   | "notPhoto"
@@ -54,6 +55,13 @@ async function loadCounts(): Promise<Counts> {
     build(from()).then((r) => r.count ?? 0);
   const from = () =>
     admin.from("tb_forwarder").select("id", { count: "exact", head: true });
+
+  // Wave 16 P0-2 — separate head-counter for the tb_check_forwarder queue
+  // (the bulk-bill page reads this table directly, not tb_forwarder).
+  const checkQueueCount = admin
+    .from("tb_check_forwarder")
+    .select("id", { count: "exact", head: true })
+    .then((r) => r.count ?? 0);
 
   // Counts run in parallel. We tolerate count failures by defaulting to 0
   // so a single broken filter doesn't blank the entire menu.
@@ -79,6 +87,8 @@ async function loadCounts(): Promise<Counts> {
     Promise.resolve(0),
     // 9) fCreditError — fCredit='1' AND fCreditDate<NOW()
     c((q) => q.eq("fcredit", "1").lt("fcreditdate", new Date().toISOString())),
+    // 10) Wave 16 — bulk-bill queue (tb_check_forwarder rows = pending bills)
+    checkQueueCount,
   ]);
 
   const val = (i: number): number =>
@@ -95,6 +105,7 @@ async function loadCounts(): Promise<Counts> {
     notShipFree:            val(7),
     notShipFreeError:       val(8),
     fCreditError:           val(9),
+    checkQueue:             val(10),
   };
 }
 
@@ -102,6 +113,11 @@ const ITEMS: { key: CountKey | "history"; label: string; href: string }[] = [
   { key: "history",                label: "ประวัติเข้าโกดังไทย",  href: "/admin/forwarder-import-warehouse" },
   { key: "waiting",                label: "รายงานตู้",            href: "/admin/report-cnt" },
   { key: "noteShop",               label: "หมายเหตุสั่งซื้อ",    href: "/admin/forwarder-action?action=NoteShop" },
+  // Wave 16 P0-2 — bulk-bill-customer queue (เรียกเก็บเงินลูกค้า).
+  // Placed BEFORE "หมายเหตุนำเข้า" because billing the customer is the
+  // revenue-pipeline next step after the audit queues — operators should
+  // see it first in the menu order.
+  { key: "checkQueue",             label: "เรียกเก็บเงินลูกค้า",  href: "/admin/forwarder-check" },
   { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarder-action?action=Note" },
   { key: "notPhoto",               label: "ไม่ได้ถ่ายสินค้า",    href: "/admin/forwarder-action?q=4&action=notPhoto" },
   { key: "notPortage",             label: "ไม่ใส่ค่าขนส่ง",      href: "/admin/forwarder-action?q=4&action=notPortage" },
