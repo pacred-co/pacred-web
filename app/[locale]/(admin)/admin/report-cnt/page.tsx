@@ -378,15 +378,16 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
                     <tr key={g.fcabinetnumber} className={`border-t border-border ${g.isPaid ? "bg-green-50/30" : ""}`}>
                       <td className="px-2 py-2 font-mono">
                         <Link
-                          /* Wave 7.2 fix (ภูม audit) — previously linked to
-                             /admin/report-cnt?id=… but the page never read
-                             sp.id → silent no-op. Now drills into the
-                             container's forwarders via the search box of
-                             /admin/forwarders so staff can see every line in
-                             the container. */
-                          href={`/admin/forwarders?focus=search&q=${encodeURIComponent(g.fcabinetnumber)}`}
+                          /* Wave 16 P0-1 — now links to the dedicated per-
+                             container detail page (replaces the Wave 7.2
+                             search-box fallback). The new page renders
+                             the full container summary + 25-column
+                             DataTable + cost-rate modal + bulk-check
+                             button — i.e. the faithful port of the
+                             report-cnt.php ?id=<cnt> mode. */
+                          href={`/admin/report-cnt/${encodeURIComponent(g.fcabinetnumber)}`}
                           className="text-primary-600 hover:underline"
-                          title="ดูทุกรายการในตู้นี้"
+                          title="ดูรายละเอียดตู้นี้"
                         >
                           {g.fcabinetnumber}
                         </Link>
