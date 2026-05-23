@@ -37,6 +37,31 @@ Full reference + concrete examples: [`docs/learnings/pacred-design-philosophy.md
 
 ---
 
+## 0b. Deep-audit from source — NEVER trust an HTML paste or screenshot (2026-05-25 added)
+
+When ภูม pastes a legacy HTML render, or shows a screenshot, or describes a workflow — the **source of truth is the legacy PHP file on disk**, not the rendered HTML. Every legacy `pcs-admin/*.php` is usually a multi-mode dispatcher (`switch ($_GET['page'])` · `if (isset($_GET['id']))` · `if (isset($_POST['*']))`); the HTML you see is ONE mode of N. The other modes are invisible until you `Read` the source.
+
+This rule exists because on 2026-05-25 I shipped a fidelity-comparison report that missed 2 huge legacy pages (`report-cnt.php?id=` mode-b + `forwarder-check.php`) because I compared against ภูม's pasted HTML instead of opening the PHP. ภูม said: *"โหนี่ขนาดมี source code ให้นายเลยนะ ไล่ deep audit เพิ่มด่วน — อยากส่งงานแล้วโดน Owner ไล่กลับบ้านหรือไง"*. Owner would have rejected the work.
+
+**Mandatory protocol when ภูม asks "does this match" or "is this faithful":**
+1. **Open the legacy PHP** under `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\` (NOT `C:\Users\Admin\Downloads\newrealdatapcs\` — that's still an unextracted archive)
+2. **List every mode** the file dispatches (grep `$_GET` / `$_POST` / `switch (` / `include 'include/pages/`)
+3. **Enumerate every `include/pages/<dir>/*.php` sub-handler** — each is potentially a separate Pacred server action
+4. **Cross-reference Pacred** for every legacy artifact (`Glob app/[locale]/(admin)/admin/<feature>/**`)
+5. **Build the diff table** (legacy file · LOC · mode · pacred path · status ✅/⚠️/❌/🔧) BEFORE answering
+6. **Use parallel agents** when scope is wide (> 10 legacy files) — agent A enumerates legacy, agent B enumerates Pacred, you produce the diff
+
+Full lesson + concrete miss-case: [`docs/learnings/audit-discipline.md`](docs/learnings/audit-discipline.md).
+Executable form: [`.claude/skills/legacy-fidelity-check/SKILL.md`](.claude/skills/legacy-fidelity-check/SKILL.md).
+
+**Anti-patterns (what NOT to do):**
+- ❌ Comparing only to "what I see in the HTML" — HTML shows one mode
+- ❌ Defending a gap as "intentional Pacred UX divergence" without verifying Pacred has the feature at all
+- ❌ Trusting your own previous audit's framing — re-audit from source for any new question
+- ❌ Saying "~85% complete" without per-file accounting — measure or don't claim
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

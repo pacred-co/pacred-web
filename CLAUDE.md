@@ -2,6 +2,61 @@
 
 ---
 
+# 🚨 2026-05-25 ค่ำ — WAVE 15 DONE · WAVE 16 PREP (deep audit) · read FIRST (supersedes 2026-05-24 below)
+
+ภูม session วันนี้. **1 commit Wave 15 + 1 commit Wave 16 prep บน `Poom-pacred`.** ภูม catch ผมว่า fidelity audit เก่า audit **ผิวเกินไป** (compare แค่จาก HTML ที่ paste มา ไม่ได้เปิด legacy PHP source) — ผมพลาด 2 หน้าใหญ่ (`report-cnt.php?id=` + `forwarder-check.php`). สั่งให้ "ไล่ deep audit เพิ่มด่วน — อยากส่งงานแล้วโดน Owner ไล่กลับบ้านหรือไง". Dispatch 4 parallel agents เทียบ 44 legacy PHP vs ~70 Pacred routes.
+
+**📦 Commits วันนี้:**
+- `152add3 feat(wave-15): Top 3 P0 fixes from fidelity audit (wallet + yuan + forwarders)` — Wave 15 ครบ + browser-verified · 3 fixes (per-customer balance summary view · default 60-day yuan window · ยอดค้างชำระ column with `lib/forwarder/outstanding.ts`)
+- **(pending push)** `feat(wave-16-prep): cargo flow deep audit + Wave 16/17 plan` — audit doc + save-point + 8 Tasks + new learning + AGENTS rule
+
+**🎯 Wave 16 P0 queue (5 items · ~10 ชม · Tasks #76-80):**
+1. **P0-1** `/admin/report-cnt/[fNo]/page.tsx` — per-container detail (cost summary · cost-edit modal · 6 status filters · 25-col DT · bulk-check button) — port of `report-cnt.php?id=` mode-b (2502 LOC) · 2-3 ชม
+2. **P0-2** `/admin/forwarder-check/page.tsx` — 3 tabs ทั้งหมด/เครดิต/ปกติ + bulk "แจ้งชำระเงินลูกค้า" → SMS+LINE+email · status 4→5 — port of `forwarder-check.php` (728 LOC) · 2 ชม
+3. **P0-3** Inline cost-edit modal (editCost / editCost2 from S / editCostSheet) บน forwarder rows · 45 นาที
+4. **P0-4** DELETE `/admin/forwarder-import-warehouse` (89-LOC stub) → redirect → `/admin/forwarders/warehouse-history` (1140-LOC faithful Wave 12) · 15 นาที
+5. **P0-5** Schema-split reconciliation — barcode gateway query `forwarders` vs `tb_forwarder` · 1 ชม
+
+**🟠 Wave 17 P1 queue (3 items · ~10-12 ชม · Tasks #81-83):**
+- P1-1+2 MOMO + CN manual-entry forms (defer API call sub-pages to Phase C) · 3 ชม
+- P1-3..6 api-sheets quartet (CTT/Sang/MK/MX — ⚠️ misnomer · เป็น carrier manual entry forms ไม่ใช่ Sheets API) · 6 ชม
+- P1-7 Finish `barcode/driver/import` AJAX wiring (UI shell มี · scan handler ยัง GET-redirect) · 1.5 ชม
+
+**🟡 P2 — defer to Phase C:** JMF/GOGO API · real Sheets API (check-sang-cost) · MOMO/CN/JMF cron jobs · standalone forwarder-driver · MOMO Sack API · CargoCenter containerReport (legacy เองยังไม่เคยทำ).
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-25-night.md`](docs/research/poom-save-point-2026-05-25-night.md) — canonical resume (Wave 15 done + Wave 16 plan + branch state + resume commands)
+2. 📋 [`docs/audit/cargo-flow-deep-audit-2026-05-25.md`](docs/audit/cargo-flow-deep-audit-2026-05-25.md) — Wave 16 gap report (44 legacy PHP vs ~70 Pacred) · P0/P1/P2 prioritized
+3. 🛠 [`docs/learnings/audit-discipline.md`](docs/learnings/audit-discipline.md) — **NEW** the lesson from today (audit from PHP source, not HTML paste)
+4. 🧭 [`AGENTS.md`](AGENTS.md) §0b — **NEW** rule: deep-audit-from-source protocol
+5. 📝 [`docs/research/poom-save-point-2026-05-24-night.md`](docs/research/poom-save-point-2026-05-24-night.md) — Wave 14 context
+
+**⚠️ ภูม manual actions pending (carried over · ยัง):**
+1. 🔴 **ROTATE S3 access key** — Dashboard → Project Settings → Storage → S3 Access Keys (key `e913d7da34ca0089638f100afb74c972` leaked วันแรก)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` ถ้ายังไม่ apply
+3. (Optional) แจ้งลูกค้า 4 คน PR เปลี่ยน
+
+**🗺 Branch state map (post-fetch · 2026-05-25 ค่ำ):**
+
+| Branch | HEAD | vs main | vs Poom-pacred | สถานะ |
+|---|---|---|---|---|
+| `main` | `9d8467b` | — | -127 | production · ปอน frontend landed |
+| `Poom-pacred` | `152add3` (Wave 15) | +127 | — | **active · ภูม admin port** |
+| `dave-pacred` | `26cf183` | +40 | +12, -99 | **active · เดฟ customer port** |
+| `dave` | (frozen) | (old V3) | — | FROZEN per 2026-05-19 pivot |
+| `podeng` | `9d8467b` | (= main) | — | merged into main |
+| `faithful-port` | `e8a0ba0` | — | — | customer 12/24 transcription |
+| Our worktree (`claude/adoring-chandrasekhar-0f8ad7`) | `152add3` | (= Poom-pacred) | 0/0 | ✅ in sync |
+
+**dave-pacred has 12 commits Poom-pacred doesn't** = customer-side D1 (cart end-to-end · OTP TTL · PromptPay QR fix). **ไม่ต้อง merge** — parallel lanes per `docs/runbook/faithful-port-plan.md`.
+
+**Recommended P0 sequencing (Task #89):**
+- **🟢 Option A: Lุย P0-3 + P0-4 ก่อน** (1 ชม รวม — เริ่มเร็ว ได้ momentum) แล้วค่อย P0-1+2
+- **🔴 Option B: Lุย P0-1+2 เลย** (4-5 ชม — 2 หน้าใหญ่ที่ owner รอดู ก่อน)
+- **🟠 Option C: ส่ง agents ทำ parallel** (~2 ชม wall-clock · ภูม approve ก่อน)
+
+---
+
 # 🌙 2026-05-24 EVENING — WAVE 14 COMPLETE (read FIRST · supersedes 2026-05-22 below)
 
 ภูม session ที่บ้านวันนี้. **1 new commit** บน `Poom-pacred` (`d287992`).
