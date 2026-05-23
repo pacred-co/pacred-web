@@ -2528,6 +2528,14 @@
       "sea": "Sea",
       "air": "Air"
     },
+    "apiSheets": {
+      "title": "Update import entries",
+      "adjustGroup": "Adjust sheet entries",
+      "ctt": "CTT",
+      "sang": "Sang",
+      "mk": "MK",
+      "mx": "MX"
+    },
     "payment": {
       "title": "Yuan transfer service",
       "list": "Yuan transfers — list",

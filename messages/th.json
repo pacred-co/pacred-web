@@ -2528,6 +2528,14 @@
       "sea": "เรือ",
       "air": "แอร์"
     },
+    "apiSheets": {
+      "title": "อัปเดตฝากนำเข้า",
+      "adjustGroup": "ปรับรายการ Sheet",
+      "ctt": "CTT",
+      "sang": "แสง (Sang)",
+      "mk": "MK",
+      "mx": "MX"
+    },
     "payment": {
       "title": "บริการฝากโอน/ชำระ",
       "list": "ฝากโอนหยวน — รายการ",
