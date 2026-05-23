@@ -11,7 +11,7 @@
  *      (บันทึก = customRate, คืนค่า = resetCustomRate). Only visible to
  *      money-tier roles, and ONLY when the container isn't paid yet.
  *   3. 2 view tabs: "มุมมอง PCS Cargo" (default) and "ปรับต้นทุนตู้ใหม่"
- *      (cost-update view from Google Sheet — DEFERRED, see note below).
+ *      (Pacred-native cost-update view — see "Cost-update view" below).
  *   4. 6 quick-filter buttons + DataTable with 25 columns (1 extra
  *      เรทต้นทุน column for money tier).
  *   5. Per-row inline cost-edit actions (editCost / editCost2 /
@@ -20,12 +20,13 @@
  *   6. Multi-select checkboxes + fixed-bottom "เพิ่มในรายการตรวจสอบแล้ว"
  *      button → adminReportCntAddCheck() server action.
  *
- * Cost-update view (Google Sheet) — DEFERRED:
- *   The legacy `?action=cost-update` branch fetches a Google Sheet via
- *   the Sheets API and matches `fTrackingCHN` against external Sheet
- *   rows. This needs Google Cloud creds + a service-account JSON; out
- *   of scope for P0-1. The tab link points there but renders a "deferred
- *   to Wave 16 P0-4" banner. (TODO marker on the tab.)
+ * Cost-update view (Pacred-native, Wave 16 follow-up B 2026-05-23):
+ *   The legacy `?action=cost-update` branch fetched a Google Sheet via
+ *   the Sheets API + service-account JSON. ภูม decision: drop the Sheets
+ *   dependency — admin enters new `fCostTotalPriceSheet` values inline or
+ *   uploads a CSV (`tracking_chn,cost_sheet`) exported from the carrier's
+ *   sheet, then bulk-saves via adminBulkUpdateForwarderCostSheet().
+ *   Implementation: <CostUpdateView> + actions/admin/report-cnt-cost-update.ts
  *
  * Auth — `requireAdmin(["super","ops","accounting","warehouse"])`.
  * Warehouse sees the page but money columns + rate-edit modal hide.
@@ -41,6 +42,7 @@ import {
   ContainerDetailClient,
   type DetailRow,
 } from "./container-detail-client";
+import { CostUpdateView } from "./cost-update-view";
 
 export const dynamic = "force-dynamic";
 
@@ -480,17 +482,21 @@ export default async function AdminReportCntDetailPage({
         </div>
 
         {isCostUpdate ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
-            <p className="font-semibold">มุมมอง &ldquo;ปรับต้นทุนตู้ใหม่&rdquo; ยังไม่เปิด</p>
-            <p className="mt-2 text-xs">
-              ฟีเจอร์นี้ใช้ Google Sheets API match ราคาต้นทุนภายนอก — เลื่อนไปทำใน
-              Wave 16 P0-4 (ต้องตั้งค่า service-account credentials ก่อน). ในระหว่างนี้ใช้
-              <a className="ml-1 text-primary-600 hover:underline" href={`https://docs.google.com/spreadsheets/d/13ufkMUoYGnz9sm4gQXiaFp9G6Lx1mRR9to0rqEVK0FA/edit`} target="_blank" rel="noreferrer">
-                Google Sheet เดิม
-              </a>{" "}
-              ตรวจสอบราคา + กลับมา &ldquo;มุมมอง PCS Cargo&rdquo; เพื่อแก้ไขทีละรายการ.
-            </p>
-          </div>
+          showMoney ? (
+            <CostUpdateView
+              fCabinetNumber={fCabinetNumber}
+              warehouseLabel={warehouseLabel}
+              rows={detailRows}
+            />
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-semibold">ไม่มีสิทธิ์เข้าถึง</p>
+              <p className="mt-2 text-xs">
+                การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ super / ops / accounting (บัญชี
+                warehouse ดูได้แต่แก้ต้นทุนไม่ได้).
+              </p>
+            </div>
+          )
         ) : (
           <ContainerDetailClient
             rows={detailRows}
