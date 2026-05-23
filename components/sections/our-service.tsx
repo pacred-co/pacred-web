@@ -108,9 +108,14 @@ export function OurService() {
                 aria-label={s.alt}
                 className={[
                   "group relative overflow-hidden isolate bg-white",
-                  "shadow-[0_14px_34px_rgba(15,23,42,0.12)] border border-black/[0.08]",
-                  "transition-[transform,box-shadow] duration-300",
-                  "hover:-translate-y-1.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.18)]",
+                  // Glossy 3D button — chunky drop shadow + crisp top bevel + bottom thickness + edge rim
+                  "shadow-[0_2px_3px_rgba(15,23,42,0.12),0_6px_14px_rgba(15,23,42,0.16),0_18px_38px_rgba(15,23,42,0.22),0_30px_60px_rgba(15,23,42,0.18),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.18),inset_0_0_0_1px_rgba(255,255,255,0.35)]",
+                  "border border-black/[0.14]",
+                  "transition-[transform,box-shadow] duration-300 ease-out will-change-transform",
+                  // Hover — pop higher, brighten gloss, deepen ambient
+                  "hover:-translate-y-2.5 hover:shadow-[0_3px_5px_rgba(15,23,42,0.14),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.26),0_44px_80px_rgba(15,23,42,0.22),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(255,255,255,0.5)]",
+                  // Active — press down hard (touch feedback)
+                  "active:translate-y-0.5 active:shadow-[0_1px_2px_rgba(15,23,42,0.14),0_2px_4px_rgba(15,23,42,0.12),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-1px_0_rgba(0,0,0,0.08),inset_0_0_0_1px_rgba(255,255,255,0.2)] active:duration-75",
                   isTop
                     ? "col-span-3 h-[125px] md:h-[200px] rounded-[15px] md:rounded-[22px]"
                     : "col-span-2 h-[110px] md:h-[150px] rounded-[13px] md:rounded-[22px]",
@@ -131,6 +136,25 @@ export function OurService() {
                 <div
                   className="absolute -left-[8%] -right-[8%] z-[2] h-[76%] bg-gradient-to-br from-[#ff1717] via-[#e00000] to-[#b90000] shadow-[0_-10px_28px_rgba(220,38,38,0.16)]"
                   style={{ bottom: "-34%", borderRadius: "62% 62% 0 0 / 34% 34% 0 0" }}
+                />
+
+                {/* Glossy top highlight — convex-button sheen on the upper half */}
+                <div
+                  className="absolute inset-x-0 top-0 z-[7] pointer-events-none rounded-t-[inherit]"
+                  style={{
+                    height: "58%",
+                    background:
+                      "linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.22) 45%, rgba(255,255,255,0.04) 85%, transparent 100%)",
+                  }}
+                />
+
+                {/* Edge vignette — dims the rim so the centre reads as raised */}
+                <div
+                  className="absolute inset-0 z-[4] pointer-events-none rounded-[inherit]"
+                  style={{
+                    boxShadow:
+                      "inset 0 0 22px 0 rgba(0,0,0,0.26), inset 0 -8px 16px 0 rgba(0,0,0,0.16)",
+                  }}
                 />
 
                 {/* Shine sweep */}
