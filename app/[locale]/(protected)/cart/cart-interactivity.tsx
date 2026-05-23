@@ -2,7 +2,13 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
-import { calculateCartTotal } from "@/actions/cart";
+import { useRouter } from "next/navigation";
+import {
+  calculateCartTotal,
+  deleteCartItem,
+  updateCartItemQuantity,
+  submitCartOrder,
+} from "@/actions/cart";
 
 /**
  * Client-side interactivity for /cart — faithful port of the jQuery
@@ -231,6 +237,112 @@ export function CartInteractivity({
   // nothing is selected.
   const submitDisabled = selectedIds.size === 0;
 
+  // ── deleteItem.php wire — remove a row from tb_cart. Optimistic:
+  //    drop from selectedIds + amounts immediately, then router.refresh
+  //    to refetch the SSR tree (gives the server-rendered grouped
+  //    providers tree the correct shape with the row gone). ──
+  const router = useRouter();
+  const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
+  function handleDelete(id: number) {
+    if (busyDeleteId !== null) return;
+    if (!window.confirm("ลบรายการนี้ออกจากตะกร้า?")) return;
+    setBusyDeleteId(id);
+    startTransition(async () => {
+      const res = await deleteCartItem({ id });
+      setBusyDeleteId(null);
+      if (!res.ok) {
+        window.alert("ลบไม่สำเร็จ: " + res.error);
+        return;
+      }
+      // Drop from local state so the totals recompute without it.
+      const ns = new Set(selectedIds);
+      ns.delete(id);
+      setSelectedIds(ns);
+      const nm = new Map(amounts);
+      nm.delete(id);
+      setAmounts(nm);
+      recompute(ns, pro2Checked);
+      // Refetch SSR tree to remove the row visually (the grouped-
+      // providers tree is server-rendered + needs a fresh fetch).
+      router.refresh();
+    });
+  }
+
+  // ── updateQuantity.php wire — when the user types a new amount we
+  //    update local state instantly (done by changeAmount above) and
+  //    fire-and-forget the persistence write to tb_cart. The recompute
+  //    via calculateCartTotal already re-reads tb_cart server-side, so
+  //    the next total it returns reflects the persisted amount. ──
+  function persistAmount(id: number, amount: number) {
+    startTransition(async () => {
+      await updateCartItemQuantity({ id, quantity: amount });
+    });
+  }
+
+  // ── addOrder wire — "สั่งซื้อสินค้า" submit. The form fields
+  //    (addressID, hTransportType, crate, hShipBy, payMethod, pro,
+  //    pro2, hNote) are rendered SSR by the outer page; we read them
+  //    via the form's FormData rather than mirroring them into client
+  //    state (keeps the SSR markup 1:1). On success → router.push
+  //    to the new order's detail page. ──
+  const [submitting, setSubmitting] = useState(false);
+  function handleSubmitOrder(e: React.MouseEvent<HTMLButtonElement>) {
+    if (selectedIds.size === 0 || submitting) return;
+    const form = e.currentTarget.form;
+    if (!form) {
+      window.alert("ไม่พบฟอร์ม กรุณารีเฟรชหน้าใหม่");
+      return;
+    }
+    const fd = new FormData(form);
+    const addressID = String(fd.get("addressID") ?? "");
+    const hTransportType = String(fd.get("hTransportType") ?? "");
+    const crate = String(fd.get("crate") ?? "");
+    const hShipBy = fd.get("hShipBy");
+    const payMethod = fd.get("payMethod");
+    const pro = fd.get("pro");
+    const pro2 = pro2Checked ? "77" : null;
+    const hNote = fd.get("hNote");
+
+    if (!addressID) {
+      window.alert("กรุณาเลือกที่อยู่จัดส่ง");
+      return;
+    }
+    if (!hTransportType) {
+      window.alert("กรุณาเลือกรูปแบบการขนส่งจีน-ไทย");
+      return;
+    }
+    if (!crate) {
+      window.alert("กรุณาเลือกการตีลังไม้");
+      return;
+    }
+    if (!window.confirm(`ยืนยันส่งออเดอร์ ${selectedIds.size} รายการ?`)) return;
+    setSubmitting(true);
+    startTransition(async () => {
+      const res = await submitCartOrder({
+        ids: Array.from(selectedIds),
+        addressID,
+        hTransportType,
+        crate,
+        hShipBy: hShipBy ? String(hShipBy) : null,
+        payMethod: payMethod ? String(payMethod) : null,
+        pro: pro ? String(pro) : null,
+        pro2,
+        hNote: hNote ? String(hNote) : null,
+      });
+      setSubmitting(false);
+      if (!res.ok) {
+        window.alert("ส่งออเดอร์ไม่สำเร็จ: " + res.error);
+        return;
+      }
+      if (res.data?.hNo) {
+        window.alert(
+          `ส่งออเดอร์เรียบร้อย เลขที่ ${res.data.hNo}\nกดตกลงเพื่อไปหน้ารายละเอียด`,
+        );
+        router.push(`/service-order/${res.data.hNo}`);
+      }
+    });
+  }
+
   const countDisplay = selectedIds.size;
 
   return (
@@ -355,24 +467,34 @@ export function CartInteractivity({
                             name="cAmount[]"
                             min="1"
                             step="1"
-                            onChange={(e) =>
-                              changeAmount(r.id, Number(e.target.value))
-                            }
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              changeAmount(r.id, val);
+                            }}
+                            onBlur={(e) => {
+                              // Persist to tb_cart on blur (avoids hammering
+                              // the action on every keystroke; matches the
+                              // legacy DataTables-style "commit on blur"
+                              // expectation).
+                              const val = Number(e.target.value);
+                              const safe = Number.isFinite(val) && val >= 1 ? Math.floor(val) : 1;
+                              persistAmount(r.id, safe);
+                            }}
                           />
                         </div>
                         <div className="product-removal">
-                          {/* cart.php L576-578: the .remove-product trash
-                              button. The legacy `deleteItem.php` AJAX is
-                              NOT wired here — removing a row is a
-                              mutation that belongs on a separate Server
-                              Action (FLAGGED in the page header §1). The
-                              button renders 1:1 so the legacy CSS hits
-                              the same selector. */}
+                          {/* cart.php L576-578: .remove-product trash
+                              button. Wired to `deleteCartItem` (1:1 of
+                              legacy deleteItem.php AJAX). Confirm popup
+                              matches the legacy SweetAlert prompt. */}
                           <button
                             type="button"
                             className="remove-product font-12 btn btn-outline-danger round"
+                            onClick={() => handleDelete(r.id)}
+                            disabled={busyDeleteId === r.id}
                           >
-                            <i className="ft-trash"></i> ลบ{" "}
+                            <i className="ft-trash"></i>{" "}
+                            {busyDeleteId === r.id ? "กำลังลบ..." : "ลบ"}
                           </button>
                         </div>
                         <div className="product-line-price notranslate">
@@ -557,13 +679,20 @@ export function CartInteractivity({
               </div>
             </div>
             <div className="float-right pt-1">
+              {/* Wired to `submitCartOrder` (1:1 of legacy shops.php
+                  addOrder handler). type="button" + onClick — captures
+                  the parent form's FormData (the SSR-rendered address /
+                  transport / crate / shipBy / payMethod / pro / note
+                  inputs) + posts via Server Action. Disabled until at
+                  least 1 row is ticked. */}
               <button
-                type="submit"
+                type="button"
                 className="checkout2 btn btn-main round btn-min-width waves-effect submit-wait animate__animated animate__infinite animate__headShake"
                 name="addOrder"
-                disabled={submitDisabled}
+                disabled={submitDisabled || submitting}
+                onClick={handleSubmitOrder}
               >
-                สั่งซื้อสินค้า
+                {submitting ? "กำลังส่งออเดอร์..." : "สั่งซื้อสินค้า"}
               </button>
             </div>
           </div>
