@@ -65,7 +65,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * Rebrand DONE: legacy `PCS<n>` member-code style → `PR<n>` + the
  * visible company-type badge labels ("PCS Freight" / "PCS Cargo")
- * → "PR Freight" / "PR Cargo" per the 2026-05-22 owner directive
+ * → "Pacred Freight" / "Pacred" per the 2026-05-22 owner directive
  * ("เปลี่ยนหมดเลย ถ้าเรื่อง rebrand"). The underlying
  * `tb_admin.companytype` integer column ("2" / "3") is data and
  * unchanged.
@@ -106,8 +106,8 @@ export const dynamic = "force-dynamic";
 function nameCompanyType(t: string | null): { label: string; cls: string } | null {
   switch (t) {
     case "1": return { label: "Freight & Cargo", cls: "badge badge-danger badge-pill" };
-    case "2": return { label: "PR Freight",      cls: "badge badge-success badge-pill" };
-    case "3": return { label: "PR Cargo",        cls: "badge badge-warning badge-pill" };
+    case "2": return { label: "Pacred Freight",      cls: "badge badge-success badge-pill" };
+    case "3": return { label: "Pacred",        cls: "badge badge-warning badge-pill" };
     default:  return null;
   }
 }

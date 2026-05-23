@@ -53,7 +53,7 @@ import { EditProfileForm } from "./edit-profile-form";
  *   - $fullAddress         → tb_address ⋈ tb_address_main (header.php L107)
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  *
  * ── Deliberately NOT reproduced (documented for the fidelity record) ──
  *  - profile.php L557 `saveHS(...)` — a render-time visit-log INSERT.
@@ -243,7 +243,7 @@ export default async function ProfilePage() {
 
       {/* profile.php <title> L73 (Next.js owns <head> — kept here as a
           comment for the fidelity record):
-          โปรไฟล์ <userID> | PR Cargo */}
+          โปรไฟล์ <userID> | Pacred */}
 
       {/* BEGIN: Content — profile.php L78 */}
       <div className="app-content content">

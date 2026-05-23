@@ -45,7 +45,7 @@ import { PasswordForm } from "./password-form";
  * popups (L79-247) are the `<PasswordForm>` client component.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred. Nothing else changed.
+ * `PR<n>` + Pacred. Nothing else changed.
  */
 
 export default async function AccountSettingsPage() {
@@ -103,7 +103,7 @@ export default async function AccountSettingsPage() {
 
       {/* account-settings.php <title> L39 (Next.js owns <head> — kept
           here as a comment for fidelity record):
-          ตั้งค่าบัญชีผู้ใช้งาน <userID> | PR Cargo */}
+          ตั้งค่าบัญชีผู้ใช้งาน <userID> | Pacred */}
 
       {/* BEGIN: Content — account-settings.php L44 */}
       <div className="app-content content">

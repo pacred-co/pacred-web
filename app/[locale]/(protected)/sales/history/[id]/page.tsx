@@ -58,7 +58,7 @@ import { fStatusBadge, nameStatusUserPay, numberFormat } from "../../helpers";
  * per-row ownership check (a payout from another team → notFound()).
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `include/header.php` L75-85 `UPDATE tb_header_order` — a
@@ -231,7 +231,7 @@ export default async function SalesHistoryDetailPage({
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales-history.php detail <title> L303 (fidelity-
-          record comment):  ประวัติจ่ายเงินลูกค้าตัวแทน #{ID} | PR Cargo Admin */}
+          record comment):  ประวัติจ่ายเงินลูกค้าตัวแทน #{ID} | Pacred Admin */}
 
       {/* BEGIN: Content — report-user-sales-history.php L316 */}
       <div className="app-content content">

@@ -299,7 +299,7 @@ export function ForwarderInteractivity({
       {/* ── (cond.) "รวมบิลจ่าย" headShake strip — forwarder.php L831-836 ── */}
       {showPayStrip && (
         <div className="m-1 p-1 bg-main text-white animate__animated animate__infinite animate__headShake">
-          คุณมีรายการรอชำระเงินที่ใช้ PR เหมาๆ มากกว่า 1 รายการ การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
+          คุณมีรายการรอชำระเงินที่ใช้ Pacred เหมาๆ มากกว่า 1 รายการ การรวมบิลจ่ายจะช่วยให้คุณได้รับส่วนลด
         </div>
       )}
 

@@ -49,11 +49,11 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                 <img
                   id="brand-logo"
                   className="brand-logo z-index-999"
-                  alt="logo"
-                  src={`${A}/images/theme/logo.png`}
+                  alt="Pacred"
+                  src="/images/pacred-logo-red.png"
                 />
                 <h3 className="brand-text d-n-991 notranslate" id="brand-text">
-                  PR Cargo
+                  Pacred
                 </h3>
               </Link>
             </li>
@@ -165,7 +165,7 @@ export function PcsTopMenu({ data }: { data: PcsChromeData }) {
                         <span>โปรโมชัน</span>
                       </a>
                       <a className="dropdown-item" href="#">
-                        <span>พื้นที่จัดส่ง PR เหมาๆ</span>
+                        <span>พื้นที่จัดส่ง Pacred เหมาๆ</span>
                       </a>
                       <a className="dropdown-item" href="#">
                         <span>วิธีการสั่งซื้อ</span>

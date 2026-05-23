@@ -48,7 +48,7 @@ import { nameStatusUserPay, numberFormat } from "../helpers";
  * (`resolveSalesAgent`).
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `report-user-sales-history.php` L14-111 — the `$_POST['add']`
@@ -138,7 +138,7 @@ export default async function SalesHistoryPage() {
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales-history.php <title> L113 (fidelity-record
-          comment):  ประวัติจ่ายเงินลูกค้าตัวแทน | PR Cargo */}
+          comment):  ประวัติจ่ายเงินลูกค้าตัวแทน | Pacred */}
 
       {/* BEGIN: Content — report-user-sales-history.php L129 */}
       <div className="app-content content">

@@ -2592,14 +2592,14 @@
     "manageCustomers": {
       "title": "จัดการลูกค้า",
       "titleSales": "ระบบจัดการลูกค้า",
-      "cargo": "ลูกค้า PR Cargo",
-      "freight": "ลูกค้า PR Freight",
+      "cargo": "ลูกค้า Pacred",
+      "freight": "ลูกค้า Pacred Freight",
       "freightAll": "ลูกค้า Freight ทั้งหมด"
     },
     "withdrawal": {
       "title": "รายการเบิกเงิน",
       "titleSales": "รายการเบิกเงิน",
-      "cargo": "PR Cargo",
+      "cargo": "Pacred",
       "freight": "ค่าคอม Freight",
       "shopGoods": "เบิกเงินค่าสินค้า",
       "cntCost": "ค่าตู้สินค้า",

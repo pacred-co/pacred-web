@@ -54,7 +54,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * legacy `$_GET['q']` (L380-390) — exposed here as `searchParams`.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred. Nothing else changed.
+ * `PR<n>` + Pacred. Nothing else changed.
  *
  * ── NOT transcribed (deliberate · flagged for the integrator) ──
  *  1. payment.php L4-215 — the `if(isset($_POST["payment"]))` handler:
@@ -359,7 +359,7 @@ export default async function ServicePaymentPage({
       <link rel="stylesheet" href="/legacy/pcs/payment.css" />
 
       {/* payment.php <title> L217 (Next.js owns <head> — kept here as a
-          comment for fidelity record):  รายการฝากชำระเงิน | PR Cargo */}
+          comment for fidelity record):  รายการฝากชำระเงิน | Pacred */}
 
       {/* BEGIN: Content — payment.php L251 */}
       <div className="app-content content">
@@ -648,7 +648,7 @@ export default async function ServicePaymentPage({
                         <img
                           className="brand-logo logo-wallet"
                           alt="logo"
-                          src="/legacy/pcs/logo.png"
+                          src="/images/pacred-logo-red.png"
                         />
                       </div>
                     </div>

@@ -44,7 +44,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   5. auto-show <script> for `?page=='add'` (L1061-1069)
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. forwarder.php L9-427 is a large POST handler — `save` (INSERT
@@ -532,12 +532,12 @@ export default async function ServiceImportAddPage() {
                           ))}
                           {(mainAddr || others.length > 0) && (
                             <option value="PCS">
-                              รับเองหน้าโกดัง PR กทม
+                              รับเองหน้าโกดัง Pacred กทม
                             </option>
                           )}
                           {!mainAddr && others.length === 0 && (
                             <option value="PCS">
-                              รับเองหน้าโกดัง PR กทม
+                              รับเองหน้าโกดัง Pacred กทม
                             </option>
                           )}
                         </select>
@@ -547,7 +547,7 @@ export default async function ServiceImportAddPage() {
                           <div id="selectShipBy"></div>
                         </div>
                         <div className="text-danger font-0_85rem">
-                          หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo
+                          หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
                           ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช
                           เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส
                           ที่เก็บต้นทางเท่านั้น{" "}
@@ -653,7 +653,7 @@ export default async function ServiceImportAddPage() {
               >
                 <div className="modal-header">
                   <span className="text-white font-1_7rem">
-                    คุณได้รับสิทธิ์ร่วมโปรโมชัน PR เหมา ๆ{" "}
+                    คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
                   </span>
                   <button
                     type="button"

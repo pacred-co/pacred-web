@@ -426,7 +426,7 @@ export default async function CartPage() {
                                       rel="noreferrer"
                                       className="text-info"
                                     >
-                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง PR Cargo
+                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
                                       ในไทย
                                     </a>
                                   </div>
@@ -450,7 +450,7 @@ export default async function CartPage() {
                                     rel="noreferrer"
                                     className="text-info"
                                   >
-                                    <i className="fa fa-map"></i> ดูแผนที่โกดัง PR Cargo
+                                    <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
                                     ในไทย
                                   </a>
                                 </span>
@@ -470,7 +470,7 @@ export default async function CartPage() {
                                 />
                                 <span className="address-select-now"></span>
                                 <span className="btn-add-address-thai cursor-pointer">
-                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง PR กทม
+                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง Pacred กทม
                                 </span>
                               </>
                             )}
@@ -479,7 +479,7 @@ export default async function CartPage() {
                             <div id="selectShipBy"></div>
                           </div>
                           <div className="text-danger font-0_85rem">
-                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo
+                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
                             ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
                             <a href="/services/import-china" target="_blank" rel="noreferrer">
                               (เช็คพื้นที่ได้ที่นี่)
@@ -731,7 +731,7 @@ export default async function CartPage() {
           >
             <div className="modal-header">
               <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน PR เหมา ๆ{" "}
+                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
               </span>
               <button
                 type="button"

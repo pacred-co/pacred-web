@@ -67,7 +67,7 @@ import { requireAuth } from "@/lib/auth/require-auth";
  * render-time INSERT/UPDATE, so there is nothing to defer.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred. `pay.php` carries no PCS branding
+ * `PR<n>` + Pacred. `pay.php` carries no PCS branding
  * text in its visible markup, so nothing changed there.
  *
  * ── FLAGGED — binary asset + brand asset (documented, never silently
@@ -104,7 +104,7 @@ export default async function PayPage() {
       <link rel="stylesheet" href="/legacy/pcs/pay.css" />
 
       {/* pay.php <title> L4 (Next.js owns <head> — kept here as a
-          comment for the fidelity record):  | PR Cargo */}
+          comment for the fidelity record):  | Pacred */}
 
       {/* BEGIN: Content — pay.php L11 */}
       <div className="app-content content">

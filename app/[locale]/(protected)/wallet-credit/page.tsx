@@ -60,7 +60,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * scroll-to-load-more behaviour itself is not reproduced.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet-credit.php L4-51 (the deposit POST handler — INSERT
@@ -235,7 +235,7 @@ export default async function WalletCreditPage() {
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet-credit.php <title> L53 (Next.js owns <head> — kept as a
-          fidelity comment): กระเป๋าสตางค์เครดิต | PR Cargo */}
+          fidelity comment): กระเป๋าสตางค์เครดิต | Pacred */}
 
       {/* BEGIN: Content — wallet-credit.php L76 */}
       <div className="app-content content">
@@ -306,7 +306,7 @@ export default async function WalletCreditPage() {
                                   <img
                                     className="brand-logo logo-wallet"
                                     alt="logo"
-                                    src="/legacy/pcs/logo.png"
+                                    src="/images/pacred-logo-red.png"
                                   />
                                 </div>
                               </div>
@@ -417,7 +417,7 @@ export default async function WalletCreditPage() {
                   <div className="modal-content ">
                     <div className="modal-header header-from">
                       <h4 className="modal-title">
-                        เติมเงินเข้าเป๋าตัง PR Cargo
+                        เติมเงินเข้าเป๋าตัง Pacred
                       </h4>
                       <button
                         type="button"

@@ -88,7 +88,7 @@ import { Link } from "@/i18n/navigation";
  * render-time INSERT/UPDATE, so there is nothing to defer.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred.
+ * `PR<n>` + Pacred.
  */
 
 // receipt-f-hs.php has no <img> raster assets — the icons are the

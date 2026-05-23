@@ -70,7 +70,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *                              WHERE fdi.fid=<id>
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred. Otherwise the markup is byte-for-byte
+ * `PR<n>` + Pacred. Otherwise the markup is byte-for-byte
  * the legacy output — same class names, same Thai labels, same order.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
@@ -173,8 +173,8 @@ const NAME_SHIP_BY: Record<string, string> = {
   "34": "ทวีทรัพย์ระยอง", "35": "ศิริสมบูรณ์", "36": "นิวสอง อัศวินขนส่ง",
   "37": "โชคสถาพรขนส่ง", "38": "ทรัพย์สมบูรณ์ถาวร", "39": "MNB Transport",
   "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014", "41": "สิรินครขนส่ง", "42": "พาณิชย์การขนส่ง KSD",
-  PCS: "รับเองโกดัง PR กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
-  PCSF: "PR เหมาเหมา", PCSE: "PR Express",
+  PCS: "รับเองโกดัง Pacred กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
+  PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express",
 };
 function nameShipBy(fShipBy: string | null): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? "ไม่พบข้อมูล";

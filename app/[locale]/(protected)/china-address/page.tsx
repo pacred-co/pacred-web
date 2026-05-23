@@ -48,7 +48,7 @@ import { Link } from "@/i18n/navigation";
  * "must be a logged-in member" check (redirect to /complete-profile
  * when the profile row is missing, as the menu.php pilot does).
  *
- * Rebrand DONE: legacy `PCS Cargo` brand -> `PR Cargo` / Pacred (the
+ * Rebrand DONE: legacy `PCS Cargo` brand -> Pacred (the
  * <title> branding); the legacy `basePath` home href -> Pacred `/`.
  * Nothing else.
  */
@@ -56,7 +56,7 @@ import { Link } from "@/i18n/navigation";
 export const metadata: Metadata = {
   // china-address.php L4: <title>ที่อยู่โกดังจีน | PCS Cargo</title>
   // Rebrand PCS -> PR.
-  title: "ที่อยู่โกดังจีน | PR Cargo",
+  title: "ที่อยู่โกดังจีน | Pacred",
 };
 
 export default async function ChinaAddressPage() {

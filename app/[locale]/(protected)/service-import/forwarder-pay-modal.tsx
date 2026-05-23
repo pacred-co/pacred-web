@@ -498,7 +498,7 @@ export function ForwarderPayModal({
                       <>
                         <div className="col-7">
                           <h5 className="text-right">
-                            <b>รวมบิล PR เหมาๆ : </b>
+                            <b>รวมบิล Pacred เหมาๆ : </b>
                           </h5>
                         </div>
                         <div className="col-5">

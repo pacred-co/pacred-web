@@ -78,8 +78,8 @@ import { Link } from "@/i18n/navigation";
  * that client-side total is wired.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
- * `PR<n>` + "PR Cargo" / Pacred — incl. the address-pickup option
- * ("รับเองหน้าโกดัง PR กทม"). The `value="PCS"` data value on the
+ * `PR<n>` + Pacred — incl. the address-pickup option
+ * ("รับเองหน้าโกดัง Pacred กทม"). The `value="PCS"` data value on the
  * pickup option stays (it's the DB-stored fShipBy value the legacy
  * tb_*.fshipby rows persist).
  */
@@ -1167,7 +1167,7 @@ export default async function ForwarderTablePage({
                           {a.fullAddress}
                         </option>
                       ))}
-                      <option value="PCS">รับเองหน้าโกดัง PR กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
                     </select>
                   </div>
                   <div id="selectShipBy"></div>

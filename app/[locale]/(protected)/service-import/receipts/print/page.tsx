@@ -84,7 +84,7 @@ import { PrintButton } from "@/components/print-button";
  *    page, `pageBreakAfter` between them.
  *
  * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" / "บริษัท
- * พีซีเอส คาร์โก้ จำกัด" brand → `PR<n>` + "PR Cargo" / "บริษัท แพคเรด
+ * พีซีเอส คาร์โก้ จำกัด" brand → `PR<n>` + "Pacred" / "บริษัท แพคเรด
  * (ประเทศไทย) จำกัด" — the issuer block on the document now shows the
  * Pacred legal name. The legacy Tax-ID + address values remain (data
  * values — runbook §3 / PCS-scrub plan gates those).
@@ -682,7 +682,7 @@ function ReceiptPage({
             </th>
             <th colSpan={2} className="text-center">
               <h2>บริษัท แพคเรด (ประเทศไทย) จำกัด</h2>
-              <h3>PR Cargo CO., LTD.</h3>
+              <h3>Pacred (Thailand) Co., Ltd.</h3>
             </th>
             <th
               colSpan={3}
