@@ -636,8 +636,12 @@ export default async function ServiceImportDetailPage({
   //   button only renders when fStatus>=6 (`$row['fStatus']<6` returns nothing).
 
   return (
-    <div className="pcs-legacy">
-      {/* Legacy PCS theme — same stylesheet the LIST page loads. */}
+    <div className="pcs-legacy pr-forwarder-detail">
+      {/* Legacy PCS theme — same stylesheet the LIST page loads.
+          The `.pr-forwarder-detail` marker scopes the compact-header /
+          tighter-meta / table-density overrides at the end of
+          service-import.css so they apply on the detail page only
+          (not on the list page that shares this stylesheet). */}
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
 
       {/* forwarder.php L1683-1685 — magnific-popup / switchery / dropify

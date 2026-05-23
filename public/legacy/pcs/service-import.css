@@ -1090,3 +1090,78 @@
   /* reserve 2 lines for labels that wrap ("รอเข้าโกดังจีน", "สินค้าถึงไทย" etc.) */
   min-height: 2.4em;
 }
+
+/* =============================================================
+ * /service-import/[fNo] DETAIL PAGE — owner-flagged "บวม" polish
+ * 2026-05-22. Scoped to `.pcs-legacy.pr-forwarder-detail` so the
+ * compact overrides apply on the detail screen only (the list page
+ * at /service-import shares this stylesheet but does NOT carry the
+ * marker class).
+ * ============================================================= */
+
+/* — Header h3 row (ออเดอร์/แทรคกิ้ง/สถานะ): 4× 1.75rem stacked is
+ *   too tall. Reduce to 1.2rem inside the .content-header-* + the
+ *   first .card-body so the order-meta block is compact. Barcode +
+ *   secondary-tracking h3s shrink the most. */
+.pcs-legacy.pr-forwarder-detail .content-body .card-body > .row:first-child h3 {
+  font-size: 1.2rem;
+  margin-bottom: 0.3rem;
+  line-height: 1.3;
+}
+/* — Status badge stays prominent (it's the visual anchor). */
+.pcs-legacy.pr-forwarder-detail .content-body .card-body .badge {
+  font-size: 0.95rem;
+  padding: 0.35em 0.65em;
+}
+
+/* — Meta block h5 rows (วันที่/บริษัทขนส่ง/ที่อยู่/ฯลฯ): tighten
+ *   bottom-margin + line-height so the left + right columns aren't
+ *   ladder-spaced. Also kill the stray <br/> visual gap. */
+.pcs-legacy.pr-forwarder-detail .content-body h5 {
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+  font-size: 1rem;       /* was 1.25rem — too tall when 10+ stacked */
+}
+.pcs-legacy.pr-forwarder-detail .content-body h5 b {
+  font-weight: 600;
+}
+.pcs-legacy.pr-forwarder-detail .content-body p,
+.pcs-legacy.pr-forwarder-detail .content-body .font-16 {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+}
+
+/* — Product-detail table at the bottom: tighter cell padding +
+ *   smaller font so rows fit without horizontal scrolling on
+ *   typical laptop widths. Match the print-receipt density. */
+.pcs-legacy.pr-forwarder-detail .pcs-table2 {
+  font-size: 0.9rem;
+}
+.pcs-legacy.pr-forwarder-detail .pcs-table2 th,
+.pcs-legacy.pr-forwarder-detail .pcs-table2 td {
+  padding: 0.35rem 0.5rem;
+  line-height: 1.4;
+  vertical-align: middle;
+}
+.pcs-legacy.pr-forwarder-detail .pcs-table2 thead th {
+  background: #fde2e4;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* — Process-model.pro2 (8-circle tracker) on this detail page —
+ *   the list page got the .pro2 width:12.5% fix already. Here the
+ *   container width is constrained by the card; ensure the row
+ *   never wraps + the connecting line stays centered through every
+ *   circle. */
+.pcs-legacy.pr-forwarder-detail .process-model.pro2 {
+  min-width: 0;
+  white-space: nowrap;
+  overflow-x: auto;       /* on very narrow viewports allow horizontal scroll */
+}
+.pcs-legacy.pr-forwarder-detail .process-model.pro2 li {
+  width: 12.5%;            /* 8 circles even-split */
+  vertical-align: top;
+  min-width: 78px;          /* don't squeeze below circle diameter */
+}
