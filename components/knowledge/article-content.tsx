@@ -3,7 +3,7 @@ import { MessageCircle, Phone, ArrowRight, Quote } from "lucide-react";
 import { TrackedExternalLink } from "@/components/analytics/tracked-link";
 
 const LINE_URL = "/line";
-const HOTLINE = "066-125-3007";
+const HOTLINE = "066-131-0253";
 
 const EMOJI_HEAD = /^([\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{1F000}-\u{1F02F}✅⚠️📞📲🚢✈️📦🛠️🆘🛑🚫🌍🇨🇳🚀🛳️💡🎯👉⏱⏰🔎🛒🇹🇭🏁📍⭐📂](?:[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE0F}️])*)\s*(.*)$/u;
 const NUMBERED_RE = /^(\d+)\.\s+(.+)$/;

@@ -13,7 +13,6 @@ import {
   Sparkles,
   Truck,
   Anchor,
-  FileCheck,
   Crown,
   ArrowRight,
   BadgePercent,
@@ -55,7 +54,7 @@ const PORTS = [
 // ───────────── Term ─────────────
 const TERMS: { id: Term; label: string; descKey: string; modes: Mode[] }[] = [
   { id: "DDP", label: "DDP", descKey: "termDdpDesc", modes: ["cargo", "freight"] },
-  { id: "EXW", label: "EXW", descKey: "termExwDesc", modes: ["cargo", "freight"] },
+  { id: "EXW", label: "EXW", descKey: "termExwDesc", modes: ["freight"] }, // FCL only — cargo + LCL are DDP-inclusive
   { id: "FOB", label: "FOB", descKey: "termFobDesc", modes: ["freight"] },
 ];
 
@@ -70,13 +69,14 @@ type CargoCard = {
   subtitleKey: string;
   prices: {
     mode: CargoPriceMode;
-    cbm: string;
-    kg: string;
+    cbm: string;    // LCL: ฿/CBM  |  FCL: ฿/ตู้
+    kg: string;     // LCL: ฿/กก.  |  FCL: capacity string e.g. "≤ 25 CBM"
     transitKey: string;
   }[];
   noteKey: string;
   popular?: boolean;
   comingSoon?: boolean;
+  fclMode?: boolean;   // true = FCL card — changes unit labels
   bgImages?: string[];
 };
 
@@ -129,6 +129,36 @@ const CARGO_CARDS: CargoCard[] = [
       "/images/catagory/camera.png",
       "/images/catagory/comlaptop.png",
     ],
+  },
+];
+
+// ───────────── Cargo FCL cards (full container, road + sea) ─────────────
+const CARGO_FCL_CARDS: CargoCard[] = [
+  {
+    id: "cargo-fcl-20ft",
+    title: "FCL 20ft",
+    subtitleKey: "cargoFcl20Subtitle",
+    prices: [
+      { mode: "road", cbm: "55,000", kg: "≤ 25 CBM", transitKey: "transit5to7"   },
+      { mode: "sea",  cbm: "42,000", kg: "≤ 25 CBM", transitKey: "transit12to15" },
+    ],
+    noteKey: "cargoFcl20Note",
+    fclMode: true,
+    bgImages: ["/images/catagory/comlaptop.png"],
+  },
+  {
+    id: "cargo-fcl-40hq",
+    badgeKey: "cargoFcl40Badge",
+    title: "FCL 40HQ",
+    subtitleKey: "cargoFcl40Subtitle",
+    prices: [
+      { mode: "road", cbm: "82,000", kg: "≤ 65 CBM", transitKey: "transit5to7"   },
+      { mode: "sea",  cbm: "60,000", kg: "≤ 65 CBM", transitKey: "transit12to15" },
+    ],
+    noteKey: "cargoFcl40Note",
+    fclMode: true,
+    popular: true,
+    bgImages: ["/images/catagory/camera.png"],
   },
 ];
 
@@ -255,7 +285,8 @@ export function PricingSection() {
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             {t("originCountry")}
           </div>
-          <div className="flex overflow-x-auto md:flex-wrap gap-2 pb-1 md:pb-0 -mx-[10px] px-[10px] md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+          {/* Country chips — clean modern pill selector */}
+          <div className="flex overflow-x-auto gap-2 pb-1 -mx-[10px] px-[10px] md:mx-0 md:px-0 md:pb-0 md:flex-wrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
             {COUNTRIES.map((c) => {
               const selected = country === c.code && c.active;
               const disabled = c.soon || !c.active;
@@ -263,32 +294,27 @@ export function PricingSection() {
                 <button
                   key={c.code}
                   type="button"
-                  disabled={disabled || c.locked}
+                  disabled={disabled}
                   onClick={() => !disabled && setCountry(c.code)}
                   suppressHydrationWarning
                   className={[
-                    "group relative inline-flex items-center gap-2 h-10 px-3.5 rounded-xl text-[13px] font-bold transition-all duration-300 border overflow-hidden",
+                    "inline-flex items-center gap-2 h-[42px] pl-3 pr-4 rounded-full border text-[13.5px] font-semibold transition-all duration-200 focus:outline-none whitespace-nowrap",
                     selected
-                      ? "bg-gradient-to-br from-primary-500 to-primary-700 text-white border-primary-600 shadow-[0_10px_22px_rgba(179,0,0,0.35)] scale-[1.02]"
+                      ? "bg-primary-600 border-primary-600 text-white shadow-[0_4px_14px_rgba(179,0,0,0.35)]"
                       : disabled
-                        ? "bg-surface text-muted border-border opacity-70 cursor-not-allowed"
-                        : "bg-white dark:bg-surface text-[#111827] dark:text-white border-border hover:border-primary-400 hover:-translate-y-0.5 hover:shadow-[0_6px_14px_rgba(179,0,0,0.10)] cursor-pointer",
+                        ? "bg-surface dark:bg-surface border-border/60 text-muted opacity-55 cursor-not-allowed"
+                        : "bg-white dark:bg-surface border-border hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-950/30 text-[#111827] dark:text-foreground cursor-pointer",
                   ].join(" ")}
                 >
-                  {selected && (
-                    <span aria-hidden className="absolute inset-y-0 -left-1/2 w-1/3 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[shimmer_2.5s_infinite]" />
-                  )}
-                  <span className="text-[18px] leading-none relative">{c.flag}</span>
-                  <span className="relative">{t(c.nameKey)}</span>
-                  {selected && c.locked && (
-                    <span className="relative inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/25 ml-0.5">
-                      <Lock className="w-3 h-3" strokeWidth={3} />
-                    </span>
-                  )}
+                  <span className="text-[18px] leading-none">{c.flag}</span>
+                  <span>{t(c.nameKey)}</span>
                   {c.soon && (
-                    <span className="ml-1 inline-flex items-center text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
-                      {t("comingSoon")}
+                    <span className="ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/8 dark:bg-white/10 text-muted leading-none">
+                      เร็วๆนี้
                     </span>
+                  )}
+                  {selected && (
+                    <Check className="w-[14px] h-[14px] ml-0.5 shrink-0" strokeWidth={2.5} />
                   )}
                 </button>
               );
@@ -365,7 +391,8 @@ export function PricingSection() {
           </div>
         )}
 
-        {/* ─── Term toggle ─── */}
+        {/* ─── Term toggle — hidden when only one term available (cargo = DDP only) ─── */}
+        {visibleTerms.length > 1 && (
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           <div className="text-[12px] font-bold text-muted uppercase tracking-[0.12em] mb-2">
             {t("termLabel")}
@@ -415,38 +442,31 @@ export function PricingSection() {
             })}
           </div>
         </div>
-
-        {/* ─── Cargo terms notice ─── */}
-        {mode === "cargo" && (
-          <div className="mx-auto mt-4 w-full max-w-[1120px]">
-            <div className="relative flex items-center gap-3 rounded-2xl border border-primary-200 dark:border-primary-900/60 bg-gradient-to-r from-primary-50 via-white to-primary-50/40 dark:from-primary-950/30 dark:via-surface dark:to-primary-950/10 px-4 py-3 overflow-hidden">
-              {/* Decorative shimmer */}
-              <span aria-hidden className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/4 bg-gradient-to-r from-transparent via-primary-200/40 to-transparent dark:via-primary-700/20 animate-[shimmer_4s_infinite]" />
-
-              <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shrink-0 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
-                <FileCheck className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              </div>
-              <div className="relative text-[12px] md:text-[13px] leading-[1.5] flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-600 text-white text-[10px] font-black tracking-[0.08em]">
-                    <ShieldCheck className="w-3 h-3" strokeWidth={2.5} />
-                    {t("cargoNoticeBadge")}
-                  </span>
-                  <span className="font-black text-[#111827] dark:text-white">{t("cargoNoticeTitle")}</span>
-                </div>
-                <p className="text-muted mt-0.5">{t("cargoNoticeDesc")}</p>
-              </div>
-            </div>
-          </div>
         )}
+
 
         {/* ─── Price cards — horizontal swipe on mobile ─── */}
         <div className="mx-auto mt-6 w-full max-w-[1120px]">
           {mode === "cargo" ? (
-            <div className="flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:grid-cols-3 md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {CARGO_CARDS.map((card) => (
-                <CargoPriceCard key={card.id} card={card} t={t} />
-              ))}
+            <div className="flex flex-col gap-7 md:gap-10">
+              {/* ═════ Cargo LCL Section ═════ */}
+              <CargoGroupRow
+                eyebrow={t("cargoLclSectionEyebrow")}
+                title={t("cargoLclSectionTitle")}
+                sub={t("cargoLclSectionSub")}
+                cards={CARGO_CARDS}
+                cols={3}
+                t={t}
+              />
+              {/* ═════ Cargo FCL Section ═════ */}
+              <CargoGroupRow
+                eyebrow={t("cargoFclSectionEyebrow")}
+                title={t("cargoFclSectionTitle")}
+                sub={t("cargoFclSectionSub")}
+                cards={CARGO_FCL_CARDS}
+                cols={2}
+                t={t}
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-7 md:gap-10">
@@ -483,12 +503,44 @@ export function PricingSection() {
   );
 }
 
-// ────────────────── Cargo card (dual price) ──────────────────
+// ────────────────── Cargo group row (LCL or FCL with section header) ──────────────────
 type PricingT = ReturnType<typeof useTranslations<"pricing">>;
+
+function CargoGroupRow({
+  eyebrow, title, sub, cards, cols, t,
+}: {
+  eyebrow: string; title: string; sub: string;
+  cards: CargoCard[]; cols: 2 | 3; t: PricingT;
+}) {
+  return (
+    <section aria-label={title}>
+      <header className="mb-3 md:mb-4">
+        <div className="flex items-center gap-2 mb-1.5 text-primary-600 text-[11px] md:text-[12.5px] font-black tracking-[0.10em] uppercase">
+          <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-primary-600 shrink-0" />
+          {eyebrow}
+        </div>
+        <h3 className="text-[19px] md:text-[26px] leading-[1.18] font-black tracking-[-0.03em] text-[#111827] dark:text-white">
+          {title}
+        </h3>
+        <p className="mt-1 text-[12.5px] md:text-[14px] leading-[1.55] font-medium text-muted max-w-[820px]">
+          {sub}
+        </p>
+      </header>
+      <div className={`flex overflow-x-auto gap-3 pb-2 -mx-[10px] px-[10px] snap-x snap-mandatory md:mx-0 md:px-0 md:pb-0 md:overflow-visible md:grid md:gap-4 [&>*]:shrink-0 [&>*]:w-[80%] [&>*]:min-w-[280px] [&>*]:snap-start md:[&>*]:w-auto md:[&>*]:min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${cols === 2 ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+        {cards.map((card) => (
+          <CargoPriceCard key={card.id} card={card} t={t} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ────────────────── Cargo card (clearance-style header + dual price) ──────────────────
 
 function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
   const popular = card.popular;
   const comingSoon = card.comingSoon;
+  const isFcl = !!card.fclMode;
 
   return (
     <div className={`group relative ${popular ? "md:scale-[1.04] z-[1]" : ""}`}>
@@ -497,133 +549,98 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
         <div aria-hidden className="pointer-events-none absolute -inset-2 rounded-[28px] bg-gradient-to-br from-primary-400/50 via-primary-600/40 to-primary-800/50 blur-2xl animate-[glow-pulse_3s_ease-in-out_infinite]" />
       )}
 
-      <div
-        className={[
-          "relative flex flex-col rounded-3xl overflow-hidden transition-all duration-300",
+      <div className={[
+        "relative flex flex-col rounded-3xl overflow-hidden transition-all duration-300 border",
+        comingSoon
+          ? "border-border/60 shadow-[0_4px_14px_rgba(0,0,0,0.05)]"
+          : popular
+            ? "border-primary-700 shadow-[0_16px_44px_rgba(179,0,0,0.28)] group-hover:-translate-y-1 group-hover:shadow-[0_28px_56px_rgba(179,0,0,0.38)]"
+            : "border-border shadow-[0_8px_22px_rgba(0,0,0,0.07)] group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_rgba(179,0,0,0.13)] group-hover:border-primary-200",
+      ].join(" ")}>
+
+        {/* ── Gradient image header (clearance-card style) ── */}
+        <div className={[
+          "relative overflow-hidden flex-shrink-0",
+          isFcl ? "h-[110px] md:h-[120px]" : "h-[128px] md:h-[140px]",
           comingSoon
-            ? "bg-gradient-to-br from-surface to-surface-alt dark:from-surface dark:to-background text-muted border border-dashed border-border"
+            ? "bg-gradient-to-br from-[#94a3b8] via-[#64748b] to-[#475569] bg-[length:200%_200%]"
             : popular
-              ? "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 bg-[length:200%_200%] text-white shadow-[0_20px_50px_rgba(179,0,0,0.35)] border border-primary-700 group-hover:-translate-y-1 group-hover:shadow-[0_30px_60px_rgba(179,0,0,0.45)] animate-[gradient-pan_8s_ease-in-out_infinite]"
-              : "bg-white dark:bg-surface text-[#111827] dark:text-white border border-border shadow-[0_8px_22px_rgba(0,0,0,0.06)] group-hover:-translate-y-1 group-hover:shadow-[0_18px_36px_rgba(179,0,0,0.12)] group-hover:border-primary-300",
-        ].join(" ")}
-      >
-        {/* Pattern overlay — popular */}
-        {popular && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.08]"
-            style={{
-              backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-              backgroundSize: "14px 14px",
-            }}
+              ? "bg-gradient-to-br from-primary-500 via-primary-600 to-primary-900 bg-[length:200%_200%] animate-[gradient-pan_6s_ease-in-out_infinite]"
+              : "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 bg-[length:200%_200%] animate-[gradient-pan_9s_ease-in-out_infinite]",
+        ].join(" ")}>
+
+          {/* Dot grid */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "14px 14px" }}
           />
-        )}
-        {/* Pattern overlay — coming soon */}
-        {comingSoon && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-40"
-            style={{
-              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.025) 10px, rgba(0,0,0,0.025) 20px)",
-            }}
-          />
-        )}
 
-        {/* Faint product watermark images */}
-        {card.bgImages && card.bgImages.length > 0 && (
-          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-            {/* Main large image — bottom right */}
-            <div
-              className={[
-                "absolute -bottom-6 -right-6 w-[180px] h-[180px]",
-                popular ? "opacity-[0.14]" : comingSoon ? "opacity-[0.10]" : "opacity-[0.10]",
-              ].join(" ")}
-              style={popular ? { filter: "brightness(0) invert(1)" } : undefined}
-            >
-              <Image
-                src={card.bgImages[0]}
-                alt=""
-                fill
-                sizes="180px"
-                className="object-contain"
-              />
+          {/* Shimmer sweep on hover */}
+          <div aria-hidden className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 -translate-x-full group-hover:translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-[1200ms]" />
+
+          {/* Product images — white-tinted, layered */}
+          {card.bgImages && card.bgImages[0] && (
+            <div className="absolute -bottom-5 -right-5 w-[130px] h-[130px] md:w-[148px] md:h-[148px]"
+              style={{ filter: "brightness(0) invert(1)" }}>
+              <Image src={card.bgImages[0]} alt="" fill sizes="148px" className="object-contain opacity-25" />
             </div>
-            {/* Smaller accent image — top right */}
-            {card.bgImages[1] && (
-              <div
-                className={[
-                  "absolute top-12 -right-4 w-[90px] h-[90px] rotate-[12deg]",
-                  popular ? "opacity-[0.10]" : comingSoon ? "opacity-[0.07]" : "opacity-[0.07]",
-                ].join(" ")}
-                style={popular ? { filter: "brightness(0) invert(1)" } : undefined}
-              >
-                <Image
-                  src={card.bgImages[1]}
-                  alt=""
-                  fill
-                  sizes="90px"
-                  className="object-contain"
-                />
-              </div>
-            )}
-            {/* Smaller accent image — middle left */}
-            {card.bgImages[2] && (
-              <div
-                className={[
-                  "absolute top-1/2 -left-5 w-[80px] h-[80px] -rotate-[8deg]",
-                  popular ? "opacity-[0.08]" : comingSoon ? "opacity-[0.06]" : "opacity-[0.06]",
-                ].join(" ")}
-                style={popular ? { filter: "brightness(0) invert(1)" } : undefined}
-              >
-                <Image
-                  src={card.bgImages[2]}
-                  alt=""
-                  fill
-                  sizes="80px"
-                  className="object-contain"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Crown ribbon — popular */}
-        {popular && (
-          <div className="absolute -top-px left-5 z-[2]">
-            <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
-              <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
-              {t("popularBadge")}
+          )}
+          {card.bgImages && card.bgImages[1] && (
+            <div className="absolute top-3 right-[88px] md:right-[104px] w-[52px] h-[52px] rotate-[14deg]"
+              style={{ filter: "brightness(0) invert(1)" }}>
+              <Image src={card.bgImages[1]} alt="" fill sizes="52px" className="object-contain opacity-15" />
             </div>
-          </div>
-        )}
-        {/* Coming Soon badge */}
-        {comingSoon && (
-          <div className="absolute top-4 right-4 z-[2] inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-600 text-white text-[10px] font-black tracking-[0.08em]">
-            <Lock className="w-3 h-3" strokeWidth={3} />
-            {t("comingSoon")}
-          </div>
-        )}
-
-        <div className="relative p-5 md:p-6 pb-4 md:pb-5">
-          {/* Badge */}
-          {card.badgeKey && !popular && !comingSoon && (
-            <span className="inline-flex items-center text-[10px] font-black px-2 py-1 rounded-full bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300 tracking-[0.08em] mb-2">
-              {t(card.badgeKey)}
-            </span>
+          )}
+          {card.bgImages && card.bgImages[2] && (
+            <div className="absolute -top-2 right-[140px] md:right-[158px] w-[44px] h-[44px] -rotate-[8deg]"
+              style={{ filter: "brightness(0) invert(1)" }}>
+              <Image src={card.bgImages[2]} alt="" fill sizes="44px" className="object-contain opacity-10" />
+            </div>
           )}
 
-          {/* Title */}
-          <div className={popular ? "mt-3" : ""}>
-            <h3 className={`text-[22px] md:text-[24px] font-black leading-tight ${popular ? "text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]" : ""}`}>
+          {/* Top badges */}
+          {popular && (
+            <div className="absolute top-3 left-3 z-[2]">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.22)]">
+                <Crown className="w-3 h-3" fill="currentColor" strokeWidth={0} />
+                {t("popularBadge")}
+              </div>
+            </div>
+          )}
+          {comingSoon && (
+            <div className="absolute top-3 right-3 z-[2] inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 text-white text-[10px] font-black tracking-[0.08em]">
+              <Lock className="w-3 h-3" strokeWidth={3} />
+              {t("comingSoon")}
+            </div>
+          )}
+          {card.badgeKey && !popular && !comingSoon && (
+            <div className="absolute top-3 left-3 z-[2]">
+              <span className="inline-flex items-center text-[10px] font-black px-2.5 py-1 rounded-full bg-white/20 text-white tracking-[0.08em]">
+                {t(card.badgeKey)}
+              </span>
+            </div>
+          )}
+
+          {/* Title overlay — bottom of header */}
+          <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-8 bg-gradient-to-t from-black/45 via-black/10 to-transparent">
+            <h3 className="text-[22px] md:text-[24px] font-black text-white leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">
               {card.title}
             </h3>
-            <p className={`text-[12px] md:text-[13px] mt-0.5 leading-snug ${popular ? "text-white/85" : "text-muted"}`}>
+            <p className="text-[11px] text-white/80 font-medium mt-0.5 leading-snug">
               {t(card.subtitleKey)}
             </p>
           </div>
+        </div>
+
+        {/* ── Body (price rows + CTAs) ── */}
+        <div className={[
+          "flex flex-col flex-1",
+          comingSoon
+            ? "bg-gradient-to-b from-surface to-surface-alt dark:from-surface dark:to-background"
+            : "bg-white dark:bg-surface",
+        ].join(" ")}>
 
           {/* Dual prices: รถ + เรือ */}
-          <div className="mt-4 space-y-2">
+          <div className="px-4 md:px-5 pt-4 space-y-2">
             {card.prices.map((p) => {
               const isCar = p.mode === "road";
               const Icon = isCar ? Truck : Ship;
@@ -632,49 +649,43 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
                 <div
                   key={p.mode}
                   className={[
-                    "relative flex items-center gap-2.5 rounded-2xl px-3 py-2.5 transition-colors",
-                    popular
-                      ? "bg-white/10 hover:bg-white/15 backdrop-blur-sm border border-white/15"
-                      : comingSoon
-                        ? "bg-white/40 dark:bg-background/40 border border-dashed border-border"
-                        : "bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface border border-border/60",
+                    "relative flex items-center gap-2.5 rounded-2xl px-3 py-2.5",
+                    comingSoon
+                      ? "bg-white/40 dark:bg-background/40 border border-dashed border-border"
+                      : "bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface border border-border/60",
                   ].join(" ")}
                 >
-                  <div
-                    className={[
-                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-                      popular
-                        ? "bg-white/25 text-white shadow-inner"
-                        : comingSoon
-                          ? "bg-border text-muted"
-                          : "bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.25)]",
-                    ].join(" ")}
-                  >
+                  <div className={[
+                    "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                    comingSoon
+                      ? "bg-border text-muted"
+                      : "bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.25)]",
+                  ].join(" ")}>
                     <Icon className="w-[18px] h-[18px]" strokeWidth={2.5} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] ${popular ? "text-white/75" : "text-muted"}`}>
+                    <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
                       <span>{modeLabel}</span>
                       <span className="opacity-50">·</span>
                       <span>{t(p.transitKey)}</span>
                     </div>
                     <div className="flex items-baseline gap-2.5 flex-wrap mt-0.5">
                       <div className="flex items-baseline gap-1">
-                        <span className={`text-[22px] md:text-[24px] font-black leading-none tracking-tight tabular-nums ${popular ? "text-white" : comingSoon ? "text-muted" : "text-primary-600"}`}>
+                        <span className={`text-[22px] md:text-[24px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600"}`}>
                           {p.cbm}
                         </span>
-                        <span className={`text-[10px] font-bold ${popular ? "text-white/80" : "text-muted"}`}>
-                          {t("perCbm")}
+                        <span className="text-[10px] font-bold text-muted">
+                          {isFcl ? t("perContainer") : t("perCbm")}
                         </span>
                       </div>
-                      <span className={`w-px h-3 ${popular ? "bg-white/25" : "bg-border"}`} />
+                      <span className="w-px h-3 bg-border" />
                       <div className="flex items-baseline gap-1">
-                        <span className={`text-[17px] md:text-[19px] font-black leading-none tracking-tight tabular-nums ${popular ? "text-white/95" : comingSoon ? "text-muted" : "text-primary-600/90"}`}>
+                        <span className={`${isFcl ? "text-[13px]" : "text-[17px] md:text-[19px]"} font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : isFcl ? "text-muted" : "text-primary-600/90"}`}>
                           {p.kg}
                         </span>
-                        <span className={`text-[10px] font-bold ${popular ? "text-white/80" : "text-muted"}`}>
-                          {t("perKg")}
-                        </span>
+                        {!isFcl && (
+                          <span className="text-[10px] font-bold text-muted">{t("perKg")}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -682,87 +693,71 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
               );
             })}
           </div>
-        </div>
 
-        {/* Decorative divider with center pill */}
-        <div className="relative mx-5 md:mx-6">
-          <div className={`border-t border-dashed ${popular ? "border-white/30" : "border-border"}`} />
-          <div className={[
-            "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-[0.12em]",
-            popular
-              ? "bg-primary-800 text-yellow-200 border border-white/20"
-              : comingSoon
+          {/* Divider with pill */}
+          <div className="relative mx-4 md:mx-5 mt-4">
+            <div className="border-t border-dashed border-border" />
+            <div className={[
+              "absolute -top-2 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-[0.12em]",
+              comingSoon
                 ? "bg-surface text-muted border border-border"
                 : "bg-white dark:bg-surface text-primary-600 border border-primary-200 dark:border-primary-900",
-          ].join(" ")}>
-            <BadgePercent className="w-2.5 h-2.5" strokeWidth={2.5} />
-            {t("carePill")}
-          </div>
-        </div>
-
-        <div className="relative p-5 md:p-6 pt-5 flex-1 flex flex-col">
-          {/* Note */}
-          <div
-            className={[
-              "flex items-start gap-2 rounded-xl px-3 py-2.5 mb-4 text-[11.5px] md:text-[12px] leading-[1.5]",
-              popular
-                ? "bg-white/10 text-white/95 border border-white/15"
-                : comingSoon
-                  ? "bg-white/40 dark:bg-background/40 text-muted border border-dashed border-border"
-                  : "bg-gradient-to-br from-primary-50/80 to-primary-50/40 text-[#111827] dark:from-primary-900/20 dark:to-primary-900/5 dark:text-white/85 border border-primary-100 dark:border-primary-900/40",
-            ].join(" ")}
-          >
-            <div className={[
-              "w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5",
-              popular ? "bg-yellow-300/20 text-yellow-300" : comingSoon ? "bg-border text-muted" : "bg-primary-600 text-white",
             ].join(" ")}>
-              <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+              <BadgePercent className="w-2.5 h-2.5" strokeWidth={2.5} />
+              {t("carePill")}
             </div>
-            <span className="pt-0.5">{t(card.noteKey)}</span>
           </div>
 
-          {/* CTAs */}
-          <div className="mt-auto flex flex-col gap-2">
-            {comingSoon ? (
-              <button
-                type="button"
-                disabled
-                suppressHydrationWarning
-                className="w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black bg-surface-alt dark:bg-background/60 text-muted border border-dashed border-border cursor-not-allowed"
-              >
-                <Lock className="w-4 h-4" strokeWidth={2.5} />
-                {t("notServingYet")}
-              </button>
-            ) : (
-              <>
-                <TrackedExternalLink
-                  href={LINE_URL}
-                  cta="line_consult"
-                  surface="pricing_cargo"
-                  ctaProps={{ card: card.id }}
-                  className={[
-                    "relative w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black transition-all duration-300 overflow-hidden group/cta",
-                    popular
-                      ? "bg-white text-primary-700 hover:bg-yellow-50 shadow-[0_8px_20px_rgba(255,255,255,0.15)]"
-                      : "bg-gradient-to-br from-primary-500 to-primary-700 text-white hover:shadow-[0_10px_22px_rgba(179,0,0,0.35)]",
-                  ].join(" ")}
-                >
-                  <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover/cta:translate-x-full transition-transform duration-700" />
-                  <svg className="w-4 h-4 shrink-0 relative" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
-                  </svg>
-                  <span className="relative">{t("ctaQuote")}</span>
-                  <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
+          <div className="px-4 md:px-5 pb-4 md:pb-5 pt-5 flex-1 flex flex-col">
+            {/* Note */}
+            <div className={[
+              "flex items-start gap-2 rounded-xl px-3 py-2.5 mb-4 text-[11.5px] md:text-[12px] leading-[1.5]",
+              comingSoon
+                ? "bg-white/40 dark:bg-background/40 text-muted border border-dashed border-border"
+                : "bg-gradient-to-br from-primary-50/80 to-primary-50/40 text-[#111827] dark:from-primary-900/20 dark:to-primary-900/5 dark:text-white/85 border border-primary-100 dark:border-primary-900/40",
+            ].join(" ")}>
+              <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${comingSoon ? "bg-border text-muted" : "bg-primary-600 text-white"}`}>
+                <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+              </div>
+              <span className="pt-0.5">{t(card.noteKey)}</span>
+            </div>
+
+            {/* Compliance note */}
+            {!comingSoon && (
+              <div className="flex items-center gap-1.5 mb-3 text-[10px] font-bold leading-snug text-muted">
+                <ShieldCheck className="w-3 h-3 shrink-0" strokeWidth={2.5} />
+                <span>{t("cargoNoticeBadge")} · {t("cargoNoticeTitle")}</span>
+              </div>
+            )}
+
+            {/* CTAs */}
+            <div className="mt-auto flex flex-col gap-2">
+              {comingSoon ? (
+                <button type="button" disabled suppressHydrationWarning
+                  className="w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black bg-surface-alt dark:bg-background/60 text-muted border border-dashed border-border cursor-not-allowed">
+                  <Lock className="w-4 h-4" strokeWidth={2.5} />
+                  {t("notServingYet")}
+                </button>
+              ) : (
+                <>
+                  <TrackedExternalLink
+                    href={LINE_URL}
+                    cta="line_consult"
+                    surface="pricing_cargo"
+                    ctaProps={{ card: card.id }}
+                    className="relative w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black transition-all duration-300 overflow-hidden group/cta bg-gradient-to-br from-primary-500 to-primary-700 text-white hover:shadow-[0_10px_22px_rgba(179,0,0,0.35)]"
+                  >
+                    <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover/cta:translate-x-full transition-transform duration-700" />
+                    <svg className="w-4 h-4 shrink-0 relative" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
+                    </svg>
+                    <span className="relative">{t("ctaQuote")}</span>
+                    <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
                 </TrackedExternalLink>
 
                 <a
                   href={`tel:${HOTLINE.replace(/-/g, "")}`}
-                  className={[
-                    "w-full inline-flex items-center justify-center gap-1.5 h-[40px] rounded-xl text-[12.5px] font-bold border transition-all duration-300",
-                    popular
-                      ? "border-white/40 text-white hover:bg-white/10 hover:border-white/60"
-                      : "border-border text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700",
-                  ].join(" ")}
+                  className="w-full inline-flex items-center justify-center gap-1.5 h-[40px] rounded-xl text-[12.5px] font-bold border border-border text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-all duration-300"
                 >
                   <Phone className="w-3.5 h-3.5" strokeWidth={2.5} />
                   {t("ctaCallPrefix")} {HOTLINE}
@@ -773,6 +768,7 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
         </div>
       </div>
     </div>
+  </div>
   );
 }
 
@@ -816,8 +812,138 @@ function FreightGroupRow({
   );
 }
 
-// ────────────────── Freight card (Term-varied) ──────────────────
+// ────────────────── Freight card (Term-varied / LCL clearance-style) ──────────────────
 function FreightPriceCard({ card, term, t }: { card: FreightCard; term: Term; t: PricingT }) {
+  const isLcl = card.group === "lcl";
+
+  // ── LCL cards: clearance-page card style (image-top, always DDP) ──
+  if (isLcl) {
+    const displayPrice = card.price.DDP; // LCL is always DDP-inclusive
+    const popular = card.popular;
+    const Icon = card.id === "lcl-truck" ? Truck : Ship;
+
+    return (
+      <div className={`group relative ${popular ? "md:scale-[1.03] z-[1]" : ""}`}>
+        {popular && (
+          <div aria-hidden className="pointer-events-none absolute -inset-2 rounded-[28px] bg-gradient-to-br from-primary-400/50 via-primary-600/40 to-primary-800/50 blur-2xl animate-[glow-pulse_3s_ease-in-out_infinite]" />
+        )}
+
+        <div className="relative flex flex-col bg-white dark:bg-surface rounded-2xl md:rounded-3xl overflow-hidden border border-[rgba(229,231,235,0.95)] dark:border-border shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition-all duration-300 group-hover:shadow-[0_18px_42px_rgba(15,23,42,0.15)] group-hover:border-primary-300 group-hover:-translate-y-0.5">
+
+          {/* Popular crown badge */}
+          {popular && (
+            <div className="absolute -top-px left-5 z-[5]">
+              <div className="relative inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-br from-yellow-300 to-amber-400 text-primary-800 text-[10px] font-black tracking-[0.08em] rounded-b-xl shadow-[0_6px_14px_rgba(0,0,0,0.18)]">
+                <Crown className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} />
+                {t("popularBadge")}
+              </div>
+            </div>
+          )}
+
+          {/* Gradient header — replaces image (no photo available) */}
+          <div className="relative w-full aspect-[16/9] overflow-hidden bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900">
+            {/* Dot-pattern overlay */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-[0.07]"
+              style={{
+                backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
+                backgroundSize: "14px 14px",
+              }}
+            />
+            {/* Watermark icon */}
+            <div aria-hidden className="absolute -right-5 -bottom-5 opacity-[0.13] text-white pointer-events-none">
+              <Icon className="w-40 h-40" strokeWidth={0.8} />
+            </div>
+
+            {/* Top-left icon badge (clearance card style) */}
+            <div
+              className="absolute left-3 top-3 w-11 h-11 md:w-[52px] md:h-[52px] rounded-full border-[3px] border-white flex items-center justify-center overflow-hidden z-[4]"
+              style={{
+                background: "linear-gradient(135deg,#ff3030,#b8002e)",
+                boxShadow: "0 8px 18px rgba(185,28,28,0.42)",
+              }}
+            >
+              <Icon className="w-5 h-5 md:w-6 md:h-6 text-white" strokeWidth={2.5} />
+            </div>
+
+            {/* Bottom tags */}
+            <div className="absolute left-2.5 right-2.5 bottom-2.5 flex gap-1.5 flex-wrap z-[3]">
+              {card.badgeKey && (
+                <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[9px] md:text-[10px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                  {t(card.badgeKey)}
+                </span>
+              )}
+              <span className="flex-none px-2 py-1 rounded-full bg-white/95 text-[#b91c1c] border border-white/80 text-[9px] md:text-[10px] font-black shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                DDP รวมภาษี
+              </span>
+            </div>
+          </div>
+
+          {/* Info section */}
+          <div className="p-4 md:p-5 flex flex-col flex-1">
+            <h3 className="text-[16px] md:text-[19px] font-black leading-tight text-[#111827] dark:text-white mb-0.5">
+              {card.title}
+            </h3>
+            <p className="text-[11px] md:text-[12.5px] text-muted mb-3 leading-snug">{t(card.subtitleKey)}</p>
+
+            {/* Price — clearance style: "เริ่มต้น X,XXX ฿/CBM" */}
+            <p className="text-[15px] md:text-[18px] font-black text-[#dc2626] mb-3 leading-tight whitespace-nowrap">
+              เริ่มต้น {displayPrice} {t(card.unitKey)}
+            </p>
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {card.stats.map((s) => (
+                <div
+                  key={s.labelKey}
+                  className="rounded-xl px-3 py-2 border border-border/60 bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface"
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">{t(s.labelKey)}</div>
+                  <div className="text-[13px] font-black mt-0.5 tabular-nums text-[#111827] dark:text-white">{t(s.valueKey)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Note box */}
+            <div className="flex items-start gap-2 rounded-xl px-3 py-2.5 mb-4 text-[11.5px] md:text-[12px] leading-[1.5] bg-gradient-to-br from-primary-50/80 to-primary-50/40 dark:from-primary-900/20 dark:to-primary-900/5 text-[#111827] dark:text-white/85 border border-primary-100 dark:border-primary-900/40">
+              <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 bg-primary-600 text-white">
+                <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+              </div>
+              <span className="pt-0.5">{t(card.noteKey)}</span>
+            </div>
+
+            {/* CTAs */}
+            <div className="mt-auto flex flex-col gap-2">
+              <TrackedExternalLink
+                href={LINE_URL}
+                cta="line_consult"
+                surface="pricing_freight"
+                ctaProps={{ card: card.id, term: "DDP" }}
+                className="relative w-full inline-flex items-center justify-center gap-1.5 h-[44px] rounded-xl text-[13px] font-black transition-all duration-300 overflow-hidden group/cta bg-gradient-to-br from-primary-500 to-primary-700 text-white hover:shadow-[0_10px_22px_rgba(179,0,0,0.35)]"
+              >
+                <span aria-hidden className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover/cta:translate-x-full transition-transform duration-700" />
+                <svg className="w-4 h-4 shrink-0 relative" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
+                </svg>
+                <span className="relative">{t("ctaQuote")}</span>
+                <ArrowRight className="w-4 h-4 relative transition-transform duration-300 group-hover/cta:translate-x-1" strokeWidth={3} />
+              </TrackedExternalLink>
+              <a
+                href={`tel:${HOTLINE.replace(/-/g, "")}`}
+                className="w-full inline-flex items-center justify-center gap-1.5 h-[40px] rounded-xl text-[12.5px] font-bold border transition-all duration-300 border-border text-[#111827] dark:text-white hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700"
+              >
+                <Phone className="w-3.5 h-3.5" strokeWidth={2.5} />
+                {t("ctaCallPrefix")} {HOTLINE}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── FCL cards: existing term-varied style ──
   const popular = card.popular;
   const price = card.price[term];
 

@@ -9,10 +9,17 @@ const LEFT_SLIDES = [
   "/images/promotion/fclimportchinjesus.png",
   "/images/promotion/importchinawidth.png",
 ];
-const RIGHT_SLIDES = [
+// Desktop right slot — shorter promotion banners (same folder, paired with LEFT_SLIDES)
+const RIGHT_DESKTOP_SLIDES = [
   "/images/promotion/clearanceshort.png",
   "/images/promotion/fclimportchinman.png",
   "/images/promotion/importlclchina.png",
+];
+// Mobile right slot — mobile-optimised banners
+const RIGHT_MOBILE_SLIDES = [
+  "/images/mobilebanner/1.png",
+  "/images/mobilebanner/2.png",
+  "/images/mobilebanner/3.png",
 ];
 
 function InnerCarousel({
@@ -62,7 +69,7 @@ function InnerCarousel({
               alt={`Slide ${i + 1}`}
               fill
               sizes="(max-width: 768px) 100vw, 730px"
-              className="object-contain md:object-cover transition-transform duration-500 ease-out group-hover/promo:scale-[1.045]"
+              className="object-cover transition-transform duration-500 ease-out group-hover/promo:scale-[1.045]"
               priority={i === 0}
             />
             {/* Soft vignette on hover */}
@@ -107,10 +114,16 @@ export function PromoCarousel() {
         containerClass="hidden md:block relative w-[730px] h-[180px] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
         delay={4000}
       />
-      {/* RIGHT — full width on mobile, fixed 350px on desktop */}
+      {/* RIGHT desktop — promotion banner (hidden on mobile) */}
       <InnerCarousel
-        slides={RIGHT_SLIDES}
-        containerClass="relative w-full md:w-[350px] h-[120px] md:h-[180px] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
+        slides={RIGHT_DESKTOP_SLIDES}
+        containerClass="hidden md:block relative md:w-[350px] md:h-[180px] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
+        delay={3000}
+      />
+      {/* RIGHT mobile — mobile-optimised banner (hidden on desktop) */}
+      <InnerCarousel
+        slides={RIGHT_MOBILE_SLIDES}
+        containerClass="md:hidden relative w-full aspect-[17/6] shrink-0 rounded-xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden"
         delay={3000}
       />
     </div>
