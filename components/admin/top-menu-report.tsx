@@ -99,7 +99,7 @@ async function loadCounts(): Promise<Counts> {
 }
 
 const ITEMS: { key: CountKey | "history"; label: string; href: string }[] = [
-  { key: "history",                label: "ประวัติเข้าโกดังไทย",  href: "/admin/forwarder-import-warehouse" },
+  { key: "history",                label: "ประวัติเข้าโกดังไทย",  href: "/admin/forwarders/warehouse-history" },
   { key: "waiting",                label: "รายงานตู้",            href: "/admin/report-cnt" },
   { key: "noteShop",               label: "หมายเหตุสั่งซื้อ",    href: "/admin/forwarder-action?action=NoteShop" },
   { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarder-action?action=Note" },

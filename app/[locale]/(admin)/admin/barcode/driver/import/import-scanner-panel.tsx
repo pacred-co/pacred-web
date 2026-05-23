@@ -128,7 +128,7 @@ export function ImportScannerPanel() {
           <div className="row">
             <div className="col-12 pb-1">
               <Link
-                href="/admin/forwarder-import-warehouse"
+                href="/admin/forwarders/warehouse-history"
                 className=""
               >
                 <span className="badge badge-info badge-pill">
