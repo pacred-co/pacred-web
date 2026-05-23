@@ -78,6 +78,9 @@ type CargoCard = {
   comingSoon?: boolean;
   fclMode?: boolean;   // true = FCL card — changes unit labels
   bgImages?: string[];
+  // Banner-style warehouse photo — replaces gradient + silhouettes when set.
+  // Source: 1280×580 px landscape (2.2:1). subject กลาง/บน · ขอบล่างโดน gradient ดำทับ.
+  heroImage?: string;
 };
 
 const CARGO_CARDS: CargoCard[] = [
@@ -91,11 +94,7 @@ const CARGO_CARDS: CargoCard[] = [
       { mode: "sea",  cbm: "3,200", kg: "11", transitKey: "transit12to15" },
     ],
     noteKey: "yiwuNote",
-    bgImages: [
-      "/images/catagory/kidtoy.png",
-      "/images/catagory/homeuse.png",
-      "/images/catagory/pet.png",
-    ],
+    heroImage: "/images/main/importcard/wiwu.png",
   },
   {
     id: "guangzhou",
@@ -107,11 +106,7 @@ const CARGO_CARDS: CargoCard[] = [
     ],
     noteKey: "guangzhouNote",
     popular: true,
-    bgImages: [
-      "/images/catagory/handbag.png",
-      "/images/catagory/girlshoe.png",
-      "/images/catagory/girlfashion.png",
-    ],
+    heroImage: "/images/main/importcard/gwangzhou.png",
   },
   {
     id: "shenzhen",
@@ -138,9 +133,10 @@ const CARGO_FCL_CARDS: CargoCard[] = [
     id: "cargo-fcl-20ft",
     title: "FCL 20ft",
     subtitleKey: "cargoFcl20Subtitle",
+    // Per ปอน 2026-05-23: Cargo FCL = door-to-door inclusive → same flat price for road/sea (matches Freight DDP)
     prices: [
-      { mode: "road", cbm: "55,000", kg: "≤ 25 CBM", transitKey: "transit5to7"   },
-      { mode: "sea",  cbm: "42,000", kg: "≤ 25 CBM", transitKey: "transit12to15" },
+      { mode: "road", cbm: "135,000", kg: "≤ 25 CBM", transitKey: "transit5to7"   },
+      { mode: "sea",  cbm: "135,000", kg: "≤ 25 CBM", transitKey: "transit12to15" },
     ],
     noteKey: "cargoFcl20Note",
     fclMode: true,
@@ -151,9 +147,10 @@ const CARGO_FCL_CARDS: CargoCard[] = [
     badgeKey: "cargoFcl40Badge",
     title: "FCL 40HQ",
     subtitleKey: "cargoFcl40Subtitle",
+    // Per ปอน 2026-05-23: same flat price for road/sea (matches Freight DDP)
     prices: [
-      { mode: "road", cbm: "82,000", kg: "≤ 65 CBM", transitKey: "transit5to7"   },
-      { mode: "sea",  cbm: "60,000", kg: "≤ 65 CBM", transitKey: "transit12to15" },
+      { mode: "road", cbm: "155,000", kg: "≤ 65 CBM", transitKey: "transit5to7"   },
+      { mode: "sea",  cbm: "155,000", kg: "≤ 65 CBM", transitKey: "transit12to15" },
     ],
     noteKey: "cargoFcl40Note",
     fclMode: true,
@@ -569,28 +566,53 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
               : "bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 bg-[length:200%_200%] animate-[gradient-pan_9s_ease-in-out_infinite]",
         ].join(" ")}>
 
-          {/* Dot grid */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.06]"
-            style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "14px 14px" }}
-          />
+          {/* Hero warehouse photo — branded tint via mix-blend-multiply.
+              When set, replaces the silhouette decorations entirely. */}
+          {card.heroImage && (
+            <>
+              <Image
+                src={card.heroImage}
+                alt={card.title}
+                fill
+                sizes="(max-width: 768px) 88vw, 440px"
+                className="object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+              />
+              <div
+                aria-hidden
+                className={[
+                  "absolute inset-0 mix-blend-multiply",
+                  popular
+                    ? "bg-gradient-to-br from-primary-500/30 via-primary-700/25 to-primary-900/45"
+                    : "bg-gradient-to-br from-primary-600/25 via-primary-700/20 to-primary-800/35",
+                ].join(" ")}
+              />
+            </>
+          )}
+
+          {/* Dot grid — only when no hero photo */}
+          {!card.heroImage && (
+            <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.06]"
+              style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "14px 14px" }}
+            />
+          )}
 
           {/* Shimmer sweep on hover */}
           <div aria-hidden className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 -translate-x-full group-hover:translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-[1200ms]" />
 
-          {/* Product images — white-tinted, layered */}
-          {card.bgImages && card.bgImages[0] && (
+          {/* Product silhouettes — only when no hero photo */}
+          {!card.heroImage && card.bgImages && card.bgImages[0] && (
             <div className="absolute -bottom-5 -right-5 w-[130px] h-[130px] md:w-[148px] md:h-[148px]"
               style={{ filter: "brightness(0) invert(1)" }}>
               <Image src={card.bgImages[0]} alt="" fill sizes="148px" className="object-contain opacity-25" />
             </div>
           )}
-          {card.bgImages && card.bgImages[1] && (
+          {!card.heroImage && card.bgImages && card.bgImages[1] && (
             <div className="absolute top-3 right-[88px] md:right-[104px] w-[52px] h-[52px] rotate-[14deg]"
               style={{ filter: "brightness(0) invert(1)" }}>
               <Image src={card.bgImages[1]} alt="" fill sizes="52px" className="object-contain opacity-15" />
             </div>
           )}
-          {card.bgImages && card.bgImages[2] && (
+          {!card.heroImage && card.bgImages && card.bgImages[2] && (
             <div className="absolute -top-2 right-[140px] md:right-[158px] w-[44px] h-[44px] -rotate-[8deg]"
               style={{ filter: "brightness(0) invert(1)" }}>
               <Image src={card.bgImages[2]} alt="" fill sizes="44px" className="object-contain opacity-10" />
@@ -639,60 +661,101 @@ function CargoPriceCard({ card, t }: { card: CargoCard; t: PricingT }) {
             : "bg-white dark:bg-surface",
         ].join(" ")}>
 
-          {/* Dual prices: รถ + เรือ */}
-          <div className="px-4 md:px-5 pt-4 space-y-2">
-            {card.prices.map((p) => {
-              const isCar = p.mode === "road";
-              const Icon = isCar ? Truck : Ship;
-              const modeLabel = isCar ? t("modeRoad") : t("modeSea");
-              return (
-                <div
-                  key={p.mode}
-                  className={[
-                    "relative flex items-center gap-2.5 rounded-2xl px-3 py-2.5",
-                    comingSoon
-                      ? "bg-white/40 dark:bg-background/40 border border-dashed border-border"
-                      : "bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface border border-border/60",
-                  ].join(" ")}
-                >
-                  <div className={[
-                    "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-                    comingSoon
-                      ? "bg-border text-muted"
-                      : "bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.25)]",
-                  ].join(" ")}>
-                    <Icon className="w-[18px] h-[18px]" strokeWidth={2.5} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
-                      <span>{modeLabel}</span>
+          {/* Price block — FCL: single big price (road = sea, แบบ Freight) · LCL: dual rows (รถ + เรือ ราคาต่าง) */}
+          {isFcl ? (
+            <div className="px-4 md:px-5 pt-4">
+              {/* Capacity badge */}
+              <div className={[
+                "inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full tracking-[0.08em]",
+                comingSoon
+                  ? "bg-surface text-muted border border-border"
+                  : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300",
+              ].join(" ")}>
+                {card.prices[0].kg}
+              </div>
+
+              {/* Big single price */}
+              <div className="flex items-baseline gap-1.5 mt-2">
+                <span className={`text-[38px] md:text-[46px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600"}`}>
+                  {card.prices[0].cbm}
+                </span>
+                <span className="text-[12px] font-bold text-muted">{t("perContainer")}</span>
+              </div>
+
+              {/* Transit row — รถ + เรือ as supporting info */}
+              <div className="mt-3 flex items-center gap-x-4 gap-y-1.5 flex-wrap text-[11.5px] font-bold text-muted">
+                {card.prices.map((p) => {
+                  const isCar = p.mode === "road";
+                  const Icon = isCar ? Truck : Ship;
+                  return (
+                    <span key={p.mode} className="inline-flex items-center gap-1.5">
+                      <span className={[
+                        "inline-flex w-5 h-5 rounded-md items-center justify-center shrink-0",
+                        comingSoon
+                          ? "bg-border text-muted"
+                          : "bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300",
+                      ].join(" ")}>
+                        <Icon className="w-3 h-3" strokeWidth={2.5} />
+                      </span>
+                      <span>{isCar ? t("modeRoad") : t("modeSea")}</span>
                       <span className="opacity-50">·</span>
                       <span>{t(p.transitKey)}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 md:px-5 pt-4 space-y-2">
+              {card.prices.map((p) => {
+                const isCar = p.mode === "road";
+                const Icon = isCar ? Truck : Ship;
+                const modeLabel = isCar ? t("modeRoad") : t("modeSea");
+                return (
+                  <div
+                    key={p.mode}
+                    className={[
+                      "relative flex items-center gap-2.5 rounded-2xl px-3 py-2.5",
+                      comingSoon
+                        ? "bg-white/40 dark:bg-background/40 border border-dashed border-border"
+                        : "bg-gradient-to-br from-surface to-white dark:from-background dark:to-surface border border-border/60",
+                    ].join(" ")}
+                  >
+                    <div className={[
+                      "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                      comingSoon
+                        ? "bg-border text-muted"
+                        : "bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-[0_4px_10px_rgba(179,0,0,0.25)]",
+                    ].join(" ")}>
+                      <Icon className="w-[18px] h-[18px]" strokeWidth={2.5} />
                     </div>
-                    <div className="flex items-baseline gap-2.5 flex-wrap mt-0.5">
-                      <div className="flex items-baseline gap-1">
-                        <span className={`text-[22px] md:text-[24px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600"}`}>
-                          {p.cbm}
-                        </span>
-                        <span className="text-[10px] font-bold text-muted">
-                          {isFcl ? t("perContainer") : t("perCbm")}
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
+                        <span>{modeLabel}</span>
+                        <span className="opacity-50">·</span>
+                        <span>{t(p.transitKey)}</span>
                       </div>
-                      <span className="w-px h-3 bg-border" />
-                      <div className="flex items-baseline gap-1">
-                        <span className={`${isFcl ? "text-[13px]" : "text-[17px] md:text-[19px]"} font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : isFcl ? "text-muted" : "text-primary-600/90"}`}>
-                          {p.kg}
-                        </span>
-                        {!isFcl && (
+                      <div className="flex items-baseline gap-2.5 flex-wrap mt-0.5">
+                        <div className="flex items-baseline gap-1">
+                          <span className={`text-[22px] md:text-[24px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600"}`}>
+                            {p.cbm}
+                          </span>
+                          <span className="text-[10px] font-bold text-muted">{t("perCbm")}</span>
+                        </div>
+                        <span className="w-px h-3 bg-border" />
+                        <div className="flex items-baseline gap-1">
+                          <span className={`text-[17px] md:text-[19px] font-black leading-none tracking-tight tabular-nums ${comingSoon ? "text-muted" : "text-primary-600/90"}`}>
+                            {p.kg}
+                          </span>
                           <span className="text-[10px] font-bold text-muted">{t("perKg")}</span>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Divider with pill */}
           <div className="relative mx-4 md:mx-5 mt-4">
