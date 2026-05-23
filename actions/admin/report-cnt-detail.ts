@@ -46,6 +46,9 @@ export const customRateSchema = z.object({
   fProductsType2: rate,
   fProductsType3: rate,
   fProductsType4: rate,
+  /** Wave 16 Follow-up C — admin picks dimension per container. Defaults
+   *  to "cbm" if caller omits (back-compat with the legacy POST shape). */
+  mode: z.enum(["cbm", "weight"]).default("cbm"),
 });
 export type CustomRateInput = z.input<typeof customRateSchema>;
 
@@ -117,19 +120,20 @@ function pickRate(rates: { p1: number; p2: number; p3: number; p4: number }, fPr
 }
 
 /**
- * Cost = rate × CBM (volume). Legacy `calPriceForwarderCost()` is more
- * complex (handles fRefPrice=น้ำหนัก, special MX weight tier, sang's
- * literal width×length×height multiplier), but the per-container bulk
- * update path in report-cnt.php uses the same rate × volume formula
- * for the CTT/MK/JMF/GOGO/CargoCenter/MOMO warehouses (the warehouses
- * the "ตั้งค่าต้นทุนตู้" modal is allowed to open — see L1478).
+ * Cost = rate × dimension. Wave 16 Follow-up C extends legacy:
+ *   - mode="cbm"     → cost = rate × fVolume
+ *   - mode="weight"  → cost = rate × fWeight
  *
- * MX/Sang fall under the "ปรับต้นทุนไม่ได้" banner in the modal (legacy
- * L1486-1488), so they don't reach this code path through customRate.
- * We mirror that: skip non-CBM warehouses with a banner-friendly null.
+ * Legacy `calPriceForwarderCost()` is more complex (handles per-row
+ * fRefPrice, a special MX weight-vs-CBM max() tier, and Sang's literal
+ * width×length×height multiplier). The per-container bulk-update path
+ * here applies one mode uniformly across every row — the admin's
+ * intent ("คิดทั้งตู้แบบเดียวกัน"). The Sang width×length×height
+ * formula is not exposed here; admin uses per-row edit (Wave 16 P0-3)
+ * for that.
  */
-function calcRowCost(fVolume: number | null, rate: number): number {
-  const v = Number(fVolume ?? 0);
+function calcRowCost(dimension: number | null, rate: number): number {
+  const v = Number(dimension ?? 0);
   if (!Number.isFinite(v) || v <= 0) return 0;
   return Math.round(v * rate * 100) / 100;
 }
@@ -140,14 +144,21 @@ function calcRowCost(fVolume: number | null, rate: number): number {
 //   for every row in this container.
 // ─────────────────────────────────────────────────────────────────────
 
-export async function adminReportCntCustomRate(input: CustomRateInput): Promise<AdminActionResult<{ updated: number }>> {
+export async function adminReportCntCustomRate(input: CustomRateInput): Promise<AdminActionResult<{ updated: number; mode: "cbm" | "weight" }>> {
   const parsed = customRateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fCabinetNumber, fProductsType1, fProductsType2, fProductsType3, fProductsType4 } = parsed.data;
+  const {
+    fCabinetNumber,
+    fProductsType1,
+    fProductsType2,
+    fProductsType3,
+    fProductsType4,
+    mode,
+  } = parsed.data;
 
-  return withAdmin<{ updated: number }>(["super", "ops", "accounting"], async ({ adminId }) => {
+  return withAdmin<{ updated: number; mode: "cbm" | "weight" }>(["super", "ops", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // ── (a) UPSERT tb_cost_container ──
@@ -184,13 +195,26 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
       if (insErr) return { ok: false, error: insErr.message };
     }
 
-    // ── (b) Bulk-update fcosttotalprice per row ──
-    // Legacy loops every tb_forwarder row in the container and recomputes
-    // cost via calPriceForwarderCost(). For the supported warehouses this
-    // simplifies to rate(productType) × CBM (see calcRowCost notes).
+    // ── (b) Normalise fRefPrice across every row in the container ──
+    // Wave 16 Follow-up C: container-wide mode is stored implicitly by
+    // forcing each row's fRefPrice to match. Legacy comment from migration
+    // 0081: fRefPrice '1' = น้ำหนัก, '2' = ปริมาตร (badge code treats
+    // '' / null same as '2'). We always write the explicit value here.
+    const refPriceValue = mode === "weight" ? "1" : "2";
+    const { error: refErr } = await admin
+      .from("tb_forwarder")
+      .update({ frefprice: refPriceValue })
+      .eq("fcabinetnumber", fCabinetNumber);
+    if (refErr) return { ok: false, error: refErr.message };
+
+    // ── (c) Bulk-update fcosttotalprice per row ──
+    // Legacy looped every tb_forwarder row and called calPriceForwarderCost();
+    // for the CBM warehouses this simplifies to rate × CBM. Pacred extends:
+    // when mode="weight", cost = rate × fWeight (admin's chosen dimension
+    // applies to the whole container).
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fproductstype")
+      .select("id, fvolume, fweight, fproductstype")
       .eq("fcabinetnumber", fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -202,9 +226,10 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     };
 
     let updated = 0;
-    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fproductstype: string | null }>) {
+    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
-      const cost = calcRowCost(r.fvolume, rate);
+      const dim = mode === "weight" ? r.fweight : r.fvolume;
+      const cost = calcRowCost(dim, rate);
       const { error: updErr } = await admin
         .from("tb_forwarder")
         .update({ fcosttotalprice: cost })
@@ -215,12 +240,13 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     await logAdminAction(adminId, "report_cnt.custom_rate", "tb_cost_container", fCabinetNumber, {
       cabinet:    fCabinetNumber,
       rates,
+      mode,
       row_count:  updated,
     });
 
     revalidatePath(`/admin/report-cnt/${fCabinetNumber}`);
     revalidatePath("/admin/report-cnt");
-    return { ok: true, data: { updated } };
+    return { ok: true, data: { updated, mode } };
   });
 }
 
@@ -249,7 +275,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
     // ── (b) Load settings + container rows ──
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fproductstype, fwarehousename, fwarehousechina, ftransporttype")
+      .select("id, fvolume, fweight, fproductstype, fwarehousename, fwarehousechina, ftransporttype")
       .eq("fcabinetnumber", parsed.data.fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -265,6 +291,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
     for (const r of (rows ?? []) as Array<{
       id: number;
       fvolume: number | null;
+      fweight: number | null;
       fproductstype: string | null;
       fwarehousename: string | null;
       fwarehousechina: string | null;
@@ -286,8 +313,19 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
 
       const col = warehouseSegment(wh, idx, transport, r.fwarehousechina ?? "");
       const rate = Number(settingsRow?.[col] ?? 0);
-      const cost = calcRowCost(r.fvolume, rate);
-      const { error: updErr } = await admin.from("tb_forwarder").update({ fcosttotalprice: cost }).eq("id", r.id);
+
+      // Reset fRefPrice to the carrier default (Wave 16 Follow-up C):
+      //   MX (4) + Sang (1) → '1' (weight) — historical default
+      //   others             → '2' (CBM)
+      // Then compute cost using the matching dimension.
+      const carrierDefaultMode: "weight" | "cbm" = (wh === "1" || wh === "4") ? "weight" : "cbm";
+      const refPriceValue = carrierDefaultMode === "weight" ? "1" : "2";
+      const dim = carrierDefaultMode === "weight" ? r.fweight : r.fvolume;
+      const cost = calcRowCost(dim, rate);
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({ fcosttotalprice: cost, frefprice: refPriceValue })
+        .eq("id", r.id);
       if (!updErr) updated += 1;
     }
 

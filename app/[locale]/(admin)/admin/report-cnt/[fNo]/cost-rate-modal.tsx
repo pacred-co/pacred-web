@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * <CostRateModal> — Wave 16 P0-1
+ * <CostRateModal> — Wave 16 P0-1 + Follow-up C (dual-mode)
  *
- * Modal for "ตั้งค่าต้นทุนตู้" — faithful port of report-cnt.php
+ * Modal for "ตั้งค่าต้นทุนตู้" — Pacred upgrade on top of report-cnt.php
  * L1278-1497 (the rate-settings modal). 4 inputs (ทั่วไป / มอก. /
  * อย./น้ำยา / พิเศษ) × 2 submit buttons:
  *   - บันทึก  → adminReportCntCustomRate()
  *   - คืนค่า → adminReportCntResetRate()
  *
- * Per legacy L1478 the modal "save" button only appears for warehouses
- * CTT/MK/JMF/GOGO/CargoCenter/MOMO (since their pricing is purely
- * rate × CBM). For warehouse 1 (แสง) + warehouse 4 (MX) the legacy
- * renders a red disabled banner — we surface the same `disabled` flag.
+ * Wave 16 Follow-up C — dual mode:
+ *   Legacy only allowed bulk-update for warehouses CTT/MK/JMF/GOGO/
+ *   CargoCenter/MOMO (rate × CBM). MX + Sang fell under a red "ปรับ
+ *   ต้นทุนไม่ได้" banner. ภูม decision: let admin pick CBM or Weight
+ *   per container — for ALL carriers — and edit the 4 rates regardless.
+ *   The mode is persisted by updating `tb_forwarder.frefprice` across
+ *   every row in the container (legacy comment: '1'=น้ำหนัก, '2'=ปริมาตร).
  *
  * Pure Tailwind + brand polish per AGENTS.md §0a — no Bootstrap-4
  * verbatim markup.
@@ -25,20 +28,25 @@ import {
   adminReportCntResetRate,
 } from "@/actions/admin/report-cnt-detail";
 
+export type CostRateMode = "cbm" | "weight";
+
 export type CostRateModalProps = {
   fCabinetNumber: string;
   warehouseLabel: string;       // "CTT" | "MK" | … (for the title)
   warehouseChinaLabel: string;  // "กวางโจว" | "อี้อู"
   transportLabel: string;       // "ทางรถ" | "ทางเรือ"
-  /** When true, the form is rendered but the submit buttons are hidden +
-   *  a red banner explains why (matches legacy L1486-1488). */
-  disabled: boolean;
   defaults: {
     fProductsType1: number;
     fProductsType2: number;
     fProductsType3: number;
     fProductsType4: number;
   };
+  /** Container's current mode derived from majority of rows' frefprice.
+   *  '1' → weight; '' / '2' → cbm. */
+  currentMode: CostRateMode;
+  /** True iff rows have inconsistent frefprice values (a mixed-mode
+   *  container). Saving will normalise all rows to the picked mode. */
+  mixedMode?: boolean;
   /** Hide the trigger entirely if user can't open (e.g. cnt already paid). */
   hidden?: boolean;
 };
@@ -48,14 +56,16 @@ export function CostRateModal({
   warehouseLabel,
   warehouseChinaLabel,
   transportLabel,
-  disabled,
   defaults,
+  currentMode,
+  mixedMode,
   hidden,
 }: CostRateModalProps) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const router = useRouter();
 
+  const [mode, setMode] = useState<CostRateMode>(currentMode);
   const [p1, setP1] = useState(String(defaults.fProductsType1));
   const [p2, setP2] = useState(String(defaults.fProductsType2));
   const [p3, setP3] = useState(String(defaults.fProductsType3));
@@ -74,6 +84,7 @@ export function CostRateModal({
         fProductsType2: p2,
         fProductsType3: p3,
         fProductsType4: p4,
+        mode,
       });
       if (!res.ok) {
         setErr(res.error);
@@ -97,6 +108,10 @@ export function CostRateModal({
       router.refresh();
     });
   }
+
+  const unit = mode === "weight" ? "kg" : "CBM";
+  const subtitleMode =
+    mode === "weight" ? "ราคาคิดตามน้ำหนัก (kg)" : "ราคาคิดตามปริมาตร (CBM)";
 
   return (
     <>
@@ -128,7 +143,7 @@ export function CostRateModal({
                 แก้ไขเรทต้นทุนสำหรับตู้นี้
               </h3>
               <p className="mt-0.5 text-xs opacity-90">
-                {fCabinetNumber} · {transportLabel} · ราคาคิดตามปริมาตร (CBM)
+                {fCabinetNumber} · {transportLabel} · {subtitleMode}
               </p>
             </div>
 
@@ -138,25 +153,44 @@ export function CostRateModal({
                 {" · "}จากเมือง: <span className="font-semibold">{warehouseChinaLabel}</span>
               </p>
 
+              {/* Mode toggle — segmented control */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted">เลือกวิธีคำนวณต้นทุน</label>
+                <div
+                  role="tablist"
+                  aria-label="cost calculation mode"
+                  className="inline-flex w-full rounded-md border border-border bg-surface-alt/60 p-1"
+                >
+                  <ModeButton
+                    active={mode === "cbm"}
+                    onClick={() => setMode("cbm")}
+                    label="คิดตามปริมาตร (CBM)"
+                    iconChar="📦"
+                  />
+                  <ModeButton
+                    active={mode === "weight"}
+                    onClick={() => setMode("weight")}
+                    label="คิดตามน้ำหนัก (Weight)"
+                    iconChar="⚖️"
+                  />
+                </div>
+                {mixedMode && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    ⚠ ตู้นี้มีรายการที่คิดต้นทุนปนกัน — เมื่อบันทึกแล้วจะเปลี่ยนทุกแถวเป็นแบบเดียวกัน
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="เรทราคา ทั่วไป (บาท)" value={p1} onChange={setP1} />
-                <Field label="เรทราคา มอก. (บาท)"   value={p2} onChange={setP2} />
-                <Field label="เรทราคา อย./น้ำยา (บาท)" value={p3} onChange={setP3} />
-                <Field label="เรทราคา พิเศษ (บาท)"   value={p4} onChange={setP4} />
+                <Field label={`เรทราคา ทั่วไป (บาท/${unit})`} value={p1} onChange={setP1} />
+                <Field label={`เรทราคา มอก. (บาท/${unit})`}   value={p2} onChange={setP2} />
+                <Field label={`เรทราคา อย./น้ำยา (บาท/${unit})`} value={p3} onChange={setP3} />
+                <Field label={`เรทราคา พิเศษ (บาท/${unit})`}   value={p4} onChange={setP4} />
               </div>
 
               {err && (
                 <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-900/20 p-2 text-xs text-red-700 dark:text-red-300">
                   {err}
-                </div>
-              )}
-
-              {disabled && (
-                <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-900/20 p-2 text-xs text-red-700 dark:text-red-300 space-y-1">
-                  <p>ปรับต้นทุนแบบรวมไม่ได้สำหรับโกดังนี้</p>
-                  <p className="opacity-80">
-                    MX มีเรทแบบน้ำหนักด้วย / Sang คำนวณจาก กว้าง×ยาว×สูง โดยตรง — ต้องแก้ไขทีละรายการ
-                  </p>
                 </div>
               )}
             </div>
@@ -169,26 +203,22 @@ export function CostRateModal({
               >
                 ยกเลิก
               </button>
-              {!disabled && (
-                <>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={reset}
-                    className="rounded-md border border-sky-500 bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 disabled:opacity-50"
-                  >
-                    คืนค่าเป็นแบบหลัก
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={save}
-                    className="rounded-md bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
-                  >
-                    {pending ? "กำลังบันทึก…" : "บันทึกและอัปเดตต้นทุนในตู้ทั้งหมด"}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={reset}
+                className="rounded-md border border-sky-500 bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 disabled:opacity-50"
+              >
+                คืนค่าเป็นแบบหลัก
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={save}
+                className="rounded-md bg-primary-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+              >
+                {pending ? "กำลังบันทึก…" : "บันทึกและอัปเดตต้นทุนในตู้ทั้งหมด"}
+              </button>
             </div>
           </div>
         </div>
@@ -211,5 +241,34 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
         placeholder="หน่วยเป็นบาทไทย"
       />
     </label>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  label,
+  iconChar,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  iconChar: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? "bg-white dark:bg-surface text-primary-700 shadow-sm border border-primary-200"
+          : "text-muted hover:text-foreground hover:bg-white/60 dark:hover:bg-surface/60"
+      }`}
+    >
+      <span aria-hidden="true">{iconChar}</span>
+      <span>{label}</span>
+    </button>
   );
 }

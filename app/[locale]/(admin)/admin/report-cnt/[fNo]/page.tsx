@@ -61,10 +61,14 @@ const WAREHOUSE_CHINA_LABEL: Record<string, string> = {
   "1": "กวางโจว", "2": "อี้อู",
 };
 
-// Warehouses whose pricing is purely rate × CBM — the "ตั้งค่าต้นทุนตู้"
-// modal supports bulk-update. MX (4) + Sang (1) are excluded per legacy
-// L1478-1488 because their pricing uses น้ำหนัก / width×length×height.
-const BULK_UPDATABLE_WAREHOUSES = new Set(["2", "3", "5", "6", "7", "8"]);
+// Wave 16 Follow-up C: removed BULK_UPDATABLE_WAREHOUSES set. ALL carriers
+// now use the dual-mode (CBM/Weight) modal — admin picks the dimension
+// per container. MX (4) + Sang (1) default to "weight"; the rest default
+// to "cbm". The legacy L1478-1488 red disabled banner is gone.
+
+// Carriers whose historical default is "weight" (fRefPrice='1') — used
+// to pre-select the modal toggle when the container has no rows yet.
+const WEIGHT_DEFAULT_WAREHOUSES = new Set(["1", "4"]);
 
 // ─────────────────────────────────────────────────────────────────────
 // Settings-row column lookup — picks the right tb_settings column for
@@ -383,8 +387,27 @@ export default async function AdminReportCntDetailPage({
   const warehouseLabel = WAREHOUSE_LABEL[fWarehouseName] ?? fWarehouseName;
   const warehouseChinaLabel = WAREHOUSE_CHINA_LABEL[fWarehouseChina] ?? fWarehouseChina;
   const transportLabel = TRANSPORT_LABEL[fTransportType] ?? fTransportType;
-  const canEditCost = showMoney && !cabinetIsPaid && BULK_UPDATABLE_WAREHOUSES.has(fWarehouseName);
-  const showCostModalAsDisabled = showMoney && !cabinetIsPaid && !BULK_UPDATABLE_WAREHOUSES.has(fWarehouseName);
+
+  // Wave 16 Follow-up C — derive container-wide cost mode from row data.
+  // fRefPrice '1' = น้ำหนัก (weight); '' / '2' / null = ปริมาตร (cbm).
+  // "Current mode" = majority of rows. "Mixed" = rows disagree.
+  let weightRows = 0;
+  let cbmRows = 0;
+  for (const r of cntRows) {
+    if (String(r.frefprice ?? "") === "1") weightRows += 1;
+    else cbmRows += 1;
+  }
+  const mixedMode = weightRows > 0 && cbmRows > 0;
+  const derivedMode: "cbm" | "weight" =
+    weightRows === 0 && cbmRows === 0
+      ? (WEIGHT_DEFAULT_WAREHOUSES.has(fWarehouseName) ? "weight" : "cbm")
+      : weightRows > cbmRows
+        ? "weight"
+        : "cbm";
+
+  // Wave 16 Follow-up C — ALL carriers can open the modal now (mode-aware).
+  // The legacy MX/Sang disabled banner is gone.
+  const canEditCost = showMoney && !cabinetIsPaid;
 
   return (
     <>
@@ -451,13 +474,14 @@ export default async function AdminReportCntDetailPage({
               )}
             </div>
 
-            {(canEditCost || showCostModalAsDisabled) && (
+            {canEditCost && (
               <CostRateModal
                 fCabinetNumber={fCabinetNumber}
                 warehouseLabel={warehouseLabel}
                 warehouseChinaLabel={warehouseChinaLabel}
                 transportLabel={transportLabel}
-                disabled={showCostModalAsDisabled}
+                currentMode={derivedMode}
+                mixedMode={mixedMode}
                 defaults={{
                   fProductsType1: p1,
                   fProductsType2: p2,
