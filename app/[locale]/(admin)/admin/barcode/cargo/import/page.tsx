@@ -1,22 +1,22 @@
 /**
  * /admin/barcode/cargo/import — สแกนบาร์โค้ดบันทึกสินค้าถึงโกดังไทยด้วยมือถือ
  *
- * Faithful 1:1 transcription of legacy
- * `member/pcs-admin/barcode-c-import.php` (408 LOC). NOTE the legacy
- * title is "บันทึกสินค้าถึงโกดังไทย" (mark goods arrived at TH warehouse),
- * not "เข้าโกดังไทย" as the wave-2 brief said — we keep the legacy title.
+ * Wave 17 P1-7: camera-mode sibling of the USB-scanner page at
+ * /admin/barcode/driver/import. Both pages now call the same
+ * `adminBarcodeImportScan` Server Action which does the actual
+ * tb_forwarder_import2 UPSERT + tb_forwarder.fstatus='4' auto-flip
+ * (the port of legacy `include/pages/barcode-import/index.php`).
  *
- * Differences from the `all` page (only):
- *   - title:  "สแกนบาร์โค้ดบันทึกสินค้าถึงโกดังไทยด้วยมือถือ"  (barcode-c-import.php L4, L19)
- *   - gateway type = "4"                                       (barcode-c-import.php L400)
- *
- * Everything else (markup, controls, Quagga config) is identical to
- * barcode-c-all.php — shared via <CameraScanner>.
+ * Faithful port of legacy `member/pcs-admin/barcode-c-import.php`
+ * (408 LOC). The mobile page never had its own writer in legacy
+ * either — it just bounced through gateway.php?type=4. Wave 17
+ * replaces the redirect with a direct server-action call so the
+ * operator never leaves the camera view between scans.
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { CameraScanner } from "@/components/admin/camera-scanner";
+import { CargoImportScanner } from "./cargo-import-scanner";
 import { TopMenuBarcode } from "@/components/admin/top-menu-barcode";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ export default async function BarcodeCargoImportPage() {
                           </div>
                           <div className="row">
                             <div className="col-md-12">
-                              <CameraScanner gatewayType="4" />
+                              <CargoImportScanner />
                             </div>
                           </div>
                         </div>

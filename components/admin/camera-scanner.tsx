@@ -68,7 +68,24 @@ const BARCODE_READERS = [
   { value: "code_93", label: "Code 93" },
 ] as const;
 
-export function CameraScanner({ gatewayType }: { gatewayType: GatewayType }) {
+/**
+ * Props:
+ *   gatewayType  — required only when `onDetected` is not supplied. If
+ *                  `onDetected` is provided, the scanner does NOT bounce
+ *                  to /admin/barcode/gateway — instead the parent owns
+ *                  the response (e.g. calling a server action like
+ *                  `adminBarcodeImportScan` on `cargo/import`).
+ *   onDetected   — optional callback fired on the first successful decode
+ *                  of a NEW code (dedupe inside). When set, suppresses
+ *                  the legacy gateway redirect.
+ */
+export function CameraScanner({
+  gatewayType,
+  onDetected: onDetectedProp,
+}: {
+  gatewayType?: GatewayType;
+  onDetected?: (code: string) => void;
+}) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const lastResultRef = useRef<string | null>(null);
   const [reader, setReader] = useState<string>("code_128");
@@ -143,13 +160,31 @@ export function CameraScanner({ gatewayType }: { gatewayType: GatewayType }) {
     );
 
     // onDetected — the redirect-on-scan handler. Legacy L391-404.
+    //
+    // Wave 17 P1-7: when `onDetected` prop is provided, hand the code
+    // up to the parent (e.g. for cargo/import which calls the server
+    // action `adminBarcodeImportScan` to do the WRITE). When no
+    // callback is provided, fall back to the legacy gateway redirect.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onDetected = (result: any) => {
       const code: string | undefined = result?.codeResult?.code;
       if (!code) return;
       if (lastResultRef.current === code) return;
       lastResultRef.current = code;
-      // Match legacy URL shape exactly: gateway?type=…&device=mobile&tracking=<code>
+
+      if (onDetectedProp) {
+        onDetectedProp(code);
+        return;
+      }
+
+      if (!gatewayType) {
+        console.warn(
+          "[CameraScanner] no gatewayType + no onDetected; ignoring scan",
+        );
+        return;
+      }
+
+      // Legacy fallback: gateway?type=…&device=mobile&tracking=<code>
       const params = new URLSearchParams({
         type: gatewayType,
         device: "mobile",
@@ -210,7 +245,7 @@ export function CameraScanner({ gatewayType }: { gatewayType: GatewayType }) {
       setRunning(false);
     };
     // Re-init on reader/deviceId change — mirrors legacy setState() → init() loop (L286-303).
-  }, [reader, deviceId, gatewayType]);
+  }, [reader, deviceId, gatewayType, onDetectedProp]);
 
   // Manual Stop button — mirrors legacy `.controls button.stop` (L46-48, L219-223).
   const handleStop = () => {

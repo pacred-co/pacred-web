@@ -1,0 +1,463 @@
+"use server";
+
+/**
+ * Wave 17 P1-7 — `adminBarcodeImportScan` server action.
+ *
+ * Faithful port of legacy `pcs-admin/include/pages/barcode-import/index.php`
+ * (236 LOC) — the AJAX endpoint behind `barcode-d-import.php`'s scanner
+ * panel. This is the actual warehouse-arrival WRITER:
+ *   1. Look up tb_forwarder by ftrackingchn OR fidorco (fstatus<5)
+ *   2. Multi-tier fallback when 0 hits: dash-trim, then strip-non-digits
+ *      LIKE-suffix (legacy LIKE '__$digits' = "any 2 chars + digits")
+ *   3. UPSERT tb_forwarder_import2 (a "scan event" row keyed by fid OR
+ *      keysearch+date for orphans)
+ *   4. Auto-flip tb_forwarder.fstatus='4' (สินค้าถึงไทย) when
+ *      fi2amount ≥ famount (the parcel-count threshold)
+ *   5. Audit log
+ *
+ * Auth: super / ops / warehouse (same union as the page.tsx + the
+ * sibling `warehouse-history` Server Action).
+ *
+ * Return shape lets the client render a 3-card visual:
+ *   green  — matched + saved          (legacy 'border-success bg-success-2')
+ *   orange — saved but unmatched      (legacy 'border-warning bg-warning-2')
+ *   red    — nothing happened (validation / write error)
+ *
+ * Legacy comment correspondence (line numbers from index.php):
+ *   L23-76      → forwarderLookup() — primary + adminIDCreator + refOrder paths
+ *   L78-132     → fallbackLookup()  — dash-trim + strip-non-digits paths
+ *   L136-166    → upsertScan()      — fid-keyed OR keysearch-keyed insert/update
+ *   L167-175    → maybeFlipStatus()
+ *   L176-216    → buildHtml()       — handled by the React panel (not here)
+ */
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { logger } from "@/lib/logger";
+
+// ────────────────────────────────────────────────────────────
+// Schemas
+// ────────────────────────────────────────────────────────────
+
+const scanInputSchema = z.object({
+  keysearch: z.string().trim().min(1).max(200),
+  // Legacy supported keyType=1 only (track); leave open for future
+  // values, default to 1.
+  keyType: z.number().int().min(1).max(2).default(1),
+  fPallet: z.string().trim().min(1).max(20),
+});
+export type AdminBarcodeImportScanInput = z.infer<typeof scanInputSchema>;
+
+// ────────────────────────────────────────────────────────────
+// Response shape — server-driven card render
+// ────────────────────────────────────────────────────────────
+
+export type CardColor = "green" | "orange" | "red";
+
+export type BarcodeImportScanOk = {
+  matched: boolean;            // true → tb_forwarder row found
+  fid: number | null;          // tb_forwarder.id of the parent row (null if unmatched)
+  productName: string | null;  // tb_forwarder.fdetail trimmed for the card body
+  pallet: string;              // echoed fPallet (the location code)
+  countScanned: number;        // fi2amount AFTER this scan
+  countTotal: number;          // tb_forwarder.famount (target parcel count)
+  statusFlipped: boolean;      // true → we auto-flipped fstatus to '4'
+  cardColor: CardColor;
+  message: string;             // human-readable Thai message for the card header
+
+  // Extra surface for the panel — legacy showed these in the result card.
+  fIDorCO: string | null;
+  fTrackingCHN: string | null;
+  fCabinetNumber: string | null;
+  userId: string | null;
+  dateSave: string;            // ISO timestamp of THIS scan event
+};
+
+export type BarcodeImportScanResult = AdminActionResult<BarcodeImportScanOk>;
+
+// ────────────────────────────────────────────────────────────
+// Helper — current Supabase user's legacy adminid (varchar 10/30).
+// Mirror of `resolveLegacyAdminId` in actions/admin/{combine-bill,
+// warehouse-history}.ts; duplicated here per the runbook's
+// "lift on the third repeat" rule has been touched 11 times in
+// the codebase — this is N=12. The full extraction is out of
+// scope for this task; staying local + matching exact pattern.
+// ────────────────────────────────────────────────────────────
+async function resolveLegacyAdminId(): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const email = user?.email ?? null;
+  if (!email) return "system";
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("tb_admin")
+    .select("adminid")
+    .eq("adminemail", email)
+    .maybeSingle<{ adminid: string | null }>();
+  if (data?.adminid) return data.adminid;
+  return email.slice(0, 30);
+}
+
+// ────────────────────────────────────────────────────────────
+// Internal types
+// ────────────────────────────────────────────────────────────
+
+type ForwarderRow = {
+  id: number;
+  famount: number;
+  fidorco: string | null;
+  ftrackingchn: string | null;
+  fstatus: string;
+  fcabinetnumber: string | null;
+  userid: string | null;
+  fdetail: string | null;
+};
+
+const FORWARDER_SELECT =
+  "id, famount, fidorco, ftrackingchn, fstatus, fcabinetnumber, userid, fdetail";
+
+// ────────────────────────────────────────────────────────────
+// Lookup — faithful port of L23-132
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Primary lookup: ftrackingchn = keysearch OR fidorco = keysearch,
+ * fstatus < 5. Legacy disambiguates ties via:
+ *   1. refOrder<>'' (came from a sub-order)
+ *   2. adminIDCreator<>'' (came from admin manual entry)
+ *   3. otherwise: ambiguous → treat as not-found
+ */
+async function primaryLookup(
+  admin: ReturnType<typeof createAdminClient>,
+  keysearch: string,
+): Promise<ForwarderRow | null> {
+  const { data, error } = await admin
+    .from("tb_forwarder")
+    .select(FORWARDER_SELECT)
+    .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
+    .lt("fstatus", "5")
+    .limit(50);
+  if (error) {
+    logger.error("barcode-import", "primaryLookup failed", error, { keysearch });
+    return null;
+  }
+  const rows = (data ?? []) as ForwarderRow[];
+  if (rows.length === 1) return rows[0];
+  if (rows.length === 0) return null;
+
+  // Multi-hit tiebreaker: refOrder<>'' first (legacy L41)
+  const { data: refRows } = await admin
+    .from("tb_forwarder")
+    .select(FORWARDER_SELECT)
+    .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
+    .lt("fstatus", "5")
+    .neq("reforder", "")
+    .limit(2);
+  const refList = (refRows ?? []) as ForwarderRow[];
+  if (refList.length === 1) return refList[0];
+
+  // Then adminIDCreator<>'' (legacy L58)
+  const { data: adminRows } = await admin
+    .from("tb_forwarder")
+    .select(FORWARDER_SELECT)
+    .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
+    .lt("fstatus", "5")
+    .neq("adminidcreator", "")
+    .limit(2);
+  const adminList = (adminRows ?? []) as ForwarderRow[];
+  if (adminList.length === 1) return adminList[0];
+
+  // Still ambiguous → legacy treats as not-found (statusData=2).
+  return null;
+}
+
+/**
+ * Fallback chain. Legacy L78-132:
+ *   1. If keysearch contains '-', search by the chunk BEFORE the dash
+ *      (handles "SF1234-001" → "SF1234" matched as fidorco).
+ *   2. Else strip non-digits then match ftrackingchn LIKE '__$digits'
+ *      (any-2-chars + digits → matches trackings that start with a
+ *      2-char prefix like SF/YT/JT).
+ */
+async function fallbackLookup(
+  admin: ReturnType<typeof createAdminClient>,
+  keysearch: string,
+): Promise<ForwarderRow | null> {
+  // Dash-cut path (legacy L81-102)
+  const dashIdx = keysearch.indexOf("-");
+  if (dashIdx > 0) {
+    const head = keysearch.slice(0, dashIdx);
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select(FORWARDER_SELECT)
+      .eq("fidorco", head)
+      .lt("fstatus", "5")
+      .limit(2);
+    if (error) {
+      logger.error("barcode-import", "fallbackLookup dash-cut failed", error, {
+        keysearch,
+        head,
+      });
+      return null;
+    }
+    const rows = (data ?? []) as ForwarderRow[];
+    if (rows.length === 1) return rows[0];
+    return null;
+  }
+
+  // Strip-non-digits path (legacy L104-131)
+  const digits = keysearch.replace(/[^0-9]/g, "");
+  if (!digits) return null;
+
+  // Legacy used LIKE '__$digits' (any-2-char prefix + digits). Supabase
+  // PostgREST `like` operator with two underscores does the same: each
+  // _ matches exactly one character.
+  // Use ilike for case-insensitive parity with MySQL default collation.
+  const { data, error } = await admin
+    .from("tb_forwarder")
+    .select(FORWARDER_SELECT)
+    .ilike("ftrackingchn", `__${digits}`)
+    .lt("fstatus", "5")
+    .limit(2);
+  if (error) {
+    logger.error("barcode-import", "fallbackLookup like failed", error, {
+      keysearch,
+      digits,
+    });
+    return null;
+  }
+  const rows = (data ?? []) as ForwarderRow[];
+  if (rows.length === 1) return rows[0];
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────
+// Upsert — L136-166
+// ────────────────────────────────────────────────────────────
+
+/**
+ * UPSERT a tb_forwarder_import2 row. There are two key modes:
+ *   - keyed by fid     → when we have a matching tb_forwarder row
+ *   - keyed by keysearch+today  → when we don't (orphan scan;
+ *     warehouse staff link later via the relink modal)
+ *
+ * Returns the new fi2amount (1 for fresh insert, prev+1 for update).
+ */
+async function upsertScanRow(
+  admin: ReturnType<typeof createAdminClient>,
+  args: {
+    fid: number | null;
+    keysearch: string;
+    fiPallet: string;
+    legacyAdminId: string;
+  },
+): Promise<{ fi2amount: number; mode: "insert" | "update" }> {
+  const { fid, keysearch, fiPallet, legacyAdminId } = args;
+  const nowIso = new Date().toISOString();
+
+  if (fid !== null) {
+    // FID-keyed lookup (legacy L137-150)
+    const { data: existing } = await admin
+      .from("tb_forwarder_import2")
+      .select("id, fi2amount")
+      .eq("fid", fid)
+      .limit(1)
+      .maybeSingle<{ id: number; fi2amount: number }>();
+    if (!existing) {
+      await admin.from("tb_forwarder_import2").insert({
+        fid,
+        fi2amount: 1,
+        fi2date: nowIso,
+        adminid: legacyAdminId,
+        keysearch,
+        fipallet: fiPallet,
+      });
+      return { fi2amount: 1, mode: "insert" };
+    }
+    const nextAmount = (existing.fi2amount ?? 0) + 1;
+    await admin
+      .from("tb_forwarder_import2")
+      .update({
+        fi2amount: nextAmount,
+        adminid: legacyAdminId,
+        fipallet: fiPallet,
+        fi2date: nowIso,
+      })
+      .eq("id", existing.id);
+    return { fi2amount: nextAmount, mode: "update" };
+  }
+
+  // Orphan path — keyed by keysearch + today. Legacy L152-165
+  // uses DATE(fi2Date)=DATE(NOW()); we mirror with a 24h date-window
+  // (UTC) on fi2date.
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setUTCDate(todayEnd.getUTCDate() + 1);
+
+  const { data: existingOrphan } = await admin
+    .from("tb_forwarder_import2")
+    .select("id, fi2amount")
+    .is("fid", null)
+    .eq("keysearch", keysearch)
+    .gte("fi2date", todayStart.toISOString())
+    .lt("fi2date", todayEnd.toISOString())
+    .limit(1)
+    .maybeSingle<{ id: number; fi2amount: number }>();
+
+  if (!existingOrphan) {
+    await admin.from("tb_forwarder_import2").insert({
+      // fid intentionally NULL
+      fi2amount: 1,
+      fi2date: nowIso,
+      adminid: legacyAdminId,
+      keysearch,
+      fipallet: fiPallet,
+    });
+    return { fi2amount: 1, mode: "insert" };
+  }
+
+  const nextOrphanAmount = (existingOrphan.fi2amount ?? 0) + 1;
+  await admin
+    .from("tb_forwarder_import2")
+    .update({
+      fi2amount: nextOrphanAmount,
+      adminid: legacyAdminId,
+      fipallet: fiPallet,
+      fi2date: nowIso,
+    })
+    .eq("id", existingOrphan.id);
+  return { fi2amount: nextOrphanAmount, mode: "update" };
+}
+
+// ────────────────────────────────────────────────────────────
+// Public action
+// ────────────────────────────────────────────────────────────
+
+export async function adminBarcodeImportScan(
+  input: AdminBarcodeImportScanInput,
+): Promise<BarcodeImportScanResult> {
+  const parsed = scanInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "invalid_input",
+    };
+  }
+  const { keysearch, fPallet } = parsed.data;
+
+  return withAdmin<BarcodeImportScanOk>(
+    ["super", "ops", "warehouse"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+      const legacyAdminId = await resolveLegacyAdminId();
+      const nowIso = new Date().toISOString();
+
+      // ── 1. LOOKUP — primary then fallback chain
+      let row = await primaryLookup(admin, keysearch);
+      if (!row) row = await fallbackLookup(admin, keysearch);
+
+      // ── 2. UPSERT scan event
+      const fid = row?.id ?? null;
+      const { fi2amount, mode } = await upsertScanRow(admin, {
+        fid,
+        keysearch,
+        fiPallet: fPallet,
+        legacyAdminId,
+      });
+
+      // ── 3. MAYBE FLIP STATUS — legacy L167-175
+      let statusFlipped = false;
+      if (row && fi2amount >= row.famount) {
+        const { error: flipErr } = await admin
+          .from("tb_forwarder")
+          .update({
+            fstatus: "4",
+            fdatestatus4: nowIso,
+            adminidupdate: legacyAdminId,
+            fpallet: fPallet,
+          })
+          .eq("id", row.id);
+        if (!flipErr) statusFlipped = true;
+      } else if (row) {
+        // L171-175 — touch adminidupdate + fpallet even without status flip.
+        await admin
+          .from("tb_forwarder")
+          .update({
+            adminidupdate: legacyAdminId,
+            fpallet: fPallet,
+          })
+          .eq("id", row.id);
+      }
+
+      // ── 4. Build response card
+      const matched = row !== null;
+      let cardColor: CardColor = "green";
+      let message = "";
+      if (matched) {
+        // Green = saved + matched (legacy 'border-success bg-success-2')
+        // Even at over-count (fi2amount > famount) legacy keeps the green
+        // border because the upsert + the flip-once happened — but the
+        // count badge goes red (`bg-danger`). We surface that via the
+        // `countScanned > countTotal` flag the client renders separately.
+        cardColor = "green";
+        message = "บันทึกสำเร็จ พบข้อมูลถูกต้อง";
+      } else {
+        // Orange = saved but unmatched (legacy 'border-warning bg-warning-2')
+        // The orphan row is in tb_forwarder_import2; warehouse staff will
+        // link it later via the warehouse-history page.
+        cardColor = "orange";
+        message = "บันทึกสำเร็จ ไม่พบข้อมูลเชื่อมภายหลัง";
+      }
+
+      // ── 5. Audit log
+      await logAdminAction(
+        adminId,
+        "barcode_import.scan",
+        "tb_forwarder_import2",
+        row ? String(row.id) : `orphan:${keysearch}`,
+        {
+          keysearch,
+          fPallet,
+          fid,
+          fi2amount,
+          famount: row?.famount ?? null,
+          mode,
+          statusFlipped,
+          legacy_admin_id: legacyAdminId,
+        },
+      );
+
+      revalidatePath("/admin/barcode/driver/import");
+      revalidatePath("/admin/barcode/cargo/import");
+      revalidatePath("/admin/forwarders/warehouse-history");
+      if (row) revalidatePath(`/admin/forwarders/${row.id}`);
+
+      return {
+        ok: true,
+        data: {
+          matched,
+          fid,
+          productName: row?.fdetail ?? null,
+          pallet: fPallet,
+          countScanned: fi2amount,
+          countTotal: row?.famount ?? 0,
+          statusFlipped,
+          cardColor,
+          message,
+          fIDorCO: row?.fidorco ?? null,
+          fTrackingCHN: row?.ftrackingchn ?? null,
+          fCabinetNumber: row?.fcabinetnumber ?? null,
+          userId: row?.userid ?? null,
+          dateSave: nowIso,
+        },
+      };
+    },
+  );
+}

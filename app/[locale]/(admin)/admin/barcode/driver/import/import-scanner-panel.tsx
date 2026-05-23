@@ -1,30 +1,38 @@
 "use client";
 
 /**
- * <ImportScannerPanel>
+ * <ImportScannerPanel> — Wave 17 P1-7
  *
- * Faithful 1:1 port of the legacy `barcode-d-import.php` JS panel
- * (L80-256) — the warehouse-intake workstation scanner. Differs
- * from the simpler `<ScannerInput>` (used by `barcode-d-{all,
- * from,prepare}.php`) in that it ADDS:
+ * Faithful-port of `barcode-d-import.php` L80-256 with the legacy AJAX
+ * write wired to `adminBarcodeImportScan` (the server action that ports
+ * `include/pages/barcode-import/index.php`).
  *
- *   1. A `fPallet` (LOCATION) input — sticky via `document.cookie`
- *      ("set_fPallet"). Required before any scan is accepted.
- *      Auto-set when the user types one of the 46 hardcoded
- *      location codes (`A1`..`Z6`) — verbatim from legacy L192-199.
- *   2. A "บันทึกเข้าโกดัง" result panel below the input — shows
- *      the loading ring (`.lds-ring`) while the scan resolves, then
- *      renders an HTML response from the gateway.
+ * Behaviour preserved from legacy:
+ *   1. fPallet (location) input — sticky via cookie `set_fPallet`
+ *      (100-min TTL, exactly matches legacy 100*60*1000ms).
+ *   2. Auto-set fPallet when the scanned code matches one of the 46
+ *      hardcoded LOCATION_CODES — input clears + plays sSave sound +
+ *      cookie refreshes. Does NOT fire the writer.
+ *   3. Validation: fPallet required first, then keysearch required
+ *      (legacy SweetAlert prompts → inline `setError`).
+ *   4. On scan submit: call server action; render the result panel
+ *      (green/orange/red Tailwind card) inside `#result`; play
+ *      sSave (matched) or notFoundSave (orphan-saved) sound; clear
+ *      input + refocus so the operator can keep scanning.
  *
- * The Pacred Wave 2 behaviour is to GET-redirect to Agent 3's
- * `/admin/barcode/gateway?type=4&device=scanner&tracking=…&
- * pallet=…` (matching the other 3 `barcode-d-*` siblings). The
- * legacy AJAX-fetch + `#result` HTML injection + audio playback is
- * Wave 3 follow-up — see the inline "Wave 3 TODO" markers.
+ * NOT a 1:1 markup port — per AGENTS.md §0a we keep the WORKFLOW but
+ * use Pacred design (Tailwind, clean card chrome). The legacy markup
+ * is left as a thin Bootstrap-4 shell for the top form area to match
+ * the existing pcs-legacy CSS scaffolding, and the result card is
+ * rendered with pure Tailwind for clarity.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
+import {
+  adminBarcodeImportScan,
+  type BarcodeImportScanOk,
+} from "@/actions/admin/barcode-import";
 
 // Legacy L192-199 — the 46 hardcoded location codes that switch
 // `fPallet` when scanned.
@@ -40,6 +48,11 @@ const LOCATION_SET = new Set(LOCATION_CODES);
 
 const COOKIE_NAME = "set_fPallet";
 
+// Audio paths — files exist at the legacy bundle location.
+// `audio/mpeg` per legacy `<source type="audio/mpeg">`.
+const SOUND_SUCCESS = "/legacy/pcs/assets/audio/sSave.mp4";
+const SOUND_NOT_FOUND = "/legacy/pcs/assets/audio/notFoundSave.mp4";
+
 function readCookie(name: string): string {
   if (typeof document === "undefined") return "";
   const m = document.cookie.match(
@@ -54,12 +67,140 @@ function writeCookie(name: string, value: string, minutes: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/`;
 }
 
+/**
+ * Result card — Tailwind, three colour variants driven by server's
+ * cardColor + count overflow detection. Mirrors legacy L190-216 in
+ * INFORMATION shown (header msg / tracking / IDCO / fid link / count
+ * badge / cabinet link / location / status / userid link / datetime)
+ * but with Pacred chrome (rounded-xl borders, no Bootstrap rows).
+ */
+function ResultCard({ data }: { data: BarcodeImportScanOk }) {
+  const overCount = data.countTotal > 0 && data.countScanned > data.countTotal;
+  // Override server's "green" to "orange" when over-count (legacy used
+  // bg-success-2 border but added bg-danger to the count badge — we
+  // promote the whole card to orange so the operator clearly sees the
+  // overshoot).
+  const color: "green" | "orange" | "red" =
+    overCount && data.cardColor === "green" ? "orange" : data.cardColor;
+
+  const colorClasses: Record<typeof color, string> = {
+    green: "border-emerald-300 bg-emerald-50 text-emerald-900",
+    orange: "border-amber-300 bg-amber-50 text-amber-900",
+    red: "border-red-300 bg-red-50 text-red-900",
+  };
+
+  const badgeClasses = overCount
+    ? "bg-red-600 text-white"
+    : "bg-slate-100 text-slate-800";
+
+  return (
+    <div
+      className={`rounded-xl border-2 ${colorClasses[color]} p-4 text-sm`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="text-center font-semibold text-base">
+        คำค้นหา : {data.fTrackingCHN ?? data.fIDorCO ?? "-"}
+      </div>
+      <div className="text-center font-semibold mt-1">{data.message}</div>
+
+      {data.fTrackingCHN && (
+        <div className="mt-3 font-semibold">
+          เลขแทรคกิ้ง : <span className="font-mono">{data.fTrackingCHN}</span>
+        </div>
+      )}
+
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
+        <div>
+          ID CO : <span className="font-mono">{data.fIDorCO ?? "-"}</span>
+        </div>
+        <div>
+          เลขออเดอร์ :{" "}
+          {data.fid !== null ? (
+            <Link
+              href={`/admin/forwarders/${data.fid}`}
+              target="_blank"
+              className="text-primary-600 hover:underline font-semibold"
+            >
+              #{data.fid}
+            </Link>
+          ) : (
+            "-"
+          )}
+        </div>
+        <div>
+          <span
+            className={`inline-block px-2 py-0.5 rounded ${badgeClasses}`}
+          >
+            จำนวน : {data.countScanned}/{data.countTotal}
+          </span>
+        </div>
+        <div>
+          เลขตู้ :{" "}
+          {data.fCabinetNumber ? (
+            <Link
+              href={`/admin/report-cnt/${data.fCabinetNumber}`}
+              target="_blank"
+              className="text-primary-600 hover:underline"
+            >
+              {data.fCabinetNumber}
+            </Link>
+          ) : (
+            "-"
+          )}
+        </div>
+        <div>
+          location : <span className="font-semibold">{data.pallet}</span>
+        </div>
+        <div>
+          สถานะ :{" "}
+          <span className="font-semibold">
+            {data.statusFlipped ? "ถึงโกดังไทย (4)" : "บันทึกแล้ว"}
+          </span>
+        </div>
+        {data.userId && (
+          <div>
+            รหัส :{" "}
+            <Link
+              href={`/admin/customers/${encodeURIComponent(data.userId)}`}
+              target="_blank"
+              className="text-primary-600 hover:underline"
+            >
+              {data.userId}
+            </Link>
+          </div>
+        )}
+        <div className="col-span-2 text-xs text-slate-600">
+          วันที่บันทึก : {new Date(data.dateSave).toLocaleString("th-TH")}
+        </div>
+      </div>
+
+      {data.productName && (
+        <div className="mt-3 text-xs text-slate-700 line-clamp-2">
+          <span className="font-semibold">สินค้า : </span>
+          {data.productName}
+        </div>
+      )}
+
+      {overCount && (
+        <div className="mt-3 text-xs font-semibold text-red-700">
+          เพิ่มเกินจำนวน ({data.countScanned - data.countTotal} เกิน)
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ImportScannerPanel() {
   // fPallet — the sticky location code. Cookie-restored on mount.
   const [fPallet, setFPallet] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<BarcodeImportScanOk | null>(null);
+  const [isPending, startTransition] = useTransition();
+
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const cached = readCookie(COOKIE_NAME);
@@ -69,19 +210,44 @@ export function ImportScannerPanel() {
     inputRef.current?.focus();
   }, []);
 
+  // Play one of the two sounds. The audio element is mounted once;
+  // we swap .src + .play() per call. Legacy did `<audio autoplay>`
+  // inside a <div class="music"> with `controls style="display:none"`.
+  function playSound(src: string) {
+    const el = audioRef.current;
+    if (!el) return;
+    try {
+      el.src = src;
+      void el.play().catch(() => {
+        // Browsers throw on autoplay-without-user-gesture; ignore
+        // (the first scan already counts as a gesture).
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  function focusInput() {
+    // Use a microtask so React commits the empty value before we focus.
+    queueMicrotask(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+  }
+
   function submit() {
     setError(null);
     const keysearch = search.trim();
 
     // Legacy L200-205 — if the scanned code is a LOCATION code,
     // store it as fPallet + cookie + reset the input. Don't fire
-    // the AJAX scan.
+    // the writer.
     if (LOCATION_SET.has(keysearch)) {
       writeCookie(COOKIE_NAME, keysearch, 100); // legacy "100 * 60 * 1000ms" = 100 min
       setFPallet(keysearch);
       setSearch("");
-      inputRef.current?.focus();
-      // Wave 3 TODO — legacy plays /assets/audio/sSave.mp4 here.
+      playSound(SOUND_SUCCESS); // legacy L205
+      focusInput();
       return;
     }
 
@@ -95,23 +261,49 @@ export function ImportScannerPanel() {
       return;
     }
 
-    // Wave 2 behaviour — GET-redirect through Agent 3's gateway.
-    // Legacy L211-234 instead AJAX-POSTs to /pcs-admin/include/
-    // pages/barcode-import/index.php with {keysearch, keyType=1,
-    // fiPallet} and renders the JSON {HTML, statusData, statusSave}
-    // result inline (Wave 3 follow-up).
-    const qs = new URLSearchParams({
-      type: "4",
-      device: "scanner",
-      tracking: keysearch,
-      pallet: fPallet,
+    // Wave 17 P1-7 — call the server action (replaces the legacy gateway
+    // GET-redirect). The action does the actual UPSERT + auto-flip.
+    startTransition(async () => {
+      const res = await adminBarcodeImportScan({
+        keysearch,
+        keyType: 1,
+        fPallet,
+      });
+
+      if (!res.ok) {
+        setError(res.error);
+        setResult(null);
+        playSound(SOUND_NOT_FOUND);
+        return;
+      }
+      if (!res.data) {
+        // Shouldn't happen — server action always populates data on ok.
+        setError("ไม่ได้รับข้อมูลตอบกลับจากเซิร์ฟเวอร์");
+        setResult(null);
+        playSound(SOUND_NOT_FOUND);
+        return;
+      }
+
+      const data = res.data;
+      setResult(data);
+
+      // Sound selection — mirror legacy L226-230:
+      //   statusData=2 && statusSave=1  → notFoundSave (orphan saved)
+      //   else                           → sSave        (matched + saved)
+      if (!data.matched) {
+        playSound(SOUND_NOT_FOUND);
+      } else {
+        playSound(SOUND_SUCCESS);
+      }
+
+      // Clear input + refocus so the operator can keep scanning.
+      setSearch("");
+      focusInput();
     });
-    window.location.href = `/admin/barcode/gateway?${qs.toString()}`;
   }
 
   function onKeyUp(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Legacy L179-184 — Enter (13) OR IME composition end (229) =
-    // submit.
+    // Legacy L179-184 — Enter (13) OR IME composition end (229) = submit.
     if (e.key === "Enter" || e.keyCode === 13 || e.keyCode === 229) {
       submit();
     }
@@ -119,7 +311,8 @@ export function ImportScannerPanel() {
 
   return (
     <div className="row">
-      {/* Top bar — barcode-d-import.php L84-104 */}
+      {/* Top bar — barcode-d-import.php L84-104, kept in legacy Bootstrap
+          for visual parity with the rest of the admin chrome. */}
       <div className="col-md-6 offset-md-3 filtered-list-search barcode pl-2 pr-2">
         <div
           className="my-lg-0 justify-content-center im"
@@ -128,7 +321,7 @@ export function ImportScannerPanel() {
           <div className="row">
             <div className="col-12 pb-1">
               <Link
-                href="/admin/forwarders/warehouse-history"
+                href="/admin/forwarder-import-warehouse"
                 className=""
               >
                 <span className="badge badge-info badge-pill">
@@ -181,6 +374,7 @@ export function ImportScannerPanel() {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyUp={onKeyUp}
                 autoComplete="off"
+                disabled={isPending}
                 className="w-100 form-control product-search br-30"
                 placeholder="ค้นหาหมายเลข Tracking..."
               />
@@ -188,6 +382,7 @@ export function ImportScannerPanel() {
                 className="btn btn-main r0"
                 id="send"
                 type="button"
+                disabled={isPending}
                 onClick={submit}
               >
                 <svg
@@ -210,35 +405,46 @@ export function ImportScannerPanel() {
           </div>
 
           {error && (
-            <p
-              className="text-danger pt-2"
+            <div
+              className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 text-red-900 p-4 text-sm"
               role="alert"
             >
-              {error}
-            </p>
+              <div className="text-center font-semibold">ผิดพลาด</div>
+              <div className="text-center mt-1">{error}</div>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Result panel — L113-121. Wave 3 TODO: the gateway should
-          target this panel via AJAX (legacy `#result` + audio +
-          `lds-ring`) instead of redirecting away. For Wave 2 the
-          panel renders a placeholder. */}
+      {/* Result panel — L113-121 */}
       <div className="pt-2 col-md-6 offset-md-3">
         <div className="resultPCS">
-          <div
-            className="text-center"
-            style={{ display: "none" }}
-          >
-            <div className="lds-ring">
-              <div></div>
-              <div></div>
-              <div></div>
-              <div></div>
+          {isPending && (
+            <div className="text-center">
+              <div className="lds-ring">
+                <div></div>
+                <div></div>
+                <div></div>
+                <div></div>
+              </div>
             </div>
-          </div>
-          <div id="result"></div>
-          <div className="music"></div>
+          )}
+
+          {!isPending && result && (
+            <div id="result" className="pt-2">
+              <ResultCard data={result} />
+            </div>
+          )}
+
+          {/* Hidden audio element — swapped src per call. Legacy used
+              an inline <audio autoplay> rebuilt every scan; we keep one
+              instance + change .src so we don't pile DOM nodes. */}
+          <audio
+            ref={audioRef}
+            preload="none"
+            className="hidden"
+            aria-hidden="true"
+          />
         </div>
       </div>
     </div>
