@@ -2528,6 +2528,11 @@
       "sea": "เรือ",
       "air": "แอร์"
     },
+    "apiForwarderUpdate": {
+      "title": "อัปเดตฝากนำเข้า (API)",
+      "momo": "MOMO",
+      "cn": "CargoCenter"
+    },
     "payment": {
       "title": "บริการฝากโอน/ชำระ",
       "list": "ฝากโอนหยวน — รายการ",

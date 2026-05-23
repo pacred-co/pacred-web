@@ -218,6 +218,25 @@ const blockForwarderImport: MenuItem = {
   badge: "forwarderArrived",
 };
 
+/** Wave 17 P1-1+2 (2026-05-23) — MOMO + CargoCenter manual-entry forms.
+ *  Legacy `pcs-admin/api-forwarder-momo.php?page=manualUpdate` +
+ *  `api-forwarder-cn.php?page=manualUpdate` — admin types in shipment data
+ *  by hand when API-side automation is unavailable (Phase C scope).
+ *
+ *  Only the `manualUpdate` sub-page is in scope; dashboard / updateAPI /
+ *  APICheckSM / hisAutomation are P2 (need upstream token + retry design).
+ *  Routes /admin/api-forwarder-momo + /admin/api-forwarder-cn render the
+ *  hub with "Coming soon · Phase C" cards for the deferred sub-pages.
+ */
+const blockApiForwarderUpdate: MenuItem = {
+  labelKey: "apiForwarderUpdate.title",
+  icon: "Wand2",
+  children: [
+    { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
+    { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
+  ],
+};
+
 /** legacy OOP/Cargo/menu-payment.php — บริการฝากโอน/ชำระ */
 const blockPayment: MenuItem = {
   labelKey: "payment.title",
@@ -544,6 +563,10 @@ const menuSuper: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // Wave 17 P1-1+2 — MOMO + CargoCenter manual-entry forms (collapsible).
+      // Sits next to "บริการฝากนำเข้า" so admin can flip from the queue to
+      // the manual-update form in one hop.
+      blockApiForwarderUpdate,
       // 2026-05-21 ภูม flagged — /admin/drivers had no direct super sidebar
       // entry · only reachable via the /admin/forwarders top-menubar
       // "งาน → มอบงานคนขับ". Added as a top-level leaf so super can land
@@ -602,6 +625,8 @@ const menuOps: MenuSection[] = [
       itemWalletAll,
       itemPurchasingAll,
       blockForwarderImport,
+      // Wave 17 P1-1+2 — MOMO + CargoCenter manual-entry forms.
+      blockApiForwarderUpdate,
       blockPayment,
       // Phase 2 — driver-runs sales-only side not yet live.
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3", phase: 2 },
@@ -713,6 +738,10 @@ const menuWarehouse: MenuSection[] = [
           { labelKey: "forwarder.combineBill", href: "/admin/forwarders/combine-bill",      icon: "Printer" },
         ],
       },
+      // Wave 17 P1-1+2 — MOMO + CargoCenter manual-entry forms. Warehouse
+      // role uses these daily when API drops a shipment that needs hand
+      // confirmation before going into tb_forwarder.
+      blockApiForwarderUpdate,
       // Option C (ภูม 2026-05-20 ค่ำ) — point at the faithful port of legacy
       // `report-cnt.php`. Spine page at `/admin/warehouse/containers` retired
       // (tombstoned · redirects to /admin/report-cnt).
