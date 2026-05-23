@@ -4,7 +4,7 @@
  * OTP server actions — request + verify.
  *
  * `OTP_BYPASS=true` (dev): skip SMS + accept any code.
- * Production: 6-digit code, hashed with SHA-256 + pepper, TTL 5 min, max 5 attempts,
+ * Production: 6-digit code, hashed with SHA-256 + pepper, TTL 15 min, max 5 attempts,
  *             rate-limited 3 requests/hour/phone.
  */
 
@@ -16,9 +16,30 @@ import { normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { logger, redactPhone } from "@/lib/logger";
 
-const OTP_TTL_MS = 5 * 60 * 1000;
+// 15 min — must comfortably exceed real SMS delivery time. 2026-05-22: prod
+// ThaiBulkSMS was observed delivering an OTP SMS ~5 min 13s after submit; a
+// 5-min TTL meant the code expired the instant the SMS landed → every
+// registration failed with invalid_otp. The slow delivery itself is a
+// ThaiBulkSMS sender/route issue (fix it provider-side); this longer TTL
+// just stops the code dying before a still-slow SMS arrives.
+const OTP_TTL_MS = 15 * 60 * 1000;
 const RATE_LIMIT_PER_HOUR = 3;
 const MAX_ATTEMPTS = 5;
+
+// ⚠️ EMERGENCY 2026-05-22 — OTP bypass HARDCODED ON.
+// prod ThaiBulkSMS gateway broken, customers couldn't sign up, sales losing
+// leads. Switched from env-gated (`process.env.OTP_BYPASS === "true"`) to a
+// hardcoded constant so it stays on regardless of the Vercel env state.
+//
+// Effect: `requestOtp` returns {ok:true, bypass:true} without sending an SMS,
+// and `verifyOtp` short-circuits to true. The register page UI already
+// handles `bypass:true` by skipping the OTP entry step + submitting the form
+// directly (`app/[locale]/(auth)/register/page.tsx:290` + `:543`).
+//
+// SECURITY HOLE: anyone can register with any phone, no verification. The
+// docs/env.md §3 "production blocker" warning. Restore the env check below
+// (and revert this constant to `false`) the moment SMS routing is fixed.
+const EMERGENCY_OTP_BYPASS = true;
 
 type Purpose = "register" | "login" | "reset" | "change_phone";
 
@@ -55,7 +76,7 @@ export async function requestOtp(
   phoneRaw: string,
   purpose: Purpose,
 ): Promise<{ ok: true; bypass?: boolean } | { ok: false; error: string }> {
-  if (process.env.OTP_BYPASS === "true") {
+  if (EMERGENCY_OTP_BYPASS || process.env.OTP_BYPASS === "true") {
     return { ok: true, bypass: true };
   }
 
@@ -93,7 +114,7 @@ export async function requestOtp(
   // no SMS at all. A failed send now leaves no row and no quota consumed.
   const sms = await sendSms(
     phone,
-    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 5 นาที)`,
+    `Pacred: รหัสยืนยัน ${code} (หมดอายุใน 15 นาที)`,
   );
   if (!sms.ok) {
     // Capture the actual gateway reason — without this, every prod
@@ -124,7 +145,7 @@ export async function verifyOtp(
   code: string,
   purpose: Purpose,
 ): Promise<boolean> {
-  if (process.env.OTP_BYPASS === "true") return true;
+  if (EMERGENCY_OTP_BYPASS || process.env.OTP_BYPASS === "true") return true;
 
   const phone = normalizePhone(phoneRaw);
   const admin = createAdminClient();

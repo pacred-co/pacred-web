@@ -24,6 +24,24 @@
 import "server-only";
 import { logger } from "@/lib/logger";
 
+// ⚠️ EMERGENCY 2026-05-23 — hCaptcha bypass HARDCODED ON.
+// Pairs with `EMERGENCY_OTP_BYPASS` in actions/otp.ts (commit 2175437).
+// Vercel prod's HCAPTCHA_SECRET_KEY is set to a placeholder/wrong value,
+// so the hCaptcha siteverify endpoint returns `invalid-input-secret` and
+// every register/login/forgot-password action ends in `captcha_failed`
+// (user sees "ติดความปลอดภัย"). The existing soft-degrade at the
+// !secret branch below only triggers when the secret is UNSET, not when
+// it is WRONG — so customers stay blocked even with OTP bypassed.
+//
+// Hardcoded ON forces `verifyHcaptcha` to return success regardless of
+// secret/token/API state. Signup is still gated by phone OTP (currently
+// bypassed too) and IP rate-limit (5/h per signup endpoint).
+//
+// SECURITY HOLE: bot signup is not gated by captcha. Restore the
+// env-gated path (and revert this constant to `false`) the moment a
+// valid HCAPTCHA_SECRET_KEY is set on Vercel and verified working.
+const EMERGENCY_HCAPTCHA_BYPASS = true;
+
 export type HcaptchaVerifyResult = {
   success: boolean;
   /** Hostname returned by hCaptcha — useful for cross-checking your domain. */
@@ -45,6 +63,12 @@ export async function verifyHcaptcha(
   token: string | null | undefined,
   ip?: string,
 ): Promise<HcaptchaVerifyResult> {
+  // EMERGENCY 2026-05-23 — see top-of-file note. Hardcoded bypass to unblock
+  // customer signup while HCAPTCHA_SECRET_KEY is misconfigured on Vercel.
+  if (EMERGENCY_HCAPTCHA_BYPASS) {
+    return { success: true };
+  }
+
   const secret = process.env.HCAPTCHA_SECRET_KEY;
 
   // No secret configured → degrade OPEN. hCaptcha is a 🟡 optional

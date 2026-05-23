@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
@@ -10,13 +9,31 @@ interface SearchBarProps {
   embedded?: boolean;
   /** When `hideOnMobile`, sticky bar is hidden < md (used on customs landing where BookingCalculator replaces it). */
   hideOnMobile?: boolean;
+  /** Start in collapsed state (bar hidden); user can toggle open with the NavBar chevron. */
+  defaultCollapsed?: boolean;
 }
 
-export function SearchBar({ embedded = false, hideOnMobile = false }: SearchBarProps) {
+export function SearchBar({ embedded = false, hideOnMobile = false, defaultCollapsed = false }: SearchBarProps) {
   const t = useTranslations("searchBar");
   // Embedded mode starts collapsed (trigger button only); full mode renders straight away
   const [expanded, setExpanded] = useState(false);
+  // Non-embedded: collapses when NavBar dispatches "toggle-search-bar"
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (embedded) return;
+    const handler = () => setCollapsed((v) => !v);
+    window.addEventListener("toggle-search-bar", handler);
+    return () => window.removeEventListener("toggle-search-bar", handler);
+  }, [embedded]);
+
+  // When starting collapsed, notify NavBar so its chevron starts in the correct orientation
+  useEffect(() => {
+    if (embedded || !defaultCollapsed) return;
+    window.dispatchEvent(new CustomEvent("search-bar-default-collapsed"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const quickKeys = [
     t("quick1"),
@@ -63,25 +80,13 @@ export function SearchBar({ embedded = false, hideOnMobile = false }: SearchBarP
 
   const rootClass = embedded
     ? "w-full bg-white dark:bg-surface overflow-hidden"
-    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden`;
+    : `${hideOnMobile ? "hidden md:block" : "block"} sticky top-[56px] z-40 w-full bg-white dark:bg-surface border-b border-gray-100 dark:border-border shadow-[0_4px_15px_rgba(0,0,0,0.04)] overflow-hidden transition-[max-height,padding,opacity] duration-300 ease-in-out ${collapsed ? "max-h-0 opacity-0 !py-0 !border-0 !shadow-none" : "max-h-[200px] opacity-100"}`;
 
   return (
     <div className={rootClass}>
-      <div className="mx-auto w-full max-w-[1440px] px-4 xl:px-6 py-[10px]">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-[10px] md:pl-[168px] md:pr-[56px]">
 
-        <div className="flex items-center gap-4">
-
-          {/* Logo — ขยายชนขอบบน-ล่าง แล้วโดนขอบ clip */}
-          <Link href="/" className="hidden sm:block shrink-0 -my-[10px]">
-            <Image
-              src="/images/iconfloattabs/pacleft.png"
-              alt="Pacred"
-              width={200}
-              height={64}
-              className="h-[64px] w-auto object-contain"
-              priority
-            />
-          </Link>
+        <div className="flex items-center gap-0">
 
           {/* Search input + camera + button */}
           <div className="relative flex-1">

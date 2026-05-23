@@ -302,11 +302,16 @@ function PersonalForm() {
     });
   }
 
-  function handleVerifyOtp() {
-    if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
+  // Take the completed code as an ARGUMENT. OtpInput.onComplete fires with
+  // the fresh 6-digit string in the SAME tick setOtpCode is called — the
+  // `otpCode` state here is still the previous 5-digit value. Reading state
+  // instead of the arg made `length !== 6` true → an instant spurious
+  // "OTP ไม่ถูกต้องหรือหมดอายุ" the moment the 6th digit landed.
+  function handleVerifyOtp(code: string) {
+    if (code.length !== 6) { setError(ERR.invalid_otp); return; }
     setError(null);
     startTransition(async () => {
-      await submitRegister(otpCode);
+      await submitRegister(code);
     });
   }
 
@@ -550,11 +555,13 @@ function JuristicForm() {
     });
   }
 
-  function verifyStep1Otp() {
-    if (otpCode.length !== 6) { setError(ERR.invalid_otp); return; }
+  // Code arrives as an ARGUMENT — see handleVerifyOtp (PersonalForm) for why
+  // reading `otpCode` state here races OtpInput.onComplete (stale 5 digits).
+  function verifyStep1Otp(code: string) {
+    if (code.length !== 6) { setError(ERR.invalid_otp); return; }
     setError(null);
     startTransition(async () => {
-      await submitStep1(otpCode);
+      await submitStep1(code);
     });
   }
 
@@ -1063,7 +1070,7 @@ function OtpStep({
   phone: string;
   code: string;
   onCodeChange: (v: string) => void;
-  onVerify: () => void;
+  onVerify: (code: string) => void;
   onResend: () => void;
   onBack: () => void;
   resendIn: number;
@@ -1120,7 +1127,7 @@ function OtpStep({
         <BackBtn onClick={onBack}>ย้อนกลับ</BackBtn>
         <button
           type="button"
-          onClick={onVerify}
+          onClick={() => onVerify(code)}
           disabled={pending || code.length !== 6}
           className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary-600 px-4 py-[15px] text-[15px] font-semibold text-white shadow-[0_8px_20px_rgba(179,0,0,0.25)] transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-[0_12px_25px_rgba(179,0,0,0.35)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
         >

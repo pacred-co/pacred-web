@@ -97,7 +97,7 @@ export function Reviews({ defaultFilter = "all" }: { defaultFilter?: "all" | Ser
   const row2 = splitInto2 ? filtered.slice(half) : [];
 
   return (
-    <section className="pt-6 md:pt-10 pb-10 md:pb-14">
+    <section className="pt-3 md:pt-10 pb-5 md:pb-14">
       <div className="mx-auto w-full max-w-[1140px] px-[10px]">
 
         {/* Heading */}

@@ -38,9 +38,14 @@ const SERVICE_IDS = [
 export const serviceIdSchema = z.enum(SERVICE_IDS);
 
 export const registerPersonalSchema = z.object({
-  firstName: z.string().min(1, "กรอกชื่อ"),
-  lastName: z.string().min(1, "กรอกนามสกุล"),
-  phone: phoneSchema,
+  // 2026-05-22 — relaxed signup validation per sales-urgent ask:
+  // name + surname ≥ 2 chars · phone ≥ 9 chars. OTP is bypassed in
+  // `actions/otp.ts` (EMERGENCY_OTP_BYPASS) — `otp` field still required
+  // by the schema but the UI passes the "bypass" sentinel + the server
+  // skips verification.
+  firstName: z.string().min(2, "ชื่อขั้นต่ำ 2 ตัวอักษร"),
+  lastName:  z.string().min(2, "นามสกุลขั้นต่ำ 2 ตัวอักษร"),
+  phone:     z.string().min(9, "เบอร์โทรขั้นต่ำ 9 ตัวอักษร").max(20),
   password: passwordSchema,
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),

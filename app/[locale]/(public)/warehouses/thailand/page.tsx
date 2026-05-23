@@ -152,11 +152,11 @@ export default async function Page({
                         เปิดใน Google Maps
                       </a>
                       <a
-                        href="tel:0661253007"
+                        href="tel:0661310253"
                         className="inline-flex items-center gap-1.5 h-9 md:h-10 px-3.5 md:px-4 rounded-full bg-white dark:bg-background text-[#111827] dark:text-white border border-border text-[12px] md:text-[12.5px] font-black hover:border-primary-400 hover:text-primary-700 transition-colors"
                       >
                         <Phone className="w-3.5 h-3.5" strokeWidth={2.6} />
-                        066-125-3007
+                        066-131-0253
                       </a>
                     </div>
                   </div>
