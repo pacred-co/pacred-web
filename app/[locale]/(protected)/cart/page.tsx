@@ -4,9 +4,18 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ADDRESSES } from "@/components/seo/site";
 import {
+  getShipByOptionsForAddress,
+  isMaomaoEligibleForAddress,
+} from "@/lib/cart/ship-by-eligibility";
+import {
   CartInteractivity,
   type CartInteractiveProvider,
 } from "./cart-interactivity";
+import {
+  CartAddressShipBy,
+  type CartAddressOption,
+  type ShipByOption,
+} from "./cart-address-shipby";
 
 /**
  * Customer shopping-cart screen for the ฝากสั่งซื้อ (China shop-order)
@@ -57,22 +66,19 @@ import {
  * facts — not scrubbed per runbook §3).
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
- *   1. Cart-mutation jQuery + AJAX endpoints are NOT wired. cart.php
- *      ships a large client-side script block (cart.php L788-1143):
- *        - `calculateCart.php` / `recalculateCart()`     — live subtotal/total
- *        - `deleteItem.php`  (the `.remove-product` trash button)
- *        - `updateQuantity.php` (the per-row quantity `<input>`)
- *        - `option-address-thai.php` (the เปลี่ยนที่อยู่ modal)
- *        - `api-shipBy.php` / `checkPCSMaoMao.php`  (the #selectShipBy
- *          slot + the PCS-เหมาๆ promotion popup)
- *      These are jQuery `$.ajax` POSTs to legacy PHP endpoints. A
- *      Server Component render must stay a PURE READ — it cannot run
- *      jQuery, and re-wiring 6 AJAX proxies is non-trivial. The
- *      visible cart surface (rows, totals shell, address block,
- *      transport/crate radios, promotion cards, modal) is rendered
- *      1:1; the interactive behaviour is left unwired. The totals
- *      values (`#cart-subtotal`, `#cart-total`) render EMPTY exactly
- *      as the legacy screen shows them before its AJAX returns.
+ *   1. Cart-mutation jQuery + AJAX endpoints — most are now ported:
+ *        - `calculateCart.php` / `recalculateCart()`     ✅ wired (Sprint-2 — Server Action + recompute)
+ *        - `deleteItem.php`  (.remove-product)            ✅ wired
+ *        - `updateQuantity.php` (per-row quantity input)  ✅ wired
+ *        - `option-address-thai.php` (เปลี่ยนที่อยู่ modal) ✅ Sprint-10 P1.3 — SSR prop list + reveal-on-click
+ *        - `api-shipBy.php` (#selectShipBy)                ✅ Sprint-10 P1.3 — SSR-rendered per-address `<option>` map
+ *        - `checkPCSMaoMao.php` (PCS-เหมาๆ popup gate)     ✅ Sprint-10 P1.3 — SSR-computed eligibility per address
+ *      The three address/ship-by/promo endpoints are now zero-AJAX:
+ *      the Server Component pre-computes the address list +
+ *      `shipByByAddress` + `maomaoByAddress` keyed by addressID, and
+ *      <CartAddressShipBy> filters on the user's selection client-side.
+ *      No AJAX roundtrip on every address change. See
+ *      `lib/cart/ship-by-eligibility.ts` for the eligibility port.
  *   2. The two top POST handlers (`addCart` / `addCartURL`,
  *      cart.php L3-109) INSERT into tb_cart. A render-time INSERT is
  *      a mutation — NOT performed here (Next.js disallows mutations
@@ -81,9 +87,12 @@ import {
  *   3. `proValentine` / the time-boxed 3.3 promotion (cart.php L667)
  *      is a date-window check — reproduced as a server-side date
  *      compare so the conditional promotion card matches legacy.
- *   4. The `#pro-maomao` promotion modal renders 1:1 in its hidden
- *      default state; legacy reveals it via jQuery `.modal("show")`
- *      (part of FLAG 1) — left hidden.
+ *   4. The `#pro-maomao` promotion modal is now wired through
+ *      <CartAddressShipBy> — auto-reveals when the selected address
+ *      is in the BKK metro ZIP allowlist, and `รับโปรโมชัน` accepts
+ *      the promo + bridges to <CartInteractivity> via a
+ *      `cart-maomao-accepted` window event (the cleanest way to keep
+ *      the two client islands coupled without a parent wrapper).
  *   5. Legacy raster assets are referenced at `/legacy/pcs/…` (NOT
  *      copied here — listed in the transcription report for the
  *      integrator to stage). The shop-empty illustration legacy
@@ -159,6 +168,17 @@ function imgProvider(cProvider: string | null): {
  * pcscargo.co.th URL; a bare filename → the `images/shops/` dir.
  * The PHP basePath maps to the `/legacy/pcs/` static mount.
  */
+/**
+ * Build the legacy `CONCAT(addressName,' ',…) AS fullAddress` string
+ * from a `tb_address` row — used by both `resolveAddressBlock` and
+ * the address-list resolution for the เปลี่ยนที่อยู่ modal. Verbatim
+ * with cart.php's CONCAT (L445 + L62 + L86 + L116 across the legacy
+ * queries — all produce the same shape).
+ */
+function buildFullAddressFromRow(r: AddressRow): string {
+  return `${r.addressname} ${r.addresslastname} | ${r.addressno} ตำบล/แขวง ${r.addresssubdistrict} อำเภอ/เขต ${r.addressdistrict} จังหวัด ${r.addressprovince} ${r.addresszipcode} โทร. ${r.addresstel}, ${r.addresstel2 ?? ""}`;
+}
+
 function convertIMGCHN(url: string | null, size: string): string {
   if (!url || url === "") {
     return "/legacy/pcs/images/shops/default.png";
@@ -240,9 +260,9 @@ export default async function CartPage() {
       userShipBy = fwdRow.fshipby;
     }
   }
-  // userShipBy participates in the legacy JS (PCSF promo branch);
-  // referenced here so the value is computed exactly as legacy.
-  void userShipBy;
+  // userShipBy threaded into <CartAddressShipBy> — drives the
+  // default selection of `#hShipBy` + the PCSF promo branch
+  // (cart.php L1132-1141).
 
   // ── Address block (cart.php L441-499) ───────────────────────
   // Only resolved when there are cart items (the whole address card
@@ -250,6 +270,50 @@ export default async function CartPage() {
   const addressBlock = countCart > 0
     ? await resolveAddressBlock(admin, userID, userAddressID)
     : null;
+
+  // ── All addresses (for the เปลี่ยนที่อยู่ modal — cart.php's
+  //   option-address-thai.php) + per-address shipBy/maomao maps.
+  //   Server-rendered ONCE; the client filters on selection so the
+  //   legacy `getShipBy` / `checkPCSMaoMao` AJAX roundtrips are
+  //   eliminated.
+  const addressOptions: CartAddressOption[] = [];
+  const shipByByAddress: Record<string, ShipByOption[]> = {};
+  const maomaoByAddress: Record<string, boolean> = {};
+  if (countCart > 0) {
+    const { data: allAddrRows } = await admin
+      .from("tb_address")
+      .select(
+        "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
+      )
+      .eq("userid", userID)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: false })
+      .returns<AddressRow[]>();
+    for (const r of allAddrRows ?? []) {
+      const id = String(r.addressid);
+      addressOptions.push({
+        addressID:   id,
+        fullAddress: buildFullAddressFromRow(r),
+        zip:         r.addresszipcode ?? "",
+        province:    r.addressprovince ?? "",
+        amphoe:      r.addressdistrict ?? "",
+      });
+      shipByByAddress[id] = getShipByOptionsForAddress({
+        zip:      r.addresszipcode,
+        province: r.addressprovince,
+        amphoe:   r.addressdistrict,
+        userID,
+      });
+      maomaoByAddress[id] = isMaomaoEligibleForAddress({
+        addressID: id,
+        zip:       r.addresszipcode,
+      });
+    }
+    // 'PCS' warehouse pickup is always present + always non-maomao
+    // (matches checkPCSMaoMao.php — when addressID==='PCS' → proF=2).
+    shipByByAddress["PCS"] = [];
+    maomaoByAddress["PCS"] = false;
+  }
 
   // ── Cart rows, grouped provider → shop (cart.php L522-586) ───
   // cart.php L523: SELECT DISTINCT(cProvider) … GROUP BY cProvider
@@ -377,125 +441,24 @@ export default async function CartPage() {
                 <div className="row">
                   <div className="col-12">
                     {/* ── Thai delivery-address card — cart.php L434-509 ──
-                        (only rendered when there are cart items) */}
-                    {countCart > 0 && (
-                      <div className="ele-address-thai box-shadow mb-2">
-                        <div className="top-address-thai"></div>
-                        <div className="p-1">
-                          <h3 className="text-color mb-1">
-                            <span className="fa fa-map"></span> ที่อยู่ในการจัดส่งในไทย{" "}
-                            <i className="flag-icon flag-icon-th"></i>
-                          </h3>
-                          <div className="address-select">
-                            {addressBlock?.mode === "saved" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue={addressBlock.addressID}
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {addressBlock.fullAddress}
-                                  <span className="box-lastaddress">
-                                    {addressBlock.lastAddressLabel}
-                                  </span>
-                                </span>
-                                <span className="btn-change-address-thai cursor-pointer">
-                                  เปลี่ยนที่อยู่
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "warehouse-saved" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue="PCS"
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {PCS_WAREHOUSE_ADDRESS}
-                                  <span className="box-lastaddress">
-                                    ที่อยู่ล่าสุดที่เคยสั่ง
-                                  </span>
-                                  <span className="ml-1 btn-add-address-thai cursor-pointer">
-                                    เปลี่ยนที่อยู่
-                                  </span>
-                                  {PCS_WAREHOUSE_MAP_URL && (
-                                    <div>
-                                      <a
-                                        href={PCS_WAREHOUSE_MAP_URL}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-info"
-                                      >
-                                        <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                        ในไทย
-                                      </a>
-                                    </div>
-                                  )}
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "warehouse-default" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue="PCS"
-                                  required={true}
-                                />
-                                <span className="address-select-now">
-                                  {PCS_WAREHOUSE_ADDRESS}
-                                  {PCS_WAREHOUSE_MAP_URL && (
-                                    <a
-                                      href={PCS_WAREHOUSE_MAP_URL}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-info"
-                                    >
-                                      <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                                      ในไทย
-                                    </a>
-                                  )}
-                                </span>
-                                <span className="btn-change-address-thai cursor-pointer">
-                                  เปลี่ยนที่อยู่
-                                </span>
-                              </>
-                            )}
-                            {addressBlock?.mode === "none" && (
-                              <>
-                                <input
-                                  type="text"
-                                  name="addressID"
-                                  id="addressIDMain"
-                                  defaultValue=""
-                                  required={true}
-                                />
-                                <span className="address-select-now"></span>
-                                <span className="btn-add-address-thai cursor-pointer">
-                                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง Pacred กทม
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <div className="shipBy-select pt-1 mb-05">
-                            <div id="selectShipBy"></div>
-                          </div>
-                          <div className="text-danger font-0_85rem">
-                            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
-                            ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
-                            <a href="/services/import-china" target="_blank" rel="noreferrer">
-                              (เช็คพื้นที่ได้ที่นี่)
-                            </a>
-                          </div>
-                        </div>
-                      </div>
+                        (only rendered when there are cart items).
+                        Address selection / ship-by select / maomao
+                        popup are wired in <CartAddressShipBy> (a Client
+                        Component). The three legacy AJAX endpoints
+                        `option-address-thai.php` / `api-shipBy.php` /
+                        `checkPCSMaoMao.php` are replaced by the
+                        SSR-computed `addressOptions` + `shipByByAddress`
+                        + `maomaoByAddress` props — no AJAX. */}
+                    {countCart > 0 && addressBlock && (
+                      <CartAddressShipBy
+                        initialAddressBlock={addressBlock}
+                        addresses={addressOptions}
+                        shipByByAddress={shipByByAddress}
+                        maomaoByAddress={maomaoByAddress}
+                        userShipBy={userShipBy}
+                        warehouseAddress={PCS_WAREHOUSE_ADDRESS}
+                        warehouseMapUrl={PCS_WAREHOUSE_MAP_URL}
+                      />
                     )}
 
                     {/* ── Shopping-cart item list — cart.php L510-600 ──
@@ -722,68 +685,11 @@ export default async function CartPage() {
           </div>
         </div>
       </div>
-      {/* cart.php L736 — the address-option AJAX slot */}
-      <div id="option-address-thai"></div>
-      {/* cart.php L737-754 — the PCS-เหมาๆ promotion modal.
-          Renders 1:1 in its hidden default state; legacy reveals it
-          via jQuery `.modal("show")` (FLAGGED — jQuery not wired). */}
-      <div
-        id="pro-maomao"
-        className="modal fade in"
-        tabIndex={-1}
-        role="dialog"
-        aria-hidden="true"
-      >
-        <div className="pcs-notify modal-dialog modal-sm">
-          <div
-            className="modal-content modal-content-pcs"
-            style={{ backgroundColor: "unset" }}
-          >
-            <div className="modal-header">
-              <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
-              </span>
-              <button
-                type="button"
-                className="close text-white"
-                data-dismiss="modal"
-                aria-hidden="true"
-                style={{
-                  opacity: 1,
-                  border: "2px solid",
-                  borderRadius: "20px",
-                }}
-              >
-                <i
-                  className="la la-close text-white"
-                  style={{ fontSize: "1.5rem" }}
-                ></i>
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="bg-pro-valentine">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/legacy/pcs/theme/free50-3.png"
-                  className="img-fluid"
-                  alt=""
-                />
-              </div>
-              <div
-                className="modal-footer text-center"
-                style={{ display: "inherit" }}
-              >
-                <span
-                  className="btn btn-main round btn-min-width animate__animated animate__infinite animate__headShake cursor-pointer"
-                  id="btn-getMaoMao"
-                >
-                  รับโปรโมชัน เหมา ๆ
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* cart.php L736 — the address-option AJAX slot + L737-754 the
+          PCS-เหมาๆ promotion modal both now rendered by
+          <CartAddressShipBy> above. Those legacy `<div>` containers
+          are intentionally dropped: the equivalent reactive markup
+          ships inside the Client component along with the wiring. */}
       {/* END: Content — cart.php L755 */}
       {/* cart.php L756-759 — preload <img width=0> hints for the
           promotion modal assets. */}
@@ -857,10 +763,6 @@ async function resolveAddressBlock(
     .eq("addressstatus", "1");
   const hasAddress = (anyAddr ?? []).length > 0;
 
-  // Build the legacy CONCAT(...) AS fullAddress string from a row.
-  const buildFullAddress = (r: AddressRow): string =>
-    `${r.addressname} ${r.addresslastname} | ${r.addressno} ตำบล/แขวง ${r.addresssubdistrict} อำเภอ/เขต ${r.addressdistrict} จังหวัด ${r.addressprovince} ${r.addresszipcode} โทร. ${r.addresstel}, ${r.addresstel2 ?? ""}`;
-
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
     const { data: matchRow } = await admin
@@ -880,7 +782,7 @@ async function resolveAddressBlock(
       return {
         mode: "saved",
         addressID: String(matchRow.addressid),
-        fullAddress: buildFullAddress(matchRow),
+        fullAddress: buildFullAddressFromRow(matchRow),
         lastAddressLabel: "ที่อยู่ล่าสุดที่เคยสั่ง",
       };
     }
@@ -907,7 +809,7 @@ async function resolveAddressBlock(
           return {
             mode: "saved",
             addressID: String(mainAddr.addressid),
-            fullAddress: buildFullAddress(mainAddr),
+            fullAddress: buildFullAddressFromRow(mainAddr),
             lastAddressLabel:
               userAddressID !== ""
                 ? "ที่อยู่ล่าสุดที่เคยสั่ง"

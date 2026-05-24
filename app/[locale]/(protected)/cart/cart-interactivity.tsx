@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
 import {
@@ -155,6 +155,20 @@ export function CartInteractivity({
   // The fade50 promo (PCS เหมาๆ — `input-12`). Legacy only changes the
   // border, not the totals — purely cosmetic but reproduced for fidelity.
   const [proMaomao, setProMaomao] = useState(false);
+
+  // Listen for the popup "รับโปรโมชัน เหมา ๆ" accept dispatched from
+  // <CartAddressShipBy> (cart.php L1018-1024 — legacy `btn-getMaoMao`
+  // also ticks `#input-12`). The two client islands aren't parented
+  // by a shared wrapper, so a `CustomEvent` is the lightest-touch
+  // bridge. Safe (not a cascading render — triggered by DOM event,
+  // not by another state change).
+  useEffect(() => {
+    function handler() {
+      setProMaomao(true);
+    }
+    window.addEventListener("cart-maomao-accepted", handler);
+    return () => window.removeEventListener("cart-maomao-accepted", handler);
+  }, []);
 
   // ── G1 promo-code input — typed legacy `tagPro()` codes ──
   // Sprint-2 wire of `validatePromoCode` + `applyPromoToCart` /
