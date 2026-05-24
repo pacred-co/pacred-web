@@ -1,7 +1,16 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { Link } from "@/i18n/navigation";
+import {
+  BulkActionsProvider,
+  BulkCancelButton,
+  BulkPayBar,
+  RowCancelButton,
+  RowCheckbox,
+} from "./service-order-bulk-actions";
 
 /**
  * รายการฝากสั่งซื้อสินค้า — `/service-order/add` route.
@@ -278,6 +287,25 @@ export default async function ServiceOrderAddPage({
     );
   }
 
+  // ── Multi-select interaction support (wired to actions/service-order.ts) ──
+  // Pre-compute per-row totals + the wallet-balance precheck so the
+  // client-side b-pay bar can show a live total + a fail-fast shortfall
+  // banner without an extra round-trip. The matching server-side checks
+  // re-verify ownership / balance inside payServiceOrderFromWallet, so
+  // these numbers are display-only (not the security boundary).
+  const totalsMap = new Map<string, number>(
+    rows.map((r) => [
+      r.hno,
+      (Number(r.htotalpricechn ?? 0) + Number(r.hshippingchn ?? 0)) *
+        Number(r.hrate ?? 0) +
+        Number(r.hshippingservice ?? 0),
+    ]),
+  );
+  const payableHNos = rows.filter((r) => r.hstatus === "2").map((r) => r.hno);
+  const supabaseRLS = await createClient();
+  const walletBalance =
+    (await getWalletAvailableBalance(supabaseRLS, data.user.id)) ?? 0;
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
@@ -432,15 +460,26 @@ export default async function ServiceOrderAddPage({
                           </div>
                           <div className="hr-dashed"></div>
 
-                          {/* shops.php L898-1058 — the order table / empty state */}
+                          {/* shops.php L898-1081 — the order table + b-pay bar.
+                              Wrapped in <BulkActionsProvider> so row checkboxes,
+                              the bulk-cancel button, and the b-pay bottom bar
+                              share selection state (matches the legacy
+                              DataTables + jQuery wiring at L1101-1367 — one
+                              global $('.dt-checkboxes') namespace). */}
+                          <BulkActionsProvider
+                            payableHNos={payableHNos}
+                            totals={totalsMap}
+                          >
                           <div className="p-1 p-m-0">
                             {/* shops.php L899 — <form action="printShop/" method="GET">.
                                 printShop is now transcribed to the Pacred
                                 route /service-order/print; the form posts
-                                there (method=GET, default-locale path).
-                                TODO(server-action): wire the multi-select
-                                checkbox shim so id[] is collected before
-                                submission (legacy L1240-1253). */}
+                                there (method=GET, default-locale path). The
+                                bulk-cancel + bulk-pay interactions wire up
+                                via the wrapping <BulkActionsProvider>; the
+                                form retains the print-receipt / print-invoice
+                                submit buttons (no checkbox shim needed for
+                                those — they submit the q filter). */}
                             <form id="frm-example" action="/service-order/print" method="GET">
                               {countStatusAll > 0 ? (
                                 rows.length > 0 ? (
@@ -451,13 +490,11 @@ export default async function ServiceOrderAddPage({
                                       </div>
                                     )}
                                     <div className="text-center text-md-left">
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-danger waves-effect round"
-                                        id="selectCancel"
-                                      >
-                                        ยกเลิกออเดอร์รายการที่เลือก
-                                      </button>
+                                      <BulkCancelButton
+                                        cancellableHNos={rows
+                                          .filter((r) => Number(r.hstatus) <= 2)
+                                          .map((r) => r.hno)}
+                                      />
                                     </div>
                                     <div className="table-responsive pt-1 p-1">
                                       <table
@@ -466,6 +503,12 @@ export default async function ServiceOrderAddPage({
                                       >
                                         <thead className="">
                                           <tr className="text-center bg-danger2">
+                                            {/* Checkbox column — legacy DataTables
+                                                auto-added it via the responsive
+                                                plugin (L1189+). Visible only for
+                                                rows where bulk-cancel or bulk-pay
+                                                applies (hstatus <= 2). */}
+                                            <th className="all" style={{ width: "32px" }}></th>
                                             <th className="all add-text-all">ID</th>
                                             <th className="none">วันที่สร้าง</th>
                                             <th className="none">ออเดอร์เลขที่</th>
@@ -506,6 +549,16 @@ export default async function ServiceOrderAddPage({
                                                   ? { className: "bg-danger2 anchor", id: row.hno }
                                                   : {})}
                                               >
+                                                {/* col 0 — row checkbox (legacy
+                                                    DataTables auto-injected; gated
+                                                    on hstatus<=2 — the legacy
+                                                    bulk-cancel + bulk-pay scope). */}
+                                                <td className="text-center" style={{ width: "32px" }}>
+                                                  <RowCheckbox
+                                                    hNo={row.hno}
+                                                    selectable={Number(row.hstatus) <= 2}
+                                                  />
+                                                </td>
                                                 {/* col 1 — ID */}
                                                 <td className="text-center tr1 notranslate">{row.hno}</td>
                                                 {/* col 2 — วันที่สร้าง */}
@@ -585,15 +638,11 @@ export default async function ServiceOrderAddPage({
                                                 {/* col 7 — ตัวเลือก */}
                                                 <td className="text-center">
                                                   {Number(row.hstatus) <= 2 && (
-                                                    // shops.php L1005 — onclick deleteOrder(hNo).
-                                                    // TODO(server-action): port AJAX cancelOrder.php
-                                                    // → actions/orders.ts::cancelServiceOrder, then
-                                                    // re-attach via a "use client" row-shim.
-                                                    <a href="javascript:void(0)">
-                                                      <p className="btn font-12 btn-danger btn-rounded btn-sm">
-                                                        ยกเลิกออเดอร์
-                                                      </p>
-                                                    </a>
+                                                    // shops.php L1005 — onclick deleteOrder(hNo)
+                                                    // → AJAX cancelOrder.php. Now wired to
+                                                    // actions/service-order.ts::cancelServiceOrder
+                                                    // via the <RowCancelButton> client shim.
+                                                    <RowCancelButton hNo={row.hno} />
                                                   )}
                                                   <Link href={`/service-order/${row.hno}`}>
                                                     <p className="btn font-12 btn-outline-success btn-rounded btn-sm">
@@ -708,52 +757,22 @@ export default async function ServiceOrderAddPage({
                           </div>
 
                           {/* shops.php L1059-1081 — the b-pay bottom bar.
-                              TODO(server-action): wire #select → AJAX
-                              getListPay.php → actions/orders.ts::startPayFlow
-                              + #selectCancel → getList.php →
-                              actions/orders.ts::cancelServiceOrders, then
-                              re-attach calPrice.php live-total via a
-                              "use client" shim. */}
+                              `#select` → legacy AJAX getListPay.php →
+                              POST `paymentOrder` (L246-438). Now wired to
+                              actions/service-order.ts::payServiceOrderFromWallet
+                              via the <BulkPayBar> client shim (wallet-
+                              sufficient branch, matches legacy L281-326);
+                              the legacy slip-upload top-up branch (L328-430)
+                              is out of scope on this view — customers with
+                              insufficient balance see an inline shortfall
+                              banner pointing at the wallet top-up flow,
+                              same as `pay-from-wallet-button.tsx`. */}
                           <div className="p-1 p-m-0">
                             {countShops2 > 0 && (q === "" || q === "2") && (
-                              <div
-                                className="b-pay"
-                                style={{ position: "fixed", bottom: "20px", zIndex: 999 }}
-                              >
-                                <div className="row">
-                                  <div className="col-md-6 offset-md-3" style={{ marginLeft: "9%" }}>
-                                    <div className="row">
-                                      <div className="col-3 p-05 text-center">
-                                        <input
-                                          type="checkbox"
-                                          className="dt-checkboxes check-all c6"
-                                          defaultChecked
-                                        />
-                                        <br />
-                                        เลือกทั้งหมด
-                                      </div>
-                                      <div className="col-6 p-05">
-                                        จำนวนรายการ : <span className="countPay">00</span>
-                                        <br />
-                                        <b>
-                                          ยอดชำระรวม : <span className="text-danger price-all">00000</span> บ.
-                                        </b>
-                                      </div>
-                                      <div className="col-3 p-05 text-right">
-                                        <button
-                                          type="button"
-                                          className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
-                                          id="select"
-                                        >
-                                          ชำระเงิน
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
+                              <BulkPayBar walletBalance={walletBalance} />
                             )}
                           </div>
+                          </BulkActionsProvider>
                         </div>
                       </div>
                     </div>
