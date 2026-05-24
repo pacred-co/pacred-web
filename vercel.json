@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/cargothai-sync",
       "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/momo-sync",
+      "schedule": "30 18 * * *"
     }
   ]
 }
