@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { getTranslations } from "next-intl/server";
 import {
   Ship,
-  Truck,
   CheckCircle2,
   ShieldCheck,
   Zap,
@@ -23,7 +21,6 @@ import {
   Home,
   ChevronRight,
   ArrowRight,
-  Anchor,
   Warehouse,
   Globe2,
   Container,
@@ -32,6 +29,7 @@ import {
   HandCoins,
   ShoppingBag,
   Sparkles,
+  Layers,
 } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
@@ -39,6 +37,7 @@ import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { ContactSales } from "@/components/sections/contact-sales";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
+import { Reviews } from "@/components/sections/reviews";
 import { Footer } from "@/components/sections/footer";
 import { TrustStatsStrip } from "@/components/sections/trust-stats-strip";
 import { Link } from "@/i18n/navigation";
@@ -54,6 +53,8 @@ import {
   TrackedExternalLink,
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
+
+export const dynamic = "force-dynamic";
 
 const SURFACE = "import_china_landing";
 
@@ -71,85 +72,6 @@ export async function generateMetadata({
 
 const LINE_URL = "/line";
 const PHONE_DISPLAY = CONTACT.phoneDisplay;
-
-type Mode = {
-  id: "fcl" | "lcl" | "cargo";
-  icon: typeof Ship;
-  badge: string;
-  title: string;
-  subtitle: string;
-  intro: string;
-  image: string;
-  imageAlt: string;
-  accent: string;
-  forItems: string[];
-  highlights: string[];
-  href: string;
-  cta: string;
-};
-
-const MODES: Mode[] = [
-  {
-    id: "fcl",
-    icon: Container,
-    badge: "FCL · เหมาตู้",
-    title: "FCL — Full Container Load",
-    subtitle: "เหมาตู้ 20'/40'/40HQ จากโรงงานจีน",
-    intro:
-      "สำหรับคำสั่งซื้อปริมาณมาก เหมาตู้คุ้มที่สุด รับสินค้าหน้าโรงงาน · ลำเลียงตู้ตรงสู่ Port ไทย · เคลียร์ภาษีครบ Term EXW / FOB / CIF / DDP",
-    image: "/images/hero-section/banner/ship.png",
-    imageAlt: "นำเข้า FCL จากจีน Pacred",
-    accent: "from-blue-600 to-blue-800",
-    forItems: [
-      "สั่งโรงงานจีนปริมาณเต็มตู้ — ต้นทุนต่อหน่วยถูกที่สุด",
-      "Cross-dock 20' / 40' / 40HQ · รับโรงงาน ปลายทางคลังไทย",
-      "ครบทุก Incoterm — EXW / FOB / CIF / DDP",
-    ],
-    highlights: ["20'/40'/40HQ", "Door-to-Door", "ทุก Term"],
-    href: "/services/import-china-fcl",
-    cta: "ดูรายละเอียด FCL",
-  },
-  {
-    id: "lcl",
-    icon: Boxes,
-    badge: "LCL · รวมตู้",
-    title: "LCL — Less Container Load",
-    subtitle: "รวมตู้ จ่ายตาม CBM · เหมาะกับงานเริ่มต้น",
-    intro:
-      "รวมตู้กับลูกค้ารายอื่น — จ่ายตามปริมาตร CBM หรือ KG ที่สูงกว่า เริ่มไม่กี่กล่องก็ได้ ระบบจัดการที่โกดังกวางโจว/เซินเจิ้น/อี้อู ครบจบ",
-    image: "/images/hero-section/banner/airbanner.png",
-    imageAlt: "นำเข้า LCL จากจีน Pacred",
-    accent: "from-emerald-600 to-emerald-800",
-    forItems: [
-      "เริ่มต้นไม่กี่กล่อง — ไม่ต้องเหมาตู้",
-      "พักของที่โกดังจีนรอรวมส่ง",
-      "Total Landed Cost คุมได้ง่าย — แจ้งราคาก่อนยืนยัน",
-    ],
-    highlights: ["จ่ายตาม CBM/KG", "Door-to-Door", "เริ่มไม่กี่กล่อง"],
-    href: "/services/import-china-lcl",
-    cta: "ดูรายละเอียด LCL",
-  },
-  {
-    id: "cargo",
-    icon: Truck,
-    badge: "CARGO · จีน-ไทย",
-    title: "Cargo จีน-ไทย — รถ/เรือ/แอร์",
-    subtitle: "ขนส่งทุกรูปแบบ · เลือกตามไทม์ไลน์",
-    intro:
-      "ฝากนำเข้าสินค้าจากจีนทุกประเภท — เลือกได้ทั้งทางรถ (ด่านชายแดน), ทางเรือ (LCL/FCL คลองเตย/แหลมฉบัง), หรือทางอากาศ (สุวรรณภูมิ/ดอนเมือง) ตามความเร่งด่วน",
-    image: "/images/hero-section/banner/car.png",
-    imageAlt: "Cargo จีน-ไทย Pacred",
-    accent: "from-primary-500 to-primary-700",
-    forItems: [
-      "รถ 5-7 วัน · เรือ 12-15 วัน · แอร์ 3-5 วัน",
-      "เคลียร์ภาษีครบ — Form E ลดภาษีนำเข้าได้",
-      "ติดตามสถานะแบบ real-time",
-    ],
-    highlights: ["รถ/เรือ/แอร์", "ติดตามเรียลไทม์", "Form E"],
-    href: "/booking",
-    cta: "ปรึกษาฟรี",
-  },
-];
 
 const SERVICE_SCOPE = [
   "รับสินค้าหน้าโรงงานจีน — กวางโจว · เซินเจิ้น · อี้อู · เซี่ยงไฮ้ · หางโจว",
@@ -181,7 +103,7 @@ const WHY = [
   {
     icon: Zap,
     title: "ขนส่งเร็ว ลด lead time",
-    desc: "แอร์ 3-5 วัน · LCL 12-15 วัน · FCL 15-20 วัน — ลดสต๊อกแขวน",
+    desc: "FCL 15-20 วัน · LCL 15-25 วัน · เลือก mode ที่เหมาะกับ order",
   },
   {
     icon: BadgePercent,
@@ -228,7 +150,7 @@ const STEPS = [
     num: "04",
     icon: Ship,
     title: "ขนส่งจีน-ไทย",
-    desc: "เลือกได้ — รถ/เรือ/แอร์ ตามงบ + ไทม์ไลน์ที่ต้องการ",
+    desc: "เลือกได้ — FCL เหมาตู้ หรือ LCL รวมตู้ ตามปริมาณ + งบ",
   },
   {
     num: "05",
@@ -257,7 +179,7 @@ const TERMS_QUICK = [
     code: "FOB",
     name: "Free On Board",
     desc: "ผู้ขายส่งถึง Port ต้นทาง · ผู้ซื้อจ่ายขนส่ง+ภาษี+เคลียร์ปลายทาง",
-    icon: Anchor,
+    icon: Container,
   },
   {
     code: "EXW",
@@ -275,12 +197,16 @@ const TERMS_QUICK = [
 
 const FAQ_ITEMS = [
   {
+    q: "นำเข้าจากจีน ควรเลือก FCL หรือ LCL?",
+    a: "ดูที่ปริมาณสินค้า — ถ้ามากกว่า 15 CBM แนะนำ FCL (เหมาตู้) เพราะคุ้มกว่า · ถ้าน้อยกว่า 15 CBM ใช้ LCL (รวมตู้) จ่ายตาม CBM/KG ที่ใช้จริง · FCL ลด lead time + ต้นทุนต่อหน่วยต่ำสุด · LCL เหมาะกับเริ่มต้นและทดลองตลาด",
+  },
+  {
     q: "นำเข้าจากจีน Pacred ใช้เวลากี่วัน?",
-    a: "ขึ้นกับช่องทาง — ทางอากาศ (Air Freight) 3-5 วัน · ทางเรือ LCL 12-15 วัน · ทางเรือ FCL 15-20 วัน · ทางรถข้ามแดน 5-7 วัน เวลาที่บอกนับจากของเข้าโกดังจีน ถึงปลายทางในไทย (ก่อนเคลียร์ศุลกากร)",
+    a: "ขึ้นกับ mode ที่เลือก — FCL ทางเรือ 15-20 วัน · LCL ทางเรือ 15-25 วัน · ทางอากาศ (Air Freight) 3-5 วัน · ทางรถข้ามแดน 5-7 วัน เวลาที่บอกนับจากของเข้าโกดังจีน ถึงปลายทางในไทย",
   },
   {
     q: "ราคาขนส่งจากจีนคิดยังไง?",
-    a: "LCL ทางเรือคิดตาม CBM (ปริมาตร) หรือ KG (น้ำหนัก) ที่สูงกว่า · FCL คิดเป็นต่อตู้ 20'/40' · ทางอากาศคิดตาม Volume Weight หรือ Actual Weight ที่สูงกว่า ทีมแจ้ง Total Landed Cost ครบ (ค่าขนส่ง + ภาษีนำเข้า + VAT + เคลียร์) ในใบเดียวก่อนยืนยัน",
+    a: "FCL คิดเป็นต่อตู้ 20'/40'/40HQ — flat rate ไม่ว่าจะใส่เต็มหรือไม่ · LCL คิดตาม CBM (ปริมาตร) หรือ KG (น้ำหนัก) ที่สูงกว่า ทีมแจ้ง Total Landed Cost ครบ (ค่าขนส่ง + ภาษีนำเข้า + VAT + เคลียร์) ในใบเดียวก่อนยืนยัน",
   },
   {
     q: "ต้องเสียภาษีนำเข้าเท่าไร?",
@@ -296,15 +222,11 @@ const FAQ_ITEMS = [
   },
   {
     q: "ไม่รู้จีน · ไม่ได้คุยซัพพลายเออร์เอง?",
-    a: "ใช้บริการ ฝากสั่งซื้อสินค้าจากจีน (China Shopping) — ทีมล่ามจีน Pacred ปิดดีลกับโรงงาน ตรวจสเปก ตรวจคุณภาพ ในนามคุณ — แค่ส่งลิงก์สินค้า (1688/Taobao/Tmall/Alibaba) มาให้ ดูเพิ่มที่หน้า /services/china-shopping",
+    a: "ใช้บริการ ฝากสั่งซื้อสินค้าจากจีน (China Shopping) — ทีมล่ามจีน Pacred ปิดดีลกับโรงงาน ตรวจสเปก ตรวจคุณภาพ ในนามคุณ — แค่ส่งลิงก์สินค้า (1688/Taobao/Tmall/Alibaba) มาให้",
   },
   {
     q: "สินค้าควบคุม เช่น เครื่องสำอาง อาหารเสริม เข้าได้มั้ย?",
     a: "ได้ — แต่ต้องมีใบอนุญาต อย. ก่อนนำเข้า ทีม Pacred ช่วยจัดทำเอกสาร · ประสานกับ อย./มอก./สมอ./กสทช./กรมเกษตร · ตรวจ HS Code · เตรียมข้อมูลสำหรับยื่นขอใบอนุญาต ใช้เวลาเตรียมประมาณ 7-30 วัน ขึ้นอยู่กับประเภทสินค้า",
-  },
-  {
-    q: "ค่าบริการ Pacred รวมอะไรบ้าง?",
-    a: "ค่าบริการมาตรฐานครอบคลุม — รับของจากโรงงาน + พัก-ตรวจ-แพ็คที่โกดังจีน + ขนส่งจีน-ไทย + เคลียร์ภาษีศุลกากร + ออกใบขนสินค้า + ใบกำกับภาษี + จัดส่งถึงปลายทางในไทย ไม่มีค่าบริการแฝง — แจ้ง quote ครบทุกหัวก่อนยืนยัน",
   },
 ];
 
@@ -393,86 +315,44 @@ export default async function ImportChinaPage({
               IMPORT FROM CHINA · นำเข้าสินค้าจากจีน
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">นำเข้าสินค้าจากจีน</span> ครบวงจร FCL · LCL · Cargo
+              <span className="text-primary-600">นำเข้าสินค้าจากจีน</span> ครบวงจร FCL · LCL
               <span className="hidden md:inline"> ทุก Term ทุก Port</span>
             </h1>
 
             <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
-              บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย รถ/เรือ/แอร์ · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ — <span className="text-primary-600/80 font-bold">ราคาเริ่มต้น 40฿/kg · ทีมล่ามจีนปิดดีลในนามคุณ</span>
+              บริการนำเข้าสินค้าจากจีนแบบมืออาชีพ — รับสินค้าหน้าโรงงาน · ขนส่งจีน-ไทย FCL/LCL · เคลียร์ภาษีศุลกากร · ใช้สิทธิ Form E · Door-to-Door ทั่วประเทศ — <span className="text-primary-600/80 font-bold">FCL เริ่ม $500/ตู้ · LCL เริ่ม $150/CBM · ทีมล่ามจีนปิดดีลในนามคุณ</span>
             </h2>
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
 
-            {/* LINE attention banner — primary CTA above the fold */}
-            <TrackedExternalLink
-              href={LINE_URL}
-              cta="line_cta"
-              surface={SURFACE}
-              ctaProps={{ position: "hero_banner" }}
-              aria-label="ทักไลน์ Pacred — ปรึกษานำเข้าจีนฟรี"
-              className="group block mt-4 md:mt-6 relative pt-3 md:pt-4 pr-4 md:pr-8 max-w-[1100px] no-underline"
-            >
-              <span className="absolute top-0 left-3 md:left-5 z-20 inline-flex items-center gap-1.5 bg-slate-900 dark:bg-black text-white text-[11.5px] md:text-[13px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.45)] tracking-tight transition-transform duration-300 group-hover:-translate-y-0.5">
-                <span className="relative flex w-2 h-2">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-red-500" />
-                </span>
-                ฝากนำเข้าจีน?
-              </span>
-
-              <div
-                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
+            {/* Primary CTA row — "ใช้บริการ" (register) + "ปรึกษาฟรี" (LINE) */}
+            <div className="mt-4 md:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-[640px]">
+              <Link
+                href="/register"
+                aria-label="ใช้บริการนำเข้าจีน — สมัครฟรี"
+                data-cta="register_hero"
+                className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[15px] hover:bg-primary-700 transition-colors shadow-[0_8px_22px_rgba(179,0,0,0.30)]"
               >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-50 mix-blend-overlay"
-                  style={{ background: "radial-gradient(circle at 75% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
-                />
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.08]"
-                  style={{
-                    backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
-                    backgroundSize: "16px 16px",
-                  }}
-                />
-
-                <div className="relative grid grid-cols-[auto_1fr] items-center gap-2 md:gap-5 pl-3 md:pl-6 pr-3 md:pr-6 pt-7 md:pt-7 pb-4 md:pb-5">
-                  <div className="leading-none shrink-0">
-                    <p className="text-[16px] md:text-[32px] font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
-                      <span className="text-yellow-300">P</span>
-                      <span className="text-white">acred</span>
-                    </p>
-                    <p className="mt-0.5 text-[7.5px] md:text-[12px] font-bold tracking-[0.30em]">
-                      <span className="text-yellow-300">S</span>
-                      <span className="text-white">HIPPING</span>
-                    </p>
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-[12px] md:text-[28px] font-bold text-white leading-snug">
-                      เริ่มต้นไม่กี่กล่อง · ราคาชัดเจน · ไม่ต้องคุยจีนเอง
-                    </p>
-                    <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
-                      ทีมล่ามจีน + เคลียร์ภาษีครบ · ขนส่งจีน-ไทย รถ/เรือ/แอร์ · Door-to-Door
-                    </p>
-                    <p className="mt-1.5 md:mt-2 inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold tracking-wide">
-                      <MessageCircle className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300" strokeWidth={2.6} />
-                      <span className="text-yellow-300">ทักไลน์</span>
-                      <span className="text-white/85">ปรึกษาฟรี — ตอบไว 5 นาที</span>
-                      <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </TrackedExternalLink>
+                ใช้บริการ — สมัครฟรี
+                <ArrowRight className="w-4 h-4" strokeWidth={2.6} />
+              </Link>
+              <TrackedExternalLink
+                href={LINE_URL}
+                cta="line_cta"
+                surface={SURFACE}
+                ctaProps={{ position: "hero_primary" }}
+                className="inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[15px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(6,199,85,0.35)]"
+              >
+                <MessageCircle className="w-4 h-4" strokeWidth={2.6} />
+                ปรึกษาฟรี · ทักไลน์
+              </TrackedExternalLink>
+            </div>
 
             {/* Service scope card — checklist */}
             <div className="mt-5 md:mt-7 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)] max-w-[1100px]">
               <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
                 <span className="shrink-0">🇨🇳</span>
-                <span>บริการนำเข้าจากจีนครบวงจร — รับของจีน เคลียร์ไทย ส่งถึงประตู ✈️🚢🚛</span>
+                <span>บริการนำเข้าจากจีนครบวงจร — รับของจีน เคลียร์ไทย ส่งถึงประตู</span>
               </h3>
               <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed">
                 กวางโจว · เซินเจิ้น · อี้อู · เซี่ยงไฮ้ · หางโจว · เทียนจิน · ชิงเต่า
@@ -516,105 +396,171 @@ export default async function ImportChinaPage({
           </div>
         </section>
 
-        {/* ─── Sales contact ─── */}
-        <ContactSales hideAssuranceStrip />
-
-        {/* ═══════ 2. Modes ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        {/* ═══════ 2. MODE PICKER — FCL spotlight + LCL ═══════
+             FCL = bigger card on the left (spotlight per ปอน — wants FCL ahead of LCL).
+             OurService glossy 3D button style — chunky drop shadow + top sheen + edge rim.
+             Each card links to the deep-dive sub-page. */}
+        <section className="relative pt-10 md:pt-16 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
-              <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" />
-              3 MODES · 3 รูปแบบ
+              <Layers className="w-3.5 h-3.5" strokeWidth={2.6} />
+              เลือก MODE · FCL vs LCL
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              เลือกแบบ <span className="text-primary-600">FCL · LCL · Cargo</span> ที่เหมาะกับคุณ
+              เลือกแบบ <span className="text-primary-600">FCL เหมาตู้</span> หรือ <span className="text-primary-600">LCL รวมตู้</span>
             </h2>
             <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
-              ปริมาณมาก = FCL · เริ่มต้นไม่กี่กล่อง = LCL · ต้องการความเร่งด่วน = Cargo ทางอากาศ/รถ
+              ปริมาณมาก = FCL เหมาตู้คุ้มที่สุด · เริ่มต้นไม่กี่กล่อง = LCL จ่ายตาม CBM ที่ใช้
             </p>
 
-            <div className="mt-6 md:mt-8 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
-              {MODES.map((m) => {
-                const Icon = m.icon;
-                return (
-                  <article
-                    key={m.id}
-                    className="group relative flex flex-col rounded-2xl md:rounded-3xl border border-border bg-white dark:bg-surface overflow-hidden shadow-[0_8px_22px_rgba(15,23,42,0.06)] hover:shadow-[0_22px_50px_rgba(179,0,0,0.14)] hover:border-primary-300 dark:hover:border-primary-800 hover:-translate-y-1 transition-all duration-400"
-                  >
-                    <div className="relative h-32 md:h-40 overflow-hidden">
-                      <Image
-                        src={m.image}
-                        alt={m.imageAlt}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 380px"
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.06]"
-                      />
-                      <div className={`absolute inset-0 bg-gradient-to-br ${m.accent} mix-blend-multiply opacity-30`} />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                      <div className="absolute top-3 left-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-sm text-primary-700 text-[10px] md:text-[11px] font-black tracking-[0.10em] shadow-md">
-                          <Icon className="w-3.5 h-3.5" strokeWidth={2.6} />
-                          {m.badge}
-                        </span>
-                      </div>
-                      <div className="absolute bottom-3 left-3 right-3">
-                        <h3 className="text-[18px] md:text-[20px] font-black text-white leading-tight tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-                          {m.title}
-                        </h3>
-                        <p className="mt-0.5 text-[11px] md:text-[12.5px] text-white/85 font-medium drop-shadow">
-                          {m.subtitle}
-                        </p>
-                      </div>
+            {/* 2-card grid — desktop: FCL spans 3, LCL spans 2 (glossy 3D button style from OurService) */}
+            <div className="mt-6 md:mt-8 grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-5">
+              {/* ── FCL — spotlight (bigger, left, gradient red) ── */}
+              <Link
+                href="/services/import-china-fcl"
+                aria-label="ดูรายละเอียดบริการ FCL — Full Container Load จีน-ไทย"
+                data-cta="mode-fcl"
+                className={[
+                  "group relative overflow-hidden isolate bg-white col-span-1 md:col-span-3",
+                  "h-[260px] md:h-[340px] rounded-[18px] md:rounded-[26px]",
+                  // Glossy 3D — same recipe as OurService
+                  "shadow-[0_2px_3px_rgba(15,23,42,0.12),0_6px_14px_rgba(15,23,42,0.16),0_18px_38px_rgba(15,23,42,0.22),0_30px_60px_rgba(15,23,42,0.18),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.18),inset_0_0_0_1px_rgba(255,255,255,0.35)]",
+                  "border border-black/[0.14]",
+                  "transition-[transform,box-shadow] duration-300 ease-out will-change-transform",
+                  "hover:-translate-y-2.5 hover:shadow-[0_3px_5px_rgba(15,23,42,0.14),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.26),0_44px_80px_rgba(15,23,42,0.22),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(255,255,255,0.5)]",
+                  "active:translate-y-0.5 active:duration-75",
+                ].join(" ")}
+              >
+                {/* Background image */}
+                <div
+                  className="absolute inset-0 z-[1] bg-cover bg-center bg-no-repeat transition-transform duration-500 ease-out group-hover:scale-[1.035]"
+                  style={{ backgroundImage: "url('/images/hero-section/banner/ship.png')" }}
+                />
+                {/* Red gradient overlay */}
+                <div className="absolute inset-0 z-[2] bg-gradient-to-br from-primary-600/85 via-primary-700/75 to-primary-900/85" />
+                {/* Glossy top sheen */}
+                <div
+                  className="absolute inset-x-0 top-0 z-[4] pointer-events-none rounded-t-[inherit]"
+                  style={{
+                    height: "58%",
+                    background:
+                      "linear-gradient(to bottom, rgba(255,255,255,0.40) 0%, rgba(255,255,255,0.15) 45%, rgba(255,255,255,0.04) 85%, transparent 100%)",
+                  }}
+                />
+                {/* Shine sweep */}
+                <div
+                  className="absolute -inset-[45%] z-[3] pointer-events-none -translate-x-[65%] rotate-[8deg] transition-transform duration-[650ms] group-hover:translate-x-[65%]"
+                  style={{ background: "linear-gradient(115deg, transparent 36%, rgba(255,255,255,0.22) 50%, transparent 64%)" }}
+                />
+
+                {/* Content */}
+                <div className="relative z-[5] h-full flex flex-col justify-between p-5 md:p-7">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-300 text-primary-800 text-[10.5px] md:text-[12px] font-black tracking-[0.10em] shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
+                      <Container className="w-3.5 h-3.5" strokeWidth={2.8} />
+                      ยอดนิยม · FCL
                     </div>
+                    <h3 className="mt-3 md:mt-4 text-[26px] md:text-[42px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]">
+                      FCL <span className="text-yellow-300">เหมาตู้</span>
+                    </h3>
+                    <p className="mt-1 md:mt-2 text-[14px] md:text-[18px] font-extrabold text-white/95 leading-snug drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
+                      20{"'"} · 40{"'"} · 40HQ · Door-to-Door ทุก Term
+                    </p>
+                    <ul className="mt-3 md:mt-4 hidden md:flex flex-col gap-1.5 text-[13.5px] font-bold text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
+                      {[
+                        "ต้นทุนต่อหน่วยต่ำสุด — Order ใหญ่คุ้มสุด",
+                        "ลำเลียงตู้ตรง · ไม่ต้องรอรวมตู้",
+                        "Cross-dock 20'/40'/40HQ · Reefer (อาหารแช่เย็น) ก็ได้",
+                      ].map((b) => (
+                        <li key={b} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-yellow-300" strokeWidth={2.8} />
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
 
-                    <div className="flex-1 p-5 md:p-6 space-y-4">
-                      <p className="text-[12.5px] md:text-[13.5px] leading-[1.6] text-muted font-medium">
-                        {m.intro}
-                      </p>
+                  <div className="mt-3 inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-xl bg-white text-primary-700 font-black text-[13px] md:text-[15px] shadow-[0_6px_16px_rgba(0,0,0,0.25)] group-hover:translate-x-1 transition-transform">
+                    ดูรายละเอียด FCL
+                    <ArrowRight className="w-4 h-4" strokeWidth={2.8} />
+                  </div>
+                </div>
+              </Link>
 
-                      <div>
-                        <div className="text-[10px] md:text-[10.5px] font-bold text-muted tracking-[0.10em] uppercase mb-2">
-                          เหมาะสำหรับ
-                        </div>
-                        <ul className="space-y-1.5">
-                          {m.forItems.map((it) => (
-                            <li key={it} className="flex items-start gap-2 text-[12px] md:text-[13px] text-foreground/85 font-medium leading-snug">
-                              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary-600" strokeWidth={2.6} />
-                              <span>{it}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+              {/* ── LCL — smaller, right, secondary ── */}
+              <Link
+                href="/services/import-china-lcl"
+                aria-label="ดูรายละเอียดบริการ LCL — Less Container Load จีน-ไทย"
+                data-cta="mode-lcl"
+                className={[
+                  "group relative overflow-hidden isolate bg-white col-span-1 md:col-span-2",
+                  "h-[220px] md:h-[340px] rounded-[18px] md:rounded-[26px]",
+                  "shadow-[0_2px_3px_rgba(15,23,42,0.12),0_6px_14px_rgba(15,23,42,0.16),0_18px_38px_rgba(15,23,42,0.22),0_30px_60px_rgba(15,23,42,0.18),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.18),inset_0_0_0_1px_rgba(255,255,255,0.35)]",
+                  "border border-black/[0.14]",
+                  "transition-[transform,box-shadow] duration-300 ease-out will-change-transform",
+                  "hover:-translate-y-2.5 hover:shadow-[0_3px_5px_rgba(15,23,42,0.14),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.26),0_44px_80px_rgba(15,23,42,0.22),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(255,255,255,0.5)]",
+                  "active:translate-y-0.5 active:duration-75",
+                ].join(" ")}
+              >
+                <div
+                  className="absolute inset-0 z-[1] bg-cover bg-center bg-no-repeat transition-transform duration-500 ease-out group-hover:scale-[1.035]"
+                  style={{ backgroundImage: "url('/images/hero-section/banner/airbanner.png')" }}
+                />
+                {/* Emerald gradient overlay — keeps it visually distinct from FCL red */}
+                <div className="absolute inset-0 z-[2] bg-gradient-to-br from-emerald-700/85 via-emerald-800/75 to-slate-900/85" />
+                <div
+                  className="absolute inset-x-0 top-0 z-[4] pointer-events-none rounded-t-[inherit]"
+                  style={{
+                    height: "58%",
+                    background:
+                      "linear-gradient(to bottom, rgba(255,255,255,0.40) 0%, rgba(255,255,255,0.15) 45%, rgba(255,255,255,0.04) 85%, transparent 100%)",
+                  }}
+                />
+                <div
+                  className="absolute -inset-[45%] z-[3] pointer-events-none -translate-x-[65%] rotate-[8deg] transition-transform duration-[650ms] group-hover:translate-x-[65%]"
+                  style={{ background: "linear-gradient(115deg, transparent 36%, rgba(255,255,255,0.22) 50%, transparent 64%)" }}
+                />
 
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {m.highlights.map((h) => (
-                          <span
-                            key={h}
-                            className="inline-flex items-center px-2 h-6 rounded-md bg-primary-50/70 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-900/40 text-[10.5px] md:text-[11px] font-bold text-primary-700 dark:text-primary-300"
-                          >
-                            {h}
-                          </span>
-                        ))}
-                      </div>
-
-                      <Link
-                        href={m.href}
-                        data-cta={`mode-${m.id}`}
-                        className="inline-flex items-center justify-center gap-1.5 h-10 mt-1 rounded-xl border border-primary-200 text-primary-700 font-black text-[12.5px] md:text-[13.5px] hover:bg-primary-50 transition-colors dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
-                      >
-                        {m.cta}
-                        <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.6} />
-                      </Link>
+                <div className="relative z-[5] h-full flex flex-col justify-between p-5 md:p-6">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/95 text-emerald-800 text-[10.5px] md:text-[12px] font-black tracking-[0.10em] shadow-[0_4px_12px_rgba(0,0,0,0.20)]">
+                      <Boxes className="w-3.5 h-3.5" strokeWidth={2.8} />
+                      เริ่มต้น · LCL
                     </div>
-                  </article>
-                );
-              })}
+                    <h3 className="mt-3 md:mt-4 text-[22px] md:text-[34px] font-black text-white leading-[1.05] tracking-[-0.025em] drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]">
+                      LCL <span className="text-yellow-300">รวมตู้</span>
+                    </h3>
+                    <p className="mt-1 md:mt-2 text-[13px] md:text-[16px] font-extrabold text-white/95 leading-snug drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
+                      จ่ายตาม CBM/KG · เริ่มไม่กี่กล่อง
+                    </p>
+                    <ul className="mt-3 md:mt-4 hidden md:flex flex-col gap-1.5 text-[12.5px] font-bold text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
+                      {[
+                        "ไม่ต้องเหมาตู้ — Order เล็กก็เริ่มได้",
+                        "พักของฟรี 14 วันที่โกดังจีน",
+                      ].map((b) => (
+                        <li key={b} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-yellow-300" strokeWidth={2.8} />
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-3 inline-flex items-center gap-2 self-start px-3.5 py-2.5 rounded-xl bg-white text-emerald-800 font-black text-[12.5px] md:text-[14px] shadow-[0_6px_16px_rgba(0,0,0,0.25)] group-hover:translate-x-1 transition-transform">
+                    ดูรายละเอียด LCL
+                    <ArrowRight className="w-4 h-4" strokeWidth={2.8} />
+                  </div>
+                </div>
+              </Link>
             </div>
           </div>
         </section>
 
+        {/* ─── Sales contact ─── */}
+        <ContactSales hideAssuranceStrip />
+
         {/* ═══════ 3. Why Pacred ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-10 md:pt-16 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -652,7 +598,7 @@ export default async function ImportChinaPage({
         </section>
 
         {/* ═══════ 4. Process ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-10 md:pt-16 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Calculator className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -690,7 +636,7 @@ export default async function ImportChinaPage({
         </section>
 
         {/* ═══════ 5. Documents needed + Terms ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-10 md:pt-16 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5 grid md:grid-cols-2 gap-6 md:gap-8">
             {/* Documents */}
             <div>
@@ -784,8 +730,11 @@ export default async function ImportChinaPage({
           </div>
         </section>
 
+        {/* ─── Reviews — filtered to import service ─── */}
+        <Reviews defaultFilter="import" />
+
         {/* ═══════ 6. FAQ ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-12 md:pb-16">
+        <section className="relative pt-10 md:pt-16 pb-6 md:pb-8">
           <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <HandCoins className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -808,6 +757,64 @@ export default async function ImportChinaPage({
                   },
                 ]}
               />
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════ Final CTA banner — "ใช้บริการ" + "ปรึกษาฟรี" ═══════ */}
+        <section className="relative pt-8 md:pt-12 pb-12 md:pb-16">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <div
+              className="relative overflow-hidden rounded-2xl md:rounded-3xl text-white shadow-[0_18px_44px_rgba(179,0,0,0.35)] p-6 md:p-10"
+              style={{ background: "linear-gradient(135deg, #DC1F1F 0%, #B30000 45%, #7F0000 100%)" }}
+            >
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                style={{ background: "radial-gradient(circle at 25% 50%, rgba(255,200,100,0.30) 0%, transparent 55%)" }}
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-0 opacity-[0.10]"
+                style={{
+                  backgroundImage: "radial-gradient(circle, white 1px, transparent 1.4px)",
+                  backgroundSize: "16px 16px",
+                }}
+              />
+
+              <div className="relative">
+                <p className="text-yellow-300 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase mb-2">
+                  พร้อมเริ่มนำเข้าจากจีน?
+                </p>
+                <h3 className="text-[24px] md:text-[40px] font-black leading-[1.1] tracking-tight drop-shadow-[0_3px_10px_rgba(0,0,0,0.45)]">
+                  เร็ว ไว ไม่มีคำว่าทำไม่ได้ — ทีม Pacred พร้อมดูแลคุณ
+                </h3>
+                <p className="mt-2 md:mt-3 text-[14px] md:text-[16px] font-bold text-white/95 leading-snug drop-shadow-[0_1px_3px_rgba(0,0,0,0.4)]">
+                  สมัครฟรี ไม่มีเงื่อนไข — หรือทักไลน์ปรึกษาก่อนได้ ตอบไวใน 5 นาที
+                </p>
+
+                <div className="mt-5 md:mt-6 flex flex-col sm:flex-row gap-3 max-w-[640px]">
+                  <Link
+                    href="/register"
+                    aria-label="ใช้บริการนำเข้าจีน — สมัครฟรี"
+                    data-cta="register_footer"
+                    className="inline-flex items-center justify-center gap-2 h-12 md:h-14 px-6 rounded-xl bg-white text-primary-700 font-black text-[14px] md:text-[16px] hover:bg-yellow-50 transition-colors shadow-[0_8px_22px_rgba(0,0,0,0.25)]"
+                  >
+                    ใช้บริการ — สมัครฟรี
+                    <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
+                  </Link>
+                  <TrackedExternalLink
+                    href={LINE_URL}
+                    cta="line_cta"
+                    surface={SURFACE}
+                    ctaProps={{ position: "footer_cta" }}
+                    className="inline-flex items-center justify-center gap-2 h-12 md:h-14 px-6 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] transition-colors shadow-[0_6px_18px_rgba(0,0,0,0.25)]"
+                  >
+                    <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
+                    ปรึกษาฟรี · ทักไลน์
+                  </TrackedExternalLink>
+                </div>
+              </div>
             </div>
           </div>
         </section>

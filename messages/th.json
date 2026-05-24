@@ -2078,6 +2078,10 @@
       "chinaShopping": {
         "title": "ฝากสั่งซื้อสินค้าจากจีน · ฝากโอนหยวน",
         "description": "บริการฝากสั่งสินค้า 1688 · Taobao · Tmall · Alibaba พร้อมล่ามจีนต่อรองโรงงาน และฝากโอนเงินหยวน Alipay ปลอดภัย โดย Pacred Shipping"
+      },
+      "yuanTransfer": {
+        "title": "ฝากโอนหยวน · ชำระค่าสินค้าจีน · Alipay/WeChat Pay",
+        "description": "บริการฝากโอนหยวน ชำระค่าสินค้าจีน — Alipay · WeChat Pay · บัญชีจีน อัตราเรทที่ดี โอนไว 1-2 ชม. รองรับ 1688/Taobao/Tmall โดย Pacred Shipping"
       }
     },
     "warehouses": {

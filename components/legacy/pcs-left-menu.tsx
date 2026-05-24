@@ -5,8 +5,9 @@ import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
 import { PcsLeftMenuAccordion } from "./pcs-left-menu-accordion";
 
-/** left-menu.php L33 — the central PCS line is shown pre-formatted, as-is. */
-const CENTRAL_TEL = "02-055-6063";
+/** Central Pacred line is shown pre-formatted (skips formatPhoneNumber which
+ *  expects mobile format). Matches the SALES_FALLBACK tel in pcs-chrome.ts. */
+const CENTRAL_TEL = "02-421-3325";
 
 /** left-menu.php L99 — the four member codes that see the agent-history menu
  *  (legacy PCS888/PCS352/PCS2678/PCS4155 → rebranded PR<n>). */

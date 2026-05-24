@@ -10,7 +10,7 @@ export function OurService() {
     {
       title: t("importTitle"),       sub: t("importSub"),
       titleMobile: t("importTitle"), subMobile: t("importSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/import.png",
       bgMobile:    "/images/ourservices/mobile/import.png",
       iconDesktop: "",
@@ -20,7 +20,7 @@ export function OurService() {
     {
       title: t("exportTitle"),       sub: t("exportSub"),
       titleMobile: t("exportTitle"), subMobile: t("exportSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/export.png",
       bgMobile:    "/images/ourservices/mobile/export.png",
       iconDesktop: "",
@@ -31,7 +31,7 @@ export function OurService() {
     {
       title: t("transferTitle"),       sub: t("transferSub"),
       titleMobile: t("transferTitle"), subMobile: t("transferSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/exchange.png",
       bgMobile:    "/images/ourservices/mobile/exchange.png",
       iconDesktop: "",
@@ -41,7 +41,7 @@ export function OurService() {
     {
       title: t("orderTitle"),       sub: t("orderSub"),
       titleMobile: t("orderTitle"), subMobile: t("orderSubMobile"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/shop.png",
       bgMobile:    "/images/ourservices/mobile/shop.png",
       iconDesktop: "",
