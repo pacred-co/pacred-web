@@ -59,7 +59,9 @@ export function FloatingTabs() {
   if (isHidden) return null;
 
   // Desktop floating tabs mirror the mobile bottom-nav set MINUS the centre
-  // call-FAB — per ปอน 2026-05-23 ("เอาแบบมือถือเลย ยกเว้นโทร").
+  // call-FAB AND the "บริการ" tab — ปอน 2026-05-24 dropped "บริการ" on
+  // desktop because the top NavBar already exposes the service mega-menu.
+  // Mobile keeps it (the bottom nav doesn't carry the desktop NavBar).
   const desktopTabs: Array<{
     label: string;
     href: string;
@@ -68,7 +70,6 @@ export function FloatingTabs() {
     external?: boolean;
   }> = [
     { label: t("homeMain"), iconImg: "/images/home/iconfloating/pacred-home-main.png", href: "/" },
-    { label: t("services"), iconImg: "/images/home/iconfloating/services.png",         href: "#services" },
     { label: t("orders"),   iconImg: "/images/home/iconfloating/pcs-cart.png",         href: "/service-order" },
     { label: t("pay"),      iconImg: "/images/home/iconfloating/pcs-payment.png",      href: "/dashboard" },
     { label: t("chat"),     iconImg: "/images/home/iconfloating/pcs-line-notify.png",  href: "/line", external: true },

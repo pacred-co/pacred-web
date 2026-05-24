@@ -2207,6 +2207,10 @@
       "chinaShopping": {
         "title": "China Shop-Order · Yuan Transfer",
         "description": "Shop on 1688 · Taobao · Tmall · Alibaba with Chinese-speaking buyers and safe Yuan transfers via Alipay through Pacred Shipping."
+      },
+      "yuanTransfer": {
+        "title": "Yuan Transfer · Pay Chinese Suppliers · Alipay/WeChat",
+        "description": "Pay Chinese suppliers in Yuan — Alipay, WeChat Pay, China bank transfer. Best rate, 1-2 hours turnaround, supports 1688/Taobao/Tmall by Pacred Shipping."
       }
     },
     "warehouses": {

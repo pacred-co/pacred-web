@@ -4,6 +4,7 @@ import { ImpersonationBanner } from "@/components/sections/impersonation-banner"
 import { loadPcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsBodyClass } from "@/components/legacy/pcs-body-class";
 import { PcsLeftMenu } from "@/components/legacy/pcs-left-menu";
+import { PcsSidebarToggle } from "@/components/legacy/pcs-sidebar-toggle";
 import { PcsFooterNav } from "@/components/legacy/pcs-footer-nav";
 import { PcsChromeInit } from "@/components/legacy/pcs-chrome-init";
 import { NavBar } from "@/components/sections/navbar";
@@ -192,6 +193,7 @@ export default async function ProtectedLayout({
 
       {/* 4. Legacy left sidebar — kept per ปอน 2026-05-23 (the "แถบซ้าย"). */}
       <PcsLeftMenu data={chrome} />
+      <PcsSidebarToggle />
 
       {/* 5. The per-screen `.app-content` body. */}
       {children}

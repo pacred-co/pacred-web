@@ -1,6 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
 import { redirect } from "next/navigation";
-import { ShoppingCart, Package, CreditCard, Wallet } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -145,12 +144,14 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stat-card row — push down so the carousel above has breathing room
-          (ปอน 2026-05-24: "โดนแบนเนอร์เบียด"). */}
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+          (ปอน 2026-05-24: "โดนแบนเนอร์เบียด"). Mobile = 2x2 grid; desktop = 4
+          in a row. Cards are glossy 3D buttons in the style of the public
+          <OurService /> section (ปอน "สวยๆ นูนๆ เหมือนปุ่มหน้าแรก"). */}
+      <div className="mt-6 grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
         {/* 1 — ฝากสั่งซื้อสินค้า */}
         <Link
           href="/service-order"
-          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -160,7 +161,20 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/30">
-              <ShoppingCart className="h-6 w-6 text-primary-600" />
+              <div
+                className="h-8 w-8 bg-primary-600"
+                style={{
+                  WebkitMaskImage: "url(/images/home/iconfloating/pcs-cart.png)",
+                  maskImage: "url(/images/home/iconfloating/pcs-cart.png)",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                }}
+                aria-hidden
+              />
             </div>
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-primary-600" />
@@ -169,7 +183,7 @@ export default async function DashboardPage() {
         {/* 2 — ฝากนำเข้าสินค้า */}
         <Link
           href="/service-import"
-          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -179,7 +193,20 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30">
-              <Package className="h-6 w-6 text-amber-500" />
+              <div
+                className="h-8 w-8 bg-amber-500"
+                style={{
+                  WebkitMaskImage: "url(/images/home/iconfloating/pcs-forwarder.png)",
+                  maskImage: "url(/images/home/iconfloating/pcs-forwarder.png)",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                }}
+                aria-hidden
+              />
             </div>
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-amber-500" />
@@ -188,7 +215,7 @@ export default async function DashboardPage() {
         {/* 3 — ฝากชำระเงิน */}
         <Link
           href="/service-payment"
-          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -198,7 +225,20 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/30">
-              <CreditCard className="h-6 w-6 text-violet-500" />
+              <div
+                className="h-8 w-8 bg-violet-500"
+                style={{
+                  WebkitMaskImage: "url(/images/home/iconfloating/pcs-payment.png)",
+                  maskImage: "url(/images/home/iconfloating/pcs-payment.png)",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                }}
+                aria-hidden
+              />
             </div>
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-violet-500" />
@@ -207,7 +247,7 @@ export default async function DashboardPage() {
         {/* 4 — กระเป๋าสตางค์เงินสด */}
         <Link
           href="/wallet"
-          className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 p-4 md:p-5"
+          className="group block rounded-2xl bg-white dark:bg-surface border border-black/[0.10] dark:border-white/10 shadow-[0_2px_3px_rgba(15,23,42,0.10),0_6px_14px_rgba(15,23,42,0.12),0_18px_38px_rgba(15,23,42,0.16),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.10),inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-2 hover:shadow-[0_3px_5px_rgba(15,23,42,0.12),0_12px_24px_rgba(15,23,42,0.18),0_28px_54px_rgba(15,23,42,0.20),inset_0_2px_0_rgba(255,255,255,1),inset_0_-3px_0_rgba(0,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5)] active:translate-y-0.5 active:duration-75 p-4 md:p-5"
         >
           <div className="flex items-center justify-between">
             <div className="text-left">
@@ -220,7 +260,20 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
-              <Wallet className="h-6 w-6 text-emerald-500" />
+              <div
+                className="h-8 w-8 bg-emerald-500"
+                style={{
+                  WebkitMaskImage: "url(/images/home/iconfloating/pcs-wallet.png)",
+                  maskImage: "url(/images/home/iconfloating/pcs-wallet.png)",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                }}
+                aria-hidden
+              />
             </div>
           </div>
           <div className="mt-4 h-[1.5px] w-full rounded-full bg-emerald-500" />

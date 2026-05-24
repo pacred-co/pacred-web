@@ -135,6 +135,14 @@ nav.nav-footer-pcs { display: none !important; }
   font-weight: bold;
   line-height: 1;
 }
+/* Hide carousel arrows on mobile — touch users swipe instead
+   (ปอน 2026-05-24). slick's built-in swipe handler stays on. */
+@media (max-width: 767.98px) {
+  .single-item-member .slick-prev,
+  .single-item-member .slick-next {
+    display: none !important;
+  }
+}
 
 /* Desktop: left sidebar spans the full viewport height and overlays the
    NavBar (ปอน 2026-05-23 — "ให้แถบซ้ายพาดเต็มไปเลย, ทับไปเลย, ไม่ต้อง
@@ -152,22 +160,47 @@ nav.nav-footer-pcs { display: none !important; }
   #pcs-left-menu.main-menu {
     position: fixed !important;
     left: 0 !important;
-    /* Start below the NavBar (56px) + SearchBar (84px) so the sidebar
-       doesn't overlap the top chrome — ปอน 2026-05-24
-       "เอาไอก้อนด้านซ้ายย้ายลงมาไม่ให้ไปทับ head". */
-    top: 140px !important;
+    /* Start just below the NavBar (56px) — sidebar overlaps the SearchBar
+       (which sits at top:56) so it covers SearchBar's left edge but stops
+       short of the NavBar (head). ปอน 2026-05-24
+       "ขยับให้ไปทับ search bar ก็พอ". */
+    top: 56px !important;
     width: 260px !important;
-    height: calc(100vh - 140px) !important;
-    z-index: 40 !important;
+    height: calc(100vh - 56px) !important;
+    z-index: 45 !important;
     overflow-y: auto !important;
     background: #ffffff !important;
     border-right: 1px solid rgba(0, 0, 0, 0.06);
+    /* Hide the scrollbar entirely (ปอน 2026-05-24). The sidebar still
+       scrolls via wheel / touch / arrow keys — only the visible bar is
+       gone. Firefox uses `scrollbar-width: none`; Chromium/WebKit use the
+       `::-webkit-scrollbar { display: none }` rule below. */
+    scrollbar-width: none;
+  }
+  #pcs-left-menu.main-menu::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
   /* Push body content so it clears the fixed 260px sidebar — applies to
      the page content. NavBar + SearchBar (the top chrome) stay full-width
      because the sidebar now sits below them. */
   body.vertical-layout > .mx-auto {
     padding-left: 260px;
+    transition: padding-left 0.3s ease-out;
+  }
+
+  /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
+     Sidebar slides off-screen + content reclaims the 260px. Smooth
+     transition matches the toggle button's chevron flip. */
+  #pcs-left-menu.main-menu {
+    transition: transform 0.3s ease-out;
+  }
+  body.pcs-sidebar-collapsed.vertical-layout > #pcs-left-menu.main-menu {
+    transform: translateX(-100%);
+  }
+  body.pcs-sidebar-collapsed.vertical-layout > .mx-auto {
+    padding-left: 0;
   }
 }
 /* Mobile: hide the sidebar entirely (legacy theme would slide it in via

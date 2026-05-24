@@ -30,6 +30,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { BookingCalculator } from "@/components/booking/BookingCalculator";
 import { ContactSales } from "@/components/sections/contact-sales";
+import { Reviews } from "@/components/sections/reviews";
 import { PurchaseBanner } from "@/components/sections/purchase-banner";
 import { FaqAccordion } from "@/components/sections/faq-accordion";
 import { Footer } from "@/components/sections/footer";
@@ -48,10 +49,12 @@ import {
   TrackedPhoneLink,
 } from "@/components/analytics/tracked-link";
 
-const SURFACE = "china_shopping_landing";
+export const dynamic = "force-dynamic";
 
+const SURFACE = "china_shopping_landing";
 const PATH = "/services/china-shopping";
 const NS = "seo.services.chinaShopping";
+const LINE_URL = "/line";
 
 export async function generateMetadata({
   params,
@@ -61,9 +64,6 @@ export async function generateMetadata({
   const { locale } = await params;
   return buildPageMetadata({ locale, path: PATH, namespace: NS });
 }
-
-const LINE_URL = "/line";
-const PHONE_DISPLAY = CONTACT.phoneDisplay;
 
 type Platform = {
   id: "1688" | "taobao" | "tmall" | "alibaba";
@@ -78,7 +78,7 @@ const PLATFORMS: Platform[] = [
     id: "1688",
     name: "1688",
     desc: "ตลาดส่งสำหรับเจ้าของกิจการ · ราคาส่งของจริงจากโรงงานจีน · ต้องสั่งขั้นต่ำตามแต่ละ SKU",
-    for: "ผู้ขายปลีก · ผู้ผลิตที่หาวัตถุดิบ · ทำแบรนด์ OEM",
+    for: "ผู้ขายปลีก · ผู้ผลิตหาวัตถุดิบ · ทำแบรนด์ OEM",
     accent: "from-orange-500 to-rose-600",
   },
   {
@@ -91,7 +91,7 @@ const PLATFORMS: Platform[] = [
   {
     id: "tmall",
     name: "Tmall",
-    desc: "แพลตฟอร์มของ Alibaba เน้นแบรนด์-ของแท้-คุณภาพ · สำหรับลูกค้าที่ต้องการความมั่นใจในแหล่งที่มา",
+    desc: "แพลตฟอร์ม Alibaba เน้นแบรนด์-ของแท้-คุณภาพ · เหมาะลูกค้าที่ต้องการความมั่นใจในแหล่งที่มา",
     for: "ขายของแบรนด์ · ของแท้ certificate ครบ",
     accent: "from-red-500 to-pink-600",
   },
@@ -108,7 +108,7 @@ const SERVICE_SCOPE = [
   "ทีมล่ามจีนปิดดีลกับโรงงาน-ซัพพลายเออร์ในนามคุณ",
   "ค้นหาสินค้าจาก URL · รูปสินค้า · keyword ภาษาไทย/จีน/อังกฤษ",
   "เช็คราคา · เช็คสต๊อก · เจรจาส่วนลด ก่อนสั่ง",
-  "ตรวจสเปก · ตรวจสี · ตรวจขนาด · ตรวจคุณภาพ ก่อนของออกจีน",
+  "ตรวจสเปก · สี · ขนาด · คุณภาพ ก่อนของออกจีน",
   "ถ่ายรูป-วีดิโอสินค้าจริงให้ก่อนชำระเงิน",
   "รับของจากทุกร้านที่โกดังกวางโจว/เซินเจิ้น/อี้อู",
   "รวมส่งทุก order ในรอบเดียว — ค่าขนส่งคุ้มกว่า",
@@ -120,7 +120,7 @@ const HOW = [
     num: "01",
     icon: Search,
     title: "ส่ง URL / รูปสินค้า",
-    desc: "Copy ลิงก์ 1688/Taobao/Tmall มาให้ — หรือถ่ายรูปสินค้าตัวอย่าง ทีม Pacred ช่วยหาให้",
+    desc: "Copy ลิงก์ 1688/Taobao/Tmall มาให้ — หรือถ่ายรูปสินค้าตัวอย่าง ทีมช่วยหาให้",
   },
   {
     num: "02",
@@ -138,7 +138,7 @@ const HOW = [
     num: "04",
     icon: Camera,
     title: "ตรวจรับที่โกดังจีน",
-    desc: "รับ-นับ-ตรวจ-ถ่ายรูป ก่อนส่งออก แจ้งสถานะให้คุณทราบทุกขั้น",
+    desc: "รับ-นับ-ตรวจ-ถ่ายรูป ก่อนส่งออก แจ้งสถานะให้คุณทุกขั้น",
   },
   {
     num: "05",
@@ -149,46 +149,14 @@ const HOW = [
 ];
 
 const WHY = [
-  {
-    icon: Languages,
-    title: "ไม่ต้องคุยจีนเอง",
-    desc: "ทีมล่ามจีนปิดดีลให้ในนามคุณ — ราคาส่ง · ต่อรองได้",
-  },
-  {
-    icon: ShieldCheck,
-    title: "ตรวจของก่อนส่ง",
-    desc: "ถ่ายรูป-วีดิโอ-นับชิ้น แจ้งก่อนของออกจีน ไม่เซอร์ไพรส์ตอนถึง",
-  },
-  {
-    icon: HandCoins,
-    title: "ฝากโอนหยวนเรทดี",
-    desc: "Alipay · WeChat Pay · Bank Transfer — ไม่ต้องเปิดบัญชีจีนเอง",
-  },
-  {
-    icon: Wallet,
-    title: "ราคาชัดเจน",
-    desc: "ค่าบริการ + ค่าขนส่ง + ภาษี แจ้งครบในใบเดียวก่อนยืนยัน",
-  },
-  {
-    icon: Boxes,
-    title: "รวมส่งทุก order",
-    desc: "สั่งหลายร้าน รวมส่งรอบเดียวที่โกดังจีน — ค่าขนส่งถูกกว่า",
-  },
-  {
-    icon: BadgePercent,
-    title: "ใช้สิทธิ Form E",
-    desc: "ลดภาษีนำเข้าผ่าน FTA ASEAN-China · ประหยัดได้สูงสุด",
-  },
-  {
-    icon: Users,
-    title: "ทีมประจำคุณ",
-    desc: "ผู้ดูแลเฉพาะรายลูกค้า · ไม่ต้องเล่าใหม่ทุกครั้ง",
-  },
-  {
-    icon: Award,
-    title: "ประสบการณ์ 15+ ปี",
-    desc: "ครอบคลุมเสื้อผ้า · เครื่องสำอาง · อะไหล่ · ของชำ · ของแต่งบ้าน",
-  },
+  { icon: Languages, title: "ไม่ต้องคุยจีนเอง", desc: "ทีมล่ามจีนปิดดีลให้ในนามคุณ — ราคาส่ง · ต่อรองได้" },
+  { icon: ShieldCheck, title: "ตรวจของก่อนส่ง", desc: "ถ่ายรูป-วีดิโอ-นับชิ้น แจ้งก่อนของออกจีน ไม่เซอร์ไพรส์ตอนถึง" },
+  { icon: HandCoins, title: "ฝากโอนหยวนเรทดี", desc: "Alipay · WeChat Pay · Bank Transfer — ไม่ต้องเปิดบัญชีจีน" },
+  { icon: Wallet, title: "ราคาชัดเจน", desc: "ค่าบริการ + ค่าขนส่ง + ภาษี แจ้งครบในใบเดียวก่อนยืนยัน" },
+  { icon: Boxes, title: "รวมส่งทุก order", desc: "สั่งหลายร้าน รวมส่งรอบเดียวที่โกดังจีน — ค่าขนส่งถูกกว่า" },
+  { icon: BadgePercent, title: "ใช้สิทธิ Form E", desc: "ลดภาษีนำเข้าผ่าน FTA ASEAN-China · ประหยัดได้สูงสุด" },
+  { icon: Users, title: "ทีมประจำคุณ", desc: "ผู้ดูแลเฉพาะรายลูกค้า · ไม่ต้องเล่าใหม่ทุกครั้ง" },
+  { icon: Award, title: "ประสบการณ์ 15+ ปี", desc: "ครอบคลุมเสื้อผ้า · เครื่องสำอาง · อะไหล่ · ของชำ · ของแต่งบ้าน" },
 ];
 
 const PRODUCT_TYPES = [
@@ -237,7 +205,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "ออกใบกำกับภาษี (ภพ.20) ได้มั้ย?",
-    a: "ได้ — Pacred เป็นบริษัท จดทะเบียน VAT 7% ออกใบกำกับภาษีให้ทุก order ทั้งฝั่ง individual และนิติบุคคล ใบเสร็จและใบกำกับภาษีใช้ลดหย่อนได้",
+    a: "ได้ — Pacred เป็นบริษัทจดทะเบียน VAT 7% ออกใบกำกับภาษีให้ทุก order ทั้งฝั่ง individual และนิติบุคคล ใบเสร็จและใบกำกับภาษีใช้ลดหย่อนได้",
   },
 ];
 
@@ -251,8 +219,7 @@ export default async function ChinaShoppingPage({
   const t = await getTranslations({ locale, namespace: NS });
   const homeLabel = typedLocale === "th" ? "หน้าหลัก" : "Home";
   const svcLabel = typedLocale === "th" ? "บริการ" : "Services";
-  const here =
-    typedLocale === "th" ? "สั่งซื้อสินค้าจากจีน" : "China shopping";
+  const here = typedLocale === "th" ? "ฝากสั่งซื้อสินค้าจีน" : "China shop-order";
 
   return (
     <>
@@ -263,8 +230,7 @@ export default async function ChinaShoppingPage({
             description: t("description"),
             slug: PATH,
             locale: typedLocale,
-            serviceType:
-              typedLocale === "th" ? "ฝากสั่งจีน" : "China shop-order",
+            serviceType: typedLocale === "th" ? "ฝากสั่งจีน" : "China shop-order",
           }),
           breadcrumbSchema(
             [
@@ -280,7 +246,7 @@ export default async function ChinaShoppingPage({
         ]}
       />
       <NavBar />
-      <SearchBar />
+      <SearchBar hideOnMobile defaultCollapsed />
       <main>
         <BookingCalculator landing="sourcing" />
 
@@ -289,12 +255,9 @@ export default async function ChinaShoppingPage({
           aria-label="Breadcrumb"
           className="mx-auto w-full max-w-[1140px] px-4 md:px-5 pt-3 md:pt-4"
         >
-          <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px]">
+          <ol className="flex items-center gap-1.5 md:gap-2 text-[12.5px] md:text-[14px] whitespace-nowrap">
             <li>
-              <Link
-                href="/"
-                className="inline-flex items-center gap-1.5 text-muted hover:text-primary-600 transition-colors"
-              >
+              <Link href="/" className="inline-flex items-center gap-1.5 text-muted hover:text-primary-600 transition-colors">
                 <Home className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
                 <span>{homeLabel}</span>
               </Link>
@@ -303,127 +266,77 @@ export default async function ChinaShoppingPage({
               <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
             </li>
             <li>
-              <Link
-                href="/services"
-                className="text-muted hover:text-primary-600 transition-colors"
-              >
+              <Link href="/services" className="text-muted hover:text-primary-600 transition-colors">
                 {svcLabel}
               </Link>
             </li>
             <li aria-hidden className="text-gray-300 dark:text-border">
               <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.2} />
             </li>
-            <li aria-current="page" className="font-bold text-foreground truncate">
+            <li aria-current="page" className="font-bold text-foreground">
               {here}
             </li>
           </ol>
         </nav>
 
         {/* ═══════ 1. Hero ═══════ */}
-        <section className="relative pt-3 md:pt-5 pb-2 md:pb-4">
+        <section className="relative pt-1 md:pt-2 pb-1 md:pb-2">
           <div className="relative mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-2 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ShoppingBag className="w-3.5 h-3.5" strokeWidth={2.6} />
-              CHINA SHOPPING · ฝากสั่งซื้อจีน
+              CHINA SHOP-ORDER · ฝากสั่งซื้อจีน
             </div>
             <h1 className="text-[22px] md:text-[44px] leading-[1.2] font-black tracking-[-0.025em] text-[#111827] dark:text-white max-w-[980px]">
-              <span className="text-primary-600">ฝากสั่งซื้อสินค้าจีน</span> 1688 · Taobao · Tmall · Alibaba
-              <span className="hidden md:inline"> ฝากโอนหยวนครบจบ</span>
+              <span className="text-primary-600">ฝากสั่งซื้อสินค้าจีน</span> 1688 · Taobao · Tmall
+              <span className="md:block md:mt-1"> ฝากโอนหยวน · ตรวจของก่อนส่ง · รวมส่งคุ้ม</span>
             </h1>
-
-            <h2 className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
+            <p className="mt-2 md:mt-3 text-[13px] md:text-[16px] leading-[1.6] font-medium text-muted max-w-[920px]">
               บริการฝากสั่งของจีนแบบมืออาชีพ — ทีมล่ามจีนปิดดีลกับโรงงาน · ตรวจสินค้าก่อนส่ง · ฝากโอนหยวน · รวมส่งคุ้ม · ใบกำกับภาษีครบ — <span className="text-primary-600/80 font-bold">ค่าบริการฝากสั่งเริ่ม 3% · เริ่มจาก 0 ก็ทำได้</span>
-            </h2>
+            </p>
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
 
-            {/* LINE attention banner */}
-            <TrackedExternalLink
-              href={LINE_URL}
-              cta="line_cta"
-              surface={SURFACE}
-              ctaProps={{ position: "hero_banner" }}
-              aria-label="ทักไลน์ Pacred — ปรึกษาฝากสั่งจีนฟรี"
-              className="group block mt-4 md:mt-6 relative pt-3 md:pt-4 pr-4 md:pr-8 max-w-[1100px] no-underline"
-            >
-              <span className="absolute top-0 left-3 md:left-5 z-20 inline-flex items-center gap-1.5 bg-slate-900 dark:bg-black text-white text-[11.5px] md:text-[13px] font-bold px-3 md:px-4 py-1.5 md:py-2 rounded-xl shadow-[0_6px_18px_rgba(0,0,0,0.45)] tracking-tight transition-transform duration-300 group-hover:-translate-y-0.5">
-                <span className="relative flex w-2 h-2">
-                  <span className="absolute inline-flex w-full h-full rounded-full bg-red-500 opacity-75 animate-ping" />
-                  <span className="relative inline-flex w-2 h-2 rounded-full bg-red-500" />
-                </span>
-                อยากสั่งของจีน?
-              </span>
-
-              <div
-                className="relative rounded-2xl text-white shadow-[0_12px_32px_rgba(120,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(160,0,0,0.5)] group-hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(135deg, #5b0c0c 0%, #7a0a0a 45%, #3b0707 100%)" }}
+            {/* 2 primary CTAs */}
+            <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2 md:gap-3 max-w-[560px]">
+              <Link
+                href="/register"
+                aria-label="ใช้บริการฝากสั่งจีน — สมัครสมาชิกฟรี"
+                className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[16px] hover:bg-primary-700 hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(179,0,0,0.30)]"
               >
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-50 mix-blend-overlay"
-                  style={{ background: "radial-gradient(circle at 75% 50%, rgba(253,224,71,0.25) 0%, transparent 55%)" }}
-                />
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.08]"
-                  style={{
-                    backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
-                    backgroundSize: "16px 16px",
-                  }}
-                />
+                ใช้บริการ
+                <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
+              </Link>
+              <TrackedExternalLink
+                href={LINE_URL}
+                cta="line_consult"
+                surface={SURFACE}
+                ctaProps={{ position: "hero_cta" }}
+                aria-label="ปรึกษาฝากสั่งจีนฟรี ทางไลน์"
+                className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(6,199,85,0.35)]"
+              >
+                <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
+                ปรึกษาฟรี
+              </TrackedExternalLink>
+            </div>
 
-                <div className="relative grid grid-cols-[auto_1fr] items-center gap-2 md:gap-5 pl-3 md:pl-6 pr-3 md:pr-6 pt-7 md:pt-7 pb-4 md:pb-5">
-                  <div className="leading-none shrink-0">
-                    <p className="text-[16px] md:text-[32px] font-black tracking-tight drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]">
-                      <span className="text-yellow-300">P</span>
-                      <span className="text-white">acred</span>
-                    </p>
-                    <p className="mt-0.5 text-[7.5px] md:text-[12px] font-bold tracking-[0.30em]">
-                      <span className="text-yellow-300">S</span>
-                      <span className="text-white">HIPPING</span>
-                    </p>
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-[12px] md:text-[28px] font-bold text-white leading-snug">
-                      ส่ง URL · ส่งรูป · ทีมจัดให้ครบ
-                    </p>
-                    <p className="hidden md:block mt-1.5 text-[13px] text-white/75 leading-snug">
-                      ฝากสั่ง · ฝากโอน · ตรวจของ · รวมส่ง · เคลียร์ภาษี ครบในที่เดียว
-                    </p>
-                    <p className="mt-1.5 md:mt-2 inline-flex items-center gap-1 text-[10px] md:text-[12px] font-bold tracking-wide">
-                      <MessageCircle className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300" strokeWidth={2.6} />
-                      <span className="text-yellow-300">ทักไลน์</span>
-                      <span className="text-white/85">ปรึกษาฟรี — ตอบไว 5 นาที</span>
-                      <ArrowRight className="w-3 h-3 md:w-3.5 md:h-3.5 text-yellow-300 transition-transform group-hover:translate-x-1" strokeWidth={2.6} />
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </TrackedExternalLink>
-
-            {/* Service scope card */}
-            <div className="mt-5 md:mt-7 rounded-2xl border border-primary-100 dark:border-border bg-white dark:bg-surface p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)] max-w-[1100px]">
+            {/* Service scope highlights — themed card */}
+            <div className="mt-5 md:mt-7 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
               <h3 className="flex items-start gap-2 text-[15px] md:text-[20px] font-black text-primary-700 dark:text-primary-300 tracking-tight leading-snug">
-                <span className="shrink-0">🛒</span>
-                <span>บริการฝากสั่งจีนครบทุกแพลตฟอร์ม — ส่ง URL · รับของถึงประตู 🇨🇳➡️🇹🇭</span>
+                <ShoppingBag className="w-5 h-5 md:w-6 md:h-6 shrink-0 mt-0.5" strokeWidth={2.6} />
+                <span>ฝากสั่งครบทุกแพลตฟอร์ม — ส่ง URL · รับของถึงประตู</span>
               </h3>
-              <p className="mt-2 md:mt-3 text-[12.5px] md:text-[15px] font-bold text-foreground/85 leading-relaxed">
+              <p className="mt-2 text-[12.5px] md:text-[14px] font-bold text-foreground/85 leading-relaxed">
                 1688 · Taobao · Tmall · Alibaba · JD · Pinduoduo · Xiaomi Youpin
               </p>
-              <ul className="mt-4 md:mt-5 grid md:grid-cols-2 gap-x-5 md:gap-x-6 gap-y-2 md:gap-y-2.5 text-[12.5px] md:text-[14px] leading-snug text-foreground/85">
+              <ul className="mt-4 md:mt-5 grid md:grid-cols-2 gap-x-5 md:gap-x-6 gap-y-2 md:gap-y-2.5 text-[13px] md:text-[15px] leading-snug text-foreground/95">
                 {SERVICE_SCOPE.map((item) => (
                   <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2
-                      className="w-4 h-4 md:w-[18px] md:h-[18px] mt-0.5 shrink-0 text-primary-600"
-                      strokeWidth={2.6}
-                    />
+                    <CheckCircle2 className="w-4 h-4 md:w-[18px] md:h-[18px] mt-0.5 shrink-0 text-primary-600" strokeWidth={2.6} />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
 
-              {/* Phone + LINE row */}
               <div className="mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <TrackedPhoneLink
                   phone={CONTACT.phone}
@@ -433,7 +346,7 @@ export default async function ChinaShoppingPage({
                   className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border border-primary-200 bg-primary-50 text-primary-700 font-black text-[14px] md:text-[15px] hover:bg-primary-100 hover:border-primary-300 transition-colors dark:bg-primary-900/30 dark:border-primary-800 dark:text-primary-200"
                 >
                   <Phone className="w-4 h-4" strokeWidth={2.6} />
-                  โทร {PHONE_DISPLAY}
+                  โทร {CONTACT.phoneDisplay}
                 </TrackedPhoneLink>
                 <TrackedExternalLink
                   href={LINE_OA.shortUrl}
@@ -450,11 +363,8 @@ export default async function ChinaShoppingPage({
           </div>
         </section>
 
-        {/* ─── Sales contact ─── */}
-        <ContactSales hideAssuranceStrip />
-
         {/* ═══════ 2. Platforms ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Globe2 className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -505,16 +415,22 @@ export default async function ChinaShoppingPage({
           </div>
         </section>
 
-        {/* ═══════ 3. How it works ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        {/* ─── Sales contact ─── */}
+        <ContactSales hideAssuranceStrip compact />
+
+        {/* ═══════ 3. How it works — 5 steps ═══════ */}
+        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <ScanLine className="w-3.5 h-3.5" strokeWidth={2.6} />
-              HOW IT WORKS · ใช้งานยังไง
+              5 STEPS · ใช้งานยังไง
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
               ใช้งาน <span className="text-primary-600">ง่ายๆ ใน 5 ขั้น</span>
             </h2>
+            <p className="mt-2 text-[13px] md:text-[15px] leading-[1.6] font-medium text-muted max-w-[820px]">
+              ไม่ต้องคุยจีน ไม่ต้องเปิดบัญชีจีน ทีม Pacred จัดให้ครบจบ
+            </p>
 
             <div className="mt-6 md:mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
               {HOW.map((s) => {
@@ -522,18 +438,20 @@ export default async function ChinaShoppingPage({
                 return (
                   <div
                     key={s.num}
-                    className="relative rounded-2xl border border-border bg-white dark:bg-surface p-5 hover:border-primary-300 dark:hover:border-primary-800 hover:shadow-[0_12px_28px_rgba(179,0,0,0.10)] hover:-translate-y-0.5 transition-all duration-300"
+                    className="relative rounded-2xl border border-border bg-gradient-to-br from-white to-primary-50/40 dark:from-surface dark:to-primary-900/10 p-4 md:p-5 shadow-[0_6px_16px_rgba(15,23,42,0.05)] hover:border-primary-300 hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(179,0,0,0.12)] transition-all duration-300"
                   >
-                    <div className="absolute -top-3 left-4 text-[40px] md:text-[44px] font-black leading-none text-primary-600/10 dark:text-primary-300/15 tracking-tighter">
-                      {s.num}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[34px] md:text-[40px] font-black text-primary-200/70 dark:text-primary-900/70 leading-none tracking-tight">
+                        {s.num}
+                      </span>
+                      <span className="inline-flex w-10 h-10 md:w-11 md:h-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_6px_14px_rgba(179,0,0,0.25)]">
+                        <Icon className="w-5 h-5 md:w-6 md:h-6 text-white" strokeWidth={2.4} />
+                      </span>
                     </div>
-                    <div className="relative inline-flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-primary-50 text-primary-600 mb-2.5 dark:bg-primary-900/30 dark:text-primary-300">
-                      <Icon className="w-4.5 h-4.5 md:w-5 md:h-5" strokeWidth={2.4} />
-                    </div>
-                    <div className="relative text-[13px] md:text-[15px] font-black text-[#111827] dark:text-white tracking-tight">
+                    <h3 className="text-[14px] md:text-[15.5px] font-black text-[#111827] dark:text-white leading-snug tracking-tight">
                       {s.title}
-                    </div>
-                    <p className="relative mt-1 text-[11.5px] md:text-[12.5px] leading-[1.55] text-muted font-medium">
+                    </h3>
+                    <p className="mt-1 text-[12px] md:text-[12.5px] leading-[1.55] text-muted">
                       {s.desc}
                     </p>
                   </div>
@@ -543,15 +461,18 @@ export default async function ChinaShoppingPage({
           </div>
         </section>
 
+        {/* ─── Reviews — default to import filter ─── */}
+        <Reviews defaultFilter="import" />
+
         {/* ═══════ 4. Why Pacred ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <Sparkles className="w-3.5 h-3.5" strokeWidth={2.6} />
               WHY PACRED · ทำไมต้องเรา
             </div>
             <h2 className="text-[22px] md:text-[34px] leading-[1.18] font-black tracking-[-0.035em] text-[#111827] dark:text-white">
-              ทำไมลูกค้า <span className="text-primary-600">10,600+</span> เลือก Pacred
+              ทำไมลูกค้า <span className="text-primary-600">10,600+ ราย</span> เลือก Pacred
             </h2>
 
             <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -579,7 +500,7 @@ export default async function ChinaShoppingPage({
         </section>
 
         {/* ═══════ 5. Product types ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-6 md:pb-8">
+        <section className="relative pt-8 md:pt-14 pb-2 md:pb-4">
           <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <PackageCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -618,7 +539,7 @@ export default async function ChinaShoppingPage({
         </section>
 
         {/* ═══════ 6. FAQ ═══════ */}
-        <section className="relative pt-12 md:pt-20 pb-12 md:pb-16">
+        <section className="relative pt-8 md:pt-14 pb-6 md:pb-10">
           <div className="mx-auto w-full max-w-[920px] px-4 md:px-5">
             <div className="inline-flex items-center gap-2 mb-1.5 text-primary-600 text-[11.5px] md:text-[13px] font-black tracking-[0.10em] uppercase">
               <CircleDollarSign className="w-3.5 h-3.5" strokeWidth={2.6} />
@@ -639,6 +560,59 @@ export default async function ChinaShoppingPage({
                 ]}
               />
             </div>
+          </div>
+        </section>
+
+        {/* ═══════ 7. Final CTA banner ═══════ */}
+        <section className="relative pt-4 md:pt-8 pb-8 md:pb-12">
+          <div className="mx-auto w-full max-w-[1140px] px-4 md:px-5">
+            <TrackedExternalLink
+              href={LINE_URL}
+              cta="line_consult"
+              surface={SURFACE}
+              ctaProps={{ position: "final_cta" }}
+              aria-label="ปรึกษาฝากสั่งจีนฟรี — ทักไลน์ Pacred Shipping"
+              className="group block relative max-w-[1100px] mx-auto no-underline"
+            >
+              <div
+                className="relative overflow-hidden rounded-2xl text-white shadow-[0_12px_32px_rgba(179,0,0,0.35)] transition-all duration-300 group-hover:shadow-[0_18px_44px_rgba(179,0,0,0.5)] group-hover:-translate-y-0.5"
+                style={{ background: "linear-gradient(135deg, #DC1F1F 0%, #B30000 45%, #7F0000 100%)" }}
+              >
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                  style={{ background: "radial-gradient(circle at 25% 50%, rgba(255,200,100,0.30) 0%, transparent 55%)" }}
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 opacity-[0.10]"
+                  style={{
+                    backgroundImage: "radial-gradient(circle, white 1px, transparent 1.4px)",
+                    backgroundSize: "16px 16px",
+                  }}
+                />
+
+                <div className="relative grid grid-cols-1 md:grid-cols-[1fr_auto] items-center gap-3 md:gap-6 px-5 md:px-10 py-6 md:py-8">
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center gap-1.5 mb-2 text-yellow-300 text-[10.5px] md:text-[12px] font-black tracking-[0.10em] uppercase">
+                      <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2.6} />
+                      SHOPPING GUARANTEE
+                    </div>
+                    <p className="text-[24px] md:text-[40px] font-black text-white leading-[1.05] tracking-tight [text-shadow:0_2px_6px_rgba(0,0,0,0.45)]">
+                      อยากสั่งจีน? <span className="text-yellow-300">ปรึกษาฟรี</span> ทักไลน์ Pacred
+                    </p>
+                    <p className="hidden md:block mt-2 text-[14px] font-semibold text-white/90 leading-snug">
+                      ส่ง URL · ทีมล่ามจัดให้ครบ · ตรวจของก่อนส่ง · รวมส่งคุ้ม · ตอบใน 5 นาที
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center justify-center gap-2 px-5 md:px-7 py-3 md:py-4 rounded-xl bg-white text-primary-700 font-black text-[15px] md:text-[18px] shadow-[0_8px_20px_rgba(0,0,0,0.25)] group-hover:scale-105 transition-transform whitespace-nowrap">
+                    <MessageCircle className="w-5 h-5" strokeWidth={2.6} />
+                    ทักไลน์เลย
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.6} />
+                  </span>
+                </div>
+              </div>
+            </TrackedExternalLink>
           </div>
         </section>
       </main>

@@ -58,11 +58,13 @@ export type PcsChromeData = {
   vipCorporate: boolean;
 };
 
-/** left-menu.php L30-34 — the central PCS line, shown when no rep is assigned. */
+/** Fallback sales rep — shown when the customer has no `adminidsale` set.
+ *  Mirrors the central rep on the public site's <SalesCarousel /> (แนท
+ *  with the Pacred logo + office line 02-421-3325 — ปอน 2026-05-24). */
 const SALES_FALLBACK: PcsSalesRep = {
-  nickname: "ส่วนกลาง",
-  picture: "/legacy/pcs/assets/images/theme/logo.png",
-  tel: "02-055-6063",
+  nickname: "แนท",
+  picture: "/images/pacred-logo-red.png",
+  tel: "02-421-3325",
 };
 
 /**

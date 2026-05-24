@@ -120,8 +120,8 @@ export default async function Home({
         <Reviews />
         <Blog />
         <HomeArticle locale={localeTyped} />
-        <HomeRelatedTags />
         <HomeBottomBanner />
+        <HomeRelatedTags />
         <Partner />
       </main>
       <Footer />
