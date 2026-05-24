@@ -19,7 +19,7 @@
  */
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
@@ -70,15 +70,39 @@ const ROLE_LABEL_KEY: Record<AdminRole, string> = {
   interpreter: "role.interpreter",
 };
 
-/** Does any descendant href match the current path? Used to auto-open. */
-function subtreeHasActive(item: MenuItem, pathname: string): boolean {
-  if (item.href && hrefMatches(item.href, pathname)) return true;
-  return (item.children ?? []).some((c) => subtreeHasActive(c, pathname));
+/** Does any descendant href match the current (pathname + search) location? */
+function subtreeHasActive(item: MenuItem, pathname: string, search: string): boolean {
+  if (item.href && hrefMatches(item.href, pathname, search)) return true;
+  return (item.children ?? []).some((c) => subtreeHasActive(c, pathname, search));
 }
 
-/** Path-match ignoring locale prefix + query string. */
-function hrefMatches(href: string, pathname: string): boolean {
-  const base = href.split("?")[0];
+/**
+ * Path-match — pathname AND query string aware. (Sprint-22 fix — the prior
+ * version stripped `?` and only compared the path, so multiple sibling
+ * leafs like `/admin?c=all` + `/admin?c=freight` + `/admin?c=cargo` ALL
+ * matched the same `/admin` pathname and all 4 lit up simultaneously.)
+ *
+ *   - If `href` carries no query (e.g. `/admin/forwarders`): match the
+ *     pathname exactly OR as a parent prefix of a deeper segment (so
+ *     `/admin/forwarders/F-001` still highlights "บริการฝากนำเข้า").
+ *   - If `href` carries a query (e.g. `/admin?c=all`): both the pathname
+ *     AND every query-string param in the href must equal the current
+ *     URL's. A leaf with `?c=all` does NOT match `/admin` with no `c`
+ *     param (the parent `/admin` link covers the no-param view).
+ */
+function hrefMatches(href: string, pathname: string, search: string): boolean {
+  const [base, query] = href.split("?", 2);
+  if (query) {
+    // Query-aware: pathname must match exactly AND every key in href's
+    // query must equal the URL's value for the same key.
+    if (pathname !== base) return false;
+    const want = new URLSearchParams(query);
+    const have = new URLSearchParams(search);
+    for (const [k, v] of want) {
+      if (have.get(k) !== v) return false;
+    }
+    return true;
+  }
   if (base === "/admin") return pathname === "/admin" || pathname.endsWith("/admin");
   return pathname === base || pathname.startsWith(base + "/");
 }
@@ -95,18 +119,19 @@ function CountBadge({ value }: { value: number }) {
 
 // ── One menu row — recursive (handles nested accordion). ───────────────
 function MenuRow({
-  item, depth, counts, pathname, t, onNavigate,
+  item, depth, counts, pathname, search, t, onNavigate,
 }: {
   item: MenuItem;
   depth: number;
   counts: BadgeCounts;
   pathname: string;
+  search: string;
   t: (k: string) => string;
   onNavigate: () => void;
 }) {
   const hasChildren = !!item.children?.length;
-  const active = item.href ? hrefMatches(item.href, pathname) : false;
-  const branchActive = subtreeHasActive(item, pathname);
+  const active = item.href ? hrefMatches(item.href, pathname, search) : false;
+  const branchActive = subtreeHasActive(item, pathname, search);
   const [open, setOpen] = useState(branchActive);
 
   const badgeVal = item.badge ? counts[item.badge] ?? 0 : 0;
@@ -144,6 +169,7 @@ function MenuRow({
                 depth={depth + 1}
                 counts={counts}
                 pathname={pathname}
+                search={search}
                 t={t}
                 onNavigate={onNavigate}
               />
@@ -229,6 +255,8 @@ export function AdminSidebar({
   adminLabel?: string;
 }) {
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
+  const search = searchParams ? searchParams.toString() : "";
   const t = useTranslations("pcsAdminNav");
   const [openMobile, setOpenMobile] = useState(false);
 
@@ -298,6 +326,7 @@ export function AdminSidebar({
                     depth={0}
                     counts={counts}
                     pathname={pathname}
+                    search={search}
                     t={t}
                     onNavigate={closeMobile}
                   />

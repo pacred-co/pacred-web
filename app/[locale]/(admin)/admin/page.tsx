@@ -548,20 +548,20 @@ function RevenueCard({
       href={href}
       className="group block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden"
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className={`font-bold leading-none ${tones.text} text-2xl sm:text-3xl font-mono`}>
+            <p className={`font-bold leading-tight ${tones.text} text-base sm:text-lg font-mono truncate`}>
               ฿{formatTHB(monthValue)}
             </p>
-            <p className="mt-2 text-xs font-semibold text-foreground line-clamp-2">{label}</p>
+            <p className="mt-1 text-[11px] font-semibold text-foreground line-clamp-2">{label}</p>
             {todayValue !== undefined ? (
-              <p className="text-[10px] text-muted mt-1">วันนี้: ฿{formatTHB(todayValue)}</p>
+              <p className="text-[10px] text-muted mt-0.5">วันนี้: ฿{formatTHB(todayValue)}</p>
             ) : subtitle ? (
-              <p className="text-[10px] text-muted mt-1">{subtitle}</p>
+              <p className="text-[10px] text-muted mt-0.5">{subtitle}</p>
             ) : null}
           </div>
-          <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
+          <div className={`shrink-0 ${tones.text} w-6 h-6 [&>svg]:w-6 [&>svg]:h-6 opacity-70`}>{icon}</div>
         </div>
       </div>
       <div className="h-1.5 w-full bg-surface-alt">
@@ -581,7 +581,7 @@ function RateChip({ color, label, value }: { color: "cyan" | "red" | "purple" | 
   return (
     <div>
       <p className="text-[10px] uppercase tracking-widest text-muted">{label}</p>
-      <p className={`mt-0.5 font-mono text-xl font-bold ${colors[color]}`}>{value}</p>
+      <p className={`mt-0.5 font-mono text-base sm:text-lg font-bold ${colors[color]}`}>{value}</p>
     </div>
   );
 }
@@ -607,11 +607,11 @@ function UserStatCard({
       href={href}
       className="block rounded-2xl border border-border bg-white dark:bg-surface shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden"
     >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <p className={`font-bold leading-none ${tones.text} text-3xl font-mono`}>{value.toLocaleString("th-TH")}</p>
-            <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
+            <p className={`font-bold leading-tight ${tones.text} text-xl sm:text-2xl font-mono`}>{value.toLocaleString("th-TH")}</p>
+            <p className="mt-1 text-xs font-semibold text-foreground">{label}</p>
             <p className="text-[10px] text-muted mt-0.5">{subtitle}</p>
           </div>
           <div className={`shrink-0 ${tones.text} w-9 h-9 [&>svg]:w-9 [&>svg]:h-9 opacity-80`}>{icon}</div>
