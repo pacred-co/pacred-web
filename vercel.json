@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/dispatch-line-notify",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/cargothai-sync",
+      "schedule": "30 19 * * *"
     }
   ]
 }

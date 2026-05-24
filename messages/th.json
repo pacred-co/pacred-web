@@ -2647,6 +2647,7 @@
       "note": "หมายเหตุนำเข้า",
       "checkCntCost": "เช็คต้นทุนตู้ Sheet",
       "momoLclSack": "ตรวจสอบ MOMO LCL Sack",
+      "cargothaiSync": "Sync CargoThai (container/manifest)",
       "cntReport": "รายงานตู้สินค้า",
       "whHistory": "ประวัติเข้าโกดังไทย",
       "assignDriver": "มอบงานคนขับรถ",
