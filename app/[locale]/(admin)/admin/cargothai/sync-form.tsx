@@ -16,10 +16,15 @@ import { adminSyncCargoThai } from "@/actions/admin/cargothai";
 export function SyncForm({ tokenConfigured }: { tokenConfigured: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const today = new Date().toISOString().slice(0, 10);
-  const yday  = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const [from, setFrom] = useState(yday);
-  const [to,   setTo]   = useState(today);
+  // Lazy useState initialisers — React 19's `react-hooks/purity` rule blocks
+  // `Date.now()` / `new Date()` directly in the component body (would re-run
+  // on every render and silently shift state). The lazy init form runs once
+  // at mount, which is the contract we actually want for a "default to
+  // yesterday/today" date range.
+  const [from, setFrom] = useState(() =>
+    new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+  );
+  const [to,   setTo]   = useState(() => new Date().toISOString().slice(0, 10));
   const [msg, setMsg]   = useState<{ tone: "ok" | "err"; text: string } | null>(null);
 
   function handleSync(e: React.FormEvent) {

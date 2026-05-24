@@ -109,8 +109,8 @@ export default async function AdminCargoThaiPage() {
                 </tr>
               </thead>
               <tbody>
-                {recent.map((r) => (
-                  <tr key={r.sm_code ?? Math.random()} className="border-t border-border">
+                {recent.map((r, idx) => (
+                  <tr key={r.sm_code ?? `row-${idx}`} className="border-t border-border">
                     <td className="px-4 py-2 text-xs font-mono">{r.sm_code ?? "—"}</td>
                     <td className="px-4 py-2 text-xs">
                       <div>{r.container_name ?? "—"}</div>
