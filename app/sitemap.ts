@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE_LOCALES, SITE_URL, absoluteUrl, type SiteLocale } from "@/components/seo/site";
 import { KNOWLEDGE_ARTICLES } from "@/lib/knowledge-articles";
 import { CUSTOMS_PORTS } from "@/components/sections/customs-port-data";
-import { PACRED_NEWS } from "@/components/sections/pacred-news-data";
+import { ALL_NEWS as PACRED_NEWS } from "@/lib/news/all";
 
 type Freq = MetadataRoute.Sitemap[number]["changeFrequency"];
 
