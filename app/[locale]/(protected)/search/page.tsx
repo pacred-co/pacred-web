@@ -189,9 +189,10 @@ export default async function SearchPage({
   }
 
   // ── MODE B — keyword search ─────────────────────────────────
-  // search.php L302-333: provider=pcs branch queries tb_product.
-  // taobao / 1688 use the external TAMIT API (FLAGGED — not wired);
-  // for those providers the grid renders the legacy empty state.
+  // search.php L302-333: provider=pcs branch queries tb_product
+  // (Pacred-local product catalog). taobao / 1688 are wired below
+  // through AkuCargo (P-52, Sprint-3 P2.2 — replaces the legacy
+  // TAMIT keyword endpoint).
   let products: ProductRow[] = [];
   let totalPages = 1;
   let apiError2 = 0; // search.php $apiERROR2 — 1 = "ไม่พบข้อมูล"
@@ -410,8 +411,11 @@ export default async function SearchPage({
             <div className="bg-white">
               <div className="row p-1">
                 {provider !== "pcs" ? (
-                  // taobao / 1688 — external TAMIT API not wired (FLAGGED).
-                  // search.php L292-298 empty-data branch ($apiERROR2=1).
+                  // taobao / 1688 — AkuCargo result handled above; the
+                  // empty-state branch fires when AkuCargo returned no
+                  // hits OR errored (network / rate_limited /
+                  // not_configured), mirroring legacy search.php L292-298
+                  // ($apiERROR2=1).
                   apiError2 === 1 ? (
                     <div className="col-12 text-center">
                       <span className="text-danger">
