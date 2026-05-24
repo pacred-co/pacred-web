@@ -64,8 +64,8 @@ function csvCell(v: unknown): string {
 }
 
 export async function GET(req: NextRequest) {
-  // Role gate — mirrors the page.
-  const { user } = await requireAdmin(["super"]);
+  // Role gate — mirrors the page (Sprint-11 P2.3: widened to super + ops).
+  const { user } = await requireAdmin(["super", "ops"]);
   const adminId  = user.id;
 
   const url    = new URL(req.url);
@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
   const action      = sp.get("action")?.trim() ?? null;
   const targetType  = sp.get("target_type")?.trim() ?? null;
   const targetId    = sp.get("target_id")?.trim() ?? null;
+  const qStr        = sp.get("q")?.trim() ?? null;
   const fromStr     = sp.get("from")?.trim() ?? null;
   const toStr       = sp.get("to")?.trim()   ?? null;
   const limit       = Math.min(
@@ -110,6 +111,13 @@ export async function GET(req: NextRequest) {
     // End-of-day inclusive — append T23:59:59 if it's a bare date.
     const t = /^\d{4}-\d{2}-\d{2}$/.test(toStr) ? `${toStr}T23:59:59` : toStr;
     q = q.lte("created_at", t);
+  }
+  // Sprint-11 P2.3 — `q` substring search across target_id + payload-as-text.
+  // Mirrors the /admin/audit page filter so a CSV export matches what
+  // the operator sees on screen.
+  if (qStr) {
+    const term = qStr.replace(/[%,]/g, "\\$&");
+    q = q.or(`target_id.ilike.%${term}%,payload::text.ilike.%${term}%`);
   }
 
   const { data, error } = await q;
@@ -168,6 +176,7 @@ export async function GET(req: NextRequest) {
       action: action ?? null,
       target_type: targetType ?? null,
       target_id: targetId ?? null,
+      q: qStr ?? null,
       from: fromStr ?? null,
       to: toStr ?? null,
     },

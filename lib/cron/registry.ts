@@ -78,6 +78,24 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ส่ง broadcasts ที่ scheduled_for <= now() แบบ idempotent",
     scheduleLabel: "ทุก 5 นาที",
   },
+  // Sprint-11 P2.3.C — register the LINE Notify dispatcher + CargoThai
+  // sync crons so all 9 entries in vercel.json appear on the cron-health
+  // page (they were previously surfaced as "orphans" with logs but no
+  // registry row).
+  {
+    path:          "/api/cron/dispatch-line-notify",
+    schedule:      "*/2 * * * *",
+    label:         "ส่ง notification → LINE Notify",
+    description:   "ดึง notifications ที่ยังไม่ push แล้วส่งให้ LINE Notify ของลูกค้า (per-user OAuth, transition EOL)",
+    scheduleLabel: "ทุก 2 นาที",
+  },
+  {
+    path:          "/api/cron/cargothai-sync",
+    schedule:      "30 19 * * *",
+    label:         "Sync ตู้/forwarder จาก CargoThai",
+    description:   "ดึง tb_tmp_forwarder_cargothai สดจาก partner API + reconcile กับ forwarders ใน Pacred",
+    scheduleLabel: "ทุกวัน 02:30 ICT (19:30 UTC ก่อนหน้า)",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means

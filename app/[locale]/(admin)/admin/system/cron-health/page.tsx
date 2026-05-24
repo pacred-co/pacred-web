@@ -1,0 +1,22 @@
+import { redirect } from "next/navigation";
+
+/**
+ * Sprint-11 P2.3.C — /admin/system/cron-health alias.
+ *
+ * The cron-health dashboard already lives at /admin/system/crons (with
+ * its trigger-button companion + cron_invocations + lib/cron/registry +
+ * lib/cron/instrument wiring). The sprint spec asks for /cron-health as
+ * the path; rather than fork or duplicate, this alias redirects to the
+ * single canonical implementation.
+ *
+ * If someone bookmarks /cron-health (the more discoverable name), they
+ * land on the working dashboard. If sidebar entries point at /crons,
+ * those still work too. One implementation, two URLs.
+ *
+ * Coverage of all 9 vercel.json crons is provided by lib/cron/registry.ts
+ * (Sprint-11 P2.3.C added dispatch-line-notify + cargothai-sync to round
+ * out the registry).
+ */
+export default function CronHealthAliasPage() {
+  redirect("/admin/system/crons");
+}
