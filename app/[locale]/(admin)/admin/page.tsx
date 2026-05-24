@@ -2,6 +2,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye } from "lucide-react";
+import { pickPrimaryRole } from "@/lib/admin/dashboards/pick-primary-role";
+import { AccountingDashboard } from "@/components/admin/dashboards/accounting-dashboard";
+import { WarehouseDashboard } from "@/components/admin/dashboards/warehouse-dashboard";
+import { SalesAdminDashboard } from "@/components/admin/dashboards/sales-admin-dashboard";
+import { DriverDashboard } from "@/components/admin/dashboards/driver-dashboard";
+import { InterpreterDashboard } from "@/components/admin/dashboards/interpreter-dashboard";
+
+export const dynamic = "force-dynamic";
 
 const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
 
@@ -10,14 +18,38 @@ type TabKey =
   | "forwarder1" | "forwarder5" | "forwarderC" | "forwarder6" | "forwarder62"
   | "payment" | "inactiveCustomers";
 
+/**
+ * V-E12 · per-role dashboard dispatch.
+ *
+ * Single landing route — reads the signed-in admin's roles, picks the
+ * primary role (priority: super > accounting > warehouse > sales_admin >
+ * driver > interpreter > ops), and renders the role-specific dashboard.
+ *
+ * - super / ops → the comprehensive ops view below (revenue + queues + tabs)
+ * - accounting → AccountingDashboard (invoice queues, WHT, refunds)
+ * - warehouse → WarehouseDashboard (QA queue, containers due, orphans)
+ * - sales_admin → SalesAdminDashboard (signups, leads, top customers)
+ * - driver → DriverDashboard (own pickups + completed today)
+ * - interpreter → InterpreterDashboard (own commission accruals)
+ *
+ * Per docs/port-specs/cargo-and-freight-dashboards.md (V-E12).
+ */
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  // W-1 (gap-admin H-2): page-level role gate. The (admin) layout only
-  // proves "some admin" — driver/warehouse roles legitimately reach
-  // floor-ops pages, but this dashboard exposes company-wide revenue +
-  // total wallet balance + pending payouts via createAdminClient
-  // (RLS-bypass). Office roles only; super implicit.
-  await requireAdmin(["ops", "accounting", "sales_admin"]);
+  // Layout already gated to "some admin"; here we just read roles to
+  // dispatch. Any active admin role lands somewhere — none falls through
+  // to the notFound() path.
+  const { user, roles } = await requireAdmin();
+  const variant = pickPrimaryRole(roles);
 
+  if (variant === "accounting")  return <AccountingDashboard />;
+  if (variant === "warehouse")   return <WarehouseDashboard />;
+  if (variant === "sales_admin") return <SalesAdminDashboard />;
+  if (variant === "driver")      return <DriverDashboard userId={user.id} />;
+  if (variant === "interpreter") return <InterpreterDashboard userId={user.id} />;
+
+  // super + ops → comprehensive ops view (revenue + customer KPIs + pending
+  // queues + tabbed work-in-progress lists). Inlined below to avoid a
+  // 600-line refactor of the existing live dashboard — fidelity first.
   const sp = await searchParams;
   const admin = createAdminClient();
 
