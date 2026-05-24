@@ -2764,7 +2764,8 @@
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
       "bulletin": "บุลเลตินตู้รายวัน",
-      "qaInspect": "ตรวจสอบคุณภาพ (QA)"
+      "qaInspect": "ตรวจสอบคุณภาพ (QA)",
+      "csvImports": "ปรับรายการอัตโนมัติ (CSV)"
     },
     "driver": {
       "toDeliver": "งานที่ต้องส่ง",

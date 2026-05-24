@@ -44,22 +44,36 @@ export default async function CsvImportUploadPage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-900 space-y-2">
-        <p className="font-bold">📋 รูปแบบ CSV ที่รองรับ (target = forwarders)</p>
-        <p>แถวแรก = header ตรงกับชื่อคอลัมน์ใน DB. ต้องมี:</p>
-        <ul className="list-disc pl-5 space-y-0.5">
-          <li><code className="font-mono">profile_id</code> — UUID ของ customer</li>
-          <li><code className="font-mono">source_warehouse</code> — <code>guangzhou</code> หรือ <code>yiwu</code></li>
-          <li><code className="font-mono">transport_type</code> — <code>truck</code> / <code>ship</code> / <code>air</code></li>
-          <li><code className="font-mono">product_type</code> — <code>general</code> / <code>tisi</code> / <code>fda</code> / <code>special</code></li>
-        </ul>
-        <p>ไม่บังคับ:</p>
-        <ul className="list-disc pl-5 space-y-0.5">
-          <li><code className="font-mono">weight_kg</code>, <code className="font-mono">volume_cbm</code>, <code className="font-mono">total_price</code> — ตัวเลข</li>
-          <li><code className="font-mono">tracking_china</code>, <code className="font-mono">note</code> — text</li>
-        </ul>
-        <p className="text-amber-700">
-          ขีดจำกัด: ไฟล์ ≤ 5 MB, ≤ 1000 แถวต่อรอบ. f_no จะถูก auto-gen ตอน insert.
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-900 space-y-3">
+        <p className="font-bold">📋 รูปแบบ CSV ที่รองรับ — มี 2 target</p>
+
+        <div className="space-y-1">
+          <p className="font-semibold">A. <code className="font-mono">forwarders</code> — สร้างรายการใหม่ (bulk INSERT)</p>
+          <p>แถวแรก = header. ต้องมี:</p>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li><code className="font-mono">profile_id</code> — UUID ของ customer</li>
+            <li><code className="font-mono">source_warehouse</code> — <code>guangzhou</code> หรือ <code>yiwu</code></li>
+            <li><code className="font-mono">transport_type</code> — <code>truck</code> / <code>ship</code> / <code>air</code></li>
+            <li><code className="font-mono">product_type</code> — <code>general</code> / <code>tisi</code> / <code>fda</code> / <code>special</code></li>
+          </ul>
+          <p>ไม่บังคับ: <code className="font-mono">weight_kg</code>, <code className="font-mono">volume_cbm</code>, <code className="font-mono">total_price</code>, <code className="font-mono">tracking_china</code>, <code className="font-mono">note</code></p>
+        </div>
+
+        <div className="space-y-1 border-t border-amber-200 pt-3">
+          <p className="font-semibold">B. <code className="font-mono">forwarders_update_by_tracking</code> — ปรับรายการอัตโนมัติ (legacy &quot;import-excel.php&quot;)</p>
+          <p>Match รายการเดิมตาม <code className="font-mono">tracking_chn</code> → UPDATE ค่ากล่อง/น้ำหนัก/เลขตู้/สถานะ</p>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li><code className="font-mono">tracking_chn</code> — บังคับ</li>
+            <li><code className="font-mono">cabinet_closed_date</code> — วันที่ปิดตู้ (เมื่อมี ระบบจะ bump status 1→2 / 2→3)</li>
+            <li><code className="font-mono">source_warehouse</code> — รับ <code>GuangZhou</code>/<code>guangzhou</code> หรือ <code>Yiwu</code>/<code>อี้อู</code></li>
+            <li><code className="font-mono">transport_type</code> — รับ <code>EK</code>/<code>truck</code> หรือ <code>SEA</code>/<code>ship</code></li>
+            <li><code className="font-mono">cabinet_number</code>, <code className="font-mono">weight_kg</code>, <code className="font-mono">width_cm</code>, <code className="font-mono">length_cm</code>, <code className="font-mono">height_cm</code>, <code className="font-mono">volume_cbm</code>, <code className="font-mono">box_count</code>, <code className="font-mono">detail</code></li>
+          </ul>
+          <p>แถวที่ไม่พบ tracking ใน DB จะถูกข้าม (count ใน &quot;skipped&quot;) ไม่ใช่ error</p>
+        </div>
+
+        <p className="text-amber-700 border-t border-amber-200 pt-2">
+          ขีดจำกัด: ไฟล์ ≤ 5 MB, ≤ 1000 แถวต่อรอบ. แนะนำใช้ encoding UTF-8 รองรับภาษาไทย/จีน
         </p>
       </div>
 

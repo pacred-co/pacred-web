@@ -31,8 +31,8 @@ import {
   FileText, Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins,
   PackagePlus, PackageCheck, UserPlus, Plus, History, Landmark, Layers,
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
-  Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, ChevronDown,
-  ChevronRight, type LucideIcon,
+  Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, FileSpreadsheet,
+  ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
 import {
@@ -50,7 +50,7 @@ const ICONS: Record<string, LucideIcon> = {
   Newspaper, ScrollText, Boxes, Wrench, ShoppingBag, HandCoins, PackagePlus,
   PackageCheck, UserPlus, Plus, History, Landmark, Layers, SlidersHorizontal,
   Network, ListOrdered, Barcode, ScanLine, Camera, Printer, Calculator,
-  BadgeCheck, ShieldAlert, UserCheck,
+  BadgeCheck, ShieldAlert, UserCheck, FileSpreadsheet,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {

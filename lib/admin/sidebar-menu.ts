@@ -516,6 +516,9 @@ const menuOps: MenuSection[] = [
       blockForwarder,
       blockPayment,
       { labelKey: "report.titleDriver", href: "/admin/driver-runs", icon: "BarChart3" },
+      // Gap #7 — legacy "ปรับรายการอัตโนมัติ" — bulk-update / bulk-create forwarders.
+      // Same page is in the warehouse menu (per-role visibility, see migration 0107).
+      { labelKey: "warehouse.csvImports", href: "/admin/csv-imports", icon: "FileSpreadsheet" },
     ],
   },
   learningSection,
@@ -622,6 +625,11 @@ const menuWarehouse: MenuSection[] = [
       { labelKey: "warehouse.bulletin",   href: "/admin/warehouse/bulletin",   icon: "ClipboardCheck" },
       { labelKey: "warehouse.qaInspect",  href: "/admin/warehouse/qa-inspections", icon: "ShieldAlert" },
       blockBarcode,
+      // Gap #7 — legacy "ปรับรายการอัตโนมัติ" — bulk-update forwarders by tracking_chn.
+      // Warehouse staff in Guangzhou / Yiwu paste their daily container manifest
+      // CSV here. Migration 0107 + actions/admin/csv-imports.ts
+      // `forwarders_update_by_tracking` target.
+      { labelKey: "warehouse.csvImports", href: "/admin/csv-imports", icon: "FileSpreadsheet" },
     ],
   },
   learningSection,
