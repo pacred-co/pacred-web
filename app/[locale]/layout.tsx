@@ -13,6 +13,43 @@ import {
 } from "@/components/seo/schemas";
 import { SITE_NAME, SITE_URL } from "@/components/seo/site";
 
+/**
+ * Server-only message namespaces — NOT shipped to the client provider.
+ *
+ * Sprint-8 perf trim. `messages/th.json` is 202 KB on disk; every namespace
+ * we serialize into the RSC payload adds bytes to every customer's HTML
+ * download. By restricting `NextIntlClientProvider` to the namespaces that
+ * client components actually call via `useTranslations(...)`, we drop the
+ * 15 server-only namespaces below from the wire — ~20 KB raw / ~5-7 KB
+ * gzipped saved per page boot.
+ *
+ * If a NEW client component starts calling `useTranslations("seo")` (or
+ * any other namespace below), move it off this list — the hook will throw
+ * `MISSING_MESSAGE` otherwise. Grep is the cheapest audit:
+ *   grep -rE 'useTranslations\(["\x27]NAMESPACE' app components
+ *
+ * Server components (e.g. `generateMetadata`) keep using `getTranslations`
+ * with the FULL message set — `getMessages()` on the server side still
+ * returns everything. This list ONLY narrows what crosses to the browser.
+ */
+const SERVER_ONLY_NAMESPACES = new Set([
+  "admin",            // legacy admin sub-tree, used server-side only
+  "bookingPage",      // booking SC render only
+  "credit",           // server credit-line copy
+  "dashboard",        // dashboard SC render
+  "footer",           // legacy footer SC — `footerNew` is the client one
+  "footerExtras",     // server footer SC
+  "freightReceipt",   // PDF render server-side
+  "hero",             // legacy hero SC — `heroBanner` is the client one
+  "register",         // server-rendered register form copy
+  "sales",            // sales server pages
+  "seo",              // metadata/OG generators only
+  "serviceData",      // service detail SC
+  "shipments",        // shipments SC
+  "walletShop",       // shop wallet SC (client uses local strings)
+  "work_chat",        // legacy work-chat server-side
+]);
+
 export async function generateMetadata({
   params,
 }: {
@@ -72,8 +109,18 @@ export default async function LocaleLayout({
   const messages = await getMessages();
   const typedLocale = locale as "th" | "en";
 
+  // Pick only the client-required namespaces. The full message tree
+  // stays available to server components via `getTranslations` — this
+  // only controls what gets serialized into the RSC payload that the
+  // browser downloads on every page boot.
+  const clientMessages = Object.fromEntries(
+    Object.entries(messages as Record<string, unknown>).filter(
+      ([ns]) => !SERVER_ONLY_NAMESPACES.has(ns),
+    ),
+  );
+
   return (
-    <NextIntlClientProvider messages={messages}>
+    <NextIntlClientProvider messages={clientMessages}>
       <LocaleHtmlLang />
       <JsonLd data={[
         organizationSchema(typedLocale),
