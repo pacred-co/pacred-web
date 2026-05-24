@@ -7,7 +7,7 @@ import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { ArticleListTabs } from "@/components/sections/article-list-tabs";
-import { PACRED_NEWS } from "@/components/sections/pacred-news-data";
+import { ALL_NEWS as PACRED_NEWS } from "@/lib/news/all";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/components/seo/schemas";

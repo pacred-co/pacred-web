@@ -17,10 +17,10 @@ import { ArticleContent } from "@/components/knowledge/article-content";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import {
-  PACRED_NEWS,
-  getPacredNewsBySlug,
+  ALL_NEWS as PACRED_NEWS,
+  getNewsBySlug as getPacredNewsBySlug,
   getRelatedNews,
-} from "@/components/sections/pacred-news-data";
+} from "@/lib/news/all";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";

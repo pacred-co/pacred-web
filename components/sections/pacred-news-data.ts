@@ -1,6 +1,16 @@
 /**
  * Pacred News data — customer-facing announcements & company updates.
  *
+ * **This file is the CLIENT-SAFE legacy data** — pre-MDX in-code items
+ * only. It's imported by `"use client"` components on the homepage
+ * (`blog.tsx`, `knowledge-news-block.tsx`) which need the data inlined
+ * into the client bundle.
+ *
+ * The **full merged listing** (legacy + MDX files under `content/news/`)
+ * lives in `lib/news/all.ts` — server-only, used by the `/news` index
+ * + detail pages + sitemap. Editors add `.mdx` files there and the
+ * public news routes pick them up at build time without touching code.
+ *
  * Mirrors `lib/knowledge-articles.ts` but lives under `components/` so
  * ปอน can own/edit without crossing the `lib/` boundary
  * (per `docs/briefs/podeng.md` scope rules).
