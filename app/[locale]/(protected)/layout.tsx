@@ -125,6 +125,12 @@ const CSS_BUNDLE: string[] = [
   `/legacy/pcs/report-user-sales.css`,
   `/legacy/pcs/receipt-f-hs.css`,
   `/legacy/pcs/index.css`,
+  // Sprint-5 theme — Pacred brand-token swap, loaded LAST so every
+  // per-screen sheet (search.css btn-main gradient, payment.css btn-main
+  // gradient, etc.) is overridden by the canonical podeng #B30000 +
+  // semantic palette. Scoped to `.pcs-legacy` so public marketing is
+  // unaffected.
+  `/legacy/pcs/legacy-brand-tokens.css`,
   // NOTE — print-shop.css / print-receipt-f.css / print-overlay.css are
   // INTENTIONALLY NOT in this global bundle. Each contains an `@page`
   // rule that defines the printed-paper margin, and `@page` is GLOBAL
