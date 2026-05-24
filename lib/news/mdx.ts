@@ -147,7 +147,6 @@ function loadMdxNews(): PacredNews[] {
       : ("ประกาศ" as const);
 
     if (!title || !excerpt || !publishedAt || !image) {
-      // eslint-disable-next-line no-console
       console.warn(
         `[news/mdx] skipping ${file}: missing required frontmatter ` +
           `(title=${!!title} excerpt=${!!excerpt} publishedAt=${!!publishedAt} image=${!!image})`,

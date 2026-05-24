@@ -78,7 +78,7 @@ export default async function AdminShopPayoutsPage({
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
         <p className="mt-1 text-sm text-muted">
-          คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด "โอนแล้ว" ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ
+          คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด &ldquo;โอนแล้ว&rdquo; ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ
         </p>
       </div>
 
