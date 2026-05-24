@@ -70,7 +70,32 @@ export type Row = {
    * (`adminidkey`). Empty when not yet measured.
    */
   measured_by_admin: string | null;
-  customer: { userid: string; name: string; phone: string } | null;
+  /**
+   * Wave 18-B — 7-col fidelity backfill (per fidelity-gap-2026-05-24.md).
+   * Legacy forwarder.php L575-580 + L595-609 + L651-653 render these as
+   * inline badges/chips operators read at-a-glance.
+   */
+  print_status_1: boolean;   // legacy printstatus1='1' → "พิมพ์แล้ว #1"
+  print_status_2: boolean;   // legacy printstatus2='1' → "พิมพ์แล้ว #2"
+  print_status_3: boolean;   // legacy printstatus3='1' → "พิมพ์แล้ว #3"
+  print_status_4: boolean;   // legacy printstatus4='1' → "พิมพ์แล้ว #4"
+  car_on: boolean;           // legacy fstatuscaron='1' → ขึ้นรถแล้ว
+  car_off: boolean;          // legacy fstatuscaroff='1' → ลงรถ
+  eta_base: string | null;   // legacy fdatetothai · ETA range computed in cell
+  pallet: string | null;     // legacy fpallet · warehouse location chip
+  customer: {
+    userid: string;
+    name: string;
+    phone: string;
+    // Wave 18-B — VIP/SVIP/SaleAdmin badge inputs (legacy badgeVIP3 +
+    // badgeAdminSale at forwarder.php L589).
+    coid: string;
+    is_svip: boolean;
+    is_corporate: boolean;
+    is_comparison: boolean;
+    is_juristic: boolean;
+    sale_admin: string | null;
+  } | null;
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -123,6 +148,127 @@ function relativeAgo(iso: string | null | undefined): string {
   const m = Math.floor(diff / 60_000);
   if (m > 0) return `${m} นาที`;
   return "เมื่อกี้";
+}
+
+/**
+ * Wave 18-B — port of legacy `diffDateTimeNow($datetime)` from
+ * `pcs-admin/include/function.php` L1399-1425. Used as the inline
+ * "X วันที่แล้ว" elapsed-time stamp next to fdate so operators see SLA
+ * breaches at-a-glance ("stuck 8 days in China warehouse").
+ *
+ * Output format chosen for list density: "8 วัน 3 ชม" (skip seconds —
+ * legacy showed them but they're noise in a 300-row table).
+ */
+function diffDateTimeNowThai(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Math.max(0, Date.now() - then);
+  const days = Math.floor(diff / 86_400_000);
+  const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+  const minutes = Math.floor((diff % 3_600_000) / 60_000);
+  if (days > 0) return hours > 0 ? `${days} วัน ${hours} ชม` : `${days} วัน`;
+  if (hours > 0) return `${hours} ชม ${minutes} น.`;
+  if (minutes > 0) return `${minutes} นาที`;
+  return "เพิ่งสักครู่";
+}
+
+/**
+ * Wave 18-B — ETA range "23/05 ± 2 วัน" formatter (port of legacy
+ * forwarder.php L595-609). Legacy logic:
+ *   transport=1 (รถ): show fDateToThai → fDateToThai+2 (range = 2 days)
+ *   else (เรือ/แอร์): show fDateToThai → fDateToThai+4 (range = 4 days)
+ * The `0000-00-00` sentinel ("no ETA yet") is mapped to null upstream
+ * — server-side `eta_base` is already `string | null`.
+ */
+function formatEtaRange(
+  base: string | null,
+  transportType: string,
+): { primary: string; tail: string } | null {
+  if (!base) return null;
+  const d = new Date(base);
+  if (Number.isNaN(d.getTime())) return null;
+  const offset = transportType === "1" ? 2 : 4;
+  const end = new Date(d);
+  end.setDate(end.getDate() + offset);
+  const fmt = (x: Date) =>
+    x.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit" });
+  return {
+    primary: `${fmt(d)} - ${fmt(end)}`,
+    tail: `± ${offset} วัน`,
+  };
+}
+
+/**
+ * Wave 18-B — VIP/SVIP/SaleAdmin badges. Port of legacy helpers
+ * `badgeVIP3()` (function.php L597) + `badgeAdminSale()` (L618).
+ * Inline component to avoid a new file for ~30 LOC.
+ */
+function CustomerBadges({
+  coid,
+  isSvip,
+  isCorporate,
+  isComparison,
+  isJuristic,
+  saleAdmin,
+}: {
+  coid: string;
+  isSvip: boolean;
+  isCorporate: boolean;
+  isComparison: boolean;
+  isJuristic: boolean;
+  saleAdmin: string | null;
+}) {
+  // Tier-color map mirrors the legacy `badge-vip` palette but uses our
+  // Tailwind tokens (no Bootstrap badge classes).
+  const tierBadge = (() => {
+    if (!coid || coid === "PCS") return null;  // PCS = default tier = no chip
+    const label = coid;
+    return (
+      <span className="rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700">
+        {label}
+      </span>
+    );
+  })();
+  return (
+    <div className="mt-0.5 flex flex-wrap gap-1 items-center">
+      {tierBadge}
+      {isSvip && (
+        <span
+          className="rounded-full border border-pink-300 bg-pink-50 px-1.5 py-0.5 text-[9px] font-semibold text-pink-700"
+          title="ลูกค้าคิดราคาแบบส่วนตัว"
+        >
+          SVIP
+        </span>
+      )}
+      {isComparison && (
+        <span
+          className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700"
+          title="ลูกค้าคิดราคาตามค่าเทียบ"
+        >
+          CPS
+        </span>
+      )}
+      {(isCorporate || isJuristic) && (
+        <span
+          className="rounded-full border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700"
+          title="ลูกค้าบริษัท (นิติบุคคล)"
+        >
+          นิติ
+        </span>
+      )}
+      <span
+        className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+          saleAdmin
+            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+            : "border-gray-200 bg-gray-50 text-gray-500"
+        }`}
+        title="Sale ผู้ดูแล"
+      >
+        Sale : {saleAdmin ?? "ไม่ระบุ"}
+      </span>
+    </div>
+  );
 }
 
 export function ForwardersTable({
@@ -259,6 +405,71 @@ export function ForwardersTable({
                       <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
                         {r.created_at ? new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {/* Wave 18-B — diffDateTimeNow elapsed-time stamp
+                            (port of legacy function.php L1399 · forwarder.php
+                            L673 "ผ่านมา : ...") next to fdate. SLA visibility
+                            without making operators do mental math. */}
+                        {r.created_at && (
+                          <div className="text-[9px] text-amber-700 mt-0.5">
+                            ผ่านมา {diffDateTimeNowThai(r.created_at)}
+                          </div>
+                        )}
+                        {/* Wave 18-B — print-status + ขึ้นรถ/ลงรถ badges
+                            (port of legacy forwarder.php L575-580). Each
+                            badge = a workflow checkbox an operator already
+                            ticked. Tiny chips kept inline below the date. */}
+                        {(r.print_status_1 || r.print_status_2 || r.print_status_3 || r.print_status_4 || r.car_on || r.car_off) && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {r.print_status_1 && (
+                              <span
+                                className="rounded-full border border-blue-300 bg-blue-50 px-1 py-0.5 text-[9px] text-blue-700"
+                                title="พิมพ์เอกสาร #1 แล้ว"
+                              >
+                                📄1
+                              </span>
+                            )}
+                            {r.print_status_2 && (
+                              <span
+                                className="rounded-full border border-sky-300 bg-sky-50 px-1 py-0.5 text-[9px] text-sky-700"
+                                title="พิมพ์เอกสาร #2 แล้ว"
+                              >
+                                📄2
+                              </span>
+                            )}
+                            {r.print_status_3 && (
+                              <span
+                                className="rounded-full border border-green-300 bg-green-50 px-1 py-0.5 text-[9px] text-green-700"
+                                title="พิมพ์เอกสาร #3 แล้ว"
+                              >
+                                📄3
+                              </span>
+                            )}
+                            {r.print_status_4 && (
+                              <span
+                                className="rounded-full border border-amber-300 bg-amber-50 px-1 py-0.5 text-[9px] text-amber-700"
+                                title="พิมพ์เอกสาร #4 แล้ว"
+                              >
+                                📄4
+                              </span>
+                            )}
+                            {r.car_on && (
+                              <span
+                                className="rounded-full border border-amber-400 bg-amber-50 px-1 py-0.5 text-[9px] text-amber-800"
+                                title="ขึ้นรถแล้ว"
+                              >
+                                ↑ ขึ้นรถ
+                              </span>
+                            )}
+                            {r.car_off && (
+                              <span
+                                className="rounded-full border border-gray-300 bg-gray-50 px-1 py-0.5 text-[9px] text-gray-700"
+                                title="ลงรถแล้ว"
+                              >
+                                ↓ ลงรถ
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="font-mono font-semibold">{r.customer?.userid ?? "—"}</div>
@@ -266,6 +477,31 @@ export function ForwardersTable({
                           {r.customer?.name || "—"}
                         </div>
                         <div className="text-muted text-[10px]">{r.customer?.phone}</div>
+                        {/* Wave 18-B — VIP/SVIP/SaleAdmin badges (port of
+                            legacy badgeVIP3 + badgeAdminSale · L589). */}
+                        {r.customer && (
+                          <CustomerBadges
+                            coid={r.customer.coid}
+                            isSvip={r.customer.is_svip}
+                            isCorporate={r.customer.is_corporate}
+                            isComparison={r.customer.is_comparison}
+                            isJuristic={r.customer.is_juristic}
+                            saleAdmin={r.customer.sale_admin}
+                          />
+                        )}
+                        {/* Wave 18-B — จะมาถึงไทย ETA range (port of legacy
+                            forwarder.php L595-609). Transport=1 = ±2d ·
+                            else ±4d. Hidden when no ETA set. */}
+                        {(() => {
+                          const eta = formatEtaRange(r.eta_base, r.transport_type);
+                          if (!eta) return null;
+                          return (
+                            <div className="mt-1 text-[10px] text-primary-700">
+                              จะมาถึงไทย: <span className="font-medium">{eta.primary}</span>{" "}
+                              <span className="text-muted">{eta.tail}</span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex gap-2 items-start">
@@ -365,6 +601,35 @@ export function ForwardersTable({
                           </>
                         ) : (
                           <span className="text-muted">—</span>
+                        )}
+                        {/* Wave 18-B — cabinet number drill-down (port of
+                            legacy forwarder.php L651 — anchor to
+                            `report-cnt.php?id=<cabinet>`). Pacred has a
+                            per-cabinet detail page at
+                            `/admin/report-cnt/[fNo]` (Wave 16 P0-1)
+                            keyed by the cabinet code; link straight there. */}
+                        {r.cabinet_number && (
+                          <div className="mt-1 text-[10px]">
+                            <span className="text-muted">เลขตู้: </span>
+                            <Link
+                              href={`/admin/report-cnt/${encodeURIComponent(r.cabinet_number)}`}
+                              className="font-mono text-primary-600 hover:underline"
+                            >
+                              {r.cabinet_number}
+                            </Link>
+                          </div>
+                        )}
+                        {/* Wave 18-B — fpallet (warehouse location) chip
+                            (port of legacy L653 "location : <fpallet>"). */}
+                        {r.pallet && (
+                          <div className="mt-1">
+                            <span
+                              className="rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[9px] font-mono text-slate-700"
+                              title="ตำแหน่งใน warehouse"
+                            >
+                              loc: {r.pallet}
+                            </span>
+                          </div>
                         )}
                       </td>
                       <td className="px-2 py-2.5 font-mono text-[10px]">

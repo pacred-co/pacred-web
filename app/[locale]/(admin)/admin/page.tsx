@@ -226,7 +226,10 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   return (
     <main className="p-4 lg:p-6 space-y-4">
       {/* ── Row 1: 4 revenue stat cards (PCS style: number + icon + progress bar) ── */}
-      <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Layout fix 2026-05-25: 4-col only at xl (≥1280) — was lg (≥1024) which
+          overflowed on common 1366-1500px laptop viewports because the big
+          ฿-numbers (text-3xl font-mono) refuse to shrink. At lg/md → 2 cols. */}
+      <section className="grid gap-3 grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
         <RevenueCard
           tone="info"
           icon={<ShoppingBasket />}
@@ -263,7 +266,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
       {/* ── Row 2: Rate strip (4 rates) ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        {/* 4-chip rate row — push 4-col to lg (≥1024) so 1500px viewport fits */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
           <RateChip color="cyan"    label="เรทสั่งซื้อ" value={rateShop.toFixed(2)} />
           <RateChip color="red"     label="เรท Sale"   value={rateSale.toFixed(2)} />
           <RateChip color="purple"  label="เรทโอน"     value={ratePayment.toFixed(2)} />
@@ -272,7 +276,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       </section>
 
       {/* ── Row 3: User stat cards ── */}
-      <section className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+      {/* 3-card customer summary — push 3-col to md (≥768) to match the rate row */}
+      <section className="grid gap-3 grid-cols-1 md:grid-cols-3">
         <UserStatCard
           tone="info"
           icon={<Users />}
@@ -304,8 +309,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
       {/* ── Row 4: Tab strip + active tab table ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        <div className="border-b border-border overflow-x-auto">
-          <div className="flex flex-wrap min-w-max -mb-px">
+        {/* Tab strip — was `min-w-max` which forced single-line width >viewport
+            then overflow-x-auto scrolled horizontally. Bug: tabs got clipped on
+            narrower viewports. Fix: drop min-w-max so flex-wrap actually wraps
+            tabs into multiple rows when they don't fit horizontally. */}
+        <div className="border-b border-border">
+          <div className="flex flex-wrap -mb-px">
             {tabDefs.map((tab) => {
               const isActive = activeTab === tab.key;
               const count = tabCounts[tab.key];

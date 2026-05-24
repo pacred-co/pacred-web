@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { ResetPwdButton } from "./reset-pwd-button";
 
 // ─────────────────────────────────────────────────────────────────────
 // Page top-menubar — ภูม brief 2026-05-20 ค่ำ.
@@ -58,6 +59,64 @@ const STATUS_CFG: Record<DerivedStatus, { label: string; className: string }> = 
   suspended:  { label: "ระงับ",       className: "bg-red-50 text-red-700 border-red-200" },
 };
 
+// ────────────────────────────────────────────────────────────────────
+// Wave 18-A: 5 fidelity columns from legacy `pcs-admin/users.php`
+//
+//   - VIP chip       — coid != "general"/"PCS"/empty (legacy uses coid
+//                       to encode tier; "PCS" is the default = ลูกค้าทั่วไป)
+//   - Birthday       — DD/MM (no year) + age computed from full date.
+//                       tb_users.userbirthday is a `date` column in 0081
+//                       but ~110k legacy rows store the legacy varchar
+//                       format "YYYY-MM-DD" — both parse with Date(). We
+//                       fall back to "—" if parsing yields NaN.
+//   - LINE ID        — tb_users.userlineid
+//   - Facebook       — tb_users.userfacebook (link or plain text)
+//   - Main address   — tb_address rows joined by userid. The legacy
+//                       `tb_address_main` pointer table is sparsely
+//                       populated (~5% of customers) so we instead pick
+//                       the lowest addressid per userid (first-added =
+//                       customer's first / "main" address).
+// ────────────────────────────────────────────────────────────────────
+
+/** True for any legacy `coid` that signals a non-default VIP tier. */
+function isVipCoid(coid: string | null | undefined): boolean {
+  if (!coid) return false;
+  const v = coid.trim().toUpperCase();
+  // "" / "PCS" / "GENERAL" all = ลูกค้าทั่วไป.
+  return v !== "" && v !== "PCS" && v !== "GENERAL";
+}
+
+/** Parse YYYY-MM-DD or ISO into { dm, age }. Returns nulls on failure. */
+function formatBirthday(raw: string | null | undefined): { dm: string; age: number | null } {
+  if (!raw) return { dm: "—", age: null };
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return { dm: "—", age: null };
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  // Sanity — legacy rows with "0000-00-00" parse to negative years.
+  if (age < 0 || age > 120) return { dm: `${dd}/${mm}`, age: null };
+  return { dm: `${dd}/${mm}`, age };
+}
+
+/** Compact one-liner for a tb_address row. Picks the most-specific parts. */
+function summarizeAddress(a: {
+  addressno: string | null;
+  addresssubdistrict: string | null;
+  addressdistrict: string | null;
+  addressprovince: string | null;
+  addresszipcode: string | null;
+} | undefined): string {
+  if (!a) return "—";
+  const parts = [a.addressno, a.addresssubdistrict, a.addressdistrict, a.addressprovince, a.addresszipcode]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "—";
+}
+
 // Sidebar `?group=` filter (lib/admin/sidebar-menu.ts blockUserCargo) →
 // the DB filter we run + the chip label we render. The legacy `tb_users`
 // table carries three varchar(1) segment flags faithfully:
@@ -88,10 +147,14 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const admin = createAdminClient();
 
   // D1 Wave-2: read legacy tb_users (member-code identity = `userid`).
+  // Wave 18-A: extended SELECT with coid (VIP tier), userlineid, userfacebook,
+  // userbirthday — the 4 per-row fidelity columns. Main address comes from
+  // a separate batched query (tb_address) below.
   let q = admin.from("tb_users")
     .select(`
       userid, username, userlastname, usercompany,
-      usertel, useremail, useractive, userstatus, adminidsale, userregistered
+      usertel, useremail, useractive, userstatus, adminidsale, userregistered,
+      coid, userlineid, userfacebook, userbirthday
     `)
     .order("userregistered", { ascending: false })
     .limit(200);
@@ -123,6 +186,10 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     userstatus: string | null;
     adminidsale: string | null;
     userregistered: string | null;
+    coid: string | null;
+    userlineid: string | null;
+    userfacebook: string | null;
+    userbirthday: string | null;
   };
   const rows = (data ?? []) as Row[];
 
@@ -137,6 +204,35 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       .in("userid", userIds);
     for (const w of (wallets ?? []) as { userid: string; wallettotal: number | null }[]) {
       walletByUser.set(w.userid, Number(w.wallettotal ?? 0));
+    }
+  }
+
+  // Wave 18-A — main address per visible customer. tb_address holds 1..N rows
+  // per userid; the legacy `tb_address_main` pointer table is sparsely populated
+  // (~5% of customers — most never picked a "main") so we instead pick the
+  // lowest-addressid (= first-added = the legacy default-main fallback). One
+  // batched query, then a Map of userid → row for the renderer.
+  type AddressRow = {
+    addressid: number;
+    userid: string;
+    addressno: string | null;
+    addresssubdistrict: string | null;
+    addressdistrict: string | null;
+    addressprovince: string | null;
+    addresszipcode: string | null;
+  };
+  const addressByUser = new Map<string, AddressRow>();
+  if (userIds.length > 0) {
+    const { data: addresses } = await admin
+      .from("tb_address")
+      .select("addressid, userid, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
+      .in("userid", userIds)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: true });
+    for (const a of (addresses ?? []) as AddressRow[]) {
+      // First-seen (lowest addressid per userid) wins — the order() above
+      // guarantees insertion order matches ascending addressid.
+      if (!addressByUser.has(a.userid)) addressByUser.set(a.userid, a);
     }
   }
 
@@ -206,6 +302,12 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                   <th className="px-4 py-3">ประเภท</th>
                   <th className="px-4 py-3">ชื่อ</th>
                   <th className="px-4 py-3">เบอร์ / อีเมล</th>
+                  {/* Wave 18-A — 5 fidelity columns from legacy users.php */}
+                  <th className="px-4 py-3">ที่อยู่หลัก</th>
+                  <th className="px-4 py-3">วันเกิด / อายุ</th>
+                  <th className="px-4 py-3">VIP</th>
+                  <th className="px-4 py-3">LINE</th>
+                  <th className="px-4 py-3">Facebook</th>
                   <th className="px-4 py-3">เซลล์ผู้ดูแล</th>
                   <th className="px-4 py-3">สถานะ</th>
                   <th className="px-4 py-3 text-right">ยอดกระเป๋า</th>
@@ -218,6 +320,12 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                   const isJuristic = r.usercompany === "1";
                   const status = deriveStatus(r);
                   const fullName = `${r.username ?? ""} ${r.userlastname ?? ""}`.trim() || "—";
+                  // Wave 18-A — per-row derived fidelity values.
+                  const vip = isVipCoid(r.coid);
+                  const birthday = formatBirthday(r.userbirthday);
+                  const address = summarizeAddress(addressByUser.get(r.userid));
+                  const fb = (r.userfacebook ?? "").trim();
+                  const isFbUrl = /^https?:\/\//i.test(fb);
                   return (
                   <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
                     <td className="px-4 py-3 font-mono text-xs">
@@ -237,6 +345,49 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                       <div>{r.usertel ?? "—"}</div>
                       <div className="text-muted">{r.useremail ?? "—"}</div>
                     </td>
+                    {/* Wave 18-A — main address (tb_address lowest addressid per userid) */}
+                    <td className="px-4 py-3 text-xs max-w-[260px]">
+                      <div className="truncate" title={address}>{address}</div>
+                    </td>
+                    {/* Wave 18-A — birthday DD/MM + age (legacy users.php showed DD/MM without year) */}
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {birthday.dm}
+                      {birthday.age !== null && (
+                        <span className="ml-1 text-muted">({birthday.age} ปี)</span>
+                      )}
+                    </td>
+                    {/* Wave 18-A — VIP chip (coid != general/PCS/empty) */}
+                    <td className="px-4 py-3 text-xs">
+                      {vip ? (
+                        <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                          VIP
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    {/* Wave 18-A — LINE ID */}
+                    <td className="px-4 py-3 text-xs">
+                      {r.userlineid?.trim() ? (
+                        <span className="font-mono">{r.userlineid}</span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    {/* Wave 18-A — Facebook (link if URL, else plain text) */}
+                    <td className="px-4 py-3 text-xs max-w-[180px]">
+                      {fb ? (
+                        isFbUrl ? (
+                          <a href={fb} target="_blank" rel="noreferrer noopener" className="text-primary-600 hover:underline truncate inline-block max-w-full" title={fb}>
+                            {fb.replace(/^https?:\/\/(www\.)?/, "")}
+                          </a>
+                        ) : (
+                          <span className="truncate inline-block max-w-full" title={fb}>{fb}</span>
+                        )
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-xs font-mono">{r.adminidsale || "—"}</td>
                     <td className="px-4 py-3">
                       {(() => {
@@ -254,7 +405,13 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                       {r.userregistered ? new Date(r.userregistered).toLocaleDateString("th-TH") : "—"}
                     </td>
-                    <td className="px-4 py-3"><CustomerRowActions id={r.userid} status={status} /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <CustomerRowActions id={r.userid} status={status} />
+                        {/* Wave 18-A — password-reset (legacy users.php per-row action) */}
+                        <ResetPwdButton userid={r.userid} />
+                      </div>
+                    </td>
                   </tr>
                   );
                 })}

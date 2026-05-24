@@ -236,6 +236,14 @@ const blockApiForwarderUpdate: MenuItem = {
   children: [
     { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck" },
     { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
+    // 2026-05-25 (Wave 18-A · orphan wiring) — surface MOMO LCL sack tracking
+    // (Gap #6) and CargoThai PO sync (Gap #4) under the legacy "อัปเดตฝากนำเข้า"
+    // parent. Both pages existed since dave-pacred merge but had no sidebar
+    // entry — staff could only reach them by URL typing. i18n keys
+    // `forwarder.momoLclSack` + `forwarder.cargothaiSync` already live in both
+    // messages files; we reference them here.
+    { labelKey: "forwarder.momoLclSack",   href: "/admin/momo-lcl",  icon: "Barcode" },
+    { labelKey: "forwarder.cargothaiSync", href: "/admin/cargothai", icon: "RefreshCw" },
     {
       labelKey: "apiSheets.adjustGroup",
       icon: "SlidersHorizontal",

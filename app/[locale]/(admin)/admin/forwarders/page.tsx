@@ -137,7 +137,37 @@ type SearchParams = {
   container?: string;   // 2026-05-21 segmented control · 'fcl' | 'lcl' — label-only
   mode?: string;        // transport mode chip ('1'/'2'/'3')
   create?: string;      // Wave 11 — 'user'|'system'|'admin' (legacy ?create=)
+  all?: string;         // Wave 18-B — '1' = escape default 30-day window
 };
+
+// Wave 18-B — Default date window helpers (port of legacy `forwarder.php`
+// L318-323: list defaults to last 30 days unless POST `historyTableAll` is
+// set). Pacred currently loaded "newest 300 of all time" which buries
+// today's รอเข้าโกดังจีน rows under months-old shipments. Mirrors the
+// yuan-payments Wave 15 pattern.
+//
+// Rule: if neither `?date_from` nor `?date_to` is in the URL AND `?all=1`
+// is absent → apply the 30-day default. `?all=1` is the escape hatch
+// matching legacy's "ค้นหาข้อมูลทั้งหมด" button.
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+function resolveDateWindow(sp: SearchParams): {
+  from: string | null;
+  to: string | null;
+  isDefault: boolean;
+} {
+  if (sp.all === "1") return { from: null, to: null, isDefault: false };
+  if (sp.date_from || sp.date_to)
+    return { from: sp.date_from ?? null, to: sp.date_to ?? null, isDefault: false };
+  // Default 30-day window per legacy.
+  return { from: isoDaysAgo(30), to: todayIsoDate(), isDefault: true };
+}
 
 // 2026-05-21 ภูม brief — Segmented Controls in head menu (NOT sidebar).
 // Legacy tb_forwarder has NO explicit cargo/freight or FCL/LCL column —
@@ -197,6 +227,15 @@ type RawForwarderRow = {
   fdiscount: number | null;
   fusercompany: string | number | null;       // legacy varchar; '1' = juristic
   adminidkey: string | null;                   // admin who measured weight/CBM
+  // Wave 18-B — 7-col fidelity backfill (legacy forwarder.php L575-580 + L595-609 + L651-653)
+  printstatus1: string | null;        // "1" = พิมพ์แล้ว (badge #1)
+  printstatus2: string | null;        // "1" = พิมพ์แล้ว (badge #2)
+  printstatus3: string | null;        // "1" = พิมพ์แล้ว (badge #3)
+  printstatus4: string | null;        // "1" = พิมพ์แล้ว (badge #4)
+  fstatuscaron: string | null;        // "1" = ขึ้นรถแล้ว
+  fstatuscaroff: string | null;       // "1" = ลงรถ
+  fdatetothai: string | null;         // ETA base date · transport-type adds offset (±2/±4d)
+  fpallet: string | null;             // warehouse pallet location code (e.g. "A-3")
 };
 
 type RawUserRow = {
@@ -204,6 +243,11 @@ type RawUserRow = {
   username: string | null;
   userlastname: string | null;
   usertel: string | null;
+  // Wave 18-B — VIP/SVIP/SaleAdmin chips on the customer cell
+  coid: string | null;            // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc.
+  usercomparison: string | null;  // '1' = CPS (รคา่เทียบ)
+  usercompany: string | null;     // '1' = นิติบุคคล
+  adminidsale: string | null;     // sale rep code · '' = ไม่ระบุ
 };
 
 export type Row = {
@@ -247,7 +291,29 @@ export type Row = {
    * measurement looks off.
    */
   measured_by_admin: string | null;
-  customer: { userid: string; name: string; phone: string } | null;
+  // Wave 18-B — 7-col fidelity backfill from fidelity-gap-2026-05-24.md.
+  // All these mirror legacy forwarder.php L575-653 row chrome that operators
+  // rely on to triage SLA + delivery state at-a-glance.
+  print_status_1: boolean;     // legacy printstatus1='1' → "พิมพ์แล้ว #1"
+  print_status_2: boolean;     // legacy printstatus2='1' → "พิมพ์แล้ว #2"
+  print_status_3: boolean;     // legacy printstatus3='1' → "พิมพ์แล้ว #3"
+  print_status_4: boolean;     // legacy printstatus4='1' → "พิมพ์แล้ว #4"
+  car_on: boolean;             // legacy fstatuscaron='1' → ขึ้นรถแล้ว
+  car_off: boolean;            // legacy fstatuscaroff='1' → ลงรถ
+  eta_base: string | null;     // legacy fdatetothai · ETA range computed in client
+  pallet: string | null;       // legacy fpallet · warehouse location chip
+  customer: {
+    userid: string;
+    name: string;
+    phone: string;
+    // Wave 18-B — VIP/SVIP/SaleAdmin badge inputs
+    coid: string;              // 'PCS'/'STAR'/'DIAMOND'/'CROWN'/etc
+    is_svip: boolean;          // row in tb_rate_custom_cbm
+    is_corporate: boolean;     // row in tb_corporate
+    is_comparison: boolean;    // tb_users.usercomparison='1'
+    is_juristic: boolean;      // tb_users.usercompany='1'
+    sale_admin: string | null; // tb_users.adminidsale
+  } | null;
 };
 
 export default async function AdminForwardersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -258,6 +324,11 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
 
   const sp = await searchParams;
   const admin = createAdminClient();
+
+  // Wave 18-B — resolve default 30-day window (legacy parity ·
+  // forwarder.php L318-323). Applied to the main query AND counts below
+  // so badges align with what's on screen.
+  const dateWindow = resolveDateWindow(sp);
 
   // ─── Main query against tb_forwarder ──────────────────────────────────
   // Note: PostgREST cannot reliably auto-join the legacy `tb_users` table
@@ -276,10 +347,19 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       // Wave 15 P0-3 — extra cols required by calcForwarderOutstanding()
       // (port of legacy calPriceForwarderMain · shows ยอดค้างชำระ in the list)
       "fpriceupdate,ftransportprice,fshippingservice,pricecrate," +
-      "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey",
+      "ftransportpricechnthb,priceother,fdiscount,fusercompany,adminidkey," +
+      // Wave 18-B — 7-col fidelity backfill (print badges · car on/off ·
+      // ETA base date · pallet code · all from legacy forwarder.php L575-653).
+      "printstatus1,printstatus2,printstatus3,printstatus4," +
+      "fstatuscaron,fstatuscaroff,fdatetothai,fpallet",
     )
     .order("fdate", { ascending: false, nullsFirst: false })
     .limit(300);
+
+  // Wave 18-B — default-30-day window (escape via ?all=1) — applied to
+  // both the data query and the per-tab counts below.
+  if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
+  if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
 
   // Wave 11 — `create=` top-tab filter (legacy: ?create=user|system|admin).
   //   user   = customer-initiated (adminidcreator empty AND reforder empty)
@@ -348,16 +428,43 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
   }
 
-  // ─── 2nd query: tb_users for customer name/phone ──────────────────────
+  // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───
   const uniqueUserIds = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
   let usersByUserId = new Map<string, RawUserRow>();
+  // Wave 18-B — SVIP + นิติ sets (legacy badgeVIP3 + tb_corporate join).
+  // SVIP membership = ≥1 row in tb_rate_custom_cbm with matching userid.
+  // นิติ membership  = ≥1 row in tb_corporate with matching userid.
+  let svipUserIds = new Set<string>();
+  let corporateUserIds = new Set<string>();
   if (uniqueUserIds.length > 0) {
-    const { data: userRows } = await admin
-      .from("tb_users")
-      .select("userid,username,userlastname,usertel")
-      .in("userid", uniqueUserIds);
+    const [userRowsRes, svipRowsRes, corpRowsRes] = await Promise.all([
+      admin
+        .from("tb_users")
+        .select(
+          "userid,username,userlastname,usertel,coid,usercomparison,usercompany,adminidsale",
+        )
+        .in("userid", uniqueUserIds),
+      admin
+        .from("tb_rate_custom_cbm")
+        .select("userid")
+        .in("userid", uniqueUserIds),
+      admin
+        .from("tb_corporate")
+        .select("userid")
+        .in("userid", uniqueUserIds),
+    ]);
     usersByUserId = new Map(
-      ((userRows ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]),
+      ((userRowsRes.data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]),
+    );
+    svipUserIds = new Set(
+      ((svipRowsRes.data ?? []) as unknown as { userid: string }[])
+        .map((r) => r.userid)
+        .filter(Boolean),
+    );
+    corporateUserIds = new Set(
+      ((corpRowsRes.data ?? []) as unknown as { userid: string }[])
+        .map((r) => r.userid)
+        .filter(Boolean),
     );
   }
 
@@ -367,6 +474,11 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     const name = user
       ? `${user.username ?? ""} ${user.userlastname ?? ""}`.trim()
       : "";
+    // Wave 18-B — fpallet column is empty-string-by-default in legacy; treat
+    // both null and "" as "no location set".
+    const pallet = r.fpallet && r.fpallet.trim() !== "" ? r.fpallet.trim() : null;
+    // Legacy uses '0000-00-00' as the "no ETA yet" sentinel; map to null.
+    const eta = r.fdatetothai && r.fdatetothai !== "0000-00-00" ? r.fdatetothai : null;
     return {
       id: r.id,
       order_no: `ออเดอร์ #${r.id}`,           // Wave 11 — legacy display label
@@ -400,11 +512,29 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
       // paydeposit='1' = paid in full → outstanding = 0; otherwise compute.
       outstanding_thb: r.paydeposit === "1" ? 0 : calcForwarderOutstanding(r),
       measured_by_admin: r.adminidkey ?? null,
+      // Wave 18-B — 7-col fidelity backfill flags.
+      print_status_1: r.printstatus1 === "1",
+      print_status_2: r.printstatus2 === "1",
+      print_status_3: r.printstatus3 === "1",
+      print_status_4: r.printstatus4 === "1",
+      car_on:  r.fstatuscaron  === "1",
+      car_off: r.fstatuscaroff === "1",
+      eta_base: eta,
+      pallet,
       customer: user
         ? {
             userid: user.userid,
             name,
             phone: user.usertel ?? "",
+            coid: user.coid ?? "",
+            is_svip: svipUserIds.has(user.userid),
+            is_corporate: corporateUserIds.has(user.userid),
+            is_comparison: user.usercomparison === "1",
+            is_juristic: user.usercompany === "1",
+            sale_admin:
+              user.adminidsale && user.adminidsale.trim() !== ""
+                ? user.adminidsale.trim()
+                : null,
           }
         : null,
     };
@@ -457,9 +587,10 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   rows = rows.map((r) => ({ ...r, coverUrl: coverMap[String(r.id)] ?? null }));
 
   // ─── Per-tab counts (head queries against tb_forwarder) ──────────────
-  // We run these in parallel; each returns the global count for that
-  // status code (independent of the keyword filter so badges are stable).
-  const counts = await loadStatusCounts(admin);
+  // We run these in parallel; each returns the count for that status
+  // code (scoped to the SAME date window as the data query so the badges
+  // reflect what's on screen · Wave 18-B fidelity backfill).
+  const counts = await loadStatusCounts(admin, dateWindow);
 
   const filterOpts: { v: string | undefined; l: string; n: number }[] = [
     { v: undefined, l: "ทั้งหมด", n: counts.total },
@@ -559,6 +690,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.mode)      params.set("mode", sp.mode);
           if (service)      params.set("service", service);
           if (container)    params.set("container", container);
+          if (sp.all)       params.set("all", sp.all);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.create ?? "") === (t.v ?? "");
           return (
@@ -587,6 +719,88 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           โหลดข้อมูลไม่สำเร็จ: {forwarderErr.message}
         </div>
       )}
+
+      {/* Wave 18-B — Date-range filter (default last 30 days · matches
+          legacy forwarder.php L318-323 "ผลลัพธ์การค้นหาย้อนหลัง 30 วัน").
+          The `?all=1` escape hatch mirrors legacy's "ค้นหาข้อมูลทั้งหมด"
+          button. Same pattern as `/admin/yuan-payments` (Wave 15 P0-2). */}
+      <form className="flex gap-2 flex-wrap items-end" action="/admin/forwarders">
+        {/* Preserve all other filter state across submit */}
+        {sp.status    ? <input type="hidden" name="status"    value={sp.status} /> : null}
+        {sp.q         ? <input type="hidden" name="q"         value={sp.q} /> : null}
+        {sp.mode      ? <input type="hidden" name="mode"      value={sp.mode} /> : null}
+        {sp.create    ? <input type="hidden" name="create"    value={sp.create} /> : null}
+        {service      ? <input type="hidden" name="service"   value={service} /> : null}
+        {container    ? <input type="hidden" name="container" value={container} /> : null}
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+          <input
+            type="date"
+            name="date_from"
+            defaultValue={sp.date_from ?? (dateWindow.isDefault ? dateWindow.from ?? "" : "")}
+            className="rounded-lg border border-border px-3 py-2 text-xs"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+          <input
+            type="date"
+            name="date_to"
+            defaultValue={sp.date_to ?? (dateWindow.isDefault ? dateWindow.to ?? "" : "")}
+            className="rounded-lg border border-border px-3 py-2 text-xs"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded-lg bg-primary-500 text-white px-3 py-2 text-xs hover:bg-primary-600"
+        >
+          ค้นหาข้อมูล
+        </button>
+        {!dateWindow.isDefault && (
+          <Link
+            href="/admin/forwarders"
+            className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt self-end"
+          >
+            กลับ 30 วัน
+          </Link>
+        )}
+        {dateWindow.isDefault && (
+          <Link
+            href="/admin/forwarders?all=1"
+            className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt self-end"
+            title="แสดงทั้งหมด ไม่จำกัดช่วงวัน"
+          >
+            ค้นหาข้อมูลทั้งหมด
+          </Link>
+        )}
+      </form>
+
+      {/* Date-window status chip — explicit feedback for what's loaded.
+          Mirrors legacy footer "ผลลัพธ์การค้นหา ..." (L352-355). */}
+      <p className="text-[11px] text-muted">
+        {dateWindow.isDefault ? (
+          <>
+            📅 แสดง <strong className="text-foreground">30 วันล่าสุด</strong> ({dateWindow.from} → {dateWindow.to}) ·{" "}
+            <Link href="/admin/forwarders?all=1" className="text-primary-600 hover:underline">
+              ค้นหาข้อมูลทั้งหมด
+            </Link>
+          </>
+        ) : sp.all === "1" ? (
+          <>
+            📅 แสดง <strong className="text-foreground">ทั้งหมด</strong> ·{" "}
+            <Link href="/admin/forwarders" className="text-primary-600 hover:underline">
+              กลับ 30 วัน
+            </Link>
+          </>
+        ) : (
+          <>
+            📅 ช่วง:{" "}
+            <strong className="text-foreground">
+              {dateWindow.from ?? "ตั้งแต่เริ่ม"} → {dateWindow.to ?? "ปัจจุบัน"}
+            </strong>
+          </>
+        )}
+      </p>
 
       {/* Segmented Control · ภูม brief 2026-05-21 — Cargo/Freight × FCL/LCL
           moved out of sidebar (4-leaf dropdown) into head-menu pills.
@@ -624,6 +838,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.mode)      params.set("mode", sp.mode);
           if (service)      params.set("service", service);
           if (container)    params.set("container", container);
+          if (sp.all)       params.set("all", sp.all);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
           return (
@@ -649,6 +864,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.date_to)   params.set("date_to", sp.date_to);
           if (service)      params.set("service", service);
           if (container)    params.set("container", container);
+          if (sp.all)       params.set("all", sp.all);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.mode ?? "") === (m ?? "");
           const label = m ? MODE_LABEL[m] : "ทุก mode";
@@ -683,25 +899,44 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
  * in a single query; PostgREST has no GROUP BY in select so we run
  * one head query per status. 9 parallel HEAD queries × ~50ms each.
  */
-async function loadStatusCounts(admin: ReturnType<typeof createAdminClient>) {
+async function loadStatusCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  dateWindow: { from: string | null; to: string | null; isDefault: boolean },
+) {
+  // Wave 18-B — scope all count queries to the same date window the data
+  // query uses, so badge numbers match what the user sees on screen.
+  function applyDate<T extends { gte: (col: string, v: string) => T; lte: (col: string, v: string) => T }>(
+    builder: T,
+  ): T {
+    let q = builder;
+    if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
+    if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
+    return q;
+  }
   async function countFstatus(value: string): Promise<number> {
-    const r = await admin
-      .from("tb_forwarder")
-      .select("id", { count: "exact", head: true })
-      .eq("fstatus", value);
+    const r = await applyDate(
+      admin
+        .from("tb_forwarder")
+        .select("id", { count: "exact", head: true })
+        .eq("fstatus", value),
+    );
     return r.count ?? 0;
   }
   async function countCredit(): Promise<number> {
-    const r = await admin
-      .from("tb_forwarder")
-      .select("id", { count: "exact", head: true })
-      .eq("fcredit", "1");
+    const r = await applyDate(
+      admin
+        .from("tb_forwarder")
+        .select("id", { count: "exact", head: true })
+        .eq("fcredit", "1"),
+    );
     return r.count ?? 0;
   }
   async function countTotal(): Promise<number> {
-    const r = await admin
-      .from("tb_forwarder")
-      .select("id", { count: "exact", head: true });
+    const r = await applyDate(
+      admin
+        .from("tb_forwarder")
+        .select("id", { count: "exact", head: true }),
+    );
     return r.count ?? 0;
   }
 
@@ -749,6 +984,7 @@ function SegmentedPills({
         if (sp.date_from) params.set("date_from", sp.date_from);
         if (sp.date_to)   params.set("date_to", sp.date_to);
         if (sp.mode)      params.set("mode", sp.mode);
+        if (sp.all)       params.set("all", sp.all);
         // Set both service + container — but override THIS dimension with o.v.
         const svc = name === "service"   ? o.v : serviceOverride;
         const con = name === "container" ? o.v : containerOverride;
