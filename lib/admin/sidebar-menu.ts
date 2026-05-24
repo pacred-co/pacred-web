@@ -352,6 +352,7 @@ const blockWithdrawalList: MenuItem = {
       badge: "withdrawalAll",
       children: [
         { labelKey: "withdrawal.shopGoods",   href: "/admin/sales-payouts?kind=shop-goods",  icon: "HandCoins", badge: "shopPayout" },
+        { labelKey: "withdrawal.shopWallet",  href: "/admin/shop-payouts",                   icon: "Wallet", badge: "shopWalletPayout" },
         { labelKey: "withdrawal.cntCost",     href: "/admin/accounting/disbursements?kind=container_lease", icon: "Truck", badge: "cntDrawMoney" },
         { labelKey: "withdrawal.thaiFreight", href: "/admin/accounting/disbursements?kind=trucking", icon: "Truck" },
         { labelKey: "withdrawal.agentCustomer", href: "/admin/reports/user-sales-history",   icon: "Users" },

@@ -2735,6 +2735,7 @@
       "cargo": "Pacred",
       "freight": "Freight commission",
       "shopGoods": "Goods-cost disbursement",
+      "shopWallet": "Shop wallet payouts",
       "cntCost": "Container cost",
       "thaiFreight": "TH freight cost",
       "agentCustomer": "Per-customer sales history",

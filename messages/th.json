@@ -2735,6 +2735,7 @@
       "cargo": "Pacred",
       "freight": "ค่าคอม Freight",
       "shopGoods": "เบิกเงินค่าสินค้า",
+      "shopWallet": "เบิกกระเป๋าร้าน",
       "cntCost": "ค่าตู้สินค้า",
       "thaiFreight": "ค่าขนส่งไทย",
       "agentCustomer": "ประวัติยอดขายต่อลูกค้า",
