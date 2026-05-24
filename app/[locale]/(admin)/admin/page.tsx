@@ -309,12 +309,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
       {/* ── Row 4: Tab strip + active tab table ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        {/* Tab strip — was `min-w-max` which forced single-line width >viewport
-            then overflow-x-auto scrolled horizontally. Bug: tabs got clipped on
-            narrower viewports. Fix: drop min-w-max so flex-wrap actually wraps
-            tabs into multiple rows when they don't fit horizontally. */}
-        <div className="border-b border-border">
-          <div className="flex flex-wrap -mb-px">
+        {/* Tab strip — ภูม brief 2026-05-25: ต้อง 1 แถวเดียวเสมอ (ไม่ wrap).
+            Compacted px-3 py-2.5 text-xs sm:text-sm → px-2 py-2 text-xs (no sm
+            bump) so 14 tabs fit in ~1100px (สบายๆ ใน sidebar-offset viewport
+            ของ laptop 1500px+). overflow-x-auto fallback ถ้า viewport แคบกว่า. */}
+        <div className="border-b border-border overflow-x-auto">
+          <div className="flex flex-nowrap -mb-px">
             {tabDefs.map((tab) => {
               const isActive = activeTab === tab.key;
               const count = tabCounts[tab.key];
@@ -322,7 +322,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
                 <Link
                   key={tab.key}
                   href={`/admin?tab=${tab.key}`}
-                  className={`inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  className={`inline-flex items-center gap-1.5 px-2 py-2 text-xs font-medium border-b-2 whitespace-nowrap shrink-0 transition-colors ${
                     isActive ? "border-primary-500 text-primary-600 bg-primary-50/30" : "border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50"
                   }`}
                 >
@@ -337,7 +337,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
             })}
             <Link
               href="/admin/report-cnt"
-              className="inline-flex items-center gap-2 px-3 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-2 py-2 text-xs font-medium border-b-2 border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50 whitespace-nowrap shrink-0"
             >
               🚛 รายการตู้
               {activeContainersCount > 0 && (
