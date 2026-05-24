@@ -59,8 +59,27 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
   const monthLabel = `${THAI_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`;
 
+  // ── Sprint-21 (2026-05-25) — Owner directive: queries swap from rebuilt
+  //    schema (service_orders/forwarders/yuan_payments/wallet/settings, near-empty)
+  //    to LEGACY tb_* tables (where 8,898 customers + years of orders + ฿4.2M/月
+  //    shop revenue actually live, post Sprint-1 prod data port).
+  //    Field map (rebuilt → legacy):
+  //      service_orders.total_thb     → tb_header_order.hcostallth
+  //      service_orders.created_at    → tb_header_order.hdate
+  //      service_orders.status enum   → tb_header_order.hstatus '1'/'2'/'4'/'6'
+  //      forwarders.total_price       → tb_forwarder.ftotalprice
+  //      forwarders.created_at        → tb_forwarder.fdate
+  //      forwarders.status enum       → tb_forwarder.fstatus '1'/'5'/'6'/'62'
+  //      forwarders.credit_used       → tb_forwarder.fcredit = '1'
+  //      yuan_payments.thb_amount     → tb_payment.paythb
+  //      yuan_payments.created_at     → tb_payment.paydate
+  //      yuan_payments.status         → tb_payment.paystatus '1'/'2'
+  //      wallet.balance               → tb_wallet.wallettotal
+  //      settings.yuan_rate           → tb_settings.rsdefault (and rpdefault/hratecostsale)
+  //    profiles.is_active stays — that's a Pacred-side cron-flipped flag for
+  //    "has used any service", not a legacy concept.
   const [
-    settings,
+    tbSettings,
     revShopMonth, revShopToday,
     revForwarderMonth, revForwarderToday,
     revYuanMonth, revYuanToday,
@@ -77,52 +96,55 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     forwardersPending, forwardersCredit, forwardersDelivery, forwardersInDelivery,
     containersActive,
   ] = await Promise.all([
-    admin.from("settings").select("yuan_rate, service_fee").eq("id", 1).maybeSingle<{ yuan_rate: number; service_fee: number }>(),
-    admin.from("service_orders").select("total_thb").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("service_orders").select("total_thb").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", monthStart).eq("status", "completed"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", todayStart).eq("status", "completed"),
-    admin.from("wallet").select("balance"),
-    // "used a service" vs "registered but never used" — keyed on
-    // `profiles.is_active` (the cron `/api/cron/refresh-active-customers`
-    // flips false→true when a profile has real order/forwarder/yuan
-    // activity). NOT `profiles.status` — that is the *account* state
-    // (active/incomplete/suspended) and would count every fresh signup
-    // as "ใช้งานแล้ว" even though they've never transacted.
+    admin.from("tb_settings").select("rsdefault, rpdefault, hratecostsale").eq("id", 1).maybeSingle<{ rsdefault: number; rpdefault: number; hratecostsale: number }>(),
+    admin.from("tb_header_order").select("hcostallth").gte("hdate", monthStart).neq("hstatus", "6"),
+    admin.from("tb_header_order").select("hcostallth").gte("hdate", todayStart).neq("hstatus", "6"),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", monthStart),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", todayStart),
+    admin.from("tb_payment").select("paythb").gte("paydate", monthStart).eq("paystatus", "2"),
+    admin.from("tb_payment").select("paythb").gte("paydate", todayStart).eq("paystatus", "2"),
+    admin.from("tb_wallet").select("wallettotal"),
+    // Pacred-side "has used any service" — kept on profiles (cron-flipped).
     admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", false),
     admin.from("profiles").select("id", { count: "exact", head: true }).eq("is_active", true),
     admin.from("profiles").select("id", { count: "exact", head: true }),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "cancelled").gte("created_at", monthStart),
+    // Cancelled shop orders this month = hstatus='6'
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
     admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "deposit").eq("status", "pending"),
     admin.from("wallet_transactions").select("id", { count: "exact", head: true }).eq("kind", "withdraw").eq("status", "pending"),
     admin.from("sales_payouts").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("yuan_payments").select("id", { count: "exact", head: true }).in("status", ["pending", "processing"]),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_payment"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "ordered"),
-    admin.from("service_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_chn_dispatch"),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment"),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "pending_payment").eq("credit_used", true),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).in("status", ["arrived_thailand"]),
-    admin.from("forwarders").select("id", { count: "exact", head: true }).eq("status", "out_for_delivery"),
-    admin.from("containers").select("id", { count: "exact", head: true }).in("status", ["preparing", "sealed", "in_transit"]),
+    admin.from("tb_payment").select("id", { count: "exact", head: true }).eq("paystatus", "1"),
+    // Shop status enums: '1'=สั่งซื้อรอดำเนินการ '2'=รอชำระเงิน '4'=รอร้านจีนจัดส่ง
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "1"),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "2"),
+    admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "4"),
+    // Forwarder status enums: '1'=รอเข้าโกดังจีน '5'=รอชำระนำเข้า '5'+credit=เครดิตค้าง '6'=เตรียมส่ง '62'=กำลังจัดส่ง
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "1"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5").eq("fcredit", "1"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "6"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "62"),
+    // Active containers — keep on rebuilt schema (Sprint-16 just re-applied 0033)
+    admin.from("cargo_containers").select("id", { count: "exact", head: true }).in("status", ["packing", "sealed", "in_transit"]),
   ]);
 
   const sumNum = <T extends Record<string, unknown>>(rows: T[] | null, key: keyof T): number =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
 
-  const shopMonth      = sumNum(revShopMonth.data, "total_thb");
-  const shopToday      = sumNum(revShopToday.data, "total_thb");
-  const forwarderMonth = sumNum(revForwarderMonth.data, "total_price");
-  const forwarderToday = sumNum(revForwarderToday.data, "total_price");
-  const yuanMonth      = sumNum(revYuanMonth.data, "thb_amount");
-  const yuanToday      = sumNum(revYuanToday.data, "thb_amount");
-  const walletAll      = sumNum(walletTotal.data, "balance");
+  const shopMonth      = sumNum(revShopMonth.data, "hcostallth");
+  const shopToday      = sumNum(revShopToday.data, "hcostallth");
+  const forwarderMonth = sumNum(revForwarderMonth.data, "ftotalprice");
+  const forwarderToday = sumNum(revForwarderToday.data, "ftotalprice");
+  const yuanMonth      = sumNum(revYuanMonth.data, "paythb");
+  const yuanToday      = sumNum(revYuanToday.data, "paythb");
+  const walletAll      = sumNum(walletTotal.data, "wallettotal");
   const grandTotal     = shopMonth + forwarderMonth + yuanMonth;
 
-  const yuanRate   = Number(settings.data?.yuan_rate ?? 5);
+  // 3 distinct rates from tb_settings — เรทสั่งซื้อ (shop) / เรท Sale (cost) / เรทโอน (transfer).
+  // Legacy admin top-strip showed all 3 separately (e.g. 4.99 / 4.97 / 4.95).
+  const shopRate      = Number(tbSettings.data?.rsdefault ?? 5);
+  const saleRate      = Number(tbSettings.data?.hratecostsale ?? 5);
+  const transferRate  = Number(tbSettings.data?.rpdefault ?? 5);
 
   const totalProfilesCount = totalProfiles.count ?? 0;
   const activeUsers        = activeCustomerProfiles.count ?? 0;
@@ -207,9 +229,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       {/* ── Row 2: Rate strip (4 rates) ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={yuanRate.toFixed(2)} />
-          <RateChip color="red"     label="เรท Sale"   value={(yuanRate - 0.02).toFixed(2)} />
-          <RateChip color="purple"  label="เรทโอน"     value={(yuanRate - 0.04).toFixed(2)} />
+          <RateChip color="cyan"    label="เรทสั่งซื้อ" value={shopRate.toFixed(2)} />
+          <RateChip color="red"     label="เรท Sale"   value={saleRate.toFixed(2)} />
+          <RateChip color="purple"  label="เรทโอน"     value={transferRate.toFixed(2)} />
           <RateChip color="amber"   label="ยอดรวม"     value={formatTHB(grandTotal, true)} />
         </div>
       </section>
