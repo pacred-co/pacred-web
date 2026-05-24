@@ -8,7 +8,13 @@
  * Pattern matches lib/validators/auth.test.ts.
  */
 
-import { cartItemSchema, placeOrderSchema, PROVIDERS } from "./cart";
+import {
+  cartItemSchema,
+  placeOrderSchema,
+  promoCodeSchema,
+  applyPromoSchema,
+  PROVIDERS,
+} from "./cart";
 
 let pass = 0;
 let fail = 0;
@@ -142,6 +148,68 @@ assertFail("empty address_line",            placeOrderSchema, { ...validOrder, s
 assertFail("empty sub_district",            placeOrderSchema, { ...validOrder, ship_sub_district: "" });
 assertFail("empty district",                placeOrderSchema, { ...validOrder, ship_district: "" });
 assertFail("empty province",                placeOrderSchema, { ...validOrder, ship_province: "" });
+
+// ────────────────────────────────────────────────────────────
+section("promoCodeSchema — code length + uppercase transform + cartTotal bounds");
+// ────────────────────────────────────────────────────────────
+//
+// Legacy fidelity — the legacy `check-proV.php` accepts ANY string
+// (it just queries `tb_pro_valentine` by userID, code is unused). Our
+// validator gates the input surface: 2-32 chars, trim, uppercase. The
+// `cartTotal` is required (non-negative) and `userId` is the optional
+// member_code ("PR<n>" up to 30 chars).
+
+assertOk  ("happy path 'PR19' cartTotal=500",   promoCodeSchema, { code: "PR19", cartTotal: 500 });
+assertOk  ("with userId 'PR12345'",             promoCodeSchema, { code: "PR19", cartTotal: 500, userId: "PR12345" });
+assertOk  ("cartTotal=0 valid",                 promoCodeSchema, { code: "PR19", cartTotal: 0 });
+assertOk  ("PCSF freeship code",                promoCodeSchema, { code: "PCSF", cartTotal: 100 });
+assertOk  ("lowercase 'pcsf' uppercased",       promoCodeSchema, { code: "pcsf", cartTotal: 100 });
+
+// Verify the .toUpperCase() transform actually fired — pull the parsed
+// data out and confirm.
+const upperRes = promoCodeSchema.safeParse({ code: "valentine", cartTotal: 0 });
+if (upperRes.success && upperRes.data.code === "VALENTINE") {
+  pass++; console.log("  ✓ transform: 'valentine' → 'VALENTINE'");
+} else {
+  fail++; console.error("  ✗ transform: 'valentine' should become 'VALENTINE'");
+}
+
+// Trim transform — whitespace stripped before upper.
+const trimRes = promoCodeSchema.safeParse({ code: "  pr19  ", cartTotal: 0 });
+if (trimRes.success && trimRes.data.code === "PR19") {
+  pass++; console.log("  ✓ transform: '  pr19  ' trimmed + uppercased to 'PR19'");
+} else {
+  fail++; console.error("  ✗ transform: '  pr19  ' should become 'PR19'");
+}
+
+assertFail("code too short '' (under 2)",       promoCodeSchema, { code: "", cartTotal: 0 });
+assertFail("code too short 'X' (under 2)",      promoCodeSchema, { code: "X", cartTotal: 0 });
+assertFail("code too long (33 chars)",          promoCodeSchema, { code: "A".repeat(33), cartTotal: 0 });
+assertFail("cartTotal negative",                promoCodeSchema, { code: "PR19", cartTotal: -1 });
+assertFail("cartTotal missing",                 promoCodeSchema, { code: "PR19" });
+assertFail("code missing",                      promoCodeSchema, { cartTotal: 0 });
+assertFail("cartTotal as string '500'",         promoCodeSchema, { code: "PR19", cartTotal: "500" });
+assertFail("userId too long (31 chars)",        promoCodeSchema, { code: "PR19", cartTotal: 0, userId: "P".repeat(31) });
+
+// ────────────────────────────────────────────────────────────
+section("applyPromoSchema — promoCode trim + uppercase");
+// ────────────────────────────────────────────────────────────
+
+assertOk  ("happy path 'PR19'",                 applyPromoSchema, { promoCode: "PR19" });
+assertOk  ("PCSF",                              applyPromoSchema, { promoCode: "PCSF" });
+assertOk  ("lowercase uppercased",              applyPromoSchema, { promoCode: "pcsf" });
+
+const applyUpperRes = applyPromoSchema.safeParse({ promoCode: "  pcsf  " });
+if (applyUpperRes.success && applyUpperRes.data.promoCode === "PCSF") {
+  pass++; console.log("  ✓ apply transform: trim+upper '  pcsf  ' → 'PCSF'");
+} else {
+  fail++; console.error("  ✗ apply transform: '  pcsf  ' should become 'PCSF'");
+}
+
+assertFail("apply too short ''",                applyPromoSchema, { promoCode: "" });
+assertFail("apply too short 'A'",               applyPromoSchema, { promoCode: "A" });
+assertFail("apply too long (33 chars)",         applyPromoSchema, { promoCode: "A".repeat(33) });
+assertFail("apply missing",                     applyPromoSchema, {});
 
 // ────────────────────────────────────────────────────────────
 console.log(`\n  ${pass} pass · ${fail} fail`);

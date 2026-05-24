@@ -4,9 +4,23 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
-import { cartItemSchema, type CartItemInput, type Provider } from "@/lib/validators/cart";
+import {
+  cartItemSchema,
+  promoCodeSchema,
+  applyPromoSchema,
+  type CartItemInput,
+  type Provider,
+} from "@/lib/validators/cart";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
+import {
+  PROMO_CATALOG,
+  calcLegacyPromoDiscount,
+  isActive,
+  resolveLegacyPromoCode,
+  synthesizeStubPromo,
+  type LegacyPromo,
+} from "@/lib/promo/catalog";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -675,4 +689,377 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
   revalidatePath("/service-order/cart");
   revalidatePath("/service-order/add");
   return { ok: true, data: { count: count ?? payload.length } };
+}
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 §5 #3 + #10) — PROMO CODE SUPPORT
+// ────────────────────────────────────────────────────────────
+//
+// Faithful re-port of `member/include/pages/cart/check-proV.php` +
+// `saveproV.php` semantics. Both legacy endpoints were Valentine-only
+// stubs (no real promo-code logic — they just gated the Valentine
+// opt-in row in `tb_pro_valentine`). The promo "discount" was always
+// applied via:
+//   - URL `pro=` flag → cart.php hardcoded mapping to rate / shipping
+//   - `tagPro($ID)` static switch → label rendering
+//   - `tb_promotion` INSERT → audit log at order-submit time
+//
+// We expose four customer-facing Server Actions:
+//   - validatePromoCode  — pure read; returns discount preview
+//   - applyPromoToCart   — persists selection (re-purposes
+//                          `tb_pro_valentine` as the "selected promo
+//                          per user" record; one row per user, replaced
+//                          on re-apply — matches the legacy opt-in
+//                          semantics exactly)
+//   - removePromoFromCart — clears the per-user selection
+//   - getAvailablePromos — public catalog read (id, code, discount,
+//                          expiry, description) — no auth required
+//
+// FLAGGED — no `tb_promo_codes` master table exists in legacy. The
+// catalog is hardcoded in `lib/promo/catalog.ts`. Codes that don't
+// match the catalog fall through to a stub `PR\d{1,3}` synthesizer
+// so the QA team can dry-run the apply flow before the back-office
+// admin UI lands. Replace `synthesizeStubPromo` with a DB read once
+// the admin UI exists.
+
+export type ValidatePromoCodeResult = {
+  ok: true;
+  valid: boolean;
+  /** Discount in THB when `valid`; 0 otherwise. */
+  discount: number;
+  /** 'pct' = % of cart total / 'fixed' = flat ฿. */
+  discountType: "pct" | "fixed";
+  /** TH user-facing message (success or refusal reason). */
+  message?: string;
+  /** Catalog row that matched (echoed back so the UI can render label). */
+  promo?: {
+    id: number;
+    label: string;
+    description: string;
+  };
+} | { ok: false; error: string };
+
+/**
+ * Validate a promo code against the legacy catalog + cart preconditions.
+ * Pure read — does NOT write to any table.
+ *
+ * Legacy parity:
+ *   - `check-proV.php` (Valentine) returns `resultPro=1` when the user
+ *     already opted in (i.e. `tb_pro_valentine` row exists). We extend
+ *     that semantic by also checking the catalog + active window + the
+ *     once-only opt-in tables (`tb_pro_valentine`, `tb_promotion33`)
+ *     for the user when applicable.
+ *   - No discount % was ever computed server-side in legacy — the rate
+ *     override / shipping freebie was applied at the cart-render layer.
+ *     We surface the equivalent THB discount via `calcLegacyPromoDiscount`
+ *     so the new UI can render a single "discount: ฿X" line.
+ *
+ * Signature matches the gap-research doc:
+ *   `validatePromoCode(code, cartTotal, userId?)` →
+ *   `{ valid, discount, discountType, message? }`
+ *
+ * `userId` here is the legacy `member_code` ("PR<n>") — NOT auth.uid.
+ * Optional so the UI can preview a code before the user signs in.
+ */
+export async function validatePromoCode(
+  code: string,
+  cartTotal: number,
+  userId?: string,
+): Promise<ValidatePromoCodeResult> {
+  // 1. Input schema — uppercase + length bounds + non-negative cart total.
+  const parsed = promoCodeSchema.safeParse({ code, cartTotal, userId });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { code: upperCode, cartTotal: total, userId: uid } = parsed.data;
+
+  // 2. Catalog lookup — fallback to stub synthesizer (FLAGGED).
+  let promo: LegacyPromo | null = resolveLegacyPromoCode(upperCode);
+  if (!promo) {
+    promo = synthesizeStubPromo(upperCode);
+  }
+  if (!promo) {
+    return { ok: true, valid: false, discount: 0, discountType: "fixed", message: "ไม่พบรหัสโปรโมชั่นนี้" };
+  }
+
+  // 3. Active-window check.
+  if (!isActive(new Date(), promo)) {
+    return {
+      ok: true,
+      valid: false,
+      discount: 0,
+      discountType: "fixed",
+      message: "รหัสโปรโมชั่นหมดอายุหรือยังไม่เริ่มใช้",
+    };
+  }
+
+  // 4. Per-user once-only gate (Valentine + 3.3). Legacy `check-proV.php`
+  //    semantic was the inverse — `resultPro=1` meant "already opted in"
+  //    (i.e. user CAN see the promo card). Here we treat the opt-in row
+  //    as a redemption marker: if the user already opted in once, the
+  //    code is still valid (they reapply the same code). We DO NOT block.
+  //    The once-only enforcement happens at order-submit time
+  //    (existing logic in `submitCartOrder`).
+  if (uid && (promo.id === 19 || promo.id === 77)) {
+    // Read-only probe — surfaces an info message so the UI can hint
+    // "ใช้แล้ว — รหัสยังใช้ได้ในรายการนี้".
+    const admin = createAdminClient();
+    let alreadyOptedIn = false;
+    if (promo.id === 19) {
+      const { data: vRow } = await admin
+        .from("tb_pro_valentine")
+        .select("userid")
+        .eq("userid", uid)
+        .maybeSingle();
+      alreadyOptedIn = !!vRow;
+    } else if (promo.id === 77) {
+      const { data: pRow } = await admin
+        .from("tb_promotion33")
+        .select("userid")
+        .eq("userid", uid)
+        .eq("statuspro", "2") // 2 = ใช้โปรแล้ว
+        .maybeSingle();
+      alreadyOptedIn = !!pRow;
+    }
+    if (alreadyOptedIn) {
+      // Discount still computed — caller can decide to honor or not.
+      // Mirror message style with the success path below.
+      const { discount, discountType } = calcLegacyPromoDiscount(promo, total, await readBaselineRate(admin));
+      return {
+        ok: true,
+        valid: true,
+        discount,
+        discountType,
+        message: "รหัสโปรโมชั่นนี้คุณใช้ไปแล้ว — ยังใช้กับรายการนี้ได้",
+        promo: { id: promo.id, label: promo.label, description: promo.description },
+      };
+    }
+  }
+
+  // 5. Compute the discount — needs the live `tb_settings.rsdefault`
+  //    baseline to translate a rate-override into THB.
+  const admin = createAdminClient();
+  const baselineRate = await readBaselineRate(admin);
+  const { discount, discountType } = calcLegacyPromoDiscount(promo, total, baselineRate);
+
+  return {
+    ok: true,
+    valid: true,
+    discount,
+    discountType,
+    message: "ใช้รหัสโปรโมชั่นได้",
+    promo: { id: promo.id, label: promo.label, description: promo.description },
+  };
+}
+
+/**
+ * Persist the customer's selected promo for the current cart session.
+ * Re-purposes `tb_pro_valentine` (userid + message + date) as the
+ * "selected promo per user" record — one row per user, replaced on
+ * re-apply. Matches legacy opt-in semantics: `saveproV.php` writes the
+ * same row shape.
+ *
+ * `cartId` in the gap-research doc maps to `member_code` here — the
+ * legacy cart is keyed by `userID` (= member_code), NOT a separate
+ * cart-row ID. We accept the param for API symmetry but use the
+ * authenticated session's member_code as the source of truth (an
+ * attacker can't apply a promo to someone else's cart).
+ *
+ * The actual discount is applied at `submitCartOrder` time — this
+ * action ONLY persists the selection. That mirrors legacy: pro/pro2
+ * URL flags travel with the form submit, the discount is computed in
+ * `shops.php` L65-72 / calculateCart.php L10-12 at submit / re-render.
+ */
+export async function applyPromoToCart(
+  cartId: string,
+  promoCode: string,
+): Promise<ActionResult<{ promoId: number; label: string }>> {
+  // G-4 — impersonation is read-only.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  // Auth — same gate as the rest of the cart actions.
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  // Ownership belt-and-braces — caller-supplied cartId MUST match the
+  // session member_code (Pacred cart is keyed by userID; this gate
+  // protects against a UI bug passing the wrong handle).
+  if (cartId && cartId !== userID) {
+    return { ok: false, error: "cart_owner_mismatch" };
+  }
+
+  // Schema gate — upper-cases + bound-checks the code.
+  const parsed = applyPromoSchema.safeParse({ promoCode });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const upperCode = parsed.data.promoCode;
+
+  // Re-validate via the same lookup pipeline to avoid TOCTOU between
+  // the UI's validate call and this apply call.
+  const promo: LegacyPromo | null =
+    resolveLegacyPromoCode(upperCode) ?? synthesizeStubPromo(upperCode);
+  if (!promo) return { ok: false, error: "invalid_code" };
+  if (!isActive(new Date(), promo)) return { ok: false, error: "expired_or_not_started" };
+
+  const admin = createAdminClient();
+
+  // Upsert into `tb_pro_valentine` — one row per user, `message` holds
+  // the canonical code so removePromoFromCart can read it back.
+  // The legacy table has no PK on userid (it's just an opt-in log) so
+  // we delete-then-insert to keep "one row per user" semantics.
+  await admin.from("tb_pro_valentine").delete().eq("userid", userID);
+  const { error: insertErr } = await admin.from("tb_pro_valentine").insert({
+    userid: userID,
+    message: upperCode,
+    date: new Date().toISOString(),
+  });
+  if (insertErr) return { ok: false, error: insertErr.message };
+
+  // For promoid=77 (3.3 sale) also flip the `tb_promotion33` opt-in row
+  // to status="1" (ยังไม่ใช้) so the legacy opt-in tracker reflects the
+  // selection. Status flips to "2" (ใช้โปรแล้ว) at order-submit time.
+  if (promo.id === 77) {
+    await admin.from("tb_promotion33").delete().eq("userid", userID);
+    await admin.from("tb_promotion33").insert({
+      userid: userID,
+      statuspro: "1",
+    });
+  }
+
+  revalidatePath("/cart");
+  revalidatePath("/service-order/cart");
+  return { ok: true, data: { promoId: promo.id, label: promo.label } };
+}
+
+/**
+ * Clear the customer's selected promo for the current cart session.
+ * Counterpart to `applyPromoToCart` — deletes the `tb_pro_valentine`
+ * row (and the `tb_promotion33` row if it exists).
+ *
+ * `cartId` arg kept for API symmetry; same ownership gate as apply.
+ *
+ * Idempotent — calling on a cart with no promo applied is a no-op,
+ * returns ok=true.
+ */
+export async function removePromoFromCart(
+  cartId: string,
+): Promise<ActionResult> {
+  // G-4 — impersonation is read-only.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  const data = await getCurrentUserWithProfile();
+  if (!data?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = data.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  if (cartId && cartId !== userID) {
+    return { ok: false, error: "cart_owner_mismatch" };
+  }
+
+  const admin = createAdminClient();
+  // Delete is idempotent — no error if no rows match.
+  const { error: delV } = await admin
+    .from("tb_pro_valentine")
+    .delete()
+    .eq("userid", userID);
+  if (delV) return { ok: false, error: delV.message };
+
+  // Only clear the 3.3 opt-in if it was in "ยังไม่ใช้" state (status=1)
+  // — never clear an already-redeemed (status=2) row.
+  await admin
+    .from("tb_promotion33")
+    .delete()
+    .eq("userid", userID)
+    .eq("statuspro", "1");
+
+  revalidatePath("/cart");
+  revalidatePath("/service-order/cart");
+  return { ok: true };
+}
+
+export type AvailablePromo = {
+  id: number;
+  code: string;
+  /** Discount preview — % when rate-override or stub, ฿ when flat shipping. */
+  discount: number;
+  /** 'pct' | 'fixed' — matches validatePromoCode's return shape. */
+  discountType: "pct" | "fixed";
+  /** ISO timestamp or null. */
+  expiry: string | null;
+  description: string;
+  label: string;
+};
+
+/**
+ * Public catalog read — returns the list of currently-active promos so
+ * the UI can render an "Available promos" section at checkout.
+ *
+ * No auth required (the catalog is public marketing material).
+ *
+ * Discount preview semantics:
+ *   - Flat shipping ฿ → `discount = shippingDiscountThb`, type='fixed'.
+ *   - Rate override → `discount = round((baseline - rate) / baseline × 100)`
+ *     (i.e. "you save ~X% on the THB total"), type='pct'.
+ *   - Anything else → discount=0, type='fixed'.
+ *
+ * Uses the live `tb_settings.rsdefault` for the baseline rate. We read
+ * it once and re-use for every row.
+ *
+ * Returns at most the catalog size — the catalog is small (handful
+ * of entries) so no pagination.
+ */
+export async function getAvailablePromos(): Promise<ActionResult<AvailablePromo[]>> {
+  const admin = createAdminClient();
+  const baselineRate = await readBaselineRate(admin);
+  const now = new Date();
+  const rows: AvailablePromo[] = [];
+  for (const p of PROMO_CATALOG) {
+    if (!isActive(now, p)) continue;
+    let discount = 0;
+    let discountType: "pct" | "fixed" = "fixed";
+    if (p.shippingDiscountThb > 0) {
+      discount = p.shippingDiscountThb;
+      discountType = "fixed";
+    } else if (
+      p.rate != null &&
+      Number.isFinite(p.rate) &&
+      baselineRate > 0 &&
+      p.rate < baselineRate
+    ) {
+      discount = Math.round(((baselineRate - p.rate) / baselineRate) * 100);
+      discountType = "pct";
+    }
+    rows.push({
+      id: p.id,
+      // Canonical code = first alias (the customer-visible label).
+      code: p.aliases[0] ?? `PR${p.id}`,
+      discount,
+      discountType,
+      expiry: p.activeUntil,
+      description: p.description,
+      label: p.label,
+    });
+  }
+  return { ok: true, data: rows };
+}
+
+/**
+ * Read the live `tb_settings.rsdefault` exchange rate. Centralised so
+ * the three promo actions share one query. Returns 5.0 on miss
+ * (mirrors `calculateCartTotal`'s fallback at L73).
+ */
+async function readBaselineRate(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const { data: settingsRow } = await admin
+    .from("tb_settings")
+    .select("rsdefault")
+    .eq("id", 1)
+    .maybeSingle<{ rsdefault: number | string | null }>();
+  return Number(settingsRow?.rsdefault ?? 5.0);
 }

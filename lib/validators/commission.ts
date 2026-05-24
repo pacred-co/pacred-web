@@ -183,6 +183,96 @@ export const markWithdrawalPaidSchema = z.object({
 export type MarkWithdrawalPaidInput = z.infer<typeof markWithdrawalPaidSchema>;
 
 // ────────────────────────────────────────────────────────────
+// G6 — Customer-side affiliate (team-leader) commission withdraw
+// ────────────────────────────────────────────────────────────
+//
+// Pacred's customer-side affiliate model = `sales_commissions` +
+// `sales_payouts` from migration 0013_sales_referral.sql. This is
+// DIFFERENT from the staff `commission_accruals` model above:
+//
+//   - staff model (`commission_accruals` / `commission_withdrawals`)
+//     = per-order accruals + WHT + tiered rates, used by interpreters
+//     + sales_rep admins. Tested in (e)/(f)/(g) above.
+//
+//   - affiliate model (`sales_commissions` / `sales_payouts`)
+//     = simple percent-of-forwarder-total earned by `team_leaders`
+//     when their team's forwarders reach `delivered`. The legacy
+//     `report-user-sales.php` uses this model (verified vs
+//     `tb_user_sales` and PR888/PR2000/PR352/PR2678/PR4155
+//     whitelist in app/[locale]/(protected)/sales/team-map.ts).
+//
+// The two coexist and never share rows. The schema below is for the
+// customer-facing /commissions page only.
+
+/** Minimum amount an affiliate team_leader must withdraw at once. */
+export const MIN_AFFILIATE_WITHDRAW_THB = 1000;
+
+/** Maximum amount per affiliate withdraw request (safety cap). */
+export const MAX_AFFILIATE_WITHDRAW_THB = 5_000_000;
+
+/**
+ * Customer-side affiliate withdraw request — team leader picks N
+ * unpaid `sales_commissions` rows (server resolves by `commission_ids`
+ * OR by `amount` first-fit) and gives a payee bank.
+ *
+ * App-layer enforces:
+ *   - caller must own a row in `team_leaders` (RLS already filters,
+ *     but the action re-checks for a friendly error)
+ *   - selected `sales_commissions` belong to one of caller's teams
+ *     and are still `unpaid` + `payout_id is null`
+ *   - sum(selected.commission_amount) >= MIN_AFFILIATE_WITHDRAW_THB
+ *   - sum(selected.commission_amount) >= `amount` (the requested top)
+ *   - account_number matches a forgiving Thai bank-no pattern.
+ *
+ * NOTE: kept narrow on purpose — the G6 foundation only needs the
+ * shape used by the customer-facing modal; admin approval/payout
+ * fields (status, slip, admin_id) are written by the existing
+ * actions/admin/sales-payouts.ts adminUpdateSalesPayout flow.
+ */
+export const affiliateWithdrawRequestSchema = z.object({
+  /** Requested gross amount in THB. Must be ≥ MIN_AFFILIATE_WITHDRAW_THB. */
+  amount:         z
+    .number()
+    .min(MIN_AFFILIATE_WITHDRAW_THB, `ยอดขั้นต่ำ ${MIN_AFFILIATE_WITHDRAW_THB.toLocaleString()} บาท`)
+    .max(MAX_AFFILIATE_WITHDRAW_THB),
+  /** Payee bank name (e.g. "กสิกรไทย"). */
+  bank_name:      z.string().trim().min(1, "กรุณาเลือกธนาคาร").max(100),
+  /** Payee account-holder name. */
+  account_name:   z.string().trim().min(1, "กรุณากรอกชื่อบัญชี").max(200),
+  /** Payee account number — digits, dashes, or spaces (8..20 chars). */
+  account_number: z
+    .string()
+    .trim()
+    .regex(/^[\d\- ]{8,20}$/, "เลขบัญชีไม่ถูกต้อง")
+    .transform((v) => v.replace(/[\s-]/g, "")),
+  /**
+   * Optional note shown to admin reviewing the request.
+   * An empty string ("") from a never-touched form input is folded to
+   * `undefined` so the row insert stays `null` rather than empty-string.
+   */
+  note:           z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().min(1).max(500).optional(),
+  ),
+});
+export type AffiliateWithdrawRequestInput = z.infer<typeof affiliateWithdrawRequestSchema>;
+
+/**
+ * Filters for the affiliate-commissions list query.
+ *
+ * `from`/`to` are inclusive YYYY-MM-DD date bounds (interpreted as
+ * `earned_at` calendar date in server TZ). `status` filters by the
+ * `sales_commissions.status` enum (`unpaid`/`paid`/`cancelled`) or
+ * the special `"all"` literal (no filter).
+ */
+export const affiliateCommissionFiltersSchema = z.object({
+  from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  status: z.enum(["all", "unpaid", "paid", "cancelled"]).optional(),
+});
+export type AffiliateCommissionFilters = z.infer<typeof affiliateCommissionFiltersSchema>;
+
+// ────────────────────────────────────────────────────────────
 // Tier upsert (admin)
 // ────────────────────────────────────────────────────────────
 

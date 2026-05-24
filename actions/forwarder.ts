@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertOwnedProfileId } from "@/lib/auth/owned-write";
 import { forwarderSchema, type ForwarderInput } from "@/lib/validators/forwarder";
 import { calcPrice, type CalcPriceBreakdown, DEFAULT_SETTINGS } from "@/lib/forwarder/calc-price";
+import { checkWarehouseArea } from "@/lib/freight/warehouse-calc";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
@@ -541,6 +542,26 @@ export async function createForwarder(
 
   const volume_cbm = (d.width_cm * d.length_cm * d.height_cm) / 1_000_000;
 
+  // D1 / G3 — warehouse free-area check.
+  // Port of legacy member/include/pages/forwarder/checkFreeArea.php.
+  // When the customer picked the PCSF promo (`ship_by='PCSF'`) AND
+  // their destination ZIP is in the BKK/metro allowlist, we waive
+  // the Thai-domestic delivery fee BEFORE handing the input to
+  // `calcPrice` — that matches the legacy "เหมาๆ" UX where in-zone
+  // customers pay no Thailand-side delivery line. The promo never
+  // expands the price (the helper returns `adjustedPrice ≤ input`),
+  // so this addition cannot regress the existing calc.
+  const freeArea = checkWarehouseArea({
+    warehouseId:         d.source_warehouse,
+    postalCode:          d.ship_postal_code,
+    shipBy:              d.ship_by ?? null,
+    thailandDeliveryThb: d.thailand_delivery_thb,
+    weight:              d.weight_kg,
+    volume:              volume_cbm,
+    cargoType:           d.product_type,
+  });
+  const thailandDeliveryFinal = freeArea.adjustedPrice;
+
   const breakdown = calcPrice({
     source_warehouse: d.source_warehouse,
     transport_type:   d.transport_type,
@@ -553,7 +574,7 @@ export async function createForwarder(
     qc:           d.qc,
     qc_price:     d.qc    ? Number(settings?.qc_fee_per_item ?? 5)  : 0,
     domestic_china_thb:    d.domestic_china_thb,
-    thailand_delivery_thb: d.thailand_delivery_thb,
+    thailand_delivery_thb: thailandDeliveryFinal,
     other_price:           d.other_price,
     price_update:          0,
     discount:              0,
@@ -607,7 +628,10 @@ export async function createForwarder(
       qc_price:          breakdown.qc_price,
       yuan_rate_locked:  settings?.yuan_rate ?? 5,
       domestic_china_thb:    d.domestic_china_thb,
-      thailand_delivery_thb: d.thailand_delivery_thb,
+      // D1 / G3 — store the post-promo Thai delivery fee (the helper
+      // zeroes this when the PCSF free-area applies; otherwise it
+      // echoes back the original number unchanged).
+      thailand_delivery_thb: thailandDeliveryFinal,
       other_price:           d.other_price,
       other_price_desc:      d.other_price_desc ?? null,
       service_fee:           breakdown.service_fee,

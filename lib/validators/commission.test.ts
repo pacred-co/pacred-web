@@ -36,6 +36,10 @@ import {
   rejectWithdrawalSchema,
   markWithdrawalPaidSchema,
   upsertCommissionTierSchema,
+  affiliateWithdrawRequestSchema,
+  affiliateCommissionFiltersSchema,
+  MIN_AFFILIATE_WITHDRAW_THB,
+  MAX_AFFILIATE_WITHDRAW_THB,
 } from "./commission";
 
 let pass = 0;
@@ -280,6 +284,131 @@ console.log("  (h) upsertCommissionTierSchema — rate XOR flat");
     role_kind: "interpreter", service_kind: "service_order",
     tier_name: "T", rate_pct: 5, effective_from: "2026/05/01",
   }));
+}
+
+// ────────────────────────────────────────────────────────────
+// (i) G6 — affiliateWithdrawRequestSchema (customer-side)
+//
+// Pacred-web feeds the modal on /commissions. Distinct from the
+// staff-side schema above:
+//   - has its own MIN_AFFILIATE_WITHDRAW_THB threshold (1,000 baht,
+//     transcribed from legacy report-user-sales.php L161)
+//   - takes a flat `amount`, not an `accrual_ids[]` bundle
+//   - has lenient `account_number` (digits + dashes + spaces; normalises
+//     to digits-only)
+// ────────────────────────────────────────────────────────────
+console.log("  (i) affiliateWithdrawRequestSchema (customer-side G6)");
+{
+  // Constants — the legacy 1,000 baht threshold from report-user-sales.php L161.
+  assert("MIN_AFFILIATE_WITHDRAW_THB is 1000", MIN_AFFILIATE_WITHDRAW_THB === 1000);
+  assert("MAX_AFFILIATE_WITHDRAW_THB is 5,000,000", MAX_AFFILIATE_WITHDRAW_THB === 5_000_000);
+
+  // Happy path — exactly at the minimum threshold parses.
+  const ok = affiliateWithdrawRequestSchema.parse({
+    amount:         1000,
+    bank_name:      "กสิกรไทย",
+    account_name:   "สมชาย ใจดี",
+    account_number: "1234567890",
+  });
+  assert("min threshold (1000) parses",   ok.amount === 1000);
+  assert("digits-only account passes",    ok.account_number === "1234567890");
+  assert("note defaults to undefined",    ok.note === undefined);
+  assert("bank trimmed",                  ok.bank_name === "กสิกรไทย");
+
+  // Lenient account_number — dashes + spaces, normalised to digits.
+  const dashed = affiliateWithdrawRequestSchema.parse({
+    amount: 1500, bank_name: "ไทยพาณิชย์",
+    account_name: "ทดสอบ", account_number: "123-456-7890",
+  });
+  assert("dashed account → strips dashes",   dashed.account_number === "1234567890");
+  const spaced = affiliateWithdrawRequestSchema.parse({
+    amount: 1500, bank_name: "ไทยพาณิชย์",
+    account_name: "ทดสอบ", account_number: "123 456 7890",
+  });
+  assert("spaced account → strips spaces",   spaced.account_number === "1234567890");
+
+  // Empty-string note → undefined (preserves the wallet-action pattern).
+  const noteless = affiliateWithdrawRequestSchema.parse({
+    amount: 1000, bank_name: "b", account_name: "n",
+    account_number: "12345678", note: "",
+  });
+  assert("empty-string note → undefined", noteless.note === undefined);
+
+  // Below threshold → rejected.
+  assertThrows("rejects amount below 1000",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 999, bank_name: "b", account_name: "n", account_number: "12345678",
+    }));
+  // Above safety cap → rejected.
+  assertThrows("rejects amount above 5M",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 5_000_001, bank_name: "b", account_name: "n", account_number: "12345678",
+    }));
+  // Zero / negative → rejected.
+  assertThrows("rejects zero amount",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 0, bank_name: "b", account_name: "n", account_number: "12345678",
+    }));
+  assertThrows("rejects negative amount",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: -1, bank_name: "b", account_name: "n", account_number: "12345678",
+    }));
+  // Missing bank → rejected.
+  assertThrows("rejects empty bank_name",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 1000, bank_name: "", account_name: "n", account_number: "12345678",
+    }));
+  // Missing account name → rejected.
+  assertThrows("rejects empty account_name",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 1000, bank_name: "b", account_name: "", account_number: "12345678",
+    }));
+  // account_number too short (<8) → rejected.
+  assertThrows("rejects 7-digit account",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 1000, bank_name: "b", account_name: "n", account_number: "1234567",
+    }));
+  // account_number with letters → rejected.
+  assertThrows("rejects letters in account",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 1000, bank_name: "b", account_name: "n", account_number: "ABCDEFGH",
+    }));
+  // Over-long note → rejected.
+  assertThrows("rejects note >500 chars",
+    () => affiliateWithdrawRequestSchema.parse({
+      amount: 1000, bank_name: "b", account_name: "n",
+      account_number: "12345678", note: "x".repeat(501),
+    }));
+}
+
+// ────────────────────────────────────────────────────────────
+// (j) affiliateCommissionFiltersSchema (customer-side G6)
+// ────────────────────────────────────────────────────────────
+console.log("  (j) affiliateCommissionFiltersSchema");
+{
+  // All-optional → empty {} is valid.
+  const empty = affiliateCommissionFiltersSchema.parse({});
+  assert("empty filter parses",        empty.from === undefined && empty.to === undefined);
+
+  // Happy path.
+  const ok = affiliateCommissionFiltersSchema.parse({
+    from: "2026-01-01", to: "2026-12-31", status: "unpaid",
+  });
+  assert("valid date range parses",    ok.from === "2026-01-01");
+  assert("status: unpaid parses",      ok.status === "unpaid");
+
+  // "all" sentinel.
+  const allFilter = affiliateCommissionFiltersSchema.parse({ status: "all" });
+  assert("status: all parses",         allFilter.status === "all");
+
+  // Bad date format → rejected.
+  assertThrows("rejects slash date",
+    () => affiliateCommissionFiltersSchema.parse({ from: "2026/01/01" }));
+  assertThrows("rejects partial date",
+    () => affiliateCommissionFiltersSchema.parse({ to: "2026-1-1" }));
+  // Bad status enum → rejected.
+  assertThrows("rejects unknown status",
+    () => affiliateCommissionFiltersSchema.parse({ status: "approved" }));
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);
