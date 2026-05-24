@@ -24,7 +24,13 @@ import { logger } from "@/lib/logger";
  * Folder convention: {admin_uuid}/{timestamp}.csv
  */
 
-const ALLOWED_TARGETS = ["forwarders"] as const;
+// Targets:
+//   'forwarders'                    = bulk INSERT new rows.
+//   'forwarders_update_by_tracking' = legacy "ปรับรายการอัตโนมัติ" —
+//                                     match by tracking_chn, UPDATE
+//                                     box dims / cabinet / status.
+//                                     See migration 0107 for rules.
+const ALLOWED_TARGETS = ["forwarders", "forwarders_update_by_tracking"] as const;
 type TargetTable = (typeof ALLOWED_TARGETS)[number];
 
 const MAX_SIZE   = 5 * 1024 * 1024;                              // 5 MB cap
@@ -40,7 +46,7 @@ const MAX_IMPORT_ROWS  = 1000;                                   // safety: prev
 export async function uploadCsv(
   formData: FormData,
 ): Promise<AdminActionResult<{ id: string }>> {
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "warehouse", "accounting", "super"], async ({ adminId }) => {
     const file       = formData.get("file");
     const targetRaw  = String(formData.get("target_table") ?? "");
 
@@ -134,7 +140,7 @@ export async function parsePreviewCsvImport(
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "warehouse", "accounting", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const text  = await downloadCsvText(admin, parsed.data.id);
     if (!text.ok) return text;
@@ -189,7 +195,7 @@ export async function confirmCsvImport(
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "warehouse", "accounting", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // Recover any stuck 'importing' rows before we check status, so a
@@ -252,7 +258,140 @@ export async function confirmCsvImport(
     let skipped  = 0;
     let lastError: string | null = null;
 
-    if (meta.target_table === "forwarders") {
+    if (meta.target_table === "forwarders_update_by_tracking") {
+      // Legacy import-excel.php "ปรับรายการอัตโนมัติ" path. Match by
+      // tracking_chn → UPDATE box dims / cabinet / status. Header
+      // names are aligned with legacy column legend (lines 169-191
+      // of import-excel.php). Accepted headers (case-insensitive):
+      //
+      //   tracking_chn          — required (legacy column D)
+      //   cabinet_closed_date   — optional (column M, ISO yyyy-mm-dd)
+      //   source_warehouse      — guangzhou | yiwu (column L: GuangZhou | Yiwu)
+      //   transport_type        — truck | ship | air (column N: EK | SEA)
+      //   cabinet_number        — optional (column O)
+      //   weight_kg, width_cm, length_cm, height_cm, volume_cbm — optional
+      //   box_count             — optional (column F)
+      //   detail                — optional (column E)
+      const num = (v: unknown): number | null => {
+        if (v === undefined || v === null || v === "") return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      const normWarehouse = (v: string): string | null => {
+        const s = v.trim().toLowerCase();
+        if (!s) return null;
+        if (s === "guangzhou" || s === "กวางโจว") return "guangzhou";
+        if (s === "yiwu"      || s === "อี้อู")    return "yiwu";
+        return null;
+      };
+      const normTransport = (v: string): string | null => {
+        const s = v.trim().toLowerCase();
+        if (!s) return null;
+        if (s === "ek"  || s === "truck") return "truck";
+        if (s === "sea" || s === "ship")  return "ship";
+        if (s === "air")                  return "air";
+        return null;
+      };
+      const normDate = (v: string): string | null => {
+        const s = v.trim();
+        if (!s) return null;
+        // Accept yyyy-mm-dd, yyyy/mm/dd, dd/mm/yyyy (legacy Thai-format)
+        const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        const d = new Date(s);
+        return Number.isNaN(d.getTime()) ? null : d.toISOString();
+      };
+
+      // Pre-fetch all currently-matched forwarder rows in ONE round-trip
+      // so we can decide the status bump per row + skip not-found.
+      const trackingList = allRows
+        .map((r) => String(r.tracking_chn ?? "").trim())
+        .filter((t) => t.length > 0);
+      if (trackingList.length === 0) {
+        await admin
+          .from("csv_imports")
+          .update({ status: "failed", error_message: "no_tracking_chn_in_csv" })
+          .eq("id", meta.id);
+        return { ok: false, error: "no_tracking_chn_in_csv" };
+      }
+
+      type Existing = { id: string; tracking_chn: string | null; status: string };
+      const { data: existing } = await admin
+        .from("forwarders")
+        .select("id, tracking_chn, status")
+        .in("tracking_chn", trackingList);
+
+      const byTracking = new Map<string, Existing>();
+      for (const f of (existing ?? []) as Existing[]) {
+        if (f.tracking_chn) byTracking.set(f.tracking_chn, f);
+      }
+
+      // Per-row update (Supabase's REST has no bulk-update-by-key, and
+      // the legacy flow is per-row anyway — staff want per-row error
+      // reporting). 1000-row cap (MAX_IMPORT_ROWS) keeps this bounded
+      // to ~5 minutes worst-case.
+      for (const r of allRows) {
+        const tracking = String(r.tracking_chn ?? "").trim();
+        if (!tracking) { skipped++; continue; }
+
+        const match = byTracking.get(tracking);
+        if (!match) { skipped++; continue; }
+
+        const update: Record<string, unknown> = { admin_id_update: adminId };
+
+        const w = String(r.source_warehouse ?? "").trim();
+        if (w) {
+          const n = normWarehouse(w);
+          if (n) update.source_warehouse = n;
+        }
+        const t = String(r.transport_type ?? "").trim();
+        if (t) {
+          const n = normTransport(t);
+          if (n) update.transport_type = n;
+        }
+        if (r.cabinet_number)  update.cabinet_number = String(r.cabinet_number).trim();
+        if (r.detail)          update.detail         = String(r.detail).trim();
+
+        const weight  = num(r.weight_kg);
+        const width   = num(r.width_cm);
+        const length  = num(r.length_cm);
+        const height  = num(r.height_cm);
+        const volume  = num(r.volume_cbm);
+        const boxes   = num(r.box_count);
+        if (weight !== null)  update.weight_kg  = weight;
+        if (width  !== null)  update.width_cm   = width;
+        if (length !== null)  update.length_cm  = length;
+        if (height !== null)  update.height_cm  = height;
+        if (volume !== null)  update.volume_cbm = volume;
+        if (boxes  !== null && boxes > 0) update.box_count = Math.round(boxes);
+
+        // Cabinet-closed-date bumps the status — mirrors legacy
+        // import-excel.php fStatus 1→2 / 1→3 flow. We map onto the
+        // Pacred status enum (see migration 0010):
+        //   pending_payment → shipped_china  (cabinet sealed)
+        //   shipped_china   → in_transit     (manifest re-uploaded)
+        const dateRaw = String(r.cabinet_closed_date ?? "").trim();
+        if (dateRaw) {
+          const iso = normDate(dateRaw);
+          if (iso) {
+            update.date_shipped_china = iso;
+            if (match.status === "pending_payment") update.status = "shipped_china";
+            else if (match.status === "shipped_china") update.status = "in_transit";
+          }
+        }
+
+        const { error } = await admin
+          .from("forwarders")
+          .update(update)
+          .eq("id", match.id);
+        if (error) {
+          lastError = error.message;
+          skipped++;
+        } else {
+          imported++;
+        }
+      }
+    } else if (meta.target_table === "forwarders") {
       // P-19-followup-batch: 2-pass approach.
       //   Pass 1: validate every row + collect valid payloads.  Skipped
       //           rows (missing/invalid required fields) never hit DB.
@@ -375,7 +514,7 @@ export async function deleteCsvImport(
   const parsed = idSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
-  return withAdmin(["ops", "super"], async ({ adminId }) => {
+  return withAdmin(["ops", "warehouse", "accounting", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const { data: meta } = await admin
       .from("csv_imports")

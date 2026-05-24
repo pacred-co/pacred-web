@@ -2762,7 +2762,8 @@
     "warehouse": {
       "containers": "Containers",
       "bulletin": "Daily container bulletin",
-      "qaInspect": "QA inspections"
+      "qaInspect": "QA inspections",
+      "csvImports": "Bulk CSV import"
     },
     "driver": {
       "toDeliver": "Jobs to deliver",

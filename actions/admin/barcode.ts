@@ -6,17 +6,26 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 
+// `lookup` = the legacy `barcode-c-all` / `barcode-c-from` "search-only"
+// modes. Returns ref info + current status, makes no state change.
+// `intake` / `prepare` / `driver` = the legacy `barcode-c-import` flow that
+// flips fStatus (4 / 6 / 7 in legacy → arrived_thailand / out_for_delivery /
+// delivered here).
 const scanSchema = z.object({
-  mode: z.enum(["intake", "prepare", "driver"]),
+  mode: z.enum(["lookup", "intake", "prepare", "driver"]),
   code: z.string().trim().min(1).max(200),
 });
 
 const STATUS_LABEL: Record<string, string> = {
-  arrived_thailand:  "เข้าโกดังไทยแล้ว",
-  out_for_delivery:  "กำลังจัดส่ง",
-  delivered:         "ส่งสำเร็จ",
+  pending_payment:       "รอชำระเงิน",
+  shipped_china:         "สินค้าออกจากจีน",
+  in_transit:            "ขนส่งกลางทาง",
+  arrived_thailand:      "เข้าโกดังไทยแล้ว",
+  out_for_delivery:      "กำลังจัดส่ง",
+  delivered:             "ส่งสำเร็จ",
+  cancelled:             "ยกเลิก",
   awaiting_chn_dispatch: "รอจัดส่งจากจีน",
-  completed:         "สำเร็จ",
+  completed:             "สำเร็จ",
 };
 
 export type BarcodeScanResult = {
@@ -36,7 +45,12 @@ export async function adminBarcodeScan(
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const { mode, code } = parsed.data;
 
-  return withAdmin(["ops"], async ({ adminId }): Promise<AdminActionResult<BarcodeScanResult>> => {
+  // Warehouse staff scan at intake / prepare (legacy `Cargo/Warehouse`
+  // role); driver staff scan at the truck. Super covers everything.
+  // Accounting + ops kept for back-office mis-scan recovery.
+  return withAdmin(
+    ["ops", "warehouse", "driver", "accounting", "super"],
+    async ({ adminId }): Promise<AdminActionResult<BarcodeScanResult>> => {
     const admin = createAdminClient();
 
     // ── Try forwarder ──────────────────────────────────────────────────────
@@ -54,6 +68,27 @@ export async function adminBarcodeScan(
       }>();
 
     if (f) {
+      // Lookup mode — no state change, just return the current ref.
+      // Mirrors legacy `gateway.php?type=all` (forwarder/update redirect)
+      // and `gateway.php?type=from` (print redirect) — both are read-only
+      // dispatches that don't flip fStatus. Pacred surfaces a single
+      // lookup result the UI can route from.
+      if (mode === "lookup") {
+        const profile = Array.isArray(f.profile) ? f.profile[0] ?? null : f.profile;
+        return {
+          ok: true,
+          data: {
+            message:       `${f.f_no} — ${STATUS_LABEL[f.status] ?? f.status}`,
+            ref_type:      "forwarder",
+            ref_no:        f.f_no,
+            member_code:   profile?.member_code ?? null,
+            customer_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || null,
+            before_status: f.status,
+            after_status:  f.status,
+          },
+        };
+      }
+
       const newStatus =
         mode === "intake"  ? "arrived_thailand"  :
         mode === "prepare" ? "out_for_delivery"  :
@@ -119,6 +154,23 @@ export async function adminBarcodeScan(
       }>();
 
     if (so) {
+      // Same lookup-mode short-circuit as the forwarder branch.
+      if (mode === "lookup") {
+        const profile = Array.isArray(so.profile) ? so.profile[0] ?? null : so.profile;
+        return {
+          ok: true,
+          data: {
+            message:       `${so.h_no} — ${STATUS_LABEL[so.status] ?? so.status}`,
+            ref_type:      "service_order",
+            ref_no:        so.h_no,
+            member_code:   profile?.member_code ?? null,
+            customer_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || null,
+            before_status: so.status,
+            after_status:  so.status,
+          },
+        };
+      }
+
       const newStatus = mode === "intake" ? "awaiting_chn_dispatch" : "completed";
       if (so.status === newStatus) {
         return { ok: false, error: `${so.h_no} อยู่ที่สถานะ "${STATUS_LABEL[newStatus] ?? newStatus}" แล้ว` };
@@ -163,5 +215,6 @@ export async function adminBarcodeScan(
     }
 
     return { ok: false, error: "ไม่พบรายการนี้ (ลอง f_no / h_no / tracking CN / tracking TH)" };
-  });
+  },
+  );
 }
