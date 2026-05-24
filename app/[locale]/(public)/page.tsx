@@ -16,10 +16,11 @@ import { WhyPacred } from "@/components/sections/why-pacred";
 import { ImportExportBanner } from "@/components/sections/import-export-banner";
 import { ContactSales } from "@/components/sections/contact-sales";
 import { Reviews } from "@/components/sections/reviews";
-import { Sales } from "@/components/sections/sales";
 import { Blog } from "@/components/sections/blog";
 import { Partner } from "@/components/sections/partner";
 import { HomeArticle } from "@/components/sections/home-article";
+import { HomeRelatedTags } from "@/components/sections/home-related-tags";
+import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
 import { Footer } from "@/components/sections/footer";
 import { JsonLd } from "@/components/seo/json-ld";
 import { serviceSchema } from "@/components/seo/schemas";
@@ -117,9 +118,10 @@ export default async function Home({
         <ContactSales />
         <ImportExportBanner />
         <Reviews />
-        <Sales />
         <Blog />
         <HomeArticle locale={localeTyped} />
+        <HomeBottomBanner />
+        <HomeRelatedTags />
         <Partner />
       </main>
       <Footer />

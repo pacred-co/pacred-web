@@ -56,7 +56,8 @@ import { fStatusBadge, nameStatusUserPay, numberFormat } from "../helpers";
  * Gate — `report-user-sales.php` L3 only allows the 5 whitelisted
  * member codes; that gate is in `../layout.tsx` (`resolveSalesAgent`).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `report-user-sales.php` L13-59 — the `$_POST['add']` handler
@@ -263,7 +264,7 @@ export default async function SalesReportPage({
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* report-user-sales.php <title> L61 (fidelity-record comment):
-          รายงานยอดขายทีม {userIDMain} | PR Cargo */}
+          รายงานยอดขายทีม {userIDMain} | Pacred */}
 
       {/* BEGIN: Content — report-user-sales.php L74 */}
       <div className="app-content content">

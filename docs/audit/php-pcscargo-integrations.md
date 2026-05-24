@@ -69,7 +69,7 @@ user pastes URL → convertURLChinna() classifies →
 | **PHPMailer SMTP (test invoice mail)** | `Host = smtp.gmail.com:587 STARTTLS`<br/>`Username = info@pcscargo.co.th`<br/>`Password = bblf ftlg vucv qysz` (Gmail App Password) | `pcs-admin\api\send-mail\index.php:29-34` |
 | **Google Sheets API (service account JSON)** | `pcs-admin\cryptic-album-325611-f8d67b670cf9.json` (project: `cryptic-album-325611`)<br/>Scope: `SPREADSHEETS_READONLY` | `pcs-admin\api\autorun\update-sheet-sang.php:8` |
 | **Google Sheets IDs** | `15g49hwP8dx1bOVbVKcp1V33I_o1gSLJYeqEIdRS4Mpk` (sangNew + CTT-New + MK + MX + gogo)<br/>`1zGyZoApdvsVN8UDOQ3c8tlUsa4FxyUvQhYKRV86xGzI` (cnt-hs)<br/>`13ufkMUoYGnz9sm4gQXiaFp9G6Lx1mRR9to0rqEVK0FA` (sang cost ref + cnt report)<br/>`1JKUjbJmFYLI6FisgqhWncuAWnkQY1aH678rUZDSDJAA` (1212 promo) | per files |
-| **PromptPay (PCS Cargo legacy — Pacred ต้อง new)** | Bank account `064-174-3836` Kasikorn, PromptPay number `0-1055-60160-69-4`, Account name "บริษัท พีซีเอส คาร์โก้" | `include\pages\payment\QRPay.php:43-45` (HARDCODED) |
+| **PromptPay (PCS Cargo legacy — Pacred ต้อง new)** | Bank account `064-174-3836` Kasikorn, PromptPay number `0-1055-64077-71-6`, Account name "บริษัท พีซีเอส คาร์โก้" | `include\pages\payment\QRPay.php:43-45` (HARDCODED) |
 
 ---
 
@@ -274,7 +274,7 @@ Two installed copies: `assets\plugins\mpdf\` (legacy v6/7) + `assets\plugins\mpd
 1. `member\include\pages\payment\QRPay.php` renders a PromptPay QR client-side using `promptpay.js` (jQuery plugin in `assets/plugins/promptpay/`)
 2. Hardcoded into the QR page (line 43-45):
    - Bank account: `064-174-3836` Kasikorn (KBank)
-   - PromptPay number: `0-1055-60160-69-4`
+   - PromptPay number: `0-1055-64077-71-6`
    - Account name: บริษัท พีซีเอส คาร์โก้ (LEGACY)
 3. User uploads slip image; admin manually approves in `acc-topup.php` / `wallet.php`
 

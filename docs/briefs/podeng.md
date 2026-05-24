@@ -1,23 +1,24 @@
 # ปอน — Frontend / Customer Portal UI / Landing / SEO
 
-Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
-Branch: `podeng` (working) — push to own branch only; เดฟ merges into `dave-pacred` then `faithful-port`
+Last reviewed: 2026-05-24 (strategy reset — faithful-port deleted, your work flows direct → dave-pacred → main)
+Branch: `podeng` — push to own branch only; เดฟ merges `podeng` → `dave-pacred` → `main`
 
-> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+> ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
-> The team pivoted from V3 to a **literal 1:1 transcription** of legacy
-> PHP → Next.js per the owner's "100% sameness FIRST" rule. **Your lane =
-> customer portal** = ~22 remaining `member/*.php` files (เดฟ did batch-1:
-> `menu.php` · `china-address.php` · `account-settings.php` · `search.php`).
+> Owner cleaned up branch model. `faithful-port` branch deleted — your flow now goes direct via `dave-pacred` to `main` (ก๊อต gates).
 >
-> Source on this machine (ภูม downloaded): `C:\Users\Admin\pcscargo\member\`.
-> Pattern reference: `app/[locale]/(protected)/dashboard/page.tsx` (เดฟ's
-> menu.php pilot · 668→479 lines after CSS-fix simplification) + the
-> 3 batch-1 customer screens.
+> **Just merged into `dave-pacred` (commit `d7b1758`):** your 4 commits including:
+> - `5097a2b` feat(home): related-tags + bottom banner + FCL single-price + mobile polish
+> - `fbb63fe` feat(podeng): rebuild (protected) chrome + /dashboard in Tailwind, drop legacy CSS leak
 >
-> Branch loop: `podeng` → เดฟ merges into `dave-pacred` → `faithful-port` →
-> ก๊อต gate → `main`. The pre-D1 landing / SEO / marketing-site work is
-> Phase C (deferred) — pause those until the 1:1 port ships.
+> เดฟ verifies + pushes to main (next stop after your save-points).
+>
+> **Your lane unchanged:** customer-facing frontend + brand-asset swap + customer-portal UI fidelity. ก๊อต now leads the admin 1:1 lane (was ภูม before). ภูม resumes V3 enhancements on Poom-pacred (UNLOCKED).
+>
+> **READ FIRST:**
+> - [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — gap analysis
+> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — updated branch model
+> - [`docs/research/podeng-brand-asset-swap-2026-05-20.md`](../research/podeng-brand-asset-swap-2026-05-20.md) — your brand-swap inventory (16-icon launchpad set still missing from owner)
 >
 > **READ FIRST:**
 > - [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) — branch state · per-role lanes

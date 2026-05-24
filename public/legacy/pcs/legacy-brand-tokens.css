@@ -1,0 +1,240 @@
+/* ─────────────────────────────────────────────────────────────────
+   legacy-brand-tokens.css — Pacred brand-token swap for the legacy
+   PCS Cargo customer portal (and any admin page that still renders
+   under `.pcs-legacy`).
+
+   Loaded LAST in (protected)/layout.tsx's CSS bundle — after the
+   per-screen sheets (search.css / payment.css / cart.css / etc.)
+   that hardcode the Modern-Admin gradient `#cc3333 → #f15a24` plus
+   the themeforest semantic palette (#28d094 / #ff4961 / #ff9149 /
+   #1e9ff2). Goal: every legacy element picks up podeng's
+   #B30000 + supporting tokens without touching the SC markup.
+
+   Owner directive 2026-05-24:
+     "theme และ style ให้ยึดกับ podeng ของน้องปอนทั้งหมดเลยนะ
+      ทั้งหลังบ้านลูกค้า และ หลังบ้าน admin set theme ไว้ให้ตรงกัน
+      เชื่อมกันไปเลย"
+
+   Scope — `.pcs-legacy` only. Public marketing pages render outside
+   that scope so podeng's existing `@theme inline` keeps applying.
+   ───────────────────────────────────────────────────────────────── */
+
+/* ── 1. Pacred brand variables — for downstream rules to reference ── */
+.pcs-legacy {
+  --pr-primary-50:  #fff0f0;
+  --pr-primary-100: #ffe0e0;
+  --pr-primary-200: #ffb8b8;
+  --pr-primary-300: #ff7070;
+  --pr-primary-400: #ff3030;
+  --pr-primary-500: #d60000;
+  --pr-primary-600: #b30000; /* canonical Pacred red — primary CTA */
+  --pr-primary-700: #8c0000; /* hover state */
+  --pr-primary-800: #660000;
+  --pr-primary-900: #400000;
+
+  /* Semantic accent palette — kept compatible with the legacy
+     Modern-Admin theme's "success/warning/info" cells but
+     re-tinted to harmonise with the Pacred red. */
+  --pr-success: #06c755; /* LINE green — kept */
+  --pr-warning: #f59e0b; /* amber-500 */
+  --pr-info:    #0ea5e9; /* sky-500 */
+  --pr-danger:  #b30000; /* dangerous + revenue-critical → uses brand red */
+  --pr-muted:   #737373;
+  --pr-border:  #e0e0e0;
+}
+
+/* ── 2. `.btn-main` — the legacy primary CTA pill ─────────────────
+   Per-screen sheets (search.css L540 / payment.css L296 / service-
+   import.css L321) define this with a `#cc3333 → #f15a24` gradient.
+   Replace with podeng's solid #B30000; keep the white text + zero
+   border the legacy used. */
+.pcs-legacy .btn-main {
+  color:      #fff;
+  background: var(--pr-primary-600);
+  border:     0;
+  transition: background-color 120ms ease-in-out;
+}
+.pcs-legacy .btn-main:hover,
+.pcs-legacy .btn-main:focus {
+  background: var(--pr-primary-700);
+}
+.pcs-legacy .btn-main:active {
+  background: var(--pr-primary-800);
+}
+.pcs-legacy .btn-main:disabled,
+.pcs-legacy .btn-main.disabled {
+  background: var(--pr-primary-300);
+  opacity:    0.7;
+}
+
+/* The legacy `bg-gradient-pcs` + `bg-gradient-x-pcs` utility classes
+   point at the same gradient — squash both for brand parity. */
+.pcs-legacy .bg-gradient-pcs,
+.pcs-legacy .bg-gradient-x-pcs,
+.pcs-legacy .bg-main {
+  background: var(--pr-primary-600) !important;
+  color:      #fff;
+}
+
+/* ── 3. Brand text + border accents ───────────────────────────────
+   `.text-color`, `.text-main`, `.border-main` are sprinkled across
+   menu.css, profile.css, cart.css for the brand-red highlights
+   (legacy used the gradient's start color #cc3333). */
+.pcs-legacy .text-color,
+.pcs-legacy .text-main,
+.pcs-legacy .text-pcs,
+.pcs-legacy .text-primary {
+  color: var(--pr-primary-600) !important;
+}
+
+.pcs-legacy .border-main,
+.pcs-legacy .border-pcs,
+.pcs-legacy .border-primary {
+  border-color: var(--pr-primary-600) !important;
+}
+
+/* The legacy menu icons live inside `.text-color` containers and
+   inherit `currentColor` for their stroke fills — once `.text-color`
+   resolves to #B30000 above, the SVGs follow automatically. No
+   per-icon override needed. */
+
+/* ── 4. Bootstrap-extended semantic buttons ───────────────────────
+   The Modern-Admin theme ships dramatic themeforest greens / oranges
+   that clash with the Pacred-red brand. Re-tint each semantic class
+   to a Pacred-harmonised palette. */
+.pcs-legacy .btn-success,
+.pcs-legacy .badge-success {
+  background-color: var(--pr-success);
+  border-color:     var(--pr-success);
+  color:            #fff;
+}
+.pcs-legacy .btn-success:hover {
+  background-color: #05a847;
+  border-color:     #05a847;
+}
+
+.pcs-legacy .btn-warning,
+.pcs-legacy .badge-warning {
+  background-color: var(--pr-warning);
+  border-color:     var(--pr-warning);
+  color:            #fff;
+}
+
+.pcs-legacy .btn-info,
+.pcs-legacy .badge-info {
+  background-color: var(--pr-info);
+  border-color:     var(--pr-info);
+  color:            #fff;
+}
+
+.pcs-legacy .btn-danger,
+.pcs-legacy .badge-danger {
+  background-color: var(--pr-danger);
+  border-color:     var(--pr-danger);
+  color:            #fff;
+}
+.pcs-legacy .btn-danger:hover {
+  background-color: var(--pr-primary-700);
+  border-color:     var(--pr-primary-700);
+}
+
+/* Outline button variants — re-tint border + text to match. */
+.pcs-legacy .btn-outline-main,
+.pcs-legacy .btn-outline-primary {
+  color:        var(--pr-primary-600);
+  border-color: var(--pr-primary-600);
+  background:   transparent;
+}
+.pcs-legacy .btn-outline-main:hover,
+.pcs-legacy .btn-outline-primary:hover {
+  color:      #fff;
+  background: var(--pr-primary-600);
+}
+
+/* ── 5. `text-info` (legacy uses for inline links + soft accents) ──
+   Legacy theme's #1e9ff2 reads "Twitter blue" — replace with the
+   Pacred red so customer-facing accents stay on brand. Where a true
+   "info"-blue is needed (sweetalert toasts, etc.) the
+   per-component CSS hardcodes the color and bypasses this rule.
+
+   NOTE — leave `.text-success` / `.text-danger` semantic colors
+   alone here because they signal state (paid / cancelled), not
+   brand. */
+.pcs-legacy .text-info {
+  color: var(--pr-primary-600) !important;
+}
+
+/* ── 6. Tab strip / pill accents that read the brand color ───────
+   Per-screen sheets style their pills via `.border-main12-de` /
+   `.border-main19-de` (cart promo cards). Override the active state
+   to use brand red. */
+.pcs-legacy .border-main12-de.border-main,
+.pcs-legacy .border-main19-de.border-main {
+  border-color: var(--pr-primary-600) !important;
+  box-shadow:   0 0 0 1px var(--pr-primary-600) inset;
+}
+
+/* ── 7. Pacred logo + brand-accented headings ─────────────────────
+   The legacy header may include a small `.pcs-brand` text-mark or
+   the navbar logo class. Make sure they read the Pacred red rather
+   than the bootstrap-extended primary blue. */
+.pcs-legacy .pcs-brand,
+.pcs-legacy .brand-logo,
+.pcs-legacy .pcs-text-brand {
+  color: var(--pr-primary-600);
+}
+
+/* ── 8. Form focus + active-checkbox ring ─────────────────────────
+   Modern-Admin theme uses #1e9ff2 (blue) for input focus + checked
+   state — re-tint to brand red so customer-input surfaces feel like
+   one product line with the public-site forms. */
+.pcs-legacy .form-control:focus,
+.pcs-legacy input[type="text"]:focus,
+.pcs-legacy input[type="email"]:focus,
+.pcs-legacy input[type="tel"]:focus,
+.pcs-legacy input[type="password"]:focus,
+.pcs-legacy input[type="number"]:focus,
+.pcs-legacy textarea:focus,
+.pcs-legacy select:focus {
+  border-color: var(--pr-primary-600) !important;
+  box-shadow:   0 0 0 .2rem rgba(179, 0, 0, .12) !important;
+  outline:      0;
+}
+
+/* Checkbox / radio "checked" tint */
+.pcs-legacy .checkboxes-color:checked,
+.pcs-legacy input[type="checkbox"]:checked,
+.pcs-legacy input[type="radio"]:checked {
+  accent-color: var(--pr-primary-600);
+}
+
+/* ── 9. Pagination active page chip ───────────────────────────────
+   Bootstrap-extended's pager active state uses theme primary blue.
+   Re-tint to Pacred red so the search-results pager matches the
+   surrounding chrome. */
+.pcs-legacy .page-item.active .page-link {
+  background-color: var(--pr-primary-600);
+  border-color:     var(--pr-primary-600);
+  color:            #fff;
+}
+.pcs-legacy .page-link {
+  color: var(--pr-primary-600);
+}
+.pcs-legacy .page-link:hover {
+  color:            var(--pr-primary-700);
+  background-color: var(--pr-primary-50);
+  border-color:     var(--pr-primary-100);
+}
+
+/* ── 10. Spinner + loading dot color (svg currentColor) ──────────
+   The legacy loading shimmer (.preload-effect / .progress-bar
+   variants) defaults to themeforest gray. Light-tint with the brand. */
+.pcs-legacy .progress-bar.bg-gradient-x-pcs,
+.pcs-legacy .progress-bar.bg-main {
+  background: linear-gradient(
+    90deg,
+    var(--pr-primary-600) 0%,
+    var(--pr-primary-400) 50%,
+    var(--pr-primary-600) 100%
+  ) !important;
+}

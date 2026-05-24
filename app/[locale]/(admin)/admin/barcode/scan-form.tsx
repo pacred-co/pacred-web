@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-type Mode = "intake" | "prepare" | "driver";
+type Mode = "lookup" | "intake" | "prepare" | "driver";
 
 type LogEntry = {
   ts: string;
@@ -24,6 +24,7 @@ type LogEntry = {
 };
 
 const MODE_LABEL: Record<Mode, string> = {
+  lookup:  "🔍 ค้นหา (ไม่เปลี่ยนสถานะ)",
   intake:  "📦 รับเข้าโกดัง",
   prepare: "🚚 เตรียมส่ง",
   driver:  "🛻 ปล่อยให้คนขับ",
@@ -316,6 +317,20 @@ export function ScanForm({
                   {lastResult.detail.member_code && <span className="font-mono mr-2">{lastResult.detail.member_code}</span>}
                   {lastResult.detail.customer_name}
                 </div>
+              )}
+              {/* Lookup mode: surface a "Go to record" link — mirrors the
+                  legacy `gateway.php?type=all` redirect to forwarder/update. */}
+              {lastResult.ok && lastResult.detail && mode === "lookup" && (
+                <a
+                  href={
+                    lastResult.detail.ref_type === "forwarder"
+                      ? `/admin/forwarders/${encodeURIComponent(lastResult.detail.ref_no)}`
+                      : `/admin/service-orders/${encodeURIComponent(lastResult.detail.ref_no)}`
+                  }
+                  className="inline-block mt-1.5 text-xs font-semibold underline"
+                >
+                  เปิดรายการ {lastResult.detail.ref_no} →
+                </a>
               )}
             </div>
             <span className="text-xs opacity-60 shrink-0">{lastResult.ts}</span>

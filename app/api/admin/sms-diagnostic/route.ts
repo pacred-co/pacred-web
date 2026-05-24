@@ -29,7 +29,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { sendSms, checkSmsBalance } from "@/lib/sms/gateway";
+import { sendSms, checkSmsBalance, isSmsBypassed } from "@/lib/sms/gateway";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +66,13 @@ export async function GET(request: Request) {
     placeholder: apiKey.startsWith("YOUR_") || apiSecret.startsWith("YOUR_"),
     sender:      process.env.THAIBULKSMS_SENDER ?? "Pacred",
     provider:    process.env.SMS_PROVIDER ?? "thaibulksms",
-    otpBypass:   process.env.OTP_BYPASS === "true",
+    // SMS dev-bypass. `otpBypass` here is the EFFECTIVE state — what sendSms
+    // actually does. OTP_BYPASS=true is hard-disabled on Vercel production by
+    // isSmsBypassed(), so this can read false even when otpBypassEnv is "true".
+    // When effective bypass is ON: NO real SMS is sent + balance is a fake 9999.
+    otpBypass:     isSmsBypassed(),
+    otpBypassEnv:  process.env.OTP_BYPASS ?? "(unset)",
+    vercelEnv:     process.env.VERCEL_ENV ?? "(unset — local)",
     // `force` routes the SMS via Standard / Premium / Corporate credit pool.
     // Default is "premium" (Pacred's Corporate sender approval lives there).
     // Override via THAIBULKSMS_FORCE if needed.

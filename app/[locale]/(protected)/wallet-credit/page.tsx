@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { BANK } from "@/components/seo/site";
 
 /**
  * Customer "กระเป๋าสตางค์เครดิต" (credit wallet) screen — a FAITHFUL 1:1
@@ -59,8 +60,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * replaced by a server-side render of every credit row; the
  * scroll-to-load-more behaviour itself is not reproduced.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet-credit.php L4-51 (the deposit POST handler — INSERT
@@ -235,7 +236,7 @@ export default async function WalletCreditPage() {
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet-credit.php <title> L53 (Next.js owns <head> — kept as a
-          fidelity comment): กระเป๋าสตางค์เครดิต | PR Cargo */}
+          fidelity comment): กระเป๋าสตางค์เครดิต | Pacred */}
 
       {/* BEGIN: Content — wallet-credit.php L76 */}
       <div className="app-content content">
@@ -306,7 +307,7 @@ export default async function WalletCreditPage() {
                                   <img
                                     className="brand-logo logo-wallet"
                                     alt="logo"
-                                    src="/legacy/pcs/logo.png"
+                                    src="/images/pacred-logo-red.png"
                                   />
                                 </div>
                               </div>
@@ -417,7 +418,7 @@ export default async function WalletCreditPage() {
                   <div className="modal-content ">
                     <div className="modal-header header-from">
                       <h4 className="modal-title">
-                        เติมเงินเข้าเป๋าตัง PR Cargo
+                        เติมเงินเข้าเป๋าตัง Pacred
                       </h4>
                       <button
                         type="button"
@@ -448,12 +449,12 @@ export default async function WalletCreditPage() {
                             <div className="row">
                               <div className="col-12 col-md-9">
                                 <h2 className="text-white">
-                                  ธนาคารกสิกรไทย
+                                  {BANK.name}
                                 </h2>
                                 <div className="text-center">
                                   เลขที่บัญชี{" "}
                                   <span className="font-2rem mr-0-3" id="text2">
-                                    064-174-3836
+                                    {BANK.accountNumber}
                                   </span>
                                   <button
                                     data-toggle="tooltip"
@@ -466,7 +467,7 @@ export default async function WalletCreditPage() {
                                   </button>
                                   <br />
                                   พร้อมเพย์{" "}
-                                  <span id="text1">0-1055-60160-69-4 </span>
+                                  <span id="text1">0-1055-64077-71-6 </span>
                                   <button
                                     data-toggle="tooltip"
                                     data-placement="top"
@@ -477,7 +478,7 @@ export default async function WalletCreditPage() {
                                     คัดลอก
                                   </button>
                                   <h5 className="text-white">
-                                    บริษัท พีซีเอส คาร์โก้
+                                    บริษัท แพคเรด (ประเทศไทย) จำกัด
                                   </h5>
                                 </div>
                               </div>
@@ -539,14 +540,14 @@ export default async function WalletCreditPage() {
                               }}
                             ></div>
                             <div style={{ textAlign: "center", marginTop: "10px" }}>
-                              เลขที่บัญชี : <span>064-174-3836</span>
+                              เลขที่บัญชี : <span>{BANK.accountNumber}</span>
                             </div>
                             <div style={{ textAlign: "center" }}>
                               พร้อมเพย์ :{" "}
-                              <span id="pp-id-show2">0-1055-60160-69-4</span>
+                              <span id="pp-id-show2">0-1055-64077-71-6</span>
                             </div>
                             <h5 className="text-center">
-                              บริษัท พีซีเอส คาร์โก้
+                              บริษัท แพคเรด (ประเทศไทย) จำกัด
                             </h5>
                             <div
                               id="amount-show"

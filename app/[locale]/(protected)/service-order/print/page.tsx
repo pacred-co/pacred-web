@@ -77,10 +77,11 @@ import { PrintButton } from "@/components/print-button";
  *  - logo-header-12.png / stamp.png — same: legacy PCS placeholders
  *    under `/legacy/pcs/theme/`, flagged for the brand swap.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text
- * only. `PCS Cargo` strings in the document are kept verbatim where
- * the legacy prints them (interim brand split — runbook §3 / the
- * PCS-scrub plan gates the rename).
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. The visible "ขอบคุณที่เลือกใช้"
+ * line now reads "Pacred". The legacy address / tax-ID / bank
+ * account values remain (data values — runbook §3 / PCS-scrub plan
+ * gates those).
  */
 
 export const dynamic = "force-dynamic";
@@ -862,7 +863,7 @@ function ShopItemRows({ doc }: { doc: PrintDoc }) {
       out.push(
         <tr key={`thanks-${provider.cProvider}`} className="p-1">
           <th colSpan={7} className="text-center p-1">
-            <span>ขอบคุณที่เลือกใช้ PCS Cargo</span>
+            <span>ขอบคุณที่เลือกใช้ Pacred</span>
             <br />
             {/* stamp.png — legacy PCS asset placeholder
                 (flagged for ปอน's PR brand swap). */}

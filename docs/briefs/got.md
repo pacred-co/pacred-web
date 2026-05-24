@@ -1,32 +1,41 @@
-# ก๊อต — Senior Advisor / Production Watcher
+# ก๊อต — Senior Advisor / Production Watcher / **Admin 1:1 Lead (NEW 2026-05-24)**
 
-Last reviewed: 2026-05-19 (D1 — **direction shifted PM to 1:1 PHP→Next port**)
-Branch: `main` (production gatekeeper) · Authority: second-tier owner
+Last reviewed: 2026-05-24 (strategy reset — admin lane moves to you · V3 unlocked for ภูม)
+Branch: `main` (production gatekeeper + own commits for admin 1:1) · Authority: second-tier owner
 
-> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+> ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
-> The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
-> shipped this morning) to a **literal 1:1 transcription** of legacy PHP →
-> Next.js per the owner's "100% sameness FIRST" rule. **New branch loop:**
-> `Poom-pacred` (ภูม admin) + `dave-pacred` (เดฟ customer/integrate) +
-> `podeng` (ปอน customer-portal) → **`faithful-port`** (integration target)
-> → **YOUR gate** → `main` (Vercel production).
+> Owner cleaned up branch model and **assigned you the admin 1:1 lane** (was ภูม pre-reset). ภูม returns to V3 backend continuation on `Poom-pacred` (now UNLOCKED).
 >
-> **Your boundary unchanged** — you still own `main` + Vercel + domain + the
-> production smoke gate. What changed is the *pre-production* integration
-> target: **`faithful-port` replaces `dave`** for the 1:1 work. V3 commits
-> on `Poom`/`dave` are preserved (already merged into `faithful-port`) but
-> frozen — nothing new lands there until further notice.
+> **Your two hats:**
+> 1. **Production gate** (unchanged) — review + ship to main
+> 2. **Admin 1:1 transcription lead (NEW)** — port the 187 `pcs-admin/*.php` files to `app/[locale]/(admin)/`
 >
-> **READ FIRST:** [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) §7 "ก๊อต production-gate context"
-> · [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) (the method).
+> **Active branches (6 — `faithful-port` deleted, `claude/*` cleaned):**
+> | Branch | Owner | Purpose |
+> |---|---|---|
+> | `main` | YOU (gate + admin commits) | Production |
+> | `dave-pacred` | เดฟ | 1:1 customer-backend + integration; pushes to main |
+> | `podeng` | ปอน | Frontend; merged via dave-pacred |
+> | `Poom-pacred` | ภูม | V3 backend (UNLOCKED) — merges after 1:1 |
+> | `dave` / `Poom` | archive | pre-1:1 working branches, frozen |
 >
-> **Open for your confirmation** (per save-point §11):
-> 1. Confirm `faithful-port` as pre-production integration target (replaces `dave` for 1:1 work)
-> 2. Confirm production cutover gate (one-click vs staged?)
-> 3. Borrowed-API switchover status (TAMIT / JMF / LINE Notify / MOMO) — when can ภูม scrub these refs from transcribed admin screens?
-> 4. Per-screen fidelity review process (sync vs async · cadence?)
-> 5. ThemeForest "Modern Admin" template — OK to mirror byte-identically in `public/legacy/pcs/admin/`? (same template legacy already ships · no licence change)
+> **Flow:** ปอน + ก๊อต admin + เดฟ customer → main · ภูม V3 → main *after* 1:1 ships
+>
+> **Just landed on dave-pacred (commit `d7b1758`):** ปอน's 4 commits (home polish + (protected) chrome rebuild in Tailwind). เดฟ verifies + pushes to main next. Watch for it.
+>
+> **READ FIRST:**
+> - [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — 10 critical gaps + sprint sequence + open questions for owner
+> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — updated branch model
+> - [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — the 1:1 method (you'll follow this)
+> - Admin pilot reference: `app/[locale]/(admin)/admin/admins/page.tsx` (ภูม's `admin-table.php` transcription)
+>
+> **Open questions for owner / team** (also in deep-audit §6):
+> 1. Coordination split between you (admin 1:1) and ภูม (V3 admin enhancements)
+> 2. TAMIT real-time vs delayed verification — your call
+> 3. LINE Notify EOL April 2025 — port per-user OAuth or migrate to LINE Messaging API model?
+> 4. CargoThai (`api.newcargothai.net`) — still active partnership?
+> 5. Customer image migration (37GB rar) — when can you provision disk for extraction?
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 

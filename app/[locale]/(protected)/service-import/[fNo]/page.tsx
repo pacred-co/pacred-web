@@ -69,8 +69,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *                              ⋈ tb_forwarder_driver fd
  *                              WHERE fdi.fid=<id>
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Otherwise the markup is byte-for-byte
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. Otherwise the markup is byte-for-byte
  * the legacy output — same class names, same Thai labels, same order.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
@@ -173,8 +173,8 @@ const NAME_SHIP_BY: Record<string, string> = {
   "34": "ทวีทรัพย์ระยอง", "35": "ศิริสมบูรณ์", "36": "นิวสอง อัศวินขนส่ง",
   "37": "โชคสถาพรขนส่ง", "38": "ทรัพย์สมบูรณ์ถาวร", "39": "MNB Transport",
   "40": "หจก.โชคพูลทรัพย์ขนส่ง 2014", "41": "สิรินครขนส่ง", "42": "พาณิชย์การขนส่ง KSD",
-  PCS: "รับเองโกดัง PCS กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
-  PCSF: "PCS เหมาเหมา", PCSE: "PCS Express",
+  PCS: "รับเองโกดัง Pacred กทม", F: "บริษัทจัดหาให้อัตโนมัติ",
+  PCSF: "Pacred เหมาเหมา", PCSE: "Pacred Express",
 };
 function nameShipBy(fShipBy: string | null): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? "ไม่พบข้อมูล";
@@ -255,7 +255,7 @@ function TagPro({ id }: { id: string | null }) {
 // photo URL/filename → displayable URL.
 function convertIMGCHN(url: string | null): string {
   if (!url || url === "") return "/legacy/pcs/shops/default.png";
-  let u = url
+  const u = url
     .replace("?x-oss-process=style/alsy", "")
     .replace("?x-oss-process=style/tbsy", "")
     .replace("_250x250.jpg", "");
@@ -636,8 +636,12 @@ export default async function ServiceImportDetailPage({
   //   button only renders when fStatus>=6 (`$row['fStatus']<6` returns nothing).
 
   return (
-    <div className="pcs-legacy">
-      {/* Legacy PCS theme — same stylesheet the LIST page loads. */}
+    <div className="pcs-legacy pr-forwarder-detail">
+      {/* Legacy PCS theme — same stylesheet the LIST page loads.
+          The `.pr-forwarder-detail` marker scopes the compact-header /
+          tighter-meta / table-density overrides at the end of
+          service-import.css so they apply on the detail page only
+          (not on the list page that shares this stylesheet). */}
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
 
       {/* forwarder.php L1683-1685 — magnific-popup / switchery / dropify

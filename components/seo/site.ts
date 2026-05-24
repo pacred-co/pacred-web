@@ -71,14 +71,27 @@ export const ADDRESSES = {
     postcode:    "10160",
     full:        "28/40 หมู่บ้าน สิริ อเวนิว เพชรเกษม 81 ถนนมาเจริญ แขวงหนองแขม เขตหนองแขม กรุงเทพมหานคร 10160",
   },
-  /** Bangkok-area receiving warehouse — Samut Sakhon. */
+  /** Bangkok-area receiving warehouse — Samut Sakhon.
+   *
+   *  Canonical address (= ปอน's podeng SOT): `48/3 หมู่ 12 ตำบลอ้อมน้อย
+   *  อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130`. The visible signage at the
+   *  gate reads "S&T WAREHOUSE219" — surfaced as `warehouseName` so
+   *  customers can find the entrance when shipping cargo. GPS coords +
+   *  Google-Maps URLs let landing pages embed the map without
+   *  re-querying.
+   */
   warehouseTh: {
-    line:        "48/3 หมู่ 12",
-    subDistrict: "อ้อมน้อย",
-    district:    "กระทุ่มแบน",
-    province:    "สมุทรสาคร",
-    postcode:    "74130",
-    full:        "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
+    line:          "48/3 หมู่ 12",
+    warehouseName: "S&T WAREHOUSE219",
+    subDistrict:   "อ้อมน้อย",
+    district:      "กระทุ่มแบน",
+    province:      "สมุทรสาคร",
+    postcode:      "74130",
+    full:          "48/3 หมู่ 12 ตำบลอ้อมน้อย อำเภอกระทุ่มแบน จังหวัดสมุทรสาคร 74130",
+    lat:           13.710939,
+    lng:           100.324049,
+    mapUrl:        "https://maps.app.goo.gl/iAfY8MNXrW1Wa9iE8",
+    mapEmbedUrl:   "https://www.google.com/maps/embed?pb=!1m16!1m12!1m3!1d410.7037162530852!2d100.32392984361519!3d13.710919092991068!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!2m1!1zNDgvMyDguKvguKHguLnguYggMTIg4LiV4Liz4Lia4Lil4Lit4LmJ4Lit4Lih4LiZ4LmJ4Lit4LiiIOC4reC4s-C5gOC4oOC4reC4geC4o-C4sOC4l-C4uOC5iOC4oeC5geC4muC4mSDguIjguLHguIfguKvguKfguLHguJTguKrguKHguLjguJfguKPguKrguLLguITguKMgNzQxMzAg4LiE4LmI4Liw!5e1!3m2!1sth!2sth!4v1779612609948!5m2!1sth!2sth",
   },
 } as const;
 

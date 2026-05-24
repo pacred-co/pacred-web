@@ -186,7 +186,7 @@ export function DepositForm() {
 
             <div className="rounded-xl bg-white border border-primary-100 p-4 text-center">
               <p className="text-xs text-muted">บัญชีปลายทาง</p>
-              <p className="font-bold text-base">บริษัท พีซีเอส คาร์โก้ จำกัด</p>
+              <p className="font-bold text-base">บริษัท แพคเรด (ประเทศไทย) จำกัด</p>
               <div className="my-4 inline-block rounded-xl border-2 border-primary-200 bg-white p-3 shadow-sm">
                 <Image src={qr} alt="PromptPay QR" width={256} height={256} unoptimized />
               </div>

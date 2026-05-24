@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { akucargoSearch } from "@/lib/china-search/akucargo";
+import type { AkucargoPlatform } from "@/lib/china-search/akucargo-helpers";
+import { SearchRecents } from "./search-recents";
+import { SearchHistoryLogger } from "./search-history-logger";
 
 /**
  * China product search / search-results screen — a FAITHFUL 1:1
@@ -73,8 +77,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - tb_history_key INSERT (the search-log row, L370-372) is
  *     FLAGGED below — see the note at the INSERT site.
  *
- * Rebrand: legacy `PCS` → `PR` (branding text) — search.php has no
- * `PCS<n>` member codes in its markup.
+ * Rebrand DONE: legacy `PCS` brand → `PR` (branding text) — search.php
+ * has no `PCS<n>` member codes in its markup.
  */
 
 // search.php L305 — $no_of_records_per_page = 24
@@ -185,9 +189,10 @@ export default async function SearchPage({
   }
 
   // ── MODE B — keyword search ─────────────────────────────────
-  // search.php L302-333: provider=pcs branch queries tb_product.
-  // taobao / 1688 use the external TAMIT API (FLAGGED — not wired);
-  // for those providers the grid renders the legacy empty state.
+  // search.php L302-333: provider=pcs branch queries tb_product
+  // (Pacred-local product catalog). taobao / 1688 are wired below
+  // through AkuCargo (P-52, Sprint-3 P2.2 — replaces the legacy
+  // TAMIT keyword endpoint).
   let products: ProductRow[] = [];
   let totalPages = 1;
   let apiError2 = 0; // search.php $apiERROR2 — 1 = "ไม่พบข้อมูล"
@@ -212,9 +217,34 @@ export default async function SearchPage({
       .range(offset, offset + RECORDS_PER_PAGE - 1);
     products = (rows ?? []) as ProductRow[];
   } else {
-    // taobao / 1688 — external TAMIT API not wired (FLAGGED).
-    // search.php L292-298: when $json['data'] is empty → apiERROR2=1.
-    apiError2 = 1;
+    // Sprint-3 P2.2 — taobao / 1688 keyword search via AkuCargo
+    // (P-52 canonical keyword backend; legacy TAMIT keyword endpoint
+    // was retired). When AkuCargo errors (network / not_configured /
+    // rate_limited) we fall back to the legacy `apiERROR2=1` empty
+    // state so the page still renders without throwing.
+    const platform: AkucargoPlatform = provider === "1688" ? "1688" : "taobao";
+    const result = await akucargoSearch(getURL, pageno, platform);
+    if (result.available) {
+      products = result.hits.map((hit, idx) => ({
+        // Synthetic id — AkuCargo returns no DB-style integer key. The
+        // legacy front-end only uses `id` as the React/jQuery key, never
+        // for a server roundtrip; index+1 is unique within the page.
+        id:          idx + 1,
+        pnameth:     hit.title,
+        pimages:     hit.image_url ?? null,
+        ppricepromo: null,           // AkuCargo has no promo-price axis
+        pprice:      hit.price_cny ?? null,
+        purl:        hit.url,
+      }));
+      // AkuCargo doesn't expose total-row count, only a has-more flag.
+      // Best-effort totalPages = current + 1 when more pages exist;
+      // collapses to `pageno` otherwise. The pager UI doesn't need a
+      // precise total, just enough to render "next" while results exist.
+      totalPages = result.has_more ? pageno + 1 : pageno;
+    } else {
+      // search.php L292-298: when $json['data'] is empty → apiERROR2=1.
+      apiError2 = 1;
+    }
   }
 
   /*
@@ -286,6 +316,21 @@ export default async function SearchPage({
                           </button>
                         </div>
                       </form>
+                    </div>
+                    {/* Sprint-3 P2.1 — recent searches strip + a
+                        fire-and-forget logger that closes the legacy
+                        tb_history_key write that the SC port deferred.
+                        Both live behind G8 (actions/search.ts +
+                        migration 0102). */}
+                    <div className="col-12 px-0">
+                      <SearchRecents />
+                      {getURL ? (
+                        <SearchHistoryLogger
+                          query={getURL}
+                          source={dataRe.search ? "china-search.keyword" : "china-search.url"}
+                          resultCount={dataRe.search ? products.length : null}
+                        />
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -366,8 +411,11 @@ export default async function SearchPage({
             <div className="bg-white">
               <div className="row p-1">
                 {provider !== "pcs" ? (
-                  // taobao / 1688 — external TAMIT API not wired (FLAGGED).
-                  // search.php L292-298 empty-data branch ($apiERROR2=1).
+                  // taobao / 1688 — AkuCargo result handled above; the
+                  // empty-state branch fires when AkuCargo returned no
+                  // hits OR errored (network / rate_limited /
+                  // not_configured), mirroring legacy search.php L292-298
+                  // ($apiERROR2=1).
                   apiError2 === 1 ? (
                     <div className="col-12 text-center">
                       <span className="text-danger">

@@ -10,7 +10,7 @@ export function OurService() {
     {
       title: t("importTitle"),       sub: t("importSub"),
       titleMobile: t("importTitle"), subMobile: t("importSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/import.png",
       bgMobile:    "/images/ourservices/mobile/import.png",
       iconDesktop: "",
@@ -20,7 +20,7 @@ export function OurService() {
     {
       title: t("exportTitle"),       sub: t("exportSub"),
       titleMobile: t("exportTitle"), subMobile: t("exportSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/export.png",
       bgMobile:    "/images/ourservices/mobile/export.png",
       iconDesktop: "",
@@ -31,7 +31,7 @@ export function OurService() {
     {
       title: t("transferTitle"),       sub: t("transferSub"),
       titleMobile: t("transferTitle"), subMobile: t("transferSub"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/exchange.png",
       bgMobile:    "/images/ourservices/mobile/exchange.png",
       iconDesktop: "",
@@ -41,7 +41,7 @@ export function OurService() {
     {
       title: t("orderTitle"),       sub: t("orderSub"),
       titleMobile: t("orderTitle"), subMobile: t("orderSubMobile"),
-      href: "/register",
+      href: "/line",
       bgDesktop:   "/images/ourservices/shop.png",
       bgMobile:    "/images/ourservices/mobile/shop.png",
       iconDesktop: "",
@@ -216,23 +216,26 @@ export function OurService() {
                   </span>
                 </div>
 
-                {/* Text — mobile */}
+                {/* Text — mobile · BookingHero-style sticker (white + dark-red stroke + heavy drop shadow) */}
                 <div
                   className="absolute z-[5] flex md:hidden flex-col items-center justify-end text-center"
-                  style={{ left: "6px", right: "6px", bottom: "22px" }}
+                  style={{ left: "4px", right: "4px", bottom: "14px" }}
                 >
                   <span
-                    className="text-[#111827] text-[12px] leading-[1.05] font-black tracking-[-0.02em] truncate max-w-full"
+                    className="text-white text-[18px] leading-[1.02] font-black tracking-[-0.025em] truncate max-w-full [-webkit-text-stroke:1.5px_#7f1d1d] [paint-order:stroke_fill]"
                     style={{
                       textShadow:
-                        "0 0 10px rgba(255,255,255,0.95), 0 0 6px rgba(255,255,255,0.85), 0 0 3px rgba(255,255,255,0.7), 0 1px 3px rgba(255,255,255,0.5)",
+                        "0 1px 0 #7f1d1d, 0 2px 8px rgba(0,0,0,0.9), 0 6px 16px rgba(0,0,0,0.65), 0 0 18px rgba(0,0,0,0.35)",
                     }}
                   >
                     {s.titleMobile}
                   </span>
                   <span
-                    className="mt-[3px] text-white text-[9.5px] leading-[1.1] font-extrabold truncate max-w-full"
-                    style={{ textShadow: "0 2px 8px rgba(0,0,0,0.28)" }}
+                    className="mt-[4px] text-white text-[12px] leading-[1.1] font-extrabold truncate max-w-full [-webkit-text-stroke:0.8px_#7f1d1d] [paint-order:stroke_fill]"
+                    style={{
+                      textShadow:
+                        "0 1px 0 #7f1d1d, 0 2px 6px rgba(0,0,0,0.85), 0 4px 12px rgba(0,0,0,0.55)",
+                    }}
                   >
                     {s.subMobile}
                   </span>

@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { bridgeLegacyLogin } from "@/lib/auth/pcs-legacy-bridge";
+import { legacySyntheticEmail } from "@/lib/auth/pcs-legacy-password";
 import { detectIdentifier, normalizePhone } from "@/lib/utils/phone";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { verifyHcaptcha } from "@/lib/hcaptcha";
@@ -60,20 +61,42 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   if (kind === "email") {
     resolvedEmail = identifier.trim();
   } else if (kind === "memberCode") {
-    // Look up phone/email by member_code via admin client (bypass RLS — pre-auth)
+    // Look up the profile by member_code via admin client (bypass RLS — pre-auth).
+    // We pull migrated_from_pcs so we can route migrated customers through the
+    // synthetic legacy email — bypassing the phone-collision trap where two
+    // profiles share a phone (e.g. legacy PR321 + admin PR132 both
+    // +66948782006). If we resolved `phone` here for a migrated customer,
+    // Supabase's phone-based signInWithPassword would lock onto whichever
+    // auth.users row happens to carry that phone (the staff/test account,
+    // not the legacy customer) and sign in as the wrong identity.
     const admin = createAdminClient();
+    const code = identifier.toUpperCase();
     const { data: profile } = await admin
       .from("profiles")
-      .select("phone, email")
-      .eq("member_code", identifier.toUpperCase())
-      .maybeSingle<{ phone: string | null; email: string | null }>();
+      .select("phone, email, migrated_from_pcs")
+      .eq("member_code", code)
+      .maybeSingle<{
+        phone: string | null;
+        email: string | null;
+        migrated_from_pcs: boolean;
+      }>();
 
-    // A migrated PCS customer has no `profiles` row — don't fail here. Leave
-    // the identifier unresolved; the legacy bridge below resolves it against
-    // tb_users.userid.
-    if (profile) {
+    if (profile?.migrated_from_pcs) {
+      // Migrated PCS customer — auth.users was provisioned with the synthetic
+      // email + (typically) no phone. Always resolve to the synthetic email
+      // so native signIn finds THIS customer's auth row, never a colliding
+      // staff/test row.
+      resolvedEmail = legacySyntheticEmail(code);
+    } else if (profile) {
+      // Pacred-web-native customer — phone or own email is the credential.
       resolvedPhone = profile.phone;
       resolvedEmail = profile.email;
+    } else {
+      // No profile row yet — could be a tb_users-only legacy customer that
+      // hasn't been first-login-bridged yet. Synthesize the email anyway:
+      // if `code` matches a tb_users.userid the bridge will resolve below;
+      // if it doesn't, both native + bridge return invalid_credentials.
+      resolvedEmail = legacySyntheticEmail(code);
     }
   } else {
     resolvedPhone = normalizePhone(identifier);

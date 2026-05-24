@@ -48,3 +48,5 @@ next-env.d.ts
 # Backfill 06 progress files (contain target paths only · no secrets)
 # Keep gitignored to avoid leaking the backfill state across machines.
 scripts/backfill/.progress/
+
+.claude/scheduled_tasks.lock

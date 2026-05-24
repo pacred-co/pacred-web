@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "pacred-web-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["start"],
+      "port": 3000
     }
   ]
 }

@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -34,8 +35,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - $cbTotal         → tb_cash_back.cbtotal           (wallet.php L59-66)
  *   - history rows     → tb_wallet_hs                   (load_wallet_hs.php)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet.php L3-51 (the `addData` POST handler — INSERT tb_wallet_hs,
@@ -189,7 +190,7 @@ export default async function WalletDepositPage() {
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet.php <title> L53 (Next.js owns <head> — kept as fidelity
-          comment): กระเป๋าสตางค์ | PR Cargo */}
+          comment): กระเป๋าสตางค์ | Pacred */}
 
       {/* BEGIN: Content — wallet.php L85 */}
       <div className="app-content content">
@@ -247,7 +248,7 @@ export default async function WalletDepositPage() {
                                   <img
                                     className="brand-logo logo-wallet"
                                     alt="logo"
-                                    src="/legacy/pcs/logo.png"
+                                    src="/images/pacred-logo-red.png"
                                   />
                                 </div>
                               </div>
@@ -448,7 +449,7 @@ export default async function WalletDepositPage() {
                 <div className="modal-dialog">
                   <div className="modal-content ">
                     <div className="modal-header header-from">
-                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง PR Cargo</h4>
+                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง Pacred</h4>
                       <button
                         type="button"
                         className="close"
@@ -514,7 +515,7 @@ export default async function WalletDepositPage() {
                                 height: "250px",
                               }}
                             ></div>
-                            <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
+                            <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
                               <a href="/wallet/deposit" target="_blank">
@@ -546,7 +547,7 @@ export default async function WalletDepositPage() {
                                 {" "}
                                 สามารถถอนเงินได้เมื่อ
                                 ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                                PR Cargo มาก่อน
+                                Pacred มาก่อน
                               </li>
                               <li>
                                 {" "}
@@ -602,7 +603,9 @@ export default async function WalletDepositPage() {
       {/* wallet.php L294-302 — auto-open the #wallet-add modal because
           ?page=='add' (Pacred routes this URL at /wallet/deposit, which
           matches the legacy `?page=add` branch). */}
-      <script
+      <Script
+        id="wallet-deposit-auto-open"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `
             $(document).ready(function() {

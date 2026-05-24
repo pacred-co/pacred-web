@@ -54,8 +54,8 @@ import { type ForwarderRow } from "./forwarder-row-view";
  *   - the address <select> → tb_address ⋈ tb_address_main (L979)
  *   - header.php counts   → tb_forwarder (header.php L100-101)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. Nothing else changed.
  *
  * ── NOT transcribed 1:1 (deliberate · flagged for the integrator) ──
  *  1. forwarder.php L9-427 is a large POST handler — `save` (INSERT
@@ -120,6 +120,18 @@ export default async function ServiceImportPage({
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
+
+  // ── getListPayForwarder.php L23 — userCompany ──
+  // The `#list-payment2` payment modal renders the 1% WITHHOLDING TAX
+  // line + the KBank account block only for juristic customers
+  // (`userCompany==1`). Read the legacy flag so the modal stays on the
+  // legacy data path (not the rebuilt-app `profiles.account_type`).
+  const { data: userRow } = await admin
+    .from("tb_users")
+    .select("usercompany")
+    .eq("userid", memberCode)
+    .maybeSingle<{ usercompany: string | number | null }>();
+  const isJuristic = String(userRow?.usercompany ?? "") === "1";
 
   // ── forwarder.php L450 — corporate check ──
   // SELECT ID FROM tb_corporate WHERE userID=… AND corporateStatus=1
@@ -369,7 +381,7 @@ export default async function ServiceImportPage({
 
       {/* forwarder.php <title> L436 (Next.js owns <head> — kept here
           as a comment for the fidelity record):
-          รายการฝากนำเข้า | PR Cargo */}
+          รายการฝากนำเข้า | Pacred */}
 
       {/* BEGIN: Content — forwarder.php L443 */}
       <div className="app-content content">
@@ -581,6 +593,7 @@ export default async function ServiceImportPage({
                                   rowsData={rows}
                                   arrFidDriver={Array.from(arrFidDriver)}
                                   q={q}
+                                  isJuristic={isJuristic}
                                   showPayBar={showPayBar}
                                   showMaoStrip={showMaoStrip}
                                   showPayStrip={
@@ -901,13 +914,13 @@ export default async function ServiceImportPage({
                             {a.full}
                           </option>
                         ))}
-                      <option value="PCS">รับเองหน้าโกดัง PCS กทม</option>
+                      <option value="PCS">รับเองหน้าโกดัง Pacred กทม</option>
                     </select>
                     <div className="shipBy-select pt-1 mb-05">
                       <div id="selectShipBy"></div>
                     </div>
                     <div className="text-danger font-0_85rem">
-                      หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PR Cargo ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
+                      หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส ที่เก็บต้นทางเท่านั้น{" "}
                       <a
                         href="/services/import-china"
                         target="_blank"
@@ -1007,7 +1020,7 @@ export default async function ServiceImportPage({
           >
             <div className="modal-header">
               <span className="text-white font-1_7rem">
-                คุณได้รับสิทธิ์ร่วมโปรโมชัน PR เหมา ๆ{" "}
+                คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
               </span>
               <button
                 type="button"

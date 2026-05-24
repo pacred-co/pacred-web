@@ -17,6 +17,198 @@
    that was a misdiagnosis; the legacy site is NOT bounded at 1140.)
    ───────────────────────────────────────────────────────────────── */
 
+/* ── 0. Modern Pacred chrome on (protected) — un-stick the legacy override ───
+   (protected)/layout.tsx now renders the marketing-site <NavBar> + <SearchBar>
+   instead of legacy PcsTopMenu / PcsLeftMenu (ปอน 2026-05-23). Three legacy
+   rules collide with the public chrome and need un-doing:
+
+   1. Modern-Admin's bundled `header { position: fixed }` rule yanks the
+      NavBar 162px into the page on first load → force `position: sticky`.
+   2. The legacy `.app-content` carries `min-height: calc(100% - <footer>)`
+      which, inside the Root Layout's `body.flex.flex-col`, forces the
+      content area to claim the full viewport — and `<SearchBar>`'s flex
+      sibling gets squeezed down to its 1px border. Re-baselining
+      `min-height: auto` lets all three siblings keep their natural height.
+   3. Belt-and-braces: pin NavBar + SearchBar `flex-shrink: 0` so they
+      keep their natural height regardless of whatever the inside content
+      decides to claim. */
+body[class] > header.sticky,
+header.sticky.top-0.z-50.w-full {
+  position: sticky !important;
+  top: 0 !important;
+  /* Bootstrap-extended ships `.sticky { width: 65% }` which shrinks the
+     full-width NavBar to ~244px on a 375px viewport. Force full width. */
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+body[class] > div.sticky,
+div.block.sticky.top-\[56px\].z-40 {
+  position: sticky !important;
+  /* Tailwind ships `.top-\[56px\] { top: 56px }` + `.w-full { width:100% }`
+     but Bootstrap-extended (Modern-Admin theme) defines
+     `.sticky { top: 20%; width: 65% }` later in the cascade — wins on the
+     same (0,1,0) specificity and pushes the SearchBar to ~162px / 244px
+     on a 812×375 viewport. Re-pin the intended offset and width. */
+  top: 56px !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+body[class] > .app-content,
+body[class] > div.app-content.content {
+  min-height: auto !important;
+}
+
+/* Modern-Admin theme rule `body.fixed-navbar { padding-top: 5rem }` exists
+   so legacy `position:fixed` top-nav can clear the body — but our top chrome
+   is now the public-site sticky <NavBar /> which takes its own flow space.
+   The 119px padding-top just creates a dead gap above the NavBar. */
+body.vertical-layout.fixed-navbar { padding-top: 0 !important; }
+
+/* Bootstrap-4's unlayered `nav { display: block }` defeats Tailwind v4's
+   `.md:hidden` (`@layer utilities`) — unlayered rules win over layered. The
+   FloatingTabs mobile-only bottom nav was therefore visible on desktop. */
+@media (min-width: 768px) {
+  nav.md\:hidden { display: none !important; }
+}
+
+/* Bootstrap-extended ships an unlayered `.hidden` that sets BOTH
+   `display: none` AND `visibility: hidden`, loaded AFTER Tailwind's
+   `.md:flex`. Even after re-asserting `display: flex` at md, the rail still
+   rendered invisible because `visibility: hidden` survived. Re-assert both. */
+@media (min-width: 768px) {
+  .hidden.md\:flex {
+    display: flex !important;
+    visibility: visible !important;
+  }
+}
+
+/* Hide the legacy mobile bottom-nav (`.nav-footer-pcs`) — <FloatingTabs />
+   from the marketing site fills that slot now (ปอน 2026-05-23). The
+   sibling desktop right-rail (`.nav-right-pcs`) inside the same
+   <PcsFooterNav /> tree is kept. */
+nav.nav-footer-pcs { display: none !important; }
+
+/* Left sidebar icons — grayscale baseline, full color on hover / active
+   link, matching the FloatingTabs pattern (ปอน 2026-05-24: "เปลี่ยน
+   ภาพไอคอนเหมาะสม ขึ้นเทาออฟไลน์ไว้ เอาเมาส์ไปชี้ หรือ กดค่อยมีสี"). */
+#pcs-left-menu .pcs-icon {
+  filter: grayscale(1) brightness(0.9);
+  opacity: 0.65;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+#pcs-left-menu .nav-item:hover .pcs-icon,
+#pcs-left-menu .nav-item.active .pcs-icon,
+#pcs-left-menu .nav-item.open .pcs-icon,
+#pcs-left-menu li.active .pcs-icon,
+#pcs-left-menu a:hover .pcs-icon,
+#pcs-left-menu a.active .pcs-icon {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+/* Slick carousel arrows on `.single-item-member` — default slick ships
+   20×20 transparent text arrows; ปอน 2026-05-24 wants them obvious +
+   clickable. Re-style to 44×44 white circles with the Pacred-red chevron,
+   positioned safely inside the banner edge. */
+.single-item-member .slick-prev,
+.single-item-member .slick-next {
+  width: 44px !important;
+  height: 44px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+  z-index: 10;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.single-item-member .slick-prev:hover,
+.single-item-member .slick-next:hover {
+  background: #ffffff !important;
+  transform: translateY(-50%) scale(1.05);
+}
+.single-item-member .slick-prev { left: 12px !important; }
+.single-item-member .slick-next { right: 12px !important; }
+.single-item-member .slick-prev::before,
+.single-item-member .slick-next::before {
+  font-size: 24px !important;
+  color: #B91C1C !important;
+  opacity: 1 !important;
+  font-weight: bold;
+  line-height: 1;
+}
+/* Hide carousel arrows on mobile — touch users swipe instead
+   (ปอน 2026-05-24). slick's built-in swipe handler stays on. */
+@media (max-width: 767.98px) {
+  .single-item-member .slick-prev,
+  .single-item-member .slick-next {
+    display: none !important;
+  }
+}
+
+/* Desktop: left sidebar spans the full viewport height and overlays the
+   NavBar (ปอน 2026-05-23 — "ให้แถบซ้ายพาดเต็มไปเลย, ทับไปเลย, ไม่ต้อง
+   ปรับขนาด top menu"). Modern-Admin theme defaults it to start under the
+   fixed top-nav at ~112px; we pin top:0 + full viewport height and bump
+   z-index above the NavBar's z-50 so the sidebar visually overlaps the
+   top chrome. Mobile keeps the theme's slide-off behaviour untouched
+   (the @media guard skips this rule below the md breakpoint).
+
+   Also force `position: fixed` here — when we dropped the Bootstrap CSS
+   bundle (ปอน 2026-05-24) the sidebar lost its `position: fixed` rule and
+   defaulted to static, eating ~900px of flex-column space and pushing
+   page content out of the viewport. */
+@media (min-width: 768px) {
+  #pcs-left-menu.main-menu {
+    position: fixed !important;
+    left: 0 !important;
+    /* Start just below the NavBar (56px) — sidebar overlaps the SearchBar
+       (which sits at top:56) so it covers SearchBar's left edge but stops
+       short of the NavBar (head). ปอน 2026-05-24
+       "ขยับให้ไปทับ search bar ก็พอ". */
+    top: 56px !important;
+    width: 260px !important;
+    height: calc(100vh - 56px) !important;
+    z-index: 45 !important;
+    overflow-y: auto !important;
+    background: #ffffff !important;
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
+    /* Hide the scrollbar entirely (ปอน 2026-05-24). The sidebar still
+       scrolls via wheel / touch / arrow keys — only the visible bar is
+       gone. Firefox uses `scrollbar-width: none`; Chromium/WebKit use the
+       `::-webkit-scrollbar { display: none }` rule below. */
+    scrollbar-width: none;
+  }
+  #pcs-left-menu.main-menu::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  /* Push body content so it clears the fixed 260px sidebar — applies to
+     the page content. NavBar + SearchBar (the top chrome) stay full-width
+     because the sidebar now sits below them. */
+  body.vertical-layout > .mx-auto {
+    padding-left: 260px;
+    transition: padding-left 0.3s ease-out;
+  }
+
+  /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
+     Sidebar slides off-screen + content reclaims the 260px. Smooth
+     transition matches the toggle button's chevron flip. */
+  #pcs-left-menu.main-menu {
+    transition: transform 0.3s ease-out;
+  }
+  body.pcs-sidebar-collapsed.vertical-layout > #pcs-left-menu.main-menu {
+    transform: translateX(-100%);
+  }
+  body.pcs-sidebar-collapsed.vertical-layout > .mx-auto {
+    padding-left: 0;
+  }
+}
+/* Mobile: hide the sidebar entirely (legacy theme would slide it in via
+   a menu toggle, but the toggle UI lives in the dropped Bootstrap CSS). */
+@media (max-width: 767.98px) {
+  #pcs-left-menu.main-menu { display: none !important; }
+}
+
 /* ── 1. Carousel banner — constrain to legacy aspect (900x270 = 3.33:1) ─── */
 .pcs-legacy-body .single-item-member,
 .pcs-legacy-body .single-item-member .slick-list,

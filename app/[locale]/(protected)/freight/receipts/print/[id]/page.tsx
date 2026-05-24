@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { CONTACT, ADDRESSES, BANK, TAX_ID } from "@/components/seo/site";
 
 /**
  * Freight (ฝากนำเข้า / forwarder import) RECEIPT PRINT document — a
@@ -85,10 +86,11 @@ import { PrintButton } from "@/components/print-button";
  *    only on the LAST page. Reproduced exactly — one <article> per
  *    page, `pageBreakAfter` between them.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text
- * only. `PCS Cargo` / "บริษัท พีซีเอส คาร์โก้ จำกัด" strings the
- * legacy prints in the document are kept verbatim (interim brand
- * split — runbook §3 / the PCS-scrub plan gates the rename).
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" / "บริษัท
+ * พีซีเอส คาร์โก้ จำกัด" brand → `PR<n>` + "Pacred" / "บริษัท แพคเรด
+ * (ประเทศไทย) จำกัด" — the issuer block on the document now shows the
+ * Pacred legal name. The legacy Tax-ID + address values remain (data
+ * values — runbook §3 / PCS-scrub plan gates those).
  */
 export const dynamic = "force-dynamic";
 
@@ -684,8 +686,8 @@ function ReceiptPage({
               <img src={`${THEME_BASE}/logo.png`} style={{ width: "20mm" }} alt="" />
             </th>
             <th colSpan={2} className="text-center">
-              <h2>บริษัท พีซีเอส คาร์โก้ จำกัด</h2>
-              <h3>PCS Cargo CO., LTD.</h3>
+              <h2>บริษัท แพคเรด (ประเทศไทย) จำกัด</h2>
+              <h3>Pacred (Thailand) Co., Ltd.</h3>
             </th>
             <th
               colSpan={3}
@@ -725,12 +727,14 @@ function ReceiptPage({
               <div>โทรศัพท์ / tel : </div>
             </th>
             <th colSpan={3} className="text-left v-a-t">
-              <div>บริษัท พีซีเอส คาร์โก้ จำกัด</div>
-              <div>0105560160694</div>
-              {/* printReceiptF.php L291-295 — the issuer address
-                  switched on 2025-03-20. Reproduced 1:1. */}
-              <div>{issuerAddress()}</div>
-              <div>02-444-7046</div>
+              <div>บริษัท แพคเรด (ประเทศไทย) จำกัด</div>
+              <div>{TAX_ID}</div>
+              {/* Pacred address — wired from components/seo/site.ts
+                  ADDRESSES.office (SOT). The legacy PHP 2025-03-20
+                  cutover between two PCS Cargo addresses collapses
+                  to one value under D1 (single company, single address). */}
+              <div>{ADDRESSES.office.full}</div>
+              <div>{CONTACT.phoneCompanyDisplay}</div>
             </th>
             <th colSpan={1} className="text-right v-a-t">
               <div>วันที่ / date : </div>
@@ -906,7 +910,7 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
                   style={{ fontSize: "20px" }}
                   defaultChecked
                 />{" "}
-                โอนเข้าธนาคาร <b>กสิกรไทย</b> เลขที่ <b>064-174-3836</b> วันที่{" "}
+                โอนเข้าธนาคาร <b>{BANK.name}</b> เลขที่ <b>{BANK.accountNumber}</b> วันที่{" "}
                 {doc.dateCreate}{" "}
               </div>
               <div className="text-center" style={{ display: "block" }}>
@@ -1017,15 +1021,7 @@ function ReceiptFooter({ doc }: { doc: ReceiptDoc }) {
   );
 }
 
-/**
- * printReceiptF.php L291-295 — the issuer (PCS Cargo) address switched
- * on 2025-03-20. `date('Y-m-d') > '2025-03-20'` → the new address.
- * Reproduced 1:1: today is past that cutover, so the new address.
- */
-function issuerAddress(): string {
-  const today = new Date().toISOString().slice(0, 10);
-  if (today > "2025-03-20") {
-    return "เลขที่ 12 ซอย เพชรเกษม 77 แยก 3-6 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160";
-  }
-  return "เลขที่ 8 ซอย เพชรเกษม 77 แยก 3-4 แขวงหนองค้างพลู เขตหนองแขม กรุงเทพมหานคร 10160";
-}
+// issuerAddress() retired 2026-05-23: under D1 we're one company (Pacred)
+// with one address (components/seo/site.ts ADDRESSES.office — SOT). The
+// PHP 2025-03-20 cutover between two PCS Cargo addresses doesn't apply.
+// Address is now rendered inline via {ADDRESSES.office.full}.

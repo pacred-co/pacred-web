@@ -43,7 +43,8 @@ import { Link } from "@/i18n/navigation";
  * so reads go through the admin client; the join key is
  * `tb_*.userid === profile.member_code` (the customer's "PR<n>" code).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── PURE-READ NOTE (runbook rule) ────────────────────────────
  * `shops.php` performs INSERT/UPDATE only inside `$_POST` branches
@@ -282,8 +283,8 @@ export default async function ServiceOrderAddPage({
       {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
           <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
       <link rel="stylesheet" href="/legacy/pcs/shops.css" />
-      {/* shops.php L462 — <title>; rebranded PCS Cargo → PR Cargo. */}
-      <title>รายการฝากสั่งซื้อสินค้า | PR Cargo</title>
+      {/* shops.php L462 — <title>; rebranded PCS Cargo → Pacred. */}
+      <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
       {/* BEGIN: Content — shops.php L695 */}
       <div className="app-content content">

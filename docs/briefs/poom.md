@@ -1,30 +1,32 @@
-# ภูม — Backend / Customer Portal / Admin Back-Office / Cargo Port
+# ภูม — Backend / V3 backend continuation (UNLOCKED 2026-05-24)
 
-Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
-Branch: **`Poom-pacred`** (the 1:1 lane) — `Poom` (V3 lane) is FROZEN per direction shift
+Last reviewed: 2026-05-24 (strategy reset — **V3 UNLOCKED** · admin 1:1 lane moved to ก๊อต)
+Branch: **`Poom-pacred`** (V3 continuation, active) — `Poom` (pre-1:1) is the FROZEN archive
 
-> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+> ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
-> The team pivoted from V3 to a **literal 1:1 transcription** of legacy
-> PHP → Next.js per the owner's "100% sameness FIRST" rule. **Your new
-> working branch is `Poom-pacred`** (not `Poom`). Your lane = **admin
-> back-office** = the 187 `pcs-admin/*.php` files. Source on this machine:
-> `C:\Users\Admin\pcscargo\member\pcs-admin\`.
+> **V3 work is UNLOCKED.** You resume building DPX ERP enhancements + wave-17+ admin features on `Poom-pacred`. The 1:1 ports (เดฟ customer + ก๊อต admin) ship to main first; your V3 work merges in after.
 >
-> Branch loop: `Poom-pacred` → (เดฟ merges) `dave-pacred` → `faithful-port`
-> → ก๊อต gate → `main` (production). V3 work (`Poom` branch, Wave A/B/R1)
-> is preserved + already merged into `faithful-port` — none of today's
-> morning work is lost — but no new commits land on `Poom` until further
-> notice.
+> **Lane reshuffle:**
+> - Previously you owned admin 1:1 transcription (187 `pcs-admin/*.php` files). **That moves to ก๊อต now.**
+> - You return to V3-era backend continuation — the wave-16/17 work you've been doing on `Poom-pacred` is now first-class active work, not deferred.
+> - `Poom` branch stays FROZEN as archive — keep using `Poom-pacred`.
 >
-> **READ FIRST when resuming (especially at home machine):**
-> [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md)
-> — branch state · ภูม's lane · admin pilot status · resume commands · PCS→PR table.
+> **Branch flow (post-reset):**
+> ```
+> ปอน (podeng)        ─┐
+>                      ├─► เดฟ merges into dave-pacred → push main (ก๊อต gates)
+> ก๊อต (admin 1:1)   ─┘                                                ▲
+>                                                                       │
+> ภูม (Poom-pacred V3) ── continues V3, merges in *after* 1:1 ships ───┘
+> ```
 >
-> **Method:** [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — read fully.
-> **Skill:** [`.claude/skills/legacy-php-sweep/SKILL.md`](../../.claude/skills/legacy-php-sweep/SKILL.md).
-> **Pattern reference:** เดฟ's customer pilot at `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`.
-> **Admin pilot reference (your work · 2026-05-19 evening):** `app/[locale]/(admin)/admin/admins/page.tsx` (transcription of `admin-table.php`) + `public/legacy/pcs/admin/admin-base.css` — read these before transcribing the next admin screen.
+> **Deleted 2026-05-24:** `faithful-port` (no longer the integration target) · all `claude/*` remotes (your Wave 10–13 work on `adoring-chandrasekhar` was confirmed already in `Poom-pacred`).
+>
+> **READ FIRST:**
+> - [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — gap analysis + sprint sequence
+> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — updated branch model
+> - Your wave-17 save point: [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) (history) + check `git log Poom-pacred` for recent work
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 
@@ -60,17 +62,15 @@ now** (deferred, *not cancelled*). Your work is **Phase B backend**.
 - ⚪ **Phase C** — deferred (Tier-3 systems · booking-flow backend · V-E6..V-E12
   freight · customer-intel backend).
 
-## 🧭 Your lane — PHASE-B BACKEND ONLY (execution)
+## 🧭 Your lane (post-2026-05-24)
 
-เดฟ + ก๊อต are the senior lane; you + ปอน execute. **You own Phase-B backend
-only** — the admin modules + the customer-portal backend onto the `tb_*`
-schema, reproducing the legacy PCS workflow exactly. You are the single biggest
-Phase-B lever: staff and customers must need *zero* retraining.
+You = **V3 backend continuation lead**. Build DPX ERP enhancements + advanced admin features on `Poom-pacred`. The 1:1 lanes (เดฟ customer · ก๊อต admin · ปอน frontend) ship to main first; your work integrates after.
 
-✋ **Not your lane:** the customer-facing UI (ปอน owns frontend surfaces).
-Integration + Phase-A backfill (เดฟ). You stay on `actions/`, `lib/`,
-`app/[locale]/(auth|protected|admin)/`, `supabase/migrations/`, `app/api/`,
-`components/admin/`, `components/pdf/`.
+**Scope split with ก๊อต (admin lane):**
+- ก๊อต = 1:1 fidelity port of `pcs-admin/*.php` screens (e.g. `admin-table.php` → `/admin/admins`, `index.php` → `/admin`, `users-search.php` → `/admin/customers/search`)
+- You = V3 enhancements on admin routes NOT being 1:1-ported (wave-17 MOMO/CN forms, barcode AJAX, accounting periods, etc.) — coordinate via เดฟ before touching the same route
+
+✋ **Not your lane:** customer-facing UI (`(public)/*`, marketing — ปอน's). Admin screens that ก๊อต has claimed for 1:1 transcription — coordinate first. Integration to main (เดฟ).
 
 ## 🔱 Phase-B is wave-driven — review before you take a slice
 

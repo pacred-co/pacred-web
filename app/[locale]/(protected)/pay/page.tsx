@@ -29,7 +29,7 @@ import { requireAuth } from "@/lib/auth/require-auth";
  *        > section#generate > .generate-section > .container
  *        > .row.generate-form > .col-md-8.mx-auto > <form>:
  *          - "พร้อมเพย์ ไอดี" number input (#pp-id), pre-filled with the
- *            company PromptPay ID `0105560160694` (verbatim — pay.php
+ *            company PromptPay ID `0105564077716` (verbatim — pay.php
  *            L43)
  *          - "จำนวนเงิน" number input (#amount)
  *          - "สร้าง QR Code รับเงิน" button (#myBtn)
@@ -66,9 +66,9 @@ import { requireAuth } from "@/lib/auth/require-auth";
  * A Server Component render is a PURE READ — `pay.php` has no
  * render-time INSERT/UPDATE, so there is nothing to defer.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. `pay.php` carries no PCS branding
- * text in its visible markup, so nothing changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. `pay.php` carries no PCS branding
+ * text in its visible markup, so nothing changed there.
  *
  * ── FLAGGED — binary asset + brand asset (documented, never silently
  *    diverged) ──
@@ -104,7 +104,7 @@ export default async function PayPage() {
       <link rel="stylesheet" href="/legacy/pcs/pay.css" />
 
       {/* pay.php <title> L4 (Next.js owns <head> — kept here as a
-          comment for the fidelity record):  | PR Cargo */}
+          comment for the fidelity record):  | Pacred */}
 
       {/* BEGIN: Content — pay.php L11 */}
       <div className="app-content content">
@@ -161,7 +161,7 @@ export default async function PayPage() {
                                         type="number"
                                         inputMode="numeric"
                                         pattern="\d*"
-                                        defaultValue="0105560160694"
+                                        defaultValue="0105564077716"
                                         className="form-control"
                                         id="pp-id"
                                         placeholder="เบอร์มือถือ, รหัสประจำตัวประชาชน, TAX ID, e-Wallet"

@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveTosVersion } from "@/lib/tos-server";
 import {
   profileBasicSchema,
@@ -13,6 +15,14 @@ import {
   type NotifyChannels,
   type CompleteProfileInput,
 } from "@/lib/validators/profile";
+import {
+  checkEmailAvailabilitySchema,
+  checkPhoneAvailabilitySchema,
+  type CheckEmailAvailabilityInput,
+  type CheckPhoneAvailabilityInput,
+} from "@/lib/validators/auth";
+import { normalizePhone } from "@/lib/utils/phone";
+import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 
 type ActionResult<T = void> =
@@ -325,4 +335,192 @@ export async function unlinkLine(): Promise<ActionResult> {
 
   revalidatePath("/profile");
   return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// AVAILABILITY CHECKS (G-2) — register + profile-edit pre-flight.
+//
+// 1:1 ports of:
+//   • member/include/pages/register/checkEmailUser.php
+//   • member/include/pages/register/checkTelUser.php
+//   • member/include/pages/profile/checkEmailUser.php
+//   • member/include/pages/profile/checkTelUser.php
+//
+// Legacy queried only `tb_users` (the single user table) with `userstatus<>'0'`
+// (= not soft-deleted). In the rebuilt era we have TWO sources of truth —
+// the migrated legacy `tb_users` table AND the rebuilt-era `profiles` table —
+// so this action checks BOTH and reports "taken" if either has the value.
+// Service-role admin client is required because `tb_users` has no per-row
+// RLS for anonymous reads + `profiles` only lets a user read their own row.
+//
+// In profile-edit context the caller passes `currentUserId` (uuid of the
+// signed-in profile) so editing your own profile doesn't flag your own
+// existing email/phone as "taken" — matching the legacy `<> $_SESSION[...]`
+// guard in `profile/check*User.php`.
+//
+// IP rate-limit: tries to use the `generic` bucket (30/min/IP) since that's
+// the closest preset to the "20/min" requirement and the project owner
+// explicitly forbade touching `lib/rate-limit.ts` here. 30/min is still
+// tight enough that an enumeration-by-email/phone attacker can't trawl the
+// member directory at meaningful speed.
+//
+// Return shape: `{ available: boolean, reason?: "taken" | "invalid" | "rate_limited" }`.
+// `available: true` + no reason = success. `available: false` always has
+// a reason so the caller can render the right message.
+// ────────────────────────────────────────────────────────────
+
+type AvailabilityResult =
+  | { available: true }
+  | { available: false; reason: "taken" | "invalid" | "rate_limited"; retryAfterSeconds?: number };
+
+export async function checkEmailAvailability(
+  email: string,
+  currentUserId?: string,
+): Promise<AvailabilityResult> {
+  // Zod validates shape (well-formed email, uuid if present). We don't run
+  // `assertNotImpersonating` here — read-only lookup is fine while impersonating.
+  const input: CheckEmailAvailabilityInput = { email, currentUserId: currentUserId ?? null };
+  const parsed = checkEmailAvailabilitySchema.safeParse(input);
+  if (!parsed.success) {
+    return { available: false, reason: "invalid" };
+  }
+  const { email: cleanEmail, currentUserId: ownerId } = parsed.data;
+  // Lowercase for canonical compare — both legacy and rebuilt-era should
+  // really store lowercase, but Postgres collation is case-sensitive so be
+  // explicit.
+  const needle = cleanEmail.trim().toLowerCase();
+
+  // Rate-limit (G-2 spec: 20/min/IP; using `generic` bucket = 30/min as
+  // the closest standing preset — see header comment).
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("generic", `email-avail:${ip}`);
+  if (blocked) {
+    return {
+      available:         false,
+      reason:            "rate_limited",
+      retryAfterSeconds: blocked.retryAfterSeconds,
+    };
+  }
+
+  const admin = createAdminClient();
+
+  // 1. Rebuilt-era profiles — exclude the caller's own row when editing.
+  let profilesQuery = admin
+    .from("profiles")
+    .select("id")
+    .ilike("email", needle)
+    .limit(1);
+  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
+  if (profileErr && profileErr.code !== "PGRST116") {
+    // PGRST116 = "no rows" when using .single(); .maybeSingle suppresses it
+    // but be defensive. Any other error = treat as available (don't block
+    // signup over a transient DB hiccup) but log so we notice in Sentry.
+    console.error("[profile/checkEmailAvailability] profiles lookup failed:", profileErr);
+  }
+  if (profileHit) return { available: false, reason: "taken" };
+
+  // 2. Legacy tb_users — userstatus<>'0' replicates the legacy guard.
+  //    Exclude the caller's own legacy row by useremail when in edit mode
+  //    (legacy used $_SESSION['userEmail'] for the same purpose). We don't
+  //    have a userid <-> profile.id mapping at this layer, so we exclude
+  //    by email value rather than by id — equivalent to the legacy semantics.
+  let legacyQuery = admin
+    .from("tb_users")
+    .select("userid")
+    .ilike("useremail", needle)
+    .neq("userstatus", "0")
+    .limit(1);
+  if (ownerId) {
+    // Look up the caller's own email to exclude their legacy row (if any).
+    // Cheap extra query but only on the profile-edit hot path.
+    const { data: ownProfile } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", ownerId)
+      .maybeSingle<{ email: string | null }>();
+    if (ownProfile?.email) {
+      legacyQuery = legacyQuery.neq("useremail", ownProfile.email);
+    }
+  }
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  if (legacyErr && legacyErr.code !== "PGRST116") {
+    console.error("[profile/checkEmailAvailability] tb_users lookup failed:", legacyErr);
+  }
+  if (legacyHit) return { available: false, reason: "taken" };
+
+  return { available: true };
+}
+
+export async function checkPhoneAvailability(
+  phone: string,
+  currentUserId?: string,
+): Promise<AvailabilityResult> {
+  const input: CheckPhoneAvailabilityInput = { phone, currentUserId: currentUserId ?? null };
+  const parsed = checkPhoneAvailabilitySchema.safeParse(input);
+  if (!parsed.success) {
+    return { available: false, reason: "invalid" };
+  }
+  const { phone: rawPhone, currentUserId: ownerId } = parsed.data;
+
+  // Both formats — rebuilt-era profiles.phone stores E.164 (+66...),
+  // legacy tb_users.usertel stores Thai-local (0...). normalizePhone gives
+  // us E.164; we derive the Thai-local form for the legacy query by
+  // stripping `+66` and prefixing `0`.
+  const e164  = normalizePhone(rawPhone);
+  const local = e164.startsWith("+66") ? "0" + e164.slice(3) : e164;
+
+  // Rate-limit (see checkEmailAvailability header — same bucket choice).
+  const ip = getClientIpFromHeaders(await headers());
+  const blocked = await checkRateLimit("generic", `phone-avail:${ip}`);
+  if (blocked) {
+    return {
+      available:         false,
+      reason:            "rate_limited",
+      retryAfterSeconds: blocked.retryAfterSeconds,
+    };
+  }
+
+  const admin = createAdminClient();
+
+  // 1. Rebuilt-era profiles (E.164 form).
+  let profilesQuery = admin
+    .from("profiles")
+    .select("id")
+    .eq("phone", e164)
+    .limit(1);
+  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
+  if (profileErr && profileErr.code !== "PGRST116") {
+    console.error("[profile/checkPhoneAvailability] profiles lookup failed:", profileErr);
+  }
+  if (profileHit) return { available: false, reason: "taken" };
+
+  // 2. Legacy tb_users (Thai-local form, userstatus<>'0' = not deleted).
+  let legacyQuery = admin
+    .from("tb_users")
+    .select("userid")
+    .eq("usertel", local)
+    .neq("userstatus", "0")
+    .limit(1);
+  if (ownerId) {
+    const { data: ownProfile } = await admin
+      .from("profiles")
+      .select("phone")
+      .eq("id", ownerId)
+      .maybeSingle<{ phone: string | null }>();
+    if (ownProfile?.phone) {
+      const ownLocal = ownProfile.phone.startsWith("+66")
+        ? "0" + ownProfile.phone.slice(3)
+        : ownProfile.phone;
+      legacyQuery = legacyQuery.neq("usertel", ownLocal);
+    }
+  }
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  if (legacyErr && legacyErr.code !== "PGRST116") {
+    console.error("[profile/checkPhoneAvailability] tb_users lookup failed:", legacyErr);
+  }
+  if (legacyHit) return { available: false, reason: "taken" };
+
+  return { available: true };
 }

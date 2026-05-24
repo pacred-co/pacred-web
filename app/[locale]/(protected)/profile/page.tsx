@@ -3,6 +3,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
+import { LineNotifyPanel } from "./line-notify-panel";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -52,7 +53,8 @@ import { EditProfileForm } from "./edit-profile-form";
  *   - $countPayment        → COUNT(tb_payment)          (header.php L104)
  *   - $fullAddress         → tb_address ⋈ tb_address_main (header.php L107)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── Deliberately NOT reproduced (documented for the fidelity record) ──
  *  - profile.php L557 `saveHS(...)` — a render-time visit-log INSERT.
@@ -110,6 +112,24 @@ export default async function ProfilePage() {
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
+
+  // Sprint-2 P1.3 — LINE Notify per-user OAuth state. The columns live
+  // on the profile row (migration 0101) and the panel renders the
+  // connect/disconnect + channel-toggle UI below the legacy profile
+  // card. Read alongside the other profile-card fields so the page is
+  // a single read pass.
+  const { data: lnRow } = await admin
+    .from("profiles")
+    .select("line_notify_token, line_notify_connected_at, line_notify_channels")
+    .eq("id", profile.id)
+    .maybeSingle<{
+      line_notify_token:        string | null;
+      line_notify_connected_at: string | null;
+      line_notify_channels:     Record<string, boolean> | null;
+    }>();
+  const lineNotifyConnectedAt =
+    lnRow?.line_notify_token ? lnRow.line_notify_connected_at : null;
+  const lineNotifyChannels = lnRow?.line_notify_channels ?? null;
 
   // ── Transcribed queries ──────────────────────────────────────
   // header.php L12-38 — the customer header row that fills $_SESSION;
@@ -242,7 +262,7 @@ export default async function ProfilePage() {
 
       {/* profile.php <title> L73 (Next.js owns <head> — kept here as a
           comment for the fidelity record):
-          โปรไฟล์ <userID> | PR Cargo */}
+          โปรไฟล์ <userID> | Pacred */}
 
       {/* BEGIN: Content — profile.php L78 */}
       <div className="app-content content">
@@ -600,7 +620,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="info tam-counter">{countShops}</h2>
+                              <h2 className="info tam-counter" data-count={countShops}>{countShops}</h2>
                               <h4>ฝากสั่งซื้อสินค้า</h4>
                             </div>
                             <div>
@@ -630,7 +650,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="warning tam-counter">
+                              <h2 className="warning tam-counter" data-count={countForwarder}>
                                 {countForwarder}
                               </h2>
                               <h4>ฝากนำเข้าสินค้า</h4>
@@ -662,7 +682,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="purple tam-counter">
+                              <h2 className="purple tam-counter" data-count={countPayment}>
                                 {countPayment}
                               </h2>
                               <h4>ฝากชำระเงิน</h4>
@@ -700,7 +720,7 @@ export default async function ProfilePage() {
                           <div className="media d-flex">
                             <div className="media-body text-left">
                               <h2 className="success">
-                                <span className="tam-counter">
+                                <span className="tam-counter" data-count={walletTotal}>
                                   {walletTotal}
                                 </span>
                                 <span className="font-14"> บาท</span>
@@ -730,6 +750,21 @@ export default async function ProfilePage() {
               {/* / eCommerce statistic */}
             </section>
             {/* Basic Carousel end — L399 */}
+
+            {/* Sprint-2 P1.3 — LINE Notify connect/disconnect panel.
+                Sits below the legacy profile card + stat carousel so
+                the legacy markup above stays 1:1; the panel itself is
+                a Pacred addition (legacy `member/line-notify.php` was
+                a separate page — we promote it inline since "Connect
+                LINE" is one of the death-flow gaps). */}
+            <div className="row mt-1">
+              <div className="col-md-12">
+                <LineNotifyPanel
+                  connectedAt={lineNotifyConnectedAt}
+                  channels={lineNotifyChannels}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>

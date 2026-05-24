@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Phone, Menu } from "lucide-react";
@@ -58,14 +58,22 @@ export function FloatingTabs() {
 
   if (isHidden) return null;
 
-  const desktopTabs = [
-    { label: t("home"),       icon: "/images/home/iconfloating/pacred-home-main.png", href: "#home" },
-    { label: t("services"),   icon: "/images/home/iconfloating/pcs-shop.png",         href: "#services" },
-    { label: t("promotions"), icon: "/images/home/iconfloating/ranka.png",            href: "#promotions" },
-    { label: t("blog"),       icon: "/images/home/iconfloating/checklistred.png",     href: "/knowledge" },
-    // Per ปอน 2026-05-15: partner tab swapped out for Pacred News.
-    { label: t("news"),       icon: "/images/home/iconfloating/pcs-line-notify.png",  href: "/news" },
-    { label: t("contact"),    icon: "/images/home/iconfloating/pcs-call-center.png",  href: "#contact" },
+  // Desktop floating tabs mirror the mobile bottom-nav set MINUS the centre
+  // call-FAB AND the "บริการ" tab — ปอน 2026-05-24 dropped "บริการ" on
+  // desktop because the top NavBar already exposes the service mega-menu.
+  // Mobile keeps it (the bottom nav doesn't carry the desktop NavBar).
+  const desktopTabs: Array<{
+    label: string;
+    href: string;
+    iconImg?: string;
+    iconNode?: ReactNode;
+    external?: boolean;
+  }> = [
+    { label: t("homeMain"), iconImg: "/images/home/iconfloating/pacred-home-main.png", href: "/" },
+    { label: t("orders"),   iconImg: "/images/home/iconfloating/pcs-cart.png",         href: "/service-order" },
+    { label: t("pay"),      iconImg: "/images/home/iconfloating/pcs-payment.png",      href: "/dashboard" },
+    { label: t("chat"),     iconImg: "/images/home/iconfloating/pcs-line-notify.png",  href: "/line", external: true },
+    { label: t("menu"),     iconNode: <Menu className="w-8 h-8" strokeWidth={2.2} />,  href: "/dashboard" },
   ];
 
   return (
@@ -77,10 +85,10 @@ export function FloatingTabs() {
           const cls = "group w-[64px] xl:w-[72px] py-3 bg-white dark:bg-surface border border-border flex flex-col items-center justify-center gap-1.5 text-[10px] font-medium text-muted hover:text-foreground transition-colors first:rounded-tl-xl last:rounded-bl-xl";
           const inner = (
             <>
-              {item.icon && (
+              {item.iconImg && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={item.icon}
+                  src={item.iconImg}
                   alt={item.label}
                   className={`w-8 h-8 object-contain transition-all duration-300 ${
                     active === i
@@ -89,14 +97,42 @@ export function FloatingTabs() {
                   }`}
                 />
               )}
+              {item.iconNode && (
+                <span
+                  className={`transition-all duration-300 ${
+                    active === i
+                      ? "text-primary-600 opacity-100"
+                      : "text-muted opacity-60 group-hover:text-foreground group-hover:opacity-100"
+                  }`}
+                >
+                  {item.iconNode}
+                </span>
+              )}
               <span className="text-center leading-tight">{item.label}</span>
             </>
           );
-          return isAnchor ? (
-            <a key={i} href={item.href} onClick={() => setActive(i)} className={cls}>
-              {inner}
-            </a>
-          ) : (
+          if (isAnchor) {
+            return (
+              <a key={i} href={item.href} onClick={() => setActive(i)} className={cls}>
+                {inner}
+              </a>
+            );
+          }
+          if (item.external) {
+            return (
+              <a
+                key={i}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setActive(i)}
+                className={cls}
+              >
+                {inner}
+              </a>
+            );
+          }
+          return (
             <Link key={i} href={item.href} onClick={() => setActive(i)} className={cls}>
               {inner}
             </Link>
@@ -132,7 +168,7 @@ export function FloatingTabs() {
             <button type="button" onClick={() => { setActive(1); window.dispatchEvent(new CustomEvent("toggle-mobile-menu")); }}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60 cursor-pointer">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home/iconfloating/pcs-shop.png" alt={t("services")}
+              <img src="/images/home/iconfloating/services.png" alt={t("services")}
                 className={`w-8 h-8 object-contain transition-all duration-300 ${active === 1 ? "grayscale-0 brightness-100 opacity-100 scale-110" : "grayscale brightness-75 opacity-75"}`} />
               <span className={`text-[11px] leading-tight font-medium ${active === 1 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("services")}</span>
             </button>

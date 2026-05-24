@@ -72,7 +72,15 @@ export default async function AdminBarcodePage() {
         <p>รองรับ: f_no · tracking CN/TH · เลขตู้ · h_no (ฝากสั่ง)</p>
       </div>
 
-      <ScanForm defaultMode="intake" availableModes={["intake", "prepare"]} />
+      <ScanForm defaultMode="intake" availableModes={["lookup", "intake", "prepare"]} />
+
+      {/* Print queue lookup — legacy `barcode-c-from` redirect target */}
+      <div className="text-center text-xs text-muted pt-2">
+        ต้องการพิมพ์ใบกำกับจากกล่องที่อยู่ตรงหน้า? เลือกโหมด <strong>ค้นหา</strong> → คลิกผลลัพธ์ →{" "}
+        <Link href="/admin/forwarders/combine-bill" className="text-primary-500 hover:underline">
+          หน้ารวมบิล
+        </Link>
+      </div>
     </main>
   );
 }

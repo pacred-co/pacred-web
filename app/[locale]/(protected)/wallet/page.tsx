@@ -51,8 +51,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * helpers are transcribed here and rendered server-side (a pure read —
  * Server Components can render exactly what the AJAX would produce).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. Nothing else changed.
  *
  * ── NOT transcribed (deliberate · flagged for the integrator) ──
  *  1. header.php L75-85 runs an `UPDATE tb_header_order` on every page
@@ -229,7 +229,7 @@ export default async function WalletPage() {
       <link rel="stylesheet" href="/legacy/pcs/wallet.css" />
 
       {/* wallet.php <title> L53 (Next.js owns <head> — kept here as a
-          comment for fidelity record):  กระเป๋าสตางค์ | PR Cargo */}
+          comment for fidelity record):  กระเป๋าสตางค์ | Pacred */}
 
       {/* BEGIN: Content — wallet.php L85 */}
       <div className="app-content content">
@@ -287,7 +287,7 @@ export default async function WalletPage() {
                                   <img
                                     className="brand-logo logo-wallet"
                                     alt="logo"
-                                    src="/legacy/pcs/logo.png"
+                                    src="/images/pacred-logo-red.png"
                                   />
                                 </div>
                               </div>
@@ -488,7 +488,7 @@ export default async function WalletPage() {
                 <div className="modal-dialog">
                   <div className="modal-content ">
                     <div className="modal-header header-from">
-                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง PR Cargo</h4>
+                      <h4 className="modal-title">เติมเงินเข้าเป๋าตัง Pacred</h4>
                       <button
                         type="button"
                         className="close"
@@ -554,7 +554,7 @@ export default async function WalletPage() {
                                 height: "250px",
                               }}
                             ></div>
-                            <h5 className="text-center">บริษัท พีซีเอส คาร์โก้</h5>
+                            <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
                             <div id="amount-show" style={{ textAlign: "center" }}></div>
                             <div className="text-right">
                               <a href="/wallet/deposit" target="_blank">
@@ -586,7 +586,7 @@ export default async function WalletPage() {
                                 {" "}
                                 สามารถถอนเงินได้เมื่อ
                                 ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                                PR Cargo มาก่อน
+                                Pacred มาก่อน
                               </li>
                               <li>
                                 {" "}

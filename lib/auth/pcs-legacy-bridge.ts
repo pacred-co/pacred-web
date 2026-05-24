@@ -19,20 +19,6 @@
  * provision-on-first-login with the customer's own password, no shared
  * secret. Provisional pending ก๊อต ratification before this ships to prod.
  *
- * Wave 16 follow-up A (2026-05-23) — pre-provisioned-customer handling:
- *   `scripts/data/02-provision-profiles-for-tb-users.ts` pre-creates auth.users
- *   for EVERY tb_users orphan using a synthetic email
- *   (`legacySyntheticEmail(userid)` → `.invalid` TLD) + random password, so
- *   notifications can resolve `userid → profiles.id`. On the customer's FIRST
- *   real sign-in, the bridge needs to (a) detect that pre-provisioned account
- *   by synthetic email, (b) reset its password to what the customer typed
- *   (verified against the legacy hash), and (c) sign in via synthetic email.
- *   This keeps the customer pointed at the pre-existing profile row — so
- *   `getCurrentUserWithProfile()` finds their profile and the protected
- *   layout renders. Without this branch, the old createUser(phone) path would
- *   make a SECOND auth.user with a different uuid and ensureLegacyProfile
- *   would log "manual reconcile" → broken protected-route access.
- *
  * Server-only.
  */
 import "server-only";
@@ -90,7 +76,17 @@ async function findLegacyUser(identifier: string): Promise<LegacyUser | null> {
     query = query.ilike("useremail", escapeLikePattern(id));
   } else if (kind === "memberCode") {
     // userid values are uppercase post-rebrand (pcs-data-migration.md §4).
-    query = query.eq("userid", id.toUpperCase());
+    // Padding-aware match: migration 0103 padded every legacy PR<n> to
+    // min-3-digit form (PR1/PR01 → PR001). The customer might still
+    // remember the unpadded variant, so accept either the raw input or
+    // its 3-digit-padded equivalent. Same row matches both forms — the
+    // userid column itself only stores the padded form post-0103.
+    const raw   = id.toUpperCase();
+    const match = /^PR(\d+)$/.exec(raw);
+    const padded = match ? "PR" + match[1].padStart(3, "0") : raw;
+    query = padded === raw
+      ? query.eq("userid", raw)
+      : query.in("userid", [raw, padded]);
   } else {
     const candidates = legacyPhoneCandidates(id);
     query = candidates.length > 0
@@ -141,76 +137,41 @@ export async function bridgeLegacyLogin(
   }
 
   // Password verified against the legacy passTam hash. Provision a Supabase
-  // user with that same plaintext password — Q2-(a)-refined, no shared secret.
+  // user with that same plaintext password.
+  //
+  // ⚠️ ALWAYS use the synthetic legacy email as the auth credential — NOT
+  // the customer's phone. The Phase-A bulk migration provisioned every
+  // legacy customer with `pcs-legacy-pr<n>@users.pacred.invalid` + no
+  // phone in auth.users (only the profile row carries the real number for
+  // SMS). Switching to a phone credential would:
+  //   1. Collide with Pacred-web staff/test accounts that registered with
+  //      the SAME phone (36+ such pairs observed 2026-05-24 — e.g. PR321
+  //      legacy customer วิสิฐ + PR132 admin วิสิฐ share +66948782006);
+  //      `signInWithPassword({phone})` resolves to the staff auth user
+  //      → the legacy customer signs in AS THE STAFF MEMBER. Wrong
+  //      identity. Tracked in docs/learnings/pacred-domain-knowledge.md.
+  //   2. Fail for the 8,896 legacy auth users that have NO phone column —
+  //      `signInWithPassword({phone})` returns "no user" because lookup
+  //      is by phone.
+  // The real phone stays on `profiles.phone` for SMS notifications and
+  // contact lookups — it's not load-bearing for auth.
+  const credential = { email: legacySyntheticEmail(row.userid) };
+
+  // We keep the phone normalized + diagnostic-logged when usable; the
+  // profile-row insert later reads `row.usertel` directly anyway.
   const e164 = normalizePhone(row.usertel ?? "");
-  const usePhone = isUsablePhone(e164);
-  if (!usePhone) {
-    // Q2: a legacy row with no usable phone provisions by synthetic email —
-    // logged so เดฟ can reconcile the (expected to be tiny) list.
-    logger.warn(SCOPE, "legacy row has no usable phone — using synthetic email", {
+  if (!isUsablePhone(e164)) {
+    logger.debug(SCOPE, "legacy row has no usable phone — phone field on the profile stays empty", {
       userid:  row.userid,
       usertel: redactPhone(row.usertel),
     });
   }
 
   const admin = createAdminClient();
-
-  // ── Wave 16 follow-up A — Pre-provisioned-customer path ───────────────
-  //   If `scripts/data/02-provision-profiles-for-tb-users.ts` ran, every
-  //   migrated customer already has an auth.user keyed to a synthetic email.
-  //   Look that up FIRST — if found, reset its password to what the customer
-  //   typed (now verified against the legacy hash) and sign in via the
-  //   synthetic email. This keeps the customer's auth.uid stable across the
-  //   bridge run so their pre-existing profile row continues to match.
-  const syntheticEmail = legacySyntheticEmail(row.userid);
-  const preProvisionedId = await findAuthUserBySyntheticEmail(admin, syntheticEmail);
-
-  if (preProvisionedId) {
-    // Reset the password to what the customer typed (and confirmed legacy).
-    const { error: updateErr } = await admin.auth.admin.updateUserById(preProvisionedId, {
-      password,
-    });
-    if (updateErr) {
-      logger.warn(SCOPE, "updateUserById failed for pre-provisioned customer", {
-        userid: row.userid,
-        reason: updateErr.message,
-      });
-      return { ok: false };
-    }
-
-    const supabase = await createClient();
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-      email: syntheticEmail,
-      password,
-    });
-    if (signInErr || !signInData.user) {
-      logger.warn(SCOPE, "pre-provisioned customer sign-in failed after password reset", {
-        userid: row.userid,
-        reason: signInErr?.message,
-      });
-      return { ok: false };
-    }
-
-    // Profile already exists (created by the backfill script) — ensure is
-    // still a no-op (idempotent). Belt-and-braces.
-    await ensureLegacyProfile(signInData.user.id, row);
-
-    logger.info(SCOPE, "pre-provisioned legacy customer signed in via PCS bridge", {
-      userid: row.userid,
-    });
-    return { ok: true };
-  }
-
-  // ── Original first-login path (kept for letter-only handles + any tb_users
-  //    row added after the most recent backfill run) ─────────────────────
-  const credential = usePhone
-    ? { phone: e164 }
-    : { email: syntheticEmail };
-
-  const { error: createErr } = await admin.auth.admin.createUser({
+  const { data: createData, error: createErr } = await admin.auth.admin.createUser({
     ...credential,
     password,
-    ...(usePhone ? { phone_confirm: true } : { email_confirm: true }),
+    email_confirm: true,
     user_metadata: {
       legacy_user_id:     row.userid,
       first_name:         row.username,
@@ -218,14 +179,73 @@ export async function bridgeLegacyLogin(
       legacy_provisioned: true,
     },
   });
-  // createUser is intentionally unchecked: it fails when the customer was
-  // already provisioned on an earlier login (the bridge runs once per
-  // customer) — that is the normal repeat-visit path. signInWithPassword
-  // below is the real gate.
-  if (createErr) {
-    logger.debug(SCOPE, "createUser skipped — customer likely already provisioned", {
+
+  // If createUser failed because the synthetic email already exists (Phase-A
+  // bulk-provisioned all 8,895 legacy customers with these emails — but with
+  // a placeholder password, since the migration doesn't know the customer's
+  // plaintext password), we MUST update the existing user's password to the
+  // one the customer just typed (already verified against the legacy hash).
+  // Without this step, signInWithPassword would compare against the migration-
+  // time placeholder and fail — making the entire bridge unusable for migrated
+  // customers. We find the existing user by joining through profiles.id and
+  // force-set the password via the admin API.
+  //
+  // Note: createData here is `{ user: User | null }` not `null` — supabase-js
+  // returns an object with a null `user` field on failure. So we check
+  // `!createData?.user` (the user object), not `!createData` itself.
+  if (createErr && !createData?.user) {
+    logger.debug(SCOPE, "createUser failed — existing legacy user, syncing password", {
       userid: row.userid,
       reason: createErr.message,
+    });
+    // Find the existing auth.users.id by joining through profiles.member_code:
+    // Phase-A migration created profiles.id = auth.users.id 1:1 for every
+    // legacy customer, so the profile row's UUID IS the auth user's UUID.
+    // We avoid `.schema("auth").from("users")` because the auth schema is
+    // not exposed via PostgREST by default in Supabase — that lookup would
+    // silently return null and the password sync would never apply.
+    const { data: existingProfile, error: profileLookupErr } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("member_code", row.userid)
+      .maybeSingle<{ id: string }>();
+
+    if (profileLookupErr) {
+      logger.warn(SCOPE, "profile lookup for password sync failed", {
+        userid: row.userid,
+        reason: profileLookupErr.message,
+      });
+      return { ok: false };
+    }
+    if (!existingProfile?.id) {
+      // No profile bridges this member_code to an auth user — bail. The
+      // surface should be the "create new profile" branch below; we got
+      // here because createUser said the email exists, which means there
+      // IS an auth user without a matching profile. That's an inconsistent
+      // state that the bridge can't safely auto-recover from.
+      logger.warn(SCOPE, "createUser said email exists but no profile maps to this member_code", {
+        userid: row.userid,
+      });
+      return { ok: false };
+    }
+    const { error: updErr } = await admin.auth.admin.updateUserById(existingProfile.id, {
+      password,
+      user_metadata: {
+        legacy_user_id:     row.userid,
+        first_name:         row.username,
+        last_name:          row.userlastname,
+        legacy_provisioned: true,
+      },
+    });
+    if (updErr) {
+      logger.warn(SCOPE, "password sync to existing legacy auth user failed", {
+        userid: row.userid,
+        reason: updErr.message,
+      });
+      return { ok: false };
+    }
+    logger.info(SCOPE, "password synced to existing legacy auth user", {
+      userid: row.userid,
     });
   }
 
@@ -236,7 +256,12 @@ export async function bridgeLegacyLogin(
   });
   if (signInErr || !signInData.user) {
     logger.warn(SCOPE, "legacy bridge sign-in failed after provisioning", {
-      userid: row.userid,
+      userid:     row.userid,
+      credential: credential.email,
+      errCode:    signInErr?.code,
+      errStatus:  signInErr?.status,
+      errMessage: signInErr?.message,
+      hadUser:    Boolean(signInData?.user),
     });
     return { ok: false };
   }
@@ -251,30 +276,6 @@ export async function bridgeLegacyLogin(
 
   logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userid: row.userid });
   return { ok: true };
-}
-
-/** Page through auth.users to find one with the given email. Returns null when
- *  no match exists. Used by the pre-provisioned-customer branch of
- *  bridgeLegacyLogin — bounded by the size of auth.users (post-backfill
- *  expected to be ~9k for prod). */
-async function findAuthUserBySyntheticEmail(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string,
-): Promise<string | null> {
-  const PER = 1000;
-  for (let page = 1; page <= 100; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER });
-    if (error) {
-      logger.warn(SCOPE, "auth.users listUsers failed", { reason: error.message });
-      return null;
-    }
-    if (!data?.users?.length) return null;
-    for (const u of data.users) {
-      if (u.email && u.email.toLowerCase() === email.toLowerCase()) return u.id;
-    }
-    if (data.users.length < PER) return null;
-  }
-  return null;
 }
 
 /**

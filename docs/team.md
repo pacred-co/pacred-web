@@ -3,41 +3,52 @@
 > **CANONICAL** — single source of truth for roles, branches, and merge policy.
 > ทุกไฟล์ MD ที่กล่าวถึง team/role/branch ต้อง link มาที่นี่ ห้าม duplicate
 
-Last updated: 2026-05-18
+Last updated: 2026-05-24 (post strategy-reset — `faithful-port` deleted · V3 unlocked · ก๊อต takes admin 1:1 lane · 6 active branches)
 
 ---
 
-## 1. Roles & Responsibilities
+## 1. Roles & Responsibilities (updated 2026-05-24)
 
-| คน | บทบาท | Primary branch (operating point) | สโคปงาน | สิทธิ์ main |
+| คน | บทบาท | Primary branch | สโคปงาน | สิทธิ์ main |
 |---|---|---|---|---|
-| **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` | ที่ปรึกษา · code review · architectural decisions · ผสานงานน้องๆ กับเดฟ · คุม production · backup merger | ✅ Push to main |
-| **เดฟ** (dave) | **Project Lead / Integrator** | `dave` | คุมทิศทางโปรเจคทั้งหมด · จ่ายงาน · run sprint · คนกลางรวม ภูม + ปอน ให้เสถียรก่อนขึ้น main · infrastructure · 3rd-party integrations · ไม่ปิดกั้นไอเดียน้อง ขอแค่ direction ไปทางเดียวกัน | ✅ Push to main |
-| **ปอน** (podeng) | Frontend & SEO Specialist | `podeng` | **100% หน้าบ้าน** — landing pages ทุก service · acquisition funnel · SEO · marketing support · mobile UX · ทำให้ลูกค้าใช้ง่าย · ระบบอำนวยให้ลูกค้าเข้ามาง่าย+น่าใช้สุด · i18n · Lighthouse scores | ❌ Push only to `podeng` branch |
-| **ภูม** (Poom) | Backend & Cargo Port Specialist | `Poom` | **100% หลังบ้าน** — auth/customer portal/admin · เชื่อม frontend ↔ customer backend ↔ admin backend · port PHP cargo 100% (phase 1) · DPX ERP upgrade (phase 2) | ❌ Push only to `Poom` branch |
+| **ก๊อต** (got) | Senior Advisor / Production Watcher / **Admin 1:1 lead (NEW)** | `main` (review + own commits for admin 1:1) | code review · ADRs · partner integrations · **drives 1:1 transcription of 187 `pcs-admin/*.php` files (was ภูม pre-reset)** · cuts main releases · backup merger | ✅ Push to main |
+| **เดฟ** (dave) | **Project Lead / Integrator / Customer-backend 1:1** | `dave-pacred` | drive 1:1 customer-portal port (`(protected)/*` · server actions on `tb_*`) · integrate ปอน's `podeng` · wire missing customer integrations (TAMIT · LINE Notify) · merge to main with ก๊อต gating | ✅ Push to main |
+| **ปอน** (podeng) | Frontend / Customer-portal UI / SEO | `podeng` | **100% หน้าบ้าน** — landing pages · public site · customer-portal UI fidelity · brand-asset swap · i18n · Lighthouse | ❌ Push to `podeng` only (เดฟ merges into dave-pacred) |
+| **ภูม** (Poom) | Backend / **V3 backend continuation (UNLOCKED 2026-05-24)** | `Poom-pacred` | DPX ERP enhancements · wave-17+ admin features · advanced workflows · merges to main *after* 1:1 ships | ❌ Push to `Poom-pacred` only (merges via เดฟ post-1:1) |
 
-### Phase mapping ของภูม
-- **Phase 1 (ปัจจุบัน):** Port PHP cargo system → Pacred Next.js ให้ครบ 100% (auth, profile, wallet, service-order, service-import, service-payment, sales, admin ops)
-- **Phase 2 (หลัง phase 1 stable):** DPX ERP full upgrade — ขยายเกินขอบเขต cargo เดิม
+### Phase mapping (post-2026-05-24 reset)
+- **1:1 Port Phase (current):** เดฟ (customer-portal) + ก๊อต (admin back-office) + ปอน (frontend) port the legacy PCS Cargo system 1:1 onto Next.js. Ships to main FIRST.
+- **V3 Phase (parallel, UNLOCKED 2026-05-24):** ภูม continues DPX ERP enhancements on `Poom-pacred`. Merges into main *after* 1:1 ships stable.
+- **Phase C (deferred):** Tier 0/1/2/3 capability roadmap (booking-flow detail · customer-intel · disbursement systems · platform-observability expansion) — sequenced after V3 stable.
 
-### Scope boundaries
+### Scope boundaries (updated 2026-05-24)
 - ✋ **ปอน ไม่แก้:** `actions/`, `lib/`, `app/[locale]/(auth|protected|admin)/`, `supabase/migrations/`, `app/api/`
-- ✋ **ภูม ไม่แก้:** `app/[locale]/(public)/`, `components/sections/`, `components/booking/`, `components/knowledge/`, `messages/*.json` (i18n keys)
-- ✋ **ทั้งคู่ไม่แก้:** `CLAUDE.md`, `docs/team.md`, `docs/conventions.md`, `docs/env.md`, `docs/PORT_PLAN.md`, `package.json`, `.github/`, `next.config.ts`, `eslint.config.mjs`, `proxy.ts`, `vercel.json` (lead-only)
+- ✋ **เดฟ vs ก๊อต admin coordination:** ก๊อต claims `pcs-admin/*.php` 1:1 transcription routes; เดฟ doesn't touch admin unless coordinating
+- ✋ **ภูม vs ก๊อต admin coordination:** ภูม's V3 admin work avoids routes ก๊อต has marked for 1:1 fidelity port — coordinate via เดฟ before touching same route
+- ✋ **ภูม customer-side:** ภูม V3 work focuses backend/admin; if touching `(protected)/*` (customer portal), coordinate with เดฟ first
+- ✋ **All:** `CLAUDE.md`, `docs/team.md`, `docs/conventions.md`, `docs/env.md`, `docs/PORT_PLAN.md`, `package.json`, `.github/`, `next.config.ts`, `eslint.config.mjs`, `proxy.ts`, `vercel.json` (lead-only — เดฟ/ก๊อต)
 
 ถ้าจำเป็นต้องข้ามขอบเขต — ขออนุญาตเดฟ/ก๊อตก่อน
 
 ---
 
-## 2. Branch policy
+## 2. Branch policy (updated 2026-05-24)
 
-| Branch | Owner | Purpose |
-|---|---|---|
-| `main` | เดฟ + ก๊อต (only) | Production-ready. Protected. Need approval from lead. |
-| `dave` | เดฟ | Lead's working branch — consolidation point ก่อน merge เข้า main |
-| `podeng` | ปอน | ปอน's working branch |
-| `Poom` | ภูม | ภูม's working branch |
-| `claude/*` | (auto) | Claude Code session worktrees — auto-cleaned, don't push |
+| Branch | Owner | Purpose | Status |
+|---|---|---|---|
+| `main` | ก๊อต gate | Production. Vercel auto-deploy. | 🟢 live |
+| `podeng` | ปอน | Frontend & customer-portal UI; **the brand SOT (theme/images/icons)** — merges to dave-pacred via เดฟ | 🟢 active |
+| `dave-pacred` | เดฟ | 1:1 customer-backend + integration; merges to main | 🟢 active |
+| `Poom-pacred` | ภูม | **V3 backend primary lane (UNLOCKED)** — merges to main after 1:1 | 🟢 active |
+| `Poom` | ภูม | V3 backend secondary lane (UNLOCKED — was frozen pre-2026-05-24) | 🟢 active |
+| `dave` | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships to main; then combo with Poom-pacred + podeng | 💤 dormant |
+| `claude/*` (local) | (auto worktrees) | Internal Claude Code session worktrees — don't push, never bound to remote | local-only |
+
+**Deleted 2026-05-24:** `faithful-port` (no longer integration target) · `hotfix/auth-unblock` (cherry-picked) · all stale `claude/*` remotes (work merged or stale).
+
+**Branding rule (owner directive 2026-05-24):** all theme/images/icons across the codebase follow **ปอน's `podeng` style** (Tailwind + Pacred red `#B30000` + Prompt font + lucide outline icons). Customer code prefix stays **`PR…`** (e.g. `PR201`). The 1:1 transcription copies the legacy workflow + markup + SQL — visual treatment is rebrand to podeng.
+
+**Customer data state:** Customer images + storage already in **Supabase S3 production** (ภูม uploaded `pcsracgo/public/member` files). Database = production project `yzljakczhwrpbxflnmco`. Internal table-naming conflict (rebuilt-era vs legacy `tb_*`) is OUR cleanup task — not a legacy migration gap.
 
 **กฎทอง:**
 1. ปอน + ภูม commit/push **เฉพาะ branch ตัวเอง** (`podeng` / `Poom`) — ห้าม push เข้า main หรือ dave

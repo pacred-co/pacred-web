@@ -2,7 +2,16 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
-import { calculateCartTotal } from "@/actions/cart";
+import { useRouter } from "next/navigation";
+import {
+  applyPromoToCart,
+  calculateCartTotal,
+  deleteCartItem,
+  removePromoFromCart,
+  updateCartItemQuantity,
+  validatePromoCode,
+  submitCartOrder,
+} from "@/actions/cart";
 
 /**
  * Client-side interactivity for /cart — faithful port of the jQuery
@@ -79,10 +88,22 @@ export type CartInteractivityProps = {
   initialRsDefault: number;
   /** Whether the date-window 3.3 promotion card is rendered. */
   promo33Active: boolean;
+  /** The session member_code — used as the `cartId` belt-and-braces
+      ownership check for applyPromoToCart / removePromoFromCart. */
+  memberCode: string;
   /** The static SSR shipping card (.ele-addressCHN-cart, cart.php L601-651)
       passed through as JSX so it stays SSR — the cart-list + the summary
       sit on either side of it; the structural markup is a server concern. */
   shippingCard: ReactNode;
+};
+
+type AppliedPromo = {
+  id:            number;
+  label:         string;
+  /** When `discountType==='pct'` this is a 0-100 percentage; when
+      `discountType==='fixed'` it is a flat ฿ amount. */
+  discount:      number;
+  discountType:  "pct" | "fixed";
 };
 
 export function CartInteractivity({
@@ -90,6 +111,7 @@ export function CartInteractivity({
   totalRowCount,
   initialRsDefault,
   promo33Active,
+  memberCode,
   shippingCard,
 }: CartInteractivityProps) {
   // Selected row IDs — cart.php's `$("input:checkbox[name='ID[]']")`
@@ -133,6 +155,17 @@ export function CartInteractivity({
   // The fade50 promo (PCS เหมาๆ — `input-12`). Legacy only changes the
   // border, not the totals — purely cosmetic but reproduced for fidelity.
   const [proMaomao, setProMaomao] = useState(false);
+
+  // ── G1 promo-code input — typed legacy `tagPro()` codes ──
+  // Sprint-2 wire of `validatePromoCode` + `applyPromoToCart` /
+  // `removePromoFromCart` (actions/cart.ts). Discount applies on top of
+  // the server-computed `priceThb` — the legacy `calculateCart.php`
+  // doesn't fold typed-code discounts into its result, only the static
+  // `pro=19` rate override, so the math runs client-side here.
+  const [promoCode,    setPromoCode]    = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [promoBusy,    setPromoBusy]    = useState(false);
+  const [promoMsg,     setPromoMsg]     = useState<{ tone: "err" | "ok"; text: string } | null>(null);
 
   // Server-driven totals — match the legacy AJAX response shape.
   // Defaults match the page-first-load behaviour: legacy calls
@@ -227,9 +260,186 @@ export function CartInteractivity({
     recompute(selectedIds, next);
   }
 
+  // ── promo-code apply/remove handlers ──
+  // Apply runs validate → apply (persists to tb_pro_valentine). The
+  // discount value comes from validate's response so we can show it
+  // immediately without a second server round-trip on a separate read.
+  function handleApplyPromo() {
+    const code = promoCode.trim();
+    if (!code || promoBusy) return;
+    setPromoBusy(true);
+    setPromoMsg(null);
+    startTransition(async () => {
+      // Pass the server's current ฿ subtotal as the validation cart-total.
+      // Strip the formatting commas before Number() since priceThb is
+      // already `number_format`-style ("1,234.56").
+      const total = Number(totals.priceThb.replace(/,/g, ""));
+      const v = await validatePromoCode(code, Number.isFinite(total) ? total : 0);
+      if (!v.ok) {
+        setPromoMsg({ tone: "err", text: v.error });
+        setPromoBusy(false);
+        return;
+      }
+      if (!v.valid) {
+        setPromoMsg({ tone: "err", text: v.message ?? "โค้ดส่วนลดไม่ถูกต้อง" });
+        setPromoBusy(false);
+        return;
+      }
+      const a = await applyPromoToCart(memberCode, code);
+      if (!a.ok) {
+        setPromoMsg({ tone: "err", text: a.error });
+        setPromoBusy(false);
+        return;
+      }
+      setAppliedPromo({
+        id:           v.promo?.id ?? 0,
+        label:        v.promo?.label ?? code.toUpperCase(),
+        discount:     v.discount,
+        discountType: v.discountType,
+      });
+      setPromoMsg({ tone: "ok", text: v.message ?? "ใช้โค้ดส่วนลดสำเร็จ" });
+      setPromoBusy(false);
+    });
+  }
+
+  function handleRemovePromo() {
+    if (promoBusy) return;
+    setPromoBusy(true);
+    setPromoMsg(null);
+    startTransition(async () => {
+      const res = await removePromoFromCart(memberCode);
+      if (!res.ok) {
+        setPromoMsg({ tone: "err", text: res.error });
+        setPromoBusy(false);
+        return;
+      }
+      setAppliedPromo(null);
+      setPromoCode("");
+      setPromoBusy(false);
+    });
+  }
+
+  // Compute the discount + final total on top of the server's priceThb.
+  const subtotalThb = Number(totals.priceThb.replace(/,/g, ""));
+  const discountThb = (() => {
+    if (!appliedPromo || !Number.isFinite(subtotalThb)) return 0;
+    if (appliedPromo.discountType === "pct") {
+      return subtotalThb * (appliedPromo.discount / 100);
+    }
+    // fixed THB — capped to the subtotal so the final never goes negative
+    return Math.min(appliedPromo.discount, subtotalThb);
+  })();
+  const finalThb = Math.max(0, subtotalThb - discountThb);
+
   // cart.php L895-899: the "สั่งซื้อสินค้า" submit is disabled while
   // nothing is selected.
   const submitDisabled = selectedIds.size === 0;
+
+  // ── deleteItem.php wire — remove a row from tb_cart. Optimistic:
+  //    drop from selectedIds + amounts immediately, then router.refresh
+  //    to refetch the SSR tree (gives the server-rendered grouped
+  //    providers tree the correct shape with the row gone). ──
+  const router = useRouter();
+  const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
+  function handleDelete(id: number) {
+    if (busyDeleteId !== null) return;
+    if (!window.confirm("ลบรายการนี้ออกจากตะกร้า?")) return;
+    setBusyDeleteId(id);
+    startTransition(async () => {
+      const res = await deleteCartItem({ id });
+      setBusyDeleteId(null);
+      if (!res.ok) {
+        window.alert("ลบไม่สำเร็จ: " + res.error);
+        return;
+      }
+      // Drop from local state so the totals recompute without it.
+      const ns = new Set(selectedIds);
+      ns.delete(id);
+      setSelectedIds(ns);
+      const nm = new Map(amounts);
+      nm.delete(id);
+      setAmounts(nm);
+      recompute(ns, pro2Checked);
+      // Refetch SSR tree to remove the row visually (the grouped-
+      // providers tree is server-rendered + needs a fresh fetch).
+      router.refresh();
+    });
+  }
+
+  // ── updateQuantity.php wire — when the user types a new amount we
+  //    update local state instantly (done by changeAmount above) and
+  //    fire-and-forget the persistence write to tb_cart. The recompute
+  //    via calculateCartTotal already re-reads tb_cart server-side, so
+  //    the next total it returns reflects the persisted amount. ──
+  function persistAmount(id: number, amount: number) {
+    startTransition(async () => {
+      await updateCartItemQuantity({ id, quantity: amount });
+    });
+  }
+
+  // ── addOrder wire — "สั่งซื้อสินค้า" submit. The form fields
+  //    (addressID, hTransportType, crate, hShipBy, payMethod, pro,
+  //    pro2, hNote) are rendered SSR by the outer page; we read them
+  //    via the form's FormData rather than mirroring them into client
+  //    state (keeps the SSR markup 1:1). On success → router.push
+  //    to the new order's detail page. ──
+  const [submitting, setSubmitting] = useState(false);
+  function handleSubmitOrder(e: React.MouseEvent<HTMLButtonElement>) {
+    if (selectedIds.size === 0 || submitting) return;
+    const form = e.currentTarget.form;
+    if (!form) {
+      window.alert("ไม่พบฟอร์ม กรุณารีเฟรชหน้าใหม่");
+      return;
+    }
+    const fd = new FormData(form);
+    const addressID = String(fd.get("addressID") ?? "");
+    const hTransportType = String(fd.get("hTransportType") ?? "");
+    const crate = String(fd.get("crate") ?? "");
+    const hShipBy = fd.get("hShipBy");
+    const payMethod = fd.get("payMethod");
+    const pro = fd.get("pro");
+    const pro2 = pro2Checked ? "77" : null;
+    const hNote = fd.get("hNote");
+
+    if (!addressID) {
+      window.alert("กรุณาเลือกที่อยู่จัดส่ง");
+      return;
+    }
+    if (!hTransportType) {
+      window.alert("กรุณาเลือกรูปแบบการขนส่งจีน-ไทย");
+      return;
+    }
+    if (!crate) {
+      window.alert("กรุณาเลือกการตีลังไม้");
+      return;
+    }
+    if (!window.confirm(`ยืนยันส่งออเดอร์ ${selectedIds.size} รายการ?`)) return;
+    setSubmitting(true);
+    startTransition(async () => {
+      const res = await submitCartOrder({
+        ids: Array.from(selectedIds),
+        addressID,
+        hTransportType,
+        crate,
+        hShipBy: hShipBy ? String(hShipBy) : null,
+        payMethod: payMethod ? String(payMethod) : null,
+        pro: pro ? String(pro) : null,
+        pro2,
+        hNote: hNote ? String(hNote) : null,
+      });
+      setSubmitting(false);
+      if (!res.ok) {
+        window.alert("ส่งออเดอร์ไม่สำเร็จ: " + res.error);
+        return;
+      }
+      if (res.data?.hNo) {
+        window.alert(
+          `ส่งออเดอร์เรียบร้อย เลขที่ ${res.data.hNo}\nกดตกลงเพื่อไปหน้ารายละเอียด`,
+        );
+        router.push(`/service-order/${res.data.hNo}`);
+      }
+    });
+  }
 
   const countDisplay = selectedIds.size;
 
@@ -355,24 +565,34 @@ export function CartInteractivity({
                             name="cAmount[]"
                             min="1"
                             step="1"
-                            onChange={(e) =>
-                              changeAmount(r.id, Number(e.target.value))
-                            }
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              changeAmount(r.id, val);
+                            }}
+                            onBlur={(e) => {
+                              // Persist to tb_cart on blur (avoids hammering
+                              // the action on every keystroke; matches the
+                              // legacy DataTables-style "commit on blur"
+                              // expectation).
+                              const val = Number(e.target.value);
+                              const safe = Number.isFinite(val) && val >= 1 ? Math.floor(val) : 1;
+                              persistAmount(r.id, safe);
+                            }}
                           />
                         </div>
                         <div className="product-removal">
-                          {/* cart.php L576-578: the .remove-product trash
-                              button. The legacy `deleteItem.php` AJAX is
-                              NOT wired here — removing a row is a
-                              mutation that belongs on a separate Server
-                              Action (FLAGGED in the page header §1). The
-                              button renders 1:1 so the legacy CSS hits
-                              the same selector. */}
+                          {/* cart.php L576-578: .remove-product trash
+                              button. Wired to `deleteCartItem` (1:1 of
+                              legacy deleteItem.php AJAX). Confirm popup
+                              matches the legacy SweetAlert prompt. */}
                           <button
                             type="button"
                             className="remove-product font-12 btn btn-outline-danger round"
+                            onClick={() => handleDelete(r.id)}
+                            disabled={busyDeleteId === r.id}
                           >
-                            <i className="ft-trash"></i> ลบ{" "}
+                            <i className="ft-trash"></i>{" "}
+                            {busyDeleteId === r.id ? "กำลังลบ..." : "ลบ"}
                           </button>
                         </div>
                         <div className="product-line-price notranslate">
@@ -505,6 +725,115 @@ export function CartInteractivity({
                       </span>
                     </div>
                   </div>
+
+                  {/* ── G1 promo-code input — typed code with validate +
+                       apply.  Sprint-2 wire of validatePromoCode +
+                       applyPromoToCart + removePromoFromCart.  Sits at
+                       the bottom of the promotion section so the static
+                       legacy cards remain primary.  ── */}
+                  <div className="col-12">
+                    <div className="mt-1 pt-1 border-top">
+                      {appliedPromo ? (
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <span className="badge bg-success" style={{
+                            background: "#198754",
+                            color:      "#fff",
+                            padding:    "4px 10px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                          }}>
+                            ✓ {appliedPromo.label}
+                          </span>
+                          <span className="text-muted" style={{ fontSize: 13 }}>
+                            ส่วนลด{" "}
+                            {appliedPromo.discountType === "pct"
+                              ? `${appliedPromo.discount}%`
+                              : `${numberFormat(appliedPromo.discount)} ฿`}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-link p-0"
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#dc3545",
+                              textDecoration: "underline",
+                              cursor: promoBusy ? "wait" : "pointer",
+                              fontSize: 13,
+                              padding: 0,
+                            }}
+                            onClick={handleRemovePromo}
+                            disabled={promoBusy}
+                          >
+                            ลบ
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <label
+                            htmlFor="promo-code-input"
+                            className="mb-0"
+                            style={{ fontWeight: 600, fontSize: 14 }}
+                          >
+                            มีโค้ดส่วนลด?
+                          </label>
+                          <input
+                            id="promo-code-input"
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="กรอกโค้ด เช่น PCSF"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleApplyPromo();
+                              }
+                            }}
+                            maxLength={32}
+                            disabled={promoBusy}
+                            style={{
+                              flex: "0 1 180px",
+                              minWidth: 140,
+                              padding: "4px 8px",
+                              border: "1px solid #ced4da",
+                              borderRadius: 4,
+                              fontSize: 13,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={handleApplyPromo}
+                            disabled={promoBusy || promoCode.trim().length === 0}
+                            style={{
+                              border: "1px solid #b30000",
+                              background: promoBusy ? "#e9ecef" : "#fff",
+                              color: "#b30000",
+                              padding: "4px 14px",
+                              borderRadius: 4,
+                              cursor: promoBusy ? "wait" : "pointer",
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {promoBusy ? "กำลังตรวจ..." : "ใช้โค้ด"}
+                          </button>
+                        </div>
+                      )}
+                      {promoMsg && (
+                        <div
+                          className="mt-1"
+                          style={{
+                            fontSize: 12,
+                            color: promoMsg.tone === "err" ? "#dc3545" : "#198754",
+                          }}
+                        >
+                          {promoMsg.text}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -542,6 +871,24 @@ export function CartInteractivity({
                   {totals.rate}
                 </div>
               </div>
+              {appliedPromo && (
+                <>
+                  <div className="col-6 col-md-8 text-right">
+                    <h4 style={{ color: "#198754" }}>
+                      ส่วนลด ({appliedPromo.label}) :{" "}
+                    </h4>
+                  </div>
+                  <div className="col-6 col-md-4 text-right">
+                    <div
+                      className="totals-value notranslate"
+                      style={{ color: "#198754", fontWeight: 600 }}
+                      id="cart-promo-discount"
+                    >
+                      -{numberFormat(discountThb)}
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="col-6 col-md-8 text-right">
                 <h4>ราคารวมสุทธิ : </h4>
               </div>
@@ -551,19 +898,26 @@ export function CartInteractivity({
                     className="totals-value2 font-18 text-danger cart-total notranslate"
                     id="cart-total"
                   >
-                    {totals.priceThb}
+                    {appliedPromo ? numberFormat(finalThb) : totals.priceThb}
                   </div>
                 </b>
               </div>
             </div>
             <div className="float-right pt-1">
+              {/* Wired to `submitCartOrder` (1:1 of legacy shops.php
+                  addOrder handler). type="button" + onClick — captures
+                  the parent form's FormData (the SSR-rendered address /
+                  transport / crate / shipBy / payMethod / pro / note
+                  inputs) + posts via Server Action. Disabled until at
+                  least 1 row is ticked. */}
               <button
-                type="submit"
+                type="button"
                 className="checkout2 btn btn-main round btn-min-width waves-effect submit-wait animate__animated animate__infinite animate__headShake"
                 name="addOrder"
-                disabled={submitDisabled}
+                disabled={submitDisabled || submitting}
+                onClick={handleSubmitOrder}
               >
-                สั่งซื้อสินค้า
+                {submitting ? "กำลังส่งออเดอร์..." : "สั่งซื้อสินค้า"}
               </button>
             </div>
           </div>

@@ -115,3 +115,27 @@ export const updatePasswordSchema = z.object({
   password: passwordSchema,
 });
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
+
+// ── availability checks (G2 — register/profile pre-flight) ──
+// Legacy: member/include/pages/register/{checkEmailUser,checkTelUser}.php
+//       + member/include/pages/profile/{checkEmailUser,checkTelUser}.php
+// Both took the raw user-typed value and (in the profile-edit case) excluded
+// the signed-in user's own row so editing your own profile didn't trip the
+// "taken" warning. We mirror that contract here with explicit Zod schemas
+// so the server actions get type-safe inputs + the same shape can be
+// reused by client-side pre-flight if we want it later.
+
+export const checkEmailAvailabilitySchema = z.object({
+  email:         z.email("อีเมลไม่ถูกต้อง").max(100),
+  currentUserId: z.uuid().optional().nullable(),
+});
+export type CheckEmailAvailabilityInput = z.infer<typeof checkEmailAvailabilitySchema>;
+
+export const checkPhoneAvailabilitySchema = z.object({
+  // Loose bounds — `normalizePhone()` in the action turns whatever the user
+  // typed into E.164 before any lookup. The Zod check just guards against
+  // obvious garbage (empty / 1000-char DoS payload).
+  phone:         z.string().min(8, "เบอร์โทรไม่ถูกต้อง").max(20),
+  currentUserId: z.uuid().optional().nullable(),
+});
+export type CheckPhoneAvailabilityInput = z.infer<typeof checkPhoneAvailabilitySchema>;

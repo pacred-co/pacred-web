@@ -43,7 +43,10 @@ export function UploadCsvForm({ disabled = false }: { disabled?: boolean }) {
           disabled={disabled}
           className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
         >
-          <option value="forwarders">forwarders (ฝากนำเข้า)</option>
+          <option value="forwarders">forwarders — สร้างรายการใหม่</option>
+          <option value="forwarders_update_by_tracking">
+            forwarders_update_by_tracking — ปรับรายการอัตโนมัติ (legacy)
+          </option>
         </select>
       </label>
 

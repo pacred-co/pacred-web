@@ -50,8 +50,8 @@ import { resolveSalesAgent } from "./team-map";
  * codes; that gate is in `layout.tsx` (`resolveSalesAgent`). This page
  * re-resolves the agent for the per-account `$userIDMain` / `$urlRecom`.
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── NOT transcribed (deliberate · flagged) ──
  *  1. `include/header.php` L75-85 runs an `UPDATE tb_header_order` on
@@ -253,7 +253,7 @@ export default async function SalesTeamMembersPage() {
       <link rel="stylesheet" href="/legacy/pcs/report-user-sales.css" />
 
       {/* user-sales.php <title> L5 (Next.js owns <head> — kept here as
-          a fidelity-record comment):  สมาชิกในทีม | PR Cargo */}
+          a fidelity-record comment):  สมาชิกในทีม | Pacred */}
 
       {/* BEGIN: Content — user-sales.php L19 */}
       <div className="app-content content">

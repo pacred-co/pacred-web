@@ -21,6 +21,8 @@ import {
   confirmResetByPhoneSchema,
   resetByEmailSchema,
   updatePasswordSchema,
+  checkEmailAvailabilitySchema,
+  checkPhoneAvailabilitySchema,
 } from "./auth";
 
 let pass = 0;
@@ -176,6 +178,34 @@ assertOk  ("update password 8 chars",
   updatePasswordSchema, { password: "newpass1" });
 assertFail("update password too short",
   updatePasswordSchema, { password: "x" });
+
+// ────────────────────────────────────────────────────────────
+section("checkEmailAvailabilitySchema (G-2)");
+// ────────────────────────────────────────────────────────────
+
+assertOk  ("register context — no currentUserId",  checkEmailAvailabilitySchema, { email: "x@pacred.co" });
+assertOk  ("profile-edit context — with currentUserId uuid",
+  checkEmailAvailabilitySchema,
+  { email: "x@pacred.co", currentUserId: "3f29c8a0-7b8e-4f1d-9e5c-2a4b6c8d0e12" });
+assertOk  ("currentUserId null allowed (caller passes null when not editing)",
+  checkEmailAvailabilitySchema,
+  { email: "x@pacred.co", currentUserId: null });
+assertFail("malformed email rejected",             checkEmailAvailabilitySchema, { email: "not-an-email" });
+assertFail("empty email rejected",                 checkEmailAvailabilitySchema, { email: "" });
+assertFail("currentUserId non-uuid rejected",      checkEmailAvailabilitySchema, { email: "x@pacred.co", currentUserId: "not-a-uuid" });
+
+// ────────────────────────────────────────────────────────────
+section("checkPhoneAvailabilitySchema (G-2)");
+// ────────────────────────────────────────────────────────────
+
+assertOk  ("register context — Thai-local phone",       checkPhoneAvailabilitySchema, { phone: "0812345678" });
+assertOk  ("register context — E.164 phone",            checkPhoneAvailabilitySchema, { phone: "+66812345678" });
+assertOk  ("profile-edit context — with currentUserId",
+  checkPhoneAvailabilitySchema,
+  { phone: "0812345678", currentUserId: "3f29c8a0-7b8e-4f1d-9e5c-2a4b6c8d0e12" });
+assertFail("phone too short (7 chars)",                 checkPhoneAvailabilitySchema, { phone: "0812345" });
+assertFail("phone too long (21 chars)",                 checkPhoneAvailabilitySchema, { phone: "0".repeat(21) });
+assertFail("currentUserId non-uuid rejected",           checkPhoneAvailabilitySchema, { phone: "0812345678", currentUserId: "not-a-uuid" });
 
 // ────────────────────────────────────────────────────────────
 console.log(`\n  ${pass} pass · ${fail} fail`);

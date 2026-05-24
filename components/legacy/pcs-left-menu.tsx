@@ -1,61 +1,57 @@
 /* eslint-disable @next/next/no-img-element */
+import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { signOutAction } from "@/actions/auth";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
+import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
+import { PcsLeftMenuAccordion } from "./pcs-left-menu-accordion";
 
-/** Legacy basePath."assets" — the staged Modern-Admin theme bundle. */
-const A = "/legacy/pcs/assets";
-
-/** left-menu.php L33 — the central PCS line is shown pre-formatted, as-is. */
-const CENTRAL_TEL = "02-055-6063";
+/** Central Pacred line is shown pre-formatted (skips formatPhoneNumber which
+ *  expects mobile format). Matches the SALES_FALLBACK tel in pcs-chrome.ts. */
+const CENTRAL_TEL = "02-421-3325";
 
 /** left-menu.php L99 — the four member codes that see the agent-history menu
  *  (legacy PCS888/PCS352/PCS2678/PCS4155 → rebranded PR<n>). */
 const AGENT_CODES = ["PR888", "PR352", "PR2678", "PR4155"];
 
-/** member/include/function.php L360-367 — badgeMenu(): a small red pill, or none. */
+/** member/include/function.php L360-367 — badgeMenu(): a small red pill, or none.
+ *  Tailwind-only rebuild — same name + same prop so callers don't change. */
 function MenuBadge({ n }: { n: number }) {
   if (n <= 0) return null;
-  return <div className="pcs-sm-badge badge-danger pcs-sm-badge-pill">{n}</div>;
+  return (
+    <span className="ml-auto min-w-[18px] rounded-full bg-red-600 px-1.5 text-center text-[10px] font-medium leading-[18px] text-white">
+      {n}
+    </span>
+  );
 }
 
-/** member/include/function.php L469-491 — badgeVIP2(): the coID tier badge
- *  (PCS → none) followed by the SVIP + บริษัท badges. */
-function VipBadges({
-  coID,
-  svip,
-  corporate,
-}: {
-  coID: string;
-  svip: boolean;
-  corporate: boolean;
-}) {
+/** A sub-item row inside an accordion — `<ChevronRight>` prefix + indented
+ *  small muted text. Stays a Server-Component-friendly `<Link>`. */
+function SubLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <>
-      {coID && coID !== "PCS" ? (
-        <span className="badge badge-vip badge-pill">{coID}</span>
-      ) : null}
-      {svip ? (
-        <>
-          {" "}
-          <span className="badge badge-vip badge-pill">SVIP</span>
-        </>
-      ) : null}
-      {corporate ? (
-        <>
-          {" "}
-          <span className="badge badge-vip badge-pill">บริษัท</span>
-        </>
-      ) : null}
-    </>
+    <Link
+      href={href}
+      className="flex items-center gap-2 pl-12 pr-4 py-2 text-[13px] text-muted hover:text-foreground hover:bg-gray-50"
+    >
+      <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+      <span className="flex-1">{children}</span>
+    </Link>
   );
 }
 
 /**
- * Legacy PCS Cargo customer left sidebar — a 1:1 transcription of
- * `member/include/left-menu.php` (the fixed accordion menu). Verbatim
- * Bootstrap-4 / Modern-Admin markup; the legacy `basePath."<screen>/"` hrefs
- * are rebranded to the equivalent Pacred (protected) routes.
+ * Legacy PCS Cargo customer left sidebar — Tailwind-only rebuild.
+ * Section order matches the legacy `member/include/left-menu.php` 1:1:
+ *   1. user pill / dropdown   2. last-login text   3. sales card
+ *   4. top-level nav items (some with accordion sub-lists).
+ *
+ * Bootstrap-4 / Modern-Admin markup has been dropped (ปอน 2026-05-24 —
+ * `bootstrap*.css` / `custom*.css` are no longer loaded; the legacy classes
+ * leaked into the public chrome). The outer `id="pcs-left-menu"
+ * className="notranslate main-menu"` wrapper is kept so the
+ * `#pcs-left-menu.main-menu` selector in `legacy-overrides.css` still pins
+ * the sidebar to `position: fixed; left:0; top:0; width:260px; height:100vh`
+ * on the md breakpoint. Icons keep `className="pcs-icon"` so the
+ * grayscale→color filter override still latches.
  */
 export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
   const isAgent = AGENT_CODES.includes(data.userID);
@@ -67,394 +63,187 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
   return (
     <div
       id="pcs-left-menu"
-      className="notranslate main-menu menu-fixed menu-light menu-accordion menu-shadow pcs-menu"
-      data-scroll-to-active="true"
+      className="notranslate main-menu bg-white text-foreground"
     >
-      <div className="main-menu-content">
-        <ul
-          className="navigation navigation-main"
-          id="main-menu-navigation"
-          data-menu="menu-navigation"
-        >
-          <li className="nav-item itop has-sub">
-            <a href="#">
-              <img
-                src={data.userPicture}
-                className="rounded-circle"
-                width={40}
-                style={{ marginLeft: "-0.7rem" }}
-                alt=""
-              />
-              <span className="menu-title">
-                {data.userID}{" "}
-                <VipBadges
-                  coID={data.coID}
-                  svip={data.vipSvip}
-                  corporate={data.vipCorporate}
-                />
-              </span>
-            </a>
-            <ul className="menu-content">
-              <li>
-                <Link className="menu-item" href="/profile">
-                  <i className="ft-user"></i>
-                  <span className="lang-profile">โปรไฟล์ของฉัน</span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/account-settings">
-                  <i className="ft-settings"></i>
-                  <span className="lang-account-settings">
-                    ตั้งค่าบัญชีผู้ใช้งาน
-                  </span>
-                </Link>
-              </li>
-              <li>
-                <form action={signOutAction}>
-                  <button type="submit" className="menu-item">
-                    <i className="ft-log-out"></i>
-                    <span className="lang-logout">ออกจากระบบ</span>
-                  </button>
-                </form>
-              </li>
-            </ul>
-          </li>
-          <li className="navigation-header last-login text-center">
-            <span className="font-10">
-              <div className="mb--5">
-                {data.userName} {data.userLastName}
-              </div>
-              <div>{data.userEmail}</div>
-            </span>
-          </li>
-          <li className="nav-item">
-            <div className="box-sale-main">
-              <div className="box-sale1"></div>
-              <div className="box-sale2">
-                <div className="row">
-                  <div className="col-4 d-flex justify-content-center">
-                    <div className="rounded-circle border-main2">
-                      <a
-                        className="image-popup-vertical-fit el-link"
-                        href={data.sales.picture}
-                      >
-                        <img
-                          src={data.sales.picture}
-                          className="rounded-circle"
-                          width={55}
-                          alt=""
-                        />
-                      </a>
-                    </div>
-                  </div>
-                  <div className="col-8">
-                    <div className="text-sale-crad-top">ผู้ดูแล</div>
-                    <div className="text-sale-crad-2">
-                      เซลล์ <span>{data.sales.nickname}</span>
-                    </div>
-                    <div className="text-sale-crad-tell">
-                      Tel :{" "}
-                      <a
-                        style={{ display: "inline" }}
-                        href={`tel:${data.sales.tel}`}
-                      >
-                        <span className="text-dark">{salesTel}</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </li>
-          <li className="nav-item">
-            <Link href="/">
-              <img
-                src={`${A}/images/icon/pcs-home-main.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title">
-                <span className="menu-home">หน้าแรก</span>
-              </span>
-            </Link>
-          </li>
-          <li className="nav-item">
-            <Link href="/dashboard">
-              <img
-                src={`${A}/images/icon/pcs-home.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title">
-                <span className="menu-system-member">ระบบสมาชิก</span>
-              </span>
-            </Link>
-          </li>
-          <li className="nav-item has-sub">
-            <a href="#">
-              <img
-                src={`${A}/images/icon/pcs-shops.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title">
-                <span className="menu-shop">บริการฝากสั่งสินค้า</span>{" "}
-                <MenuBadge n={data.countShops2 + data.countCart} />
-              </span>
-            </a>
-            <ul className="menu-content">
-              <li>
-                <Link className="menu-item" href="/service-order">
-                  <i className="ft-layers"></i>
-                  <span className="menu-shop-all">รายการสั่งสินค้าทั้งหมด</span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/service-order?q=2">
-                  <i className="la la-money"></i>
-                  <span>
-                    <span className="menu-shop-w-pay">รอชำระเงิน</span>{" "}
-                    <MenuBadge n={data.countShops2} />
-                  </span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/cart">
-                  <i className="ft-shopping-cart"></i>
-                  <span>
-                    <span className="lang-shop-cart">รถเข็นสินค้า</span>{" "}
-                    <MenuBadge n={data.countCart} />
-                  </span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/cart/add">
-                  <i className="ft-plus"></i>
-                  <span className="lang-add-cart">เพิ่มสินค้าในรถเข็น</span>
-                </Link>
-              </li>
-            </ul>
-          </li>
-          <li className="nav-item has-sub">
-            <a href="#">
-              <img
-                src={`${A}/images/icon/pcs-forwarder.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title">
-                <span className="menu-forwarder">บริการฝากนำเข้า</span>{" "}
-                <MenuBadge n={data.countForwarder5 + data.countFCredit} />
-              </span>
-            </a>
-            <ul className="menu-content">
-              <li>
-                <Link className="menu-item" href="/service-import">
-                  <i className="ft-box"></i>
-                  <span className="menu-forwarder-all">รายการนำเข้าทั้งหมด</span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/service-import?q=5">
-                  <i className="la la-money"></i>
-                  <span>
-                    <span className="menu-shop-w-pay">รอชำระเงิน</span>{" "}
-                    <MenuBadge n={data.countForwarder5} />
-                  </span>
-                </Link>
-              </li>
-              {data.creditUser && (
-                <li>
-                  <Link className="menu-item" href="/service-import?q=c">
-                    <i className="la la-money"></i>
-                    <span>
-                      <span className="menu-credit-list">รายการเครดิต</span>{" "}
-                      <MenuBadge n={data.countFCredit} />
-                    </span>
-                  </Link>
-                </li>
-              )}
-              <li>
-                <Link className="menu-item" href="/service-import/receipts">
-                  <i className="la la-print"></i>
-                  <span>ประวัติใบเสร็จ</span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/service-import/add">
-                  <i className="ft-plus"></i>
-                  <span className="lang-add-forwarder">เพิ่มรายการนำเข้า</span>
-                </Link>
-              </li>
-            </ul>
-          </li>
-          <li className="nav-item has-sub">
-            <a href="#">
-              <img
-                src={`${A}/images/icon/pcs-payment.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title menu-payment">บริการฝากชำระ/โอน</span>
-            </a>
-            <ul className="menu-content">
-              <li>
-                <Link className="menu-item" href="/service-payment">
-                  <i>
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="24"
-                      height="24"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="css-i6dzq1"
-                    >
-                      <line x1="12" y1="1" x2="12" y2="23"></line>
-                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                    </svg>
-                  </i>
-                  <span className="menu-payment">รายการฝากชำระ</span>
-                </Link>
-              </li>
-              <li>
-                <Link className="menu-item" href="/service-payment/add">
-                  <i className="ft-plus"></i>
-                  <span className="lang-add-payment">เพิ่มรายการฝากชำระ</span>
-                </Link>
-              </li>
-            </ul>
-          </li>
-          <li className="nav-item has-sub">
-            <a href="#">
-              <img
-                src={`${A}/images/icon/pcs-wallet.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title menu-cash-wallet">
-                กระเป๋าสตางค์เงินสด
-              </span>
-            </a>
-            <ul className="menu-content">
-              <li className="">
-                <Link className="menu-item" href="/wallet">
-                  <i className="la la-money"></i>
-                  <span className="lang-statement">รายการเดินบัญชี</span>
-                </Link>
-              </li>
-              <li className="">
-                <Link className="menu-item" href="/wallet/withdraw">
-                  <i className="la la-refresh"></i>
-                  <span className="lang-withdraw-wallet">ถอนเงิน</span>
-                </Link>
-              </li>
-              <li className="">
-                <Link className="menu-item" href="/wallet/deposit">
-                  <i className="ft-plus"></i>
-                  <span className="lang-top-up">เติมเงิน</span>
-                </Link>
-              </li>
-            </ul>
-          </li>
-          {data.creditUser && (
-            <li className="nav-item has-sub">
-              <a href="#">
-                <img
-                  src={`${A}/images/icon/pcs-wallet.png`}
-                  className="pcs-icon"
-                  alt=""
-                />
-                <span className="menu-title">
-                  <span className="menu-credit-wallet">
-                    กระเป๋าสตางค์เครดิต
-                  </span>{" "}
-                  <MenuBadge n={data.countFCreditError} />
-                </span>
-              </a>
-              <ul className="menu-content">
-                <li className="">
-                  <Link className="menu-item" href="/wallet-credit">
-                    <i className="la la-money"></i>
-                    <span className="lang-statement">รายการเดินบัญชี</span>
-                  </Link>
-                </li>
-                <li className="">
-                  <Link className="menu-item" href="/service-import?q=c">
-                    <i className="la la-money"></i>
-                    <span>
-                      <span className="lang-pay">ชำระเงิน</span>{" "}
-                      <MenuBadge n={data.countFCreditError} />
-                    </span>
-                  </Link>
-                </li>
-              </ul>
-            </li>
-          )}
-          {isAgent && (
-            <li className="nav-item has-sub">
-              <a href="#">
-                <img
-                  src={`${A}/images/icon/pcs-sales.png`}
-                  className="pcs-icon"
-                  alt=""
-                />
-                <span className="menu-title lang-agent-his">ประวัติตัวแทน</span>
-              </a>
-              <ul className="menu-content">
-                <li className="">
-                  <Link className="menu-item" href="/sales">
-                    <i className="ft-users"></i>
-                    <span className="lang-team-members">สมาชิกในทีม</span>
-                  </Link>
-                </li>
-                <li className="">
-                  <Link className="menu-item" href="/sales/report">
-                    <i className="la la-refresh"></i>
-                    <span className="menu-forwarder">
-                      ประวัติรายการทั้งหมด
-                    </span>
-                  </Link>
-                </li>
-                <li className="">
-                  <Link className="menu-item" href="/sales/history">
-                    <i className="ft-file-text"></i>
-                    <span className="lang-payment-history">
-                      ประวัติการเบิกเงิน
-                    </span>
-                  </Link>
-                </li>
-                <li className="">
-                  <Link className="menu-item" href="/sales/report/add">
-                    <i className="ft-plus"></i>
-                    <span>ทำรายการเบิกเงิน</span>
-                  </Link>
-                </li>
-              </ul>
-            </li>
-          )}
-          <li className="nav-item">
-            <Link href="/addresses">
-              <img
-                src={`${A}/images/icon/pcs-address.png`}
-                className="pcs-icon"
-                alt=""
-              />
-              <span className="menu-title lang-address">ที่อยู่จัดส่งสินค้า</span>
-            </Link>
-          </li>
-          <li className="text-center">
-            <img
-              src={`${A}/images/theme/pcs-monkey-2.webp`}
-              className="img-fluid"
-              style={{ maxWidth: "150px" }}
-              alt=""
-            />
-          </li>
-        </ul>
+      {/* 1. User pill / dropdown */}
+      <PcsLeftMenuUserPill userID={data.userID} userPicture={data.userPicture} />
+
+      {/* 2. Last-login text — centered, small muted */}
+      <div className="border-b border-border px-3 py-2 text-center text-[11px] text-muted">
+        <div>
+          {data.userName} {data.userLastName}
+        </div>
+        <div>{data.userEmail}</div>
       </div>
+
+      {/* 3. Sales card */}
+      <div className="border-b border-border px-3 py-3">
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-gradient-to-br from-red-50 to-white px-3 py-3">
+          <a
+            className="image-popup-vertical-fit shrink-0"
+            href={data.sales.picture}
+          >
+            <img
+              src={data.sales.picture}
+              alt=""
+              className="h-[55px] w-[55px] rounded-full object-cover ring-2 ring-red-200"
+            />
+          </a>
+          <div className="min-w-0 flex-1 text-[12px] leading-snug">
+            <div className="text-muted">ผู้ดูแล</div>
+            <div className="font-semibold text-foreground">
+              เซลล์ <span>{data.sales.nickname}</span>
+            </div>
+            <div className="text-muted">
+              Tel:{" "}
+              <a
+                href={`tel:${data.sales.tel}`}
+                className="text-foreground hover:text-red-700"
+              >
+                {salesTel}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Top-level nav */}
+      <nav className="py-1">
+        {/* หน้าแรก */}
+        <Link
+          href="/"
+          className="nav-item flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-gray-50 active:bg-gray-100"
+        >
+          <img
+            src="/images/home/iconfloating/pacred-home-main.png"
+            alt=""
+            className="pcs-icon h-6 w-6"
+          />
+          <span>หน้าแรก</span>
+        </Link>
+
+        {/* ระบบสมาชิก */}
+        <Link
+          href="/dashboard"
+          className="nav-item flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-gray-50 active:bg-gray-100"
+        >
+          <img
+            src="/images/home/iconfloating/pcs-home.png"
+            alt=""
+            className="pcs-icon h-6 w-6"
+          />
+          <span>ระบบสมาชิก</span>
+        </Link>
+
+        {/* บริการฝากสั่งสินค้า */}
+        <PcsLeftMenuAccordion
+          icon="/images/home/iconfloating/pcs-cart.png"
+          label="บริการฝากสั่งสินค้า"
+          badge={<MenuBadge n={data.countShops2 + data.countCart} />}
+        >
+          <SubLink href="/service-order">รายการสั่งสินค้าทั้งหมด</SubLink>
+          <SubLink href="/service-order?q=2">
+            <span className="inline-flex w-full items-center">
+              <span>รอชำระเงิน</span>
+              <MenuBadge n={data.countShops2} />
+            </span>
+          </SubLink>
+          <SubLink href="/cart">
+            <span className="inline-flex w-full items-center">
+              <span>รถเข็นสินค้า</span>
+              <MenuBadge n={data.countCart} />
+            </span>
+          </SubLink>
+          <SubLink href="/cart/add">เพิ่มสินค้าในรถเข็น</SubLink>
+        </PcsLeftMenuAccordion>
+
+        {/* บริการฝากนำเข้า */}
+        <PcsLeftMenuAccordion
+          icon="/images/home/iconfloating/pcs-forwarder.png"
+          label="บริการฝากนำเข้า"
+          badge={<MenuBadge n={data.countForwarder5 + data.countFCredit} />}
+        >
+          <SubLink href="/service-import">รายการนำเข้าทั้งหมด</SubLink>
+          <SubLink href="/service-import?q=5">
+            <span className="inline-flex w-full items-center">
+              <span>รอชำระเงิน</span>
+              <MenuBadge n={data.countForwarder5} />
+            </span>
+          </SubLink>
+          {data.creditUser && (
+            <SubLink href="/service-import?q=c">
+              <span className="inline-flex w-full items-center">
+                <span>รายการเครดิต</span>
+                <MenuBadge n={data.countFCredit} />
+              </span>
+            </SubLink>
+          )}
+          <SubLink href="/service-import/receipts">ประวัติใบเสร็จ</SubLink>
+          <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
+        </PcsLeftMenuAccordion>
+
+        {/* บริการฝากชำระ/โอน */}
+        <PcsLeftMenuAccordion
+          icon="/images/home/iconfloating/pcs-payment.png"
+          label="บริการฝากชำระ/โอน"
+        >
+          <SubLink href="/service-payment">รายการฝากชำระ</SubLink>
+          <SubLink href="/service-payment/add">เพิ่มรายการฝากชำระ</SubLink>
+        </PcsLeftMenuAccordion>
+
+        {/* กระเป๋าสตางค์เงินสด */}
+        <PcsLeftMenuAccordion
+          icon="/images/home/iconfloating/pcs-wallet.png"
+          label="กระเป๋าสตางค์เงินสด"
+        >
+          <SubLink href="/wallet">รายการเดินบัญชี</SubLink>
+          <SubLink href="/wallet/withdraw">ถอนเงิน</SubLink>
+          <SubLink href="/wallet/deposit">เติมเงิน</SubLink>
+        </PcsLeftMenuAccordion>
+
+        {/* กระเป๋าสตางค์เครดิต (creditUser only) */}
+        {data.creditUser && (
+          <PcsLeftMenuAccordion
+            icon="/images/home/iconfloating/pcs-wallet.png"
+            label="กระเป๋าสตางค์เครดิต"
+            badge={<MenuBadge n={data.countFCreditError} />}
+          >
+            <SubLink href="/wallet-credit">รายการเดินบัญชี</SubLink>
+            <SubLink href="/service-import?q=c">
+              <span className="inline-flex w-full items-center">
+                <span>ชำระเงิน</span>
+                <MenuBadge n={data.countFCreditError} />
+              </span>
+            </SubLink>
+          </PcsLeftMenuAccordion>
+        )}
+
+        {/* ประวัติตัวแทน (isAgent only) */}
+        {isAgent && (
+          <PcsLeftMenuAccordion
+            icon="/images/home/iconfloating/pacred_sales.png"
+            label="ประวัติตัวแทน"
+          >
+            <SubLink href="/sales">สมาชิกในทีม</SubLink>
+            <SubLink href="/sales/report">ประวัติรายการทั้งหมด</SubLink>
+            <SubLink href="/sales/history">ประวัติการเบิกเงิน</SubLink>
+            <SubLink href="/sales/report/add">ทำรายการเบิกเงิน</SubLink>
+          </PcsLeftMenuAccordion>
+        )}
+
+        {/* ที่อยู่จัดส่งสินค้า */}
+        <Link
+          href="/addresses"
+          className="nav-item flex items-center gap-3 px-4 py-3 text-sm font-medium text-foreground hover:bg-gray-50 active:bg-gray-100"
+        >
+          <img
+            src="/images/home/iconfloating/pcs-address.png"
+            alt=""
+            className="pcs-icon h-6 w-6"
+          />
+          <span>ที่อยู่จัดส่งสินค้า</span>
+        </Link>
+      </nav>
     </div>
   );
 }

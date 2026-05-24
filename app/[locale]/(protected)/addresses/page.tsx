@@ -53,8 +53,8 @@ import { addAddressAction } from "./add-address-action";
  * tb_address_main) is transcribed 1:1 into the Server Action
  * `addAddressAction` (`./add-address-action.ts`).
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only. Nothing else changed.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred. Nothing else changed.
  *
  * Not strictly 1:1 — documented, never silently diverged:
  *   - jQuery DataTables (#myTable search/sort/paginate), jQuery.Thailand
@@ -170,7 +170,7 @@ export default async function AddressesPage({
 
       {/* address.php <title> L127 (Next.js owns <head> — kept here as a
           comment for the fidelity record):
-          ที่อยู่จัดส่งสินค้าในไทย | PR Cargo */}
+          ที่อยู่จัดส่งสินค้าในไทย | Pacred */}
 
       {/* BEGIN: Content — address.php L410 */}
       <div className="app-content content">

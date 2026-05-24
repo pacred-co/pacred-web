@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -43,8 +44,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   4. #pro-maomao modal (L1041-1058) — promo popup
  *   5. auto-show <script> for `?page=='add'` (L1061-1069)
  *
- * Rebrand: legacy `PCS<n>` → `PR<n>` (member codes) + "PCS Cargo" →
- * "PR Cargo" branding text only.
+ * Rebrand DONE: legacy `PCS<n>` member codes + "PCS Cargo" brand →
+ * `PR<n>` + Pacred.
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. forwarder.php L9-427 is a large POST handler — `save` (INSERT
@@ -532,12 +533,12 @@ export default async function ServiceImportAddPage() {
                           ))}
                           {(mainAddr || others.length > 0) && (
                             <option value="PCS">
-                              รับเองหน้าโกดัง PCS กทม
+                              รับเองหน้าโกดัง Pacred กทม
                             </option>
                           )}
                           {!mainAddr && others.length === 0 && (
                             <option value="PCS">
-                              รับเองหน้าโกดัง PCS กทม
+                              รับเองหน้าโกดัง Pacred กทม
                             </option>
                           )}
                         </select>
@@ -547,7 +548,7 @@ export default async function ServiceImportAddPage() {
                           <div id="selectShipBy"></div>
                         </div>
                         <div className="text-danger font-0_85rem">
-                          หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ PCS Cargo
+                          หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
                           ทางบริษัทจะเก็บเงินปลายทางเท่านั้น ยกเว้น แฟลช
                           เอ็กซ์เพรส และ เจแอนด์ที เอ็กซ์เพรส
                           ที่เก็บต้นทางเท่านั้น{" "}
@@ -584,7 +585,7 @@ export default async function ServiceImportAddPage() {
                                 <img
                                   data-for="input-12"
                                   className="img-fluid cursor-pointer card-promotion"
-                                  src="/legacy/pcs/assets/images/theme/free50-3.png"
+                                  src="/images/customertheme/free50-3.png"
                                   alt=""
                                 />
                                 <br />
@@ -653,7 +654,7 @@ export default async function ServiceImportAddPage() {
               >
                 <div className="modal-header">
                   <span className="text-white font-1_7rem">
-                    คุณได้รับสิทธิ์ร่วมโปรโมชัน PCS เหมา ๆ{" "}
+                    คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
                   </span>
                   <button
                     type="button"
@@ -676,7 +677,7 @@ export default async function ServiceImportAddPage() {
                   <div className="bg-pro-valentine">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src="/legacy/pcs/assets/images/theme/free50-3.png"
+                      src="/images/customertheme/free50-3.png"
                       className="img-fluid"
                       alt=""
                     />
@@ -702,7 +703,9 @@ export default async function ServiceImportAddPage() {
       {/* forwarder.php L1061-1069 — the `?page=='add'` auto-show <script>.
           Re-emitted verbatim so the modal opens once Bootstrap-4 + jQuery
           (staged globally by (protected)/layout.tsx) have resolved. */}
-      <script
+      <Script
+        id="service-import-add-auto-open"
+        strategy="afterInteractive"
         dangerouslySetInnerHTML={{
           __html: `if (window.jQuery) { window.jQuery(function ($) { $("#add-forwarder").modal("show"); }); } else { document.addEventListener("DOMContentLoaded", function () { if (window.jQuery) window.jQuery("#add-forwarder").modal("show"); }); }`,
         }}
