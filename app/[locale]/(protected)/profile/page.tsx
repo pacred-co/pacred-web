@@ -3,6 +3,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { EditProfileForm } from "./edit-profile-form";
+import { LineNotifyPanel } from "./line-notify-panel";
 
 /**
  * Customer profile screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -111,6 +112,24 @@ export default async function ProfilePage() {
 
   const admin = createAdminClient();
   const memberCode = profile.member_code ?? "";
+
+  // Sprint-2 P1.3 — LINE Notify per-user OAuth state. The columns live
+  // on the profile row (migration 0101) and the panel renders the
+  // connect/disconnect + channel-toggle UI below the legacy profile
+  // card. Read alongside the other profile-card fields so the page is
+  // a single read pass.
+  const { data: lnRow } = await admin
+    .from("profiles")
+    .select("line_notify_token, line_notify_connected_at, line_notify_channels")
+    .eq("id", profile.id)
+    .maybeSingle<{
+      line_notify_token:        string | null;
+      line_notify_connected_at: string | null;
+      line_notify_channels:     Record<string, boolean> | null;
+    }>();
+  const lineNotifyConnectedAt =
+    lnRow?.line_notify_token ? lnRow.line_notify_connected_at : null;
+  const lineNotifyChannels = lnRow?.line_notify_channels ?? null;
 
   // ── Transcribed queries ──────────────────────────────────────
   // header.php L12-38 — the customer header row that fills $_SESSION;
@@ -731,6 +750,21 @@ export default async function ProfilePage() {
               {/* / eCommerce statistic */}
             </section>
             {/* Basic Carousel end — L399 */}
+
+            {/* Sprint-2 P1.3 — LINE Notify connect/disconnect panel.
+                Sits below the legacy profile card + stat carousel so
+                the legacy markup above stays 1:1; the panel itself is
+                a Pacred addition (legacy `member/line-notify.php` was
+                a separate page — we promote it inline since "Connect
+                LINE" is one of the death-flow gaps). */}
+            <div className="row mt-1">
+              <div className="col-md-12">
+                <LineNotifyPanel
+                  connectedAt={lineNotifyConnectedAt}
+                  channels={lineNotifyChannels}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
