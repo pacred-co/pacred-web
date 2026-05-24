@@ -269,6 +269,20 @@ export default async function AdminCommissionWithdrawalDetailPage({
         </section>
       )}
 
+      {/* PDF receipt */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5">
+        <h2 className="font-bold text-sm mb-2">📄 ใบสำคัญรับเงินค่าคอม</h2>
+        <a
+          href={`/api/commission-withdrawal/${header.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block rounded-lg bg-primary-600 px-4 py-2 text-xs font-bold text-white hover:bg-primary-700"
+        >
+          ⬇️ ดาวน์โหลด PDF
+          {Number(header.wht_amount_thb) > 0 && " (มีใบ 50 ทวิ)"}
+        </a>
+      </section>
+
       {/* Status actions (admin) */}
       <WithdrawalActionsClient
         id={header.id}
