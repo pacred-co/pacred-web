@@ -62,6 +62,34 @@ Executable form: [`.claude/skills/legacy-fidelity-check/SKILL.md`](.claude/skill
 
 ---
 
+## 0c. Verify-deep-flow — never claim "clean" without clicking the row (2026-05-25 ค่ำ added)
+
+A page returning HTTP 200 from `curl` is NOT proof it works. A list/table that renders 14 columns isn't done if column 14 is invisible behind a hidden Windows scrollbar. A detail page that says `export const dynamic = "force-dynamic"` and exists on disk isn't done if it 404s intermittently because of a silent Supabase query failure.
+
+This rule exists because on 2026-05-25 ค่ำ I reported Wave 18 as **"clean · no bugs · no dead flows"** after smoke-testing only the routes — and ภูม found 2 bugs within minutes: `/admin/customers` table cut off (scrollbar invisible on Windows Chrome) + `/admin/customers/PR10899` intermittent 404 (legacy-view.tsx silently swallowed db error). ภูม said: *"ทำไมไม่รีเช็คหรือไม่บอกภูมิว่าหน้าไหนยังไม่มี ... ภูมิต้องมาคอยหาเจอเอง ... แบบนี้มันเหมือนเราทำงานกันลวกๆไม่เรียบร้อยเลยนะ ... เราจะทำยังไงดีให้เราทั้งคู่และคอมที่ทำงานด้วย ไม่พลาด ไม่ตกหล่น"*. **2 bugs got past the gate because the gate only checked "does the URL respond 200" — not "does the user-visible flow work end-to-end".**
+
+**Mandatory protocol before claiming any list/table/detail page "clean" or "done":**
+
+1. **Route smoke (existing — necessary but NOT sufficient).** `curl` every new/changed route → 200/307. This catches `DYNAMIC_SERVER_USAGE` and dead routes; it does NOT catch UI clipping, silent db errors, or broken interactive flows.
+2. **Click-through the primary row action.** For every list/table page: open it in Chrome MCP, click the first row → verify the detail page renders (NOT 404, NOT 500, NOT spinner-forever). For each row-action button (edit · approve · suspend · view-as-customer · ดู · etc.): click → verify response (toast / navigation / state change). A 404 on row-click = the row's data field doesn't match the detail route's lookup column — that's a port bug, not a "row data missing" excuse.
+3. **Measure horizontal overflow + verify visible scrollbar.** For every wide table (≥ 8 columns), run in Chrome devtools / MCP eval: `document.querySelector('.overflow-x-auto').scrollWidth > document.querySelector('.overflow-x-auto').clientWidth`. If true → either columns fit at the tested viewport OR a visible scrollbar must be present. Windows Chrome hides scrollbars by default — use the `.scrollbar-x-visible` class (globals.css) or add a UI hint ("เลื่อนซ้าย-ขวา ⇆") so staff know to scroll.
+4. **Destructure `error` from EVERY Supabase query.** Never write `const { data } = await admin.from(...)`. Always `const { data, error } = ...`; on error → `console.error(...)` with the userid/query context AND `throw` (so Next renders a real error boundary, not a silent null → 404). The 2026-05-25 `/customers/PR10899` intermittent 404 was exactly this — `maybeSingle()` quietly returned `data=null` on a transient PgBouncer timeout, and `if (!data) return null` → `notFound()` → 404 for a row that exists.
+5. **State explicitly: verified vs not-yet-verified.** When reporting wave completion to ภูม, list per-surface: `✅ verified flow X→Y→Z`, `⚠️ rendered but didn't click action button A`, `❌ not opened at all`. Never say "clean" or "all green" if any item is ⚠️ or ❌. The honest sentence is *"3 of 5 surfaces I click-verified, 2 only smoke-tested — those 2 may have interactive bugs I didn't catch"*. ภูม would rather know what's untested than be told it's clean and find out the hard way.
+
+**Concrete miss-case that justified this rule:**
+- I shipped Wave 18 + ran `curl` on all routes (all 200) + did NOT click the eye-icon on a customer row + did NOT measure table overflow. ภูม opened `/admin/customers`, scrolled visually, saw the "จัดการ" column missing → bug 1. ภูม clicked the eye-icon on PR10899 → 404 → bug 2. **Both were 60-second checks I skipped.** The route-smoke discipline (AGENTS.md §11 → `phase-verify-loop` skill) was followed; it was insufficient.
+
+**Anti-patterns:**
+- ❌ Claiming "wave clean" because `pnpm verify` + route-smoke pass
+- ❌ `const { data } = await admin.from(...)` — error path is invisible
+- ❌ Letting the user discover interactive bugs by clicking around
+- ❌ Wide tables (≥ 8 cols) without `.scrollbar-x-visible` or a "⇆ scroll" hint
+- ❌ Detail pages that fall through to `notFound()` when the underlying issue is a transient db error (notFound = "row doesn't exist", not "I had a problem reading")
+
+Full lesson: [`docs/learnings/verify-deep-flow.md`](docs/learnings/verify-deep-flow.md) (to be written next session — capture the 2 bug case studies for compounding memory).
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

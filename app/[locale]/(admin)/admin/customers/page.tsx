@@ -294,7 +294,18 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่พบลูกค้า</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Wave 18 follow-up (2026-05-25 ค่ำ — ภูม flagged): the table
+                has 14 columns (after Wave 18-A) and overflows ~1583px on
+                a 1920px screen with sidebar. We add a left-rail hint so
+                staff know the table is scrollable + the inner wrapper uses
+                `.scrollbar-x-visible` (globals.css) to force a visible
+                scrollbar on Windows Chrome. */}
+            <p className="px-4 pt-3 text-[11px] text-muted">
+              <span className="opacity-70">เลื่อนซ้าย-ขวาเพื่อดูคอลัมน์ทั้งหมด</span>
+              <span className="ml-1">⇆</span>
+            </p>
+            <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
@@ -418,6 +429,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </main>

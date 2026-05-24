@@ -130,3 +130,40 @@ body {
 @media (max-width: 1023px) {
   .protected-content { padding-left: 0; }
 }
+
+/* Always-visible thin horizontal scrollbar for wide admin tables.
+   Wave 18 follow-up (2026-05-25 ค่ำ — ภูม flagged): the /admin/customers
+   table now has 14 columns (Wave 18-A fidelity columns) so it overflows
+   at ~1583px even on a 1920px laptop with the 256px sidebar deducted.
+   The wrapper already had `overflow-x-auto` so it WAS scrollable — but
+   Chrome on Windows hides the scrollbar by default until hover, so ภูม
+   saw "the table is cut off" and didn't know to scroll. This class
+   forces a thin, always-visible scrollbar on Windows + Mac + Firefox
+   so wide admin tables surface their scrollability immediately.
+   Apply to the wrapper that already carries `overflow-x-auto`. */
+.scrollbar-x-visible {
+  scrollbar-width: thin;                  /* Firefox */
+  scrollbar-color: #cbd5e1 transparent;   /* Firefox · slate-300 thumb */
+}
+.scrollbar-x-visible::-webkit-scrollbar {
+  height: 10px;                            /* WebKit/Blink — Chrome on Win/Mac */
+}
+.scrollbar-x-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-x-visible::-webkit-scrollbar-thumb {
+  background: #cbd5e1;                     /* slate-300 */
+  border-radius: 9999px;
+}
+.scrollbar-x-visible::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;                     /* slate-400 */
+}
+.dark .scrollbar-x-visible {
+  scrollbar-color: #475569 transparent;    /* slate-600 thumb on dark */
+}
+.dark .scrollbar-x-visible::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.dark .scrollbar-x-visible::-webkit-scrollbar-thumb:hover {
+  background: #64748b;                     /* slate-500 */
+}

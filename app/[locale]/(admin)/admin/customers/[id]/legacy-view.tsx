@@ -76,13 +76,36 @@ const STATUS_ACTIVE_CFG: Record<string, { label: string; cls: string }> = {
 
 export async function renderLegacyCustomerView(id: string) {
   const admin = createAdminClient();
-  const { data: userRaw } = await admin
+
+  // Wave 18 follow-up (2026-05-25 ค่ำ): the previous version of this query
+  // destructured ONLY `data` — so any transient Supabase error (PgBouncer
+  // timeout · network blip · 503 from project) collapsed silently to
+  // `data=null` → we returned null → page.tsx called `notFound()` → user
+  // saw an intermittent 404 even on rows that exist. Server logs showed
+  // 200/200/200/404 hitting the same userid within 5 seconds — exactly the
+  // transient-error pattern this hid. The fix: destructure `error`, log
+  // it with full context, and THROW so Next renders the error boundary
+  // (a real 500 with the diagnostic) instead of a misleading 404. A 404
+  // is now reserved for "row genuinely not in tb_users" only.
+  const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
       "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote,userimage",
     )
     .eq("userid", id)
     .maybeSingle();
+  if (userErr) {
+    console.error("[legacy-view] tb_users query failed", {
+      userid: id,
+      code: userErr.code,
+      message: userErr.message,
+      details: userErr.details,
+      hint: userErr.hint,
+    });
+    throw new Error(
+      `legacy-view: failed to load tb_users for ${id} — ${userErr.code ?? "unknown"}: ${userErr.message}`,
+    );
+  }
   if (!userRaw) return null;
   const u = userRaw as unknown as URow;
 
