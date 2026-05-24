@@ -13,10 +13,11 @@
 | Branch | Owner | Role | Status |
 |---|---|---|---|
 | **`main`** | ก๊อต gate | 🚀 **PRODUCTION** — Vercel auto-deploy | 🟢 live |
+| **`podeng`** | ปอน | Customer-facing **frontend** + **brand SOT (theme/images/icons)** → merged into `dave-pacred` | 🟢 active |
 | **`dave-pacred`** | เดฟ | 1:1 **customer-backend** portal port (`(protected)/*`) + integrates ปอน frontend → merges to `main` | 🟢 active |
-| **`podeng`** | ปอน | Customer-facing **frontend** + brand-asset swap → merged into `dave-pacred` | 🟢 active |
-| **`Poom-pacred`** | ภูม | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements; merges in *after* 1:1 ships | 🟢 active |
-| `dave` · `Poom` | (archive) | 🧊 **FROZEN** — pre-1:1 working branches; reference only, no new commits | 🧊 archive |
+| **`Poom-pacred`** | ภูม | **V3 backend primary lane (UNLOCKED 2026-05-24)** — DPX ERP enhancements; merges after 1:1 ships | 🟢 active |
+| **`Poom`** | ภูม | **V3 backend secondary lane (UNLOCKED — was frozen)** | 🟢 active |
+| **`dave`** | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships to main; combo with Poom-pacred + podeng | 💤 dormant |
 
 **Flow (post-2026-05-24):**
 ```
@@ -24,12 +25,38 @@
                    ├─► เดฟ merges into dave-pacred → verify → push main (ก๊อต gates)
 ก๊อต (admin 1:1) ─┘                                                  ▲
                                                                       │
-ภูม (Poom-pacred V3) ── continues V3 features, merges in after 1:1 ──┘
+ภูม (Poom-pacred V3) ── continues V3, merges in after 1:1 ships ─────┘
+                                                                      │
+(future) เดฟ on dave V3 full ── combo with Poom-pacred + podeng ─────┘
 ```
 
-**Deleted on 2026-05-24:** `faithful-port` branch (no longer the integration target — direct-to-main pattern won out during the OTP emergency week) · all `claude/*` remote branches (work merged or stale) · `hotfix/auth-unblock` (cherry-picked to main as `5c6bb8a`).
+**Deleted on 2026-05-24:** `faithful-port` (no longer the integration target — direct-to-main pattern won out during the OTP emergency week) · all `claude/*` remotes (work merged or stale) · `hotfix/auth-unblock` (cherry-picked as `5c6bb8a`).
 
-Everyone opens **their own** branch and works there. Sync daily; never push half-built work to `main`. Spawned worktree agents must `git fetch origin && git reset --hard origin/<your-branch>` before working (they branch from a stale `origin/main` otherwise).
+**Branding (owner directive 2026-05-24):** All theme/images/icons follow **ปอน's `podeng` style** (Tailwind + Pacred red `#B30000` + Prompt + lucide). Customer code = **`PR…`** (e.g. `PR201`). 1:1 ports legacy workflow + markup + SQL — visual treatment rebranded to podeng.
+
+**Customer data + storage:** Already in Supabase S3 production (ภูม uploaded `pcsracgo/public/member` files). DB = `yzljakczhwrpbxflnmco`. Internal table conflict (rebuilt-era vs `tb_*`) is OUR cleanup task — NOT a legacy migration gap.
+
+Everyone opens **their own** branch and works there. Sync daily; never push half-built work to `main`. Spawned worktree agents must `git fetch origin && git reset --hard origin/<your-branch>` before working.
+
+### Audit reports (2026-05-24)
+- 🔍 [`d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — top-10 gap summary + sprint sequence
+- 📑 [`d1-audit-pcscargo-2026-05-24.md`](../research/d1-audit-pcscargo-2026-05-24.md) — exhaustive pcscargo.co.th .php sweep
+- 📑 [`d1-audit-backoffice-2026-05-24.md`](../research/d1-audit-backoffice-2026-05-24.md) — backoffice.pcscargo.co.th MVC admin
+- 📑 [`d1-audit-pcsseafreight-2026-05-24.md`](../research/d1-audit-pcsseafreight-2026-05-24.md) — pcs-seafreight.com freight (V3 reference)
+
+### Gap ownership map (owner-assigned 2026-05-24)
+| # | Gap | Owners |
+|---|---|---|
+| 1 | Google Sheets sync (CTT/MX/MK/Sang) | เดฟ + ก๊อต + ภูม |
+| 2 | JMF / TTP / CN forwarder partner APIs | ก๊อต |
+| 3 | LINE Notify per-user OAuth + cron | เดฟ |
+| 4 | CargoThai PO sync | เดฟ |
+| 5 | TAMIT (Thai ID) verification | เดฟ |
+| 6 | MOMO LCL sack tracking | ภูม |
+| 7 | Barcode + Excel bulk import | เดฟ |
+| 8 | 40+ admin reports | เดฟ + ก๊อต + ภูม |
+| 9 | Customer image migration | ✅ ภูม DONE (S3 production) |
+| 10 | WP blog/news CMS | เดฟ + ปอน |
 
 ---
 

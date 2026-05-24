@@ -37,14 +37,18 @@ Last updated: 2026-05-24 (post strategy-reset — `faithful-port` deleted · V3 
 | Branch | Owner | Purpose | Status |
 |---|---|---|---|
 | `main` | ก๊อต gate | Production. Vercel auto-deploy. | 🟢 live |
+| `podeng` | ปอน | Frontend & customer-portal UI; **the brand SOT (theme/images/icons)** — merges to dave-pacred via เดฟ | 🟢 active |
 | `dave-pacred` | เดฟ | 1:1 customer-backend + integration; merges to main | 🟢 active |
-| `podeng` | ปอน | Frontend & customer-portal UI; merges to dave-pacred via เดฟ | 🟢 active |
-| `Poom-pacred` | ภูม | **V3 backend continuation (UNLOCKED)** — merges to main *after* 1:1 | 🟢 active |
-| `dave` | (archive) | Pre-1:1 working branch; reference only | 🧊 frozen |
-| `Poom` | (archive) | Pre-1:1 V3 lane; reference only | 🧊 frozen |
+| `Poom-pacred` | ภูม | **V3 backend primary lane (UNLOCKED)** — merges to main after 1:1 | 🟢 active |
+| `Poom` | ภูม | V3 backend secondary lane (UNLOCKED — was frozen pre-2026-05-24) | 🟢 active |
+| `dave` | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships to main; then combo with Poom-pacred + podeng | 💤 dormant |
 | `claude/*` (local) | (auto worktrees) | Internal Claude Code session worktrees — don't push, never bound to remote | local-only |
 
 **Deleted 2026-05-24:** `faithful-port` (no longer integration target) · `hotfix/auth-unblock` (cherry-picked) · all stale `claude/*` remotes (work merged or stale).
+
+**Branding rule (owner directive 2026-05-24):** all theme/images/icons across the codebase follow **ปอน's `podeng` style** (Tailwind + Pacred red `#B30000` + Prompt font + lucide outline icons). Customer code prefix stays **`PR…`** (e.g. `PR201`). The 1:1 transcription copies the legacy workflow + markup + SQL — visual treatment is rebrand to podeng.
+
+**Customer data state:** Customer images + storage already in **Supabase S3 production** (ภูม uploaded `pcsracgo/public/member` files). Database = production project `yzljakczhwrpbxflnmco`. Internal table-naming conflict (rebuilt-era vs legacy `tb_*`) is OUR cleanup task — not a legacy migration gap.
 
 **กฎทอง:**
 1. ปอน + ภูม commit/push **เฉพาะ branch ตัวเอง** (`podeng` / `Poom`) — ห้าม push เข้า main หรือ dave

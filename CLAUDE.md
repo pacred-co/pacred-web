@@ -11,11 +11,11 @@ Owner directive 2026-05-24: clean up the branch model and **unlock V3** for para
 | Branch | Owner | Purpose | Status |
 |---|---|---|---|
 | `main` | ก๊อต gate | Production · Vercel auto-deploy | 🟢 live |
-| `dave-pacred` | **เดฟ** | 1:1 **customer-backend** port + integrates ปอน frontend | 🟢 active |
-| `podeng` | **ปอน** | Customer-facing frontend + brand-asset swap | 🟢 active |
-| `Poom-pacred` | **ภูม** | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements | 🟢 active |
-| `dave` | (archive) | Pre-1:1 V3-era working branch — reference only | 🧊 frozen |
-| `Poom` | (archive) | Pre-1:1 V3 backend lane — reference only | 🧊 frozen |
+| `podeng` | **ปอน** | Customer-facing frontend + brand-asset swap — **the brand SOT for all of Pacred (theme/images/icons)** | 🟢 active |
+| `dave-pacred` | **เดฟ** | 1:1 **customer-backend** port + integrates ปอน frontend → pushes to main | 🟢 active |
+| `Poom-pacred` | **ภูม** | **V3 backend primary lane (UNLOCKED 2026-05-24)** — DPX ERP enhancements | 🟢 active |
+| `Poom` | **ภูม** | V3 backend secondary lane (UNLOCKED 2026-05-24) | 🟢 active |
+| `dave` | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships; then combo with Poom-pacred + podeng | 💤 dormant |
 
 **Flow:**
 ```
@@ -24,30 +24,38 @@ Owner directive 2026-05-24: clean up the branch model and **unlock V3** for para
 ก๊อต (admin 1:1)    ─┘                                                  ▲
                                                                          │
 ภูม (Poom-pacred V3) ── continues V3 features, merges in after 1:1 ─────┘
+                                                                         │
+(future) เดฟ on dave V3 full — combo with Poom-pacred + podeng ─────────┘
 ```
 
-**Direction (unchanged from D1):** 1:1 PCS Cargo port to main FIRST — เดฟ does customer-backend portal, ก๊อต does admin back-office (1:1 in parallel), ปอน does frontend. Then V3 features (Poom-pacred) layer on top after 1:1 stable.
+**Direction (unchanged from D1):** 1:1 PCS Cargo port to main FIRST — เดฟ does customer-backend portal, ก๊อต does admin back-office (1:1 in parallel), ปอน does frontend. Then V3 features (Poom-pacred + future dave) layer on top after 1:1 stable.
 
 **What changed 2026-05-24:**
 - `faithful-port` branch **deleted** — flow now goes direct to `main` (no intermediate integration branch)
-- **V3 unlocked** — ภูม resumes V3 features in `Poom-pacred` (not the frozen `Poom`) without waiting for 1:1 to ship
+- **V3 UNLOCKED across multiple branches** — ภูม resumes V3 in `Poom-pacred` (primary) + `Poom` (secondary). `dave` is dormant V3 full-site lane (เดฟ activates after `dave-pacred` ships).
 - All `claude/*` agent branches **cleaned** from remote (work either already merged or stale)
 - `hotfix/auth-unblock` removed (fix landed in main as `5c6bb8a`)
+- **Branding rule:** all theme/images/icons follow ปอน's `podeng` style; customer code prefix stays **`PR…`** (e.g. `PR201`)
+- **Customer images:** ✅ ภูม uploaded to Supabase S3 production already — `pcsracgo/public/member` image + storage files are in S3 prod; no further legacy migration needed
+- **Supabase:** working on production project `yzljakczhwrpbxflnmco`; internal table-naming conflict (rebuilt-era vs `tb_*`) still to resolve — our problem, not a legacy gap
 
 **Authoritative SOTs (read in order):**
 1. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — branch model · 4-person work-split · status (updated 2026-05-24)
 2. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — canonical 1:1 method
-3. 🔍 [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md) — **NEW gap analysis** — what's still missing from the port (Google Sheets sync, JMF/TTP/CN partner APIs, LINE Notify, CargoThai, TAMIT, MOMO LCL tracking)
-4. 🧭 [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1 ADR (V2 = faithful port)
-5. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (`tb_*` inventory)
+3. 🔍 [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md) — 10 critical missing flows + sprint sequence + owner-assigned ownership map
+4. 📑 [`docs/research/d1-audit-pcscargo-2026-05-24.md`](docs/research/d1-audit-pcscargo-2026-05-24.md) — exhaustive pcscargo.co.th customer + admin .php inventory + modal/AJAX/cron sweep
+5. 📑 [`docs/research/d1-audit-backoffice-2026-05-24.md`](docs/research/d1-audit-backoffice-2026-05-24.md) — `backoffice.pcscargo.co.th` MVC admin port checklist (MOMO LCL tracking)
+6. 📑 [`docs/research/d1-audit-pcsseafreight-2026-05-24.md`](docs/research/d1-audit-pcsseafreight-2026-05-24.md) — `pcs-seafreight.com` freight company audit (V3 freight reference)
+7. 🧭 [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1 ADR (V2 = faithful port)
+8. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (`tb_*` inventory)
 
 **Pattern references:**
-- Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`
-- Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx` + `public/legacy/pcs/admin/admin-base.css`
+- Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` (uses ปอน's Tailwind chrome — NOT verbatim legacy CSS)
+- Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx`
 
 **Legacy source locations (read-only references):**
 - Mac: `/Users/dev/Desktop/pcscargo/` (May 21 snapshot with `.git`)
-- Newly-extracted (2026-05-24): `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/` — includes the previously-unseen `backoffice.pcscargo.co.th` MVC admin + `pcs-seafreight.com` WP site
+- Full extract 2026-05-24: `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/` (~25GB code-only — `public_html/` + `backoffice.pcscargo.co.th/` + `pcs-seafreight.com/` + `sms/`)
 
 ---
 

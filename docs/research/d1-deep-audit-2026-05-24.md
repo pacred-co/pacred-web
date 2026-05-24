@@ -13,18 +13,18 @@
 
 ## TL;DR — 10 critical gaps
 
-| # | Gap | Severity | Effort | Owner | Status |
+| # | Gap | Severity | Effort | Owner (owner-assigned 2026-05-24) | Status |
 |---|---|---|---|---|---|
-| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | ก๊อต/ภูม | ❌ NONE |
-| 2 | **JMF / TTP / CN forwarder partner APIs** | 🔴 HIGH | L | ก๊อต | 🔴 only MOMO JMF stubbed |
-| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | เดฟ | ❌ admin-side LINE Messaging only |
-| 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | ก๊อต | ❌ NONE |
-| 5 | **TAMIT (Thai ID) identity verification** | 🟡 MED | S | เดฟ | ❌ NONE (DBD/RD stubbed but not equivalent) |
-| 6 | **MOMO LCL sack tracking lookup** (newly discovered) | 🟡 MED | S | ภูม | ❌ NONE |
-| 7 | **Barcode + Excel bulk import** (admin) | 🟡 MED | M | ก๊อต | 🟡 partial admin barcode |
-| 8 | **40+ admin reports** | 🟡 MED | L | ก๊อต | 🟡 framework partial |
-| 9 | **Customer image files migration** (37GB rar pending) | 🟡 MED | (infra) | ก๊อต | ⏳ waiting on disk/Pro |
-| 10 | **WordPress blog/news CMS** for public site | ⚪ LOW | M | ปอน | ❌ static-only (acceptable) |
+| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | ❌ NONE |
+| 2 | **JMF / TTP / CN forwarder partner APIs** | 🔴 HIGH | L | **ก๊อต** | 🔴 only MOMO JMF stubbed |
+| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ❌ admin-side LINE Messaging only |
+| 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | **เดฟ** | ❌ NONE |
+| 5 | **TAMIT (Thai ID) identity verification** | 🟡 MED | S | **เดฟ** | ❌ NONE (DBD/RD stubbed but not equivalent) |
+| 6 | **MOMO LCL sack tracking lookup** (newly discovered) | 🟡 MED | S | **ภูม** | ❌ NONE — port from backoffice.pcscargo.co.th |
+| 7 | **Barcode + Excel bulk import** (admin) | 🟡 MED | M | **เดฟ** | 🟡 partial admin barcode |
+| 8 | **40+ admin reports** | 🟡 MED | L | **เดฟ + ก๊อต + ภูม** (joint) | 🟡 framework partial |
+| 9 | **Customer image files migration** | ✅ DONE | — | **ภูม** | ✅ uploaded to Supabase S3 production 2026-05-24 |
+| 10 | **WordPress blog/news CMS** for public site | ⚪ LOW | M | **เดฟ + ปอน** | ❌ static-only (acceptable) |
 
 🔴 HIGH = blocks revenue / customer trust · 🟡 MED = degraded experience · ⚪ LOW = cosmetic / acceptable
 S = ≤1 day · M = 2–5 days · L = ≥1 week
@@ -183,20 +183,29 @@ These are flows that work but degraded (rebuilt-era differs from legacy):
 
 ---
 
-## 6. Open questions for owner / team
+## 6. Open questions — RESOLVED 2026-05-24
 
-1. **ก๊อต admin lane vs ภูม V3 admin work** — both touch `app/[locale]/(admin)/`. Should ก๊อต coordinate with ภูม or work on separate sub-routes? Suggest: ก๊อต owns `admin-*.php` 1:1 transcription paths; ภูม keeps V3 enhancements on routes that aren't being 1:1-ported.
-2. **TAMIT integration urgency** — is real-time Thai ID validation still required by the owner, or is delayed verification acceptable? (DBD/RD planned but stubbed.)
-3. **LINE Notify EOL** — LINE Notify was EOL April 2025 in the legacy notes. Are we porting per-user OAuth + push, or migrating to LINE Messaging API per-user model?
-4. **CargoThai partner relationship** — is `api.newcargothai.net` still active, or has the partnership ended? If ended, skip gap #4.
-5. **Customer image migration** — when can ก๊อต provision external disk for the REALSHITDATAPCS.rar 37GB extraction? Blocks Phase A "100% data parity" closure.
+| # | Question | Owner decision |
+|---|---|---|
+| 1 | ก๊อต admin lane vs ภูม V3 admin coordination | Plan: ปอน หน้าบ้านเว็บไซต์ · เดฟ+ปอน หลังบ้านลูกค้า (dave-pacred) · ก๊อต admin 1:1 (รอเอามาชนแล้วขึ้น main) · ภูม `Poom-pacred` V3 ต่อ. After `dave-pacred` ships, เดฟ kicks off V3 full-site on `dave` combo'd with Poom-pacred + podeng. |
+| 2 | TAMIT real-time vs delayed | Owned by เดฟ — implement per gap #5 (the deferred answer is in code: real-time stubbed via DBD/RD if owner pivots; if owner-confirmed for TAMIT, real-time port of `regis-tam.php`). |
+| 3 | LINE Notify EOL — port OAuth or migrate to Messaging | Owned by เดฟ — implement per gap #3 (port the per-user OAuth flow so legacy customers' connect-button keeps working; long-term migrate to LINE Messaging per-user model when LINE Notify shut off — owner can confirm cadence later) |
+| 4 | CargoThai still active partnership? | Owned by เดฟ — verify status with owner before building gap #4; if partnership ended, skip. |
+| 5 | Customer image migration disk | ✅ NOT NEEDED — ภูม uploaded the legacy `pcsracgo/public/member` image + storage files into **Supabase S3 production** 2026-05-24. Phase A storage parity closed. |
+
+**Remaining open question (internal):** the Supabase production project (`yzljakczhwrpbxflnmco`) has internal table-naming conflicts between rebuilt-era and legacy `tb_*` schemas. This is OUR problem to resolve in supabase — not a legacy migration gap. Owners: เดฟ + ภูม jointly.
 
 ---
 
 ## Cross-links
 
-- [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — branch model + work-split (updated 2026-05-24)
+- [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — branch model + work-split + ownership map (updated 2026-05-24)
 - [`docs/runbook/faithful-port-transcription.md`](../runbook/faithful-port-transcription.md) — 1:1 method
 - [`docs/decisions/0017-pacred-faithful-pcs-port.md`](../decisions/0017-pacred-faithful-pcs-port.md) — D1 ADR
 - [`docs/runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md) — Phase A
 - [`docs/runbook/otp-emergency-2026-05-23.md`](../runbook/otp-emergency-2026-05-23.md) — yesterday's emergency context
+
+### 2026-05-24 audit cross-links
+- 📑 [`d1-audit-pcscargo-2026-05-24.md`](d1-audit-pcscargo-2026-05-24.md) — exhaustive pcscargo.co.th customer + admin .php sweep + modal/AJAX/cron inventory
+- 📑 [`d1-audit-backoffice-2026-05-24.md`](d1-audit-backoffice-2026-05-24.md) — backoffice.pcscargo.co.th MVC admin (MOMO LCL tracking)
+- 📑 [`d1-audit-pcsseafreight-2026-05-24.md`](d1-audit-pcsseafreight-2026-05-24.md) — pcs-seafreight.com freight company (V3 freight reference)
