@@ -2646,6 +2646,7 @@
       "listAdd": "Add an import item",
       "note": "Import notes",
       "checkCntCost": "Container cost-check sheet",
+      "momoLclSack": "Check MOMO LCL sack",
       "cntReport": "Container report",
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",

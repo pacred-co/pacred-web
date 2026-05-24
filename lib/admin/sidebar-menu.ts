@@ -174,6 +174,7 @@ const blockForwarder: MenuItem = {
     },
     { labelKey: "forwarder.note",          href: "/admin/forwarders?q=note",               icon: "MessageSquare", badge: "forwarderNote" },
     { labelKey: "forwarder.checkCntCost",  href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
+    { labelKey: "forwarder.momoLclSack",   href: "/admin/momo-lcl",                        icon: "Barcode" },
     { labelKey: "forwarder.cntReport",     href: "/admin/containers",                      icon: "Truck" },
     { labelKey: "forwarder.whHistory",     href: "/admin/forwarders/warehouse-history",    icon: "PackageCheck", badge: "forwarderWhError" },
     { labelKey: "forwarder.assignDriver",  href: "/admin/drivers",                         icon: "Truck", badge: "driverItems" },
