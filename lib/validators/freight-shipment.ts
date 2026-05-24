@@ -2,9 +2,24 @@
  * Zod schemas for V-E1 freight shipments + invoices.
  *
  * Per [docs/port-specs/freight-document-suite.md] + ADR-0016.
+ *
+ * V-E5 hardening (2026-05-25): explicit int32-overflow rejection layered
+ * on top of the existing range bounds — `-2_146_826_xxx` legacy garbage
+ * is now rejected with "int32_overflow_suspected" instead of falling
+ * through to the generic "out of range".
  */
 
 import { z } from "zod";
+import { isInt32OverflowSuspect } from "./safe-numeric";
+
+/**
+ * Layer the int32-overflow guard on top of an existing range. Used inline
+ * so the existing min/max bounds stay readable in their declarations.
+ */
+function notInt32(n: number): boolean {
+  return !isInt32OverflowSuspect(n);
+}
+const INT32_MSG = { message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก" };
 
 // ────────────────────────────────────────────────────────────
 // Enums (mirror DB CHECK)
@@ -106,14 +121,14 @@ export function computeValueBlock(args: {
 const TAX_ID_RE = /^\d{13}$/;
 
 const valueBlockSchema = z.object({
-  commercial_value_usd:       z.number().min(0).max(99_999_999.99).optional().nullable(),
-  exchange_rate:              z.number().positive().max(9999).optional().nullable(),
+  commercial_value_usd:       z.number().refine(notInt32, INT32_MSG).min(0).max(99_999_999.99).optional().nullable(),
+  exchange_rate:              z.number().refine(notInt32, INT32_MSG).positive().max(9999).optional().nullable(),
   rate_date:                  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  declared_customs_value_thb: z.number().min(0).max(999_999_999.99).optional().nullable(),
+  declared_customs_value_thb: z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional().nullable(),
   declared_value_basis:       z.string().trim().max(1000).optional().nullable(),
   hs_code:                    z.string().trim().min(1).max(20).optional().nullable(),
-  duty_rate_pct:              z.number().min(0).max(100).optional().nullable(),
-  vat_base_thb:               z.number().min(0).max(999_999_999.99).optional().nullable(),
+  duty_rate_pct:              z.number().refine(notInt32, INT32_MSG).min(0).max(100).optional().nullable(),
+  vat_base_thb:               z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional().nullable(),
   vat_plan_label:             z.string().trim().max(50).optional().nullable(),
   form_e_applied:             z.boolean().optional(),
 });
@@ -158,14 +173,14 @@ export const updateFreightShipmentSchema = z.object({
   origin_country:       z.string().trim().max(50).optional(),
   notes:                z.string().trim().max(2000).optional().nullable(),
 
-  commercial_value_usd:       z.number().min(0).max(99_999_999.99).optional().nullable(),
-  exchange_rate:              z.number().positive().max(9999).optional().nullable(),
+  commercial_value_usd:       z.number().refine(notInt32, INT32_MSG).min(0).max(99_999_999.99).optional().nullable(),
+  exchange_rate:              z.number().refine(notInt32, INT32_MSG).positive().max(9999).optional().nullable(),
   rate_date:                  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  declared_customs_value_thb: z.number().min(0).max(999_999_999.99).optional().nullable(),
+  declared_customs_value_thb: z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional().nullable(),
   declared_value_basis:       z.string().trim().max(1000).optional().nullable(),
   hs_code:                    z.string().trim().min(1).max(20).optional().nullable(),
-  duty_rate_pct:              z.number().min(0).max(100).optional().nullable(),
-  vat_base_thb:               z.number().min(0).max(999_999_999.99).optional().nullable(),
+  duty_rate_pct:              z.number().refine(notInt32, INT32_MSG).min(0).max(100).optional().nullable(),
+  vat_base_thb:               z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional().nullable(),
   vat_plan_label:             z.string().trim().max(50).optional().nullable(),
   form_e_applied:             z.boolean().optional(),
 });
@@ -218,11 +233,11 @@ export const addInvoiceLineSchema = z.object({
   position:           z.number().int().min(1).max(999).optional(),
   marks:              z.string().trim().max(200).optional(),
   description:        z.string().trim().min(1).max(500),
-  qty:                z.number().positive().max(9_999_999),
+  qty:                z.number().refine(notInt32, INT32_MSG).positive().max(9_999_999),
   unit:               z.enum(FREIGHT_LINE_UNITS).default("PCS"),
-  unit_price_usd:     z.number().min(0).max(99_999_999.99),
-  cartons:            z.number().int().min(0).max(999_999).optional(),
-  gross_weight_kg:    z.number().min(0).max(9_999_999.999).optional(),
+  unit_price_usd:     z.number().refine(notInt32, INT32_MSG).min(0).max(99_999_999.99),
+  cartons:            z.number().refine(notInt32, INT32_MSG).int().min(0).max(999_999).optional(),
+  gross_weight_kg:    z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional(),
   hs_code:            z.string().trim().max(20).optional(),
 });
 export type AddInvoiceLineInput = z.infer<typeof addInvoiceLineSchema>;
@@ -231,11 +246,11 @@ export const updateInvoiceLineSchema = z.object({
   id:              z.string().uuid(),
   marks:           z.string().trim().max(200).optional().nullable(),
   description:     z.string().trim().min(1).max(500).optional(),
-  qty:             z.number().positive().max(9_999_999).optional(),
+  qty:             z.number().refine(notInt32, INT32_MSG).positive().max(9_999_999).optional(),
   unit:            z.enum(FREIGHT_LINE_UNITS).optional(),
-  unit_price_usd:  z.number().min(0).max(99_999_999.99).optional(),
-  cartons:         z.number().int().min(0).max(999_999).optional().nullable(),
-  gross_weight_kg: z.number().min(0).max(9_999_999.999).optional().nullable(),
+  unit_price_usd:  z.number().refine(notInt32, INT32_MSG).min(0).max(99_999_999.99).optional(),
+  cartons:         z.number().refine(notInt32, INT32_MSG).int().min(0).max(999_999).optional().nullable(),
+  gross_weight_kg: z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional().nullable(),
   hs_code:         z.string().trim().max(20).optional().nullable(),
 });
 export type UpdateInvoiceLineInput = z.infer<typeof updateInvoiceLineSchema>;

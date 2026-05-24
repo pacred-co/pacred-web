@@ -6,9 +6,19 @@
  *
  * Status workflow: draft → submitted → accepted → released, with cancel
  * possible at any non-released stage.
+ *
+ * V-E5 hardening (2026-05-25): explicit int32-overflow rejection layered
+ * on top of existing range bounds — `-2_146_826_xxx` legacy garbage is
+ * now rejected with "int32_overflow_suspected".
  */
 
 import { z } from "zod";
+import { isInt32OverflowSuspect } from "./safe-numeric";
+
+function notInt32(n: number): boolean {
+  return !isInt32OverflowSuspect(n);
+}
+const INT32_MSG = { message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก" };
 
 // ────────────────────────────────────────────────────────────
 // Enums (mirror DB CHECK)
@@ -116,7 +126,7 @@ export const updateDeclarationHeaderSchema = z.object({
   ship_or_truck_arrival_date:  z.string().regex(ISO_DATE_RE).optional().nullable(),
   port_of_entry:               z.string().trim().max(200).optional().nullable(),
   paid_through_promptpay:      z.boolean().optional(),
-  total_other_taxes_thb:       z.number().min(0).max(999_999_999.99).optional().nullable(),
+  total_other_taxes_thb:       z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional().nullable(),
   notes:                       z.string().trim().max(2000).optional().nullable(),
 });
 export type UpdateDeclarationHeaderInput = z.infer<typeof updateDeclarationHeaderSchema>;
@@ -134,12 +144,12 @@ export const addDeclarationLineSchema = z.object({
   hs_code:            z.string().trim().max(20).optional().nullable(),
   description:        z.string().trim().min(1).max(500),
   country_of_origin:  z.string().trim().regex(/^[A-Z]{2}$/, { message: "country_of_origin ต้องเป็น ISO 2-letter (CN, TH, ...)" }).optional(),
-  qty:                z.number().min(0).max(9_999_999),
+  qty:                z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999),
   unit:               z.enum(CUSTOMS_LINE_UNITS).default("PCS"),
-  gross_weight_kg:    z.number().min(0).max(9_999_999.999).optional().nullable(),
-  net_weight_kg:      z.number().min(0).max(9_999_999.999).optional().nullable(),
-  declared_value_thb: z.number().min(0).max(999_999_999.99).default(0),
-  duty_rate_pct:      z.number().min(0).max(100).default(0),
+  gross_weight_kg:    z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional().nullable(),
+  net_weight_kg:      z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional().nullable(),
+  declared_value_thb: z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).default(0),
+  duty_rate_pct:      z.number().refine(notInt32, INT32_MSG).min(0).max(100).default(0),
   fta_applied:        z.boolean().optional(),
   notes:              z.string().trim().max(1000).optional().nullable(),
 });
@@ -150,12 +160,12 @@ export const updateDeclarationLineSchema = z.object({
   hs_code:            z.string().trim().max(20).optional().nullable(),
   description:        z.string().trim().min(1).max(500).optional(),
   country_of_origin:  z.string().trim().regex(/^[A-Z]{2}$/).optional(),
-  qty:                z.number().min(0).max(9_999_999).optional(),
+  qty:                z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999).optional(),
   unit:               z.enum(CUSTOMS_LINE_UNITS).optional(),
-  gross_weight_kg:    z.number().min(0).max(9_999_999.999).optional().nullable(),
-  net_weight_kg:      z.number().min(0).max(9_999_999.999).optional().nullable(),
-  declared_value_thb: z.number().min(0).max(999_999_999.99).optional(),
-  duty_rate_pct:      z.number().min(0).max(100).optional(),
+  gross_weight_kg:    z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional().nullable(),
+  net_weight_kg:      z.number().refine(notInt32, INT32_MSG).min(0).max(9_999_999.999).optional().nullable(),
+  declared_value_thb: z.number().refine(notInt32, INT32_MSG).min(0).max(999_999_999.99).optional(),
+  duty_rate_pct:      z.number().refine(notInt32, INT32_MSG).min(0).max(100).optional(),
   fta_applied:        z.boolean().optional(),
   notes:              z.string().trim().max(1000).optional().nullable(),
 });

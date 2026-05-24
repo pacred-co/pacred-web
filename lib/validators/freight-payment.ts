@@ -16,6 +16,7 @@
  */
 
 import { z } from "zod";
+import { isInt32OverflowSuspect } from "./safe-numeric";
 
 // ────────────────────────────────────────────────────────────
 // Enums (mirror DB CHECK constraints)
@@ -142,6 +143,9 @@ export const recordFreightPaymentSchema = z.object({
 
   amount_thb: z
     .number()
+    .refine((n) => !isInt32OverflowSuspect(n), {
+      message: "int32_overflow_suspected — กรุณาตรวจค่าตัวเลขที่กรอก",
+    })
     .positive("จำนวนเงินต้อง > 0")
     .max(999_999_999.99, "จำนวนเงินเกินเพดาน"),
 

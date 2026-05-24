@@ -1,8 +1,14 @@
 /**
  * Zod schemas for the forwarder (service-import) submission flow.
+ *
+ * V-E5 hardening (2026-05-25): every numeric input goes through the
+ * `safe-numeric.ts` helpers — bounded ranges + explicit int32-overflow
+ * rejection. Legacy Excel ingestion produced `-2_146_826_xxx` values; this
+ * is the validator gate that stops them at the door.
  */
 
 import { z } from "zod";
+import { safeDecimalQty, safeQty, safeThbAmount } from "./safe-numeric";
 
 const thaiPhone = z
   .string()
@@ -11,14 +17,18 @@ const thaiPhone = z
 
 const thaiPostal = z.string().trim().regex(/^\d{5}$/, "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก");
 
+// V-E5 — dimensions in cm are real-world bounded (no shipment > 10m on a side).
+const safeDimCm = safeDecimalQty;
+const safeWeightKg = safeDecimalQty;
+
 export const forwarderItemSchema = z.object({
   product_name:        z.string().trim().min(1, "กรุณาระบุชื่อสินค้า").max(255),
   product_tracking:    z.string().trim().max(255).optional().or(z.literal("").transform(() => undefined)),
-  product_qty:         z.number().int().min(1, "จำนวนต้องไม่น้อยกว่า 1"),
-  width_cm:            z.number().nonnegative().optional(),
-  length_cm:           z.number().nonnegative().optional(),
-  height_cm:           z.number().nonnegative().optional(),
-  weight_per_item_kg:  z.number().nonnegative().optional(),
+  product_qty:         safeQty.refine((n) => n >= 1, { message: "จำนวนต้องไม่น้อยกว่า 1" }),
+  width_cm:            safeDimCm.optional(),
+  length_cm:           safeDimCm.optional(),
+  height_cm:           safeDimCm.optional(),
+  weight_per_item_kg:  safeWeightKg.optional(),
   product_type_code:   z.string().trim().max(5).optional().or(z.literal("").transform(() => undefined)),
 });
 export type ForwarderItemInput = z.infer<typeof forwarderItemSchema>;
@@ -44,19 +54,19 @@ export const forwarderSchema = z.object({
   ship_postal_code:   thaiPostal,
   ship_note:          z.string().trim().max(500).optional().or(z.literal("").transform(() => undefined)),
 
-  // measurements
-  box_count:  z.number().int().min(1).default(1),
-  weight_kg:  z.number().nonnegative(),
-  width_cm:   z.number().nonnegative(),
-  length_cm:  z.number().nonnegative(),
-  height_cm:  z.number().nonnegative(),
+  // measurements — V-E5 bounded + int32-overflow rejected
+  box_count:  safeQty.refine((n) => n >= 1, { message: "box_count ต้องไม่น้อยกว่า 1" }).default(1),
+  weight_kg:  safeWeightKg,
+  width_cm:   safeDimCm,
+  length_cm:  safeDimCm,
+  height_cm:  safeDimCm,
 
-  // optional services
+  // optional services — V-E5 THB caps + int32-overflow rejected
   crate:                 z.boolean().default(false),
   qc:                    z.boolean().default(false),
-  domestic_china_thb:    z.number().nonnegative().default(0),
-  thailand_delivery_thb: z.number().nonnegative().default(0),
-  other_price:           z.number().nonnegative().default(0),
+  domestic_china_thb:    safeThbAmount.default(0),
+  thailand_delivery_thb: safeThbAmount.default(0),
+  other_price:           safeThbAmount.default(0),
   other_price_desc:      z.string().trim().max(255).optional().or(z.literal("").transform(() => undefined)),
 
   // user-attached files (Storage paths)
