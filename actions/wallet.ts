@@ -14,6 +14,8 @@ import { notify } from "@/lib/notifications/templates";
 import { validateStoredFile } from "@/lib/file-validation";
 import { getWalletAvailableBalance, isWalletOverdrawError } from "@/lib/wallet/balance";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
+import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
+import { BANK } from "@/components/seo/site";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -323,4 +325,147 @@ export async function customerCancelPendingWalletTx(
 
   revalidatePath("/wallet/history");
   return { ok: true, data: { tx_id: existing.id } };
+}
+
+// ────────────────────────────────────────────────────────────
+// LEGACY (D1 / ADR-0017) — submitLegacyWalletDeposit
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 transcription of `member/wallet.php` L3-51 (the
+// `addData` POST handler) AND `member/wallet-credit.php` L3-51 (the
+// same handler — both pages share the deposit-modal POST flow).
+//
+// What the legacy does:
+//   1. Validates amount + slip image upload (PNG/JPEG only).
+//   2. Renames the file to `<userID>_<uniqid><time>.<ext>` under
+//      `storage/slip/`.
+//   3. Insert `tb_wallet_hs (depositNameBank, amount, imagesSlip,
+//      userID, type='1', status='1', date=NOW())` — pending admin
+//      verify.
+//   4. `move_uploaded_file()` to storage.
+//   5. SELECT the just-inserted ID and fire a LINE Notify (admin
+//      channel) — Pacred replaces with an in-app notification because
+//      LINE Notify EOL'd (Apr 2025) + the customer-facing record is
+//      the in-app feed.
+//
+// The Pacred deviation:
+//   - Slip goes to the `slips` Supabase bucket under
+//     `{auth.uid()}/wallet_deposit/<time>.<ext>` (matching the
+//     forwarder slip pattern + the bucket's RLS prefix policy).
+//   - `wusercredit` is set to '1' when the deposit comes from
+//     /wallet-credit/, '0' otherwise — so the row surfaces in the
+//     credit-history tab the legacy wallet-credit.php reads
+//     (load_wallet_hs.php `WHERE wUserCredit=1`).
+//   - In-app notification replaces LINE Notify (admin); customer
+//     also gets a "ส่งคำขอเติมเงิน" feed entry.
+//
+// Returns the freshly-inserted tb_wallet_hs.id so the UI can echo it
+// (legacy alerts a SweetAlert "successDeposit" without showing the
+// id; we surface it for the success message).
+export type SubmitLegacyDepositInput = {
+  amount: number;
+  slipFile: File;
+  /** "1" = deposit on the credit wallet (wallet-credit.php); "0" = main wallet (wallet.php). */
+  wUserCredit?: "0" | "1";
+};
+
+export async function submitLegacyWalletDeposit(
+  input: SubmitLegacyDepositInput,
+): Promise<ActionResult<{ id: number }>> {
+  // G-4 — impersonation is read-only; refuse customer-facing mutations.
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+
+  // ── Validate amount (wallet.php L5-6 — empty amount alert) ──
+  const amount = Number(input?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, error: "กรุณากรอกจำนวนเงิน" };
+  }
+  if (amount > 1_000_000) {
+    return { ok: false, error: "จำนวนเงินสูงสุด 1,000,000 บาท" };
+  }
+
+  // ── Validate slip file (wallet.php L8-16 — PNG/JPEG check) ──
+  const file = input?.slipFile;
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "กรุณเลือกรูปข้อมูลให้ครบ" };
+  }
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+  if (!isImage && !isPdf) {
+    return { ok: false, error: "ไฟล์รูปไม่ถูกต้อง" };
+  }
+  // wallet.php uses dropify `data-max-file-size="9M"`; Pacred caps at
+  // 5 MB (= the `slips` bucket validation default).
+  if (file.size > 5 * 1024 * 1024) {
+    return { ok: false, error: "ไฟล์ใหญ่เกิน 5 MB" };
+  }
+
+  const profileData = await getCurrentUserWithProfile();
+  if (!profileData?.user) return { ok: false, error: "not_signed_in" };
+  if (!profileData.profile) return { ok: false, error: "no_profile" };
+  const userID = profileData.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const supabase = await createClient();
+
+  // ── Upload slip (wallet.php L18-23 — move_uploaded_file) ──
+  const ext = (file.name.split(".").pop() ?? "bin").toLowerCase();
+  const slipPath = `${profileData.user.id}/wallet_deposit/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("slips")
+    .upload(slipPath, file, { upsert: false, contentType: file.type });
+  if (upErr) return { ok: false, error: `slip_upload: ${upErr.message}` };
+
+  // ── Insert tb_wallet_hs (wallet.php L31-34) ──
+  // tb_wallet_hs is RLS-locked to service_role → admin client.
+  const wUserCredit = input.wUserCredit === "1" ? "1" : "0";
+  // wallet.php L28 hardcodes `$depositNameBank = 'KBANK-064-174-3836'`
+  // (the legacy K-Bank account); Pacred uses the current account in
+  // components/seo/site.ts. Format kept identical: "KBANK-<acct>".
+  const depositNameBank = `KBANK-${BANK.accountNumber}`;
+  const datetimeNow = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+  const admin = createAdminClient();
+
+  const { data: inserted, error: insErr } = await admin
+    .from("tb_wallet_hs")
+    .insert({
+      date:            datetimeNow,
+      amount:          Number(amount.toFixed(2)),
+      status:          "1",
+      type:            "1",
+      typenew:         "1",
+      typeservice:     "1",
+      imagesslip:      slipPath,
+      depositnamebank: depositNameBank,
+      userid:          userID,
+      whno:            "",
+      wusercredit:     wUserCredit,
+      adminidcrate:    "",
+    })
+    .select("id")
+    .single<{ id: number }>();
+
+  if (insErr) {
+    // Roll back the slip upload so we don't leave an orphaned file.
+    await admin.storage.from("slips").remove([slipPath]);
+    return { ok: false, error: `wallet_hs insert: ${insErr.message}` };
+  }
+
+  // ── Customer-facing in-app notification (replaces wallet.php L48
+  //    LINE Notify topup which targeted the admin channel) ──
+  void sendNotification(profileData.user.id, notify.walletDepositRequested({
+    amount,
+    txId: String(inserted.id),
+  }));
+
+  // Re-render the wallet pages so the new pending row surfaces in the
+  // four-tab history without a hard reload.
+  revalidatePath("/wallet");
+  revalidatePath("/wallet/deposit");
+  revalidatePath("/wallet/history");
+  revalidatePath("/wallet-credit");
+
+  return { ok: true, data: { id: inserted.id } };
 }

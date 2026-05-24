@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { LegacyDepositForm } from "./legacy-deposit-form";
 
 /**
  * Customer "เติมเงินเข้ากระเป๋า" (wallet deposit) screen — a FAITHFUL 1:1
@@ -40,9 +41,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. wallet.php L3-51 (the `addData` POST handler — INSERT tb_wallet_hs,
- *     move_uploaded_file, LINE Notify) is a render-time write — NOT
- *     reproduced (Server Components must stay pure).
- *     TODO(server-action): port to actions/wallet.ts when reviewed by เดฟ.
+ *     move_uploaded_file, LINE Notify) → wired via the
+ *     <LegacyDepositForm> Client Component →
+ *     actions/wallet.ts::submitLegacyWalletDeposit (same INSERT into
+ *     tb_wallet_hs, slip → `slips` bucket, LINE Notify replaced by
+ *     in-app notify because LINE Notify EOL'd Apr 2025).
  *  2. The L294-302 jQuery auto-show `<script>` for `?page=='add'` needs
  *     client JS not present here — modal is rendered visible by default
  *     (matching the user-visible end-state of the legacy auto-open).
@@ -436,9 +439,12 @@ export default async function WalletDepositPage() {
                   Transcribed 1:1; the auto-open script needs Bootstrap-4
                   jQuery (loaded by the protected layout) — the modal
                   markup itself is identical to wallet.php's modal.
-                  TODO(server-action): wire the `addData` POST handler
-                  (L4-51) — INSERT tb_wallet_hs + move_uploaded_file + LINE
-                  Notify. */}
+                  The `addData` POST handler (wallet.php L4-51) is wired
+                  via the <LegacyDepositForm> Client Component →
+                  actions/wallet.ts::submitLegacyWalletDeposit (INSERT
+                  tb_wallet_hs + slip upload to `slips` bucket + in-app
+                  notify; LINE Notify replaced by the in-app feed
+                  because LINE Notify EOL'd Apr 2025). */}
               <div
                 id="wallet-add"
                 className="modal fade in"
@@ -473,123 +479,7 @@ export default async function WalletDepositPage() {
                       </button>
                     </div>
                     <div className="modal-body header-from">
-                      <form
-                        className="form-horizontal"
-                        method="POST"
-                        action="/wallet/"
-                        autoComplete="off"
-                        encType="multipart/form-data"
-                      >
-                        <div className="form-group pt-1">
-                          <div className="">
-                            <label className="form-control-label" htmlFor="amount">
-                              จำนวนเงิน (บาท)
-                            </label>
-                            <input
-                              className="form-control form-control-lg text-right"
-                              placeholder="00.00"
-                              name="amount"
-                              id="amount"
-                              type="number"
-                              min="0.01"
-                              max="1000000"
-                              step="0.01"
-                              required
-                            />
-                            <div className="text-center">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-danger round m-1"
-                                id="myBtn"
-                              >
-                                สร้าง QR Code ชำระเงิน
-                              </button>
-                            </div>
-                          </div>
-                          <div className="mb-1 qrcodeMain text-center">
-                            <div
-                              id="qrcode"
-                              style={{
-                                textAlign: "center",
-                                width: "250px",
-                                height: "250px",
-                              }}
-                            ></div>
-                            <h5 className="text-center">บริษัท แพคเรด (ประเทศไทย) จำกัด</h5>
-                            <div id="amount-show" style={{ textAlign: "center" }}></div>
-                            <div className="text-right">
-                              <a href="/wallet/deposit" target="_blank">
-                                ดูวิธีการเติมเงิน
-                              </a>
-                            </div>
-                          </div>
-                          <div className="mb-1">
-                            <label className="form-control-label" htmlFor="imagesSlip">
-                              หลักฐานการโอน (สลิปรายการ)
-                            </label>
-                            <div className="fallback">
-                              <input
-                                type="file"
-                                name="imagesSlip"
-                                className="dropify"
-                                accept="image/*"
-                                data-max-file-size="9M"
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div className="mb-1">
-                            <div>
-                              เงื่อนไขการถอนเงิน ที่ต้องทราบก่อนเติมเงินเข้าระบบ
-                            </div>
-                            <ol className="">
-                              <li>
-                                {" "}
-                                สามารถถอนเงินได้เมื่อ
-                                ท่านเคยชำระเงินบริการฝากสั่งซื้อสินค้าหรือฝากนำเข้าสินค้ากับทางบริษัท
-                                Pacred มาก่อน
-                              </li>
-                              <li>
-                                {" "}
-                                การถอนเงินต้องแนบเอกสาร
-                                บัตรประจำตัวประชาชนและหน้าสมุดบัญชีธนาคาร
-                              </li>
-                              <li> ยอดถอนเงินขั้นต่ำ คือ 25 บาท</li>
-                              <li>
-                                {" "}
-                                หากยอดที่ทำรายการถอนเงินน้อยกว่า 500 บาท
-                                จะมีค่าบริการถอนเงิน 25 บาทต่อครั้ง
-                              </li>
-                              <li>
-                                {" "}
-                                ระยะเวลาดำเนินการใช้เวลา 7-10 วันทำการ
-                                (ไม่รวมวันหยุดนักขัตฤกษ์และวันอาทิตย์)
-                                เนื่องจากทางบริษัทจำเป็นต้องตรวจสอบข้อมูลและยอดเงินเพื่อดำเนินการประสานงานกับทางธนาคารที่ให้บริการ
-                              </li>
-                              <li>
-                                {" "}
-                                ทางบริษัทขอสงวนสิทธิ์ในการเปลี่ยนแปลงนโยบายไปตามเงื่อนไขที่บริษัทกำหนด
-                              </li>
-                            </ol>
-                          </div>
-                          <div className="modal-footer">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary round waves-effect"
-                              data-dismiss="modal"
-                            >
-                              ยกเลิก
-                            </button>
-                            <button
-                              type="submit"
-                              className="btn btn-outline-info round waves-effect submit-wait"
-                              name="addData"
-                            >
-                              เติมเงิน
-                            </button>
-                          </div>
-                        </div>
-                      </form>
+                      <LegacyDepositForm kind="wallet" />
                     </div>
                   </div>
                 </div>
