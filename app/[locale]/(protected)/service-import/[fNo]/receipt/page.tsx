@@ -113,6 +113,27 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
     other:         "อื่นๆ",
   };
 
+  // V-A5: manual ± adjustments on this invoice (signed, reason required).
+  // RLS scopes to profile_id automatically — customer sees only their own.
+  type InvoiceAdjRow = {
+    id:         string;
+    amount_thb: number;
+    reason:     string;
+    status:     "active" | "reversed";
+    created_at: string;
+  };
+  const { data: invoiceAdjRaw } = await supabase
+    .from("invoice_adjustments")
+    .select("id, amount_thb, reason, status, created_at")
+    .eq("target_type", "forwarder")
+    .eq("target_id",   f.f_no ?? fNo)
+    .eq("status",      "active")
+    .order("created_at", { ascending: false })
+    .returns<InvoiceAdjRow[]>();
+  const invoiceAdjustments = invoiceAdjRaw ?? [];
+  const invoiceAdjTotal = invoiceAdjustments
+    .reduce((sum, r) => sum + Number(r.amount_thb), 0);
+
   return (
     <div className="bg-white text-black min-h-screen">
       {/* Print-only styles + auto-print on load (optional) */}
@@ -205,9 +226,18 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
               {f.domestic_china_thb > 0 && <Row label="ค่าขนส่งในจีน" value={Number(f.domestic_china_thb)} />}
               {f.thailand_delivery_thb > 0 && <Row label="ค่าขนส่งในไทย" value={Number(f.thailand_delivery_thb)} />}
               {f.other_price > 0        && <Row label="ค่าอื่นๆ"   value={Number(f.other_price)} />}
+              {invoiceAdjustments.map((r) => (
+                <Row
+                  key={r.id}
+                  label={`ปรับยอด — ${r.reason}`}
+                  value={Number(r.amount_thb)}
+                />
+              ))}
               <tr className="border-t-2 border-black font-bold text-base">
                 <td className="py-2">ยอดรวมทั้งสิ้น</td>
-                <td className="text-right font-mono">฿{Number(f.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+                <td className="text-right font-mono">
+                  ฿{(Number(f.total_price) + invoiceAdjTotal).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                </td>
               </tr>
               {whtRow && (
                 <>
@@ -334,10 +364,15 @@ export default async function ForwarderReceiptPage({ params }: { params: Promise
 }
 
 function Row({ label, value }: { label: string; value: number }) {
+  // V-A5: signed-value friendly (negative renders as −฿NN, not ฿-NN)
+  const isNeg = value < 0;
+  const abs = Math.abs(value);
   return (
     <tr>
       <td className="py-1">{label}</td>
-      <td className="text-right font-mono">฿{value.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
+      <td className="text-right font-mono">
+        {isNeg ? "−" : ""}฿{abs.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+      </td>
     </tr>
   );
 }

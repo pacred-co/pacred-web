@@ -188,3 +188,26 @@ column-for-column. The data only *looked* discontinuous because the unstyled
 screens were unreadable. **Lesson:** before "reload the DB", probe it —
 `psql … -c "SELECT count(*), max(<date>) FROM <t>"` — the pgloader load may
 already be correct, and the real bug is elsewhere (here: the chrome layer).
+
+---
+
+## 2026-05-25 — V-A5 manual invoice adjustments — Pacred safety improvement over legacy (Agent L / Sprint-12 P2.6)
+
+**What:** PORT_PLAN Part V row V-A5 ("Manual adjustment line on an invoice (±amount, reason, audited) — ends the per-cent dev tickets") shipped via migration `0109_invoice_adjustments.sql` + `actions/admin/invoice-adjustments.ts`.
+
+**Legacy state:** `pcs-realshit/public_html/member/pcs-admin/include/pages/receipt.php` + `hs-forwarder-receipt.php` + `create-f-receipt.php` — the legacy receipt/invoice flow had **no clean adjustment line**; every per-cent correction (over-collected ฿50, manual waiver, late discount) required a developer to rewrite invoice totals by hand. The chat audit (`docs/audit/chat-analysis-2026-05-16.md`) records this as a recurring staff pain point.
+
+**Pacred V-A5 design — polymorphic over invoice kinds, signed amount, mandatory reason:**
+- `invoice_adjustments(id, target_type, target_id, profile_id, amount_thb, reason, status, added_by_admin, reversed_at, reversed_by_admin, reversal_reason, created_at)`
+- `target_type` ∈ `{'forwarder', 'service_order', 'freight_invoice'}` — one table covers all 3 invoice kinds Pacred currently issues
+- `amount_thb` is SIGNED — positive = surcharge added to invoice total, negative = discount/credit
+- `reason` is REQUIRED (min 3 chars + length check at DB level)
+- `status = active | reversed`; reversed rows stay visible for full audit history but are excluded from totals
+- View `invoice_adjustment_totals` (SECURITY INVOKER) gives a per-invoice scoped sum
+- RLS: customer reads own; admin = super OR accounting (money-touching per ADR-0005 K-7 — `ops` is intentionally excluded; ops has the U2-4 cost-adjustment path for post-delivery rebills)
+
+**Distinct from U2-4 `forwarder_cost_adjustments`:**
+- U2-4 = positive-only post-delivery fees (D/O · gateway · weight rebill · customs extra · other), forwarder-specific, with wallet auto-debit "mark paid" workflow
+- V-A5 = signed manual adjustments on ANY invoice kind, no wallet move (invoice-total only), free-form reason
+
+**If you ever need to add a 4th invoice kind:** extend the `target_type` CHECK constraint + add a branch in `resolveInvoiceTarget()` (`actions/admin/invoice-adjustments.ts`). The NotifyReferenceType union also needs the new kind if you want notification deep-linking by reference_type.

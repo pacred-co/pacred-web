@@ -6,6 +6,8 @@ import { AdminForwarderUpdateForm } from "./update-form";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
+import { InvoiceAdjustmentsPanel } from "@/components/admin/invoice-adjustments-panel";
+import type { InvoiceAdjustmentRow } from "@/actions/admin/invoice-adjustments";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
@@ -65,6 +67,18 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     .order("created_at", { ascending: false })
     .returns<CostAdjustmentRow[]>();
   const costAdjustments = costAdjRaw ?? [];
+
+  // V-A5: load manual invoice adjustments for this forwarder's invoice
+  // (±amount, reason, audited). Distinct from U2-4: signed amount, no
+  // wallet auto-debit, generic to any invoice kind.
+  const { data: invoiceAdjRaw } = await admin
+    .from("invoice_adjustments")
+    .select("id, amount_thb, reason, status, added_by_admin, reversed_at, reversed_by_admin, reversal_reason, created_at")
+    .eq("target_type", "forwarder")
+    .eq("target_id",   f.f_no)
+    .order("created_at", { ascending: false })
+    .returns<InvoiceAdjustmentRow[]>();
+  const invoiceAdjustments = invoiceAdjRaw ?? [];
 
   // Surface cargo_shipments linked to this forwarder (V-D2/D3 + V-C3 visibility)
   const { data: shipmentsRaw } = await admin
@@ -269,6 +283,11 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
             forwarderId={f.id}
             fNo={f.f_no}
             existing={costAdjustments}
+          />
+          <InvoiceAdjustmentsPanel
+            targetType="forwarder"
+            targetId={f.f_no}
+            existing={invoiceAdjustments}
           />
           <BillToOverridePanel
             kind="forwarder"
