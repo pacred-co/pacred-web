@@ -331,3 +331,58 @@ normalizes user input to the padded form so a customer typing `PR1` / `PR01` /
 - [`docs/runbook/member-code-changes-0103-2026-05-24.md`](../runbook/member-code-changes-0103-2026-05-24.md) — customer notification list
 
 ---
+
+## [2026-05-24] Legacy bridge MUST use synthetic email, never phone — collision risk
+
+**Context:** Owner tested login flow as PR321 (legacy customer วิสิฐ ศิลปเลิศลักษณ์)
+right after the G1-G8 + 0103 push and **got signed in as PR132** (a Pacred-
+web admin account also named วิสิฐ — same person, different profile). The
+session showed PR132 in the navbar everywhere instead of PR321.
+
+**Root cause — phone collision:**
+- Phase-A bulk migration provisioned every legacy customer's `auth.users`
+  row with a **synthetic email** (`pcs-legacy-pr<n>@users.pacred.invalid`)
+  and **NO phone**. The customer's real phone lives only on
+  `profiles.phone` (for SMS notifications).
+- The bridge code I started from (pcs-legacy-bridge.ts line 141-153 pre-fix)
+  preferred a phone-based credential whenever `tb_users.usertel` was a
+  usable Thai number. That preference is **wrong** for the migrated cohort:
+  - `createUser({phone})` failed because the migration didn't put the phone
+    on the legacy auth user.
+  - `signInWithPassword({phone})` resolved to **any auth.users row that
+    happened to have that phone** — i.e. a Pacred-web staff/test signup
+    that registered with the SAME phone as the legacy customer (same
+    person registered twice; or coincidentally same number).
+- The audit query found **36+ such phone collisions** between a migrated
+  legacy customer and a non-migrated Pacred-web profile. Every one of
+  them would have signed in as the WRONG identity through the bridge.
+
+**The fix (2026-05-24):**
+- `pcs-legacy-bridge.ts` now **always** uses
+  `{ email: legacySyntheticEmail(row.userid) }` as the auth credential for
+  the legacy bridge. Phone is reserved for SMS; it never participates in
+  auth lookup.
+- When `createUser` returns "email already exists" (the normal repeat-
+  visit path, since Phase-A already provisioned every legacy auth user
+  with a placeholder password), the bridge now **looks up the existing
+  auth user via `auth.schema("auth").from("users")`** and force-updates
+  its password to the one the customer just typed — already verified
+  against `tb_users.userpass`. Without that update, `signInWithPassword`
+  would compare against the migration-time placeholder and fail.
+
+**How to apply (future bridge edits):**
+- Phone in `auth.users` is **not** the source of truth — `profiles.phone`
+  is. Never bridge-auth by phone.
+- New auth provisioning paths (e.g. social login + legacy linkage) must
+  pre-check `profiles.phone` for collisions before letting two profiles
+  share a number, OR keep `auth.users.phone` strictly empty for legacy.
+- When debugging a "logged in as wrong user" report, check `auth.users.phone`
+  for collisions across `profiles` rows — that's the smoking gun.
+
+**Cross-links:**
+- [`lib/auth/pcs-legacy-bridge.ts`](../../lib/auth/pcs-legacy-bridge.ts) — the fixed bridge
+- The `password sync to existing legacy auth user failed` warning + the
+  `legacy customer signed in via PCS bridge` info log are the verification
+  hooks if this ever regresses.
+
+---
