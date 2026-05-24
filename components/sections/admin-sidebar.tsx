@@ -56,7 +56,7 @@ const ICONS: Record<string, LucideIcon> = {
 function Icon({ name, active }: { name?: string; active: boolean }) {
   const Cmp = name ? ICONS[name] : undefined;
   if (!Cmp) return <span className="w-[18px] h-[18px] shrink-0" />;
-  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-white/55"}`} />;
+  return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-gray-500"}`} />;
 }
 
 // ── Role badge label (legacy nameAdminType + dept/section). ────────────
@@ -114,8 +114,8 @@ function MenuRow({
   const padLeft = depth === 0 ? "pl-3" : depth === 1 ? "pl-7" : "pl-10";
   const rowClasses = `group flex items-center gap-2.5 rounded-md ${padLeft} pr-2 py-2 text-[13px] transition-colors ${
     active
-      ? "bg-primary-600 text-white font-semibold"
-      : "text-white/75 hover:bg-white/10 hover:text-white"
+      ? "bg-primary-600 text-white font-semibold shadow-sm"
+      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
   }`;
 
   // Accordion parent (no own href, or a parent with children).
@@ -177,37 +177,37 @@ function SidebarHeader({
   const [open, setOpen] = useState(false);
   const initial = adminLabel.trim().charAt(0).toUpperCase() || "P";
   return (
-    <div className="px-4 py-4 border-b border-white/10">
+    <div className="px-4 py-4 border-b border-gray-200">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-white/5 px-1 py-1 transition-colors"
+        className="flex items-center gap-3 w-full text-left rounded-lg hover:bg-gray-50 px-1 py-1 transition-colors"
         aria-expanded={open}
       >
         <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary-600 text-white font-bold text-sm shrink-0">
           {initial}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-white truncate">{adminLabel}</span>
+          <span className="block text-sm font-semibold text-gray-900 truncate">{adminLabel}</span>
           {roleKey && (
-            <span className="block text-[11px] text-white/55 truncate">{t(roleKey)}</span>
+            <span className="block text-[11px] text-gray-500 truncate">{t(roleKey)}</span>
           )}
         </span>
         {open
-          ? <ChevronDown className="w-4 h-4 text-white/50 shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />}
+          ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+          : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
       </button>
       {open && (
         <div className="mt-2 space-y-0.5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
             <User className="w-4 h-4" />
             <span>{t("account.profile")}</span>
           </Link>
-          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/admin/settings" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
             <Settings className="w-4 h-4" />
             <span>{t("account.settings")}</span>
           </Link>
-          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-white/70 hover:bg-white/10 hover:text-white transition-colors">
+          <Link href="/logout" className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors">
             <ArrowRightLeft className="w-4 h-4" />
             <span>{t("account.logout")}</span>
           </Link>
@@ -251,21 +251,23 @@ export function AdminSidebar({
       </button>
 
       {/*
-        Dark fixed accordion sidebar — the owner's reference is the legacy
-        PCS dark `menu-fixed menu-dark menu-accordion`
-        (docs/research/d1-fidelity-admin.md §1.3 — "Default to dark to
-        match"). Slate-950 base, primary-600 accents.
+        Podeng-aligned light sidebar — owner directive 2026-05-25
+        ("admin บัคกระจาย ยึด theme ตาม podeng"). White base, gray-700
+        text, gray-200 borders, primary-600 active state + brand accents.
+        Legacy PCS dark `menu-dark` is intentionally not reproduced —
+        Pacred admin is Pacred-native, not 1:1 with legacy admin (the
+        D1 1:1 mandate applies to customer-side, not admin UI).
       */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col transition-transform lg:translate-x-0
-          bg-slate-950 text-white border-r border-white/10 shadow-xl
+          bg-white text-gray-900 border-r border-gray-200 shadow-sm
           ${openMobile ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
         {/* Brand */}
-        <div className="px-4 pt-4 pb-3 border-b border-white/10">
+        <div className="px-4 pt-4 pb-3 border-b border-gray-200">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-lg font-black tracking-tight text-white">PR</h2>
-            <span className="text-[10px] uppercase tracking-widest text-white/45">Admin</span>
+            <h2 className="text-lg font-black tracking-tight text-primary-600">PR</h2>
+            <span className="text-[10px] uppercase tracking-widest text-gray-500">Admin</span>
           </div>
         </div>
 
@@ -284,7 +286,7 @@ export function AdminSidebar({
           {sections.filter((sec) => sec.items.length > 0).map((sec, si) => (
             <div key={sec.header || `sec-${si}`} className="space-y-0.5">
               {sec.header && (
-                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-white/35 font-bold">
+                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest text-gray-400 font-bold">
                   {sec.header}
                 </p>
               )}
@@ -305,11 +307,11 @@ export function AdminSidebar({
           ))}
         </nav>
 
-        <div className="px-2.5 py-3 border-t border-white/10">
+        <div className="px-2.5 py-3 border-t border-gray-200">
           <Link
             href="/dashboard"
             onClick={closeMobile}
-            className="block rounded-md px-3 py-2 text-xs text-white/55 hover:bg-white/10 hover:text-white transition-colors"
+            className="block rounded-md px-3 py-2 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
           >
             {t("backToCustomer")}
           </Link>
