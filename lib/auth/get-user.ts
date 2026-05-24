@@ -6,6 +6,7 @@
  */
 
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readActiveImpersonation } from "@/lib/auth/impersonation";
@@ -84,8 +85,21 @@ export type Profile = {
 
 /**
  * Returns the current Supabase auth user, or null if not signed in.
+ *
+ * **Sprint-8c — wrapped with React `cache()`.** A single protected-page
+ * render typically calls this (or `getCurrentUserWithProfile`) from
+ * 2–4 places: the root `(protected)` layout's `requireAuth()`, a
+ * sub-layout (e.g. `(protected)/sales/layout.tsx`), the page itself,
+ * and sometimes a nested data-fetcher. Without `cache()` each of
+ * those was firing a fresh `supabase.auth.getUser()` Supabase Auth
+ * roundtrip (Asia region: ~150–400 ms each) plus a fresh `profiles`
+ * SELECT — adding up to >1 second of duplicate waiting on every nav.
+ *
+ * `cache()` memoizes for the duration of ONE server render
+ * (per-request scope — Next.js guarantees no cross-request leakage),
+ * so layout + sub-layout + page now share a single auth check.
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -93,19 +107,28 @@ export async function getCurrentUser() {
   } = await supabase.auth.getUser();
   if (error || !user) return null;
   return user;
-}
+});
 
 /**
  * Returns the current user + their profile row.
  * Profile may be null if user signed up but profile row hasn't been created yet.
+ *
+ * **Sprint-8c — wrapped with React `cache()` + chained through
+ * `getCurrentUser` so the auth RTT is shared.** `getCurrentUser`,
+ * `getCurrentUserWithProfile`, and `getEffectiveUser` are each
+ * memoized per-request, but they're DIFFERENT functions — so without
+ * chaining, the layout's `requireAuth` + the banner's
+ * `getEffectiveUser` would still fire two independent
+ * `supabase.auth.getUser()` round-trips. By having both call
+ * `getCurrentUser()` first (which is itself cached), they share a
+ * single auth check + we only pay for the profile fetch that this
+ * function actually needs.
  */
-export async function getCurrentUserWithProfile() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export const getCurrentUserWithProfile = cache(async () => {
+  const user = await getCurrentUser();
   if (!user) return null;
 
+  const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
@@ -113,7 +136,7 @@ export async function getCurrentUserWithProfile() {
     .maybeSingle<Profile>();
 
   return { user, profile };
-}
+});
 
 // ════════════════════════════════════════════════════════════
 // G-4 · getEffectiveUser — impersonation-aware user resolver
@@ -155,17 +178,23 @@ export type EffectiveProfile = Profile & {
   _expires_at:    string;
 };
 
-export async function getEffectiveUser(): Promise<
+export const getEffectiveUser = cache(async (): Promise<
   | null
   | {
       profile: EffectiveProfile;
       /** Convenience flag mirroring profile._impersonating. */
       isImpersonating: boolean;
     }
-> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+> => {
+  // Sprint-8c — chain through getCurrentUser so the auth RTT is shared with
+  // `requireAuth` / `getCurrentUserWithProfile` (which the layout already
+  // called via requireAuth). Otherwise the ImpersonationBanner in the
+  // protected layout was doubling the per-nav `supabase.auth.getUser()`
+  // round-trip even after each function was individually cache()-wrapped.
+  const user = await getCurrentUser();
   if (!user) return null;
+
+  const supabase = await createClient();
 
   // Check for an active impersonation session.
   const impersonation = await readActiveImpersonation(user.id);
@@ -222,4 +251,4 @@ export async function getEffectiveUser(): Promise<
     } as EffectiveProfile,
     isImpersonating: true,
   };
-}
+});
