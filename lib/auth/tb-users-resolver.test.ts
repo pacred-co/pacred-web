@@ -83,3 +83,4 @@ assert("PR1 still in (was touched)",   cacheGet("PR1").hit === true);
 
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);
+export {};

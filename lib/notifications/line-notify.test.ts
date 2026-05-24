@@ -182,3 +182,4 @@ void main().catch((err) => {
   console.error("[line-notify.test] unhandled:", err);
   process.exit(1);
 });
+export {};
