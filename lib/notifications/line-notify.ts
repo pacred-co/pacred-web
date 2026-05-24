@@ -205,16 +205,25 @@ export async function revokeLineNotifyToken(token: string): Promise<boolean> {
  * ) is the CALLER's responsibility — this helper is unconditional. The
  * channel-aware dispatcher is the later-sprint task.
  */
+/**
+ * Push-result discriminator. Callers (the dispatcher cron) need to
+ * tell apart "token revoked, nuke it" from "transient network blip,
+ * try again next tick" — the bare boolean return the foundation
+ * shipped with conflated those into one branch.
+ */
+export type PushToLineNotifyResult =
+  | { ok: true;  status: "delivered" | "bypass" }
+  | { ok: false; reason: "no_token" | "token_revoked" | "rate_limited" | "transient_http" | "throw"; httpStatus?: number };
+
 export async function pushToLineNotify(
   userId: string,
   message: string,
-): Promise<boolean> {
-  if (!userId || !message) return false;
+): Promise<PushToLineNotifyResult> {
+  if (!userId || !message) return { ok: false, reason: "no_token" };
 
   // Bypass short-circuit — matches lib/notifications/index.ts convention:
-  // dev/staging never touches the network. Returns true (success-shaped)
-  // so the dispatcher's bookkeeping treats it as delivered + we get a
-  // log line confirming what WOULD have been sent. We deliberately do
+  // dev/staging never touches the network. Returns delivered-shaped so the
+  // dispatcher's bookkeeping treats it as delivered. We deliberately do
   // NOT look up the token here — a missing token only matters in
   // production where bypass is off.
   if (LINE_BYPASS) {
@@ -222,7 +231,7 @@ export async function pushToLineNotify(
       userId: redactId(userId),
       preview: message.slice(0, 80),
     });
-    return true;
+    return { ok: true, status: "bypass" };
   }
 
   const admin = createAdminClient();
@@ -234,12 +243,12 @@ export async function pushToLineNotify(
 
   if (error) {
     logger.error("line-notify", "profile lookup failed", error, { userId: redactId(userId) });
-    return false;
+    return { ok: false, reason: "transient_http" };
   }
   const token = profile?.line_notify_token ?? null;
   if (!token) {
     logger.info("line-notify", "no token — skip push", { userId: redactId(userId) });
-    return false;
+    return { ok: false, reason: "no_token" };
   }
 
   try {
@@ -252,18 +261,56 @@ export async function pushToLineNotify(
       body: new URLSearchParams({ message }).toString(),
     });
 
-    if (!res.ok) {
-      // 401 = token revoked → caller (dispatcher) should clear the column.
-      // We DON'T clear here because pushToLineNotify is a low-level helper;
-      // the dispatcher logs the result + decides recovery policy.
-      logger.warn("line-notify", "push returned non-2xx", {
-        status: res.status, userId: redactId(userId),
-      });
-      return false;
+    if (res.ok) return { ok: true, status: "delivered" };
+
+    // 401 = customer revoked their LINE Notify grant from the
+    // notify-bot.line.me dashboard. The stored token is dead; the
+    // dispatcher must clear it so the next-tick scan doesn't re-try.
+    if (res.status === 401) {
+      logger.warn("line-notify", "token revoked", { userId: redactId(userId) });
+      return { ok: false, reason: "token_revoked", httpStatus: 401 };
     }
-    return true;
+    // 429 = LINE rate-limited us. Row stays unstamped → next tick
+    // retries. The dispatcher should leave the attempts counter alone
+    // (rate-limit isn't the customer's fault).
+    if (res.status === 429) {
+      logger.warn("line-notify", "rate limited", { userId: redactId(userId) });
+      return { ok: false, reason: "rate_limited", httpStatus: 429 };
+    }
+    // 5xx + everything else → transient. Dispatcher increments
+    // attempts so a row that never delivers eventually gets sidelined.
+    logger.warn("line-notify", "push returned non-2xx", {
+      status: res.status, userId: redactId(userId),
+    });
+    return { ok: false, reason: "transient_http", httpStatus: res.status };
   } catch (err) {
     logger.error("line-notify", "push threw", err, { userId: redactId(userId) });
-    return false;
+    return { ok: false, reason: "throw" };
+  }
+}
+
+/**
+ * Nuke the customer's LINE Notify token + clear connected_at. Called
+ * by the dispatcher when LINE returns 401 (token revoked upstream)
+ * OR after MAX_FAILED_ATTEMPTS of consecutive failures.
+ *
+ * Idempotent — clearing an already-null token is a no-op.
+ */
+export async function clearLineNotifyToken(profileId: string): Promise<void> {
+  if (!profileId) return;
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      line_notify_token:        null,
+      line_notify_connected_at: null,
+    })
+    .eq("id", profileId);
+  if (error) {
+    logger.warn("line-notify", "clear-token update failed", {
+      userId: redactId(profileId), reason: error.message,
+    });
+  } else {
+    logger.info("line-notify", "token nuked", { userId: redactId(profileId) });
   }
 }

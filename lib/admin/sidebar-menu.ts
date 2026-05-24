@@ -45,6 +45,7 @@ export type BadgeKey =
   | "yuanPending"        // legacy countPayment1 — ฝากโอน/ชำระ
   | "cntDrawMoney"       // legacy countDrawMoneyCNT — ค่าตู้รออนุมัติ
   | "shopPayout"         // legacy countShopPay1 — เบิกค่าสินค้า
+  | "shopWalletPayout"   // tb_shop_transactions kind=withdraw status=pending — เบิกกระเป๋าร้าน (G7)
   | "salesPayout"        // โบนัสเซลล์ รออนุมัติ
   | "interpreterPayout"  // โบนัสล่ามจีน รออนุมัติ
   | "withdrawalAll"      // parent — sum of all เบิกเงิน sub-rows

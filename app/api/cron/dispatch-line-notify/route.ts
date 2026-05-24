@@ -29,13 +29,23 @@
  */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { instrumentCron } from "@/lib/cron/instrument";
-import { pushToLineNotify } from "@/lib/notifications/line-notify";
+import {
+  clearLineNotifyToken,
+  pushToLineNotify,
+} from "@/lib/notifications/line-notify";
 import { logger } from "@/lib/logger";
 
 // Max rows to process per cron tick. Caps DB scan + push fan-out so a
 // backlog never causes the cron to time-out (Vercel cron has 60s
 // limit). Backlog will drain across consecutive ticks.
 const BATCH_LIMIT = 200;
+
+// After this many consecutive transient failures we give up on a row
+// (stamp it as permanently-failed) so the cron doesn't keep retrying
+// forever. The number matches the existing
+// `notifications.delivery_attempts` counter — incremented each tick
+// the row remains pending.
+const MAX_FAILED_ATTEMPTS = 5;
 
 // Map notifications.category → line_notify_channels key. The dispatcher
 // consults the customer's channels map and skips the push if the key
@@ -69,16 +79,18 @@ export async function GET(request: Request) {
         title:      string;
         body:       string;
         link_href:  string | null;
+        attempts:   number;
         token:      string;
         channels:   Record<string, boolean> | null;
       };
       const { data: rows, error } = await admin
         .from("notifications")
         .select(
-          "id, profile_id, category, title, body, link_href, " +
+          "id, profile_id, category, title, body, link_href, delivery_attempts, " +
           "profiles!notifications_profile_id_fkey ( line_notify_token, line_notify_channels )",
         )
         .is("delivered_line_notify_at", null)
+        .lt("delivery_attempts", MAX_FAILED_ATTEMPTS)
         .order("created_at", { ascending: true })
         .limit(BATCH_LIMIT);
       if (error) {
@@ -99,6 +111,7 @@ export async function GET(request: Request) {
         title:      string;
         body:       string;
         link_href:  string | null;
+        delivery_attempts: number | null;
         profiles: {
           line_notify_token:    string | null;
           line_notify_channels: Record<string, boolean> | null;
@@ -113,13 +126,20 @@ export async function GET(request: Request) {
           title:      r.title,
           body:       r.body,
           link_href:  r.link_href,
+          attempts:   r.delivery_attempts ?? 0,
           token:      r.profiles!.line_notify_token!,
           channels:   r.profiles!.line_notify_channels,
         }));
 
-      let pushed  = 0;
-      let skipped = 0;
-      let errors  = 0;
+      let pushed       = 0;
+      let skipped      = 0;
+      let revoked      = 0;
+      let transient    = 0;
+      let permaFailed  = 0;
+      // Profiles whose token we already nuked this tick — avoids racing
+      // multiple notification rows against the same dead token (each
+      // would otherwise issue its own UPDATE).
+      const tokensNukedThisTick = new Set<string>();
 
       // Step 2 — for each, check the channel toggle + push.
       for (const row of candidates) {
@@ -148,11 +168,12 @@ export async function GET(request: Request) {
         }
         const message = lines.filter(Boolean).join("\n");
 
-        // pushToLineNotify uses the customer's token (read via admin client
-        // inside the helper). LINE_PUSH_BYPASS=true short-circuits with a
-        // success log — safe default for dev.
-        const ok = await pushToLineNotify(row.profile_id, message);
-        if (ok) {
+        // pushToLineNotify returns a richer result so we can act on the
+        // specific failure mode (revoked token = nuke; rate-limited =
+        // leave alone; transient = bump attempts).
+        const result = await pushToLineNotify(row.profile_id, message);
+
+        if (result.ok) {
           const { error: updErr } = await admin
             .from("notifications")
             .update({ delivered_line_notify_at: new Date().toISOString() })
@@ -161,34 +182,101 @@ export async function GET(request: Request) {
             logger.warn("dispatch-line-notify", "stamp delivered_at failed", {
               notificationId: row.id, reason: updErr.message,
             });
-            errors += 1;
+            transient += 1;
           } else {
             pushed += 1;
           }
-        } else {
-          // Increment the delivery_attempts so a permanently-broken
-          // token surfaces in the audit (token revoked on LINE side
-          // → 401 from push → ok=false). The row stays unstamped so
-          // the next tick retries; a future enhancement could nuke
-          // the token after N failures.
+          continue;
+        }
+
+        // Failure path — branch by reason.
+        if (result.reason === "token_revoked") {
+          // Token dead upstream → nuke from profiles + mark the
+          // current row as "no LINE Notify delivery possible" so it
+          // never re-enters the scan. Skip subsequent rows for the
+          // same profile in this tick (their token is also gone, but
+          // the column read is cached from the join — clearing once
+          // is enough; the next tick won't include them at all).
+          if (!tokensNukedThisTick.has(row.profile_id)) {
+            await clearLineNotifyToken(row.profile_id);
+            tokensNukedThisTick.add(row.profile_id);
+          }
           await admin
             .from("notifications")
-            .update({ delivery_attempts: (1 as unknown as number) })
+            .update({
+              delivered_line_notify_at: new Date().toISOString(),
+              last_delivery_error:      "line_notify_token_revoked",
+            })
             .eq("id", row.id);
-          errors += 1;
+          revoked += 1;
+          continue;
         }
+
+        if (result.reason === "rate_limited") {
+          // Upstream throttle — DON'T bump attempts (not the customer's
+          // fault, not a permanent failure). Row stays unstamped → next
+          // tick retries naturally after the rate-limit window expires.
+          transient += 1;
+          continue;
+        }
+
+        if (result.reason === "no_token") {
+          // Shouldn't happen — the scan filter only selects rows whose
+          // joined profile has a token. Defensive: stamp so we don't
+          // loop, but log loudly.
+          logger.warn("dispatch-line-notify", "no_token from joined-token row", {
+            notificationId: row.id,
+          });
+          await admin
+            .from("notifications")
+            .update({ delivered_line_notify_at: new Date().toISOString() })
+            .eq("id", row.id);
+          skipped += 1;
+          continue;
+        }
+
+        // transient_http / throw → bump attempts. After
+        // MAX_FAILED_ATTEMPTS the scan filter drops this row from
+        // future ticks (lt-filter); stamp `last_delivery_error` for
+        // ops visibility on the permanent-fail set.
+        const nextAttempts = row.attempts + 1;
+        const stampNow     = nextAttempts >= MAX_FAILED_ATTEMPTS;
+        await admin
+          .from("notifications")
+          .update({
+            delivery_attempts:        nextAttempts,
+            last_delivery_error:      result.reason === "throw"
+              ? "push_threw"
+              : `http_${result.httpStatus ?? "unknown"}`,
+            // Permanent-fail rows ALSO get stamped delivered_at so
+            // they leave the scan window entirely — keeps the
+            // partial-index from migration 0106 small.
+            ...(stampNow ? { delivered_line_notify_at: new Date().toISOString() } : {}),
+          })
+          .eq("id", row.id);
+        if (stampNow) permaFailed += 1;
+        else          transient   += 1;
       }
 
-      const totalScanned = candidates.length;
+      const totalScanned    = candidates.length;
+      const irrecoverable   = revoked + permaFailed;  // rows we'll never retry
       const overallStatus =
-        errors > 0 && pushed === 0 ? "failure"
-          : errors > 0 ? "partial"
+        irrecoverable > 0 && pushed === 0 ? "failure"
+          : (irrecoverable > 0 || transient > 0) ? "partial"
           : "success";
 
       return {
         status:  overallStatus,
-        summary: { scanned: totalScanned, pushed, skipped, errors },
-        payload: { ok: errors === 0, scanned: totalScanned, pushed, skipped, errors },
+        summary: { scanned: totalScanned, pushed, skipped, revoked, transient, permaFailed },
+        payload: {
+          ok:          irrecoverable === 0 && transient === 0,
+          scanned:     totalScanned,
+          pushed,
+          skipped,
+          revoked,
+          transient,
+          permaFailed,
+        },
       };
     },
   });

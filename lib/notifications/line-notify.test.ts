@@ -124,15 +124,17 @@ async function main(): Promise<void> {
   // ══════════════════════════════════════════════════════════════════
 
   {
-    // Empty userId → early false, no network, no DB.
+    // Empty userId → early {ok:false, reason:'no_token'}, no network, no DB.
     const out = await pushToLineNotify("", "hello");
-    eq("push returns false on empty userId", out, false);
+    eq("push returns ok:false on empty userId", out.ok, false);
+    if (!out.ok) eq("…with reason='no_token'", out.reason, "no_token");
   }
 
   {
-    // Empty message → early false.
+    // Empty message → early {ok:false, reason:'no_token'}.
     const out = await pushToLineNotify("user-1", "");
-    eq("push returns false on empty message", out, false);
+    eq("push returns ok:false on empty message", out.ok, false);
+    if (!out.ok) eq("…with reason='no_token'", out.reason, "no_token");
   }
 
   // Bypass mode: pushToLineNotify short-circuits BEFORE any network or
@@ -151,7 +153,8 @@ async function main(): Promise<void> {
     try {
       process.env.LINE_PUSH_BYPASS = "true";
       const out = await pushToLineNotify("any-user-id", "test message body");
-      eq("push bypass=true → true without any fetch", out, true);
+      eq("push bypass=true → ok:true without any fetch", out.ok, true);
+      if (out.ok) eq("…with status='bypass'", out.status, "bypass");
       eq("bypass made zero fetch calls", calledUrls.length, 0);
     } finally {
       globalThis.fetch = originalFetch;
