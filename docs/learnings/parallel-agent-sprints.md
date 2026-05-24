@@ -109,6 +109,41 @@ The agent's worktree commit is the source of truth — the parent leak is always
 
 ---
 
+## L-PAS-05 · Migrations in repo ≠ migrations in prod (Sprint-16 cargo-spine recovery)
+
+**Trigger.** Sprint-16 was supposed to be W-2 container-propagation work. Pre-audit query `\dt cargo_*` against prod returned only 2 orphan child tables (`cargo_container_status_history`, `cargo_shipment_tracking`) — the canonical PARENTS `cargo_containers` + `cargo_shipments` were missing. Same for the legacy `containers` table from migration 0016. But:
+
+- Migrations 0016 (containers), 0033 (cargo_containers + cargo_shipments), 0059 (container-unify) **all exist in the repo**.
+- Other tables from 0016 (`admin_contact_extras`, `dashboard_banners`) **are present in prod** — so 0016 ran at some point.
+- Sprint-11 MOMO sync, Sprint-13 V-E10 QA + V-E11 customs code all reference these missing tables — would 500 at runtime if hit.
+
+Most likely sequence: 0016 + 0033 applied → cargo_containers + cargo_shipments + containers later **dropped manually** (Supabase dashboard or a one-off psql) → status_history + tracking child tables (no FK to parent) survived because nobody noticed they're now orphan.
+
+**This is a stealth-failure pattern** — the codebase + migrations look complete, the team thinks the schema matches the repo, but prod silently disagrees. The discrepancy hid until someone (me, in Sprint-16) ran a direct `\dt` query.
+
+**Fix — Sprint-16 recovery.** Re-applied 0016 → 0033 → 0059 to prod via psql. All idempotent (`CREATE TABLE IF NOT EXISTS`, `DROP POLICY IF EXISTS`, etc.). All tables were empty (no legacy data to migrate). Backfill in 0059 ran with `UPDATE 0` (0 legacy rows to mirror). Clean recovery, zero data risk.
+
+**Prevention — periodic schema-drift audit.** The team needs a `pnpm migrations:audit` script (or similar) that:
+
+```bash
+# Pseudocode
+for migration in supabase/migrations/*.sql; do
+  for table in $(grep "create table.*public\." $migration | extract_names); do
+    if ! psql -c "\dt $table" | grep -q "$table"; then
+      echo "MISSING IN PROD: $table (from $migration)"
+    fi
+  done
+done
+```
+
+Run weekly. Catches dropped-from-prod tables before the next agent's code crashes against them.
+
+**Cheap version for now** — every pre-audit (L-PAS-01) of a sprint that touches a domain (cargo / freight / wallet / commission) should `\dt <domain>_*` against prod before spawning agents. 5 seconds. Catches "table exists in repo but not prod" same-day. Sprint-16 caught it after months because no prior agent thought to verify the parent of an FK column they were writing to.
+
+**Cross-link.** L-PAS-01 (pre-audit before spawning) — this is the schema-side companion to that pattern.
+
+---
+
 ## Cross-links
 
 - [`ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) — single-issue CI debugging notes (older, pre-parallel-agent style)
