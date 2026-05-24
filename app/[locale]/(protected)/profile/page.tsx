@@ -620,7 +620,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="info tam-counter">{countShops}</h2>
+                              <h2 className="info tam-counter" data-count={countShops}>{countShops}</h2>
                               <h4>ฝากสั่งซื้อสินค้า</h4>
                             </div>
                             <div>
@@ -650,7 +650,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="warning tam-counter">
+                              <h2 className="warning tam-counter" data-count={countForwarder}>
                                 {countForwarder}
                               </h2>
                               <h4>ฝากนำเข้าสินค้า</h4>
@@ -682,7 +682,7 @@ export default async function ProfilePage() {
                         <div className="card-body">
                           <div className="media d-flex">
                             <div className="media-body text-left">
-                              <h2 className="purple tam-counter">
+                              <h2 className="purple tam-counter" data-count={countPayment}>
                                 {countPayment}
                               </h2>
                               <h4>ฝากชำระเงิน</h4>
@@ -720,7 +720,7 @@ export default async function ProfilePage() {
                           <div className="media d-flex">
                             <div className="media-body text-left">
                               <h2 className="success">
-                                <span className="tam-counter">
+                                <span className="tam-counter" data-count={walletTotal}>
                                   {walletTotal}
                                 </span>
                                 <span className="font-14"> บาท</span>
