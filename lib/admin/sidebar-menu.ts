@@ -198,14 +198,20 @@ const blockReport: MenuItem = {
   labelKey: "report.title",
   icon: "BarChart3",
   children: [
-    { labelKey: "report.shop",      href: "/admin/reports/monthly-orders",  icon: "BarChart3" },
-    { labelKey: "report.forwarder", href: "/admin/reports/forwarder-volume", icon: "Package" },
-    { labelKey: "report.payment",   href: "/admin/reports",                 icon: "Wallet" },
-    { labelKey: "report.salesRep",  href: "/admin/reports/sales-by-rep",    icon: "BarChart3" },
-    { labelKey: "report.allUser",   href: "/admin/reports/user-sales-history", icon: "BarChart3" },
-    { labelKey: "report.byCode",    href: "/admin/reports/hs-code-revenue", icon: "BarChart3" },
-    { labelKey: "report.driver",    href: "/admin/driver-runs",             icon: "Truck" },
-    { labelKey: "report.web",       href: "/admin/kpi",                     icon: "Activity" },
+    { labelKey: "report.shop",            href: "/admin/reports/monthly-orders",     icon: "BarChart3" },
+    { labelKey: "report.forwarder",       href: "/admin/reports/forwarder-volume",   icon: "Package" },
+    { labelKey: "report.payment",         href: "/admin/reports",                    icon: "Wallet" },
+    { labelKey: "report.salesRep",        href: "/admin/reports/sales-by-rep",       icon: "BarChart3" },
+    // Gap #8 — top-5 legacy report ports (financial + ops visibility).
+    { labelKey: "report.salesMonthly",    href: "/admin/reports/sales-monthly",      icon: "TrendingUp" },
+    { labelKey: "report.forwarderProfit", href: "/admin/reports/forwarder-profit",   icon: "Coins" },
+    { labelKey: "report.shopsProfit",     href: "/admin/reports/shops-profit",       icon: "Coins" },
+    { labelKey: "report.yuanProfit",      href: "/admin/reports/yuan-profit",        icon: "Coins" },
+    { labelKey: "report.otpSuccess",      href: "/admin/reports/otp-success",        icon: "ShieldCheck" },
+    { labelKey: "report.allUser",         href: "/admin/reports/user-sales-history", icon: "BarChart3" },
+    { labelKey: "report.byCode",          href: "/admin/reports/hs-code-revenue",    icon: "BarChart3" },
+    { labelKey: "report.driver",          href: "/admin/driver-runs",                icon: "Truck" },
+    { labelKey: "report.web",             href: "/admin/kpi",                        icon: "Activity" },
   ],
 };
 
