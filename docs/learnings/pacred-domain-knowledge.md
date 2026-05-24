@@ -274,3 +274,60 @@ The customer-facing spine (full column lists in `PCS_CARGO_COMPLETE_ANALYSIS.md`
 - [`docs/learnings/php-port-patterns.md`](php-port-patterns.md) — port mechanics (MySQL→PG, schema mapping)
 
 ---
+
+## [2026-05-24] member_code numbering rule — legacy customer base IS the anchor
+
+**Context:** Migration 0100 (the "robust" per-row padder) had the right padding
+algorithm but the WRONG ordering — it processed profiles by `created_at`, which
+for migrated rows is the *migration timestamp*, not the customer's *true age*.
+The result would have pushed legacy customers (น.ส.ภูษิชา PR01, ปาณิศรา PR07)
+to new high slots because newer Pacred-web dev accounts (Tadsakorn PR001,
+Pond PR007) sat in the canonical padded slots first. Owner's reaction
+(2026-05-24, verbatim):
+
+> "ฐานลูกค้าเดิมก็ต้องมาก่อน อย่าไปเปลี่ยนของลูกค้า ส่วนที่มาใหม่ ก็ fill ไป
+>  ส่วนเรื่อง staff จะมีอีก table แยกกันอยู่ในฝั่งของหลังบ้าน admin ปะ
+>  แยกกันระหว่างลูกค้า และ staff อะถูกแล้ว"
+
+**The rule (canonical):**
+
+1. **Format: `PR` + min-3-digit zero-padded integer.**
+   `PR1` → `PR001`, `PR21` → `PR021`, `PR321` → `PR321`, `PR4321` → `PR4321`,
+   `PR54321` → `PR54321`. Pad up to 3 digits; longer codes are emitted as-is.
+2. **Legacy PCS customers anchor the numbering.** Their original number is
+   sacred — never push a migrated customer to a new high slot to break a
+   conflict. The conflict resolver pushes the *newer* identity.
+3. **New Pacred-web signups fill the lowest vacant slot** across BOTH tables
+   (`profiles.member_code` + `tb_users.userid`). Implemented in
+   `generate_member_code()` via `generate_series(1, max+1) EXCEPT taken`.
+4. **Staff/admin profiles eventually live in a separate back-office table.**
+   Until that split lands, staff profiles get pushed to slots > current max
+   so they never block a customer slot. Their `member_code` is just a UI
+   identifier, not a customer number.
+
+**Cross-table integrity:** for migrated customers,
+`profiles.member_code === profiles.legacy_pcs_user_id === tb_users.userid`
+post-migration. The legacy-auth bridge ([`lib/auth/pcs-legacy-bridge.ts`](../../lib/auth/pcs-legacy-bridge.ts))
+normalizes user input to the padded form so a customer typing `PR1` / `PR01` /
+`PR001` all match the same `tb_users.userid = PR001`.
+
+**Migration history:**
+- `0090`/`0095`/`0096` — early attempts, all superseded.
+- `0097` — baseline min-3-digit pad + cascade backfill.
+- `0098`/`0099` — collision resolver V1/V2 (both failed mid-resolve).
+- `0100` — "robust" per-row padder but **wrong ordering**; data part deprecated.
+- **`0103` (current)** — two-stage: (1) relocate the 17 non-migrated profiles
+  blocking PR001..PR099, (2) pad the 31 legacy bare codes in place + cascade
+  `userid`/`whuserid`/`subuserid` columns + update `profiles.legacy_pcs_user_id`
+  to match. Output diff persisted to `public.member_code_migration_audit`.
+- `lib/auth/pcs-legacy-bridge.ts` — `findLegacyUser()` now accepts either
+  the padded or raw form for memberCode-kind input.
+
+**Notification list:** `docs/runbook/member-code-changes-0103-2026-05-24.md` —
+31 legacy customer codes whose display format changed (PR0X → PR00X).
+
+**Cross-links:**
+- [`supabase/migrations/0103_member_code_legacy_anchor_restore.sql`](../../supabase/migrations/0103_member_code_legacy_anchor_restore.sql) — the corrected migration
+- [`docs/runbook/member-code-changes-0103-2026-05-24.md`](../runbook/member-code-changes-0103-2026-05-24.md) — customer notification list
+
+---

@@ -28,7 +28,7 @@ type Strings = {
   transferModalTitle:         string;
   transferAmountLabel:        string;
   transferAmountHint:         string;
-  transferNoteLabel:          string;
+  noteLabel:                  string;
   transferSubmit:             string;
   transferSuccess:            string;
   withdrawModalTitle:         string;
@@ -172,6 +172,13 @@ function TransferForm({
       setError(t.amountInvalid);
       return;
     }
+    // Client-side cap — best-effort, server re-checks against the live
+    // personal-wallet balance. Skip when the hint is missing/non-positive
+    // (e.g. SC couldn't read the bucket).
+    if (mainAvailable > 0 && amt > mainAvailable) {
+      setError(t.amountExceedsAvailable);
+      return;
+    }
     startTransition(async () => {
       const res = await transferFromPersonalToShopWallet({
         amount: amt,
@@ -213,7 +220,7 @@ function TransferForm({
       </div>
       <div>
         <label htmlFor={noteId} className="block text-sm font-medium mb-1">
-          {t.transferNoteLabel}
+          {t.noteLabel}
         </label>
         <input
           id={noteId}
@@ -246,9 +253,6 @@ function TransferForm({
           {pending ? t.submitting : t.transferSubmit}
         </button>
       </div>
-
-      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-      {mainAvailable < 0 ? null : null /* mainAvailable reserved for future hint */}
     </form>
   );
 }
@@ -275,6 +279,7 @@ function WithdrawForm({
   const [error,   setError]    = useState<string | null>(null);
   const [success, setSuccess]  = useState<string | null>(null);
   const amtId = useId();
+  const noteId = useId();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -368,6 +373,22 @@ function WithdrawForm({
           className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
           pattern="[\d\-]{8,20}"
           maxLength={20}
+          disabled={pending}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={noteId} className="block text-sm font-medium mb-1">
+          {t.noteLabel}
+        </label>
+        <input
+          id={noteId}
+          name="note"
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          maxLength={500}
           disabled={pending}
         />
       </div>

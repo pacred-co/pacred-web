@@ -199,7 +199,7 @@ export async function listMyAffiliateCommissions(
     team_leader:         TL | TL[] | null;
   };
 
-  const rows: AffiliateCommissionRow[] = ((data ?? []) as Raw[]).map((r) => {
+  const rows: AffiliateCommissionRow[] = ((data ?? []) as unknown as Raw[]).map((r) => {
     const tl = Array.isArray(r.team_leader) ? r.team_leader[0] : r.team_leader;
     return {
       id:                  r.id,
@@ -337,7 +337,7 @@ export async function listMyAffiliatePayouts(
     paid_at:          string | null;
     note:             string | null;
   };
-  const rows: AffiliatePayoutRow[] = ((data ?? []) as Raw[]).map((r) => ({
+  const rows: AffiliatePayoutRow[] = ((data ?? []) as unknown as Raw[]).map((r) => ({
     ...r,
     amount_total: Number(r.amount_total),
   }));

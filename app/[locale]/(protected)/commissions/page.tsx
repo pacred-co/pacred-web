@@ -139,14 +139,17 @@ export default async function CommissionsPage() {
     listMyAffiliatePayouts(10),
   ]);
 
-  const totals: CommissionTotals = totalsRes.ok
-    ? totalsRes.data
-    : { earned_total: 0, pending_total: 0, withdrawn_total: 0, available_for_withdraw: 0, earned_count: 0 };
+  const totals: CommissionTotals =
+    totalsRes.ok && totalsRes.data
+      ? totalsRes.data
+      : { earned_total: 0, pending_total: 0, withdrawn_total: 0, available_for_withdraw: 0, earned_count: 0 };
 
-  const allRows: AffiliateCommissionRow[] = listRes.ok ? listRes.data.rows : [];
+  const allRows: AffiliateCommissionRow[] =
+    listRes.ok && listRes.data ? listRes.data.rows : [];
   const rows = allRows.slice(0, 10);
 
-  const payouts: AffiliatePayoutRow[] = payoutsRes.ok ? payoutsRes.data : [];
+  const payouts: AffiliatePayoutRow[] =
+    payoutsRes.ok && payoutsRes.data ? payoutsRes.data : [];
 
   const canRequest = totals.available_for_withdraw >= MIN_AFFILIATE_WITHDRAW_THB;
 

@@ -130,7 +130,7 @@ export default async function WalletShopPage() {
             transferModalTitle:          t("transferModalTitle"),
             transferAmountLabel:         t("transferAmountLabel"),
             transferAmountHint:          t("transferAmountHint"),
-            transferNoteLabel:           t("noteLabel"),
+            noteLabel:                   t("noteLabel"),
             transferSubmit:              t("transferSubmit"),
             transferSuccess:             t("transferSuccess"),
             withdrawModalTitle:          t("withdrawModalTitle"),

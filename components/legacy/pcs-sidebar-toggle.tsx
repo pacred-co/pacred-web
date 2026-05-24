@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 
 /**
@@ -15,34 +15,61 @@ import { PanelLeft, PanelLeftClose } from "lucide-react";
  *
  * Hidden < md (the sidebar itself is hidden on mobile via the override
  * stylesheet, so there's nothing to toggle).
+ *
+ * Persistence via useSyncExternalStore — React 19 canonical pattern for
+ * subscribing to external state (localStorage here). Avoids the
+ * react-hooks/set-state-in-effect cascade that the older
+ * useState+useEffect-hydrate pattern triggers.
  */
-export function PcsSidebarToggle() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
-  // Restore persisted state on mount + sync the body class. Defer the
-  // `mounted` flag by one tick so the icon doesn't flash the wrong glyph
-  // before localStorage is read.
+const STORAGE_KEY = "pcs-sidebar-collapsed";
+// Same-tab updates fire this synthetic event because the native `storage`
+// event only fires in OTHER tabs.
+const SAME_TAB_EVENT = "pcs-sidebar-change";
+
+function subscribe(callback: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("storage", callback);
+  window.addEventListener(SAME_TAB_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(SAME_TAB_EVENT, callback);
+  };
+}
+
+function getSnapshot(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(STORAGE_KEY) === "1";
+}
+
+// SSR default — sidebar visible (not collapsed). The client snapshot may
+// differ on hydration; suppressHydrationWarning on the button lets React
+// swap the class without throwing.
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+export function PcsSidebarToggle() {
+  const collapsed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  // DOM-only side effect: keep body.pcs-sidebar-collapsed in sync so the
+  // sidebar layout CSS can react. Not a state update.
   useEffect(() => {
-    const saved =
-      typeof window !== "undefined" &&
-      localStorage.getItem("pcs-sidebar-collapsed") === "1";
-    setCollapsed(saved);
-    document.body.classList.toggle("pcs-sidebar-collapsed", saved);
-    setMounted(true);
-  }, []);
+    document.body.classList.toggle("pcs-sidebar-collapsed", collapsed);
+  }, [collapsed]);
 
   function toggle() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      document.body.classList.toggle("pcs-sidebar-collapsed", next);
-      try {
-        localStorage.setItem("pcs-sidebar-collapsed", next ? "1" : "0");
-      } catch {
-        /* localStorage may be unavailable (private mode, quota, etc.) */
-      }
-      return next;
-    });
+    const next = !collapsed;
+    try {
+      localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      /* localStorage may be unavailable (private mode, quota, etc.) */
+    }
+    // Re-trigger the snapshot for this tab (the storage event only fires
+    // cross-tab, so without this the toggle wouldn't propagate locally).
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(SAME_TAB_EVENT));
+    }
   }
 
   return (
@@ -52,6 +79,11 @@ export function PcsSidebarToggle() {
       aria-label={collapsed ? "เปิดแถบเมนู" : "ปิดแถบเมนู"}
       aria-pressed={collapsed}
       title={collapsed ? "เปิดแถบเมนู" : "ปิดแถบเมนู"}
+      // Initial className may differ between SSR (collapsed=false) and
+      // client hydration (collapsed=true from localStorage). React swaps
+      // it on the first commit; suppressing the warning avoids a noisy
+      // hydration error for what's a deliberate persisted-UI state.
+      suppressHydrationWarning
       className={[
         // Hidden on mobile (sidebar doesn't render there)
         "hidden md:inline-flex",
@@ -73,7 +105,6 @@ export function PcsSidebarToggle() {
         "transition-[transform,box-shadow,color,left]",
         "cursor-pointer",
       ].join(" ")}
-      style={{ visibility: mounted ? "visible" : "hidden" }}
     >
       {collapsed ? (
         <PanelLeft className="h-5 w-5" strokeWidth={2.2} />

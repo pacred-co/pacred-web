@@ -76,7 +76,17 @@ async function findLegacyUser(identifier: string): Promise<LegacyUser | null> {
     query = query.ilike("useremail", escapeLikePattern(id));
   } else if (kind === "memberCode") {
     // userid values are uppercase post-rebrand (pcs-data-migration.md §4).
-    query = query.eq("userid", id.toUpperCase());
+    // Padding-aware match: migration 0103 padded every legacy PR<n> to
+    // min-3-digit form (PR1/PR01 → PR001). The customer might still
+    // remember the unpadded variant, so accept either the raw input or
+    // its 3-digit-padded equivalent. Same row matches both forms — the
+    // userid column itself only stores the padded form post-0103.
+    const raw   = id.toUpperCase();
+    const match = /^PR(\d+)$/.exec(raw);
+    const padded = match ? "PR" + match[1].padStart(3, "0") : raw;
+    query = padded === raw
+      ? query.eq("userid", raw)
+      : query.in("userid", [raw, padded]);
   } else {
     const candidates = legacyPhoneCandidates(id);
     query = candidates.length > 0
