@@ -23,6 +23,7 @@ Last reviewed: 2026-05-19 (pacred-domain-knowledge +1 + php-port-patterns +1 —
 | [`partner-apis-quirks.md`](partner-apis-quirks.md) | MOMO JMF / TAM / ThaiBulkSMS / LINE behavior · DBD juristic lookup | 2026-05-17: DBD `api/v1` retired (404) + CKAN behind Incapsula WAF — register degrades to manual entry |
 | [`php-port-patterns.md`](php-port-patterns.md) | Legacy `pcscargo` port gotchas · MySQL→PostgreSQL data migration (NUL bytes break COPY · zero-dates vs NOT NULL · live-DB convert · pgloader path · MySQL case-insensitive collation → normalise join keys · `notnull` is a PG operator · Supabase load needs the DB password) · legacy PCS `tb_*` schema reference (numeric-VARCHAR status cols · per-status DATETIME columns · stored running wallet balance) | 2026-05-19 |
 | [`pacred-domain-knowledge.md`](pacred-domain-knowledge.md) | Cargo flow + MOMO 9-status enum + containers schema coexistence + decoded cargo/freight ops model (GZE/GZS · type taxonomy · CBM mismatch · Form E / D-O) · **legacy PCS Cargo full decode** (3 revenue services · `tb_*` schema · `sStatus`/`fStatus`/`wType` enums · chargeable-weight & fee formulas · VIP-credit & agent-commission rules · forwarder pay-at-status-5 COD) | 2026-05-19 |
+| [`parallel-agent-sprints.md`](parallel-agent-sprints.md) | 4 patterns from Sprint-9..15 retrospective — pre-audit before spawn · stale-doc cost · migration-number collision recovery · worktree-leak prompt prevention | 2026-05-25 |
 
 ---
 
