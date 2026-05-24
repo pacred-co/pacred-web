@@ -2,6 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
+import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
+import { ServiceImportPayButton } from "./service-import-pay-button";
+import type { ForwarderRow } from "../forwarder-row-view";
 
 /**
  * Customer "รายการฝากนำเข้าสินค้า — รายละเอียด" (forwarder detail) screen —
@@ -75,12 +79,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * ── FLAGGED — not strictly 1:1 (documented, never silently diverged) ──
  *  1. forwarder.php L1586-1659 has TWO POST handlers — `update_fShipBy`
- *     and `update_fAddress` (UPDATE tb_forwarder SET …). Render-time
- *     mutations are NOT reproduced; the inline-edit <form> + <select>
- *     markup IS transcribed verbatim, but the submit is UNWIRED
- *     (TODO(server-action)). The legacy jQuery slide-up/down for the
- *     edit form needs client JS not present here; the form renders
- *     statically (collapsed visually via inline display:none).
+ *     and `update_fAddress` (UPDATE tb_forwarder SET …). Both wired via
+ *     <ServiceImportEditShipByForm> / <ServiceImportEditAddressForm>
+ *     Client Components → updateLegacyForwarderShipBy /
+ *     updateLegacyForwarderAddress Server Actions. The jQuery slide-
+ *     down toggle becomes a useState open/close + an "ยกเลิก" button.
  *  2. forwarder.php L2329-2335 runs `payForwarder()` JS when `?pay=true`
  *     on the URL → that fires AJAX to fetch the pay-modal. Not reproduced.
  *  3. forwarder.php L2337-2411 SweetAlert popups (eSQL / sPay / eWallet /
@@ -90,8 +93,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *     barcode generator that doesn't exist in Pacred — rendered as the
  *     same absolute legacy URL (faithful display, no extra port work).
  *  5. The "ชำระเงิน" button (L2140) calls `payForwarder()` (AJAX to
- *     `include/pages/index/getListPayForwarder.php`) — the markup is
- *     rendered verbatim, the click is UNWIRED (TODO(server-action)).
+ *     `include/pages/index/getListPayForwarder.php`) — wired via the
+ *     <ServiceImportPayButton> Client Component, which opens the
+ *     existing <ForwarderPayModal> seeded with this single row (the
+ *     same modal /service-import's pay-bar opens for multi-row).
  *  6. forwarder.php L1672 calls `statusForwarderBadge()` (function.php
  *     L581-592) — transcribed inline below as `statusForwarderBadge()`.
  *  7. forwarder.php L1678 calls `calPriceForwarderSumCompany()`
@@ -451,6 +456,77 @@ export default async function ServiceImportDetailPage({
     .maybeSingle<{ promoid: number | string | null }>();
   const promoIdStr = promoRow ? String(promoRow.promoid) : null;
 
+  // ── forwarder.php L976-997 / L1953-2011 — address <select> options ──
+  // Used by the inline "แก้ไข ที่อยู่จัดส่ง" form (update_fAddress POST).
+  // Main address first (tb_address ⋈ tb_address_main), then the rest.
+  const { data: mainAddrRow } = await admin
+    .from("tb_address_main")
+    .select("addressid")
+    .eq("userid", memberCode)
+    .maybeSingle<{ addressid: number | string | null }>();
+  const mainAddressId = mainAddrRow?.addressid ?? null;
+  const { data: allAddrs } = await admin
+    .from("tb_address")
+    .select(
+      "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
+    )
+    .eq("userid", memberCode)
+    .eq("addressstatus", "1");
+  type AddressOption = {
+    addressid: number | string;
+    label: string;
+    isMain: boolean;
+  };
+  const addressOptions: AddressOption[] = [];
+  const addrList = ((allAddrs ?? []) as Array<{
+    addressid: number;
+    addressname: string | null;
+    addresslastname: string | null;
+    addressno: string | null;
+    addresssubdistrict: string | null;
+    addressdistrict: string | null;
+    addressprovince: string | null;
+    addresszipcode: string | null;
+  }>).slice();
+  // Sort: main first, then by addressid asc (the legacy ORDER BY).
+  let mainIdx = -1;
+  for (let i = 0; i < addrList.length; i++) {
+    if (
+      mainAddressId != null &&
+      String(addrList[i].addressid) === String(mainAddressId)
+    ) {
+      mainIdx = i;
+      break;
+    }
+  }
+  const sorted: typeof addrList = [];
+  if (mainIdx >= 0) sorted.push(addrList[mainIdx]);
+  addrList
+    .filter((_, i) => i !== mainIdx)
+    .sort((a, b) => Number(a.addressid) - Number(b.addressid))
+    .forEach((a) => sorted.push(a));
+  for (const a of sorted) {
+    const parts = [
+      a.addressname ?? "",
+      a.addresslastname ?? "",
+      a.addressno ?? "",
+      "ตำบล/แขวง",
+      a.addresssubdistrict ?? "",
+      "อำเภอ/เขต",
+      a.addressdistrict ?? "",
+      "จังหวัด",
+      a.addressprovince ?? "",
+      a.addresszipcode ?? "",
+    ].filter((s) => s !== "").join(" ");
+    const isMain = mainAddressId != null &&
+      String(a.addressid) === String(mainAddressId);
+    addressOptions.push({
+      addressid: a.addressid,
+      label: isMain ? `[ที่อยู่หลัก] ${parts}` : parts,
+      isMain,
+    });
+  }
+
   // forwarder.php L1725-1739: tb_forwarder_driver_item fdi
   //   ⋈ tb_forwarder_driver fd ON fdi.fdid = fd.id
   //   ⋈ tb_admin a              ON a.adminid = fd.fdadminid
@@ -568,6 +644,47 @@ export default async function ServiceImportDetailPage({
   const fTransportPriceChnThb = Number(row.ftransportpricechnthb ?? 0);
   const priceOther = Number(row.priceother ?? 0);
   const fUserCompany = row.fusercompany ?? "";
+
+  // ── ForwarderRow projection for the <ForwarderPayModal> ──
+  // The pay-button on this detail page opens the same multi-bill modal
+  // used by /service-import's pay-bar, with this single row seeded.
+  // Cross-RSC contract — every field plain-serializable (matches the
+  // ForwarderRow type the modal already accepts from the list view).
+  const payButtonRow: ForwarderRow = {
+    id:                     row.id,
+    fdate:                  row.fdate,
+    fstatus:                row.fstatus,
+    ftrackingchn:           row.ftrackingchn,
+    ftrackingchn2:          row.ftrackingchn2,
+    ftrackingth:            row.ftrackingth,
+    ftransporttype:         row.ftransporttype,
+    fshipby:                row.fshipby,
+    fdetail:                row.fdetail,
+    fcover:                 row.fcover,
+    famount:                row.famount,
+    fweight:                fWeight,
+    fvolume:                fVolume,
+    ftotalprice:            fTotalPrice,
+    ftransportprice:        fTransportPrice,
+    fpriceupdate:           fPriceUpdate,
+    fdiscount:              fDiscount,
+    fshippingservice:       fShippingService,
+    pricecrate:             priceCrate,
+    ftransportpricechnthb:  fTransportPriceChnThb,
+    priceother:             priceOther,
+    fusercompany:           fUserCompany,
+    fcredit:                null,
+    fcreditdate:            null,
+    fdatestatus5:           null,
+    fdatetothai:            row.fdatetothai,
+    fcabinetnumber:         row.fcabinetnumber,
+    fdatecontainerclose:    row.fdatecontainerclose,
+    fnote:                  row.fnote,
+    fnoteuser:              row.fnoteuser,
+    reforder:               row.reforder ?? null,
+    adminidcreator:         null,
+    promoid:                promoIdStr,
+  };
 
   // forwarder.php L1678 — total price with WHT adjustment for tax-exempt customers.
   const priceAllUser = calPriceForwarderSumCompany(
@@ -856,87 +973,26 @@ export default async function ServiceImportDetailPage({
                             <h5 className="d-inline-block">
                               <b>บริษัทขนส่ง : </b>
                             </h5>
-                            <span id="text-fShipBy" className="">
-                              {nameShipBy(fShipBy)}{" "}
-                              <span className="" id="to-edit-fShipBy">
-                                {/* TODO(server-action): slide-down inline form
-                                    for `update_fShipBy` POST (L1586-1619). */}
-                                <a
-                                  href="javascript:void(0)"
-                                  className="text-info font-10"
-                                >
-                                  แก้ไข
-                                </a>
-                              </span>
-                            </span>
-                            <div id="fShipByForm" style={{ display: "none" }}>
-                              {fShipBy !== "F" ? (
-                                /* forwarder.php L1923-1936 — fShipBy inline edit form */
-                                <form
-                                  className="form-horizontal d-table"
-                                  method="POST"
-                                  action={`/service-import/${row.id}`}
-                                  autoComplete="off"
-                                >
-                                  {Number(fStatusValue) < 4 ? (
-                                    <>
-                                      <input
-                                        type="hidden"
-                                        name="ID"
-                                        value={row.id}
-                                      />
-                                      {/* TODO(server-action): populate <select>
-                                          options via legacy `optionHShipBy2()`
-                                          (function.php) — list of available
-                                          carriers gated by ZIP + free-shipping
-                                          flag. Static placeholder kept. */}
-                                      <select
-                                        className="form-control"
-                                        name="fShipBy"
-                                        id="fShipBy"
-                                        defaultValue={fShipBy}
-                                        required
-                                      >
-                                        <option value={fShipBy}>
-                                          {nameShipBy(fShipBy)}
-                                        </option>
-                                      </select>
-                                      <div className="modal-footer">
-                                        <button
-                                          type="button"
-                                          className="btn btn-outline-secondary btn-rounded"
-                                          id="to-text-fShipBy"
-                                        >
-                                          ยกเลิก
-                                        </button>
-                                        <button
-                                          type="submit"
-                                          name="update_fShipBy"
-                                          className="btn btn-color-main btn-rounded"
-                                        >
-                                          บันทึก
-                                        </button>
-                                      </div>
-                                      <p className="text-danger font-12 pt-1">
-                                        หมายเหตุ :
-                                        บริษัทขนส่งจะขึ้นอยู่กับพื้นที่ในการจัดส่ง
-                                        ซึ่งเงื่อนไขเป็นไปตามที่บริษัทกำหนด
-                                      </p>
-                                    </>
-                                  ) : (
-                                    <span className="bg-danger text-white">
-                                      ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
-                                      <span></span>
-                                    </span>
-                                  )}
-                                </form>
-                              ) : (
-                                <p className="text-danger">
-                                  สั่งสินค้าในช่วงโปรโมชันฟรี ค่าขนส่งในไทย
-                                  ทางบริษัทขอสงวนสิทธิ์ในการเลือกบริษัทขนส่ง
-                                </p>
-                              )}
-                            </div>
+                            <ServiceImportEditShipByForm
+                              forwarderId={row.id}
+                              currentFShipBy={fShipBy}
+                              currentLabel={nameShipBy(fShipBy)}
+                              options={
+                                /* forwarder.php L1593 → `optionHShipBy2()` —
+                                   legacy lists every carrier from
+                                   NAME_SHIP_BY (function.php L91-143). The
+                                   ZIP-gating the legacy applies is admin-
+                                   only context the customer doesn't see;
+                                   the customer-side dropdown enumerates the
+                                   full list, mirroring the legacy fallback
+                                   behaviour when no ZIP filter applies. */
+                                Object.entries(NAME_SHIP_BY).map(([code, label]) => ({
+                                  code,
+                                  label,
+                                }))
+                              }
+                              isEditable={Number(fStatusValue) < 4}
+                            />
                             <br />
                             <h5 className="text-center d-inline-block">
                               <b>การเก็บเงินค่าขนส่งในไทย : </b>
@@ -955,79 +1011,12 @@ export default async function ServiceImportDetailPage({
                               {row.faddressprovince} {row.faddresszipcode}
                               <br />
                               โทร. {row.faddresstel}, {row.faddresstel2}
-                              <span id="text-fAddress">
-                                <span
-                                  className="d-inline-block"
-                                  id="to-edit-fAddress"
-                                >
-                                  {/* TODO(server-action): slide-down inline form
-                                      for `update_fAddress` POST (L1620-1658). */}
-                                  <a
-                                    href="javascript:void(0)"
-                                    className="text-info font-10"
-                                  >
-                                    แก้ไข
-                                  </a>
-                                </span>
-                              </span>
+                              <ServiceImportEditAddressForm
+                                forwarderId={row.id}
+                                options={addressOptions}
+                                isEditable={Number(fStatusValue) < 4}
+                              />
                             </p>
-                            <div className="" id="fAddressForm" style={{ display: "none" }}>
-                              {Number(fStatusValue) < 4 ? (
-                                <>
-                                  <div className="float-right">
-                                    <Link
-                                      href="/addresses/add"
-                                      target="_blank"
-                                      className="text-info font-0_85rem"
-                                    >
-                                      เพิ่มที่อยู่ใหม่ <i className="fa fa-plus"></i>
-                                    </Link>
-                                  </div>
-                                  <br />
-                                  <form
-                                    className="form-horizontal d-table"
-                                    method="POST"
-                                    action={`/service-import/${row.id}`}
-                                    autoComplete="off"
-                                  >
-                                    <input type="hidden" name="ID" value={row.id} />
-                                    {/* TODO(server-action): populate address
-                                        options from tb_address ⋈ tb_address_main
-                                        per the legacy WHERE … (L1953-2011). */}
-                                    <select
-                                      className="form-control"
-                                      name="addressID"
-                                      required
-                                    >
-                                      <option value="">
-                                        กรุณาเลือกที่อยู่ในการจัดส่ง
-                                      </option>
-                                    </select>
-                                    <div className="modal-footer">
-                                      <button
-                                        type="button"
-                                        className="btn btn-outline-secondary btn-rounded"
-                                        id="to-text-fAddress"
-                                      >
-                                        ยกเลิก
-                                      </button>
-                                      <button
-                                        type="submit"
-                                        name="update_fAddress"
-                                        className="btn btn-color-main btn-rounded"
-                                      >
-                                        บันทึก
-                                      </button>
-                                    </div>
-                                  </form>
-                                </>
-                              ) : (
-                                <span className="bg-danger text-white">
-                                  ไม่สามารถเปลี่ยนที่อยู่ได้เนื่องจากสินค้าถึงไทยแล้ว
-                                  <span></span>
-                                </span>
-                              )}
-                            </div>
                             <h5>
                               <span className="font-16">
                                 <b>เลขพัสดุในไทย : </b>
@@ -1198,15 +1187,10 @@ export default async function ServiceImportDetailPage({
                                 {fStatusValue === "5" && (
                                   <ul className="list-inline dl text-center text-md-right">
                                     <li className="list-inline-item text-info">
-                                      {/* TODO(server-action): payForwarder() AJAX
-                                          (L2264-2274) — fetch pay modal. */}
-                                      <a href="javascript:void(0)">
-                                        <span className="btn btn-block btn-rounded btn-info">
-                                          {" "}
-                                          <i className="mdi mdi-check-circle-outline"></i>{" "}
-                                          ชำระเงิน
-                                        </span>
-                                      </a>
+                                      <ServiceImportPayButton
+                                        row={payButtonRow}
+                                        isJuristic={fUserCompany === "1"}
+                                      />
                                     </li>
                                   </ul>
                                 )}

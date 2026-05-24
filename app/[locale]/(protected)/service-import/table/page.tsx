@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { ServiceImportAddForm } from "../add/service-import-add-form";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -1062,17 +1063,13 @@ export default async function ForwarderTablePage({
               </button>
             </div>
             <div className="modal-body header-from">
-              {/* TODO(server-action): the legacy `save` POST (forwarder-table.php
-                  L1113 posts to forwarder/) creates a tb_forwarder order. A
-                  Server Component render is a pure read — the submit is
-                  unwired; port it to a "use server" action. The legacy
-                  `method="POST" action="forwarder/"` markup is kept 1:1. */}
-              <form
-                className="form-horizontal"
-                method="POST"
-                action="/service-import"
-                autoComplete="off"
-              >
+              {/* The legacy `save` POST (forwarder-table.php L37-155 / posts
+                  to forwarder/) creates a tb_forwarder order. Wired via the
+                  shared <ServiceImportAddForm> Client Component → the
+                  createLegacyForwarder Server Action accepts both forwarder
+                  .php (`hTransportType`) and forwarder-table.php
+                  (`fTransportType`) field names. */}
+              <ServiceImportAddForm>
                 <div className="form-group">
                   <div className="border-bottom-2"></div>
                   <h5 className="text-center">กรอกรายละเอียดนำเข้าสินค้า</h5>
@@ -1190,7 +1187,7 @@ export default async function ForwarderTablePage({
                     </button>
                   </div>
                 </div>
-              </form>
+              </ServiceImportAddForm>
             </div>
           </div>
         </div>

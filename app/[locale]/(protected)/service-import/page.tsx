@@ -4,6 +4,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ForwarderInteractivity } from "./forwarder-interactivity";
 import { type ForwarderRow } from "./forwarder-row-view";
+import { ServiceImportAddForm } from "./add/service-import-add-form";
 
 /**
  * Customer ฝากนำเข้าสินค้า (import / forwarder) screen — a FAITHFUL
@@ -662,17 +663,12 @@ export default async function ServiceImportPage({
               </button>
             </div>
             <div className="modal-body header-from">
-              {/* TODO(server-action): the legacy `save` POST (forwarder.php
-                  L9-427) INSERTs tb_forwarder + uploads fCover. A Server
-                  Component render is a pure read — the submit is unwired;
-                  port it to a "use server" action that writes tb_forwarder. */}
-              <form
-                className="form-horizontal"
-                method="POST"
-                action="/service-import"
-                encType="multipart/form-data"
-                autoComplete="off"
-              >
+              {/* The legacy `save` POST (forwarder.php L9-160) INSERTs
+                  tb_forwarder. Wired via the shared <ServiceImportAddForm>
+                  Client Component → createLegacyForwarder Server Action.
+                  Image upload (`fCover`, legacy L102-144) is NOT yet ported
+                  — admin attaches photos in the back-office. */}
+              <ServiceImportAddForm>
                 <div className="form-group mb-0">
                   <div className="ele-forwarder-detail">
                     <h5 className="text-center">
@@ -995,7 +991,7 @@ export default async function ServiceImportPage({
                     </button>
                   </div>
                 </div>
-              </form>
+              </ServiceImportAddForm>
             </div>
           </div>
         </div>
