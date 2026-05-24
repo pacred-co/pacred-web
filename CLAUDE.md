@@ -2,48 +2,52 @@
 
 ---
 
-# 🚨 2026-05-19 EVENING — DIRECTION SHIFT (read FIRST)
+# 🚨 2026-05-24 — STRATEGY RESET (read FIRST)
 
-The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
-sidebar-fidelity work shipped this morning) to a **literal 1:1 transcription**
-of legacy PHP → Next.js per the owner's "100% sameness FIRST" rule.
+Owner directive 2026-05-24: clean up the branch model and **unlock V3** for parallel work.
 
-**New branch loop:**
-- **`Poom-pacred`** (ภูม · admin transcription · 187 `pcs-admin/*.php` files)
-- **`dave-pacred`** (เดฟ · customer transcription + integrates)
-- **`podeng`** (ปอน · customer-portal frontend)
-- → **`faithful-port`** (integration target · เดฟ-owned)
-- → ก๊อต production gate → **`main`** (Vercel auto-deploy)
+**Active branch model (6 branches — `faithful-port` deleted, all stale `claude/*` cleaned):**
 
-V3 branches (`Poom`, `dave`) are **FROZEN** — preserved + already merged into
-`faithful-port`, so today's morning work isn't lost — but no new commits land
-there until further notice.
+| Branch | Owner | Purpose | Status |
+|---|---|---|---|
+| `main` | ก๊อต gate | Production · Vercel auto-deploy | 🟢 live |
+| `dave-pacred` | **เดฟ** | 1:1 **customer-backend** port + integrates ปอน frontend | 🟢 active |
+| `podeng` | **ปอน** | Customer-facing frontend + brand-asset swap | 🟢 active |
+| `Poom-pacred` | **ภูม** | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements | 🟢 active |
+| `dave` | (archive) | Pre-1:1 V3-era working branch — reference only | 🧊 frozen |
+| `Poom` | (archive) | Pre-1:1 V3 backend lane — reference only | 🧊 frozen |
 
-**Method:** 1:1 transcription · same HTML markup · same SQL · `PCS → PR` branding
-only · zero design decisions. Legacy source on ภูม's machine at
-`C:\Users\Admin\pcscargo\` (187 admin + 42 customer-portal `.php` files).
+**Flow:**
+```
+ปอน (podeng)         ─┐
+                      ├─► เดฟ merges into dave-pacred → verify → push main (ก๊อต gates)
+ก๊อต (admin 1:1)    ─┘                                                  ▲
+                                                                         │
+ภูม (Poom-pacred V3) ── continues V3 features, merges in after 1:1 ─────┘
+```
 
-**Status (2026-05-19 night):** register/login fix shipped to `main` · customer
-portal **7/~24** screens transcribed 1:1 on `dave-pacred` (`menu`→dashboard ·
-china-address · account-settings · search · wallet · addresses · cart) · admin
-pilot done (`admin-table`→`/admin/admins`) · Bootstrap-4 + jQuery + FontAwesome
-vendor JS being staged for 1:1 interactivity. Full status + the 4-person
-work-split → [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md).
+**Direction (unchanged from D1):** 1:1 PCS Cargo port to main FIRST — เดฟ does customer-backend portal, ก๊อต does admin back-office (1:1 in parallel), ปอน does frontend. Then V3 features (Poom-pacred) layer on top after 1:1 stable.
+
+**What changed 2026-05-24:**
+- `faithful-port` branch **deleted** — flow now goes direct to `main` (no intermediate integration branch)
+- **V3 unlocked** — ภูม resumes V3 features in `Poom-pacred` (not the frozen `Poom`) without waiting for 1:1 to ship
+- All `claude/*` agent branches **cleaned** from remote (work either already merged or stale)
+- `hotfix/auth-unblock` removed (fix landed in main as `5c6bb8a`)
 
 **Authoritative SOTs (read in order):**
-1. 🚨 [`docs/research/poom-save-point-2026-05-19-night.md`](docs/research/poom-save-point-2026-05-19-night.md) — the direction-shift save-point · branch state · per-role lanes · PCS→PR table · resume commands
-2. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — the plan · branch model · 4-person work-split · status · cross-cutting infra
-3. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — the canonical method · 1:1 transcription steps + admin pattern §8
-4. 🧰 [`.claude/skills/legacy-php-sweep/SKILL.md`](.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
-5. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (the `tb_*` table inventory)
+1. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — branch model · 4-person work-split · status (updated 2026-05-24)
+2. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — canonical 1:1 method
+3. 🔍 [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md) — **NEW gap analysis** — what's still missing from the port (Google Sheets sync, JMF/TTP/CN partner APIs, LINE Notify, CargoThai, TAMIT, MOMO LCL tracking)
+4. 🧭 [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1 ADR (V2 = faithful port)
+5. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (`tb_*` inventory)
 
-**Pattern references (read before transcribing your first screen):**
+**Pattern references:**
 - Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`
 - Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx` + `public/legacy/pcs/admin/admin-base.css`
 
-The D1 phase doc + per-role briefs below are still authoritative for company
-context · the SHIFT only changes the **work-loop** and the **method**, not the
-goal. Goal stays: faithful PCS Cargo port · zero retraining · D1.
+**Legacy source locations (read-only references):**
+- Mac: `/Users/dev/Desktop/pcscargo/` (May 21 snapshot with `.git`)
+- Newly-extracted (2026-05-24): `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/` — includes the previously-unseen `backoffice.pcscargo.co.th` MVC admin + `pcs-seafreight.com` WP site
 
 ---
 
@@ -176,7 +180,7 @@ goal. Goal stays: faithful PCS Cargo port · zero retraining · D1.
 
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-19 (D1 — Phase A data loaded to dev + prod · Phase B wave-1 integrated — see [ADR-0017](docs/decisions/0017-pacred-faithful-pcs-port.md) + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md))
+Last updated: 2026-05-24 (post strategy-reset · faithful-port branch removed · V3 unlocked on Poom-pacred · podeng merged into dave-pacred · 10 critical legacy-flow gaps identified — see [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md))
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
 > Marketing site + landing pages + customer member portal + admin back-office. The rebuilt app launched 2026-05-17, but on **2026-05-18 the owner redirected the project (D1)** — Pacred is now a **faithful port of the legacy PCS Cargo system** (`PCS` → `PR`). Current work: **Phase A** (data migration — legacy `pcsc_main` business data loaded to dev + prod Supabase; 3 log tables + customer images backfill after the Supabase Pro upgrade) → **Phase B** (workflow fidelity — wave 1 integrated on `dave`, waves 2+ in progress). See the "CURRENT DIRECTION — D1" section at the top of this file + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) for the full phase plan.
@@ -331,19 +335,21 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 > ⚠️ **CANONICAL doc moved to [`docs/team.md`](docs/team.md)** — full role/branch/merge policy + daily workflow + safety rules
 > ห้าม duplicate รายละเอียดที่นี่ — อ่านที่ `docs/team.md` ครั้งเดียว ที่เดียว
 
-**TL;DR:**
+**TL;DR (updated 2026-05-24):**
 
-| คน | บทบาท | Branch | Push to main |
+| คน | บทบาท | Active branch | Push to main |
 |---|---|---|---|
-| **ก๊อต** | Senior Advisor | (review only) | ✅ |
-| **เดฟ** | Project Lead | `dave` | ✅ |
-| **ปอน** | Frontend & SEO | `podeng` | ❌ (own branch) |
-| **ภูม** | Backend & Cargo Port | `Poom` | ❌ (own branch) |
+| **ก๊อต** | Senior Advisor + Admin 1:1 lane + Production gate | (own commits on main + admin 1:1 commits) | ✅ |
+| **เดฟ** | Project Lead / Integrator / Customer-backend 1:1 | `dave-pacred` | ✅ (after gating) |
+| **ปอน** | Frontend / Customer-portal UI / SEO | `podeng` | ❌ (own branch → เดฟ merges) |
+| **ภูม** | Backend / V3 continuation (UNLOCKED) | `Poom-pacred` | ❌ (own branch → merges after 1:1 ships) |
 
 **Daily sync (every morning):**
 ```bash
-git checkout main && git pull origin main
-git checkout <my-branch> && git merge main && git push origin <my-branch>
+git fetch origin --prune
+git checkout <my-branch> && git pull --ff-only       # ปอน=podeng, ภูม=Poom-pacred, เดฟ=dave-pacred
+git merge main --no-edit                              # pull main into your branch
+# work, commit local freely; push only at save-points (per push_frequency_strict)
 ```
 
 **Conflict / safety:** อย่าใช้ `--force` / `reset --hard` ถ้าไม่แน่ใจ — full safety rules ใน [`docs/team.md`](docs/team.md) §5

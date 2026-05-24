@@ -1,34 +1,35 @@
-# D1 Faithful-Port Plan — production launch this week
+# D1 Faithful-Port Plan — production launch (updated 2026-05-24)
 
-> **Owner directive (2026-05-19).** Pacred's customer portal + admin back-office
-> become a **1:1 transcription** of the legacy PCS Cargo PHP system — rebuilt in
-> Next.js, rebranded `PCS` → `PR`, **identical to the original 100%**.
-> **`faithful-port` is the real production branch — it launches to real
-> customers + staff THIS WEEK.**
+> **Owner directive (2026-05-19, refreshed 2026-05-24).** Pacred's customer portal + admin back-office become a **1:1 transcription** of the legacy PCS Cargo PHP system — rebuilt in Next.js, rebranded `PCS` → `PR`, **identical to the original 100%**.
 >
-> This doc is the plan + branch model + work-split **everyone follows**. The
-> *how* (the transcription method) →
-> [`faithful-port-transcription.md`](faithful-port-transcription.md).
+> **The 1:1 ports ship to `main` first.** V3 enhancements ([Poom-pacred](#branch-model)) layer on after.
+>
+> This doc is the plan + branch model + work-split **everyone follows**. The *how* (the transcription method) → [`faithful-port-transcription.md`](faithful-port-transcription.md). The *what's missing* deep audit → [`d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md).
 
 ---
 
-## Branch model
+## Branch model (updated 2026-05-24 — `faithful-port` deleted · V3 unlocked)
 
-| Branch | Role |
-|---|---|
-| **`faithful-port`** | 🚀 **PRODUCTION** — the real owner project, launches this week. Only tested, integrated 1:1 work lands here. |
-| **`dave-pacred`** | เดฟ's 1:1 working branch **+ the integration branch** — `Poom-pacred` syncs here; merge + full test here *before* `faithful-port`. |
-| **`Poom-pacred`** | ภูม's 1:1 working branch (admin back-office). push / pull-sync → `dave-pacred`. |
-| **`podeng`** | ปอน's front-end branch (marketing / landing + the brand-asset swap) → merges into `faithful-port`. |
-| `dave` · `Poom` | 🧊 **FROZEN** — the pre-pivot Next.js rebuild ("V3" / Track A). Untouched; resumed only after the faithful port ships. |
+| Branch | Owner | Role | Status |
+|---|---|---|---|
+| **`main`** | ก๊อต gate | 🚀 **PRODUCTION** — Vercel auto-deploy | 🟢 live |
+| **`dave-pacred`** | เดฟ | 1:1 **customer-backend** portal port (`(protected)/*`) + integrates ปอน frontend → merges to `main` | 🟢 active |
+| **`podeng`** | ปอน | Customer-facing **frontend** + brand-asset swap → merged into `dave-pacred` | 🟢 active |
+| **`Poom-pacred`** | ภูม | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements; merges in *after* 1:1 ships | 🟢 active |
+| `dave` · `Poom` | (archive) | 🧊 **FROZEN** — pre-1:1 working branches; reference only, no new commits | 🧊 archive |
 
-**Flow:** `Poom-pacred` → `dave-pacred` (integrate + full test) → `faithful-port`
-(production) → ก๊อต gate → `main` (Vercel deploy). ปอน's `podeng` → `faithful-port`.
+**Flow (post-2026-05-24):**
+```
+ปอน (podeng)      ─┐
+                   ├─► เดฟ merges into dave-pacred → verify → push main (ก๊อต gates)
+ก๊อต (admin 1:1) ─┘                                                  ▲
+                                                                      │
+ภูม (Poom-pacred V3) ── continues V3 features, merges in after 1:1 ──┘
+```
 
-Everyone opens **their own** branch and works there. Sync daily; never push
-half-built work to `faithful-port`. Spawned worktree agents must
-`git fetch origin && git reset --hard origin/<your-branch>` before working
-(they branch from a stale `origin/main` otherwise).
+**Deleted on 2026-05-24:** `faithful-port` branch (no longer the integration target — direct-to-main pattern won out during the OTP emergency week) · all `claude/*` remote branches (work merged or stale) · `hotfix/auth-unblock` (cherry-picked to main as `5c6bb8a`).
+
+Everyone opens **their own** branch and works there. Sync daily; never push half-built work to `main`. Spawned worktree agents must `git fetch origin && git reset --hard origin/<your-branch>` before working (they branch from a stale `origin/main` otherwise).
 
 ---
 
@@ -127,14 +128,14 @@ connection · [F] TODO list.
 
 ---
 
-## Work-split — parallel, no collision
+## Work-split — parallel, no collision (updated 2026-05-24)
 
 | Who | Owns | Branch |
 |---|---|---|
-| **เดฟ** | Drive the port · the **customer portal** screens · the **cross-cutting infra** (vendor JS · the customer-side unwired Server Actions) · integrate at `dave-pacred` · coordinate the `faithful-port` launch | `dave-pacred` |
-| **ภูม** | Transcribe the **admin back-office** — 187 `pcs-admin/*.php` screens · the admin-side Server Actions · split screen-batches to spawned agents | `Poom-pacred` |
-| **ปอน** | **Customer-portal** screen transcription (coordinate with เดฟ — one owner per screen) · the **front-end** (marketing / landing) in the owner's style · **the brand-asset swap** — sweep every legacy-PCS icon / emoji / logo placeholder and replace with the proper `PR` asset (see "Brand assets") | `podeng` |
-| **ก๊อต** | **Fidelity review** — every screen 1:1 vs the legacy original · the borrowed-API (TAMIT) watch · **confirm the `tb_*` dev↔prod Supabase wiring** · the production-launch gate | review |
+| **เดฟ** | Drive the port · 1:1 **customer-backend** portal (`(protected)/*` screens + their Server Actions onto `tb_*`) · cross-cutting infra (vendor JS · legacy-CSS scoping) · integrate ปอน's frontend · merge to main | `dave-pacred` |
+| **ก๊อต** | **Admin back-office 1:1 lane** — drives the 187 `pcs-admin/*.php` transcription (now ก๊อต-led, was ภูม pre-2026-05-24) · fidelity review · TAMIT/JMF watch · production-launch gate | (own commits) |
+| **ปอน** | **Customer-portal frontend** transcription (coordinate with เดฟ — one owner per screen) · front-end (marketing/landing) in owner's style · **brand-asset swap** | `podeng` |
+| **ภูม** | **V3 backend continuation (UNLOCKED 2026-05-24)** — DPX ERP enhancements, wave-17+ admin features; merges *after* 1:1 ships to main | `Poom-pacred` |
 
 **One owner per screen** — coordinate via เดฟ before claiming a batch, so two
 people never transcribe the same file. ภูม keeps ปอน informed so the data

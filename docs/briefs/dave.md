@@ -1,26 +1,26 @@
-# เดฟ — Project Lead / Integrator
+# เดฟ — Project Lead / Integrator / Customer-backend 1:1
 
-Last reviewed: 2026-05-19 night (D1 — **direction shifted PM to 1:1 PHP→Next port**)
-Branch: **`dave-pacred`** (1:1 integration) → merges into `faithful-port` → ก๊อต gate → `main` · Authority: second-tier owner
+Last reviewed: 2026-05-24 (strategy reset — V3 unlocked, faithful-port branch deleted, ก๊อต takes admin lane)
+Branch: **`dave-pacred`** → merges to `main` (ก๊อต gates) · Authority: second-tier owner
 
-> ## 🚨 2026-05-19 EVENING — Direction shift (READ FIRST)
+> ## 🚨 2026-05-24 STRATEGY RESET (READ FIRST)
 >
-> You established the 1:1 transcription direction this afternoon
-> (commits `7e1dce2` runbook · `13bf18a` menu.php pilot · `da4cd79` CSS fix
-> · `162f72e` pilot fixes + team plan · then customer batch-1 `3011f94` /
-> `f145351` / `1a20982`). ภูม pivoted from V3 (`Poom`) to **`Poom-pacred`**
-> and started the admin lane with `admin-table.php` pilot on 2026-05-19
-> evening (pushed to `Poom-pacred`).
+> Owner cleaned up branch model and unlocked V3 for parallel work. New lane split:
 >
-> **New branch loop:** `Poom-pacred` (ภูม admin) + `dave-pacred` (you customer/integrate)
-> + `podeng` (ปอน customer-portal) → **`faithful-port`** (you integrate) → ก๊อต
-> gate → `main` (Vercel). V3 work is preserved + frozen.
+> | Role | Lane | Branch |
+> |---|---|---|
+> | **เดฟ (you)** | 1:1 **customer-backend** portal — `(protected)/*` screens + Server Actions onto `tb_*` · integrate ปอน frontend | `dave-pacred` |
+> | **ก๊อต** | **1:1 admin back-office** lane (NEW — was ภูม pre-reset) · 187 `pcs-admin/*.php` files | (own commits) |
+> | **ปอน** | Customer-facing frontend + brand-asset swap | `podeng` |
+> | **ภูม** | **V3 backend continuation (UNLOCKED)** — DPX ERP enhancements; merges *after* 1:1 ships | `Poom-pacred` |
 >
-> **READ FIRST:** [`docs/research/poom-save-point-2026-05-19-night.md`](../research/poom-save-point-2026-05-19-night.md) §11 "Open for เดฟ" — ภูม's open questions for you (admin-pilot scope · admin CSS path · admin-side B-0 swap timing).
+> **Deleted 2026-05-24:** `faithful-port` (direct-to-main pattern now) · all stale `claude/*` remotes · `hotfix/auth-unblock` (cherry-picked).
 >
-> The runbook + pilot pattern + the team-wide work-split are all set. ภูม
-> is the admin lane (187 .php files) · ปอน is the customer lane (~22
-> remaining customer .php) · you integrate + drive batches.
+> **Just merged into `dave-pacred`:** `podeng` (4 commits — home polish + (protected) chrome rebuild in Tailwind + dropped legacy CSS leak). Verify before pushing main.
+>
+> **READ FIRST:**
+> - [`docs/research/d1-deep-audit-2026-05-24.md`](../research/d1-deep-audit-2026-05-24.md) — 10 critical gaps from the deep audit (Google Sheets, JMF/TTP/CN APIs, LINE Notify, TAMIT, MOMO LCL, etc.)
+> - [`docs/runbook/faithful-port-plan.md`](../runbook/faithful-port-plan.md) — updated branch model + work-split
 
 ## 🎯 Direction — D1: Pacred is a faithful PCS Cargo port
 
@@ -48,43 +48,25 @@ enhancements (the old Tier roadmap, *deferred not cancelled*).
   not yet element-by-element fidelity-verified.
 - ⚪ **Phase C** — deferred (Tier roadmap · ads/marketing · 8-specialist R&D).
 
-## 🧭 Your lane — INTEGRATOR + PHASE-A COMPLETION DRIVER (senior)
+## 🧭 Your lane (post-2026-05-24)
 
-You + ก๊อต are the **senior lane**; ปอน + ภูม execute. You own the integration
-spine and drive Phase A to done. Concretely you:
+You're the **1:1 customer-backend lead + ปอน integrator**. ก๊อต takes the admin 1:1 lane. ภูม keeps V3 alive on Poom-pacred (UNLOCKED 2026-05-24). Concretely you:
 
-- **Drive Phase A to完成** — the Supabase Pro backfill of the 3 log tables +
-  customer images, then reconcile 117/117 tables prod ↔ legacy.
-- **Integrate Phase B** — consolidate ภูม / ปอน pushes into `dave`, verify,
-  distribute back (the [`branch-integrate-loop`](../../.claude/skills/branch-integrate-loop/SKILL.md) skill).
-- **Spawn the Phase-B wave agents** — execute the fidelity rework via worktree
-  agents that land on `dave`, wave by wave, so the team works one direction.
-- **Hold the `dave → main` deploy gate** with ก๊อต — nothing ships before the
-  quality gate is green.
+- **Own customer-portal `(protected)/*` 1:1 fidelity** — 15/24 screens transcribed; ~9 remaining (login/register fidelity check, forgot-password, regis-tam, line-notify, etc.). Drive these to done.
+- **Wire missing customer-side integrations** — TAMIT verification, LINE Notify per-user OAuth (gaps #3 + #5 in deep audit).
+- **Integrate ปอน's frontend** — merge `podeng` into `dave-pacred`, run `pnpm verify`, smoke-test, push to main.
+- **Coordinate with ก๊อต** on the admin lane — agree on which routes are 1:1-ported (ก๊อต) vs V3-enhanced (ภูม merges later from Poom-pacred).
+- **Phase A close-out** — wait for ก๊อต's Supabase Pro upgrade, then backfill 3 log tables + customer images (need REALSHITDATAPCS.rar extraction).
 
-## 🟡 Your pickup list (priority order)
+## 🟡 Your pickup list (priority order, post-reset)
 
-1. **Phase A — finish it.** After ก๊อต's Supabase Pro upgrade: backfill the 3
-   oversized log tables (`tb_web_hs` · `tb_history_key` · `tb_history`,
-   ~779 MB — free tier capped at 500 MB) + the customer image/file storage
-   (ก๊อต fetches from แต้ม), then reconcile **117/117** tables prod ↔ legacy.
-   Runbook → [`runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md).
-2. **Phase B-0 — fidelity-verify wave 1.** Run the
-   [`legacy-fidelity-check`](../../.claude/skills/legacy-fidelity-check/SKILL.md)
-   skill on wave-1's 4 surfaces (launchpad · order flow · admin RBAC sidebar ·
-   container ledger); close every gap before moving on. Wave 1 was first-pass.
-3. **Phase B waves — sequence + spawn.** Break the fidelity gap maps
-   ([`d1-fidelity-customer.md`](../research/d1-fidelity-customer.md) ·
-   [`d1-fidelity-admin.md`](../research/d1-fidelity-admin.md) ·
-   [`d1-fidelity-workflow.md`](../research/d1-fidelity-workflow.md); overview
-   [`d1-phase-b-gap-map.md`](../research/d1-phase-b-gap-map.md)) into waves —
-   ปอน takes the customer frontend screens, ภูม the admin/backend. Spawn the
-   wave agents; keep one owner per surface.
-4. **Integrate continuously** — merge ภูม / ปอน pushes into `dave`, verify, push.
-5. **Retire the superseded scaffolding** — the pre-D1 PCS-customer migration
-   (`0067_pcs_customer_migration.sql`, `actions/admin/pcs-migration.ts`, the
-   `u2-1-pcs-customer-migration.md` runbook) is replaced by the Phase-A
-   full-system port. Decide when/how the rebuilt `profiles`-era schema retires.
+1. **Verify the just-merged podeng work** on `dave-pacred` — `pnpm lint && pnpm build`, smoke `/dashboard` + `/wallet` + `/service-order` for the chrome rebuild side-effects, then push to main if clean. (Just merged: `d7b1758` containing `5097a2b` home polish + `fbb63fe` chrome rebuild in Tailwind.)
+2. **Gap #5 — TAMIT integration stub** — port `member/regis-tam.php` flow (~1 day · S effort). Replace the DBD/RD stub.
+3. **Gap #3 — LINE Notify per-user OAuth** — port `member/line-notify.php` + `member/api/linenotify/callback/` to Next.js Route Handlers + dispatcher cron (~3-5 days · M effort). Customer-visible.
+4. **Customer screens still NOT 1:1 transcribed** — login/register fidelity check (need post-OTP-emergency verification), forgot-password, wallet-normal/wallet-credit split if owner wants legacy two-page UX.
+5. **Coordinate ก๊อต admin lane kickoff** — pick from `poom-save-point-2026-05-19-night.md` §10 top-5 admin pilots (index.php dashboard, users-search, forwarder.php, wallet family).
+6. **Phase A close-out** — once ก๊อต upgrades Supabase Pro + extracts customer images, backfill 3 log tables + reconcile 117/117 tables.
+7. **Retire pre-D1 scaffolding** — `0067_pcs_customer_migration.sql` + `actions/admin/pcs-migration.ts` + `u2-1-pcs-customer-migration.md` superseded by Phase A. Decide when rebuilt `profiles`-era schema retires.
 
 ## ✋ Non-collision rule
 
