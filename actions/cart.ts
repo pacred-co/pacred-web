@@ -18,7 +18,6 @@ import {
   calcLegacyPromoDiscount,
   isActive,
   resolveLegacyPromoCode,
-  synthesizeStubPromo,
   type LegacyPromo,
 } from "@/lib/promo/catalog";
 
@@ -701,8 +700,19 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 // opt-in row in `tb_pro_valentine`). The promo "discount" was always
 // applied via:
 //   - URL `pro=` flag → cart.php hardcoded mapping to rate / shipping
-//   - `tagPro($ID)` static switch → label rendering
-//   - `tb_promotion` INSERT → audit log at order-submit time
+//   - `tagPro($ID)` static switch (function.php L1289-1374) → label render
+//   - `tb_promotion` INSERT → forwarder-↔-promo audit log at order-submit
+//
+// `tb_promotion` is NOT a coupon-code master table — it's an audit log
+// linking a forwarder (`fid`) + house-number (`hno`) to a numeric
+// `promoid` from `tagPro()`. The PHP NEVER did a `SELECT … WHERE code=?`
+// against any master table — the catalog has always lived in code.
+//
+// The faithful re-port keeps that pattern: `lib/promo/catalog.ts` is the
+// in-code catalog (1:1 port of `tagPro()`). Unknown codes return
+// `valid: false` with the legacy-style "ไม่พบรหัสโปรโมชั่นนี้" message —
+// EXACTLY what legacy did when `tagPro()` hit its `default:` branch
+// (returned an empty string → cart rendered no badge → no discount).
 //
 // We expose four customer-facing Server Actions:
 //   - validatePromoCode  — pure read; returns discount preview
@@ -714,13 +724,6 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
 //   - removePromoFromCart — clears the per-user selection
 //   - getAvailablePromos — public catalog read (id, code, discount,
 //                          expiry, description) — no auth required
-//
-// FLAGGED — no `tb_promo_codes` master table exists in legacy. The
-// catalog is hardcoded in `lib/promo/catalog.ts`. Codes that don't
-// match the catalog fall through to a stub `PR\d{1,3}` synthesizer
-// so the QA team can dry-run the apply flow before the back-office
-// admin UI lands. Replace `synthesizeStubPromo` with a DB read once
-// the admin UI exists.
 
 export type ValidatePromoCodeResult = {
   ok: true;
@@ -773,11 +776,10 @@ export async function validatePromoCode(
   }
   const { code: upperCode, cartTotal: total, userId: uid } = parsed.data;
 
-  // 2. Catalog lookup — fallback to stub synthesizer (FLAGGED).
-  let promo: LegacyPromo | null = resolveLegacyPromoCode(upperCode);
-  if (!promo) {
-    promo = synthesizeStubPromo(upperCode);
-  }
+  // 2. Catalog lookup — `lib/promo/catalog.ts` is the 1:1 port of
+  //    `tagPro()` (function.php L1289-1374). Unknown codes return
+  //    `valid: false` — legacy parity (tagPro default → empty badge).
+  const promo: LegacyPromo | null = resolveLegacyPromoCode(upperCode);
   if (!promo) {
     return { ok: true, valid: false, discount: 0, discountType: "fixed", message: "ไม่พบรหัสโปรโมชั่นนี้" };
   }
@@ -899,9 +901,9 @@ export async function applyPromoToCart(
   const upperCode = parsed.data.promoCode;
 
   // Re-validate via the same lookup pipeline to avoid TOCTOU between
-  // the UI's validate call and this apply call.
-  const promo: LegacyPromo | null =
-    resolveLegacyPromoCode(upperCode) ?? synthesizeStubPromo(upperCode);
+  // the UI's validate call and this apply call. Unknown code = reject
+  // (legacy parity — tagPro default branch returned empty).
+  const promo: LegacyPromo | null = resolveLegacyPromoCode(upperCode);
   if (!promo) return { ok: false, error: "invalid_code" };
   if (!isActive(new Date(), promo)) return { ok: false, error: "expired_or_not_started" };
 

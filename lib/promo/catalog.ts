@@ -59,11 +59,13 @@ export type LegacyPromo = {
  * future/evergreen entries are surfaced to the customer. Adding a new
  * promo = add a row here.
  *
- * Stub-discount fallback: codes that DON'T match an alias and start with
- * "PR" + digits get a synthetic % discount derived from the digit (see
- * `synthesizeStubPromo` below) so the QA team can dry-run the apply flow
- * without seeding a new entry. This is FLAGGED in the gap report so
- * admin UI can later replace it with a real catalog.
+ * Faithful-port note: legacy `tagPro()` (function.php L1289-1374) had
+ * NO master table — the catalog has always lived in code as a static
+ * switch. Unknown codes returned the empty string (default branch) →
+ * cart rendered no badge → no discount. Our `resolveLegacyPromoCode`
+ * returns `null` for the same effect, and `validatePromoCode` surfaces
+ * the legacy refusal message "ไม่พบรหัสโปรโมชั่นนี้". No DB lookup is
+ * possible because no master table ever existed.
  */
 export const PROMO_CATALOG: readonly LegacyPromo[] = [
   // ── PCSF — free-shipping (50฿) — the only one legacy actually used
@@ -146,35 +148,6 @@ export function resolveLegacyPromoCode(code: string): LegacyPromo | null {
 }
 
 /**
- * STUB-DISCOUNT FALLBACK — when the customer types a code that doesn't
- * match the catalog, synthesize a one-off promo so the apply flow still
- * exercises the write path. Rules (deliberately conservative):
- *
- *   - Code must match `^PR(\d{1,3})$` (e.g. "PR5", "PR10", "PR50").
- *   - The digit fragment becomes the % discount, capped at 25%.
- *   - Anything else → null (validator returns `invalid_code`).
- *
- * FLAGGED: this exists to unblock UI demos. Replace with a real admin-
- * managed `promo_codes` table when the back-office UI lands (see
- * docs/research/d1-customer-backend-gap-2026-05-24.md §5 #3).
- */
-export function synthesizeStubPromo(code: string): LegacyPromo | null {
-  const m = /^PR(\d{1,3})$/.exec(code.trim().toUpperCase());
-  if (!m) return null;
-  const pct = Math.min(25, Math.max(1, Number(m[1])));
-  return {
-    id: 0, // 0 = "synthetic / not a real tb_promotion row"
-    label: `STUB-${pct}%`,
-    aliases: [code.trim().toUpperCase()],
-    rate: null,
-    shippingDiscountThb: 0,
-    description: `(เดโม) ลด ${pct}% — STUB CODE — ต้องเชื่อมตารางจริงภายหลัง`,
-    activeFrom: null,
-    activeUntil: null,
-  };
-}
-
-/**
  * Discount calc for `validatePromoCode`. Converts a `LegacyPromo` +
  * cart total → `{ discount, discountType }`:
  *
@@ -183,8 +156,6 @@ export function synthesizeStubPromo(code: string): LegacyPromo | null {
  *     server-side `tb_settings.rsdefault` value). discountType='fixed'.
  *   - Promo carries `shippingDiscountThb` → that flat THB.
  *     discountType='fixed'.
- *   - Stub promo (`label` starts with "STUB-") → percent off cart total.
- *     discountType='pct'.
  *   - All-zeros → discount=0, discountType='fixed' (no-op).
  *
  * `cartTotalThb` is the customer's cart subtotal in THB (already converted
@@ -206,13 +177,6 @@ export function calcLegacyPromoDiscount(
   cartTotalThb: number,
   baselineRate: number,
 ): { discount: number; discountType: "pct" | "fixed" } {
-  // Stub % discount path.
-  if (p.label.startsWith("STUB-")) {
-    const m = /^STUB-(\d{1,3})%$/.exec(p.label);
-    const pct = m ? Number(m[1]) : 0;
-    const amt = Math.max(0, cartTotalThb * pct / 100);
-    return { discount: round2(amt), discountType: "pct" };
-  }
   // Flat shipping ฿ off.
   if (p.shippingDiscountThb > 0) {
     return { discount: round2(p.shippingDiscountThb), discountType: "fixed" };
