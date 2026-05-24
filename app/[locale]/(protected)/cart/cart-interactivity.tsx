@@ -4,9 +4,12 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
 import {
+  applyPromoToCart,
   calculateCartTotal,
   deleteCartItem,
+  removePromoFromCart,
   updateCartItemQuantity,
+  validatePromoCode,
   submitCartOrder,
 } from "@/actions/cart";
 
@@ -85,10 +88,22 @@ export type CartInteractivityProps = {
   initialRsDefault: number;
   /** Whether the date-window 3.3 promotion card is rendered. */
   promo33Active: boolean;
+  /** The session member_code — used as the `cartId` belt-and-braces
+      ownership check for applyPromoToCart / removePromoFromCart. */
+  memberCode: string;
   /** The static SSR shipping card (.ele-addressCHN-cart, cart.php L601-651)
       passed through as JSX so it stays SSR — the cart-list + the summary
       sit on either side of it; the structural markup is a server concern. */
   shippingCard: ReactNode;
+};
+
+type AppliedPromo = {
+  id:            number;
+  label:         string;
+  /** When `discountType==='pct'` this is a 0-100 percentage; when
+      `discountType==='fixed'` it is a flat ฿ amount. */
+  discount:      number;
+  discountType:  "pct" | "fixed";
 };
 
 export function CartInteractivity({
@@ -96,6 +111,7 @@ export function CartInteractivity({
   totalRowCount,
   initialRsDefault,
   promo33Active,
+  memberCode,
   shippingCard,
 }: CartInteractivityProps) {
   // Selected row IDs — cart.php's `$("input:checkbox[name='ID[]']")`
@@ -139,6 +155,17 @@ export function CartInteractivity({
   // The fade50 promo (PCS เหมาๆ — `input-12`). Legacy only changes the
   // border, not the totals — purely cosmetic but reproduced for fidelity.
   const [proMaomao, setProMaomao] = useState(false);
+
+  // ── G1 promo-code input — typed legacy `tagPro()` codes ──
+  // Sprint-2 wire of `validatePromoCode` + `applyPromoToCart` /
+  // `removePromoFromCart` (actions/cart.ts). Discount applies on top of
+  // the server-computed `priceThb` — the legacy `calculateCart.php`
+  // doesn't fold typed-code discounts into its result, only the static
+  // `pro=19` rate override, so the math runs client-side here.
+  const [promoCode,    setPromoCode]    = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [promoBusy,    setPromoBusy]    = useState(false);
+  const [promoMsg,     setPromoMsg]     = useState<{ tone: "err" | "ok"; text: string } | null>(null);
 
   // Server-driven totals — match the legacy AJAX response shape.
   // Defaults match the page-first-load behaviour: legacy calls
@@ -232,6 +259,77 @@ export function CartInteractivity({
     setPro2Checked(next);
     recompute(selectedIds, next);
   }
+
+  // ── promo-code apply/remove handlers ──
+  // Apply runs validate → apply (persists to tb_pro_valentine). The
+  // discount value comes from validate's response so we can show it
+  // immediately without a second server round-trip on a separate read.
+  function handleApplyPromo() {
+    const code = promoCode.trim();
+    if (!code || promoBusy) return;
+    setPromoBusy(true);
+    setPromoMsg(null);
+    startTransition(async () => {
+      // Pass the server's current ฿ subtotal as the validation cart-total.
+      // Strip the formatting commas before Number() since priceThb is
+      // already `number_format`-style ("1,234.56").
+      const total = Number(totals.priceThb.replace(/,/g, ""));
+      const v = await validatePromoCode(code, Number.isFinite(total) ? total : 0);
+      if (!v.ok) {
+        setPromoMsg({ tone: "err", text: v.error });
+        setPromoBusy(false);
+        return;
+      }
+      if (!v.valid) {
+        setPromoMsg({ tone: "err", text: v.message ?? "โค้ดส่วนลดไม่ถูกต้อง" });
+        setPromoBusy(false);
+        return;
+      }
+      const a = await applyPromoToCart(memberCode, code);
+      if (!a.ok) {
+        setPromoMsg({ tone: "err", text: a.error });
+        setPromoBusy(false);
+        return;
+      }
+      setAppliedPromo({
+        id:           v.promo?.id ?? 0,
+        label:        v.promo?.label ?? code.toUpperCase(),
+        discount:     v.discount,
+        discountType: v.discountType,
+      });
+      setPromoMsg({ tone: "ok", text: v.message ?? "ใช้โค้ดส่วนลดสำเร็จ" });
+      setPromoBusy(false);
+    });
+  }
+
+  function handleRemovePromo() {
+    if (promoBusy) return;
+    setPromoBusy(true);
+    setPromoMsg(null);
+    startTransition(async () => {
+      const res = await removePromoFromCart(memberCode);
+      if (!res.ok) {
+        setPromoMsg({ tone: "err", text: res.error });
+        setPromoBusy(false);
+        return;
+      }
+      setAppliedPromo(null);
+      setPromoCode("");
+      setPromoBusy(false);
+    });
+  }
+
+  // Compute the discount + final total on top of the server's priceThb.
+  const subtotalThb = Number(totals.priceThb.replace(/,/g, ""));
+  const discountThb = (() => {
+    if (!appliedPromo || !Number.isFinite(subtotalThb)) return 0;
+    if (appliedPromo.discountType === "pct") {
+      return subtotalThb * (appliedPromo.discount / 100);
+    }
+    // fixed THB — capped to the subtotal so the final never goes negative
+    return Math.min(appliedPromo.discount, subtotalThb);
+  })();
+  const finalThb = Math.max(0, subtotalThb - discountThb);
 
   // cart.php L895-899: the "สั่งซื้อสินค้า" submit is disabled while
   // nothing is selected.
@@ -627,6 +725,115 @@ export function CartInteractivity({
                       </span>
                     </div>
                   </div>
+
+                  {/* ── G1 promo-code input — typed code with validate +
+                       apply.  Sprint-2 wire of validatePromoCode +
+                       applyPromoToCart + removePromoFromCart.  Sits at
+                       the bottom of the promotion section so the static
+                       legacy cards remain primary.  ── */}
+                  <div className="col-12">
+                    <div className="mt-1 pt-1 border-top">
+                      {appliedPromo ? (
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <span className="badge bg-success" style={{
+                            background: "#198754",
+                            color:      "#fff",
+                            padding:    "4px 10px",
+                            borderRadius: 4,
+                            fontWeight: 600,
+                          }}>
+                            ✓ {appliedPromo.label}
+                          </span>
+                          <span className="text-muted" style={{ fontSize: 13 }}>
+                            ส่วนลด{" "}
+                            {appliedPromo.discountType === "pct"
+                              ? `${appliedPromo.discount}%`
+                              : `${numberFormat(appliedPromo.discount)} ฿`}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-link p-0"
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#dc3545",
+                              textDecoration: "underline",
+                              cursor: promoBusy ? "wait" : "pointer",
+                              fontSize: 13,
+                              padding: 0,
+                            }}
+                            onClick={handleRemovePromo}
+                            disabled={promoBusy}
+                          >
+                            ลบ
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <label
+                            htmlFor="promo-code-input"
+                            className="mb-0"
+                            style={{ fontWeight: 600, fontSize: 14 }}
+                          >
+                            มีโค้ดส่วนลด?
+                          </label>
+                          <input
+                            id="promo-code-input"
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="กรอกโค้ด เช่น PCSF"
+                            value={promoCode}
+                            onChange={(e) => setPromoCode(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleApplyPromo();
+                              }
+                            }}
+                            maxLength={32}
+                            disabled={promoBusy}
+                            style={{
+                              flex: "0 1 180px",
+                              minWidth: 140,
+                              padding: "4px 8px",
+                              border: "1px solid #ced4da",
+                              borderRadius: 4,
+                              fontSize: 13,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={handleApplyPromo}
+                            disabled={promoBusy || promoCode.trim().length === 0}
+                            style={{
+                              border: "1px solid #b30000",
+                              background: promoBusy ? "#e9ecef" : "#fff",
+                              color: "#b30000",
+                              padding: "4px 14px",
+                              borderRadius: 4,
+                              cursor: promoBusy ? "wait" : "pointer",
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {promoBusy ? "กำลังตรวจ..." : "ใช้โค้ด"}
+                          </button>
+                        </div>
+                      )}
+                      {promoMsg && (
+                        <div
+                          className="mt-1"
+                          style={{
+                            fontSize: 12,
+                            color: promoMsg.tone === "err" ? "#dc3545" : "#198754",
+                          }}
+                        >
+                          {promoMsg.text}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -664,6 +871,24 @@ export function CartInteractivity({
                   {totals.rate}
                 </div>
               </div>
+              {appliedPromo && (
+                <>
+                  <div className="col-6 col-md-8 text-right">
+                    <h4 style={{ color: "#198754" }}>
+                      ส่วนลด ({appliedPromo.label}) :{" "}
+                    </h4>
+                  </div>
+                  <div className="col-6 col-md-4 text-right">
+                    <div
+                      className="totals-value notranslate"
+                      style={{ color: "#198754", fontWeight: 600 }}
+                      id="cart-promo-discount"
+                    >
+                      -{numberFormat(discountThb)}
+                    </div>
+                  </div>
+                </>
+              )}
               <div className="col-6 col-md-8 text-right">
                 <h4>ราคารวมสุทธิ : </h4>
               </div>
@@ -673,7 +898,7 @@ export function CartInteractivity({
                     className="totals-value2 font-18 text-danger cart-total notranslate"
                     id="cart-total"
                   >
-                    {totals.priceThb}
+                    {appliedPromo ? numberFormat(finalThb) : totals.priceThb}
                   </div>
                 </b>
               </div>

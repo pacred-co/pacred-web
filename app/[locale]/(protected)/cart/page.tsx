@@ -512,6 +512,7 @@ export default async function CartPage() {
                         totalRowCount={totalRowCount}
                         initialRsDefault={rsDefault}
                         promo33Active={promo33Active}
+                        memberCode={userID}
                         shippingCard={
                           <div className="ele-addressCHN-cart box-shadow mb-1 p-1">
                             <h3 className="text-color">
