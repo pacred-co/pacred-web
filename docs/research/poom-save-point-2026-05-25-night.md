@@ -1,10 +1,31 @@
-# 🌙 ภูม save-point — 2026-05-25 ค่ำ (Wave 15 + 16 + 17 ALL DONE · กลับบ้านทำต่อ)
+# 🌙 ภูม save-point — 2026-05-25 ค่ำ (Wave 15-18 ALL DONE · ไปทำต่อที่ทำงาน)
 
 > **อ่านไฟล์นี้ก่อนทุกอย่าง** session ถัดไป. ครอบคลุม: Wave 15 (3 P0 fixes ของวานนี้) ·
 > Wave 16 (5 P0 + 3 follow-ups · cargo flow deep audit + UX fix) · Wave 17 (4 P1 ·
-> MOMO/CN/Sheets carriers + barcode AJAX) · branch state · resume commands.
+> MOMO/CN/Sheets carriers + barcode AJAX) · **Wave 18 (orphan wires + 5/7 cols)** ·
+> **Wave 18 follow-up (2 bugs ภูม caught · §0c rule new)** · branch state · resume commands.
 
-**Session tagline:** ภูม catch ผม ตอนทำ fidelity audit ผิว → spawn 4 agents เทียบ deep audit → 5 P0 + 3 follow-ups + UX fix + 4 P1 ทั้งหมด **18 commits** ลง `Poom-pacred`.
+**Session tagline:** ภูม catch ผม ตอนทำ fidelity audit ผิว → spawn 4 agents เทียบ deep audit → 5 P0 + 3 follow-ups + UX fix + 4 P1 ทั้งหมด **18 commits** ลง `Poom-pacred`. **Later same evening: ภูม catch ผมอีก — Wave 18 ผมเคลม "clean" แต่ตกหล่น 2 bugs → fix + เขียน §0c rule กันเกิดซ้ำ.**
+
+---
+
+## 🔥 Wave 18 + follow-up (last 4 commits · 2026-05-25 ค่ำ later)
+
+**Wave 18 batch (3 commits · `9a9c0ed..606be13`):**
+- `9a9c0ed feat(wave-18)` — 2 orphan wires (`/admin/momo-lcl` + `/admin/cargothai`) + customer 5 fidelity cols (VIP/birthday/LINE/Facebook/main-address) + forwarder 7 fidelity cols (elapsed chip · VIP/SVIP/SaleAdmin badges · ETA range · cabinet-number link · print-status · pallet · 30d window) + password-reset action + dashboard layout fix
+- `309de7b fix(admin/dashboard)` — tab strip 1 row ALWAYS (compacted px/gap)
+- `606be13 fix(admin/layout)` — `min-w-0 + overflow-x-hidden` on main wrapper (root cause: flex children default `min-width:auto`)
+
+**Wave 18 follow-up (1 commit · `3a278aa` · the ภูม-catch):**
+- ผมเคลม "Wave 18 clean · no bugs · no dead flows" หลัง smoke-test routes
+- ภูม เปิด `/admin/customers` ที่ทำงาน → ตารางขาด + คลิก eye-icon → 404 → **2 bugs ภายใน 60 วินาที**
+- Bug 1: 14-col table overflow ~1583/1676 บน 1920px + Windows Chrome ซ่อน scrollbar default → ภูม ไม่รู้ scrollable. **Fix:** `.scrollbar-x-visible` class (globals.css · always-visible 10px thumb · light+dark) + "เลื่อนซ้าย-ขวา ⇆" hint
+- Bug 2: `/admin/customers/PR10899` intermittent 404 — `legacy-view.tsx` L79 destructure แค่ `data` → silent Supabase error → `notFound()`. **Fix:** destructure `error` + log + throw → real error boundary แทน 404 หลอก
+- **Process fix:** AGENTS.md §0c new rule "verify-deep-flow protocol" (5-step mandatory click-through · destructure-error-every-supabase-query · explicit verified-vs-not reporting) + `docs/learnings/verify-deep-flow.md` case-study
+
+**Total Wave 18 + follow-up: ~1,700 LOC across ~25 files** · TSC clean · 0 new lint warnings.
+
+---
 
 ---
 
@@ -85,11 +106,11 @@ c1b9bf9 fix(wave-16 P0-4): collapse stub → warehouse-history (Agent D)
 
 | Branch | HEAD | สถานะ |
 |---|---|---|
-| `main` | `9d8467b` | production · ปอน frontend landed (-145 vs Poom) |
-| **`Poom-pacred`** | **TODAY** | **active · +145 vs main · 18 commits today** |
+| `main` | `9d8467b` | production · ปอน frontend landed (-149 vs Poom) |
+| **`Poom-pacred`** | **`3a278aa`** | **active · +149 vs main · 22 commits today (18 Wave 15-17 + 4 Wave 18+followup)** |
 | `dave-pacred` | `4fe0480` | เดฟ active · pulled 2 new commits today (customer-side D1) |
 | `dave` (frozen) · `faithful-port` · `podeng` | various | secondary lanes |
-| Our worktree (`claude/adoring-chandrasekhar-0f8ad7`) | sync 0/0 | ✅ |
+| Our worktree (`claude/adoring-chandrasekhar-0f8ad7`) | sync 0/0 | ✅ pushed |
 
 ---
 
@@ -103,8 +124,9 @@ c1b9bf9 fix(wave-16 P0-4): collapse stub → warehouse-history (Agent D)
 
 ## 🟢 Browser-test queue (recommend 30 นาที พรุ่งนี้)
 
-7 หน้าใหม่ที่ควร smoke ก่อน demo:
+7 หน้าใหม่จาก Wave 15-17 + 5 หน้าจาก Wave 18 (12 total) ที่ควร smoke ก่อน demo:
 ```
+# Wave 15-17 batch
 /admin/report-cnt?page=succeed       — ติ๊กตู้ + modal เบิกเงิน
 /admin/report-cnt/<fNo>              — per-container detail + cost-edit + cost-update
 /admin/forwarder-check               — 3 tabs + bulk-bill button
@@ -112,7 +134,16 @@ c1b9bf9 fix(wave-16 P0-4): collapse stub → warehouse-history (Agent D)
 /admin/api-forwarder-cn/manual       — CargoCenter manual entry
 /admin/api-sheets-sang               — Sang carrier (live preview ค่าขนส่ง)
 /admin/barcode/driver/import         — USB scanner · auto-flip fStatus=4
+
+# Wave 18 batch (per §0c · click-through MANDATORY · ไม่ใช่แค่ load)
+/admin/customers                     — 14 cols · scrollbar visible? · คลิก row → detail 200? · คลิก ResetPwd → toast?
+/admin/customers/PR<id>              — load 200 always? (ลอง reload 5 ครั้งกัน intermittent 404)
+/admin/forwarders                    — 7 new cols visible? · 30d window default? · ?all=1 escape works?
+/admin/momo-lcl                      — page renders? (orphan wired Wave 18)
+/admin/cargothai                     — page renders? (orphan wired Wave 18)
 ```
+
+**🚨 §0c reminder:** สำหรับทุกหน้าด้านบน — ห้ามเคลม "clean" ถ้าแค่ load 200. ต้องคลิก row + action button + วัด table overflow + รายงาน per-surface verified-vs-not. ผมพลาด Wave 18 แบบนี้ — กฎเขียนแล้ว ใช้ไล่ผมได้.
 
 ---
 
@@ -157,7 +188,9 @@ cat docs/audit/cargo-flow-deep-audit-2026-05-25.md
 ## 📚 Related docs
 
 - 🚨 [`docs/audit/cargo-flow-deep-audit-2026-05-25.md`](../audit/cargo-flow-deep-audit-2026-05-25.md) — full 47-gap report
-- 🛠 [`docs/learnings/audit-discipline.md`](../learnings/audit-discipline.md) — the lesson + 6-step protocol
+- 🛠 [`docs/learnings/audit-discipline.md`](../learnings/audit-discipline.md) — the lesson + 6-step protocol (audit from source)
+- 🆕 [`docs/learnings/verify-deep-flow.md`](../learnings/verify-deep-flow.md) — **NEW** Wave 18 follow-up · 2-bug case-study + 5-step click-through protocol + safe Supabase destructure pattern + visible-scrollbar pattern
 - 📝 [`docs/research/poom-save-point-2026-05-24-night.md`](poom-save-point-2026-05-24-night.md) — yesterday's context (Wave 14)
 - 🧭 [`AGENTS.md`](../../AGENTS.md) §0b — deep-audit-from-source rule
+- 🧭 [`AGENTS.md`](../../AGENTS.md) §0c — **NEW** verify-deep-flow rule (click row · destructure error · explicit verified-vs-not)
 - 📋 [`docs/audit/fidelity-gap-2026-05-24.md`](../audit/fidelity-gap-2026-05-24.md) — Wave 14 47-gap (still relevant for non-cargo modules)
