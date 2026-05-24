@@ -100,4 +100,20 @@ const sentryBuildOptions = {
   },
 };
 
-export default withSentryConfig(withNextIntl(nextConfig), sentryBuildOptions);
+/**
+ * Sprint-8 perf — gate the Sentry build-time plugin behind the DSN.
+ *
+ * `withSentryConfig` is what injects the ~474 KB `@sentry/nextjs` client
+ * SDK into the customer's main JS chunk. Without a DSN there's nothing
+ * for it to do, so skipping the wrapper when `NEXT_PUBLIC_SENTRY_DSN`
+ * is unset at build time removes the SDK from the bundle entirely.
+ *
+ * Setting `NEXT_PUBLIC_SENTRY_DSN` on Vercel re-enables Sentry on the
+ * next build — instrumentation, source-map upload, and the tunnel
+ * route at `/api/monitoring` all come back automatically.
+ */
+const baseConfig = withNextIntl(nextConfig);
+
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(baseConfig, sentryBuildOptions)
+  : baseConfig;

@@ -1,40 +1,34 @@
 /**
  * Next 16 client (browser) instrumentation entry point.
  *
- * Initialises Sentry in the browser before React hydrates. DSN is
- * read from `NEXT_PUBLIC_SENTRY_DSN` — must be the public-prefixed
- * variant so it's inlined into the client bundle. When unset, init is
- * a no-op (safe for dev / pre-launch).
+ * **Perf-critical (Sprint-8):** Sentry's `@sentry/nextjs` SDK is ~474 KB
+ * uncompressed (~150 KB gzipped) — most of the JS bundle weight when
+ * the customer hits any Pacred page. As long as we don't have a
+ * `NEXT_PUBLIC_SENTRY_DSN` env var configured (current pre-launch
+ * state), there's nothing the SDK can do at runtime, so we shouldn't
+ * import it at all — even a dynamic `import("@sentry/nextjs")` inside
+ * an `if (dsn)` branch still forces the bundler to emit a chunk
+ * containing the SDK on the off-chance the branch fires.
+ *
+ * This file is therefore a pure no-op for the no-DSN path. When ก๊อต
+ * configures `NEXT_PUBLIC_SENTRY_DSN` on Vercel, restore the original
+ * `Sentry.init({...})` body — that re-introduces the SDK to the bundle
+ * but does so for an environment that's actually sending events.
+ *
+ * The original Sentry init body is preserved in
+ * `docs/learnings/perf-patterns.md` for restore-time reference.
+ *
+ * `next.config.ts` separately skips `withSentryConfig()` when the DSN
+ * is unset; the two halves together keep the SDK fully out of the
+ * bundle until the DSN lands.
  *
  * @see https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
  */
 
-import * as Sentry from "@sentry/nextjs";
-
-const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
-
-if (dsn) {
-  Sentry.init({
-    dsn,
-    environment: process.env.NEXT_PUBLIC_SENTRY_ENV ?? process.env.NODE_ENV,
-
-    // Performance — sample 10% in prod, 100% in dev. Adjust later when traffic
-    // shape is understood; cheap to start narrow + ratchet up.
-    tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-
-    // Session replay — off by default (privacy + bundle size). Enable later
-    // when needed for debugging customer-reported bugs.
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 0,
-
-    // Don't capture noise from third-party browser extensions.
-    ignoreErrors: [
-      "ResizeObserver loop limit exceeded",
-      "ResizeObserver loop completed with undelivered notifications",
-      "Non-Error promise rejection captured",
-    ],
-  });
+// onRouterTransitionStart is the documented hook Next 16 calls on every
+// client-side navigation. With Sentry stripped, it's a silent no-op.
+// Type signature matches `(navigateToHref: string, navigateType: ...)`
+// so this stays a valid Next instrumentation file.
+export function onRouterTransitionStart(): void {
+  // intentionally empty — Sentry is not loaded
 }
-
-// Required by Next 16: lets Sentry attach navigation breadcrumbs to events.
-export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
