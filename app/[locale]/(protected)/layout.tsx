@@ -1,11 +1,13 @@
+import Script from "next/script";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { ImpersonationBanner } from "@/components/sections/impersonation-banner";
 import { loadPcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsBodyClass } from "@/components/legacy/pcs-body-class";
-import { PcsTopMenu } from "@/components/legacy/pcs-top-menu";
 import { PcsLeftMenu } from "@/components/legacy/pcs-left-menu";
 import { PcsFooterNav } from "@/components/legacy/pcs-footer-nav";
 import { PcsChromeInit } from "@/components/legacy/pcs-chrome-init";
+import { NavBar } from "@/components/sections/navbar";
+import { SearchBar } from "@/components/sections/search-bar";
 
 /**
  * Layout for the (protected) customer portal — the D1 faithful PCS Cargo port.
@@ -48,37 +50,47 @@ export const dynamic = "force-dynamic";
 const PCS = "/legacy/pcs/assets";
 
 /**
- * The legacy `member/include/header.php` CSS bundle (L158-182), in load order.
- * Two entries stay on their original CDN — the legacy portal loads them from
- * the CDN too, so the faithful reproduction is the same CDN `<link>`.
+ * ⚠️ 2026-05-24 (ปอน) — legacy CSS bundle SLASHED.
+ *
+ * The full 21-stylesheet Modern-Admin theme bundle leaked unscoped rules
+ * (Bootstrap `.hidden`/`.sticky`, `nav { display:block }`, `body { padding-top }`,
+ * etc.) that broke the public-site chrome (NavBar/SearchBar/FloatingTabs) on
+ * every protected page. Per ปอน: stop patching legacy CSS overrides, just
+ * remove the leaking stylesheets entirely — chrome must render Tailwind-pure.
+ *
+ * What we KEEP:
+ *  - Icon fonts (feather + Font Awesome + simple-line-icons) — used by legacy
+ *    inside-content markup; safe because they only add @font-face + `.fa-*`
+ *    classes that don't collide with Tailwind.
+ *  - Sidebar layout sheet (`vertical-menu-modern.css`) — scopes to
+ *    `.main-menu` only, doesn't leak.
+ *  - Plugin CSS (sweetalert, animate, magnific-popup, intl-tel-input, slick)
+ *    — plugin-scoped class names.
+ *  - `legacy-overrides.css` — our own overrides.
+ *  - Per-screen sheets (`menu.css`, `shops.css`, etc.) — each is scoped to a
+ *    `.pcs-legacy-scoped` wrapper its page sets up.
+ *
+ * What we DROP:
+ *  - bootstrap.min.css, bootstrap-extended.min.css, vendors.min.css
+ *  - colors.min.css, components.min.css, palette-gradient.css
+ *  - style.css, custom.css, custom-2023*.css, pcs-group/custom*.css
+ *  These rules generated all the `.hidden`/`.sticky`/grid/typography
+ *  collisions. Inside-content Bootstrap markup (.card / .col-md-* / .row /
+ *  .progress) will render unstyled until each page is migrated to Tailwind,
+ *  but every link/form/function still works (ปอน's "relations must stay"
+ *  rule is preserved — markup + hrefs + Server Actions are untouched).
  */
 const CSS_BUNDLE: string[] = [
-  `${PCS}/css/vendors.min.css`,
-  `${PCS}/css/bootstrap.min.css`,
-  `${PCS}/css/bootstrap-extended.min.css`,
-  `${PCS}/css/colors.min.css`,
-  `${PCS}/css/components.min.css`,
   `${PCS}/css/core/menu/menu-types/vertical-menu-modern.css`,
-  `${PCS}/css/core/colors/palette-gradient.css`,
   `${PCS}/plugins/animate/animate.min.css`,
   `${PCS}/plugins/sweetalert/css/sweetalert2.min.css`,
   `${PCS}/fonts/feather/style.min.css`,
   `${PCS}/plugins/magnific-popup/dist/magnific-popup.css`,
   `${PCS}/fonts/simple-line-icons/style.css`,
   "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/css/intlTelInput.css",
-  // Bumped from legacy 5.9.0 → 5.15.4 (last FA5 release) — needed for the
-  // Pacred-added `fa-tiktok` topbar icon (TikTok was added in FA 5.11.2).
-  // All FA5.9-era glyph names (fa-line, fa-facebook, fa-youtube, fa-instagram)
-  // remain backward-compatible. Same CDN, same `fab` class convention.
   "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css",
-  `${PCS}/css/style.css`,
-  `${PCS}/css/custom.css`,
-  `${PCS}/css/custom-2023.css`,
-  `${PCS}/css/custom-tablet-2023.css`,
-  `${PCS}/css/custom-mobile-2023.css`,
-  `${PCS}/css/pcs-group/custom.css`,
-  `${PCS}/css/pcs-group/custom-tablet.css`,
-  `${PCS}/css/pcs-group/custom-mobile.css`,
+  `${PCS}/plugins/slick/slick.css`,
+  `${PCS}/plugins/slick/slick-theme.css`,
   // Last-loaded scoped overrides for Tailwind v4 preflight resets
   // (.card / .img-fluid / h1-h6 baselines + the carousel slick-init
   // pre-load max-height). Scoped to body.pcs-legacy-body — see 4b.2 in
@@ -124,6 +136,13 @@ const CSS_BUNDLE: string[] = [
 /** The legacy `member/include/all-script.php` JS bundle (L85-96), in order. */
 const JS_BUNDLE: string[] = [
   `${PCS}/js/vendors/js/vendors.min.js`,
+  // headroom.min.js — Modern-Admin theme's `app.min.js` calls
+  // `$(...).headroom()` on the navbar at init; legacy PCS loaded the plugin
+  // inline on each member page, but the bundle list never picked it up. The
+  // plugin file ships with the staged assets at `assets/js/ui/headroom.min.js`
+  // so wiring it in before app-menu fixes the "$(...).headroom is not a
+  // function" runtime error without touching legacy markup.
+  `${PCS}/js/ui/headroom.min.js`,
   `${PCS}/js/core/app-menu.min.js`,
   `${PCS}/js/core/app.min.js`,
   `${PCS}/js/tam-it.js`,
@@ -157,17 +176,30 @@ export default async function ProtectedLayout({
         <link key={href} rel="stylesheet" type="text/css" href={href} />
       ))}
 
-      {/* 2. Legacy <body class="vertical-layout vertical-menu-modern …"> */}
+      {/* 2. Legacy <body class="vertical-layout vertical-menu-modern …">
+            — needed for the Modern-Admin sidebar (`PcsLeftMenu`) and the
+            desktop right-rail (`PcsFooterNav` → `.nav-right-pcs`) which the
+            theme CSS only positions correctly when the body carries those
+            classes. The unwanted `margin-left: 240px` push on `.app-content`
+            is undone in `legacy-overrides.css` §0. */}
       <PcsBodyClass />
 
-      {/* 3-4. Legacy chrome — the fixed navbar + the accordion sidebar. */}
-      <PcsTopMenu data={chrome} />
+      {/* 3. Modern Pacred top chrome — replaces legacy PcsTopMenu.
+            NavBar already knows auth state (reads Supabase from the client)
+            and SearchBar is the same component the public home renders. */}
+      <NavBar />
+      <SearchBar />
+
+      {/* 4. Legacy left sidebar — kept per ปอน 2026-05-23 (the "แถบซ้าย"). */}
       <PcsLeftMenu data={chrome} />
 
       {/* 5. The per-screen `.app-content` body. */}
       {children}
 
-      {/* 6. Legacy footer + mobile bottom-nav + desktop right rail. */}
+      {/* 6. Legacy right rail (`.nav-right-pcs`) — kept per ปอน 2026-05-23.
+            The bundled legacy mobile bottom-nav `.nav-footer-pcs` is hidden
+            in `legacy-overrides.css` §0 because <FloatingTabs /> from the
+            marketing site fills that slot. */}
       <PcsFooterNav data={chrome} />
 
       <ImpersonationBanner />
@@ -175,7 +207,13 @@ export default async function ProtectedLayout({
       {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists when
             it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the
             Modern-Admin theme JS → SweetAlert → Magnific-Popup, in exact
-            all-script.php order; `async={false}` keeps that order. */}
+            all-script.php order. next/script strategy="afterInteractive"
+            queues each script via the DOM API (rather than rendering a
+            <script> element in the RSC payload that React 19 would flag as
+            "script tag inside component"), and scripts in the same strategy
+            execute in render order — preserving the chain legacy plugins
+            depend on. basePath inline-script is also routed through Script
+            so it shares the same queue and runs before any src below it. */}
       {/* basePath = the legacy asset root. Legacy `app.min.js` L295-301 does
           `$.getScript(basePath+"assets/js/lang/X.js")` at runtime, so basePath
           must resolve to `/legacy/pcs/` (not `/`) — otherwise the language
@@ -184,9 +222,13 @@ export default async function ProtectedLayout({
           two are different (`/` for routes, `/legacy/pcs/` for staged assets),
           and the runtime JS only consumes basePath for ASSETS — so the asset
           root is the correct value. App-route links are hardcoded in JSX. */}
-      <script dangerouslySetInnerHTML={{ __html: "var basePath='/legacy/pcs/';" }} />
+      <Script
+        id="legacy-base-path"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{ __html: "var basePath='/legacy/pcs/';" }}
+      />
       {JS_BUNDLE.map((src) => (
-        <script key={src} src={src} async={false} />
+        <Script key={src} id={`legacy-${src}`} src={src} strategy="afterInteractive" />
       ))}
 
       {/* 8. Legacy chrome-init (post-hydration). Replays the two pieces of

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { X, Phone, Check, ArrowRight, MousePointerClick } from "lucide-react";
+import { X, Phone, Check, MousePointerClick } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { trackCtaClick } from "@/lib/analytics";
@@ -66,51 +66,35 @@ export function PurchaseBanner() {
               <span className="sr-only">{t("lineAria")}</span>
             </TrackedExternalLink>
 
-            <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-2 pl-4 pr-1 min-h-[110px]">
-              {/* Left: text + buttons */}
+            <div className="relative pointer-events-none grid grid-cols-[1fr_auto] items-center gap-1.5 pl-3.5 pr-1 min-h-[92px]">
+              {/* Left: title row + brand pill + icon-only phone CTA (LINE button dropped — whole card is the LINE click) */}
               <div className="py-1.5 min-w-0">
-                <div className="flex flex-col gap-0.5">
-                  <p className="text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.3)] whitespace-nowrap overflow-hidden">
-                    <span className="text-[clamp(15px,4.5vw,19px)] font-black leading-tight tracking-tight">{t("titlePart1")} {t("titlePart2")}</span>
-                  </p>
-                  <p className="flex items-center gap-1.5">
-                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-white text-[#059944] text-[17px] font-black tracking-tight shadow-[0_3px_10px_rgba(0,0,0,0.18)]">
-                      {t("titleBrand")}
-                    </span>
-                    <ArrowRight className="w-4 h-4 text-white transition-transform group-hover:translate-x-1" strokeWidth={2.8} />
-                  </p>
-                  {/* Action buttons */}
-                  <div className="mt-1 flex items-center gap-2 pointer-events-auto relative z-20">
-                    <a
-                      href="tel:0661310253"
-                      onClick={() => trackCtaClick("banner_phone", "home_purchase_banner", { surface: "mobile_cta" })}
-                      className="inline-flex items-center gap-1 h-[28px] px-3 rounded-full bg-white text-[#059944] text-[12px] font-black shadow-sm whitespace-nowrap"
-                    >
-                      <Phone className="w-3 h-3 shrink-0" strokeWidth={2.8} />
-                      โทร
-                    </a>
-                    <a
-                      href={LINE_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 h-[28px] px-3 rounded-full bg-white/20 border border-white/50 text-white text-[12px] font-black whitespace-nowrap"
-                    >
-                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 3c-4.97 0-9 3.185-9 7.108 0 2.115 1.155 4.025 3.09 5.303-.234.996-1.127 2.378-1.218 2.518-.088.183.056.36.24.316.593-.14 2.875-.726 4.35-1.928 1.48.566 3.14.898 4.908.898 4.97 0 9-3.184 9-7.107S16.97 3 12 3z" />
-                      </svg>
-                      ติดต่อไลน์
-                    </a>
-                  </div>
-                </div>
+                <p className="text-white [text-shadow:0_2px_6px_rgba(0,0,0,0.3)] whitespace-nowrap overflow-hidden">
+                  <span className="text-[clamp(13px,3.6vw,15px)] font-black leading-tight tracking-tight">{t("titlePart1")} {t("titlePart2")}</span>
+                </p>
+                <p className="mt-0.5 flex items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-white text-[#059944] text-[14px] font-black tracking-tight shadow-[0_2px_8px_rgba(0,0,0,0.16)] whitespace-nowrap">
+                    {t("titleBrand")}
+                  </span>
+                  {/* Icon-only phone CTA — arrow dropped because "คลิ๊กเลย!" badge top-right already cues the LINE tap */}
+                  <a
+                    href="tel:0661310253"
+                    onClick={() => trackCtaClick("banner_phone", "home_purchase_banner", { surface: "mobile_cta" })}
+                    aria-label="โทร 066-131-0253"
+                    className="pointer-events-auto relative z-20 inline-flex items-center justify-center w-[24px] h-[24px] shrink-0 rounded-full bg-white text-[#059944] shadow-[0_2px_6px_rgba(0,0,0,0.14)]"
+                  >
+                    <Phone className="w-3.5 h-3.5" strokeWidth={2.8} />
+                  </a>
+                </p>
               </div>
 
-              {/* Right: character photo — taller than card so it pops out */}
-              <div className="relative w-[140px] h-[128px] shrink-0">
+              {/* Right: character photo — taller box so body is visible (object-contain anchored bottom) */}
+              <div className="relative w-[108px] h-[104px] shrink-0">
                 <Image
                   src="/images/Character_Icon/visitmobileshop02.png"
                   alt="เซลล์ Pacred"
                   fill
-                  sizes="140px"
+                  sizes="108px"
                   className="object-contain object-bottom drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)]"
                 />
               </div>
