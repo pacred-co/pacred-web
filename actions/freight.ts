@@ -161,3 +161,89 @@ export async function customerAcceptQuote(
 
   return { ok: true, data: { quoteNo: quote.quote_no } };
 }
+
+// ────────────────────────────────────────────────────────────
+// markReceiptPrinted — port of the render-time statusPrint UPDATE
+// ────────────────────────────────────────────────────────────
+//
+// Faithful 1:1 port of the legacy
+//   member/printReceiptF.php L58
+//   member/invoiceF.php L58
+// which both ran the same UPDATE at render time:
+//   UPDATE `tb_receipt` SET `statusPrint`='1',
+//                           `adminIDprint`='ลูกค้า',
+//                           `rDatePrint`=NOW()
+//   WHERE rID='$rID';
+//
+// A Next.js Server Component render must stay a pure read (runbook §9.4),
+// so the mutation was deferred via the `TODO(server-action)` in both
+// page.tsx files. This action ports it — same columns, same `'ลูกค้า'`
+// literal, same NOW() semantics. No audit log added beyond what legacy
+// did (= nothing, faithful-port rule).
+//
+// Ownership: legacy gated by cookie `pcs_userID`; Pacred gates by
+// `tb_receipt.userid === profile.member_code` (the same "PR<n>" the
+// page already enforces). Receipts not owned by the caller are silently
+// skipped (the legacy was also tolerant — the link was only ever shown
+// to its owner, and the UPDATE would just no-op via the WHERE rID).
+//
+// Multi-rID support: both legacy pages call this once per rID in their
+// loop over `explode(",", $_GET['id'])`. The new action accepts an
+// array so the caller can mark the whole comma-joined set in one call.
+const markReceiptPrintedSchema = z.object({
+  rIds: z.array(z.string().min(1).max(20)).min(1).max(50),
+});
+
+export async function markReceiptPrinted(
+  input: { rIds: string[] },
+): Promise<ActionResult<{ updated: number }>> {
+  const parsed = markReceiptPrintedSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  const { profile } = await requireAuth();
+  if (!profile) return { ok: false, error: "auth_required" };
+  const userID = profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const admin = createAdminClient();
+
+  // Ownership filter — legacy relied on the link only being shown to its
+  // owner; Pacred enforces it server-side (same gate as the print pages).
+  // Build the rid list bounded to receipts this customer actually owns.
+  const { data: owned, error: readErr } = await admin
+    .from("tb_receipt")
+    .select("rid")
+    .in("rid", parsed.data.rIds)
+    .eq("userid", userID);
+  if (readErr) return { ok: false, error: `read_failed: ${readErr.message}` };
+  const ownedRids = (owned ?? []).map((r) => (r as { rid: string }).rid);
+  if (ownedRids.length === 0) {
+    // Nothing to mark — not an error; matches the legacy no-op WHERE.
+    return { ok: true, data: { updated: 0 } };
+  }
+
+  // Faithful: statusprint='1', adminidprint='ลูกค้า', rdateprint=NOW().
+  // The legacy `NOW()` was MySQL local time; Pacred uses Postgres'
+  // server-local timestamp via the JS-side `new Date()` formatted to the
+  // same `YYYY-MM-DD HH:MM:SS` shape the rest of the tb_* writers use
+  // (see actions/wallet.ts:submitLegacyWalletDeposit L427).
+  const datetimeNow = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+  const { error: updErr } = await admin
+    .from("tb_receipt")
+    .update({
+      statusprint:  "1",
+      adminidprint: "ลูกค้า",
+      rdateprint:   datetimeNow,
+    })
+    .in("rid", ownedRids);
+  if (updErr) return { ok: false, error: `update_failed: ${updErr.message}` };
+
+  // Revalidate both surfaces that read statusprint (the receipt-history
+  // list shows a "printed" badge from this column).
+  revalidatePath("/freight/receipts/history");
+
+  return { ok: true, data: { updated: ownedRids.length } };
+}
