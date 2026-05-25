@@ -85,69 +85,53 @@ export default async function TransferSalesRepPage({
   const admins = (adminsRaw ?? []) as unknown as TbAdminLite[];
 
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
+    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+      {/* Wave 20 P1 rewrite (2026-05-26): removed Bootstrap-4 `.pcs-legacy`
+          chrome + jQuery `<link>` to admin-base.css. Pure Tailwind v4 now;
+          same form logic + same `tb_users` / `tb_admin` queries. */}
 
-      <title>ย้ายเซลล์ผู้ดูแลลูกค้า | PR Admin</title>
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
+        <Link href="/admin/customers" className="hover:text-primary-600">ลูกค้า</Link>
+        <span>/</span>
+        <span className="text-foreground">ย้ายเซลล์ผู้ดูแล (bulk)</span>
+      </nav>
 
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/customers">ลูกค้า</Link>
-                    </li>
-                    <li className="breadcrumb-item active">ย้ายเซลล์ผู้ดูแล (bulk)</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="content-body body-new">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <h2 className="text-color-main">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h2>
-                        <div className="pcs-sequence">
-                          <ol>
-                            <li>
-                              ตัวกรองรายชื่อ — กรอกชื่อ/รหัส PR หรือใส่
-                              <code>?currentRep=PR0001</code> ใน URL เพื่อกรองตามเซลล์ปัจจุบัน
-                            </li>
-                            <li>เลือกลูกค้า (multi-select) แล้วเลือก admin ปลายทาง</li>
-                            <li>กด &quot;ยืนยันการย้าย&quot; → <code>tb_users.adminidsale</code> จะถูกอัปเดตทุกราย</li>
-                          </ol>
-                        </div>
-
-                        <TransferRepForm
-                          customers={customers}
-                          admins={admins}
-                          initialQuery={qFree}
-                          initialCurrentRep={sp.currentRep ?? ""}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <h1 className="mt-1 text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h1>
+        <p className="mt-1 text-sm text-muted">
+          อัปเดต <code className="rounded bg-surface-alt px-1 text-xs">tb_users.adminidsale</code> หลายรายในครั้งเดียว
+        </p>
       </div>
-    </div>
+
+      {/* How-to card */}
+      <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <p className="font-medium mb-1.5">วิธีใช้</p>
+        <ol className="list-decimal list-inside space-y-1 text-xs">
+          <li>
+            ตัวกรองรายชื่อ — กรอกชื่อ/รหัส PR หรือใส่{" "}
+            <code className="rounded bg-white px-1 py-0.5">?currentRep=PR0001</code> ใน URL เพื่อกรองตามเซลล์ปัจจุบัน
+          </li>
+          <li>เลือกลูกค้า (multi-select) แล้วเลือก admin ปลายทาง</li>
+          <li>
+            กด &ldquo;ยืนยันการย้าย&rdquo; → <code className="rounded bg-white px-1 py-0.5">tb_users.adminidsale</code> จะถูกอัปเดตทุกราย
+          </li>
+        </ol>
+      </section>
+
+      {/* Form card */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <TransferRepForm
+          customers={customers}
+          admins={admins}
+          initialQuery={qFree}
+          initialCurrentRep={sp.currentRep ?? ""}
+        />
+      </section>
+    </main>
   );
 }

@@ -4,51 +4,54 @@
  * Legacy source: `pcs-admin/forwarder-action.php?action=Note`
  *   - SELECT * FROM tb_forwarder WHERE fNote <> '' [+ optional fStatus filter]
  *
- * Before this commit the sidebar item linked to `/admin/forwarders?q=note`
- * but the list page does NOT handle `?q=note` — the link rendered the
- * unfiltered list. Owner flagged this. Fix = a dedicated `/notes` route.
+ * Wave 20 P1 (2026-05-26): two fixes in one commit.
+ * - Schema swap: was reading rebuilt `forwarders` (empty on prod) →
+ *   now reads `tb_forwarder` with fnote/fnoteuser columns + 2-pass
+ *   tb_users lookup (same pattern as /admin/forwarders/page.tsx).
+ *   Closes audit P1-2 finding for this page.
+ * - UI cleanup: dropped the `.pcs-legacy` CSS scope wrapper +
+ *   `<link>` to admin-base.css. The body was already Tailwind; the
+ *   wrapper was vestigial from an early Wave 7.3 port.
  *
- * Pacred-native schema (migration 0010 L140-141):
- *   - `forwarders.note_admin` (text) — legacy fNote
- *   - `forwarders.note_user`  (text) — legacy fNoteUser (customer-side note)
- *
- * This page surfaces BOTH columns; either being non-empty qualifies the
- * row.
+ * Legacy column map:
+ *   forwarders.note_admin (rebuilt) → tb_forwarder.fnote
+ *   forwarders.note_user  (rebuilt) → tb_forwarder.fnoteuser
+ *   forwarders.f_no                 → tb_forwarder.fidorco (text) ?? id (int)
+ *   forwarders.status               → tb_forwarder.fstatus numeric '1'..'7'
+ *   forwarders.created_at           → tb_forwarder.fdate
+ *   forwarders.updated_at           → tb_forwarder.fdateadminstatus (last-touched)
+ *   forwarders.total_price          → tb_forwarder.ftotalprice
+ *   forwarders.tracking_chn         → tb_forwarder.ftrackingchn
+ *   forwarders.tracking_th          → tb_forwarder.ftrackingth
+ *   profile (uuid join)             → tb_users via userid (text)
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { LEGACY_FORWARDER_STATUS, legacyForwarderStatusThai, toLegacyForwarderCode } from "@/lib/legacy-status-map";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABEL: Record<string, string> = {
-  pending_payment: "รอชำระ",
-  shipped_china:   "ออกจีน",
-  in_transit:      "กลางทาง",
-  arrived_thailand: "ถึงไทย",
-  out_for_delivery: "กำลังจัดส่ง",
-  delivered:       "สำเร็จ",
-  cancelled:       "ยกเลิก",
+type RawForwarder = {
+  id: number;
+  fidorco: string | null;
+  fstatus: string;
+  fnote: string | null;
+  fnoteuser: string | null;
+  fdate: string;
+  fdateadminstatus: string | null;
+  ftotalprice: number | null;
+  ftrackingchn: string | null;
+  ftrackingth: string | null;
+  userid: string;
 };
 
-type Forwarder = {
-  id:                string;
-  f_no:              string;
-  status:            string;
-  note_admin:        string | null;
-  note_user:         string | null;
-  created_at:        string;
-  updated_at:        string | null;
-  total_price:       number | null;
-  tracking_chn:      string | null;
-  tracking_th:       string | null;
-  profile: {
-    member_code: string | null;
-    first_name:  string | null;
-    last_name:   string | null;
-    phone:       string | null;
-  } | null;
+type UserLite = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
 };
 
 export default async function ForwarderNotesPage({
@@ -63,154 +66,166 @@ export default async function ForwarderNotesPage({
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  // legacy: WHERE fNote<>'' (+ optional fStatus). Pacred surfaces BOTH
-  // note_admin + note_user — either non-empty puts the row on the list.
-  let q = admin.from("forwarders")
-    .select(`
-      id, f_no, status, note_admin, note_user, created_at, updated_at,
-      total_price, tracking_chn, tracking_th,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone )
-    `)
-    .or("note_admin.not.is.null,note_user.not.is.null")
-    .order("updated_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
+  // Resolve rebuilt-era status key (?status=pending_payment / shipped_china / etc.)
+  // to its numeric legacy fstatus via the shared status map.
+  const legacyStatusCode = sp.status ? toLegacyForwarderCode(sp.status) : undefined;
+
+  // Pass 1 — fetch headers with at least one non-empty note column.
+  // Supabase `.or()` can combine "neq empty" predicates: fnote.neq.,fnoteuser.neq.
+  // §0c: destructure error + throw on the load-bearing read.
+  let q = admin
+    .from("tb_forwarder")
+    .select("id, fidorco, fstatus, fnote, fnoteuser, fdate, fdateadminstatus, ftotalprice, ftrackingchn, ftrackingth, userid")
+    .or("fnote.neq.,fnoteuser.neq.")
+    .order("fdateadminstatus", { ascending: false, nullsFirst: false })
+    .order("fdate", { ascending: false })
     .limit(500);
 
-  if (sp.status) q = q.eq("status", sp.status);
+  if (legacyStatusCode) q = q.eq("fstatus", legacyStatusCode);
 
-  type RawRow = Omit<Forwarder, "profile"> & {
-    profile: Forwarder["profile"] | Forwarder["profile"][];
-  };
-  const { data, error } = await q;
-  if (error) {
-    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  const { data: rowsRaw, error: rowsErr } = await q;
+  if (rowsErr) {
+    console.error(`[tb_forwarder notes] failed`, {
+      code: rowsErr.code, message: rowsErr.message, details: rowsErr.details,
+    });
+    throw new Error(`Failed to load tb_forwarder notes (${rowsErr.code ?? "unknown"}): ${rowsErr.message}`);
   }
-  // filter empty-string post-load (Supabase .neq("","") can't combine via .or)
-  const rows = ((data ?? []) as RawRow[])
-    .filter((r) => (r.note_admin && r.note_admin.trim()) || (r.note_user && r.note_user.trim()))
-    .map((r) => ({
-      ...r,
-      profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-    }));
+  const rows = ((rowsRaw ?? []) as RawForwarder[])
+    // Drop any row where BOTH note columns are empty (.or with neq.'' false negatives).
+    .filter((r) => (r.fnote && r.fnote.trim()) || (r.fnoteuser && r.fnoteuser.trim()));
+
+  // Pass 2 — batch tb_users lookup for the customer panel column.
+  const useridList = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean)));
+  let userMap: Record<string, UserLite> = {};
+  if (useridList.length > 0) {
+    const { data: usersRaw, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userid, username, userlastname, usertel")
+      .in("userid", useridList);
+    if (usersErr) {
+      console.error(`[tb_users notes-join] failed`, { code: usersErr.code, message: usersErr.message });
+    } else {
+      userMap = Object.fromEntries(((usersRaw ?? []) as UserLite[]).map((u) => [u.userid, u]));
+    }
+  }
 
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-      <title>หมายเหตุนำเข้า | PR Admin</title>
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
+        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
+        <span>/</span>
+        <span className="text-foreground">หมายเหตุนำเข้า</span>
+      </nav>
 
-      <main className="p-6 lg:p-8 space-y-5">
-        {/* Breadcrumb */}
-        <div className="text-sm text-muted space-x-2">
-          <Link href="/admin" className="hover:underline">หน้าแรก</Link>
-          <span>›</span>
-          <Link href="/admin/forwarders" className="hover:underline">ฝากนำเข้า</Link>
-          <span>›</span>
-          <span className="font-semibold">หมายเหตุนำเข้า</span>
-        </div>
+      {/* Header */}
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากนำเข้า</p>
+        <h1 className="mt-1 text-2xl font-bold">หมายเหตุนำเข้า</h1>
+        <p className="mt-1 text-sm text-muted">
+          รายการฝากนำเข้าที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
+        </p>
+      </div>
 
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากนำเข้า</p>
-          <h1 className="mt-1 text-2xl font-bold">หมายเหตุนำเข้า</h1>
-          <p className="mt-1 text-sm text-muted">
-            รายการฝากนำเข้าที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ
-          </p>
-        </div>
+      {/* Filter chips — all statuses from LEGACY_FORWARDER_STATUS map */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-muted mr-1">สถานะ:</span>
+        <FilterChip active={!sp.status} href="/admin/forwarders/notes">ทั้งหมด</FilterChip>
+        {Object.values(LEGACY_FORWARDER_STATUS).map((e) => (
+          <FilterChip
+            key={e.key}
+            active={sp.status === e.key}
+            href={`/admin/forwarders/notes?status=${e.key}`}
+          >
+            {e.thai}
+          </FilterChip>
+        ))}
+      </div>
 
-        {/* Filter chips */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs text-muted mr-1">สถานะ:</span>
-          <FilterChip active={!sp.status} href="/admin/forwarders/notes">ทั้งหมด</FilterChip>
-          {Object.entries(STATUS_LABEL).map(([k, label]) => (
-            <FilterChip
-              key={k}
-              active={sp.status === k}
-              href={`/admin/forwarders/notes?status=${k}`}
-            >
-              {label}
-            </FilterChip>
-          ))}
-        </div>
-
-        {/* Table */}
-        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-          {rows.length === 0 ? (
-            <div className="p-12 text-center space-y-2">
-              <div className="text-4xl" aria-hidden>📝</div>
-              <p className="text-sm font-medium text-foreground">ไม่มีรายการฝากนำเข้าที่มีหมายเหตุ</p>
-              <p className="text-xs text-muted">ลองล้าง/เปลี่ยนตัวกรองสถานะด้านบน</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-4 py-3">วันอัปเดต / สั่ง</th>
-                    <th className="px-4 py-3">เลขนำเข้า</th>
-                    <th className="px-4 py-3">ลูกค้า</th>
-                    <th className="px-4 py-3">สถานะ</th>
-                    <th className="px-4 py-3 text-right">ยอด (บาท)</th>
-                    <th className="px-4 py-3">Tracking</th>
-                    <th className="px-4 py-3">หมายเหตุ</th>
-                    <th className="px-4 py-3 text-right">เปิด</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const updated = r.updated_at ?? r.created_at;
-                    return (
-                      <tr key={r.id} className="border-t border-border align-top">
-                        <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                          {new Date(updated).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-mono font-semibold">{r.f_no}</td>
-                        <td className="px-4 py-3 text-xs">
-                          <div className="font-mono font-semibold">{r.profile?.member_code ?? "—"}</div>
-                          <div className="text-muted">{r.profile?.first_name} {r.profile?.last_name}</div>
-                          <div className="text-[10px] text-muted">{r.profile?.phone}</div>
-                        </td>
-                        <td className="px-4 py-3 text-xs">{STATUS_LABEL[r.status] ?? r.status}</td>
-                        <td className="px-4 py-3 text-right font-mono text-xs">
-                          {r.total_price != null
-                            ? Number(r.total_price).toLocaleString("th-TH", { minimumFractionDigits: 2 })
-                            : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-xs space-y-1">
-                          {r.tracking_chn && <div className="font-mono text-[10px]">🇨🇳 {r.tracking_chn}</div>}
-                          {r.tracking_th &&  <div className="font-mono text-[10px]">🇹🇭 {r.tracking_th}</div>}
-                          {!r.tracking_chn && !r.tracking_th && <span className="text-muted">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-xs max-w-[320px] space-y-1">
-                          {r.note_admin && r.note_admin.trim() && (
-                            <div className="rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1">
-                              <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">แอดมิน</span>
-                              <div>📝 {r.note_admin}</div>
-                            </div>
-                          )}
-                          {r.note_user && r.note_user.trim() && (
-                            <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
-                              <span className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-300">ลูกค้า</span>
-                              <div>📝 {r.note_user}</div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right text-xs">
-                          <Link
-                            href={`/admin/forwarders/${r.f_no}`}
-                            className="text-primary-500 hover:underline whitespace-nowrap"
-                          >
-                            เปิด →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+      {/* Table */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>📝</div>
+            <p className="text-sm font-medium text-foreground">ไม่มีรายการฝากนำเข้าที่มีหมายเหตุ</p>
+            <p className="text-xs text-muted">ลองล้าง/เปลี่ยนตัวกรองสถานะด้านบน</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3">วันอัปเดต / สั่ง</th>
+                  <th className="px-4 py-3">เลขนำเข้า</th>
+                  <th className="px-4 py-3">ลูกค้า</th>
+                  <th className="px-4 py-3">สถานะ</th>
+                  <th className="px-4 py-3 text-right">ยอด (บาท)</th>
+                  <th className="px-4 py-3">Tracking</th>
+                  <th className="px-4 py-3">หมายเหตุ</th>
+                  <th className="px-4 py-3 text-right">เปิด</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const updated = r.fdateadminstatus ?? r.fdate;
+                  const u = userMap[r.userid];
+                  const customerName = u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "";
+                  const displayFNo = r.fidorco ?? `#${r.id}`;
+                  return (
+                    <tr key={r.id} className="border-t border-border align-top">
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {new Date(updated).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono font-semibold">{displayFNo}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono font-semibold">{r.userid}</div>
+                        <div className="text-muted">{customerName || "—"}</div>
+                        {u?.usertel && <div className="text-[10px] text-muted">{u.usertel}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-xs">{legacyForwarderStatusThai(r.fstatus)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">
+                        {r.ftotalprice != null
+                          ? Number(r.ftotalprice).toLocaleString("th-TH", { minimumFractionDigits: 2 })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs space-y-1">
+                        {r.ftrackingchn && <div className="font-mono text-[10px]">🇨🇳 {r.ftrackingchn}</div>}
+                        {r.ftrackingth &&  <div className="font-mono text-[10px]">🇹🇭 {r.ftrackingth}</div>}
+                        {!r.ftrackingchn && !r.ftrackingth && <span className="text-muted">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-xs max-w-[320px] space-y-1">
+                        {r.fnote && r.fnote.trim() && (
+                          <div className="rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-2 py-1">
+                            <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300">แอดมิน</span>
+                            <div>📝 {r.fnote}</div>
+                          </div>
+                        )}
+                        {r.fnoteuser && r.fnoteuser.trim() && (
+                          <div className="rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-2 py-1">
+                            <span className="text-[10px] font-semibold text-yellow-700 dark:text-yellow-300">ลูกค้า</span>
+                            <div>📝 {r.fnoteuser}</div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs">
+                        <Link
+                          href={`/admin/forwarders/${r.id}`}
+                          className="text-primary-500 hover:underline whitespace-nowrap"
+                        >
+                          เปิด →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
 
