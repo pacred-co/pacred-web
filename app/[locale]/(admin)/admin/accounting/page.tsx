@@ -46,6 +46,9 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
+import { CARGO_MENUBAR, ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
 import {
   legacyOrderStatusThai,
   legacyForwarderStatusThai,
@@ -572,14 +575,24 @@ export default async function AdminAccountingPage({
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      {/* Header */}
+      {/* ── Header — PEAK-style (Wave 20 fix 2026-05-26 per ภูม) ──
+          - h1 + Cargo/Freight segment pills (was on /cargo only)
+          - subtitle hint about the 6 section labels
+          - Optional date-range chip when filter is set
+          - "ปิดงบรายเดือน" CTA stays right-side */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
-          <h1 className="mt-1 text-2xl font-bold">ระบบบัญชี</h1>
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
+            <AccountingSegmentPills active="cargo" />
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            Cargo · ฝากสั่งซื้อ · ฝากนำเข้า · ฝากโอนหยวน — รายรับ · รายจ่าย · ผู้ติดต่อ · การเงิน · การบัญชี
+          </p>
           {(dateFrom || dateTo) && (
-            <p className="text-sm text-muted mt-0.5">
-              {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
+            <p className="text-xs text-muted mt-1">
+              ช่วงเวลา: {dateFrom ? new Date(dateFrom).toLocaleDateString("th-TH") : "ทั้งหมด"}
               {" — "}
               {dateTo ? new Date(dateTo).toLocaleDateString("th-TH") : "ปัจจุบัน"}
             </p>
@@ -592,6 +605,13 @@ export default async function AdminAccountingPage({
           📋 ปิดงบฝากนำเข้ารายเดือน →
         </Link>
       </div>
+
+      {/* ── PEAK-style TOP menubar — purple bar with cascading dropdowns ──
+          Shared config from `lib/admin/accounting-menubar.ts`. Many leaf
+          URLs are TODO placeholders (legacy `acc-system-cargo.php` parity
+          — owner brief 2026-05-20 night). activeHref="/admin/accounting"
+          so "หน้าหลัก" lights up on this dashboard. */}
+      <PageTopMenubar items={CARGO_MENUBAR} activeHref="/admin/accounting" />
 
       {/* Tab nav */}
       <div className="flex flex-wrap border-b border-border gap-0">
@@ -909,6 +929,40 @@ export default async function AdminAccountingPage({
             })}
           </DataTable>
         </div>
+      )}
+
+      {/* ── Quick-access cards — pulled in from the old /cargo hub
+            (Wave 20 fix 2026-05-26). Shown only on the Summary tab so the
+            other tabs stay focused on their ledgers. */}
+      {tab === "summary" && (
+        <section className="pt-2">
+          <h2 className="text-sm font-bold text-muted uppercase tracking-wider mb-3">
+            🗂 หน้าบัญชีที่ใช้ได้ตอนนี้
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {ACCOUNTING_HUB_CARDS.map((card) => (
+              <Link
+                key={card.href}
+                href={card.href}
+                className="block rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm hover:shadow-md hover:border-primary-300 transition-all"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-foreground">{card.title}</h3>
+                  <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px] font-medium uppercase">
+                    {card.badge}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-muted leading-relaxed">{card.desc}</p>
+                <p className="mt-3 text-xs font-medium text-primary-600">เปิด →</p>
+              </Link>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted italic">
+            เมนูด้านบน (รายรับ / รายจ่าย / ผู้ติดต่อ / การเงิน / การบัญชี) เป็นโครงเดียวกับ legacy{" "}
+            <code className="rounded bg-gray-100 dark:bg-gray-800 px-1 py-0.5">acc-system-cargo.php</code>{" "}
+            — บางลิงก์ปลายทางยังเป็น placeholder (รอสร้างหน้าจริง)
+          </p>
+        </section>
       )}
     </main>
   );
