@@ -2,6 +2,65 @@
 
 ---
 
+# 🚨 2026-05-26 ค่ำ — WAVE 20 ALL DONE · read FIRST (supersedes 2026-05-25 below)
+
+ภูม **mega-session วันนี้ · 30+ commits บน `Poom-pacred`** (เกือบทั้งวัน). ที่ผ่านมา Wave 19 ปิด BUG #1-4 เสร็จ → วันนี้ดำเนินการ Wave 20 ครบทั้ง 5 layer (P0 schema swaps + P0-4 reports + P1 batch 1 Tailwind rewrites + qw1/qw2 + bonus). **ทุกหน้า browser-verified §0c** (ไม่ใช่แค่ route smoke).
+
+**📦 30+ commits today (push range `2ab967b..22d5e37`):**
+- **§0c sprint** — codemod 244 files + ESLint rule `pacred/no-bare-supabase-data-destructure`
+- **4 bugs** — BUG #1 PR10899 500 · #2 forwarders badge · #3 wallet/[id] type-aware · #4 paydeposit slip join
+- **Wave 20 P0-1..3** — customers/[id] · accounting hub (+ unified PEAK chrome) · KPI dashboard — all → tb_*
+- **Wave 20 P0-4** — reports hub + 5 sub-reports (credit-pending 143 · pending-payments 1,470 · refunds 60 · monthly-orders ฿1.8M+ · debtors 0+banner)
+- **Wave 20 P1 batch 1 (7 หน้า)** — notes (+ schema swap) · transfer-rep · admins + [id] · warehouse-history (+ helpers) · combine-bill + add
+- **Wave 20 fixes** — qw1 fcover URL rewriter + smart placeholder · qw2 warehouse-history 7d default · forwarders avatar revert · 2× menubar link wiring for /notes
+- **Bonus** — /admin/service-orders → tb_header_order (21,950 rows) · /admin/accounting/cargo redirect
+- **Docs** — admin pages audit (175) · marketplace thumbnails research · order taxonomy · **agent orchestration learnings (NEW)**
+
+**🟢 23 pages verified working with real prod data:**
+- /admin/accounting (฿35M+ cards), /accounting/cargo (redirect)
+- /admin/customers/PR10899, /customers/transfer-rep
+- /admin/kpi (฿6.8M MTD), /service-orders (200 rows)
+- /admin/forwarders + /[fNo] enhanced detail, /warehouse-history, /notes (500 rows), /combine-bill (997 rows), /combine-bill/add
+- /admin/admins (13), /admins/admin_nat (identity + KPI)
+- /admin/reports (5 tabs) + credit-pending (143) + pending-payments (4) + refunds (60) + monthly-orders + debtors
+- /admin/wallet/105410 (topup+slip), /wallet/105411 (partner slip via paydeposit join)
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-26-night.md`](docs/research/poom-save-point-2026-05-26-night.md) — canonical resume (30+ commits · verified pages · pickup options · resume commands)
+2. 📋 [`docs/learnings/agent-orchestration.md`](docs/learnings/agent-orchestration.md) — **NEW** 6 lessons from running 8 parallel agents (stale base · dual-write · API timeout · 1000-row cap · PEAK chrome · §0c click-through)
+3. 📋 [`docs/audit/admin-pages-audit-2026-05-25-night.md`](docs/audit/admin-pages-audit-2026-05-25-night.md) — 175-page audit (Wave 21 backlog source)
+
+**🟡 Pickup options for next session (ภูม pick when resuming):**
+- **A** Wave 20 P1 batch 2 (~2-3h) — wallet/add · yuan-payments/new · reports/{payment,shop,forwarder} · service-orders/cart
+- **B** Wave 21 P0 task #106 (~3-4h) — port shop→forwarder auto-spawn (legacy shops.php L1675-1721) — biggest backlog impact (spawn chip ready)
+- **C** Browser-verify ภูม เอง (~30min) on prod surfaces before going further
+- **D** Wave 21 P1 follow-ups (~2h) — task #128 admin-profile-client modals + combine-bill backend stubs
+
+**⚠️ Pending ภูม manual actions (carried over · ยัง):**
+1. 🔴 **ROTATE S3 access key** — Dashboard → Project Settings → Storage → S3 Access Keys (key `e913d7da34ca0089638f100afb74c972` leaked วันที่แรก)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` ถ้ายังไม่ apply
+
+**🗺 Branch state (post-push · 2026-05-26 ค่ำ):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม wave 20 ยังไม่ merge) |
+| `Poom-pacred` | `22d5e37` | **active · all Wave 20 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel lane) |
+| Our worktree | `22d5e37` | ✅ in sync with Poom-pacred 0/0 |
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-26-night.md         # canonical resume
+pnpm dev   # port 3000 (if not running)
+# Then: pick option A/B/C/D from above
+```
+
+---
+
 # 🚨 2026-05-25 ค่ำ — WAVE 15 + 16 + 17 ALL DONE · read FIRST (supersedes 2026-05-24 below)
 
 ภูม **mega-session วันนี้ · 18 commits บน `Poom-pacred`** (16:00 → 23:30). ภูม catch ผม audit ผิวเกินไป (compared HTML paste only · missed 2 huge pages) → dispatched 4+3+3 parallel agents ในชุดต่างๆ. ผลลัพธ์: 5 P0 + 3 P0 follow-ups + UX fix + 3 P1 + close-out · **~7,200 LOC** ลง production-ready Cargo flow.
