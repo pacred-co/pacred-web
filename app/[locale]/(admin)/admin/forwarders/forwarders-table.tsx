@@ -376,18 +376,30 @@ export function ForwardersTable({
                     ? `เครติด · ${statusLabel[r.status] ?? r.status}`
                     : statusLabel[statusKey] ?? statusKey;
                   const isOn = selected.has(r.id);
-                  const isSystem = r.ref_order && r.ref_order !== "";
-                  const isAdminInitiated = r.admin_creator && r.admin_creator !== "" && !isSystem;
-                  const sourceLabel = isSystem
-                    ? "ฝากนำเข้า : ระบบ"
-                    : isAdminInitiated
+                  // Wave 19 BUG #2 fix — port forwarder.php L623-624 logic
+                  // EXACTLY (ภูม catch · "ฝากนำเข้า : ระบบ" wording was wrong ·
+                  // legacy refOrder-set = "ฝากสั่งซื้อ : <hNo>" link to shops).
+                  //
+                  // Legacy 2-block rendering:
+                  //   Block 1 (mutually exclusive · ONLY when refOrder empty):
+                  //     - adminIDCreator set      → yellow "ฝากนำเข้า : admin_X"
+                  //     - adminIDCreator empty    → gray  "ฝากนำเข้าจาก : users"
+                  //   Block 2 (additive · ONLY when refOrder set):
+                  //     - any                     → blue  "ฝากสั่งซื้อ : <hNo>"
+                  //                                 + link to /admin/shops/detail/<hNo>
+                  //
+                  // When refOrder is set, Block 1 hides entirely (customer's
+                  // shop order spawned this forwarder · the shop is the source).
+                  const hasRefOrder = !!(r.ref_order && r.ref_order !== "");
+                  const hasAdminCreator = !!(r.admin_creator && r.admin_creator !== "");
+                  const block1Label = hasRefOrder
+                    ? null
+                    : hasAdminCreator
                       ? `ฝากนำเข้า : ${r.admin_creator}`
                       : "ฝากนำเข้าจาก : users";
-                  const sourceBadgeCls = isSystem
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : isAdminInitiated
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-gray-50 text-gray-600 border-gray-200";
+                  const block1Cls = hasAdminCreator
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-gray-50 text-gray-600 border-gray-200";
 
                   return (
                     <tr
@@ -542,9 +554,22 @@ export function ForwardersTable({
                               </div>
                             )}
                             <div className="mt-1 flex flex-wrap gap-1 items-center">
-                              <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${sourceBadgeCls}`}>
-                                {sourceLabel}
-                              </span>
+                              {/* Block 1: admin OR users (mutually exclusive · only when no refOrder) */}
+                              {block1Label && (
+                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${block1Cls}`}>
+                                  {block1Label}
+                                </span>
+                              )}
+                              {/* Block 2: shop-order link (additive · only when refOrder set) */}
+                              {hasRefOrder && (
+                                <Link
+                                  href={`/admin/shops/detail/${r.ref_order}`}
+                                  className="rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[9px] hover:bg-sky-100"
+                                  title="คลิกดูออเดอร์ฝากสั่งซื้อที่ spawn ฝากนำเข้านี้"
+                                >
+                                  ฝากสั่งซื้อ : {r.ref_order}
+                                </Link>
+                              )}
                               {r.f_no_cargo && (
                                 <span className="text-[9px] text-muted font-mono" title="Cargo API tracking (fidorco)">
                                   {r.f_no_cargo}
