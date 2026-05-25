@@ -17,24 +17,31 @@ export const DEFAULT_LOCALE: SiteLocale = "th";
 /**
  * Pacred contact information — single source of truth.
  *
- * Authoritative info from เดฟ 2026-05-15 (`docs/pacred-info.md`).
- * Replace any hardcoded phone numbers / addresses across the codebase
- * by importing from here — see grep `066-131-0253` / `02-444-7046`
- * (PCS Cargo legacy values) for residual hardcoded references that
- * should migrate to CONTACT / ADDRESSES.
+ * Authoritative info from เดฟ 2026-05-25 (post-org-shift roster — see
+ * `docs/pacred-info.md` for the full per-department directory + `STAFF`
+ * constant below). Replace any hardcoded phone numbers / addresses across
+ * the codebase by importing from here — see grep `066-090-1217` /
+ * `099-444-9978` / `066-125-3007` / `02-444-7046` (legacy values from the
+ * pre-2026-05-25 roster + PCS Cargo holdovers) for residual hardcoded
+ * references that should migrate to CONTACT / STAFF / ADDRESSES.
+ *
+ * Note: `066-131-0253` is **NOT** a legacy default — it's แนท's new sales
+ * line (correction 2026-05-25). Existing hardcodes of that number across
+ * the codebase are still valid (they happen to display แนท's line); they
+ * just need to migrate to `STAFF.sales[…].phone` for consistency.
  */
 export const CONTACT = {
-  /** Default phone shown to customers (= sales primary). Back-compat alias for old `phone`/`phoneDisplay`. */
-  phone:               "+66661310253",
-  phoneDisplay:        "066-131-0253",
+  /** Default phone shown to customers (= Sales primary = พี). Back-compat alias for old `phone`/`phoneDisplay`. */
+  phone:               "+66617799299",
+  phoneDisplay:        "061-779-9299",
   /** Company main line — for footer / receipts / official invoices. */
   phoneCompany:        "+6624213325",
   phoneCompanyDisplay: "02-421-3325",
-  /** Customer Service (CS) — currently routed to พลอย. */
-  phoneCs:             "+66660901217",
-  phoneCsDisplay:      "066-090-1217",
-  /** Sales reps — used by booking-data + sales-carousel + cards. */
-  phoneSalesDisplay:   ["066-131-0253", "066-125-3006"],
+  /** Customer Service (CS) — routed to พลอย (new line as of 2026-05-25; old `066-090-1217` retired). */
+  phoneCs:             "+66626034456",
+  phoneCsDisplay:      "062-603-4456",
+  /** Sales reps — used by booking-data + sales-carousel + cards. 4 named reps; a 5th rep `099-234-5196` is in the org but unnamed pending HR confirm. */
+  phoneSalesDisplay:   ["061-779-9299", "099-253-1415", "066-125-3006", "066-131-0253"],
   /**
    * Customer-facing default — shown in footer / JSON-LD ContactPoint / signup
    * confirmation. Per เดฟ 2026-05-15: pair `sales` + `docs` side-by-side on
@@ -158,6 +165,60 @@ export const LINE_OA = {
   basicAddFriend:   "https://line.me/R/ti/p/%40683wolja",
   /** Default URL to use in CTAs — premium ID URL (most brandable). */
   addFriendUrl:     "https://line.me/R/ti/p/%40pacred",
+} as const;
+
+/**
+ * Pacred staff directory — full org by department (snapshot 2026-05-25 from เดฟ).
+ *
+ * Use this for internal admin / "ติดต่อทีม" surfaces that need dept granularity.
+ * The customer-facing sales carousel curates a subset via
+ * `components/sections/contact-sales.tsx` — keep it in sync when reps churn.
+ *
+ * `phone` = display format (with dashes, Thai mobile style).
+ * `phoneIntl` = E.164 format for `tel:` hrefs and SMS gateways.
+ * `phone: null` = role exists but no direct line yet (e.g. เดฟ — DM only).
+ *
+ * Pending HR confirm (omitted from this directory until name is known):
+ *   - Sales rep `099-234-5196`
+ *   - Pricing rep `080-030-4257`
+ *
+ * Recently retired numbers (do not reuse):
+ *   - `066-090-1217` (พลอย CS, retired 2026-05-25)
+ *   - `099-444-9978` (เรด้าห์ Sales, retired 2026-05-25)
+ *   - `066-125-3007` (legacy "Sales primary", not in new roster)
+ *   - `02-421-3325` ← still company main, but no longer แนท's personal line
+ */
+export const STAFF = {
+  sales: [
+    { name: "พี",       phone: "061-779-9299", phoneIntl: "+66617799299" },
+    { name: "เรด้าห์",   phone: "099-253-1415", phoneIntl: "+66992531415" },
+    { name: "เมย์",      phone: "066-125-3006", phoneIntl: "+66661253006" },
+    { name: "แนท",      phone: "066-131-0253", phoneIntl: "+66661310253" },
+  ],
+  pricing: [
+    { name: "เว็บ", phone: "062-602-8456", phoneIntl: "+66626028456" },
+  ],
+  doc: [
+    { name: "วิน",   phone: "062-603-0456", phoneIntl: "+66626030456" },
+    { name: "กริ้ง", phone: "080-058-8746", phoneIntl: "+66800588746" },
+    { name: "เวฟ",   phone: "062-603-8456", phoneIntl: "+66626038456" },
+  ],
+  cs: [
+    { name: "พลอย", phone: "062-603-4456", phoneIntl: "+66626034456" },
+    { name: "อ้อน", phone: "099-435-9535", phoneIntl: "+66994359535" },
+  ],
+  acc: [
+    { name: "เจน", phone: "081-160-9304", phoneIntl: "+66811609304" },
+    { name: "ออม", phone: "063-210-2537", phoneIntl: "+66632102537" },
+  ],
+  mkt: [
+    { name: "เดฟ",   phone: null,           phoneIntl: null           },
+    { name: "ภูมิ",  phone: "092-131-3786", phoneIntl: "+66921313786" },
+    { name: "ปอนด์", phone: "092-131-3788", phoneIntl: "+66921313788" },
+  ],
+  hr: [
+    { name: "แวม", phone: "066-131-4733", phoneIntl: "+66661314733" },
+  ],
 } as const;
 
 export const LOGO_PATH = "/images/pacred-logo-red.png";

@@ -17,8 +17,8 @@ type SalesPersonData = {
 
 const TEAM_DATA: SalesPersonData[] = [
   { personKey: "win",  name: "วิน",  phone: "062-603-0456", image: "/images/Character_Icon/win01.png" },
-  { personKey: "nat",  name: "แนท",  phone: "02-421-3325",  image: "/images/pacred-logo-red.png", useContain: true },
-  { personKey: "ploy", name: "พลอย", phone: "066-090-1217", image: "/images/Character_Icon/ploy01.png" },
+  { personKey: "nat",  name: "แนท",  phone: "066-131-0253", image: "/images/pacred-logo-red.png", useContain: true },
+  { personKey: "ploy", name: "พลอย", phone: "062-603-4456", image: "/images/Character_Icon/ploy01.png" },
 ];
 
 type ResolvedPerson = SalesPersonData & {
