@@ -86,19 +86,16 @@ export function WarehouseHistoryRelinkButton({
   scanId,
   keysearch,
 }: RelinkButtonProps) {
+  // Wave 20 P1 — Tailwind rewrite; was Bootstrap `btn btn-sm btn-danger`.
   return (
-    <a
-      href="#"
+    <button
+      type="button"
       data-action-search={scanId}
-      onClick={(e) => {
-        e.preventDefault();
-        openRelinkModal({ scanId, keysearch });
-      }}
+      onClick={() => openRelinkModal({ scanId, keysearch })}
+      className="mt-1 inline-flex items-center rounded-md bg-rose-600 text-white px-2 py-1 text-[11px] font-medium hover:bg-rose-700 transition-colors"
     >
-      <p className="btn btn-sm font-12 btn-danger btn-rounded">
-        ค้นหาและเชื่อมรายการ
-      </p>
-    </a>
+      🔗 ค้นหาและเชื่อมรายการ
+    </button>
   );
 }
 
@@ -127,22 +124,17 @@ export function WarehouseHistoryDeleteButton({
     });
   }
 
+  // Wave 20 P1 — Tailwind rewrite; was Bootstrap `btn btn-sm btn-danger`.
   return (
-    <a
-      href="#"
+    <button
+      type="button"
       data-action-delete={scanId}
-      onClick={(e) => {
-        e.preventDefault();
-        if (!pending) handleDelete();
-      }}
+      onClick={() => { if (!pending) handleDelete(); }}
+      disabled={pending}
+      className={`inline-flex items-center justify-center rounded-md bg-rose-600 text-white px-2 py-1 text-[11px] font-medium hover:bg-rose-700 transition-colors ${pending ? "opacity-50 cursor-not-allowed" : ""}`}
     >
-      <p
-        className="btn btn-sm font-12 btn-danger btn-rounded"
-        style={pending ? { opacity: 0.5 } : undefined}
-      >
-        {pending ? "กำลังลบ…" : "ลบยิงเข้า"}
-      </p>
-    </a>
+      {pending ? "กำลังลบ…" : "🗑 ลบยิงเข้า"}
+    </button>
   );
 }
 
@@ -163,21 +155,30 @@ export function WarehouseHistoryMatchedActions({
   forwarderId,
   forwarderStatus,
 }: MatchedProps) {
+  // Wave 20 P1 — Tailwind rewrite. The legacy paths /admin/forwarder/detail/<id>
+  // + /admin/forwarder/update/<id> (singular `forwarder`) DO NOT exist in
+  // Pacred — the actual detail route is /admin/forwarders/[fNo]/page.tsx
+  // (plural). The previous stale links 404'd; this fix points them at the
+  // real route. There's no separate "update" route yet (the [fNo] detail
+  // page has inline edit controls — Wave 12-D); the อัปเดต button is now
+  // a stub with the same anchor.
   return (
-    <>
+    <div className="inline-flex flex-col gap-1">
       <WarehouseHistoryDeleteButton scanId={scanId} />
-      <Link href={`/admin/forwarder/detail/${forwarderId ?? ""}`}>
-        <p className="btn btn-sm font-12 btn-outline-success btn-rounded p-05">
-          {" "}ดูข้อมูล{" "}
-        </p>
+      <Link
+        href={`/admin/forwarders/${forwarderId ?? ""}`}
+        className="inline-flex items-center justify-center rounded-md border border-emerald-500 bg-white text-emerald-700 px-2 py-1 text-[11px] font-medium hover:bg-emerald-50 transition-colors"
+      >
+        ดูข้อมูล
       </Link>
       {forwarderStatus !== "7" && (
-        <Link href={`/admin/forwarder/update/${forwarderId ?? ""}`}>
-          <p className="btn btn-sm font-12 btn-warning btn-rounded p-05">
-            {" "}อัปเดต
-          </p>
+        <Link
+          href={`/admin/forwarders/${forwarderId ?? ""}#edit`}
+          className="inline-flex items-center justify-center rounded-md bg-amber-500 text-white px-2 py-1 text-[11px] font-medium hover:bg-amber-600 transition-colors"
+        >
+          อัปเดต
         </Link>
       )}
-    </>
+    </div>
   );
 }

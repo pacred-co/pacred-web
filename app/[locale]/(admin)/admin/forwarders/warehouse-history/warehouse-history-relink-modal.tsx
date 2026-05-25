@@ -148,107 +148,96 @@ export function WarehouseHistoryRelinkModal({
         borderRadius: 4,
       }}
     >
-      <div className="modal-content header-from" style={{ padding: "1rem" }}>
-        <div
-          className="modal-header"
-          style={{ display: "flex", justifyContent: "space-between" }}
-        >
-          <h4 className="modal-title">
-            ค้นหา {initialQuery || "—"} รายการที่ต้องการเชื่อมข้อมูล
+      {/* Wave 20 P1 — Tailwind rewrite (was Bootstrap modal classes). */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3 mb-3">
+          <h4 className="text-base font-semibold">
+            ค้นหา <span className="font-mono text-rose-700">{initialQuery || "—"}</span> รายการที่ต้องการเชื่อมข้อมูล
           </h4>
           <button
             type="button"
-            className="close"
             aria-label="ปิด"
             onClick={onClose}
+            className="rounded-md border border-border bg-white px-2 py-1 text-xs hover:bg-surface-alt"
           >
-            <i className="ft-x">x</i>
+            ✕
           </button>
         </div>
-        <div className="modal-body header-from">
-          <div className="col-md-6 offset-md-3">
-            <label className="form-control-label" htmlFor="modal-search">
-              ตัวเลือกค้นหา (เลข ID CO / เลขแทรคกิ้ง)
-            </label>
-            <div className="form-group">
-              <input
-                type="text"
-                id="modal-search"
-                className="form-control2"
-                placeholder="คำค้นหา"
-                style={{ padding: "5px 16px" }}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
+
+        <div className="max-w-md mx-auto">
+          <label className="block text-xs font-medium text-muted mb-1" htmlFor="modal-search">
+            ตัวเลือกค้นหา (เลข ID CO / เลขแทรคกิ้ง)
+          </label>
+          <input
+            type="text"
+            id="modal-search"
+            placeholder="คำค้นหา"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          />
+        </div>
+
+        {loading && (
+          <div className="text-center mt-3">
+            <span className="text-rose-700 text-sm">กำลังค้นหา…</span>
           </div>
+        )}
+        {error && (
+          <div className="text-center mt-3">
+            <span className="text-rose-700 text-sm">{error}</span>
+          </div>
+        )}
 
-          {loading && (
-            <div className="text-center">
-              <h3 className="text-danger">กำลังค้นหา…</h3>
-            </div>
-          )}
-          {error && (
-            <div className="text-center">
-              <span className="text-danger">{error}</span>
-            </div>
-          )}
-
-          <div className="table-responsive font-14 pt-2">
-            <table className="table table-bordered table-striped">
-              <thead>
-                <tr className="text-center">
-                  <th>ID</th>
-                  <th>เลขตู้</th>
-                  <th>ID CO</th>
-                  <th>เลขพัสดุ (จีน)</th>
-                  <th>กล่อง</th>
-                  <th>ลูกค้า</th>
-                  <th>รายละเอียด</th>
-                  <th>ตัวเลือก</th>
+        <div className="overflow-x-auto scrollbar-x-visible mt-3 border border-border rounded-lg">
+          <table className="min-w-[900px] w-full text-xs">
+            <thead className="bg-surface-alt">
+              <tr>
+                <th className="px-3 py-2 text-center font-semibold">ID</th>
+                <th className="px-3 py-2 text-center font-semibold">เลขตู้</th>
+                <th className="px-3 py-2 text-center font-semibold">ID CO</th>
+                <th className="px-3 py-2 text-left font-semibold">เลขพัสดุ (จีน)</th>
+                <th className="px-3 py-2 text-center font-semibold">กล่อง</th>
+                <th className="px-3 py-2 text-left font-semibold">ลูกค้า</th>
+                <th className="px-3 py-2 text-left font-semibold">รายละเอียด</th>
+                <th className="px-3 py-2 text-center font-semibold">ตัวเลือก</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-6 text-center text-muted">
+                    {query.trim().length === 0
+                      ? "กรอกคำค้นหาเพื่อแสดงรายการ"
+                      : "ไม่พบรายการ"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={8} className="text-center text-muted">
-                      {query.trim().length === 0
-                        ? "กรอกคำค้นหาเพื่อแสดงรายการ"
-                        : "ไม่พบรายการ"}
-                    </td>
-                  </tr>
-                )}
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="text-center">#{r.id}</td>
-                    <td className="text-center">{r.fcabinetnumber}</td>
-                    <td className="text-center">{r.fidorco ?? ""}</td>
-                    <td>{r.ftrackingchn}</td>
-                    <td className="text-center">{r.famount}</td>
-                    <td>{r.userid}</td>
-                    <td>
-                      <div
-                        className="short-text max-w"
-                        style={{ maxWidth: 240 }}
-                      >
-                        {r.fdetail}
-                      </div>
-                    </td>
-                    <td className="text-center">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-warning round"
-                        disabled={pending}
-                        onClick={() => handleRelink(r.id)}
-                      >
-                        {pending ? "กำลังเชื่อม…" : "เลือก"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+              {rows.map((r) => (
+                <tr key={r.id} className="hover:bg-surface-alt">
+                  <td className="px-3 py-2 text-center font-mono">#{r.id}</td>
+                  <td className="px-3 py-2 text-center">{r.fcabinetnumber}</td>
+                  <td className="px-3 py-2 text-center">{r.fidorco ?? ""}</td>
+                  <td className="px-3 py-2 font-mono text-[11px] break-all">{r.ftrackingchn}</td>
+                  <td className="px-3 py-2 text-center">{r.famount}</td>
+                  <td className="px-3 py-2">{r.userid}</td>
+                  <td className="px-3 py-2">
+                    <div className="line-clamp-2 max-w-[240px]">{r.fdetail}</div>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => handleRelink(r.id)}
+                      className={`rounded-md bg-amber-500 text-white px-3 py-1 text-xs font-medium hover:bg-amber-600 transition-colors ${pending ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      {pending ? "กำลังเชื่อม…" : "เลือก"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </dialog>
