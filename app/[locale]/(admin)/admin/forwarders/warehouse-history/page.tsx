@@ -312,13 +312,24 @@ export default async function AdminForwardersWarehouseHistoryPage({
   // Three modes:
   //   ?historyTable=true     → use the provided range
   //   ?historyTableAll=true  → no filter
-  //   (default)              → today only
+  //   (default)              → last 7 days (Wave 20 quick-win 2)
+  //
+  // Wave 20 quick-win 2 (2026-05-25 ค่ำ) — ภูม flagged this as audit
+  // P1 finding: legacy default was "today only", which on slow days
+  // shows an empty page. Staff didn't know to click "ค้นหาข้อมูลทั้งหมด".
+  // Bumped default to last 7 days — matches typical warehouse audit
+  // cycle (yesterday's truck arrives + this morning's scans + 4 day
+  // buffer). Staff who want "today only" can pick a 1-day range on
+  // the date-picker; staff who want "all" still have the existing
+  // ?historyTableAll=true link in the toolbar.
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const sevenDaysAgo = new Date(today.getTime() - 7 * 86_400_000);
+  const sevenDaysAgoStr = `${sevenDaysAgo.getFullYear()}-${String(sevenDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(sevenDaysAgo.getDate()).padStart(2, "0")}`;
 
-  let startDate: string | null = todayStr;
+  let startDate: string | null = sevenDaysAgoStr;
   let endDate: string | null = todayStr;
-  let mode: "today" | "range" | "all" = "today";
+  let mode: "default-week" | "range" | "all" = "default-week";
 
   if (sp.historyTable === "true") {
     mode = "range";
@@ -332,15 +343,15 @@ export default async function AdminForwardersWarehouseHistoryPage({
     endDate = null;
   }
 
-  // Re-build the displayed input value verbatim — legacy L113:
-  //   not set       → today + " - " + today
-  //   historyTable  → first10 + " - " + last10  (re-render of provided range)
-  //   historyTableAll → still uses the today/today fallback in the input
-  //                     because the legacy condition checks historyTable only
+  // Re-build the displayed input value verbatim — legacy L113.
+  // The default-week mode shows the actual 7-day range in the picker
+  // so staff can see what's being filtered (they can then narrow).
   const dateInputValue =
     mode === "range"
       ? `${startDate} - ${endDate}`
-      : `${todayStr} - ${todayStr}`;
+      : mode === "default-week"
+        ? `${sevenDaysAgoStr} - ${todayStr}`
+        : `${todayStr} - ${todayStr}`;
 
   // ── Build the two scan-event queries (L140-161, L183-184, L234) ──
   //   SELECT … FROM tb_forwarder_import2 fi
@@ -369,14 +380,15 @@ export default async function AdminForwardersWarehouseHistoryPage({
   const scanColumns = "id, fid, keysearch, fipallet, fi2amount, fi2date, adminid";
 
   // Date-filter bounds — computed once and applied to both queries.
+  // Wave 20 qw2: default-week mode uses the 7-day range; "all" disables.
   const dateGte =
-    mode === "today"
-      ? `${todayStr} 00:00:00`
+    mode === "default-week"
+      ? `${sevenDaysAgoStr} 00:00:00`
       : mode === "range" && startDate
         ? `${startDate} 00:00:00`
         : null;
   const dateLte =
-    mode === "today"
+    mode === "default-week"
       ? `${todayStr} 23:59:59`
       : mode === "range" && endDate
         ? `${endDate} 23:59:59`
