@@ -108,11 +108,14 @@ export default async function AdminForwarderEditPage({
   const r = row as unknown as RawForwarderRow;
 
   // ─── Look up customer name (legacy text id, no FK auto-join) ───────
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel")
     .eq("userid", r.userid)
     .maybeSingle();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
   const u = userRow as unknown as {
     userid: string;
     username: string | null;
@@ -121,7 +124,7 @@ export default async function AdminForwarderEditPage({
   } | null;
 
   // ─── Load tb_forwarder_item rows for crate per-item entry ──────────
-  const { data: itemRowsRaw } = await admin
+  const { data: itemRowsRaw, error: itemRowsRawErr } = await admin
     .from("tb_forwarder_item")
     .select(
       "id, productname, producttracking, productqty, productwidth, productlength, " +
@@ -131,6 +134,9 @@ export default async function AdminForwarderEditPage({
     .eq("fid", r.id)
     .order("id", { ascending: true })
     .limit(200);
+  if (itemRowsRawErr) {
+    console.error(`[tb_forwarder_item list] failed`, { code: itemRowsRawErr.code, message: itemRowsRawErr.message });
+  }
 
   const items: EditItemRow[] = ((itemRowsRaw ?? []) as unknown as RawItemRow[]).map((it) => ({
     itemId:           it.id,

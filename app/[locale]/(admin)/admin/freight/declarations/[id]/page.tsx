@@ -83,7 +83,7 @@ export default async function AdminCustomsDeclarationDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: header } = await admin
+  const { data: header, error: headerErr } = await admin
     .from("customs_declarations")
     .select(`
       id, declaration_no, status, declaration_type, freight_shipment_id,
@@ -96,15 +96,22 @@ export default async function AdminCustomsDeclarationDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<Header>();
+  if (headerErr) {
+    console.error(`[customs_declarations lookup] failed`, { code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint });
+    throw new Error(`Failed to load customs_declarations (${headerErr.code ?? "unknown"}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
-  const { data: shipment } = await admin
+  const { data: shipment, error: shipmentErr } = await admin
     .from("freight_shipments")
     .select("job_no, transport_mode, container_code, carrier_container_no, bl_no, profile_id")
     .eq("id", header.freight_shipment_id)
     .maybeSingle<Shipment>();
+  if (shipmentErr) {
+    console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+  }
 
-  const { data: customer } = await admin
+  const { data: customer, error: customerErr } = await admin
     .from("profiles")
     .select("member_code, first_name, last_name, company_name, email, phone, tax_id, account_type")
     .eq("id", shipment?.profile_id ?? "")
@@ -113,8 +120,11 @@ export default async function AdminCustomsDeclarationDetailPage({
       company_name: string | null; email: string | null; phone: string | null;
       tax_id: string | null; account_type: string | null;
     }>();
+  if (customerErr) {
+    console.error(`[profiles list] failed`, { code: customerErr.code, message: customerErr.message });
+  }
 
-  const { data: linesRaw } = await admin
+  const { data: linesRaw, error: linesRawErr } = await admin
     .from("customs_declaration_lines")
     .select(`
       id, position, hs_code, description, country_of_origin, qty, unit,
@@ -123,16 +133,22 @@ export default async function AdminCustomsDeclarationDetailPage({
     `)
     .eq("declaration_id", id)
     .order("position", { ascending: true });
+  if (linesRawErr) {
+    console.error(`[customs_declaration_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
+  }
   const lines = (linesRaw ?? []) as DeclarationLineData[];
 
   // Audit timeline.
-  const { data: auditRaw } = await admin
+  const { data: auditRaw, error: auditRawErr } = await admin
     .from("admin_audit_log")
     .select("id, action, created_at, payload, admin_id, admin:profiles!admin_id ( member_code, first_name, last_name )")
     .eq("target_type", "customs_declaration")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (auditRawErr) {
+    console.error(`[admin_audit_log list] failed`, { code: auditRawErr.code, message: auditRawErr.message });
+  }
   type AuditRaw = {
     id: string; action: string; created_at: string;
     admin: { member_code: string | null; first_name: string | null } | { member_code: string | null; first_name: string | null }[] | null;

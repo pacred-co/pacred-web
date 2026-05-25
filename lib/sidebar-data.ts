@@ -57,11 +57,14 @@ export async function getSidebarData(profileId: string): Promise<{
       : supabase.from("profiles").select("id, first_name, last_name, phone").eq("member_code", repId).maybeSingle();
     const { data: rep } = await lookup as { data: { id: string; first_name: string | null; last_name: string | null; phone: string | null } | null };
     if (rep) {
-      const { data: extras } = await supabase
+      const { data: extras, error: extrasErr } = await supabase
         .from("admin_contact_extras")
         .select("display_name, direct_phone")
         .eq("profile_id", rep.id)
         .maybeSingle<{ display_name: string | null; direct_phone: string | null }>();
+      if (extrasErr) {
+        console.error(`[admin_contact_extras list] failed`, { code: extrasErr.code, message: extrasErr.message });
+      }
       const fullName = `${rep.first_name ?? ""} ${rep.last_name ?? ""}`.trim();
       salesRep = {
         display_name: extras?.display_name ?? (fullName || null),

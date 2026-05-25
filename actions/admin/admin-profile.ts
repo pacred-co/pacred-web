@@ -222,11 +222,14 @@ export async function adminUpdateInterpreterCommission(
     const now = new Date().toISOString();
 
     // Mirror the legacy "INSERT ELSE UPDATE" logic: check existence, branch.
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("tb_set_comm_interpreter")
       .select("id")
       .eq("adminid", d.admin_id)
       .maybeSingle();
+    if (existingErr) {
+      console.error(`[tb_set_comm_interpreter list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     let error;
     if (!existing) {
@@ -348,9 +351,12 @@ export async function adminUpdateProfile(
     if (d.zipcode      !== undefined) addressUpdate.zipcode     = d.zipcode;
     if (d.address_note !== undefined) addressUpdate.addressnote = d.address_note;
     if (Object.keys(addressUpdate).length > 0) {
-      const { data: addr } = await admin
+      const { data: addr, error: addrErr } = await admin
         .from("tb_admin_address")
         .select("id").eq("adminid", d.admin_id).maybeSingle();
+      if (addrErr) {
+        console.error(`[tb_admin_address list] failed`, { code: addrErr.code, message: addrErr.message });
+      }
       if (addr) {
         const r = await admin.from("tb_admin_address").update(addressUpdate).eq("adminid", d.admin_id);
         if (r.error) return { ok: false, error: r.error.message };

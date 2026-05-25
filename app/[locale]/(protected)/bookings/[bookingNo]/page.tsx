@@ -110,22 +110,28 @@ export default async function BookingDetailPage({
 
   // Children — the picked option line-items (RLS scopes via parent).
   const supabase = await createClient();
-  const { data: options } = await supabase
+  const { data: options, error: optionsErr } = await supabase
     .from("booking_options")
     .select("option_key, option_label, detail, quantity, line_amount")
     .eq("booking_id", b.id)
     .order("position", { ascending: true });
+  if (optionsErr) {
+    console.error(`[booking_options list] failed`, { code: optionsErr.code, message: optionsErr.message });
+  }
 
   // If Pricing has formalised a freight_quote, fetch its no for the
   // "ดูใบเสนอราคา" link. We don't try to render the quote here — just
   // surface it.
   let freightQuoteNo: string | null = null;
   if (b.freight_quote_id) {
-    const { data: q } = await supabase
+    const { data: q, error: qErr } = await supabase
       .from("freight_quotes")
       .select("quote_no")
       .eq("id", b.freight_quote_id)
       .maybeSingle<{ quote_no: string }>();
+    if (qErr) {
+      console.error(`[freight_quotes list] failed`, { code: qErr.code, message: qErr.message });
+    }
     freightQuoteNo = q?.quote_no ?? null;
   }
 

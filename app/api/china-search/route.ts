@@ -24,7 +24,10 @@ import { saveSearchQuery } from "@/actions/search";
  */
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     return NextResponse.json({ available: false, reason: "not_authorized" }, { status: 401 });
   }

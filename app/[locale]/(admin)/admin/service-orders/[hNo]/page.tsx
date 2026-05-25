@@ -23,7 +23,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
   const { hNo } = await params;
   const admin = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("service_orders")
     .select(`
       id, h_no, profile_id, status, title, item_count, total_thb, subtotal_cny, yuan_rate_locked,
@@ -37,6 +37,10 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
     .eq("h_no", hNo)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[service_orders lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load service_orders (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) {
     // Wave 7 legacy fallback — read tb_header_order by hno
     const legacy = await renderLegacyServiceOrderView(hNo);
@@ -52,18 +56,24 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
   // override panel so the displayed default matches the actual default.
   let corporateName: string | null = null;
   if (profile?.account_type === "juristic") {
-    const { data: corp } = await admin
+    const { data: corp, error: corpErr } = await admin
       .from("corporate")
       .select("company_name")
       .eq("profile_id", o.profile_id)
       .maybeSingle<{ company_name: string | null }>();
+    if (corpErr) {
+      console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+    }
     corporateName = corp?.company_name ?? null;
   }
 
-  const { data: items } = await admin
+  const { data: items, error: itemsErr } = await admin
     .from("service_order_items")
     .select("id, provider, shop_name, title, price_cny, amount, url")
     .eq("service_order_id", o.id);
+  if (itemsErr) {
+    console.error(`[service_order_items list] failed`, { code: itemsErr.code, message: itemsErr.message });
+  }
 
   return (
     <main className="p-6 lg:p-8 space-y-6">

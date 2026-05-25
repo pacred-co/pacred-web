@@ -108,11 +108,14 @@ export default async function AdminNotificationsLogPage({
     if (isUuid(trimmed)) {
       recipientFilterId = trimmed;
     } else {
-      const { data: profile } = await admin
+      const { data: profile, error: profileErr } = await admin
         .from("profiles")
         .select("id")
         .eq("member_code", trimmed.toUpperCase())
         .maybeSingle<{ id: string }>();
+      if (profileErr) {
+        console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+      }
       recipientFilterId = profile?.id ?? "__not_found__";
     }
   }
@@ -142,7 +145,10 @@ export default async function AdminNotificationsLogPage({
     q = q.lte("created_at", padded);
   }
 
-  const { data, count } = await q;
+  const { data, count, error } = await q;
+  if (error) {
+    console.error(`[notifications list] failed`, { code: error.code, message: error.message });
+  }
   const rows = (data ?? []) as Row[];
   const totalCount = count ?? 0;
   const pageEnd = Math.min(offset + PAGE_SIZE, offset + rows.length);

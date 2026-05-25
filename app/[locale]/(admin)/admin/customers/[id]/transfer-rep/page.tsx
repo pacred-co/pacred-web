@@ -90,7 +90,7 @@ export default async function TransferRepPage({
   type RepContact = { display_name: string | null; direct_phone: string | null };
   let currentRepDisplay: string | null = null;
   if (p.sales_admin_id) {
-    const { data: repRow } = await admin
+    const { data: repRow, error: repRowErr } = await admin
       .from("admins")
       .select(
         `profile_id, role,
@@ -106,6 +106,9 @@ export default async function TransferRepPage({
         profile: RepProfile | RepProfile[] | null;
         contact: RepContact | RepContact[] | null;
       }>();
+    if (repRowErr) {
+      console.error(`[admins list] failed`, { code: repRowErr.code, message: repRowErr.message });
+    }
     if (repRow) {
       const prof    = Array.isArray(repRow.profile) ? repRow.profile[0] : repRow.profile;
       const contact = Array.isArray(repRow.contact) ? repRow.contact[0] : repRow.contact;

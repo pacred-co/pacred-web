@@ -180,16 +180,19 @@ export default async function AdminReportCntDetailPage({
   const fTransportType = String(firstRow.ftransporttype ?? "1");
 
   // ── 2) Container payment status ── (tb_cnt_item row presence)
-  const { data: cntItemRow } = await admin
+  const { data: cntItemRow, error: cntItemRowErr } = await admin
     .from("tb_cnt_item")
     .select("id, cntid")
     .eq("fcabinetnumber", fCabinetNumber)
     .maybeSingle<{ id: number; cntid: number | null }>();
+  if (cntItemRowErr) {
+    console.error(`[tb_cnt_item list] failed`, { code: cntItemRowErr.code, message: cntItemRowErr.message });
+  }
   const cabinetIsPaid = Boolean(cntItemRow);
   const paidCntId = cntItemRow?.cntid ?? null;
 
   // ── 3) tb_cost_container — per-container custom rate ──
-  const { data: customRate } = await admin
+  const { data: customRate, error: customRateErr } = await admin
     .from("tb_cost_container")
     .select("fproductstype1, fproductstype2, fproductstype3, fproductstype4")
     .eq("fcabinetnumber", fCabinetNumber)
@@ -199,6 +202,9 @@ export default async function AdminReportCntDetailPage({
       fproductstype3: number;
       fproductstype4: number;
     }>();
+  if (customRateErr) {
+    console.error(`[tb_cost_container list] failed`, { code: customRateErr.code, message: customRateErr.message });
+  }
 
   // ── 4) tb_settings — pick the 4 default rates if no custom row ──
   let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
@@ -213,11 +219,14 @@ export default async function AdminReportCntDetailPage({
       warehouseRateColumn(fWarehouseName, i as 1 | 2 | 3 | 4, transport, fWarehouseChina),
     );
     const sel = ["id", ...cols].join(",");
-    const { data: settingsRow } = await admin
+    const { data: settingsRow, error: settingsRowErr } = await admin
       .from("tb_settings")
       .select(sel)
       .eq("id", 1)
       .maybeSingle<Record<string, number | string | null>>();
+    if (settingsRowErr) {
+      console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+    }
     if (settingsRow) {
       p1 = Number(settingsRow[cols[0]] ?? 0);
       p2 = Number(settingsRow[cols[1]] ?? 0);
@@ -230,10 +239,13 @@ export default async function AdminReportCntDetailPage({
   const userIds = Array.from(new Set(cntRows.map((r) => r.userid).filter(Boolean) as string[]));
   const userMap = new Map<string, { username: string | null; coid: string | null }>();
   if (userIds.length > 0) {
-    const { data: users } = await admin
+    const { data: users, error: usersErr } = await admin
       .from("tb_users")
       .select("userid, username, coid")
       .in("userid", userIds);
+    if (usersErr) {
+      console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
+    }
     for (const u of (users ?? []) as Array<{ userid: string; username: string | null; coid: string | null }>) {
       userMap.set(u.userid, { username: u.username, coid: u.coid });
     }
@@ -243,10 +255,13 @@ export default async function AdminReportCntDetailPage({
   const fIds = cntRows.map((r) => r.id);
   const shippedSet = new Set<number>();
   if (fIds.length > 0) {
-    const { data: imp2 } = await admin
+    const { data: imp2, error: imp2Err } = await admin
       .from("tb_forwarder_import2")
       .select("fid")
       .in("fid", fIds);
+    if (imp2Err) {
+      console.error(`[tb_forwarder_import2 list] failed`, { code: imp2Err.code, message: imp2Err.message });
+    }
     for (const r of (imp2 ?? []) as Array<{ fid: number }>) {
       shippedSet.add(Number(r.fid));
     }
@@ -256,10 +271,13 @@ export default async function AdminReportCntDetailPage({
   const trackingNos = cntRows.map((r) => r.ftrackingchn).filter((s): s is string => Boolean(s));
   const trackingDupCount = new Map<string, number>();
   if (trackingNos.length > 0) {
-    const { data: trackPay } = await admin
+    const { data: trackPay, error: trackPayErr } = await admin
       .from("tb_cnt_pay_trackingchn")
       .select("ftrackingchn")
       .in("ftrackingchn", trackingNos);
+    if (trackPayErr) {
+      console.error(`[tb_cnt_pay_trackingchn list] failed`, { code: trackPayErr.code, message: trackPayErr.message });
+    }
     for (const r of (trackPay ?? []) as Array<{ ftrackingchn: string }>) {
       trackingDupCount.set(r.ftrackingchn, (trackingDupCount.get(r.ftrackingchn) ?? 0) + 1);
     }
@@ -269,10 +287,13 @@ export default async function AdminReportCntDetailPage({
   const idCoNos = cntRows.map((r) => r.fidorco).filter((s): s is string => Boolean(s));
   const idCoDupCount = new Map<string, number>();
   if (idCoNos.length > 0) {
-    const { data: idCoPay } = await admin
+    const { data: idCoPay, error: idCoPayErr } = await admin
       .from("tb_cnt_pay_idorco")
       .select("fidorco")
       .in("fidorco", idCoNos);
+    if (idCoPayErr) {
+      console.error(`[tb_cnt_pay_idorco list] failed`, { code: idCoPayErr.code, message: idCoPayErr.message });
+    }
     for (const r of (idCoPay ?? []) as Array<{ fidorco: string }>) {
       idCoDupCount.set(r.fidorco, (idCoDupCount.get(r.fidorco) ?? 0) + 1);
     }
@@ -281,10 +302,13 @@ export default async function AdminReportCntDetailPage({
   // ── 9) tb_check_forwarder — "already in check queue" markers ──
   const checkMap = new Map<number, { adminid: string; date: string | null }>();
   if (fIds.length > 0) {
-    const { data: checks } = await admin
+    const { data: checks, error: checksErr } = await admin
       .from("tb_check_forwarder")
       .select("fid, adminid, date")
       .in("fid", fIds);
+    if (checksErr) {
+      console.error(`[tb_check_forwarder list] failed`, { code: checksErr.code, message: checksErr.message });
+    }
     for (const r of (checks ?? []) as Array<{ fid: number; adminid: string; date: string | null }>) {
       checkMap.set(Number(r.fid), { adminid: r.adminid, date: r.date });
     }

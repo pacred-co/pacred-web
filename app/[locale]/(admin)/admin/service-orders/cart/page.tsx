@@ -268,11 +268,14 @@ export default async function AdminCartPage({
   // query returns no rows = the legacy empty-cart view.
   let myLegacyAdminId = "";
   if (user.email) {
-    const { data: adminRow } = await admin
+    const { data: adminRow, error: adminRowErr } = await admin
       .from("tb_admin")
       .select("adminid")
       .eq("adminemail", user.email)
       .maybeSingle<{ adminid: string }>();
+    if (adminRowErr) {
+      console.error(`[tb_admin list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
+    }
     myLegacyAdminId = adminRow?.adminid ?? "";
   }
 

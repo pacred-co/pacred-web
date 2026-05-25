@@ -332,7 +332,10 @@ export default async function ServicePaymentPage({
       .eq("userid", memberCode);
     // payment.php L382-387 — when ?q is set, also filter by payStatus.
     if (q) listQuery = listQuery.eq("paystatus", q);
-    const { data: listData } = await listQuery;
+    const { data: listData, error: listDataErr } = await listQuery;
+    if (listDataErr) {
+      console.error(`[tb_payment list] failed`, { code: listDataErr.code, message: listDataErr.message });
+    }
     rows = (
       (listData ?? []) as {
         id: number;

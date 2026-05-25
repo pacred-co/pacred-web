@@ -76,7 +76,10 @@ export default async function ServiceOrderNotesPage({
   type RawRow = Omit<ServiceOrder, "profile"> & {
     profile: ServiceOrder["profile"] | ServiceOrder["profile"][];
   };
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[service_orders list] failed`, { code: error.code, message: error.message });
+  }
   const rows = ((data ?? []) as RawRow[]).map((r) => ({
     ...r,
     profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,

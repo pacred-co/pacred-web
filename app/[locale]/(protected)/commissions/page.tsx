@@ -80,10 +80,13 @@ export default async function CommissionsPage() {
   // team_leaders (policy `team_leaders_select_own` from 0013 L217-218).
   // No row = no commissions to ever show → render the empty state.
   const supabase = await createClient();
-  const { data: leadersRaw } = await supabase
+  const { data: leadersRaw, error: leadersRawErr } = await supabase
     .from("team_leaders")
     .select("id, team_code, commission_pct, is_active")
     .eq("profile_id", user.id);
+  if (leadersRawErr) {
+    console.error(`[team_leaders list] failed`, { code: leadersRawErr.code, message: leadersRawErr.message });
+  }
   const leaders = (leadersRaw ?? []) as {
     id: string; team_code: string; commission_pct: number; is_active: boolean;
   }[];

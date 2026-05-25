@@ -50,20 +50,26 @@ export default async function AdminOrgContactsPage({
     : "email";
 
   const admin = createAdminClient();
-  const { data: rowsRaw } = await admin
+  const { data: rowsRaw, error: rowsRawErr } = await admin
     .from("org_contacts")
     .select("id, kind, label, value, department, is_active, display_order, notes, created_at, updated_at")
     .eq("kind", activeKind)
     .order("display_order", { ascending: true })
     .order("label", { ascending: true });
+  if (rowsRawErr) {
+    console.error(`[org_contacts list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   const rows = (rowsRaw ?? []) as OrgContactRow[];
 
   // Counts per kind for tab badges.
   const counts: Record<OrgContactKind, number> = {} as Record<OrgContactKind, number>;
   for (const k of ORG_CONTACT_KINDS) counts[k] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("org_contacts")
     .select("kind");
+  if (countRowsErr) {
+    console.error(`[org_contacts list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ kind: OrgContactKind }>) {
     counts[r.kind] = (counts[r.kind] ?? 0) + 1;
   }

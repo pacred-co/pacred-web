@@ -90,12 +90,18 @@ export default async function AdminRefundsListPage({
   if (q) {
     query = query.or(`request_no.ilike.%${q}%,source_ref.ilike.%${q}%,reason.ilike.%${q}%`);
   }
-  const { data: rowsRaw } = await query;
+  const { data: rowsRaw, error: rowsRawErr } = await query;
+  if (rowsRawErr) {
+    console.error(`[refund_requests list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   const rows = ((rowsRaw ?? []) as RefundRow[]).map((r) => ({ ...r, profile: normP(r.profile) }));
 
   // Status counts for filter chips.
   const counts: Record<RefundStatus, number> = { pending: 0, approved: 0, rejected: 0, paid: 0 };
-  const { data: countRows } = await admin.from("refund_requests").select("status");
+  const { data: countRows, error: countRowsErr } = await admin.from("refund_requests").select("status");
+  if (countRowsErr) {
+    console.error(`[refund_requests list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: RefundStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }

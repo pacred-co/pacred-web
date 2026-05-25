@@ -37,21 +37,27 @@ export default async function AdminWalletAddPage({
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
-    const { data } = await admin
+    const { data, error } = await admin
       .from("tb_users")
       .select("userid, username, userlastname, usertel, useremail")
       .eq("userid", candidate)
       .maybeSingle<CustomerLite>();
+    if (error) {
+      console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+    }
     preset = data ?? null;
   }
 
   // Recent customers — order by registered desc · cap 20 for the dropdown.
-  const { data: recentRaw } = await admin
+  const { data: recentRaw, error: recentRawErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel, useremail")
     .eq("userstatus", "1")
     .order("userregistered", { ascending: false })
     .limit(20);
+  if (recentRawErr) {
+    console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });
+  }
   const recent = (recentRaw ?? []) as unknown as CustomerLite[];
 
   return (

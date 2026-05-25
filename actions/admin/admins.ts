@@ -164,7 +164,7 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
     const admin = createAdminClient();
 
     // Load current state so we can notify the previous rep and audit the delta
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name, company_name, account_type, sales_admin_id")
       .eq("id", d.customer_id)
@@ -173,6 +173,10 @@ export async function adminTransferSalesRep(input: TransferSalesRepInput): Promi
         company_name: string | null; account_type: "personal" | "juristic"; sales_admin_id: string | null;
       }>();
 
+    if (beforeErr) {
+      console.error(`[profiles mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "customer_not_found" };
 
     const previous_sales_admin_id = before.sales_admin_id;
@@ -364,13 +368,17 @@ export async function adminBulkTransferSalesRep(
     // If a target rep is given, verify it's an active sales_admin/super to
     // prevent accidentally pointing customers at a non-admin profile.
     if (d.new_sales_admin_id) {
-      const { data: target } = await admin
+      const { data: target, error: targetErr } = await admin
         .from("admins")
         .select("profile_id, role, is_active")
         .eq("profile_id", d.new_sales_admin_id)
         .in("role", ["sales_admin", "super"])
         .eq("is_active", true)
         .maybeSingle();
+      if (targetErr) {
+        console.error(`[admins mutation lookup] failed`, { code: targetErr.code, message: targetErr.message });
+        return { ok: false, error: `db_error:${targetErr.code ?? "unknown"}` };
+      }
       if (!target) return { ok: false, error: "target_not_active_sales_admin" };
     }
 
@@ -431,11 +439,15 @@ export async function adminBulkTransferSalesRepTb(
       const admin = createAdminClient();
 
       // Validate target admin: must exist in tb_admin + be active.
-      const { data: target } = await admin
+      const { data: target, error: targetErr } = await admin
         .from("tb_admin")
         .select("adminid, adminstatusa, adminnickname")
         .eq("adminid", d.new_admin_userid)
         .maybeSingle<{ adminid: string; adminstatusa: string; adminnickname: string | null }>();
+      if (targetErr) {
+        console.error(`[tb_admin mutation lookup] failed`, { code: targetErr.code, message: targetErr.message });
+        return { ok: false, error: `db_error:${targetErr.code ?? "unknown"}` };
+      }
       if (!target) return { ok: false, error: "ไม่พบ admin ปลายทาง (tb_admin.adminid ไม่ตรง)" };
       if (target.adminstatusa !== "1") return { ok: false, error: "admin ปลายทางไม่ใช่ active" };
 

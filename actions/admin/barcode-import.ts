@@ -88,18 +88,22 @@ export type BarcodeImportScanResult = AdminActionResult<BarcodeImportScanOk>;
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const email = user?.email ?? null;
   if (!email) return "system";
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string | null }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   if (data?.adminid) return data.adminid;
   return email.slice(0, 30);
 }
@@ -152,24 +156,30 @@ async function primaryLookup(
   if (rows.length === 0) return null;
 
   // Multi-hit tiebreaker: refOrder<>'' first (legacy L41)
-  const { data: refRows } = await admin
+  const { data: refRows, error: refRowsErr } = await admin
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
     .lt("fstatus", "5")
     .neq("reforder", "")
     .limit(2);
+  if (refRowsErr) {
+    console.error(`[tb_forwarder list] failed`, { code: refRowsErr.code, message: refRowsErr.message });
+  }
   const refList = (refRows ?? []) as ForwarderRow[];
   if (refList.length === 1) return refList[0];
 
   // Then adminIDCreator<>'' (legacy L58)
-  const { data: adminRows } = await admin
+  const { data: adminRows, error: adminRowsErr } = await admin
     .from("tb_forwarder")
     .select(FORWARDER_SELECT)
     .or(`ftrackingchn.eq.${keysearch},fidorco.eq.${keysearch}`)
     .lt("fstatus", "5")
     .neq("adminidcreator", "")
     .limit(2);
+  if (adminRowsErr) {
+    console.error(`[tb_forwarder list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+  }
   const adminList = (adminRows ?? []) as ForwarderRow[];
   if (adminList.length === 1) return adminList[0];
 
@@ -263,12 +273,15 @@ async function upsertScanRow(
 
   if (fid !== null) {
     // FID-keyed lookup (legacy L137-150)
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("tb_forwarder_import2")
       .select("id, fi2amount")
       .eq("fid", fid)
       .limit(1)
       .maybeSingle<{ id: number; fi2amount: number }>();
+    if (existingErr) {
+      console.error(`[tb_forwarder_import2 list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     if (!existing) {
       await admin.from("tb_forwarder_import2").insert({
         fid,
@@ -301,7 +314,7 @@ async function upsertScanRow(
   const todayEnd = new Date(todayStart);
   todayEnd.setUTCDate(todayEnd.getUTCDate() + 1);
 
-  const { data: existingOrphan } = await admin
+  const { data: existingOrphan, error: existingOrphanErr } = await admin
     .from("tb_forwarder_import2")
     .select("id, fi2amount")
     .is("fid", null)
@@ -310,6 +323,9 @@ async function upsertScanRow(
     .lt("fi2date", todayEnd.toISOString())
     .limit(1)
     .maybeSingle<{ id: number; fi2amount: number }>();
+  if (existingOrphanErr) {
+    console.error(`[tb_forwarder_import2 list] failed`, { code: existingOrphanErr.code, message: existingOrphanErr.message });
+  }
 
   if (!existingOrphan) {
     await admin.from("tb_forwarder_import2").insert({

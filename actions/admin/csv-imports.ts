@@ -203,11 +203,15 @@ export async function confirmCsvImport(
     // block the row.  See P-19-followup-stale + migration 0032.
     await sweepStaleImportingRows(admin);
 
-    const { data: meta } = await admin
+    const { data: meta, error: metaErr } = await admin
       .from("csv_imports")
       .select("id, status, target_table")
       .eq("id", parsed.data.id)
       .maybeSingle<{ id: string; status: string; target_table: TargetTable }>();
+    if (metaErr) {
+      console.error(`[csv_imports mutation lookup] failed`, { code: metaErr.code, message: metaErr.message });
+      return { ok: false, error: `db_error:${metaErr.code ?? "unknown"}` };
+    }
     if (!meta) return { ok: false, error: "not_found" };
     if (meta.status === "imported") return { ok: false, error: "already_imported" };
     if (meta.status === "importing") return { ok: false, error: "import_in_progress" };
@@ -316,10 +320,13 @@ export async function confirmCsvImport(
       }
 
       type Existing = { id: string; tracking_chn: string | null; status: string };
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("forwarders")
         .select("id, tracking_chn, status")
         .in("tracking_chn", trackingList);
+      if (existingErr) {
+        console.error(`[forwarders list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       const byTracking = new Map<string, Existing>();
       for (const f of (existing ?? []) as Existing[]) {
@@ -516,11 +523,15 @@ export async function deleteCsvImport(
 
   return withAdmin(["ops", "warehouse", "accounting", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: meta } = await admin
+    const { data: meta, error: metaErr } = await admin
       .from("csv_imports")
       .select("id, storage_path, status")
       .eq("id", parsed.data.id)
       .maybeSingle<{ id: string; storage_path: string; status: string }>();
+    if (metaErr) {
+      console.error(`[csv_imports mutation lookup] failed`, { code: metaErr.code, message: metaErr.message });
+      return { ok: false, error: `db_error:${metaErr.code ?? "unknown"}` };
+    }
     if (!meta) return { ok: false, error: "not_found" };
     if (meta.status === "importing") return { ok: false, error: "cannot_delete_while_importing" };
 
@@ -544,11 +555,15 @@ async function downloadCsvText(
   admin: ReturnType<typeof createAdminClient>,
   id: string,
 ): Promise<{ ok: true; data: string } | { ok: false; error: string }> {
-  const { data: meta } = await admin
+  const { data: meta, error: metaErr } = await admin
     .from("csv_imports")
     .select("storage_path")
     .eq("id", id)
     .maybeSingle<{ storage_path: string }>();
+  if (metaErr) {
+    console.error(`[csv_imports mutation lookup] failed`, { code: metaErr.code, message: metaErr.message });
+    return { ok: false, error: `db_error:${metaErr.code ?? "unknown"}` };
+  }
   if (!meta) return { ok: false, error: "not_found" };
 
   const { data: blob, error } = await admin.storage

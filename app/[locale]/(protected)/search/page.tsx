@@ -171,11 +171,14 @@ export default async function SearchPage({
   const admin = createAdminClient();
 
   // search.php L24-27: SELECT rsDefault FROM tb_settings WHERE ID=1
-  const { data: settingsRow } = await admin
+  const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
     .eq("id", 1)
     .maybeSingle<{ rsdefault: number }>();
+  if (settingsRowErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+  }
   const rsDefault = Number(settingsRow?.rsdefault ?? 0);
 
   // The convertURLChinna() MODE decision (see classifyUrl note).
@@ -210,11 +213,14 @@ export default async function SearchPage({
     totalPages = Math.ceil((totalRows ?? 0) / RECORDS_PER_PAGE) || 1;
 
     // search.php L311-312: SELECT … FROM tb_product WHERE pNameTH LIKE … LIMIT …
-    const { data: rows } = await admin
+    const { data: rows, error: rowsErr } = await admin
       .from("tb_product")
       .select("id, pnameth, pimages, ppricepromo, pprice, purl")
       .ilike("pnameth", pNameTH)
       .range(offset, offset + RECORDS_PER_PAGE - 1);
+    if (rowsErr) {
+      console.error(`[tb_product list] failed`, { code: rowsErr.code, message: rowsErr.message });
+    }
     products = (rows ?? []) as ProductRow[];
   } else {
     // Sprint-3 P2.2 — taobao / 1688 keyword search via AkuCargo

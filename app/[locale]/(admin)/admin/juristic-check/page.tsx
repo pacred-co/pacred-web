@@ -17,7 +17,10 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
 
   if (sp.status) q = q.eq("status", sp.status);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[corporate list] failed`, { code: error.code, message: error.message });
+  }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
   type RawRow = NonNullable<typeof data>[number] & { profile: ProfileShape | ProfileShape[] | null };
   const rows = ((data ?? []) as RawRow[]).map((r) => ({

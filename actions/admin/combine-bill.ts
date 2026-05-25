@@ -68,18 +68,22 @@ import {
 // `tb_bill.adminid` is always satisfied.
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const email = user?.email ?? null;
   if (!email) return "system";
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string | null }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   if (data?.adminid) return data.adminid;
 
   // Fall back to a 30-char email slice so the NOT NULL never trips.
@@ -266,10 +270,13 @@ export async function adminDeleteCombineBill(
       if (!billRow) return { ok: false, error: "not_found" };
 
       // Snapshot the items for the audit log before the DELETE wipes them.
-      const { data: items } = await admin
+      const { data: items, error: itemsErr } = await admin
         .from("tb_bill_item")
         .select("id, fid")
         .eq("billid", billId);
+      if (itemsErr) {
+        console.error(`[tb_bill_item list] failed`, { code: itemsErr.code, message: itemsErr.message });
+      }
 
       // ── (b) DELETE tb_bill_item (legacy L7-8) ──
       const { error: itemDelErr } = await admin

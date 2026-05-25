@@ -331,7 +331,10 @@ export default async function ReportSystemPage({
   else if (deviceFilter === "2") detailQ = detailQ.eq("device", 2);
   else if (deviceFilter === "3") detailQ = detailQ.eq("device", 0); // legacy "" → 0 in int col
 
-  const { data: detailData } = await detailQ;
+  const { data: detailData, error: detailDataErr } = await detailQ;
+  if (detailDataErr) {
+    console.error(`[tb_web_hs list] failed`, { code: detailDataErr.code, message: detailDataErr.message });
+  }
   const rawHits = (detailData ?? []) as unknown as WebHitRow[];
 
   // Apply the group-by JS-side (mirrors the legacy GROUP BY semantics).
@@ -443,10 +446,13 @@ export default async function ReportSystemPage({
   const overflowIds = Array.from(usedPageIds).filter((id) => id > 29);
   const pageNameLookup = new Map<number, string>();
   if (overflowIds.length > 0) {
-    const { data: pnData } = await admin
+    const { data: pnData, error: pnDataErr } = await admin
       .from("tb_page_name")
       .select("id, pagename")
       .in("id", overflowIds);
+    if (pnDataErr) {
+      console.error(`[tb_page_name list] failed`, { code: pnDataErr.code, message: pnDataErr.message });
+    }
     for (const r of (pnData ?? []) as Array<{ id: number; pagename: string }>) {
       pageNameLookup.set(r.id, r.pagename);
     }

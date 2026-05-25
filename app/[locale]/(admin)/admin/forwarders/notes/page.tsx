@@ -81,7 +81,10 @@ export default async function ForwarderNotesPage({
   type RawRow = Omit<Forwarder, "profile"> & {
     profile: Forwarder["profile"] | Forwarder["profile"][];
   };
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  }
   // filter empty-string post-load (Supabase .neq("","") can't combine via .or)
   const rows = ((data ?? []) as RawRow[])
     .filter((r) => (r.note_admin && r.note_admin.trim()) || (r.note_user && r.note_user.trim()))

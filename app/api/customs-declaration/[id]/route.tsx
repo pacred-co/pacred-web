@@ -107,12 +107,15 @@ export async function GET(
 
   // Auth + RLS-scoped read.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
 
-  const { data: declaration } = await supabase
+  const { data: declaration, error: declarationErr } = await supabase
     .from("customs_declarations")
     .select(`
       id, declaration_no, status, declaration_type,
@@ -124,6 +127,9 @@ export async function GET(
     `)
     .eq("id", id)
     .maybeSingle<DeclarationRow>();
+  if (declarationErr) {
+    console.error(`[customs_declarations list] failed`, { code: declarationErr.code, message: declarationErr.message });
+  }
 
   if (!declaration) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
@@ -132,7 +138,7 @@ export async function GET(
   // Pull shipment + parties + lines via admin client (we've already
   // proven the caller is entitled to the declaration row).
   const admin = createAdminClient();
-  const { data: shipment } = await admin
+  const { data: shipment, error: shipmentErr } = await admin
     .from("freight_shipments")
     .select(`
       job_no, transport_mode, container_code, carrier_container_no,
@@ -140,16 +146,22 @@ export async function GET(
     `)
     .eq("id", declaration.freight_shipment_id)
     .maybeSingle<ShipmentRow>();
+  if (shipmentErr) {
+    console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+  }
 
-  const { data: partiesRaw } = await admin
+  const { data: partiesRaw, error: partiesRawErr } = await admin
     .from("freight_parties")
     .select("role, name, address, tax_id, branch")
     .eq("freight_shipment_id", declaration.freight_shipment_id);
+  if (partiesRawErr) {
+    console.error(`[freight_parties list] failed`, { code: partiesRawErr.code, message: partiesRawErr.message });
+  }
   const partyList = (partiesRaw ?? []) as PartyRow[];
   const shipper   = partyList.find((p) => p.role === "shipper");
   const consignee = partyList.find((p) => p.role === "consignee");
 
-  const { data: linesRaw } = await admin
+  const { data: linesRaw, error: linesRawErr } = await admin
     .from("customs_declaration_lines")
     .select(`
       position, hs_code, description, country_of_origin, qty, unit,
@@ -158,6 +170,9 @@ export async function GET(
     `)
     .eq("declaration_id", declaration.id)
     .order("position", { ascending: true });
+  if (linesRawErr) {
+    console.error(`[customs_declaration_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
+  }
   const lines = (linesRaw ?? []) as LineRow[];
 
   registerPdfFonts();

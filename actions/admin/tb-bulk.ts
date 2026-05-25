@@ -101,11 +101,14 @@ export async function adminBulkApproveWalletHs(
         // Adjust wallet balance (if applicable).
         if (delta !== 0) {
           // Read current balance (upsert if missing — new customer).
-          const { data: wRow } = await admin
+          const { data: wRow, error: wRowErr } = await admin
             .from("tb_wallet")
             .select("userid, wallettotal")
             .eq("userid", r.userid)
             .maybeSingle<{ userid: string; wallettotal: number }>();
+          if (wRowErr) {
+            console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
+          }
 
           if (!wRow) {
             // No tb_wallet row yet — insert with the delta.

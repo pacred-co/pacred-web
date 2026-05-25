@@ -137,7 +137,10 @@ export default async function CustomHsRatesPage({
     .order("date", { ascending: false })
     .limit(200);
   if (sp.q) historyQ = historyQ.eq("userid", sp.q.trim().toUpperCase());
-  const { data: histRaw } = await historyQ;
+  const { data: histRaw, error: histRawErr } = await historyQ;
+  if (histRawErr) {
+    console.error(`[tb_customrate_hs list] failed`, { code: histRawErr.code, message: histRawErr.message });
+  }
   const history = (histRaw ?? []) as unknown as HistoryRow[];
 
   // Exact total — Wave 10 follow-up fix 2026-05-23 (ภูม flagged similar
@@ -155,10 +158,13 @@ export default async function CustomHsRatesPage({
   const userIds = Array.from(new Set(history.map((h) => h.userid).filter(Boolean)));
   let userMap = new Map<string, URow>();
   if (userIds.length > 0) {
-    const { data: usersRaw } = await admin
+    const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
       .select("userid,username,userlastname,usertel,coid")
       .in("userid", userIds);
+    if (usersRawErr) {
+      console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+    }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 

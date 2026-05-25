@@ -39,7 +39,7 @@ export default async function AdminCustomersPendingPage() {
   await requireAdmin(["ops", "sales_admin", "accounting"]);
 
   const admin = createAdminClient();
-  const { data: customers, count } = await admin
+  const { data: customers, count, error: customersErr } = await admin
     .from("tb_users")
     .select(
       "userid,username,userlastname,usertel,useremail,usercompany,userregistered,useractive",
@@ -48,6 +48,9 @@ export default async function AdminCustomersPendingPage() {
     .eq("useractive", "0")
     .order("userregistered", { ascending: false })
     .limit(500);
+  if (customersErr) {
+    console.error(`[tb_users list] failed`, { code: customersErr.code, message: customersErr.message });
+  }
 
   const rows = ((customers ?? []) as Row[]);
   const total = count ?? 0;

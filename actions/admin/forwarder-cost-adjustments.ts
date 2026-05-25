@@ -68,23 +68,30 @@ export async function adminAddForwarderCostAdjustment(
     // Resolve forwarder + profile + preview total (= the price the
     // customer agreed to at order time, stored as forwarders.total_price
     // since createForwarder inserts it from calcPrice on submit).
-    const { data: fwd } = await admin
+    const { data: fwd, error: fwdErr } = await admin
       .from("forwarders")
       .select("id, f_no, profile_id, total_price")
       .eq("id", d.forwarder_id)
       .maybeSingle<{ id: string; f_no: string; profile_id: string; total_price: number }>();
+    if (fwdErr) {
+      console.error(`[forwarders mutation lookup] failed`, { code: fwdErr.code, message: fwdErr.message });
+      return { ok: false, error: `db_error:${fwdErr.code ?? "unknown"}` };
+    }
     if (!fwd) return { ok: false, error: "forwarder not_found" };
 
     // 10%-over-preview gate (BUSINESS_FLOW.md L85-87 / audit §3 P2).
     // Sum existing non-cancelled adjustments to know the cumulative
     // BEFORE this one (paid + unpaid + pending_reconfirm all count).
     const previewTotal = Number(fwd.total_price) || 0;
-    const { data: existingRows } = await admin
+    const { data: existingRows, error: existingRowsErr } = await admin
       .from("forwarder_cost_adjustments")
       .select("amount_thb")
       .eq("forwarder_id", fwd.id)
       .neq("status", "cancelled")
       .returns<Array<{ amount_thb: number }>>();
+    if (existingRowsErr) {
+      console.error(`[forwarder_cost_adjustments list] failed`, { code: existingRowsErr.code, message: existingRowsErr.message });
+    }
     const existingCumulative = (existingRows ?? [])
       .reduce((sum, r) => sum + (Number(r.amount_thb) || 0), 0);
 
@@ -209,7 +216,7 @@ export async function adminMarkCostAdjustmentPaid(
   return withAdmin<{ wallet_tx_id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: adj } = await admin
+    const { data: adj, error: adjErr } = await admin
       .from("forwarder_cost_adjustments")
       .select("id, forwarder_id, profile_id, kind, amount_thb, status, paid_via_wallet_tx_id")
       .eq("id", d.id)
@@ -218,6 +225,10 @@ export async function adminMarkCostAdjustmentPaid(
         kind: string; amount_thb: number; status: string;
         paid_via_wallet_tx_id: string | null;
       }>();
+    if (adjErr) {
+      console.error(`[forwarder_cost_adjustments mutation lookup] failed`, { code: adjErr.code, message: adjErr.message });
+      return { ok: false, error: `db_error:${adjErr.code ?? "unknown"}` };
+    }
     if (!adj)                            return { ok: false, error: "not_found" };
     if (adj.status === "paid")           return { ok: false, error: "already_paid" };
     if (adj.status === "cancelled")      return { ok: false, error: "cancelled" };
@@ -250,11 +261,14 @@ export async function adminMarkCostAdjustmentPaid(
     }
 
     // Look up forwarder f_no for the wallet_tx note
-    const { data: fwd } = await admin
+    const { data: fwd, error: fwdErr } = await admin
       .from("forwarders")
       .select("f_no")
       .eq("id", adj.forwarder_id)
       .maybeSingle<{ f_no: string }>();
+    if (fwdErr) {
+      console.error(`[forwarders list] failed`, { code: fwdErr.code, message: fwdErr.message });
+    }
     const fNo = fwd?.f_no ?? "—";
 
     const { data: tx, error: txErr } = await admin
@@ -338,11 +352,15 @@ export async function adminCancelCostAdjustment(
   return withAdmin(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: adj } = await admin
+    const { data: adj, error: adjErr } = await admin
       .from("forwarder_cost_adjustments")
       .select("id, forwarder_id, profile_id, status")
       .eq("id", d.id)
       .maybeSingle<{ id: string; forwarder_id: string; profile_id: string; status: string }>();
+    if (adjErr) {
+      console.error(`[forwarder_cost_adjustments mutation lookup] failed`, { code: adjErr.code, message: adjErr.message });
+      return { ok: false, error: `db_error:${adjErr.code ?? "unknown"}` };
+    }
     if (!adj)                       return { ok: false, error: "not_found" };
     if (adj.status === "cancelled") return { ok: false, error: "already_cancelled" };
     if (adj.status === "paid")      return { ok: false, error: "ชำระแล้ว — ยกเลิกไม่ได้ (ทำ refund แทน)" };
@@ -364,11 +382,14 @@ export async function adminCancelCostAdjustment(
     });
 
     // Look up f_no for revalidate
-    const { data: fwd } = await admin
+    const { data: fwd, error: fwdErr } = await admin
       .from("forwarders")
       .select("f_no")
       .eq("id", adj.forwarder_id)
       .maybeSingle<{ f_no: string }>();
+    if (fwdErr) {
+      console.error(`[forwarders list] failed`, { code: fwdErr.code, message: fwdErr.message });
+    }
     if (fwd) {
       revalidatePath(`/admin/forwarders/${fwd.f_no}`);
       revalidatePath(`/service-import/${fwd.f_no}/receipt`);

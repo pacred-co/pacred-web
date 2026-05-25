@@ -13,7 +13,10 @@ type ActionResult<T = void> =
 // ────────────────────────────────────────────────────────────
 export async function listMyNotifications(limit = 50): Promise<ActionResult<NotificationRow[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // We can't join through the FK directly without a foreign-table policy
@@ -49,7 +52,10 @@ export async function listMyNotifications(limit = 50): Promise<ActionResult<Noti
 
 export async function getUnreadCount(): Promise<number> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return 0;
 
   const { count: total } = await supabase
@@ -70,7 +76,10 @@ export async function getUnreadCount(): Promise<number> {
 // ────────────────────────────────────────────────────────────
 export async function markRead(notificationId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -88,14 +97,20 @@ export async function markRead(notificationId: string): Promise<ActionResult> {
 
 export async function markAllRead(): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Fetch unread notification ids first, then upsert reads in one query.
-  const { data: notifs } = await supabase
+  const { data: notifs, error: notifsErr } = await supabase
     .from("notifications")
     .select("id")
     .eq("profile_id", user.id);
+  if (notifsErr) {
+    console.error(`[notifications list] failed`, { code: notifsErr.code, message: notifsErr.message });
+  }
 
   const ids = (notifs ?? []).map((n) => n.id);
   if (ids.length === 0) return { ok: true };

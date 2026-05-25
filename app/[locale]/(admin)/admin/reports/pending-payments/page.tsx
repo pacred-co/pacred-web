@@ -58,7 +58,10 @@ export default async function PendingPaymentsReport({
     .limit(1000);
   if (sp.date_from) q = q.gte("created_at", sp.date_from);
   if (sp.date_to)   q = q.lte("created_at", sp.date_to + "T23:59:59");
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  }
 
   const rows: Row[] = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
   const total = rows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);

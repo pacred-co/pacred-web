@@ -61,20 +61,26 @@ export default async function CreditPendingReport({
     .limit(2000);
   if (sp.date_from) fq = fq.gte("created_at", sp.date_from);
   if (sp.date_to)   fq = fq.lte("created_at", sp.date_to + "T23:59:59");
-  const { data: fData } = await fq;
+  const { data: fData, error: fDataErr } = await fq;
+  if (fDataErr) {
+    console.error(`[forwarders list] failed`, { code: fDataErr.code, message: fDataErr.message });
+  }
   const forwarders: Fwd[] = ((fData ?? []) as FwdRaw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
   const fNos = forwarders.map((f) => f.f_no);
 
   // 2) Fetch wallet_transactions that ALREADY paid these forwarders
   const paidSet = new Set<string>();
   if (fNos.length > 0) {
-    const { data: txData } = await admin
+    const { data: txData, error: txDataErr } = await admin
       .from("wallet_transactions")
       .select("reference_id")
       .eq("reference_type", "forwarder")
       .eq("kind", "import_payment")
       .eq("status", "completed")
       .in("reference_id", fNos);
+    if (txDataErr) {
+      console.error(`[wallet_transactions list] failed`, { code: txDataErr.code, message: txDataErr.message });
+    }
     for (const t of (txData ?? []) as Array<{ reference_id: string | null }>) {
       if (t.reference_id) paidSet.add(t.reference_id);
     }

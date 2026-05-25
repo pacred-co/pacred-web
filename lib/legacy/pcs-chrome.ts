@@ -122,27 +122,36 @@ async function resolveSalesRep(
 ): Promise<PcsSalesRep> {
   if (!adminIdSale) return { ...SALES_FALLBACK };
 
-  const { data: adminRow } = await admin
+  const { data: adminRow, error: adminRowErr } = await admin
     .from("tb_admin")
     .select("adminnickname, adminpicture")
     .eq("adminid", adminIdSale)
     .maybeSingle<{ adminnickname: string | null; adminpicture: string | null }>();
+  if (adminRowErr) {
+    console.error(`[tb_admin list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
+  }
   if (!adminRow) return { ...SALES_FALLBACK };
 
   let tel: string | null = null;
-  const { data: shipRow } = await admin
+  const { data: shipRow, error: shipRowErr } = await admin
     .from("tb_org_tell_ships")
     .select("otid")
     .eq("adminid", adminIdSale)
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle<{ otid: number | null }>();
+  if (shipRowErr) {
+    console.error(`[tb_org_tell_ships list] failed`, { code: shipRowErr.code, message: shipRowErr.message });
+  }
   if (shipRow?.otid != null) {
-    const { data: tellRow } = await admin
+    const { data: tellRow, error: tellRowErr } = await admin
       .from("tb_organization_tell")
       .select("tell")
       .eq("id", shipRow.otid)
       .maybeSingle<{ tell: string | null }>();
+    if (tellRowErr) {
+      console.error(`[tb_organization_tell list] failed`, { code: tellRowErr.code, message: tellRowErr.message });
+    }
     tel = tellRow?.tell ?? null;
   }
 

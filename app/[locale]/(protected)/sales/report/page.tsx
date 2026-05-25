@@ -168,10 +168,13 @@ export default async function SalesReportPage({
 
   // ── The report query, transcribed 1:1 (L133-155) ──────────────
   // 1. The team's member ids — tb_users WHERE coID = $userIDMain.
-  const { data: teamUsersRaw } = await admin
+  const { data: teamUsersRaw, error: teamUsersRawErr } = await admin
     .from("tb_users")
     .select("userid")
     .eq("coid", userIDMain);
+  if (teamUsersRawErr) {
+    console.error(`[tb_users list] failed`, { code: teamUsersRawErr.code, message: teamUsersRawErr.message });
+  }
   const teamUserIds = (
     (teamUsersRaw ?? []) as unknown as { userid: string }[]
   ).map((u) => u.userid);
@@ -187,7 +190,10 @@ export default async function SalesReportPage({
     if (usStatusRaw !== "all" && usStatusRaw !== "") {
       usQuery = usQuery.eq("usstatus", usStatusRaw);
     }
-    const { data: usRaw } = await usQuery;
+    const { data: usRaw, error: usRawErr } = await usQuery;
+    if (usRawErr) {
+      console.error(`[tb_user_sales list] failed`, { code: usRawErr.code, message: usRawErr.message });
+    }
     const usRows = (usRaw ?? []) as unknown as {
       id: number;
       usstatus: string | null;
@@ -217,10 +223,13 @@ export default async function SalesReportPage({
       }
     >();
     if (forwarderIds.length > 0) {
-      const { data: fwdRaw } = await admin
+      const { data: fwdRaw, error: fwdRawErr } = await admin
         .from("tb_forwarder")
         .select("id, userid, ftrackingchn, fvolume, fweight, ftotalprice, fstatus")
         .in("id", forwarderIds);
+      if (fwdRawErr) {
+        console.error(`[tb_forwarder list] failed`, { code: fwdRawErr.code, message: fwdRawErr.message });
+      }
       for (const f of (fwdRaw ?? []) as unknown as {
         id: number;
         userid: string | null;

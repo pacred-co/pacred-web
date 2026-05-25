@@ -54,7 +54,7 @@ export async function adminBarcodeScan(
     const admin = createAdminClient();
 
     // ── Try forwarder ──────────────────────────────────────────────────────
-    const { data: f } = await admin
+    const { data: f, error: fErr } = await admin
       .from("forwarders")
       .select(`
         id, f_no, status, profile_id,
@@ -66,6 +66,9 @@ export async function adminBarcodeScan(
         id: string; f_no: string; status: string; profile_id: string;
         profile: { member_code: string | null; first_name: string | null; last_name: string | null } | null;
       }>();
+    if (fErr) {
+      console.error(`[forwarders list] failed`, { code: fErr.code, message: fErr.message });
+    }
 
     if (f) {
       // Lookup mode — no state change, just return the current ref.
@@ -140,7 +143,7 @@ export async function adminBarcodeScan(
     }
 
     // ── Try service_order ──────────────────────────────────────────────────
-    const { data: so } = await admin
+    const { data: so, error: soErr } = await admin
       .from("service_orders")
       .select(`
         id, h_no, status, profile_id,
@@ -152,6 +155,9 @@ export async function adminBarcodeScan(
         id: string; h_no: string; status: string; profile_id: string;
         profile: { member_code: string | null; first_name: string | null; last_name: string | null } | null;
       }>();
+    if (soErr) {
+      console.error(`[service_orders list] failed`, { code: soErr.code, message: soErr.message });
+    }
 
     if (so) {
       // Same lookup-mode short-circuit as the forwarder branch.

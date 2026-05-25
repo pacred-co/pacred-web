@@ -38,29 +38,38 @@ export default async function AdminYuanPaymentNewPage({
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
-    const { data } = await admin
+    const { data, error } = await admin
       .from("tb_users")
       .select("userid, username, userlastname, usertel, useremail")
       .eq("userid", candidate)
       .maybeSingle<CustomerLite>();
+    if (error) {
+      console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+    }
     preset = data ?? null;
   }
 
   // Recent customers (cap 20).
-  const { data: recentRaw } = await admin
+  const { data: recentRaw, error: recentRawErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel, useremail")
     .eq("userstatus", "1")
     .order("userregistered", { ascending: false })
     .limit(20);
+  if (recentRawErr) {
+    console.error(`[tb_users list] failed`, { code: recentRawErr.code, message: recentRawErr.message });
+  }
   const recent = (recentRaw ?? []) as unknown as CustomerLite[];
 
   // Default rate from tb_settings (single-row config). rsdefault = sell-rate default.
-  const { data: settingsRaw } = await admin
+  const { data: settingsRaw, error: settingsRawErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
     .limit(1)
     .maybeSingle<{ rsdefault: number | null }>();
+  if (settingsRawErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRawErr.code, message: settingsRawErr.message });
+  }
   const defaultRate = Number(settingsRaw?.rsdefault ?? 5);
 
   return (

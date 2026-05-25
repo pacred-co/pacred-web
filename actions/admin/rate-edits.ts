@@ -53,18 +53,22 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const email = user?.email ?? null;
   if (!email) return "system";
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string | null }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   if (data?.adminid) return data.adminid;
   return email.slice(0, 30);
 }
@@ -239,11 +243,15 @@ export async function adminUpdateCustomerHsRates(
       const legacyAdminId = await resolveLegacyAdminId();
 
       // Verify customer exists.
-      const { data: customer } = await admin
+      const { data: customer, error: customerErr } = await admin
         .from("tb_users")
         .select("userid")
         .eq("userid", userid)
         .maybeSingle<{ userid: string }>();
+      if (customerErr) {
+        console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
+        return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
+      }
       if (!customer) return { ok: false, error: "ไม่พบลูกค้า (userid ไม่ตรงกับ tb_users)" };
 
       // Read the LATEST per-cell rate (max crhsid → first row per cell when

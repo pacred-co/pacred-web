@@ -72,24 +72,31 @@ export async function adminCreateFreightInvoice(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: shipment } = await admin
+    const { data: shipment, error: shipmentErr } = await admin
       .from("freight_shipments")
       .select("id, profile_id, status, job_no")
       .eq("id", d.freight_shipment_id)
       .maybeSingle<{ id: string; profile_id: string; status: string; job_no: string }>();
+    if (shipmentErr) {
+      console.error(`[freight_shipments mutation lookup] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+      return { ok: false, error: `db_error:${shipmentErr.code ?? "unknown"}` };
+    }
     if (!shipment) return { ok: false, error: "shipment_not_found" };
     if (shipment.status === "cancelled") return { ok: false, error: "shipment_cancelled" };
 
     // Refuse if there's already a non-cancelled invoice (draft or issued)
     // for this shipment. Drafts can be edited; cancelled rows can be
     // replaced. Issued blocks until cancelled.
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("freight_invoices")
       .select("id, status")
       .eq("freight_shipment_id", d.freight_shipment_id)
       .neq("status", "cancelled")
       .limit(1)
       .maybeSingle<{ id: string; status: string }>();
+    if (existingErr) {
+      console.error(`[freight_invoices list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     if (existing) {
       return { ok: false, error: `existing_invoice:${existing.status}:${existing.id}` };
     }
@@ -134,23 +141,30 @@ export async function adminAddFreightInvoiceLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_invoices")
       .select("id, status, freight_shipment_id")
       .eq("id", d.freight_invoice_id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error(`[freight_invoices mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
     let position = d.position ?? 1;
     if (!d.position) {
-      const { data: maxRow } = await admin
+      const { data: maxRow, error: maxRowErr } = await admin
         .from("freight_invoice_lines")
         .select("position")
         .eq("freight_invoice_id", d.freight_invoice_id)
         .order("position", { ascending: false })
         .limit(1)
         .maybeSingle<{ position: number }>();
+      if (maxRowErr) {
+        console.error(`[freight_invoice_lines list] failed`, { code: maxRowErr.code, message: maxRowErr.message });
+      }
       position = (maxRow?.position ?? 0) + 1;
     }
 
@@ -200,18 +214,26 @@ export async function adminUpdateFreightInvoiceLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("freight_invoice_lines")
       .select("id, freight_invoice_id, qty, unit_price_usd")
       .eq("id", d.id)
       .maybeSingle<{ id: string; freight_invoice_id: string; qty: number; unit_price_usd: number }>();
+    if (rowErr) {
+      console.error(`[freight_invoice_lines mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_invoices")
       .select("status, freight_shipment_id")
       .eq("id", row.freight_invoice_id)
       .maybeSingle<{ status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error(`[freight_invoices mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -254,18 +276,26 @@ export async function adminDeleteFreightInvoiceLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("freight_invoice_lines")
       .select("id, freight_invoice_id")
       .eq("id", input.id)
       .maybeSingle<{ id: string; freight_invoice_id: string }>();
+    if (rowErr) {
+      console.error(`[freight_invoice_lines mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_invoices")
       .select("status, freight_shipment_id")
       .eq("id", row.freight_invoice_id)
       .maybeSingle<{ status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error(`[freight_invoices mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -298,11 +328,15 @@ export async function adminIssueFreightInvoice(
     const admin = createAdminClient();
 
     // Load draft + ensure has lines.
-    const { data: invoice } = await admin
+    const { data: invoice, error: invoiceErr } = await admin
       .from("freight_invoices")
       .select("id, status, freight_shipment_id, profile_id")
       .eq("id", input.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string; profile_id: string }>();
+    if (invoiceErr) {
+      console.error(`[freight_invoices mutation lookup] failed`, { code: invoiceErr.code, message: invoiceErr.message });
+      return { ok: false, error: `db_error:${invoiceErr.code ?? "unknown"}` };
+    }
     if (!invoice) return { ok: false, error: "not_found" };
     if (invoice.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -333,7 +367,7 @@ export async function adminIssueFreightInvoice(
     }
 
     // Load parent shipment + parties for snapshot.
-    const { data: shipment } = await admin
+    const { data: shipment, error: shipmentErr } = await admin
       .from("freight_shipments")
       .select(`
         id, job_no, transport_mode, container_code, bl_no, vessel_voyage,
@@ -357,15 +391,22 @@ export async function adminIssueFreightInvoice(
         vat_base_thb: number | null; vat_thb: number | null;
         vat_plan_label: string | null; form_e_applied: boolean;
       }>();
+    if (shipmentErr) {
+      console.error(`[freight_shipments mutation lookup] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+      return { ok: false, error: `db_error:${shipmentErr.code ?? "unknown"}` };
+    }
     if (!shipment) return { ok: false, error: "shipment_missing" };
     if (shipment.commercial_value_usd == null || shipment.exchange_rate == null) {
       return { ok: false, error: "value_block_incomplete" };
     }
 
-    const { data: parties } = await admin
+    const { data: parties, error: partiesErr } = await admin
       .from("freight_parties")
       .select("role, name, address, tax_id, branch")
       .eq("freight_shipment_id", invoice.freight_shipment_id);
+    if (partiesErr) {
+      console.error(`[freight_parties list] failed`, { code: partiesErr.code, message: partiesErr.message });
+    }
     type Party = { role: string; name: string; address: string; tax_id: string | null; branch: string | null };
     const partyList = (parties ?? []) as Party[];
     const shipper   = partyList.find((p) => p.role === "shipper");
@@ -456,11 +497,15 @@ export async function adminCancelFreightInvoice(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: invoice } = await admin
+    const { data: invoice, error: invoiceErr } = await admin
       .from("freight_invoices")
       .select("id, status, freight_shipment_id, invoice_no")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string; invoice_no: string | null }>();
+    if (invoiceErr) {
+      console.error(`[freight_invoices mutation lookup] failed`, { code: invoiceErr.code, message: invoiceErr.message });
+      return { ok: false, error: `db_error:${invoiceErr.code ?? "unknown"}` };
+    }
     if (!invoice) return { ok: false, error: "not_found" };
     if (invoice.status === "cancelled") return { ok: false, error: "already_cancelled" };
 

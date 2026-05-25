@@ -134,10 +134,13 @@ export async function adminBulkEnrollActiveAdmins(input: z.infer<typeof bulkEnro
 
   return withAdmin(["super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: actives } = await admin
+    const { data: actives, error: activesErr } = await admin
       .from("admins")
       .select("profile_id")
       .eq("is_active", true);
+    if (activesErr) {
+      console.error(`[admins list] failed`, { code: activesErr.code, message: activesErr.message });
+    }
     if (!actives || actives.length === 0) return { ok: true, data: { inserted: 0 } };
 
     const rows = actives.map((a) => ({

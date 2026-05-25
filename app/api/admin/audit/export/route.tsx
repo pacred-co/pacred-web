@@ -86,11 +86,14 @@ export async function GET(req: NextRequest) {
   // Resolve admin filter to profile_id first (mirror /admin/audit).
   let adminFilterId: string | null = null;
   if (adminFilter) {
-    const { data: profile } = await admin
+    const { data: profile, error: profileErr } = await admin
       .from("profiles")
       .select("id")
       .eq("member_code", adminFilter)
       .maybeSingle<{ id: string }>();
+    if (profileErr) {
+      console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+    }
     adminFilterId = profile?.id ?? "__not_found__";
   }
 

@@ -49,11 +49,14 @@ export default async function AdminCartAddPage({
   const admin = createAdminClient();
   let myAdminId = "";
   if (user.email) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("tb_admin")
       .select("adminid")
       .eq("adminemail", user.email)
       .maybeSingle<{ adminid: string }>();
+    if (error) {
+      console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+    }
     myAdminId = data?.adminid ?? "";
   }
 

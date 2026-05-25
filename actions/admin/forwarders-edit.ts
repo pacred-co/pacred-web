@@ -44,18 +44,22 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const email = user?.email ?? null;
   if (!email) return "system";
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string | null }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   if (data?.adminid) return data.adminid;
   return email.slice(0, 30);
 }

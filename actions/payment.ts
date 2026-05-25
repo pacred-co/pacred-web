@@ -51,7 +51,7 @@ export async function getCurrentYuanRate(): Promise<{ rate: number; updated_at: 
 // ────────────────────────────────────────────────────────────
 export async function getYuanPayment(id: string): Promise<ActionResult<YuanPayment>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // RLS scopes to profile_id = auth.uid() automatically — but explicit
@@ -65,6 +65,10 @@ export async function getYuanPayment(id: string): Promise<ActionResult<YuanPayme
     .eq("profile_id", user.id)
     .maybeSingle<YuanPayment>();
   if (error) return { ok: false, error: error.message };
+  if (dataErr) {
+    console.error(`[supabase mutation lookup] failed`, { code: dataErr.code, message: dataErr.message });
+    return { ok: false, error: `db_error:${dataErr.code ?? "unknown"}` };
+  }
   if (!data) return { ok: false, error: "not_found" };
   return { ok: true, data };
 }
@@ -74,7 +78,10 @@ export async function getYuanPayment(id: string): Promise<ActionResult<YuanPayme
 // ────────────────────────────────────────────────────────────
 export async function listYuanPayments(limit = 50): Promise<ActionResult<YuanPayment[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -107,7 +114,10 @@ export async function createYuanPayment(
   const thb_amount = Math.round(d.yuan_amount * d.exchange_rate * 100) / 100;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // If paying via wallet, verify the PENDING-AWARE available balance — not

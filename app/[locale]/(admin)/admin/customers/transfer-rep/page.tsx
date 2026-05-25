@@ -66,16 +66,22 @@ export default async function TransferSalesRepPage({
     }
   }
 
-  const { data: customersRaw } = await q;
+  const { data: customersRaw, error: customersRawErr } = await q;
+  if (customersRawErr) {
+    console.error(`[tb_users list] failed`, { code: customersRawErr.code, message: customersRawErr.message });
+  }
   const customers = (customersRaw ?? []) as unknown as CustomerLite[];
 
   // Active admins from tb_admin for the target dropdown.
-  const { data: adminsRaw } = await admin
+  const { data: adminsRaw, error: adminsRawErr } = await admin
     .from("tb_admin")
     .select("adminid, adminnickname, adminname, adminlastname, department, section")
     .eq("adminstatusa", "1")
     .order("adminnickname", { ascending: true })
     .limit(500);
+  if (adminsRawErr) {
+    console.error(`[tb_admin list] failed`, { code: adminsRawErr.code, message: adminsRawErr.message });
+  }
   const admins = (adminsRaw ?? []) as unknown as TbAdminLite[];
 
   return (

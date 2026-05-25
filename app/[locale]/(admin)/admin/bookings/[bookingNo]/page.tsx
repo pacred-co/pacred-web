@@ -152,19 +152,25 @@ export default async function AdminBookingDetailPage({
 
   let rowRaw: BookingDetailRaw | null = null;
   {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("bookings")
       .select(baseSelect)
       .eq("booking_no", bookingNo)
       .maybeSingle<BookingDetailRaw>();
+    if (error) {
+      console.error(`[bookings list] failed`, { code: error.code, message: error.message });
+    }
     rowRaw = data ?? null;
   }
   if (!rowRaw && looksLikeUuid) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("bookings")
       .select(baseSelect)
       .eq("id", bookingNo)
       .maybeSingle<BookingDetailRaw>();
+    if (error) {
+      console.error(`[bookings list] failed`, { code: error.code, message: error.message });
+    }
     rowRaw = data ?? null;
   }
   if (!rowRaw) notFound();
@@ -172,11 +178,14 @@ export default async function AdminBookingDetailPage({
 
   // Option line-items (mirrors the estimate_breakdown snapshot — preferred over
   // the JSONB when a per-row id is needed for future per-line actions).
-  const { data: optionsRaw } = await admin
+  const { data: optionsRaw, error: optionsRawErr } = await admin
     .from("booking_options")
     .select("id, position, option_key, option_label, detail, quantity, unit_amount, line_amount")
     .eq("booking_id", row.id)
     .order("position", { ascending: true });
+  if (optionsRawErr) {
+    console.error(`[booking_options list] failed`, { code: optionsRawErr.code, message: optionsRawErr.message });
+  }
   const options = (optionsRaw ?? []) as BookingOptionRow[];
 
   // Frozen JSONB snapshot — preferred display source so the page always shows
@@ -203,7 +212,7 @@ export default async function AdminBookingDetailPage({
   // panel can render below.  May be null until bookings are added to the
   // work_items entity_type CHECK constraint (a future migration) — the
   // placeholder explains the gap.
-  const { data: workItem } = await admin
+  const { data: workItem, error: workItemErr } = await admin
     .from("work_items")
     .select("id")
     .eq("entity_type", "booking")
@@ -211,6 +220,9 @@ export default async function AdminBookingDetailPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
+  if (workItemErr) {
+    console.error(`[work_items list] failed`, { code: workItemErr.code, message: workItemErr.message });
+  }
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">

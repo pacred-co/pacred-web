@@ -87,7 +87,7 @@ export default async function AdminGlobalSearchPage({
 
   if (willRun) {
     // Profiles — multi-column OR via PostgREST `or` clause
-    const { data: pData } = await admin
+    const { data: pData, error: pDataErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name, phone, email, company_name, account_type")
       .or([
@@ -100,11 +100,14 @@ export default async function AdminGlobalSearchPage({
       ].join(","))
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (pDataErr) {
+      console.error(`[profiles list] failed`, { code: pDataErr.code, message: pDataErr.message });
+    }
     profiles = (pData ?? []) as Profile[];
 
     // Forwarders — search both f_no AND cabinet_number (so a container ตู้
     // search lands here directly, replacing the deleted cargo_containers entity)
-    const { data: fData } = await admin
+    const { data: fData, error: fDataErr } = await admin
       .from("forwarders")
       .select("id, f_no, status, profile_id, total_price, cabinet_number, created_at")
       .or([
@@ -113,33 +116,45 @@ export default async function AdminGlobalSearchPage({
       ].join(","))
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (fDataErr) {
+      console.error(`[forwarders list] failed`, { code: fDataErr.code, message: fDataErr.message });
+    }
     forwarders = (fData ?? []) as Forwarder[];
 
     // Service orders
-    const { data: soData } = await admin
+    const { data: soData, error: soDataErr } = await admin
       .from("service_orders")
       .select("id, h_no, status, profile_id, total_thb, created_at")
       .ilike("h_no", ilike)
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (soDataErr) {
+      console.error(`[service_orders list] failed`, { code: soDataErr.code, message: soDataErr.message });
+    }
     serviceOrders = (soData ?? []) as ServiceOrder[];
 
     // Freight shipments
-    const { data: fsData } = await admin
+    const { data: fsData, error: fsDataErr } = await admin
       .from("freight_shipments")
       .select("id, job_no, status, profile_id, created_at")
       .ilike("job_no", ilike)
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (fsDataErr) {
+      console.error(`[freight_shipments list] failed`, { code: fsDataErr.code, message: fsDataErr.message });
+    }
     freightShips = (fsData ?? []) as FreightShip[];
 
     // Tax invoices
-    const { data: tiData } = await admin
+    const { data: tiData, error: tiDataErr } = await admin
       .from("tax_invoices")
       .select("id, invoice_no, profile_id, total_thb, issued_at")
       .ilike("invoice_no", ilike)
       .order("issued_at", { ascending: false, nullsFirst: false })
       .limit(PER_ENTITY_LIMIT);
+    if (tiDataErr) {
+      console.error(`[tax_invoices list] failed`, { code: tiDataErr.code, message: tiDataErr.message });
+    }
     taxInvoices = (tiData ?? []) as TaxInvoice[];
 
     // Container search now folds into forwarders.cabinet_number above
@@ -147,21 +162,27 @@ export default async function AdminGlobalSearchPage({
     // jump to /admin/report-cnt directly.
 
     // Refund requests
-    const { data: rData } = await admin
+    const { data: rData, error: rDataErr } = await admin
       .from("refund_requests")
       .select("id, request_no, status, profile_id, amount_thb, created_at")
       .ilike("request_no", ilike)
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (rDataErr) {
+      console.error(`[refund_requests list] failed`, { code: rDataErr.code, message: rDataErr.message });
+    }
     refundRequests = (rData ?? []) as RefundReq[];
 
     // Freight quotes
-    const { data: qData } = await admin
+    const { data: qData, error: qDataErr } = await admin
       .from("freight_quotes")
       .select("id, quote_no, status, profile_id, created_at")
       .ilike("quote_no", ilike)
       .order("created_at", { ascending: false })
       .limit(PER_ENTITY_LIMIT);
+    if (qDataErr) {
+      console.error(`[freight_quotes list] failed`, { code: qDataErr.code, message: qDataErr.message });
+    }
     freightQuotes = (qData ?? []) as FreightQuote[];
   }
 

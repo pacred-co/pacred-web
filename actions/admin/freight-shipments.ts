@@ -141,7 +141,7 @@ export async function adminUpdateFreightShipment(
   return withAdmin([...ROLES_WRITE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("freight_shipments")
       .select("id, job_no, status, commercial_value_usd, exchange_rate, declared_customs_value_thb, duty_rate_pct, vat_base_thb")
       .eq("id", d.id)
@@ -151,6 +151,10 @@ export async function adminUpdateFreightShipment(
         declared_customs_value_thb: number | null; duty_rate_pct: number | null;
         vat_base_thb: number | null;
       }>();
+    if (beforeErr) {
+      console.error(`[freight_shipments mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (["delivered", "cancelled"].includes(before.status)) {
       return { ok: false, error: "terminal_status" };
@@ -236,11 +240,15 @@ export async function adminUpsertFreightParty(
   return withAdmin([...ROLES_WRITE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_shipments")
       .select("status, job_no")
       .eq("id", d.freight_shipment_id)
       .maybeSingle<{ status: string; job_no: string }>();
+    if (parentErr) {
+      console.error(`[freight_shipments mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "not_found" };
     if (["delivered", "cancelled"].includes(parent.status)) {
       return { ok: false, error: "terminal_status" };
@@ -285,11 +293,15 @@ async function flipShipmentStatus(
   id: string, expectedFrom: string, to: string, extra: Record<string, unknown> = {},
 ): Promise<AdminActionResult<void>> {
   const admin = createAdminClient();
-  const { data: row } = await admin
+  const { data: row, error: rowErr } = await admin
     .from("freight_shipments")
     .select("status, job_no")
     .eq("id", id)
     .maybeSingle<{ status: string; job_no: string }>();
+  if (rowErr) {
+    console.error(`[freight_shipments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+    return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+  }
   if (!row) return { ok: false, error: "not_found" };
   if (row.status !== expectedFrom) return { ok: false, error: `bad_status:${row.status}` };
 
@@ -359,13 +371,16 @@ export async function adminMarkFreightDelivered(input: ShipmentIdOnlyInput): Pro
     // an existing non-cancelled invoice (returns 'existing_invoice:...').
     try {
       const admin = createAdminClient();
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("freight_invoices")
         .select("id, status")
         .eq("freight_shipment_id", input.id)
         .neq("status", "cancelled")
         .limit(1)
         .maybeSingle<{ id: string; status: string }>();
+      if (existingErr) {
+        console.error(`[freight_invoices list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       if (!existing) {
         const draftRes = await adminCreateFreightInvoice({ freight_shipment_id: input.id });
@@ -418,11 +433,15 @@ export async function adminCancelFreightShipment(input: CancelShipmentInput): Pr
 
   return withAdmin([...ROLES_WRITE], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("freight_shipments")
       .select("status")
       .eq("id", d.id)
       .maybeSingle<{ status: string }>();
+    if (rowErr) {
+      console.error(`[freight_shipments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status === "cancelled") return { ok: false, error: "already_cancelled" };
     if (row.status === "delivered") return { ok: false, error: "cannot_cancel_after_delivery" };

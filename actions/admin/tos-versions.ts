@@ -86,11 +86,15 @@ export async function updateTosVersion(
   return withAdmin(["super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tos_versions")
       .select("id, version_no, title, applies_to, is_active, effective_from")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[tos_versions mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const patch: Record<string, unknown> = {};
@@ -128,11 +132,15 @@ export async function activateTosVersion(
   return withAdmin(["super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("tos_versions")
       .select("id, applies_to, is_active")
       .eq("id", id)
       .maybeSingle<{ id: string; applies_to: TosScope; is_active: boolean }>();
+    if (rowErr) {
+      console.error(`[tos_versions mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
     // Deactivate every other row with same applies_to.

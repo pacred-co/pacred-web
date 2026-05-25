@@ -98,9 +98,10 @@ export default async function CustomsPortDetailPage({
   // Guests are routed through `/login?next=<this-page>` so they land back here
   // after authenticating (same pattern as `/start-order`).
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     redirect({
       href: { pathname: "/login", query: { next: `${PARENT_PATH}/${port.slug}` } },

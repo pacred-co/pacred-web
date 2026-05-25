@@ -66,9 +66,10 @@ export default async function StartOrderPage({
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
 
   if (user) {
     // Signed in → straight into the order flow with the quote pre-filled.

@@ -123,11 +123,14 @@ export default async function CustomUserRatesPage({
   const coidList = Array.from(new Set([...kgRows.map((r) => r.coid), ...cbmRows.map((r) => r.coid)])).sort();
 
   // Customer count per coid (so admin sees "VIP1 has 47 customers")
-  const { data: usersRaw } = await admin
+  const { data: usersRaw, error: usersRawErr } = await admin
     .from("tb_users")
     .select("coid")
     .in("coid", coidList)
     .limit(20000);
+  if (usersRawErr) {
+    console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+  }
   const userCountByCoid = new Map<string, number>();
   for (const u of (usersRaw ?? []) as { coid: string | null }[]) {
     if (!u.coid) continue;

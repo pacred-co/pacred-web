@@ -119,7 +119,10 @@ export default async function AdminBoardPage({
   if (statusFilter)  q = q.eq("status", statusFilter);
   else               q = q.in("status", BOARD_COLUMNS);    // default: active only
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[work_items list] failed`, { code: error.code, message: error.message });
+  }
   let rows = (data ?? []) as WorkRow[];
   if (overdueOnly) {
     rows = rows.filter((r) => isWorkItemOverdue(r.due_at, r.status as WorkStatus));
@@ -129,10 +132,13 @@ export default async function AdminBoardPage({
   const assigneeIds = [...new Set(rows.map((r) => r.assigned_to).filter((v): v is string => !!v))];
   const nameById = new Map<string, string>();
   if (assigneeIds.length > 0) {
-    const { data: profs } = await admin
+    const { data: profs, error: profsErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name")
       .in("id", assigneeIds);
+    if (profsErr) {
+      console.error(`[profiles list] failed`, { code: profsErr.code, message: profsErr.message });
+    }
     for (const p of (profs ?? []) as Array<{ id: string; member_code: string | null; first_name: string | null; last_name: string | null }>) {
       nameById.set(
         p.id,
@@ -142,10 +148,13 @@ export default async function AdminBoardPage({
   }
 
   // ── Admin options for the assignee picker ─────────────────────────
-  const { data: adminRows } = await admin
+  const { data: adminRows, error: adminRowsErr } = await admin
     .from("admins")
     .select("profile_id, role, profile:profiles!profile_id ( member_code, first_name, last_name )")
     .eq("is_active", true);
+  if (adminRowsErr) {
+    console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+  }
   type AR = {
     profile_id: string; role: string;
     profile: { member_code: string | null; first_name: string | null; last_name: string | null }
@@ -165,10 +174,13 @@ export default async function AdminBoardPage({
   const adminOptions = [...adminOptionsMap.values()].sort((x, y) => x.name.localeCompare(y.name, "th"));
 
   // ── Global counts — board-wide active state (NOT filtered) ────────
-  const { data: allActive } = await admin
+  const { data: allActive, error: allActiveErr } = await admin
     .from("work_items")
     .select("status, assigned_role, due_at, waiting_reason")
     .in("status", ["open", "in_progress", "blocked"]);
+  if (allActiveErr) {
+    console.error(`[work_items list] failed`, { code: allActiveErr.code, message: allActiveErr.message });
+  }
   const activeRows = (allActive ?? []) as Array<{
     status: string; assigned_role: string; due_at: string | null; waiting_reason: string | null;
   }>;

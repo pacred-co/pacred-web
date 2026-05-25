@@ -58,23 +58,29 @@ export default async function AdminForwarderNewPage({
   const admin = createAdminClient();
 
   // ─── tb_co (member tiers) ────────────────────────────────────────────
-  const { data: coRaw } = await admin
+  const { data: coRaw, error: coRawErr } = await admin
     .from("tb_co")
     .select("coid, coname")
     .eq("costatus", "1")
     .order("coid", { ascending: true })
     .limit(100);
+  if (coRawErr) {
+    console.error(`[tb_co list] failed`, { code: coRawErr.code, message: coRawErr.message });
+  }
   const coidList = (coRaw ?? []) as CoidOption[];
 
   // ─── tb_settings.freeShipping ───────────────────────────────────────
   // Legacy `optionHShipByCart()` prepends the "PCSF · เหมาๆ 50บ." option
   // only when tb_settings.freeShipping = '1'. We pass the flag to the
   // client form so it can branch the dropdown the same way.
-  const { data: settingsRow } = await admin
+  const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("freeshipping")
     .eq("id", 1)
     .maybeSingle<{ freeshipping: string | null }>();
+  if (settingsRowErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+  }
   const freeShipping = settingsRow?.freeshipping === "1";
 
   // ─── Optional preset (?q=PR1234) ────────────────────────────────────
@@ -87,11 +93,14 @@ export default async function AdminForwarderNewPage({
   const qRaw = (sp.q ?? "").trim();
   if (qRaw) {
     const candidate = qRaw.toUpperCase();
-    const { data: userRow } = await admin
+    const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
       .select("userid, username, userlastname, usertel, coid")
       .eq("userid", candidate)
       .maybeSingle<CustomerOption & { coid: string | null }>();
+    if (userRowErr) {
+      console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+    }
 
     if (userRow) {
       presetUser = {

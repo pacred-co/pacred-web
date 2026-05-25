@@ -298,12 +298,15 @@ export default async function ReportForwarderPage({
   //   then sum (ftotalprice + ftransportprice + fpriceupdate -
   //   fdiscount) bucketed per day in JS. Mirrors the legacy intent
   //   one subquery per day, just in a single Postgres-friendly fetch.
-  const { data: revData } = await admin
+  const { data: revData, error: revDataErr } = await admin
     .from("tb_forwarder")
     .select("fdate, ftotalprice, ftransportprice, fpriceupdate, fdiscount")
     .eq("fstatus", "7")
     .gte("fdate", `${graphStart}T00:00:00`)
     .lt("fdate", `${graphEnd}T00:00:00`);
+  if (revDataErr) {
+    console.error(`[tb_forwarder list] failed`, { code: revDataErr.code, message: revDataErr.message });
+  }
   const revRows = (revData ?? []) as unknown as RevenueRow[];
 
   // Build the date-keyed revenue map (legacy `$dataArr`).
@@ -365,7 +368,10 @@ export default async function ReportForwarderPage({
   // mirror server-side.
   ledgerQ = ledgerQ.order("fdate", { ascending: false, nullsFirst: false });
 
-  const { data: ledgerData } = await ledgerQ;
+  const { data: ledgerData, error: ledgerDataErr } = await ledgerQ;
+  if (ledgerDataErr) {
+    console.error(`[tb_forwarder list] failed`, { code: ledgerDataErr.code, message: ledgerDataErr.message });
+  }
   const ledgerRows = (ledgerData ?? []) as unknown as LedgerRow[];
 
   // Pre-build the ledger input default value — legacy L132 echoes the

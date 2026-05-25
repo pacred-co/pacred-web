@@ -147,7 +147,7 @@ export default async function UserSalesHistoryDrillIn({
 
   const admin = createAdminClient();
 
-  const { data: userRaw } = await admin
+  const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
     .select(
       "userid, username, userlastname, usertel, useremail, userstatus, userregistered, userlastlogin, adminidsale, usercompany",
@@ -155,6 +155,10 @@ export default async function UserSalesHistoryDrillIn({
     .eq("userid", id)
     .maybeSingle();
 
+  if (userRawErr) {
+    console.error(`[tb_users lookup] failed`, { code: userRawErr.code, message: userRawErr.message, details: userRawErr.details, hint: userRawErr.hint });
+    throw new Error(`Failed to load tb_users (${userRawErr.code ?? "unknown"}): ${userRawErr.message}`);
+  }
   if (!userRaw) notFound();
   const u = userRaw as unknown as URow;
 

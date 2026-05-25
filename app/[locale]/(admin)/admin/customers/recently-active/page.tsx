@@ -69,7 +69,10 @@ export default async function RecentlyActiveCustomersPage({
   if (type === "personal") q = q.neq("usercompany", "1");
   if (type === "juristic") q = q.eq("usercompany", "1");
 
-  const { data: rowsRaw } = await q;
+  const { data: rowsRaw, error: rowsRawErr } = await q;
+  if (rowsRawErr) {
+    console.error(`[tb_users list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   const rows = (rowsRaw ?? []) as Row[];
 
   const activeCount = rows.filter((r) => r.userlastlogin).length;

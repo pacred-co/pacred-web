@@ -166,7 +166,7 @@ export async function setBusinessConfig(
   const admin = createAdminClient();
 
   // 1. Read existing (for the audit before-image).
-  const { data: existing } = await admin
+  const { data: existing, error: existingErr } = await admin
     .from("business_config")
     .select("value, value_type, category, description, created_at")
     .eq("key", key)
@@ -178,6 +178,10 @@ export async function setBusinessConfig(
       created_at: string;
     }>();
 
+  if (existingErr) {
+    console.error(`[business_config lookup] failed`, { code: existingErr.code, message: existingErr.message, details: existingErr.details, hint: existingErr.hint });
+    throw new Error(`Failed to load business_config (${existingErr.code ?? "unknown"}): ${existingErr.message}`);
+  }
   if (!existing) {
     // Refuse to create new keys via this path — schema-by-migration.
     // The admin UI lets you edit known keys, not invent new ones.
@@ -219,10 +223,13 @@ export async function setBusinessConfig(
  */
 export async function listAllBusinessConfig(): Promise<BusinessConfigRow[]> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("business_config")
     .select("key, value, value_type, category, description, updated_by_admin_id, updated_at, created_at")
     .order("category", { ascending: true, nullsFirst: false })
     .order("key", { ascending: true });
+  if (error) {
+    console.error(`[business_config list] failed`, { code: error.code, message: error.message });
+  }
   return (data ?? []) as BusinessConfigRow[];
 }

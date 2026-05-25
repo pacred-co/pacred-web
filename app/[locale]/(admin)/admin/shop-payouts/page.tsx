@@ -56,7 +56,10 @@ export default async function AdminShopPayoutsPage({
     .limit(200);
 
   if (sp.status) q = q.eq("status", sp.status);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[tb_shop_transactions list] failed`, { code: error.code, message: error.message });
+  }
 
   type Profile = {
     member_code: string | null;

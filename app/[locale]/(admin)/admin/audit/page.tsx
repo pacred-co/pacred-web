@@ -50,11 +50,14 @@ export default async function AdminAuditPage({
   // Resolve admin filter to profile_id first
   let adminFilterId: string | null = null;
   if (sp.admin) {
-    const { data: profile } = await admin
+    const { data: profile, error: profileErr } = await admin
       .from("profiles")
       .select("id")
       .eq("member_code", sp.admin.trim().toUpperCase())
       .maybeSingle<{ id: string }>();
+    if (profileErr) {
+      console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+    }
     adminFilterId = profile?.id ?? "__not_found__";
   }
 
@@ -88,7 +91,10 @@ export default async function AdminAuditPage({
 
   const { count: totalCount } = await countQ;
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[admin_audit_log list] failed`, { code: error.code, message: error.message });
+  }
   const rows = ((data ?? []) as Row[]).map((r) => ({ ...r, _admin: normAdmin(r.admin) }));
 
   // Top 10 distinct action prefixes (from current page) for quick chips

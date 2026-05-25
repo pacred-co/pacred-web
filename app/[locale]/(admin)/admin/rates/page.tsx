@@ -15,7 +15,7 @@ type Settings = {
 
 export default async function AdminRatesPage() {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("settings")
     .select(`
       yuan_rate, service_fee,
@@ -26,6 +26,10 @@ export default async function AdminRatesPage() {
     .eq("id", 1)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[settings lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load settings (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
   const s = data as Settings;
 

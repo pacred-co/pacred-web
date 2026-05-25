@@ -84,13 +84,16 @@ export async function adminBeginImpersonation(
     if (tErr) return { ok: false, error: tErr.message };
     if (!target) return { ok: false, error: "target_not_found" };
 
-    const { data: targetIsAdmin } = await admin
+    const { data: targetIsAdmin, error: targetIsAdminErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", d.target_profile_id)
       .eq("is_active", true)
       .limit(1)
       .maybeSingle<{ role: string }>();
+    if (targetIsAdminErr) {
+      console.error(`[admins list] failed`, { code: targetIsAdminErr.code, message: targetIsAdminErr.message });
+    }
     if (targetIsAdmin) {
       return { ok: false, error: "cannot_impersonate_admin" };
     }

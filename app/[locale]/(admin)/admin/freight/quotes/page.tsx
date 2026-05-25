@@ -64,15 +64,21 @@ export default async function AdminFreightQuotesListPage({
       `quote_no.ilike.%${q}%,buyer_name_snapshot.ilike.%${q}%,buyer_tax_id_snapshot.ilike.%${q}%`,
     );
   }
-  const { data: rows } = await query;
+  const { data: rows, error: rowsErr } = await query;
+  if (rowsErr) {
+    console.error(`[freight_quotes list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
   const quotes = (rows ?? []) as QuoteRow[];
 
   // Counts per status for badges.
   const counts: Record<QuoteStatus, number> = {} as Record<QuoteStatus, number>;
   for (const s of QUOTE_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("freight_quotes")
     .select("status");
+  if (countRowsErr) {
+    console.error(`[freight_quotes list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: QuoteStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }

@@ -27,10 +27,13 @@ export default async function PcsMigrationPage() {
   await requireAdmin(["super"]);
 
   const admin = createAdminClient();
-  const { data: status } = await admin
+  const { data: status, error: statusErr } = await admin
     .from("v_pcs_migration_status")
     .select("*")
     .maybeSingle<StatusRow>();
+  if (statusErr) {
+    console.error(`[v_pcs_migration_status list] failed`, { code: statusErr.code, message: statusErr.message });
+  }
 
   const seqOffsetOk = status ? status.member_code_seq_current > status.max_legacy_num_in_staging : true;
 

@@ -57,7 +57,7 @@ export default async function ShopOrderReceiptPage({
   // V-A6: WHT info banner (juristic customer who withholds tax — see ADR-0015).
   // RLS allows the customer to read OWN withholding_tax_entries row.
   const supabase = await createClient();
-  const { data: whtRow } = await supabase
+  const { data: whtRow, error: whtRowErr } = await supabase
     .from("withholding_tax_entries")
     .select("id, cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
     .eq("order_h_no", o.h_no ?? hNo)
@@ -69,6 +69,9 @@ export default async function ShopOrderReceiptPage({
       net_expected_thb:   number;
       gross_invoice_thb:  number;
     }>();
+  if (whtRowErr) {
+    console.error(`[withholding_tax_entries list] failed`, { code: whtRowErr.code, message: whtRowErr.message });
+  }
 
   // D1 Phase-B Wave 2: o.status is the legacy tb_header_order.hstatus code.
   // isPaid drives the "ชำระเงินแล้ว" stamp + the THB-paid framing; the doc

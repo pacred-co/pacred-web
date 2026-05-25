@@ -69,7 +69,10 @@ export default async function AdminTaxInvoicesPage({
 
   if (statusFilter !== "all") q = q.eq("status", statusFilter);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[tax_invoices list] failed`, { code: error.code, message: error.message });
+  }
   type ProfileShape = { member_code: string | null; first_name: string | null; last_name: string | null };
   type RawRow = Omit<NonNullable<typeof data>[number], "profile"> & {
     profile: ProfileShape | ProfileShape[] | null;

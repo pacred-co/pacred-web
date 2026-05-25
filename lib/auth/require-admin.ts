@@ -110,11 +110,14 @@ const getAdminUserAndRoles = cache(async (): Promise<
   if (!user) return null;
 
   const supabase = await createClient();
-  const { data: rows } = await supabase
+  const { data: rows, error: rowsErr } = await supabase
     .from("admins")
     .select("role")
     .eq("profile_id", user.id)
     .eq("is_active", true);
+  if (rowsErr) {
+    console.error(`[admins list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
 
   const roles = (rows ?? []).map((r) => r.role as AdminRole);
   return { user: { id: user.id, email: user.email ?? null }, roles };

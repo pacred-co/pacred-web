@@ -162,11 +162,14 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     const admin = createAdminClient();
 
     // ── (a) UPSERT tb_cost_container ──
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("tb_cost_container")
       .select("id")
       .eq("fcabinetnumber", fCabinetNumber)
       .maybeSingle<{ id: number }>();
+    if (existingErr) {
+      console.error(`[tb_cost_container list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     const nowIso = new Date().toISOString();
     if (existing?.id) {
@@ -367,10 +370,13 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
     // Skip rows that already exist (legacy doesn't guard — leaves a dup
     // row when an admin clicks twice. We guard for cleanliness; the
     // observable behaviour matches "the row is in the queue").
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("tb_check_forwarder")
       .select("fid")
       .in("fid", parsed.data.fIDs);
+    if (existingErr) {
+      console.error(`[tb_check_forwarder list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     const seen = new Set((existing ?? []).map((r) => Number(r.fid)));
 
     const toInsert = parsed.data.fIDs

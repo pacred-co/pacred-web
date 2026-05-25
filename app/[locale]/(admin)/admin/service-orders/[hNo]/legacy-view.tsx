@@ -88,21 +88,28 @@ type URow = {
 
 export async function renderLegacyServiceOrderView(hno: string) {
   const admin = createAdminClient();
-  const { data: rowRaw } = await admin
+  const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_header_order")
     .select(
       "id,hno,htitle,hcover,hcount,hdate,hdatepayment,hstatus,htransporttype,htotalpricechn,htotalpriceuser,hshippingservice,hshippingchn,hrate,hcostall,hcostallth,hnote,hnoteuser,hshipby,hfreeshipping,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddresstel,haddressnote,userid,paymethod,crate",
     )
     .eq("hno", hno)
     .maybeSingle();
+  if (rowRawErr) {
+    console.error(`[tb_header_order lookup] failed`, { code: rowRawErr.code, message: rowRawErr.message, details: rowRawErr.details, hint: rowRawErr.hint });
+    throw new Error(`Failed to load tb_header_order (${rowRawErr.code ?? "unknown"}): ${rowRawErr.message}`);
+  }
   if (!rowRaw) return null;
   const r = rowRaw as unknown as HRow;
 
-  const { data: userRaw } = await admin
+  const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
     .select("userid,username,userlastname,usertel,useremail")
     .eq("userid", r.userid)
     .maybeSingle();
+  if (userRawErr) {
+    console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
+  }
   const u = userRaw as unknown as URow | null;
 
   const customerName = `${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || "—";

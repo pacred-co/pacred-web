@@ -95,7 +95,10 @@ export default async function ClosingReportPage({
     .order("created_at", { ascending: false })
     .limit(2000);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  }
   const allRows = ((data ?? []) as unknown as Row[]).map((r) => ({
     ...r,
     profile:   normSingle(r.profile),

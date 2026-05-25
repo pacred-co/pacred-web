@@ -135,33 +135,43 @@ export default async function CntHsDetailPage({
   const admin = createAdminClient();
 
   // 1. Read the main cnt row
-  const { data: cntRaw } = await admin
+  const { data: cntRaw, error: cntRawErr } = await admin
     .from("tb_cnt")
     .select(
       "id,cntname,cntstatus,cntamount,cntimagesslip,cntfile,date,adminidcreate,nameblank,noblank,nameaccount,dateupdate,adminidupdate",
     )
     .eq("id", cntId)
     .maybeSingle();
+  if (cntRawErr) {
+    console.error(`[tb_cnt lookup] failed`, { code: cntRawErr.code, message: cntRawErr.message, details: cntRawErr.details, hint: cntRawErr.hint });
+    throw new Error(`Failed to load tb_cnt (${cntRawErr.code ?? "unknown"}): ${cntRawErr.message}`);
+  }
   if (!cntRaw) notFound();
   const cnt = cntRaw as unknown as CntRow;
 
   // 2. Read linked cabinet items
-  const { data: itemsRaw } = await admin
+  const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("tb_cnt_item")
     .select("id,fcabinetnumber,cntid")
     .eq("cntid", cntId);
+  if (itemsRawErr) {
+    console.error(`[tb_cnt_item list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   const items = (itemsRaw ?? []) as unknown as CntItemRow[];
   const cabinetNumbers = Array.from(new Set(items.map((i) => i.fcabinetnumber).filter(Boolean)));
 
   // 3. Read forwarders for these cabinets (so admin sees the goods)
   let forwarders: FwRow[] = [];
   if (cabinetNumbers.length > 0) {
-    const { data: fwRaw } = await admin
+    const { data: fwRaw, error: fwRawErr } = await admin
       .from("tb_forwarder")
       .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fweight,fvolume,userid")
       .in("fcabinetnumber", cabinetNumbers)
       .order("fdate", { ascending: false })
       .limit(1000);
+    if (fwRawErr) {
+      console.error(`[tb_forwarder list] failed`, { code: fwRawErr.code, message: fwRawErr.message });
+    }
     forwarders = (fwRaw ?? []) as unknown as FwRow[];
   }
 
@@ -169,10 +179,13 @@ export default async function CntHsDetailPage({
   const userIds = Array.from(new Set(forwarders.map((f) => f.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
   if (userIds.length > 0) {
-    const { data: usersRaw } = await admin
+    const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
       .select("userid,username,userlastname")
       .in("userid", userIds);
+    if (usersRawErr) {
+      console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+    }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 

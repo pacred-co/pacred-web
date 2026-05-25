@@ -393,10 +393,13 @@ async function loadUsersByUserId(
 ): Promise<Map<string, RawUserRow>> {
   const unique = Array.from(new Set(userIds.filter(Boolean)));
   if (unique.length === 0) return new Map();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_users")
     .select("userid,username,userlastname,usertel")
     .in("userid", unique);
+  if (error) {
+    console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+  }
   return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]));
 }
 
@@ -422,7 +425,10 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .order("date", { ascending: false, nullsFirst: false })
         .limit(50);
       q = tab === "topup" ? q.gt("amount", 0) : q.lt("amount", 0);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.error(`[tb_wallet_hs list] failed`, { code: error.code, message: error.message });
+      }
       const rows = (data ?? []) as unknown as RawWalletHsRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       return rows.map((r) => {
@@ -451,12 +457,15 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     case "shop2":
     case "shop4": {
       const statusMap: Record<string, string> = { shop1: "1", shop2: "2", shop4: "4" };
-      const { data } = await admin
+      const { data, error } = await admin
         .from("tb_header_order")
         .select("id,hno,hstatus,htotalpriceuser,hdate,htitle,userid")
         .eq("hstatus", statusMap[tab])
         .order("hdate", { ascending: false, nullsFirst: false })
         .limit(50);
+      if (error) {
+        console.error(`[tb_header_order list] failed`, { code: error.code, message: error.message });
+      }
       const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       return rows.map((r) => {
@@ -495,7 +504,10 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       else if (tab === "forwarderC")  q = q.eq("fcredit", "1");
       else if (tab === "forwarder6")  q = q.eq("fstatus", "4");
       else                            q = q.eq("fstatus", "6");
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
+      }
       const rows = (data ?? []) as unknown as RawForwarderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       return rows.map((r) => {
@@ -522,12 +534,15 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // ── ฝากโอน (tb_payment) ────────────────────────────────────────────────
     // paystatus '1' = รอตรวจสอบ; legacy paytype 1=alipay 2=wechat 3=bank.
     case "payment": {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("tb_payment")
         .select("id,paydate,paystatus,paytype,payyuan,paythb,userid")
         .eq("paystatus", "1")
         .order("paydate", { ascending: false, nullsFirst: false })
         .limit(50);
+      if (error) {
+        console.error(`[tb_payment list] failed`, { code: error.code, message: error.message });
+      }
       const rows = (data ?? []) as unknown as RawPaymentRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
       return rows.map((r) => {
@@ -558,7 +573,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
     // Phase C decides whether to retire the tab or re-wire it.
     // TODO Phase C — see file header.
     case "payShop": {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("sales_payouts")
         .select(`
           id, amount, status, created_at,
@@ -567,6 +582,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(50);
+      if (error) {
+        console.error(`[sales_payouts list] failed`, { code: error.code, message: error.message });
+      }
       return ((data ?? []) as RawPayoutRow[]).map((r) => {
         const p = pickProfile(r.profile);
         return {
@@ -584,12 +602,15 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
 
     // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users useractive='0') ───────────────────
     case "inactiveCustomers": {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("tb_users")
         .select("id,userid,username,userlastname,usertel,useremail,userregistered,usercompany")
         .eq("useractive", "0")
         .order("userregistered", { ascending: false, nullsFirst: false })
         .limit(50);
+      if (error) {
+        console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+      }
       const rows = (data ?? []) as unknown as RawUserListRow[];
       return rows.map((u) => ({
         id: String(u.id),

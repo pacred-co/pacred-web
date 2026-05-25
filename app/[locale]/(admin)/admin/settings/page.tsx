@@ -5,12 +5,16 @@ import { SettingsForm } from "./settings-form";
 
 export default async function AdminSettingsPage() {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("settings")
     .select("service_fee, juristic_discount_threshold, juristic_discount_pct, qc_fee_per_item, crate_fee_base, free_shipping_enabled, free_shipping_threshold, yuan_rate")
     .eq("id", 1)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[settings lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load settings (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
   type Settings = {
     service_fee: number;

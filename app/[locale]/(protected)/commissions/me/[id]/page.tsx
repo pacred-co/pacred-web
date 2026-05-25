@@ -90,7 +90,7 @@ export default async function MyWithdrawalDetailPage({
 
   // RLS-scoped read: customer/non-earner attempts will get null.
   const supabase = await createClient();
-  const { data: w } = await supabase
+  const { data: w, error: wErr } = await supabase
     .from("commission_withdrawals")
     .select(`
       id, withdrawal_no, status, title, notes, earner_admin_id,
@@ -102,6 +102,10 @@ export default async function MyWithdrawalDetailPage({
     .eq("id", id)
     .maybeSingle<WithdrawalDetail>();
 
+  if (wErr) {
+    console.error(`[commission_withdrawals lookup] failed`, { code: wErr.code, message: wErr.message, details: wErr.details, hint: wErr.hint });
+    throw new Error(`Failed to load commission_withdrawals (${wErr.code ?? "unknown"}): ${wErr.message}`);
+  }
   if (!w) notFound();
   if (w.earner_admin_id !== user.id) {
     // Defense-in-depth: RLS already scopes, but reject explicitly.
@@ -109,7 +113,7 @@ export default async function MyWithdrawalDetailPage({
   }
 
   // Bundled accrual items (RLS-scoped).
-  const { data: itemsRaw } = await supabase
+  const { data: itemsRaw, error: itemsRawErr } = await supabase
     .from("commission_withdrawal_items")
     .select(`
       id, accrual_id,
@@ -118,6 +122,9 @@ export default async function MyWithdrawalDetailPage({
       )
     `)
     .eq("commission_withdrawal_id", id);
+  if (itemsRawErr) {
+    console.error(`[commission_withdrawal_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   const items = ((itemsRaw ?? []) as ItemRow[]).map((it) => {
     const acc = Array.isArray(it.accrual) ? it.accrual[0] ?? null : it.accrual;
     return { ...it, accrual: acc };

@@ -7,7 +7,7 @@ export default async function AdminHRPage() {
   const admin = createAdminClient();
 
   // Active admin users grouped by role — basic HR roster
-  const { data: adminRows } = await admin
+  const { data: adminRows, error: adminRowsErr } = await admin
     .from("admins")
     .select(`
       profile_id, role, is_active, granted_at,
@@ -15,6 +15,9 @@ export default async function AdminHRPage() {
       contact:admin_contact_extras!profile_id ( display_name, direct_phone, department, section )
     `)
     .eq("is_active", true);
+  if (adminRowsErr) {
+    console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+  }
 
   type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
   type Contact = { display_name: string | null; direct_phone: string | null; department: string | null; section: string | null };

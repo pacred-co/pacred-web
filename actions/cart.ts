@@ -79,11 +79,14 @@ export async function calculateCartTotal(
   // calculateCart.php L6-12 — SELECT rsDefault FROM tb_settings WHERE ID=1;
   //                            if pro==19 → 5.10 override.
   const admin = createAdminClient();
-  const { data: settingsRow } = await admin
+  const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
     .eq("id", 1)
     .maybeSingle<{ rsdefault: number | string | null }>();
+  if (settingsRowErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+  }
   const baseRate = Number(settingsRow?.rsdefault ?? 5.0);
   const rsDefault = input.pro === "19" ? 5.10 : baseRate;
 
@@ -106,11 +109,14 @@ export async function calculateCartTotal(
   // RLS on tb_cart is service_role-only; the legacy WHERE userID=…
   // clause is reproduced as a `.eq("userid", userID)` predicate so an
   // attacker that controls `ids` can NOT read rows they don't own.
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("tb_cart")
     .select("id, camount, cprice")
     .in("id", input.ids)
     .eq("userid", userID);
+  if (rowsErr) {
+    console.error(`[tb_cart list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
   const priceAll = ((rows ?? []) as {
     camount: number | string | null;
     cprice: number | string | null;
@@ -250,12 +256,15 @@ export async function submitCartOrder(input: {
   // The legacy uses a MySQL AUTO_INCREMENT next-value race; here we
   // SELECT the current max + 1. Race-rare for a single customer flow,
   // but a DB-side sequence is the proper long-term fix (flagged).
-  const { data: maxRow } = await admin
+  const { data: maxRow, error: maxRowErr } = await admin
     .from("tb_header_order")
     .select("id")
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: number }>();
+  if (maxRowErr) {
+    console.error(`[tb_header_order list] failed`, { code: maxRowErr.code, message: maxRowErr.message });
+  }
   const nextID = (Number(maxRow?.id ?? 0) || 0) + 1;
   const hNo = "P" + nextID;
 
@@ -323,7 +332,7 @@ export async function submitCartOrder(input: {
       addressNote: input.hNote ?? "",
     };
   } else {
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrRowErr } = await admin
       .from("tb_address")
       .select(
         "addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote",
@@ -343,6 +352,10 @@ export async function submitCartOrder(input: {
         addresszipcode: string | null;
         addressnote: string | null;
       }>();
+    if (addrRowErr) {
+      console.error(`[tb_address mutation lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+      return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
+    }
     if (!addrRow) return { ok: false, error: "address_not_found" };
     addr = {
       addressName: addrRow.addressname ?? "",
@@ -390,13 +403,16 @@ export async function submitCartOrder(input: {
 
   // shops.php L173-194 — INSERT tb_order rows (one per selected cart
   // row). Read cart rows ownership-gated, then bulk-insert with hno.
-  const { data: cartRows } = await admin
+  const { data: cartRows, error: cartRowsErr } = await admin
     .from("tb_cart")
     .select(
       "id, ctitle, cnameshop, curl, cprovider, cimages, csize, cprice, ccolor, camount, cdetails",
     )
     .in("id", input.ids)
     .eq("userid", userID);
+  if (cartRowsErr) {
+    console.error(`[tb_cart list] failed`, { code: cartRowsErr.code, message: cartRowsErr.message });
+  }
   if (!cartRows || cartRows.length === 0) {
     return { ok: false, error: "cart_rows_not_found" };
   }
@@ -445,11 +461,14 @@ export async function submitCartOrder(input: {
 
   // shops.php L208-220 — UPDATE tb_header_order with rollup totals
   // (hTotalPriceCHN / hRate / hCount / hTitle / hCover).
-  const { data: settingsRow } = await admin
+  const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
     .eq("id", 1)
     .maybeSingle<{ rsdefault: number | string | null }>();
+  if (settingsRowErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+  }
   const rsDefault = Number(settingsRow?.rsdefault ?? 5.0);
   const sumTotalCHN = orderRowsPayload.reduce(
     (s, r) => s + r.cprice * r.camount,
@@ -500,7 +519,10 @@ export type CartItem = {
 // ────────────────────────────────────────────────────────────
 export async function listCart(): Promise<ActionResult<CartItem[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -529,7 +551,10 @@ export async function addCartItem(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data: created, error } = await supabase
@@ -572,7 +597,10 @@ export async function updateCartItem(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Build update object with only provided keys (avoid clobbering with null)
@@ -599,7 +627,10 @@ export async function removeCartItem(id: string): Promise<ActionResult> {
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase.from("cart_items").delete().eq("id", id);
@@ -615,7 +646,10 @@ export async function clearCart(): Promise<ActionResult> {
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -647,7 +681,10 @@ export async function addCartItemsBulk(rows: CartItemBulkRow[]): Promise<ActionR
   if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "empty_rows" };
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Validate each row
@@ -806,19 +843,25 @@ export async function validatePromoCode(
     const admin = createAdminClient();
     let alreadyOptedIn = false;
     if (promo.id === 19) {
-      const { data: vRow } = await admin
+      const { data: vRow, error: vRowErr } = await admin
         .from("tb_pro_valentine")
         .select("userid")
         .eq("userid", uid)
         .maybeSingle();
+      if (vRowErr) {
+        console.error(`[tb_pro_valentine list] failed`, { code: vRowErr.code, message: vRowErr.message });
+      }
       alreadyOptedIn = !!vRow;
     } else if (promo.id === 77) {
-      const { data: pRow } = await admin
+      const { data: pRow, error: pRowErr } = await admin
         .from("tb_promotion33")
         .select("userid")
         .eq("userid", uid)
         .eq("statuspro", "2") // 2 = ใช้โปรแล้ว
         .maybeSingle();
+      if (pRowErr) {
+        console.error(`[tb_promotion33 list] failed`, { code: pRowErr.code, message: pRowErr.message });
+      }
       alreadyOptedIn = !!pRow;
     }
     if (alreadyOptedIn) {
@@ -1056,10 +1099,13 @@ export async function getAvailablePromos(): Promise<ActionResult<AvailablePromo[
 async function readBaselineRate(
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<number> {
-  const { data: settingsRow } = await admin
+  const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
     .eq("id", 1)
     .maybeSingle<{ rsdefault: number | string | null }>();
+  if (settingsRowErr) {
+    console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+  }
   return Number(settingsRow?.rsdefault ?? 5.0);
 }

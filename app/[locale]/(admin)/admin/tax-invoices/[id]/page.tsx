@@ -97,7 +97,7 @@ export default async function AdminTaxInvoiceDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tax_invoices")
     .select(`
       id, profile_id, status, serial_no, order_h_no, forwarder_f_no,
@@ -110,6 +110,10 @@ export default async function AdminTaxInvoiceDetailPage({
     .eq("id", id)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[tax_invoices lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load tax_invoices (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
 
   // Normalise profile shape (Supabase typing returns array vs object inconsistency for FK joins)
@@ -120,11 +124,14 @@ export default async function AdminTaxInvoiceDetailPage({
     profile: Array.isArray(rawProfile) ? rawProfile[0] ?? null : rawProfile,
   } as Header;
 
-  const { data: lines } = await admin
+  const { data: lines, error: linesErr } = await admin
     .from("tax_invoice_lines")
     .select("id, position, description, qty, unit_price_thb, amount_thb, vat_thb")
     .eq("tax_invoice_id", header.id)
     .order("position", { ascending: true });
+  if (linesErr) {
+    console.error(`[tax_invoice_lines list] failed`, { code: linesErr.code, message: linesErr.message });
+  }
 
   const lineRows = (lines ?? []) as Line[];
 

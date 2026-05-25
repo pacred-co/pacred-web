@@ -84,11 +84,14 @@ export default async function OrgEmailPage() {
   //   AS oe LEFT JOIN tb_org_email_ships AS oes ON oe.ID=oes.oeID
   //   (WHERE adminID='$adminID' when non-CEO/HR/ITDT)
   // home.php L146-160
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("tb_organization_email")
     .select("id, date, dateupdate, email, emailtel, passemail, emailtype, adminidcreate, adminidupdate, note")
     .order("date", { ascending: false })
     .returns<Row[]>();
+  if (rowsErr) {
+    console.error(`[tb_organization_email list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
   // Per-admin scoping for non-mutators is omitted in this default-view pilot —
   // legacy join is on tb_org_email_ships which has no `adminID` column in the
   // ported schema (the schema map in 0081 shows tb_org_email_ships.oeid only).

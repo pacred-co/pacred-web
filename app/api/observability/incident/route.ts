@@ -65,16 +65,22 @@ export async function POST(request: Request) {
   let actorRef: string | null = null;
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     if (user) {
       actorRef = redactId(user.id);
       // Is this user an admin? If so, store the highest-trust role label
       // so triage knows "an ops-role user hit this". Else 'customer'.
-      const { data: adminRows } = await supabase
+      const { data: adminRows, error: adminRowsErr } = await supabase
         .from("admins")
         .select("role")
         .eq("profile_id", user.id)
         .eq("is_active", true);
+      if (adminRowsErr) {
+        console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+      }
       const roles = (adminRows ?? []).map((r) => r.role as string);
       actorRole = roles.includes("super")
         ? "super"
