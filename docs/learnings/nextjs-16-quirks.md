@@ -522,3 +522,132 @@ Once set, every deploy uses the SAME key → action IDs stay valid across deploy
 - [`docs/env.md`](../env.md) §9.6 — operational instructions
 - [Next.js docs — Server Actions encryption key](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions)
 - Vercel deploy `dpl_HB3MAU3TGBoFykvCLBPy1BHoTxQS` (the P0 #4 deploy that surfaced this)
+
+---
+
+## [2026-05-25 3rd] Server Action default body-size limit is **1 MB** — anything over is rejected at the platform layer SILENTLY
+
+**Context:** Juristic signup Step 3 has 3 file uploads (ภพ20 / company affidavit / national-ID card), each up to 10 MB per the action validator `MAX_SIZE`. Customers tapped "สมัครสมาชิก" → page just sat there. No error in browser console. No Sentry capture. No Vercel function log.
+
+**Symptom:** Server Action invocation silently does nothing. `useTransition` `pending` flips to `false` like the action returned — but the action body never ran, the validator never fired (so `file_too_large` error never surfaced), no DB row was written. The action's internal `console.error` for catch-blocks doesn't fire because the action body wasn't reached.
+
+**Root cause:** Next.js 16's default `experimental.serverActions.bodySizeLimit` is `'1 mb'`. The platform parses the multipart body BEFORE the action function runs; if the request body exceeds the limit, Next.js rejects it with an internal error that — depending on the deploy target — surfaces to the client as either a generic 413, a malformed response, or (on Vercel) a swallowed error that triggers React's transition-resolved branch without the expected return value. None of these surface to the user as an error UI.
+
+**The "empty table over time" fingerprint:** if a feature has shipped + users are visibly clicking through it + the corresponding DB table shows **zero rows after weeks of traffic**, the feature is silently broken at the platform layer. The earlier you query `select count(*) from <table>` against prod, the faster you diagnose. For juristic signup it was:
+```sql
+select count(*) from documents;   -- expected: hundreds, actual: 0 for 2 weeks
+```
+That single query collapsed a "weird intermittent register bug" into "it has literally NEVER worked in production."
+
+**Fix — raise the limit ABOVE the app-level validator:**
+```ts
+// next.config.ts
+const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",   // > MAX_SIZE (10 MB) so app-level errors surface cleanly
+    },
+  },
+  // ...
+};
+```
+
+The 2-MB headroom matters: if the limit equals MAX_SIZE, a file exactly at the boundary still trips the platform reject before the validator can return a friendly `file_too_large`. Always raise the platform limit a comfortable margin above the app limit.
+
+**Why this matters next time:**
+- The default 1 MB is hostile to **any** file upload feature — profile pictures, payment slips, freight docs, anything CSV-import-shaped. Audit every Server Action that takes a `FormData` with files and ensure the platform limit > validator limit + margin.
+- The bug is **invisible during local dev** unless you actually upload a file > 1 MB. Smoke tests with 5 KB stub PNGs pass; real customer uploads with 2-3 MB phone-camera scans fail.
+- A `console.error` inside the action's `catch (e)` block won't fire because the action body never ran. Don't trust action-internal observability — the rejection happens upstream of your code.
+- Diagnostic: `select count(*) from <feature-table> where created_at > '<deploy-date>'` is the cheapest, fastest "is this feature actually working in prod?" check there is. Run it weekly on launch-week features.
+
+**Cross-links:**
+- Commit `f6c2ab1d` — the next.config.ts change
+- [Next.js docs — `serverActions.bodySizeLimit`](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions#bodysizelimit)
+- This entry is paired with the [`requireGuest()` cookie-revalidation entry above](#2026-05-25-server-action-cookie-write--layout-revalidation--requireguest-kicks-user-out-mid-multi-step-flow) — both were "juristic signup zero documents in prod" with different root causes; first fix exposed the second.
+
+---
+
+## [2026-05-25 4th] Multi-step signup resume pattern — async Server-Component wrapper, NOT client-side state recovery
+
+**Context:** After fixing requireGuest() (let mid-signup users stay on `/register`), users hit a NEW trap: the client form started at Step 1 of 3, asked for their phone again, and `registerJuristicStep1` rejected the now-duplicate phone with `signup_failed`. The user couldn't get past Step 1 of a flow they were already past.
+
+**Symptom:** Signed-in user with `status='incomplete'` lands on the multi-step signup page → form opens at Step 1 → all Step 1 fields are blank → submitting fails because the row already exists → user is locked out forever (phone uniqueness on `auth.users`).
+
+**Wrong fixes attempted (don't):**
+- ❌ `useEffect` on mount → fetch user state → setStep — causes a Step-1-flash before the effect resolves, plus a hydration mismatch warning.
+- ❌ URL `?step=2` param + client read — works for inbound deep links from `/complete-profile` but doesn't cover direct nav from a bookmark / hard refresh.
+- ❌ Move the multi-step state into URL search params — breaks back/forward, exposes incomplete-signup state in browser history.
+
+**Right fix — refactor page.tsx to an async Server Component that fetches the partial state and passes it down as props:**
+
+```tsx
+// app/[locale]/(auth)/register/page.tsx — Server Component
+export default async function RegisterPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const tabParam = params.tab === "juristic" ? "juristic" : "personal";
+
+  const data = await getCurrentUserWithProfile();
+
+  let juristicResume: RegisterResumeState | null = null;
+  let initialTab: TabId = tabParam;
+
+  if (
+    data?.user &&
+    data.profile?.status === "incomplete" &&
+    data.profile?.account_type === "juristic"
+  ) {
+    // Check Step 2 completion by querying the canonical row
+    const supabase = await createClient();
+    const { data: corp } = await supabase
+      .from("corporate")
+      .select("tax_id, company_name, company_address")
+      .eq("profile_id", data.user.id)
+      .maybeSingle();
+
+    juristicResume = {
+      step: corp ? 3 : 2,                          // skip to Step 3 if corporate already saved
+      taxId: corp?.tax_id ?? "",
+      companyName: corp?.company_name ?? "",
+      companyAddress: corp?.company_address ?? "",
+    };
+    initialTab = "juristic";
+  }
+
+  return <RegisterClient initialTab={initialTab} juristicResume={juristicResume} />;
+}
+
+// register-client.tsx — Client Component (rename of the original RegisterPage)
+"use client";
+export function RegisterClient({
+  initialTab = "personal",
+  juristicResume = null,
+}: { initialTab?: TabId; juristicResume?: RegisterResumeState | null }) {
+  const [tab, setTab] = useState<TabId>(initialTab);
+  // pass juristicResume down to <JuristicForm resume={juristicResume} />
+}
+
+function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
+  const [step, setStep] = useState<JuristicStep>(resume?.step ?? 1);
+  const [taxId, setTaxId] = useState(resume?.taxId ?? "");
+  // ...
+}
+```
+
+**Pattern characteristics:**
+- Server reads DB → decides initial state → no client-side flash, no hydration mismatch.
+- Client state still owns subsequent user input (the resume is just an initial value).
+- Guests (no session) and active users (status='active' redirected by requireGuest) pass through with `initialTab='personal'` + `juristicResume=null` → normal full-flow.
+- Detection key is the canonical row that the previous step writes (here: `corporate`). For any multi-step form, the table the FIRST step writes is your "did Step 1 complete?" signal; the table the LAST step writes is your "is this whole flow done?" signal.
+
+**When to reach for this:**
+- Multi-step auth flows where Step 1 already has DB side-effects (auth.users + profile row insert).
+- Anything where a customer can close the tab mid-flow and the app must let them resume without restarting.
+- KYC / verification workflows that span multiple sessions.
+
+**When NOT to use this:**
+- Single-step forms — overkill.
+- Forms where Step 1 is purely client-state (no DB write yet) — resume is automatic from state being preserved across navigation.
+
+**Cross-links:**
+- Commit `a8db8b2e` — the refactor
+- File: `app/[locale]/(auth)/register/page.tsx` (server wrapper, ~60 lines) + `register-client.tsx` (the original 1137-line client moved + propified)
