@@ -438,3 +438,48 @@ export default function Page() {
 **Cross-links:**
 - Commit `ccf109e` — the split fix (`lib/tos.ts` client-safe + new `lib/tos-server.ts`)
 - [`docs/learnings/ci-and-deploy-gotchas.md`](ci-and-deploy-gotchas.md) — "verify + build green ≠ prod" family
+
+---
+
+## [2026-05-25] Server Action cookie write → layout revalidation → `requireGuest()` kicks user out mid-multi-step-flow
+
+**Context:** Every juristic register signup in PROD was stalling — 138 profiles with `status='incomplete'`, 0 rows in `documents` table, 0 corporate rows. Users said "พอกดอัพโหลด ภพ20+ใบรับรอง เด้งออก".
+
+**Symptom:** User completes Step 1 of `/register` (juristic tab) → never reaches Step 2 → orphan auth.user + orphan profile row with `status='incomplete'` left in DB. Phone number permanently blocked from re-signup (auth.users unique constraint).
+
+**Root cause — a 4-link chain:**
+1. `app/[locale]/(auth)/layout.tsx` calls `await requireGuest()` (redirects signed-in users to `/`).
+2. Step 1 server action `registerJuristicStep1()` calls `supabase.auth.signInWithPassword(...)` — needed because Step 2/3 use the user-context server client + RLS, not the admin client. This writes auth cookies.
+3. Next.js auto-revalidates the current path after ANY server action that mutates `cookies()` (which `signInWithPassword` does via `@supabase/ssr`). The `(auth)` layout re-runs.
+4. `requireGuest()` now sees a signed-in user → `redirect("/")`. User never sees Step 2.
+
+The bug was latent for ~2 weeks because:
+- Personal signup doesn't sign-in until AFTER Step 1 completes successfully (no multi-step) — unaffected.
+- Local dev without strict revalidation timing rarely repro'd.
+- The redirect happened so fast users assumed "site is broken" not "I got logged out".
+
+**Fix — make `requireGuest()` boundary-aware:**
+```ts
+// lib/auth/require-auth.ts
+export async function requireGuest(): Promise<void> {
+  const data = await getCurrentUserWithProfile();
+  // Mid-signup users have status='incomplete' — they ARE signed in
+  // but must stay on /register to finish Step 2/3.
+  if (data?.user && data.profile?.status !== "incomplete") redirect("/");
+}
+```
+
+Verified end-to-end on dev server: signed-in `incomplete` → `/register` HTTP 200 · same user `active` → HTTP 307 → `/`.
+
+**Why this matters next time:**
+- **Server Actions that write cookies trigger an automatic layout revalidation** on the current path. If your layout has any auth gate, it runs again — often within the same `startTransition`. Treat cookie mutations as "the layout will re-render with the new auth state in milliseconds".
+- **Multi-step forms that sign the user in mid-flow** must guard their layout against the freshly-signed-in state. Two patterns: (a) gate by `profile.status` (this fix), or (b) don't sign in until the FINAL step (refactor — personal signup does this).
+- **Symptom detection:** if a multi-step form yields ZERO completed signups but lots of `status='incomplete'` orphans, suspect a layout redirect mid-flow before assuming the form code is broken.
+- **Test harness:** can't repro with personal signup; need a juristic signup OR a script that signs in an `incomplete`-status user + curls the form route. The curl test confirmed both branches in <30s.
+
+**Cross-links:**
+- Commit `091380a2` — the 1-line `requireGuest()` fix
+- `app/[locale]/(auth)/layout.tsx` — the layout that calls `requireGuest()`
+- `actions/auth.ts:300-306` — Step 1 `signInWithPassword` call
+- `actions/auth.ts:380-425` — `uploadJuristicDoc()` that never ran in prod for 2 weeks
+- [`docs/learnings/supabase-rls-patterns.md`](supabase-rls-patterns.md) — RLS contexts (why Step 2/3 needs the user-context client)
