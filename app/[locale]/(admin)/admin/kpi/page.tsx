@@ -36,6 +36,41 @@ const THAI_MONTHS = [
 // report-cnt.php). The legacy `fStatus` column is 1..7 — 1..3 = pre-arrival
 // (กำลังขนส่ง), 4..6 = post-arrival (ถึงไทยแล้ว / สำเร็จ), 7 = ยกเลิก.
 // Counts are DISTINCT on fCabinetNumber (so 50 shipments in 1 container = 1 ตู้).
+//
+// Wave 20 P0-3 (2026-05-25 ค่ำ): the REMAINING rebuilt-schema reads on
+// this dashboard (revenue + signups + wallet) were swapped to legacy tb_*
+// where the 8,898 customers + years of orders actually live. Field map
+// follows admin/page.tsx (commit `9c0ffd6` Wave 6 P0):
+//   service_orders.total_thb    → tb_header_order.hcostallth
+//   service_orders.created_at   → tb_header_order.hdate
+//   service_orders.status enum  → tb_header_order.hstatus '1'..'6'
+//                                  (cancel = '6', not 'cancelled')
+//   forwarders.total_price      → tb_forwarder.ftotalprice
+//   forwarders.created_at       → tb_forwarder.fdate
+//   forwarders.status enum      → tb_forwarder.fstatus '1'..'7'
+//                                  (no "cancelled" — legacy uses '6'/'62' workflow)
+//   yuan_payments.thb_amount    → tb_payment.paythb
+//   yuan_payments.created_at    → tb_payment.paydate
+//   yuan_payments.status enum   → tb_payment.paystatus '1'=pending,'2'=completed
+//   profiles.created_at         → tb_users.userregistered
+//   wallet_transactions.amount  → tb_wallet_hs.amount
+//   wallet_transactions.kind    → tb_wallet_hs.type '1'=deposit (and `typenew='1'`)
+//   wallet_transactions.status  → tb_wallet_hs.status '1'=pending,'2'=completed,'3'=failed
+//   wallet_transactions.created_at → tb_wallet_hs.date
+//   wallet.balance              → tb_wallet.wallettotal
+
+// hstatus / fstatus → human label maps (legacy `tb_header_order.hstatus`
+// IS '1=รอดำเนินการ 2=รอชำระเงิน 3=สั่งสินค้า 4=รอร้านจีนจัดส่ง 5=สำเร็จ 6=ยกเลิกออเดอร์'
+// and `tb_forwarder.fstatus` per service-import/table/page.tsx helper).
+const HSTATUS_LABEL: Record<string, string> = {
+  "1": "รอดำเนินการ", "2": "รอชำระเงิน", "3": "สั่งสินค้า",
+  "4": "รอร้านจีนจัดส่ง", "5": "สำเร็จ", "6": "ยกเลิกออเดอร์",
+};
+const FSTATUS_LABEL: Record<string, string> = {
+  "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
+  "4": "ถึงไทยแล้ว",    "5": "รอชำระเงิน",       "6": "เตรียมส่ง / กำลังจัดส่ง",
+  "62": "กำลังจัดส่ง",   "7": "ส่งแล้ว",
+};
 
 // ── tiny helpers ─────────────────────────────────────────────────────────
 function thb(n: number): string {
@@ -67,6 +102,14 @@ export default async function AdminKpiPage() {
   const monthLabel = `${THAI_MONTHS[now.getMonth()]} ${now.getFullYear() + 543}`;
   const prevMonthLabel = THAI_MONTHS[(now.getMonth() + 11) % 12];
 
+  // Status enums we'll count separately (one count query each) to avoid the
+  // PostgREST 1000-row cap (a `.select("hstatus").limit(50_000)` is silently
+  // capped to 1000 by Supabase's `db.max_rows` ceiling, so an in-app group-by
+  // would skew toward the most-recent rows). The prior-art admin/page.tsx
+  // uses the same per-enum count pattern.
+  const HSTATUS_CODES = Object.keys(HSTATUS_LABEL);
+  const FSTATUS_CODES = Object.keys(FSTATUS_LABEL);
+
   const [
     // revenue — this month (exclude cancelled; yuan only counts completed)
     soMonth, fwMonth, yuanMonth,
@@ -74,8 +117,8 @@ export default async function AdminKpiPage() {
     soToday, fwToday, yuanToday,
     // revenue — previous full month (baseline)
     soPrev, fwPrev, yuanPrev,
-    // orders by status — full status row sets, counted in-app
-    soStatuses, fwStatuses,
+    // orders by status — per-enum count queries (see HSTATUS_CODES note)
+    soStatusCounts, fwStatusCounts,
     // container throughput (Wave 3: from tb_forwarder DISTINCT fcabinetnumber)
     containersInTransitRows, containersArrivedMonthRows,
     // signups
@@ -83,20 +126,33 @@ export default async function AdminKpiPage() {
     // wallet top-up volume (completed deposits)
     walletDepMonth, walletDepPrev, walletBalances,
   ] = await Promise.all([
-    admin.from("service_orders").select("total_thb").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", monthStart).neq("status", "cancelled"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", monthStart).eq("status", "completed"),
+    // Revenue this month — legacy tb_* (8,898 customers + years of orders).
+    // tb_header_order.hstatus '6' = ยกเลิกออเดอร์; tb_payment.paystatus '2' = สำเร็จ.
+    // tb_forwarder has no legacy "cancelled" status — workflow goes 1→7, no exclusion.
+    admin.from("tb_header_order").select("hcostallth").gte("hdate", monthStart).neq("hstatus", "6"),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", monthStart),
+    admin.from("tb_payment").select("paythb").gte("paydate", monthStart).eq("paystatus", "2"),
 
-    admin.from("service_orders").select("total_thb").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", todayStart).neq("status", "cancelled"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", todayStart).eq("status", "completed"),
+    admin.from("tb_header_order").select("hcostallth").gte("hdate", todayStart).neq("hstatus", "6"),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", todayStart),
+    admin.from("tb_payment").select("paythb").gte("paydate", todayStart).eq("paystatus", "2"),
 
-    admin.from("service_orders").select("total_thb").gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd).neq("status", "cancelled"),
-    admin.from("forwarders").select("total_price").gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd).neq("status", "cancelled"),
-    admin.from("yuan_payments").select("thb_amount").gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd).eq("status", "completed"),
+    admin.from("tb_header_order").select("hcostallth").gte("hdate", prevMonthStart).lt("hdate", prevMonthEnd).neq("hstatus", "6"),
+    admin.from("tb_forwarder").select("ftotalprice").gte("fdate", prevMonthStart).lt("fdate", prevMonthEnd),
+    admin.from("tb_payment").select("paythb").gte("paydate", prevMonthStart).lt("paydate", prevMonthEnd).eq("paystatus", "2"),
 
-    admin.from("service_orders").select("status"),
-    admin.from("forwarders").select("status"),
+    // Orders by status — one count query PER enum so we don't hit the
+    // PostgREST 1000-row cap. Returns an array of { code, count } for the
+    // status pane to render. `Promise.all` keeps this parallel inside the
+    // outer Promise.all → still one network round-trip total.
+    Promise.all(HSTATUS_CODES.map(async (code) => {
+      const res = await admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", code);
+      return { code, count: res.count ?? 0, error: res.error };
+    })),
+    Promise.all(FSTATUS_CODES.map(async (code) => {
+      const res = await admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", code);
+      return { code, count: res.count ?? 0, error: res.error };
+    })),
 
     // In-transit ตู้ — tb_forwarder fStatus 1..3 = pre-arrival, DISTINCT fcabinetnumber.
     // No date filter (we want the live load, not just rows created this month).
@@ -115,48 +171,84 @@ export default async function AdminKpiPage() {
       .gte("fdatestatus4", monthStart)
       .limit(50_000),
 
-    admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", monthStart),
-    admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", todayStart),
-    admin.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd),
-    admin.from("profiles").select("id", { count: "exact", head: true }),
+    // Signups — legacy tb_users.userregistered. ~8,898 customers ported
+    // (vs ~3 rows on profiles). No `useractive`/`userstatus` filter — count
+    // all registrations in the window for consistency with admin/page.tsx.
+    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", monthStart),
+    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", todayStart),
+    admin.from("tb_users").select("id", { count: "exact", head: true }).gte("userregistered", prevMonthStart).lt("userregistered", prevMonthEnd),
+    admin.from("tb_users").select("id", { count: "exact", head: true }),
 
-    admin.from("wallet_transactions").select("amount").eq("kind", "deposit").eq("status", "completed").gte("created_at", monthStart),
-    admin.from("wallet_transactions").select("amount").eq("kind", "deposit").eq("status", "completed").gte("created_at", prevMonthStart).lt("created_at", prevMonthEnd),
-    admin.from("wallet").select("balance"),
+    // Wallet top-up volume — legacy tb_wallet_hs. type='1' (เติมเงิน) +
+    // status='2' (สำเร็จ). Date column = `date` (the work date), matches
+    // PHP report-wallet.php period filter.
+    admin.from("tb_wallet_hs").select("amount").eq("type", "1").eq("status", "2").gte("date", monthStart),
+    admin.from("tb_wallet_hs").select("amount").eq("type", "1").eq("status", "2").gte("date", prevMonthStart).lt("date", prevMonthEnd),
+    // Wallet float (held) — one row per customer on tb_wallet, `wallettotal`.
+    admin.from("tb_wallet").select("wallettotal"),
   ]);
+
+  // AGENTS §0c: every Supabase query MUST surface its `error` rather than
+  // silently falling back to null data — silent db errors are how the
+  // 2026-05-25 PR10899 intermittent 404 slipped past Wave 18's smoke
+  // gate. Log per-query; don't throw (one failed query shouldn't blank
+  // the whole investor dashboard — partial data + visible logs are
+  // preferable to a 500 here).
+  const queryResults = {
+    soMonth, fwMonth, yuanMonth, soToday, fwToday, yuanToday,
+    soPrev, fwPrev, yuanPrev,
+    containersInTransitRows, containersArrivedMonthRows,
+    signupsMonth, signupsToday, signupsPrev, signupsTotal,
+    walletDepMonth, walletDepPrev, walletBalances,
+  };
+  for (const [name, r] of Object.entries(queryResults)) {
+    if (r.error) console.error(`[admin/kpi] query ${name} failed:`, r.error);
+  }
+  // Status-count sub-queries log their own errors (one per enum code).
+  for (const r of soStatusCounts) if (r.error) console.error(`[admin/kpi] tb_header_order hstatus=${r.code} count failed:`, r.error);
+  for (const r of fwStatusCounts) if (r.error) console.error(`[admin/kpi] tb_forwarder fstatus=${r.code} count failed:`, r.error);
 
   // DISTINCT fcabinetnumber → 1 ตู้ = 1 count (many forwarders share a container)
   const inTransitCount = new Set((containersInTransitRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber)).size;
   const arrivedCount   = new Set((containersArrivedMonthRows.data ?? []).map((r) => (r as { fcabinetnumber: string }).fcabinetnumber)).size;
 
   // ── revenue roll-up ──
-  const revMonth = sumNum(soMonth.data, "total_thb") + sumNum(fwMonth.data, "total_price") + sumNum(yuanMonth.data, "thb_amount");
-  const revToday = sumNum(soToday.data, "total_thb") + sumNum(fwToday.data, "total_price") + sumNum(yuanToday.data, "thb_amount");
-  const revPrev = sumNum(soPrev.data, "total_thb") + sumNum(fwPrev.data, "total_price") + sumNum(yuanPrev.data, "thb_amount");
+  // Wave 20 P0-3: column names follow legacy tb_* schema.
+  //   tb_header_order.hcostallth = THB cost of one shop order
+  //   tb_forwarder.ftotalprice   = THB cost of one import job
+  //   tb_payment.paythb          = THB equivalent of one yuan-transfer
+  const revMonth = sumNum(soMonth.data, "hcostallth") + sumNum(fwMonth.data, "ftotalprice") + sumNum(yuanMonth.data, "paythb");
+  const revToday = sumNum(soToday.data, "hcostallth") + sumNum(fwToday.data, "ftotalprice") + sumNum(yuanToday.data, "paythb");
+  const revPrev = sumNum(soPrev.data, "hcostallth") + sumNum(fwPrev.data, "ftotalprice") + sumNum(yuanPrev.data, "paythb");
 
   const revByChannel = [
-    { label: "ฝากสั่งซื้อ", icon: <ShoppingBasket className="h-5 w-5" />, month: sumNum(soMonth.data, "total_thb"), today: sumNum(soToday.data, "total_thb"), href: "/admin/service-orders" },
-    { label: "ฝากนำเข้า", icon: <Box className="h-5 w-5" />, month: sumNum(fwMonth.data, "total_price"), today: sumNum(fwToday.data, "total_price"), href: "/admin/forwarders" },
-    { label: "ฝากโอนหยวน", icon: <ArrowLeftRight className="h-5 w-5" />, month: sumNum(yuanMonth.data, "thb_amount"), today: sumNum(yuanToday.data, "thb_amount"), href: "/admin/yuan-payments" },
+    { label: "ฝากสั่งซื้อ", icon: <ShoppingBasket className="h-5 w-5" />, month: sumNum(soMonth.data, "hcostallth"), today: sumNum(soToday.data, "hcostallth"), href: "/admin/service-orders" },
+    { label: "ฝากนำเข้า", icon: <Box className="h-5 w-5" />, month: sumNum(fwMonth.data, "ftotalprice"), today: sumNum(fwToday.data, "ftotalprice"), href: "/admin/forwarders" },
+    { label: "ฝากโอนหยวน", icon: <ArrowLeftRight className="h-5 w-5" />, month: sumNum(yuanMonth.data, "paythb"), today: sumNum(yuanToday.data, "paythb"), href: "/admin/yuan-payments" },
   ];
 
   // ── orders by status ──
-  const countByStatus = (rows: { status: string }[] | null): [string, number][] => {
-    const map = (rows ?? []).reduce<Record<string, number>>((a, r) => {
-      a[r.status] = (a[r.status] ?? 0) + 1;
-      return a;
-    }, {});
-    return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  };
-  const soByStatus = countByStatus(soStatuses.data as { status: string }[] | null);
-  const fwByStatus = countByStatus(fwStatuses.data as { status: string }[] | null);
+  // Wave 20 P0-3: legacy enum codes decode via *_LABEL maps; sort by count
+  // descending and drop zero-count entries so the pane stays compact.
+  const toBreakdown = (
+    counts: { code: string; count: number }[],
+    labelMap: Record<string, string>,
+  ): [string, number][] =>
+    counts
+      .filter((r) => r.count > 0)
+      .map((r): [string, number] => [labelMap[r.code] ?? r.code, r.count])
+      .sort((a, b) => b[1] - a[1]);
+
+  const soByStatus = toBreakdown(soStatusCounts, HSTATUS_LABEL);
+  const fwByStatus = toBreakdown(fwStatusCounts, FSTATUS_LABEL);
   const soTotal = soByStatus.reduce((s, [, n]) => s + n, 0);
   const fwTotal = fwByStatus.reduce((s, [, n]) => s + n, 0);
 
   // ── wallet ──
+  // Wave 20 P0-3: tb_wallet_hs.amount + tb_wallet.wallettotal.
   const walletMonth = sumNum(walletDepMonth.data, "amount");
   const walletPrev = sumNum(walletDepPrev.data, "amount");
-  const walletHeld = sumNum(walletBalances.data, "balance");
+  const walletHeld = sumNum(walletBalances.data, "wallettotal");
 
   // ── signups ──
   const signupMonthN = signupsMonth.count ?? 0;
