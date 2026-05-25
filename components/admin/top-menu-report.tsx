@@ -118,7 +118,12 @@ const ITEMS: { key: CountKey | "history"; label: string; href: string }[] = [
   // revenue-pipeline next step after the audit queues — operators should
   // see it first in the menu order.
   { key: "checkQueue",             label: "เรียกเก็บเงินลูกค้า",  href: "/admin/forwarder-check" },
-  { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarder-action?action=Note" },
+  // Wave 20 P1 (2026-05-26 · ภูม flag): re-pointed from the legacy
+  // audit-queue handler (/admin/forwarder-action?action=Note · 1 of 9
+  // generic queues) to the dedicated /admin/forwarders/notes page
+  // which has filter chips + cleaner Tailwind chrome and survives
+  // bookmarking. The audit-queue URL still works as a fallback.
+  { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarders/notes" },
   { key: "notPhoto",               label: "ไม่ได้ถ่ายสินค้า",    href: "/admin/forwarder-action?q=4&action=notPhoto" },
   { key: "notPortage",             label: "ไม่ใส่ค่าขนส่ง",      href: "/admin/forwarder-action?q=4&action=notPortage" },
   { key: "notContainer",           label: "ไม่ใส่เบอร์ตู้",      href: "/admin/forwarder-action?q=2&action=notContainer" },
