@@ -64,11 +64,15 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
     const admin = createAdminClient();
 
     // Fetch existing for diff + customer notification + V-A2 rollback note merging
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarders")
       .select("id, profile_id, status, total_price, note_admin")
       .eq("f_no", d.f_no)
       .maybeSingle<{ id: string; profile_id: string; status: string; total_price: number; note_admin: string | null }>();
+    if (existingErr) {
+      console.error("[forwarders mutation lookup] f_no=", d.f_no, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
@@ -166,11 +170,14 @@ export async function adminBulkUpdateForwarderStatus(
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarders")
       .select("id, f_no, profile_id, status")
       .in("f_no", f_nos);
-
+    if (existingErr) {
+      console.error("[forwarders bulk status lookup] f_nos=", f_nos, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (!existing || existing.length === 0) return { ok: false, error: "not_found" };
 
     const dateCol = STATUS_DATE_COL[status];
@@ -253,11 +260,15 @@ export async function adminMarkForwarderPaid(
   return withAdmin<MarkForwarderPaidData>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: forwarder } = await admin
+    const { data: forwarder, error: forwarderErr } = await admin
       .from("forwarders")
       .select("id, profile_id, f_no, status, total_price")
       .eq("f_no", d.f_no)
       .maybeSingle<{ id: string; profile_id: string; f_no: string; status: string; total_price: number }>();
+    if (forwarderErr) {
+      console.error("[adminPayForwarder forwarder lookup] f_no=", d.f_no, { code: forwarderErr.code, message: forwarderErr.message });
+      return { ok: false, error: `db_error:${forwarderErr.code}` };
+    }
     if (!forwarder) return { ok: false, error: "not_found" };
 
     if (forwarder.status === "cancelled") {
@@ -300,8 +311,13 @@ export async function adminMarkForwarderPaid(
       }
     }
 
-    // Idempotency check
-    const { data: existingTx } = await admin
+    // Idempotency check — §0c CRITICAL: must refuse-to-proceed on DB error.
+    // If Supabase fails silently (PgBouncer timeout / transient) and we treat
+    // it as "no existing tx", we'd INSERT a duplicate → DOUBLE-CHARGE the
+    // customer's wallet. Errors here MUST bubble up; the 23505 partial-unique
+    // index (0061) is the only safety net we have and it can't catch races
+    // through silent-null returns. Wave 19 BUG#1 sweep added the destructure.
+    const { data: existingTx, error: existingTxErr } = await admin
       .from("wallet_transactions")
       .select("id")
       .eq("reference_type", "forwarder")
@@ -309,6 +325,17 @@ export async function adminMarkForwarderPaid(
       .eq("kind",           "import_payment")
       .eq("status",         "completed")
       .maybeSingle<{ id: string }>();
+    if (existingTxErr) {
+      console.error("[forwarders.adminPayForwarder] idempotency lookup failed", {
+        f_no: forwarder.f_no,
+        code: existingTxErr.code,
+        message: existingTxErr.message,
+        details: existingTxErr.details,
+      });
+      // REFUSE the payment — admin should retry. Better to error than risk
+      // a double-charge from a silent null.
+      return { ok: false, error: `ตรวจสอบรายการชำระเดิมไม่สำเร็จ — ลองใหม่อีกครั้ง (db:${existingTxErr.code})` };
+    }
     if (existingTx) {
       // Already paid — nudge status forward if still pending_payment
       if (forwarder.status === "pending_payment") {
@@ -361,7 +388,7 @@ export async function adminMarkForwarderPaid(
       // caught a concurrent double-debit. Re-SELECT the winning tx + nudge
       // status forward — mirrors the idempotency branch above.
       if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
-        const { data: raced } = await admin
+        const { data: raced, error: racedErr } = await admin
           .from("wallet_transactions")
           .select("id")
           .eq("reference_type", "forwarder")
@@ -369,6 +396,15 @@ export async function adminMarkForwarderPaid(
           .eq("kind", "import_payment")
           .eq("status", "completed")
           .maybeSingle<{ id: string }>();
+        if (racedErr) {
+          console.error("[forwarders.adminPayForwarder] post-23505 raced lookup failed", {
+            f_no: forwarder.f_no,
+            code: racedErr.code,
+            message: racedErr.message,
+          });
+          // Fall through to the original 23505 wallet-insert error — at least
+          // the operator sees a real db error instead of "lucky" success.
+        }
         if (raced) {
           if (forwarder.status === "pending_payment") {
             await admin

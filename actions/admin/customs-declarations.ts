@@ -65,10 +65,14 @@ async function recomputeHeaderTotals(
   admin: ReturnType<typeof createAdminClient>,
   declarationId: string,
 ): Promise<{ declared: number; duty: number; vat: number }> {
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("customs_declaration_lines")
     .select("id, declared_value_thb, duty_thb, vat_thb")
     .eq("declaration_id", declarationId);
+  if (rowsErr) {
+    console.error("[customs-declarations recomputeTotals] declarationId=", declarationId, { code: rowsErr.code, message: rowsErr.message });
+    // Don't throw — best-effort totals — but the caller may persist stale numbers
+  }
   const list = ((rows ?? []) as LineRow[]).map((r) => ({
     declared_value_thb: Number(r.declared_value_thb ?? 0),
     duty_thb:           Number(r.duty_thb ?? 0),
@@ -105,11 +109,15 @@ export async function adminCreateDeclaration(
     const admin = createAdminClient();
 
     // Verify the parent shipment exists.
-    const { data: shipment } = await admin
+    const { data: shipment, error: shipmentErr } = await admin
       .from("freight_shipments")
       .select("id, job_no, status")
       .eq("id", d.freight_shipment_id)
       .maybeSingle<{ id: string; job_no: string | null; status: string }>();
+    if (shipmentErr) {
+      console.error("[customs-declarations create shipment lookup] id=", d.freight_shipment_id, { code: shipmentErr.code, message: shipmentErr.message });
+      return { ok: false, error: `db_error:${shipmentErr.code}` };
+    }
     if (!shipment) return { ok: false, error: "shipment_not_found" };
     if (shipment.status === "cancelled") return { ok: false, error: "shipment_cancelled" };
 
@@ -154,7 +162,7 @@ export async function adminCreateDeclaration(
       exchange_rate:        number | null;
       hs_code:              string | null;
     };
-    const { data: inv } = await admin
+    const { data: inv, error: invErr } = await admin
       .from("freight_invoices")
       .select("id, commercial_value_thb, exchange_rate, hs_code")
       .eq("freight_shipment_id", d.freight_shipment_id)
