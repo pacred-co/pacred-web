@@ -449,7 +449,7 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
 export async function requestPasswordResetByPhone(
   phoneRaw: string,
   captchaToken?: string | null,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ bypass?: boolean }>> {
   const parsed = resetByPhoneSchema.safeParse({ phone: phoneRaw, captchaToken });
   if (!parsed.success) {
     return { ok: false, error: "invalid_phone" };
@@ -479,7 +479,15 @@ export async function requestPasswordResetByPhone(
 
   const res = await requestOtp(phone, "reset");
   if (!res.ok) return { ok: false, error: res.error };
-  return { ok: true };
+
+  // 2026-05-25 — when `EMERGENCY_OTP_BYPASS` (actions/otp.ts:42) is ON,
+  // `requestOtp` returns `bypass:true` without sending an SMS. Without
+  // forwarding that flag the customer sees the "ใส่รหัส OTP" step + waits
+  // forever for an SMS that never comes (the bypass mode was wired into
+  // the register UI but not the forgot-password UI). Forward the flag
+  // so the UI can skip directly to the "set new password" step + accept
+  // any 6-digit placeholder (verifyOtp short-circuits to true in bypass).
+  return { ok: true, data: { bypass: res.bypass } };
 }
 
 export async function confirmPasswordResetByPhone(

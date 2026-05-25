@@ -44,6 +44,14 @@ export default function ForgotPasswordPage() {
   const [otp, setOtp] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  // 2026-05-25 — When the server-side EMERGENCY_OTP_BYPASS (actions/otp.ts:42)
+  // is on, `requestPasswordResetByPhone` returns `data.bypass:true` because
+  // no SMS was actually sent. We hide the OTP input on the verify step in
+  // that case + auto-fill a placeholder so the customer reaches the
+  // "set new password" form without waiting for an SMS that never arrives.
+  // `confirmPasswordResetByPhone` short-circuits `verifyOtp` to true under
+  // the same flag, so any 6-digit placeholder passes.
+  const [otpBypass, setOtpBypass] = useState(false);
 
   // email path
   const [emailStep, setEmailStep] = useState<EmailStep>("request");
@@ -61,6 +69,12 @@ export default function ForgotPasswordPage() {
         setError(ERR[res.error] ?? res.error);
         captchaRef.current?.reset();
         return;
+      }
+      // If server-side OTP bypass is on, prime the OTP field with a
+      // placeholder + remember so we hide the input on the verify step.
+      if (res.data?.bypass) {
+        setOtpBypass(true);
+        setOtp("000000");
       }
       setPhoneStep("verify");
     });
@@ -156,19 +170,27 @@ export default function ForgotPasswordPage() {
 
           {mode === "phone" && phoneStep === "verify" && (
             <div className="space-y-4">
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                {t("otpSentTo", { phone })}
-              </div>
-              <FormField label={t("otpLabel")} required>
-                <input
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                  className={inputCls}
-                  inputMode="numeric"
-                  placeholder="000000"
-                  maxLength={6}
-                />
-              </FormField>
+              {otpBypass ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  ระบบ SMS อยู่ระหว่างปรับปรุง — กรุณาตั้งรหัสผ่านใหม่ของท่านเลย
+                </div>
+              ) : (
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                  {t("otpSentTo", { phone })}
+                </div>
+              )}
+              {!otpBypass && (
+                <FormField label={t("otpLabel")} required>
+                  <input
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    className={inputCls}
+                    inputMode="numeric"
+                    placeholder="000000"
+                    maxLength={6}
+                  />
+                </FormField>
+              )}
               <FormField label={t("newPasswordLabel")} required hint={t("passwordHint")}>
                 <div className="relative">
                   <input
