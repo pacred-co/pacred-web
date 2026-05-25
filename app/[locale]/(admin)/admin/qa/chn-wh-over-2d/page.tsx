@@ -89,10 +89,13 @@ export default async function ChnWhOver2dPage() {
   const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
   let userMap = new Map<string, URow>();
   if (userIds.length > 0) {
-    const { data: usersRaw } = await admin
+    const { data: usersRaw, error: usersRawErr } = await admin
       .from("tb_users")
       .select("userid,username,userlastname,usertel")
       .in("userid", userIds);
+    if (usersRawErr) {
+      console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+    }
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 

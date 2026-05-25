@@ -183,19 +183,25 @@ async function findCollidingProfiles(
     byPhone: null, byEmail: null,
   };
   if (normalizedPhone) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("profiles")
       .select("id, email, phone, legacy_pcs_user_id, migrated_from_pcs")
       .eq("phone", normalizedPhone)
       .maybeSingle<ProfileMatch>();
+    if (error) {
+      console.error(`[profiles list] failed`, { code: error.code, message: error.message });
+    }
     out.byPhone = data ?? null;
   }
   if (emailLower) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("profiles")
       .select("id, email, phone, legacy_pcs_user_id, migrated_from_pcs")
       .ilike("email", emailLower)
       .maybeSingle<ProfileMatch>();
+    if (error) {
+      console.error(`[profiles list] failed`, { code: error.code, message: error.message });
+    }
     out.byEmail = data ?? null;
   }
   return out;
@@ -293,11 +299,14 @@ export async function adminBackfillPcsAuthUsers(opts?: {
       }
 
       // Already in profiles? Skip + mark done.
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("profiles")
         .select("id")
         .eq("legacy_pcs_user_id", legacyId)
         .maybeSingle<{ id: string }>();
+      if (existingErr) {
+        console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       if (existing) {
         result.skipped++;

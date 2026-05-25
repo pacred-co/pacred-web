@@ -164,7 +164,7 @@ export default async function ServiceImportReceiptsPage({
   // The tb_users / tb_corporate joins fetch columns the rendered
   // table never prints; only the userID filter is load-bearing,
   // reproduced by the member_code equality below.
-  const { data: receiptRows } = await admin
+  const { data: receiptRows, error: receiptRowsErr } = await admin
     .from("tb_receipt")
     .select("id, rid, rdate, ramount")
     .eq("userid", userID)
@@ -172,6 +172,9 @@ export default async function ServiceImportReceiptsPage({
     .gte("rdate", `${startDate} 00:00:00`)
     .lte("rdate", `${endDate} 23:59:59`)
     .order("id", { ascending: false });
+  if (receiptRowsErr) {
+    console.error(`[tb_receipt list] failed`, { code: receiptRowsErr.code, message: receiptRowsErr.message });
+  }
 
   const receipts = (receiptRows ?? []) as ReceiptRow[];
 
@@ -181,10 +184,13 @@ export default async function ServiceImportReceiptsPage({
   const arrItem: Record<string, string[]> = {};
   const receiptIds = receipts.map((r) => r.rid);
   if (receiptIds.length > 0) {
-    const { data: itemRows } = await admin
+    const { data: itemRows, error: itemRowsErr } = await admin
       .from("tb_receipt_item")
       .select("rid, fid")
       .in("rid", receiptIds);
+    if (itemRowsErr) {
+      console.error(`[tb_receipt_item list] failed`, { code: itemRowsErr.code, message: itemRowsErr.message });
+    }
     for (const row of (itemRows ?? []) as { rid: string; fid: number }[]) {
       // legacy keeps the first-seen order: $arrItem[rID] .= ','.fID
       if (!arrItem[row.rid]) arrItem[row.rid] = [];

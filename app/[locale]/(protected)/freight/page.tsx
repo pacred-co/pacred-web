@@ -91,21 +91,27 @@ export default async function CustomerFreightHubPage() {
 
   // Recent quotes (RLS already filters to status in sent/accepted/rejected/expired
   // for the customer — drafts/pending_approval/approved are invisible).
-  const { data: quotesRaw } = await sb
+  const { data: quotesRaw, error: quotesRawErr } = await sb
     .from("freight_quotes")
     .select("quote_no, status, transport_mode, total, valid_until, created_at")
     .order("created_at", { ascending: false })
     .limit(20)
     .returns<QuoteRow[]>();
+  if (quotesRawErr) {
+    console.error(`[freight_quotes list] failed`, { code: quotesRawErr.code, message: quotesRawErr.message });
+  }
   const quotes = quotesRaw ?? [];
 
   // Recent shipments (any status owned by customer).
-  const { data: shipmentsRaw } = await sb
+  const { data: shipmentsRaw, error: shipmentsRawErr } = await sb
     .from("freight_shipments")
     .select("id, job_no, status, transport_mode, bl_no, container_code, created_at")
     .order("created_at", { ascending: false })
     .limit(20)
     .returns<ShipmentRow[]>();
+  if (shipmentsRawErr) {
+    console.error(`[freight_shipments list] failed`, { code: shipmentsRawErr.code, message: shipmentsRawErr.message });
+  }
   const shipments = shipmentsRaw ?? [];
 
   // Latest non-cancelled invoice payment_status per shipment (for the chip).
@@ -113,13 +119,16 @@ export default async function CustomerFreightHubPage() {
   const shipmentIds = shipments.map((s) => s.id);
   const paymentByShipment = new Map<string, FreightInvoicePaymentStatus>();
   if (shipmentIds.length > 0) {
-    const { data: invsRaw } = await sb
+    const { data: invsRaw, error: invsRawErr } = await sb
       .from("freight_invoices")
       .select("freight_shipment_id, payment_status, status, created_at")
       .in("freight_shipment_id", shipmentIds)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .returns<InvoicePaymentRow[] & { status: string; created_at: string }[]>();
+    if (invsRawErr) {
+      console.error(`[freight_invoices list] failed`, { code: invsRawErr.code, message: invsRawErr.message });
+    }
     for (const r of (invsRaw ?? []) as InvoicePaymentRow[]) {
       if (!paymentByShipment.has(r.freight_shipment_id)) {
         paymentByShipment.set(r.freight_shipment_id, r.payment_status);

@@ -184,11 +184,15 @@ export async function readActiveImpersonation(
     ended_at:          string | null;
     expires_at:        string;
   };
-  const { data: session } = await admin
+  const { data: session, error: sessionErr } = await admin
     .from("impersonation_sessions")
     .select("id, admin_id, target_profile_id, ended_at, expires_at")
     .eq("id", payload.session_id)
     .maybeSingle<SessionRow>();
+  if (sessionErr) {
+    console.error(`[impersonation_sessions lookup] failed`, { code: sessionErr.code, message: sessionErr.message, details: sessionErr.details, hint: sessionErr.hint });
+    throw new Error(`Failed to load impersonation_sessions (${sessionErr.code ?? "unknown"}): ${sessionErr.message}`);
+  }
   if (!session) return null;
   if (session.ended_at) return null;
   if (session.admin_id !== payload.admin_id) return null;
@@ -199,11 +203,14 @@ export async function readActiveImpersonation(
   //    we close the session with admin_role_lost so the audit shows
   //    why it died.
   type AdminRoleRow = { role: string };
-  const { data: roles } = await admin
+  const { data: roles, error: rolesErr } = await admin
     .from("admins")
     .select("role")
     .eq("profile_id", payload.admin_id)
     .eq("is_active", true);
+  if (rolesErr) {
+    console.error(`[admins list] failed`, { code: rolesErr.code, message: rolesErr.message });
+  }
 
   const roleSet = new Set(((roles ?? []) as AdminRoleRow[]).map((r) => r.role));
   const stillEligible = roleSet.has("super") || roleSet.has("ops");

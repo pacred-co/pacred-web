@@ -35,11 +35,14 @@ export async function GET(request: Request) {
   }
 
   // Ensure profile exists (first-time OAuth user) — use upsert to be idempotent
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("id, status")
     .eq("id", data.user.id)
     .maybeSingle();
+  if (existingErr) {
+    console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
+  }
 
   if (!existing) {
     await supabase.from("profiles").insert({

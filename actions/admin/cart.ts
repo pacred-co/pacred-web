@@ -87,11 +87,14 @@ const PCS_PICKUP_ADDRESS = {
 async function resolveLegacyAdminId(email: string | null): Promise<string> {
   if (!email) return "";
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   return data?.adminid ?? "";
 }
 
@@ -189,11 +192,14 @@ export async function adminAddCartUser(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      const { data: customer } = await admin
+      const { data: customer, error: customerErr } = await admin
         .from("tb_users")
         .select("userid, username, userlastname")
         .eq("userid", userid)
         .maybeSingle<{ userid: string; username: string; userlastname: string }>();
+      if (customerErr) {
+        console.error(`[tb_users list] failed`, { code: customerErr.code, message: customerErr.message });
+      }
 
       if (!customer) {
         return { ok: true, data: { exists: false, displayName: null } };
@@ -350,12 +356,15 @@ export async function adminSubmitCartAsOrder(
       // Legacy: SELECT ID FROM tb_header_order ORDER BY ID DESC LIMIT 1
       //         $hNo = 'P' + (ID + 1)
       // We do the same — bigint id auto-increment + 'P' prefix.
-      const { data: lastHeader } = await admin
+      const { data: lastHeader, error: lastHeaderErr } = await admin
         .from("tb_header_order")
         .select("id")
         .order("id", { ascending: false })
         .limit(1)
         .maybeSingle<{ id: number }>();
+      if (lastHeaderErr) {
+        console.error(`[tb_header_order list] failed`, { code: lastHeaderErr.code, message: lastHeaderErr.message });
+      }
 
       const nextHeaderId = (lastHeader?.id ?? 0) + 1;
       const hno = `P${nextHeaderId}`;
@@ -409,7 +418,10 @@ export async function adminSubmitCartAsOrder(
       // user.email here, so we look it up via auth.admin. For Pacred-native
       // admins the lookup will fall through to using the UUID directly.
       // (`requireAdmin` already authenticated — this is just adminid resolution.)
-      const { data: { user: authedUser } } = await admin.auth.admin.getUserById(adminId);
+      const { data: { user: authedUser }, error: dataErr } = await admin.auth.admin.getUserById(adminId);
+      if (dataErr) {
+        console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+      }
       const legacyAdminId = await resolveLegacyAdminId(authedUser?.email ?? null);
       const adminIdForHeader = legacyAdminId || adminId;  // fallback to UUID
 
@@ -515,11 +527,14 @@ export async function adminSubmitCartAsOrder(
 
       // ── Step e. Patch header totals ────────────────────────────────
       // Legacy: SELECT rsDefault FROM tb_settings WHERE ID=1 → use as hrate
-      const { data: settings } = await admin
+      const { data: settings, error: settingsErr } = await admin
         .from("tb_settings")
         .select("rsdefault")
         .eq("id", 1)
         .maybeSingle<{ rsdefault: number }>();
+      if (settingsErr) {
+        console.error(`[tb_settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+      }
       const hrate = Number(settings?.rsdefault ?? 0);
 
       // Legacy htitle / hcover = last cart row's ctitle / cimages (shops.php

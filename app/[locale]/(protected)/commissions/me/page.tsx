@@ -74,13 +74,16 @@ export default async function MyCommissionsPage() {
   const supabase = await createClient();
 
   // ── Unpaid accruals (own) ──
-  const { data: accrualsRaw } = await supabase
+  const { data: accrualsRaw, error: accrualsRawErr } = await supabase
     .from("commission_accruals")
     .select("id, role_kind, source_kind, source_ref, base_thb, accrued_amount_thb, accrued_at")
     .eq("earner_admin_id", user.id)
     .is("withdrawal_item_id", null)
     .order("accrued_at", { ascending: false })
     .limit(500);
+  if (accrualsRawErr) {
+    console.error(`[commission_accruals list] failed`, { code: accrualsRawErr.code, message: accrualsRawErr.message });
+  }
   const accruals = (accrualsRaw ?? []) as AccrualRow[];
 
   const unpaidTotal = accruals.reduce((s, a) => s + Number(a.accrued_amount_thb), 0);
@@ -98,12 +101,15 @@ export default async function MyCommissionsPage() {
   }
 
   // ── Withdrawals (own) ──
-  const { data: withdrawalsRaw } = await supabase
+  const { data: withdrawalsRaw, error: withdrawalsRawErr } = await supabase
     .from("commission_withdrawals")
     .select("id, withdrawal_no, status, title, gross_thb, net_thb, requested_at, paid_at")
     .eq("earner_admin_id", user.id)
     .order("requested_at", { ascending: false })
     .limit(50);
+  if (withdrawalsRawErr) {
+    console.error(`[commission_withdrawals list] failed`, { code: withdrawalsRawErr.code, message: withdrawalsRawErr.message });
+  }
   const withdrawals = (withdrawalsRaw ?? []) as WithdrawalRow[];
 
   // Role kind for new request (use first eligible accrual or fallback to role).

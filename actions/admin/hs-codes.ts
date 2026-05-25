@@ -41,11 +41,15 @@ export async function addHsLine(input: AddHsLineInput): Promise<AdminActionResul
     // Snapshot the rate at line entry if not explicitly given
     let dutyPct = d.duty_pct_used;
     if (dutyPct === undefined) {
-      const { data: hs } = await admin
+      const { data: hs, error: hsErr } = await admin
         .from("hs_codes")
         .select("default_duty_pct")
         .eq("code", d.hs_code)
         .maybeSingle<{ default_duty_pct: number }>();
+      if (hsErr) {
+        console.error(`[hs_codes mutation lookup] failed`, { code: hsErr.code, message: hsErr.message });
+        return { ok: false, error: `db_error:${hsErr.code ?? "unknown"}` };
+      }
       if (!hs) return { ok: false, error: "hs_code_not_found" };
       dutyPct = Number(hs.default_duty_pct);
     }
@@ -94,11 +98,15 @@ export async function updateHsLine(input: UpdateHsLineInput): Promise<AdminActio
 
   return withAdmin(["ops", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("container_hs_lines")
       .select("id, container_id")
       .eq("id", id)
       .maybeSingle<{ id: string; container_id: string }>();
+    if (beforeErr) {
+      console.error(`[container_hs_lines mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -128,11 +136,15 @@ export async function deleteHsLine(
 
   return withAdmin(["ops", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("container_hs_lines")
       .select("id, container_id, hs_code")
       .eq("id", parsed.data.id)
       .maybeSingle<{ id: string; container_id: string; hs_code: string }>();
+    if (beforeErr) {
+      console.error(`[container_hs_lines mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error } = await admin.from("container_hs_lines").delete().eq("id", parsed.data.id);

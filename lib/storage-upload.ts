@@ -12,7 +12,10 @@ export async function uploadSlip(
   kind: "deposit" | "withdraw" | "yuan_payment" | "id_doc",
 ): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Limit: 5 MB; accept image/* and pdf
@@ -47,7 +50,10 @@ export async function getSignedSlipUrl(path: string): Promise<string | null> {
  */
 export async function uploadAvatar(file: File): Promise<{ ok: true; publicUrl: string } | { ok: false; error: string }> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   if (file.size > 2 * 1024 * 1024) return { ok: false, error: "ไฟล์ใหญ่เกิน 2 MB" };

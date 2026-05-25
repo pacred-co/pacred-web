@@ -39,11 +39,15 @@ export async function adminAutoClearForwarderPayment(
   return withAdmin<Result>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: f } = await admin
+    const { data: f, error: fErr } = await admin
       .from("forwarders")
       .select("id, f_no, profile_id, status, total_price")
       .eq("f_no", parsed.data.f_no)
       .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string; total_price: number }>();
+    if (fErr) {
+      console.error(`[forwarders mutation lookup] failed`, { code: fErr.code, message: fErr.message });
+      return { ok: false, error: `db_error:${fErr.code ?? "unknown"}` };
+    }
     if (!f) return { ok: false, error: "forwarder_not_found" };
 
     if (f.status !== "pending_payment") {
@@ -54,7 +58,7 @@ export async function adminAutoClearForwarderPayment(
     }
 
     // Confirm a completed wallet_tx exists with full amount match
-    const { data: tx } = await admin
+    const { data: tx, error: txErr } = await admin
       .from("wallet_transactions")
       .select("id, amount")
       .eq("reference_type", "forwarder")
@@ -62,6 +66,10 @@ export async function adminAutoClearForwarderPayment(
       .eq("kind",           "import_payment")
       .eq("status",         "completed")
       .maybeSingle<{ id: string; amount: number }>();
+    if (txErr) {
+      console.error(`[wallet_transactions mutation lookup] failed`, { code: txErr.code, message: txErr.message });
+      return { ok: false, error: `db_error:${txErr.code ?? "unknown"}` };
+    }
     if (!tx) {
       return { ok: false, error: "ไม่พบ wallet_tx completed สำหรับ forwarder นี้ — ไม่ใช่ mismatch ที่ auto-clear ได้" };
     }

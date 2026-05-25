@@ -59,7 +59,10 @@ export default async function AdminContainerCostsPage({
     q = q.not("effective_to", "is", null).lt("effective_to", today);
   }
 
-  const { data: rowsRaw } = await q;
+  const { data: rowsRaw, error: rowsRawErr } = await q;
+  if (rowsRawErr) {
+    console.error(`[container_costs list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   type Row = {
     id: string; carrier_name: string; transport_mode: string;
     origin: string; destination: string; container_type: string;

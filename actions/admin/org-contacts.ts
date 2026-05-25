@@ -130,11 +130,15 @@ export async function deleteOrgContact(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("org_contacts")
       .select("id, kind, label, value")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[org_contacts mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error: delErr } = await admin

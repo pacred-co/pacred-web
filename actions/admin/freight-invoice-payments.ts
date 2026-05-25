@@ -92,10 +92,13 @@ async function recomputeInvoicePayment(
   admin: ReturnType<typeof createAdminClient>,
   invoice: InvoiceFinancials,
 ): Promise<{ paid_thb: number; total_thb: number; payment_status: FreightInvoicePaymentStatus }> {
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("freight_invoice_payments")
     .select("id, amount_thb, status")
     .eq("freight_invoice_id", invoice.id);
+  if (rowsErr) {
+    console.error(`[freight_invoice_payments list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
 
   const paid_thb = roundThb(
     ((rows ?? []) as PaymentRow[])
@@ -129,11 +132,14 @@ async function loadInvoiceFinancials(
   admin: ReturnType<typeof createAdminClient>,
   invoiceId: string,
 ): Promise<InvoiceFinancials | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("freight_invoices")
     .select("id, status, freight_shipment_id, profile_id, invoice_no, commercial_value_thb, duty_thb, vat_thb")
     .eq("id", invoiceId)
     .maybeSingle<InvoiceFinancials>();
+  if (error) {
+    console.error(`[freight_invoices list] failed`, { code: error.code, message: error.message });
+  }
   return data ?? null;
 }
 
@@ -291,13 +297,16 @@ export async function recordFreightPayment(
         (insErr.code === "23505" || /duplicate|unique/i.test(insErr.message)) &&
         d.bank_ref
       ) {
-        const { data: raced } = await admin
+        const { data: raced, error: racedErr } = await admin
           .from("freight_invoice_payments")
           .select("id")
           .eq("freight_invoice_id", invoice.id)
           .eq("bank_ref", d.bank_ref)
           .eq("status", "recorded")
           .maybeSingle<{ id: string }>();
+        if (racedErr) {
+          console.error(`[freight_invoice_payments list] failed`, { code: racedErr.code, message: racedErr.message });
+        }
         if (raced) {
           const recomputed = await recomputeInvoicePayment(admin, invoice);
           return {
@@ -441,11 +450,15 @@ export async function voidFreightPayment(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: payment } = await admin
+    const { data: payment, error: paymentErr } = await admin
       .from("freight_invoice_payments")
       .select("id, status, freight_invoice_id, amount_thb, method")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_invoice_id: string; amount_thb: number; method: string }>();
+    if (paymentErr) {
+      console.error(`[freight_invoice_payments mutation lookup] failed`, { code: paymentErr.code, message: paymentErr.message });
+      return { ok: false, error: `db_error:${paymentErr.code ?? "unknown"}` };
+    }
     if (!payment) return { ok: false, error: "payment_not_found" };
     if (payment.status === "voided") return { ok: false, error: "already_voided" };
 
@@ -550,11 +563,14 @@ export async function listFreightPayments(
     const invoice = await loadInvoiceFinancials(admin, parsed.data.freight_invoice_id);
     if (!invoice) return { ok: false, error: "invoice_not_found" };
 
-    const { data: rows } = await admin
+    const { data: rows, error: rowsErr } = await admin
       .from("freight_invoice_payments")
       .select("id, method, amount_thb, paid_at, slip_storage_path, bank_ref, status, void_reason, notes, created_at")
       .eq("freight_invoice_id", invoice.id)
       .order("paid_at", { ascending: false });
+    if (rowsErr) {
+      console.error(`[freight_invoice_payments list] failed`, { code: rowsErr.code, message: rowsErr.message });
+    }
 
     const payments = ((rows ?? []) as FreightPaymentListRow[]).map((r) => ({
       ...r,

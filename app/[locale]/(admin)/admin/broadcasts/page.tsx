@@ -56,13 +56,19 @@ export default async function AdminBroadcastsListPage({
     .order("created_at", { ascending: false })
     .limit(200);
   if (status) query = query.eq("status", status);
-  const { data: raw } = await query;
+  const { data: raw, error: rawErr } = await query;
+  if (rawErr) {
+    console.error(`[broadcasts list] failed`, { code: rawErr.code, message: rawErr.message });
+  }
   const rows = (raw ?? []) as Row[];
 
   // Status counts for chip badges.
   const counts: Record<BroadcastStatus, number> = {} as Record<BroadcastStatus, number>;
   for (const s of BROADCAST_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin.from("broadcasts").select("status");
+  const { data: countRows, error: countRowsErr } = await admin.from("broadcasts").select("status");
+  if (countRowsErr) {
+    console.error(`[broadcasts list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: BroadcastStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }

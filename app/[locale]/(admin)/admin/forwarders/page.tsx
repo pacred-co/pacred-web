@@ -390,10 +390,13 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // skipped (saves a roundtrip on the common path).
   let driverInProgressIds: Set<number> | null = null;
   if (sp.status === "6" || sp.status === "6.1") {
-    const { data: driverItemRows } = await admin
+    const { data: driverItemRows, error: driverItemRowsErr } = await admin
       .from("tb_forwarder_driver_item")
       .select("fid")
       .eq("fdistatus", "");
+    if (driverItemRowsErr) {
+      console.error(`[tb_forwarder_driver_item list] failed`, { code: driverItemRowsErr.code, message: driverItemRowsErr.message });
+    }
     driverInProgressIds = new Set(
       (driverItemRows ?? []).map((r) => Number((r as { fid: number | string }).fid)),
     );

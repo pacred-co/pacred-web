@@ -29,11 +29,15 @@ export async function adminUpdateContactStatus(
 
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("contact_messages")
       .select("id, status")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string }>();
+    if (existingErr) {
+      console.error(`[contact_messages mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === d.status) return { ok: true };
 

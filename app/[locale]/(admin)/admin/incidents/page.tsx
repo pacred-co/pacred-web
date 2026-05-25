@@ -153,7 +153,10 @@ export default async function AdminIncidentsPage({
     countQ = countQ.lte("last_seen", padded);
   }
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[platform_incidents list] failed`, { code: error.code, message: error.message });
+  }
   const { count: totalCount } = await countQ;
   const rows = (data ?? []) as Row[];
 

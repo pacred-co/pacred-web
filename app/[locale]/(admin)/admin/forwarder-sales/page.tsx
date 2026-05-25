@@ -96,7 +96,7 @@ export default async function AdminForwarderSalesPage({
   const admin = createAdminClient();
 
   // List of all active leaders (for the picker)
-  const { data: leadersRaw } = await admin
+  const { data: leadersRaw, error: leadersRawErr } = await admin
     .from("team_leaders")
     .select(`
       id, team_code, commission_pct, is_active,
@@ -104,6 +104,9 @@ export default async function AdminForwarderSalesPage({
     `)
     .eq("is_active", true)
     .order("team_code");
+  if (leadersRawErr) {
+    console.error(`[team_leaders list] failed`, { code: leadersRawErr.code, message: leadersRawErr.message });
+  }
 
   type LeaderRow = { id: string; team_code: string; commission_pct: number; profile: Profile | Profile[] | null };
   const leaders = ((leadersRaw ?? []) as LeaderRow[]).map((l) => ({
@@ -133,7 +136,10 @@ export default async function AdminForwarderSalesPage({
   if (leaderId) q = q.eq("team_leader_id", leaderId);
   if (status !== "all") q = q.eq("status", status);
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[sales_commissions list] failed`, { code: error.code, message: error.message });
+  }
   const rows = ((data ?? []) as unknown as Row[]).map((r) => ({
     ...r,
     customer:    normSingle(r.customer),

@@ -111,13 +111,16 @@ export async function adminAccrueCommissionForOrder(
     }
 
     // ── Idempotency check (give nicer error than 23505) ──
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("commission_accruals")
       .select("id, accrued_amount_thb")
       .eq("source_kind", d.source_kind)
       .eq("source_ref", d.source_ref)
       .eq("earner_admin_id", d.earner_admin_id)
       .maybeSingle<{ id: string; accrued_amount_thb: number }>();
+    if (existingErr) {
+      console.error(`[commission_accruals list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     if (existing) {
       return {
         ok: true,
@@ -183,11 +186,15 @@ export async function adminApproveWithdrawal(
   return withAdmin([...ROLES_ADMIN], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("commission_withdrawals")
       .select("id, status, withdrawal_no")
       .eq("id", parsed.data.id)
       .maybeSingle<{ id: string; status: string; withdrawal_no: string }>();
+    if (rowErr) {
+      console.error(`[commission_withdrawals mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "pending") {
       return { ok: false, error: `bad_status:${row.status}` };
@@ -232,11 +239,15 @@ export async function adminRejectWithdrawal(
   return withAdmin([...ROLES_ADMIN], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("commission_withdrawals")
       .select("id, status, withdrawal_no")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; withdrawal_no: string }>();
+    if (rowErr) {
+      console.error(`[commission_withdrawals mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "pending") {
       return { ok: false, error: `bad_status:${row.status}` };
@@ -308,11 +319,15 @@ export async function adminMarkWithdrawalPaid(
   return withAdmin([...ROLES_ADMIN], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("commission_withdrawals")
       .select("id, status, withdrawal_no")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; withdrawal_no: string }>();
+    if (rowErr) {
+      console.error(`[commission_withdrawals mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "approved") {
       return { ok: false, error: `bad_status:${row.status}` };
@@ -622,10 +637,13 @@ export async function adminUpsertCommissionTier(
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function getItemIds(admin: AdminClient, withdrawalId: string): Promise<string[]> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("commission_withdrawal_items")
     .select("id")
     .eq("commission_withdrawal_id", withdrawalId);
+  if (error) {
+    console.error(`[commission_withdrawal_items list] failed`, { code: error.code, message: error.message });
+  }
   return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }
 

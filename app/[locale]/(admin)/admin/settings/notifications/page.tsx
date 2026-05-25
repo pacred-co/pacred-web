@@ -23,7 +23,7 @@ export default async function AdminNotificationsSettingsPage() {
   const { user } = await requireAdmin();
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("notify_channels, member_code, first_name, last_name")
     .eq("id", user.id)
@@ -33,6 +33,9 @@ export default async function AdminNotificationsSettingsPage() {
       first_name: string | null;
       last_name: string | null;
     }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   // Should always exist — admins are also profiles. Fall back to login
   // bounce for the rare timing race during initial signup.
@@ -40,11 +43,14 @@ export default async function AdminNotificationsSettingsPage() {
 
   // Look up the role badges so the page can show "you'll receive the
   // sales digest because you have role X" hint.
-  const { data: adminRow } = await admin
+  const { data: adminRow, error: adminRowErr } = await admin
     .from("admins")
     .select("roles")
     .eq("profile_id", user.id)
     .maybeSingle<{ roles: string[] }>();
+  if (adminRowErr) {
+    console.error(`[admins list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
+  }
   const roles = adminRow?.roles ?? [];
 
   const initial = {

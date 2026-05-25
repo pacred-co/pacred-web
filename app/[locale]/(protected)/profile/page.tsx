@@ -118,7 +118,7 @@ export default async function ProfilePage() {
   // connect/disconnect + channel-toggle UI below the legacy profile
   // card. Read alongside the other profile-card fields so the page is
   // a single read pass.
-  const { data: lnRow } = await admin
+  const { data: lnRow, error: lnRowErr } = await admin
     .from("profiles")
     .select("line_notify_token, line_notify_connected_at, line_notify_channels")
     .eq("id", profile.id)
@@ -127,6 +127,9 @@ export default async function ProfilePage() {
       line_notify_connected_at: string | null;
       line_notify_channels:     Record<string, boolean> | null;
     }>();
+  if (lnRowErr) {
+    console.error(`[profiles list] failed`, { code: lnRowErr.code, message: lnRowErr.message });
+  }
   const lineNotifyConnectedAt =
     lnRow?.line_notify_token ? lnRow.line_notify_connected_at : null;
   const lineNotifyChannels = lnRow?.line_notify_channels ?? null;
@@ -137,7 +140,7 @@ export default async function ProfilePage() {
   // from it. profile.php's modal SELECT (L144) additionally reads
   // userTel/userSex/userBirthday/userFacebook/userLineID — all on the
   // same tb_users row, so one read covers both.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
       "username, userlastname, useremail, usertel, userpicture, usersex, userbirthday, userfacebook, userlineid",
@@ -154,6 +157,9 @@ export default async function ProfilePage() {
       userfacebook: string | null;
       userlineid: string | null;
     }>();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
 
   // header.php L86-92 — SELECT walletTotal FROM tb_wallet WHERE userID=…
   // header.php L100/104/105 — the three stat-card COUNT()s.
@@ -193,7 +199,7 @@ export default async function ProfilePage() {
   let fullAddress = "";
   const mainAddressId = addressMainRes.data?.addressid ?? null;
   if (mainAddressId != null) {
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrRowErr } = await admin
       .from("tb_address")
       .select(
         "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
@@ -208,6 +214,9 @@ export default async function ProfilePage() {
         addressprovince: string | null;
         addresszipcode: string | null;
       }>();
+    if (addrRowErr) {
+      console.error(`[tb_address list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+    }
     if (addrRow) fullAddress = buildFullAddress(addrRow);
   }
 

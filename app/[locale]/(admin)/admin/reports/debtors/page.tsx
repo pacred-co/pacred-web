@@ -26,13 +26,16 @@ export default async function DebtorsReport() {
   const admin = createAdminClient();
 
   // Pull only rows with at least one negative balance — `.or()` is OR across columns
-  const { data } = await admin
+  const { data, error } = await admin
     .from("wallet")
     .select(`profile_id, balance, credit_balance, cashback_balance,
       profile:profiles!profile_id(member_code, first_name, last_name, phone)`)
     .or("balance.lt.0,credit_balance.lt.0")
     .order("balance", { ascending: true })
     .limit(500);
+  if (error) {
+    console.error(`[wallet list] failed`, { code: error.code, message: error.message });
+  }
 
   const rows: NormRow[] = ((data ?? []) as Row[]).map((r) => ({
     ...r,

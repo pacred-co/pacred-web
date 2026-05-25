@@ -58,13 +58,17 @@ export default async function AdminSalesPayoutDetail({
   const { id } = await params;
 
   const admin = createAdminClient();
-  const { data: rowRaw } = await admin
+  const { data: rowRaw, error: rowRawErr } = await admin
     .from("sales_payouts")
     .select(
       "id,amount_total,status,bank_name,account_name,account_number,note,requested_at,paid_at,approved_at,team_leader_id,kind",
     )
     .eq("id", id)
     .maybeSingle();
+  if (rowRawErr) {
+    console.error(`[sales_payouts lookup] failed`, { code: rowRawErr.code, message: rowRawErr.message, details: rowRawErr.details, hint: rowRawErr.hint });
+    throw new Error(`Failed to load sales_payouts (${rowRawErr.code ?? "unknown"}): ${rowRawErr.message}`);
+  }
   if (!rowRaw) notFound();
   const row = rowRaw as unknown as PayoutRow;
 

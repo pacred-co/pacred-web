@@ -174,7 +174,10 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
     q = q.or(`userid.ilike.%${term}%,usertel.ilike.%${term}%,username.ilike.%${term}%,userlastname.ilike.%${term}%`);
   }
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
+  }
   type Row = {
     userid: string;
     username: string | null;
@@ -198,10 +201,13 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   const userIds = rows.map((r) => r.userid);
   const walletByUser = new Map<string, number>();
   if (userIds.length > 0) {
-    const { data: wallets } = await admin
+    const { data: wallets, error: walletsErr } = await admin
       .from("tb_wallet")
       .select("userid, wallettotal")
       .in("userid", userIds);
+    if (walletsErr) {
+      console.error(`[tb_wallet list] failed`, { code: walletsErr.code, message: walletsErr.message });
+    }
     for (const w of (wallets ?? []) as { userid: string; wallettotal: number | null }[]) {
       walletByUser.set(w.userid, Number(w.wallettotal ?? 0));
     }
@@ -223,12 +229,15 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   };
   const addressByUser = new Map<string, AddressRow>();
   if (userIds.length > 0) {
-    const { data: addresses } = await admin
+    const { data: addresses, error: addressesErr } = await admin
       .from("tb_address")
       .select("addressid, userid, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
       .in("userid", userIds)
       .eq("addressstatus", "1")
       .order("addressid", { ascending: true });
+    if (addressesErr) {
+      console.error(`[tb_address list] failed`, { code: addressesErr.code, message: addressesErr.message });
+    }
     for (const a of (addresses ?? []) as AddressRow[]) {
       // First-seen (lowest addressid per userid) wins — the order() above
       // guarantees insertion order matches ascending addressid.

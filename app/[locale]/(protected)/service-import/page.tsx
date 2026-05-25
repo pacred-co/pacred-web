@@ -126,20 +126,26 @@ export default async function ServiceImportPage({
   // line + the KBank account block only for juristic customers
   // (`userCompany==1`). Read the legacy flag so the modal stays on the
   // legacy data path (not the rebuilt-app `profiles.account_type`).
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("usercompany")
     .eq("userid", memberCode)
     .maybeSingle<{ usercompany: string | number | null }>();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
   const isJuristic = String(userRow?.usercompany ?? "") === "1";
 
   // ── forwarder.php L450 — corporate check ──
   // SELECT ID FROM tb_corporate WHERE userID=… AND corporateStatus=1
   // (the screen renders fully only if NO row OR the row is approved).
-  const { data: corpRows } = await admin
+  const { data: corpRows, error: corpRowsErr } = await admin
     .from("tb_corporate")
     .select("id, corporatestatus")
     .eq("userid", memberCode);
+  if (corpRowsErr) {
+    console.error(`[tb_corporate list] failed`, { code: corpRowsErr.code, message: corpRowsErr.message });
+  }
   const corpStatus1Count = (corpRows ?? []).filter(
     (r) => String((r as { corporatestatus: string | null }).corporatestatus) === "1",
   ).length;
@@ -163,19 +169,25 @@ export default async function ServiceImportPage({
     .eq("fstatus", "5");
 
   // ── header.php L113-122 — credit user check ──
-  const { data: creditRow } = await admin
+  const { data: creditRow, error: creditRowErr } = await admin
     .from("tb_credit")
     .select("creditvalue")
     .eq("userid", memberCode)
     .maybeSingle<{ creditvalue: number }>();
+  if (creditRowErr) {
+    console.error(`[tb_credit list] failed`, { code: creditRowErr.code, message: creditRowErr.message });
+  }
   const creditUser = creditRow ? 1 : 0;
 
   // ── forwarder.php L491-499 — status counts (GROUP BY fStatus) ──
   // arrStatus[0..7]
-  const { data: allForwardersForCount } = await admin
+  const { data: allForwardersForCount, error: allForwardersForCountErr } = await admin
     .from("tb_forwarder")
     .select("fstatus")
     .eq("userid", memberCode);
+  if (allForwardersForCountErr) {
+    console.error(`[tb_forwarder list] failed`, { code: allForwardersForCountErr.code, message: allForwardersForCountErr.message });
+  }
   const arrStatus = [0, 0, 0, 0, 0, 0, 0, 0];
   for (const r of (allForwardersForCount ?? []) as { fstatus: string | null }[]) {
     const s = Number(r.fstatus);
@@ -187,10 +199,13 @@ export default async function ServiceImportPage({
   // ── forwarder.php L501-510 — driver-item count (out-for-delivery) ──
   // SELECT f.ID FROM tb_forwarder_driver_item fdi
   //   LEFT JOIN tb_forwarder f ON fdi.fID=f.ID WHERE fdiStatus='' AND userID=…
-  const { data: fdiRows } = await admin
+  const { data: fdiRows, error: fdiRowsErr } = await admin
     .from("tb_forwarder_driver_item")
     .select("fid, fdistatus")
     .eq("fdistatus", "");
+  if (fdiRowsErr) {
+    console.error(`[tb_forwarder_driver_item list] failed`, { code: fdiRowsErr.code, message: fdiRowsErr.message });
+  }
   const fdiFidSet = new Set(
     ((fdiRows ?? []) as { fid: number; fdistatus: string | null }[]).map(
       (r) => r.fid,
@@ -200,11 +215,14 @@ export default async function ServiceImportPage({
   // f.userID into the same query)
   const arrFidDriver = new Set<number>();
   if (fdiFidSet.size > 0) {
-    const { data: ownDriverFwd } = await admin
+    const { data: ownDriverFwd, error: ownDriverFwdErr } = await admin
       .from("tb_forwarder")
       .select("id")
       .eq("userid", memberCode)
       .in("id", Array.from(fdiFidSet));
+    if (ownDriverFwdErr) {
+      console.error(`[tb_forwarder list] failed`, { code: ownDriverFwdErr.code, message: ownDriverFwdErr.message });
+    }
     for (const r of (ownDriverFwd ?? []) as { id: number }[]) {
       arrFidDriver.add(r.id);
     }
@@ -251,16 +269,22 @@ export default async function ServiceImportPage({
     case "c": listQuery = listQuery.eq("fcredit", "1"); break;
     default: break;
   }
-  const { data: listRows } = await listQuery;
+  const { data: listRows, error: listRowsErr } = await listQuery;
+  if (listRowsErr) {
+    console.error(`[tb_forwarder list] failed`, { code: listRowsErr.code, message: listRowsErr.message });
+  }
 
   // promotion ids for the rows on screen (tb_promotion po.fID=f.ID)
   const rowIds = ((listRows ?? []) as { id: number }[]).map((r) => r.id);
   const promoByFid = new Map<number, string>();
   if (rowIds.length > 0) {
-    const { data: promoRows } = await admin
+    const { data: promoRows, error: promoRowsErr } = await admin
       .from("tb_promotion")
       .select("fid, promoid")
       .in("fid", rowIds);
+    if (promoRowsErr) {
+      console.error(`[tb_promotion list] failed`, { code: promoRowsErr.code, message: promoRowsErr.message });
+    }
     for (const r of (promoRows ?? []) as {
       fid: number;
       promoid: number | null;
@@ -323,30 +347,36 @@ export default async function ServiceImportPage({
 
   // ── forwarder.php L979-997 — the modal address <select> ──
   // main address first, then the rest; legacy ⋈ tb_address_main.
-  const { data: mainAddrLink } = await admin
+  const { data: mainAddrLink, error: mainAddrLinkErr } = await admin
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", memberCode)
     .maybeSingle<{ addressid: number }>();
+  if (mainAddrLinkErr) {
+    console.error(`[tb_address_main list] failed`, { code: mainAddrLinkErr.code, message: mainAddrLinkErr.message });
+  }
   let mainAddress: { addressid: number; full: string } | null = null;
   const otherAddresses: { addressid: number; full: string }[] = [];
   const fmtAddr = (a: Record<string, unknown>) =>
     `${a.addressname ?? ""} ${a.addresslastname ?? ""} ${a.addressno ?? ""} ตำบล/แขวง ${a.addresssubdistrict ?? ""} อำเภอ/เขต ${a.addressdistrict ?? ""} จังหวัด ${a.addressprovince ?? ""} ${a.addresszipcode ?? ""}`;
   if (mainAddrLink?.addressid != null) {
-    const { data: mainAddrRow } = await admin
+    const { data: mainAddrRow, error: mainAddrRowErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
       )
       .eq("addressid", mainAddrLink.addressid)
       .maybeSingle<Record<string, unknown>>();
+    if (mainAddrRowErr) {
+      console.error(`[tb_address list] failed`, { code: mainAddrRowErr.code, message: mainAddrRowErr.message });
+    }
     if (mainAddrRow) {
       mainAddress = {
         addressid: Number(mainAddrRow.addressid),
         full: fmtAddr(mainAddrRow),
       };
     }
-    const { data: restAddrRows } = await admin
+    const { data: restAddrRows, error: restAddrRowsErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
@@ -354,6 +384,9 @@ export default async function ServiceImportPage({
       .eq("userid", memberCode)
       .eq("addressstatus", "1")
       .neq("addressid", mainAddrLink.addressid);
+    if (restAddrRowsErr) {
+      console.error(`[tb_address list] failed`, { code: restAddrRowsErr.code, message: restAddrRowsErr.message });
+    }
     for (const a of (restAddrRows ?? []) as Record<string, unknown>[]) {
       otherAddresses.push({
         addressid: Number(a.addressid),

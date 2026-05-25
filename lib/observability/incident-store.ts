@@ -117,7 +117,7 @@ export async function captureIncident(
     const nowIso = new Date().toISOString();
 
     // ── Dedup — is there already a LIVE incident for this fingerprint? ──
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("platform_incidents")
       .select("id, occurrence_count, status, severity")
       .eq("fingerprint", fingerprint)
@@ -126,6 +126,9 @@ export async function captureIncident(
         id: string; occurrence_count: number;
         status: string; severity: string;
       }>();
+    if (existingErr) {
+      console.error(`[platform_incidents list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     if (existing) {
       // Re-fire — bump the counter + last_seen. Do NOT reset status:
@@ -180,12 +183,15 @@ export async function captureIncident(
       // Unique-violation → a concurrent insert won the race. Re-read +
       // bump so the occurrence is still counted.
       if (insErr?.code === "23505") {
-        const { data: raced } = await admin
+        const { data: raced, error: racedErr } = await admin
           .from("platform_incidents")
           .select("id, occurrence_count")
           .eq("fingerprint", fingerprint)
           .not("status", "in", "(resolved,ignored)")
           .maybeSingle<{ id: string; occurrence_count: number }>();
+        if (racedErr) {
+          console.error(`[platform_incidents list] failed`, { code: racedErr.code, message: racedErr.message });
+        }
         if (raced) {
           await admin
             .from("platform_incidents")
@@ -230,11 +236,14 @@ async function fireSeedAlert(
 
     // The IO-1 alert target = the super-role admins (design doc §13 Q4
     // — promotable to a proper on-call rota in Stage 4).
-    const { data: supers } = await admin
+    const { data: supers, error: supersErr } = await admin
       .from("admins")
       .select("profile_id")
       .eq("role", "super")
       .eq("is_active", true);
+    if (supersErr) {
+      console.error(`[admins list] failed`, { code: supersErr.code, message: supersErr.message });
+    }
 
     const targets = [...new Set((supers ?? []).map((r) => r.profile_id as string))];
     if (targets.length === 0) {

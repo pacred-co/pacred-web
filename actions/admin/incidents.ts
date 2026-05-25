@@ -67,11 +67,14 @@ async function readIncident(
   admin: ReturnType<typeof createAdminClient>,
   id: string,
 ): Promise<IncidentRow | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("platform_incidents")
     .select("id, status, severity, title, route, assigned_to, acknowledged_at, work_item_id")
     .eq("id", id)
     .maybeSingle<IncidentRow>();
+  if (error) {
+    console.error(`[platform_incidents list] failed`, { code: error.code, message: error.message });
+  }
   return data ?? null;
 }
 
@@ -305,12 +308,16 @@ export async function assignIncident(
 
     // The assignee must be an active admin (an incident is never
     // assigned to a non-staff profile).
-    const { data: assigneeAdmin } = await admin
+    const { data: assigneeAdmin, error: assigneeAdminErr } = await admin
       .from("admins")
       .select("profile_id")
       .eq("profile_id", assignee)
       .eq("is_active", true)
       .maybeSingle<{ profile_id: string }>();
+    if (assigneeAdminErr) {
+      console.error(`[admins mutation lookup] failed`, { code: assigneeAdminErr.code, message: assigneeAdminErr.message });
+      return { ok: false, error: `db_error:${assigneeAdminErr.code ?? "unknown"}` };
+    }
     if (!assigneeAdmin) return { ok: false, error: "assignee_not_admin" };
 
     const nowIso = new Date().toISOString();

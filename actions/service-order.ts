@@ -140,15 +140,21 @@ export async function listServiceOrders(opts?: {
   limit?: number;
 }): Promise<ActionResult<ServiceOrderSummary[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Resolve the customer's legacy member code (the tb_* join key).
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("member_code")
     .eq("id", user.id)
     .maybeSingle<{ member_code: string | null }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
   const memberCode = profile?.member_code ?? "";
   if (!memberCode) return { ok: true, data: [] };
 
@@ -228,14 +234,20 @@ function orderItemRow(r: LegacyOrderItemRow): ServiceOrderDetail["items"][number
 // ────────────────────────────────────────────────────────────
 export async function getServiceOrder(hNo: string): Promise<ActionResult<ServiceOrderDetail>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("member_code")
     .eq("id", user.id)
     .maybeSingle<{ member_code: string | null }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
   const memberCode = profile?.member_code ?? "";
   if (!memberCode) return { ok: false, error: "not_found" };
 
@@ -274,13 +286,16 @@ export async function getServiceOrder(hNo: string): Promise<ActionResult<Service
     hnote: string | null;
   };
 
-  const { data: items } = await admin
+  const { data: items, error: itemsErr } = await admin
     .from("tb_order")
     .select(
       "id, cprovider, cnameshop, ctitle, curl, cimages, ccolor, csize, cprice, camount, cdetails, ctrackingnumber, cshippingnumber, cshippingchn, cpriceupdate, crewallet",
     )
     .eq("hno", hNo)
     .order("id", { ascending: true });
+  if (itemsErr) {
+    console.error(`[tb_order list] failed`, { code: itemsErr.code, message: itemsErr.message });
+  }
 
   const detail: ServiceOrderDetail = {
     ...headerRowToSummary(h),
@@ -385,14 +400,20 @@ export async function getServiceOrderForReceipt(
   // client; ownership is verified by matching tb_header_order.userid against
   // the signed-in customer's member_code.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: ownProfile } = await supabase
+  const { data: ownProfile, error: ownProfileErr } = await supabase
     .from("profiles")
     .select("member_code")
     .eq("id", user.id)
     .maybeSingle<{ member_code: string | null }>();
+  if (ownProfileErr) {
+    console.error(`[profiles list] failed`, { code: ownProfileErr.code, message: ownProfileErr.message });
+  }
   const memberCode = ownProfile?.member_code ?? "";
   if (!memberCode) return { ok: false, error: "not_found" };
 
@@ -452,7 +473,7 @@ export async function getServiceOrderForReceipt(
   }
 
   // 2. Customer — the signed-in customer's own legacy row (tb_users).
-  const { data: legacyUser } = await admin
+  const { data: legacyUser, error: legacyUserErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, useremail, usertel, usercompany")
     .eq("userid", memberCode)
@@ -464,6 +485,9 @@ export async function getServiceOrderForReceipt(
       usertel:     string | null;
       usercompany: string | null;
     }>();
+  if (legacyUserErr) {
+    console.error(`[tb_users list] failed`, { code: legacyUserErr.code, message: legacyUserErr.message });
+  }
 
   const accountType: "personal" | "juristic" =
     legacyUser?.usercompany === "1" ? "juristic" : "personal";
@@ -475,7 +499,7 @@ export async function getServiceOrderForReceipt(
   let tax_id:       string | null    = null;
   let company_address: string | null = null;
   if (accountType === "juristic") {
-    const { data: corp } = await supabase
+    const { data: corp, error: corpErr } = await supabase
       .from("corporate")
       .select("company_name, tax_id, company_address")
       .eq("profile_id", user.id)
@@ -484,19 +508,25 @@ export async function getServiceOrderForReceipt(
         tax_id:          string | null;
         company_address: string | null;
       }>();
+    if (corpErr) {
+      console.error(`[corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+    }
     company_name    = corp?.company_name    ?? null;
     tax_id          = corp?.tax_id          ?? null;
     company_address = corp?.company_address ?? null;
   }
 
   // 3. Items — exclude refunded lines (legacy crewallet flag = PHP cReWallet).
-  const { data: items } = await admin
+  const { data: items, error: itemsErr } = await admin
     .from("tb_order")
     .select(
       "id, cprovider, cnameshop, ctitle, curl, cimages, ccolor, csize, cprice, camount, cdetails, ctrackingnumber, cshippingnumber, cshippingchn, cpriceupdate, crewallet",
     )
     .eq("hno", hNo)
     .order("id", { ascending: true });
+  if (itemsErr) {
+    console.error(`[tb_order list] failed`, { code: itemsErr.code, message: itemsErr.message });
+  }
 
   const visibleItems = ((items ?? []) as LegacyOrderItemRow[]).filter(
     (it) => it.crewallet !== "1",
@@ -587,7 +617,10 @@ export async function placeServiceOrder(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Load the cart items (RLS ensures we only get our own)
@@ -605,11 +638,14 @@ export async function placeServiceOrder(
   }
 
   // Fetch current yuan rate from settings
-  const { data: settings } = await supabase
+  const { data: settings, error: settingsErr } = await supabase
     .from("settings")
     .select("yuan_rate, service_fee")
     .eq("id", 1)
     .maybeSingle<{ yuan_rate: number; service_fee: number }>();
+  if (settingsErr) {
+    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+  }
   const yuan_rate   = Number(settings?.yuan_rate ?? 5);
   const service_fee = Number(settings?.service_fee ?? 50);
 
@@ -726,7 +762,10 @@ export async function cancelServiceOrder(hNo: string): Promise<ActionResult> {
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -766,22 +805,29 @@ export async function payServiceOrderFromWallet(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1. Verify ownership + status + total via RLS-protected fetch
-  const { data: order } = await supabase
+  const { data: order, error: orderErr } = await supabase
     .from("service_orders")
     .select("id, h_no, status, total_thb")
     .eq("h_no", hNo)
     .maybeSingle<{ id: string; h_no: string; status: string; total_thb: number }>();
+  if (orderErr) {
+    console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
+    return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
+  }
   if (!order)                                  return { ok: false, error: "not_found" };
   if (order.status !== "awaiting_payment")     return { ok: false, error: "order_not_payable" };
   const totalThb = Number(order.total_thb);
   if (!(totalThb > 0))                         return { ok: false, error: "total_thb_invalid" };
 
   // 2. Idempotency: existing completed payment tx for this order?
-  const { data: existingTx } = await supabase
+  const { data: existingTx, error: existingTxErr } = await supabase
     .from("wallet_transactions")
     .select("id")
     .eq("reference_type", "order_header")
@@ -789,6 +835,9 @@ export async function payServiceOrderFromWallet(
     .eq("kind", "order_payment")
     .eq("status", "completed")
     .maybeSingle<{ id: string }>();
+  if (existingTxErr) {
+    console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
+  }
   if (existingTx) {
     // Status mismatch shouldn't happen, but return success — let UI refresh.
     return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
@@ -839,7 +888,7 @@ export async function payServiceOrderFromWallet(
 
   if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
     // Concurrent peer beat us — re-SELECT the canonical row.
-    const { data: peerTx } = await admin
+    const { data: peerTx, error: peerTxErr } = await admin
       .from("wallet_transactions")
       .select("id")
       .eq("reference_type", "order_header")
@@ -847,6 +896,9 @@ export async function payServiceOrderFromWallet(
       .eq("kind", "order_payment")
       .eq("status", "completed")
       .maybeSingle<{ id: string }>();
+    if (peerTxErr) {
+      console.error(`[wallet_transactions list] failed`, { code: peerTxErr.code, message: peerTxErr.message });
+    }
     if (!peerTx) {
       // 23505 fired but no row visible — partial-index predicate mismatch
       // or unexpected race. Surface so admin can investigate.
@@ -924,15 +976,22 @@ export async function customerAcknowledgeServiceOrderDelivery(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1. Verify ownership + status + ack-state via RLS-protected fetch
-  const { data: order } = await supabase
+  const { data: order, error: orderErr } = await supabase
     .from("service_orders")
     .select("id, h_no, status, acknowledged_at")
     .eq("h_no", parsed.data.h_no)
     .maybeSingle<{ id: string; h_no: string; status: string; acknowledged_at: string | null }>();
+  if (orderErr) {
+    console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
+    return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
+  }
   if (!order)                          return { ok: false, error: "not_found" };
   if (order.status !== "completed")    return { ok: false, error: "not_delivered_yet" };
 

@@ -74,7 +74,10 @@ export async function GET(request: Request) {
   // ── 4. session check — must be signed-in to bind the token ──
   // Using the owner-scoped client so the subsequent UPDATE is RLS-checked.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     // Likely the session expired during the OAuth round-trip. Bounce to
     // login with a hint to re-try after sign-in.

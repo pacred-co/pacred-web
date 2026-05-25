@@ -50,7 +50,7 @@ export default async function ContainerHsReportPage({
   const admin = createAdminClient();
 
   // Fetch all lines + container created_at for date filter + hs description
-  const { data } = await admin
+  const { data, error } = await admin
     .from("container_hs_lines")
     .select(`
       hs_code, qty, weight_kg, value_thb, duty_pct_used,
@@ -58,6 +58,9 @@ export default async function ContainerHsReportPage({
       hs:hs_codes!hs_code ( description )
     `)
     .limit(10000);
+  if (error) {
+    console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
+  }
 
   const rowsRaw = ((data ?? []) as LineRow[]).map((l) => ({
     ...l,

@@ -34,7 +34,7 @@ export default async function AdminDriverAssignmentDetailPage({
   const { id } = await params;
   const admin  = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("forwarder_driver")
     .select(`
       id, status, fd_date, accepted_at, completed_at, note, created_at, updated_at,
@@ -52,6 +52,10 @@ export default async function AdminDriverAssignmentDetailPage({
     .eq("id", id)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[forwarder_driver lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load forwarder_driver (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
 
   type Row = typeof data & {

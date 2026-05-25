@@ -44,20 +44,29 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   let walletBalance: number | null = null;
   if (o.status === "2") {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from("profiles")
         .select("member_code")
         .eq("id", user.id)
         .maybeSingle<{ member_code: string | null }>();
+      if (profileErr) {
+        console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+      }
       if (profile?.member_code) {
         const admin = createAdminClient();
-        const { data: wallet } = await admin
+        const { data: wallet, error: walletErr } = await admin
           .from("tb_wallet")
           .select("wallettotal")
           .eq("userid", profile.member_code)
           .maybeSingle<{ wallettotal: number }>();
+        if (walletErr) {
+          console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
+        }
         walletBalance = Number(wallet?.wallettotal ?? 0);
       } else {
         walletBalance = 0;

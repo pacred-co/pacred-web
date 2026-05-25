@@ -82,11 +82,14 @@ export async function calculateForwarderTotal(
   //                        FROM tb_users WHERE userID='$userID'
   // We only need userCompany here (the juristic 1% discount lever);
   // userName/userLastName are read but unused by the calc.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("usercompany")
     .eq("userid", userID)
     .maybeSingle<{ usercompany: string | number | null }>();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
   const userCompany = String(userRow?.usercompany ?? "");
 
   // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
@@ -96,7 +99,7 @@ export async function calculateForwarderTotal(
   //   FROM tb_forwarder WHERE userID='$userID' AND (fStatus='5' OR fCredit=1)
   //   AND ID IN ('$ids')
   // The legacy uses an OR over fStatus / fCredit. PostgREST: use .or().
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, faddressdistrict, fshipby, fshippingservice, ftransporttype, fdiscount, ftotalprice, ftransportprice, fpriceupdate, priceother, ftransportpricechnthb, pricecrate",
@@ -104,6 +107,9 @@ export async function calculateForwarderTotal(
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
     .in("id", input.ids);
+  if (rowsErr) {
+    console.error(`[tb_forwarder list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
 
   let countID = 0;
   let price = 0;
@@ -302,18 +308,25 @@ export async function previewPrice(
   input: PricePreviewInput,
 ): Promise<ActionResult<CalcPriceBreakdown>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type, customer_group")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic"; customer_group: string }>();
 
+  if (profileErr) {
+    console.error(`[profiles mutation lookup] failed`, { code: profileErr.code, message: profileErr.message });
+    return { ok: false, error: `db_error:${profileErr.code ?? "unknown"}` };
+  }
   if (!profile) return { ok: false, error: "no_profile" };
 
-  const { data: settings } = await supabase
+  const { data: settings, error: settingsErr } = await supabase
     .from("settings")
     .select("service_fee, juristic_discount_threshold, juristic_discount_pct, qc_fee_per_item, crate_fee_base")
     .eq("id", 1)
@@ -324,6 +337,9 @@ export async function previewPrice(
       qc_fee_per_item: number;
       crate_fee_base: number;
     }>();
+  if (settingsErr) {
+    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+  }
 
   const rates = await resolveRatesFor(
     user.id, profile.customer_group,
@@ -423,7 +439,7 @@ const SUMMARY_FORWARDER_COLS =
 
 export async function getForwarderByNo(fNo: string): Promise<ActionResult<ForwarderDetail>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -441,6 +457,10 @@ export async function getForwarderByNo(fNo: string): Promise<ActionResult<Forwar
     .maybeSingle();
 
   if (error)  return { ok: false, error: error.message };
+  if (dataErr) {
+    console.error(`[supabase mutation lookup] failed`, { code: dataErr.code, message: dataErr.message });
+    return { ok: false, error: `db_error:${dataErr.code ?? "unknown"}` };
+  }
   if (!data)  return { ok: false, error: "not_found" };
 
   const id = (data as { id: string }).id;
@@ -473,7 +493,10 @@ export async function listForwarders(opts?: {
   limit?: number;
 }): Promise<ActionResult<ForwarderSummary[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   let q = supabase
@@ -510,19 +533,26 @@ export async function createForwarder(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type, customer_group")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic"; customer_group: string }>();
+  if (profileErr) {
+    console.error(`[profiles mutation lookup] failed`, { code: profileErr.code, message: profileErr.message });
+    return { ok: false, error: `db_error:${profileErr.code ?? "unknown"}` };
+  }
   if (!profile) return { ok: false, error: "no_profile" };
 
   // Resolve rates + settings, then compute price server-side (trust nothing
   // from the client; client preview is courtesy only)
-  const { data: settings } = await supabase
+  const { data: settings, error: settingsErr } = await supabase
     .from("settings")
     .select("service_fee, juristic_discount_threshold, juristic_discount_pct, qc_fee_per_item, crate_fee_base, yuan_rate")
     .eq("id", 1)
@@ -534,6 +564,9 @@ export async function createForwarder(
       crate_fee_base: number;
       yuan_rate: number;
     }>();
+  if (settingsErr) {
+    console.error(`[settings list] failed`, { code: settingsErr.code, message: settingsErr.message });
+  }
 
   const rates = await resolveRatesFor(
     user.id, profile.customer_group,
@@ -724,22 +757,29 @@ export async function payForwarderFromWallet(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1. Verify ownership + status + total via RLS-protected fetch
-  const { data: forwarder } = await supabase
+  const { data: forwarder, error: forwarderErr } = await supabase
     .from("forwarders")
     .select("id, f_no, status, total_price")
     .eq("f_no", fNo)
     .maybeSingle<{ id: string; f_no: string; status: string; total_price: number }>();
+  if (forwarderErr) {
+    console.error(`[forwarders mutation lookup] failed`, { code: forwarderErr.code, message: forwarderErr.message });
+    return { ok: false, error: `db_error:${forwarderErr.code ?? "unknown"}` };
+  }
   if (!forwarder)                                 return { ok: false, error: "not_found" };
   if (forwarder.status !== "pending_payment")     return { ok: false, error: "forwarder_not_payable" };
   const totalThb = Number(forwarder.total_price);
   if (!(totalThb > 0))                            return { ok: false, error: "total_price_invalid" };
 
   // 2. Idempotency: existing completed payment tx for this forwarder?
-  const { data: existingTx } = await supabase
+  const { data: existingTx, error: existingTxErr } = await supabase
     .from("wallet_transactions")
     .select("id")
     .eq("reference_type", "forwarder")
@@ -747,6 +787,9 @@ export async function payForwarderFromWallet(
     .eq("kind", "import_payment")
     .eq("status", "completed")
     .maybeSingle<{ id: string }>();
+  if (existingTxErr) {
+    console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
+  }
   if (existingTx) {
     return { ok: true, data: { tx_id: existingTx.id, already_paid: true } };
   }
@@ -833,7 +876,7 @@ export async function payForwarderFromWallet(
     // caught a concurrent double-debit. Re-SELECT the winning tx and return
     // idempotently — mirrors the F-11 pattern in payServiceOrderFromWallet.
     if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
-      const { data: raced } = await admin
+      const { data: raced, error: racedErr } = await admin
         .from("wallet_transactions")
         .select("id")
         .eq("reference_type", "forwarder")
@@ -841,6 +884,9 @@ export async function payForwarderFromWallet(
         .eq("kind", "import_payment")
         .eq("status", "completed")
         .maybeSingle<{ id: string }>();
+      if (racedErr) {
+        console.error(`[wallet_transactions list] failed`, { code: racedErr.code, message: racedErr.message });
+      }
       if (raced) return { ok: true, data: { tx_id: raced.id, already_paid: true } };
     }
     return { ok: false, error: `wallet insert: ${txErr.message}` };
@@ -959,7 +1005,10 @@ export async function uploadForwarderSlip(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const file = formData.get("slip");
@@ -1077,7 +1126,7 @@ export async function submitForwarderPayment(
   // in flight; the legacy aborts the whole submit ('ePayRe'). We mirror
   // that: if EVERY selected id is already covered, return ok; otherwise
   // (defensive) refuse so the customer can't half-double-pay.
-  const { data: existingHs } = await admin
+  const { data: existingHs, error: existingHsErr } = await admin
     .from("tb_wallet_hs")
     .select("reforder")
     .eq("userid", userID)
@@ -1085,6 +1134,9 @@ export async function submitForwarderPayment(
     .in("typenew", ["5", "6"])
     .in("status", ["1", "2"])
     .in("reforder", ids.map(String));
+  if (existingHsErr) {
+    console.error(`[tb_wallet_hs list] failed`, { code: existingHsErr.code, message: existingHsErr.message });
+  }
   const alreadyPaidIds = new Set(
     (existingHs ?? []).map((r) => String((r as { reforder: string | null }).reforder)),
   );
@@ -1102,17 +1154,20 @@ export async function submitForwarderPayment(
   // forwarder.php L207-215 — corporate flag (the juristic 1% reduction
   // lever). The handler reads `tb_corporate` existence; if a row exists
   // `$corporate=1`.
-  const { data: corpRow } = await admin
+  const { data: corpRow, error: corpRowErr } = await admin
     .from("tb_corporate")
     .select("id")
     .eq("userid", userID)
     .maybeSingle<{ id: number }>();
+  if (corpRowErr) {
+    console.error(`[tb_corporate list] failed`, { code: corpRowErr.code, message: corpRowErr.message });
+  }
   const isCorporate = !!corpRow;
 
   // forwarder.php L252-253 — re-fetch the selected eligible rows
   // server-side (trust nothing from the client). The legacy predicate:
   //   userID=$userID AND (fStatus='5' OR fCredit='1') AND ID IN (ids)
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, fshipby, fcredit, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
@@ -1120,6 +1175,9 @@ export async function submitForwarderPayment(
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
     .in("id", ids);
+  if (rowsErr) {
+    console.error(`[tb_forwarder list] failed`, { code: rowsErr.code, message: rowsErr.message });
+  }
 
   const eligible = (rows ?? []) as Array<{
     id: number;
@@ -1274,15 +1332,22 @@ export async function customerAcknowledgeForwarderDelivery(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1. Verify ownership + status + ack-state via RLS-protected fetch
-  const { data: forwarder } = await supabase
+  const { data: forwarder, error: forwarderErr } = await supabase
     .from("forwarders")
     .select("id, f_no, status, acknowledged_at")
     .eq("f_no", parsed.data.f_no)
     .maybeSingle<{ id: string; f_no: string; status: string; acknowledged_at: string | null }>();
+  if (forwarderErr) {
+    console.error(`[forwarders mutation lookup] failed`, { code: forwarderErr.code, message: forwarderErr.message });
+    return { ok: false, error: `db_error:${forwarderErr.code ?? "unknown"}` };
+  }
   if (!forwarder)                              return { ok: false, error: "not_found" };
   if (forwarder.status !== "delivered")        return { ok: false, error: "not_delivered_yet" };
 
@@ -1379,7 +1444,10 @@ export async function customerDecideCostAdjustment(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1. RLS-scoped fetch — verifies ownership + reads current state.
@@ -1396,7 +1464,7 @@ export async function customerDecideCostAdjustment(
     cumulative_after_thb: number | null;
     forwarder: { f_no: string | null } | { f_no: string | null }[] | null;
   };
-  const { data: adjRaw } = await supabase
+  const { data: adjRaw, error: adjRawErr } = await supabase
     .from("forwarder_cost_adjustments")
     .select(`
       id, forwarder_id, profile_id, status, amount_thb,
@@ -1406,6 +1474,10 @@ export async function customerDecideCostAdjustment(
     `)
     .eq("id", d.adjustment_id)
     .maybeSingle<AdjRow>();
+  if (adjRawErr) {
+    console.error(`[forwarder_cost_adjustments mutation lookup] failed`, { code: adjRawErr.code, message: adjRawErr.message });
+    return { ok: false, error: `db_error:${adjRawErr.code ?? "unknown"}` };
+  }
   if (!adjRaw) return { ok: false, error: "not_found" };
 
   // assertOwnsRecord is the W-1/S-2 defence — RLS already scoped above,

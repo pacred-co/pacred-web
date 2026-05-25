@@ -145,11 +145,14 @@ export default async function DriverWorkPage({
   // profiles.member_code. The driver role uses this for self-filtering;
   // ops/super may override with ?driver=PR####.
   const supabase = await createClient();
-  const { data: myProfile } = await supabase
+  const { data: myProfile, error: myProfileErr } = await supabase
     .from("profiles")
     .select("member_code, first_name, last_name")
     .eq("id", user.id)
     .maybeSingle<{ member_code: string | null; first_name: string | null; last_name: string | null }>();
+  if (myProfileErr) {
+    console.error(`[profiles list] failed`, { code: myProfileErr.code, message: myProfileErr.message });
+  }
   const myUserid = myProfile?.member_code ?? null;
   const myName   = `${myProfile?.first_name ?? ""} ${myProfile?.last_name ?? ""}`.trim();
 
@@ -188,12 +191,15 @@ export default async function DriverWorkPage({
   //    window — pending items from old batches must still count).
   let driverBatchIds: number[] | null = null;
   if (filterDriver) {
-    const { data: dbatches } = await admin
+    const { data: dbatches, error: dbatchesErr } = await admin
       .from("tb_forwarder_driver")
       .select("id")
       .eq("fdadminid", filterDriver)
       .order("fddate", { ascending: false })
       .limit(5000);
+    if (dbatchesErr) {
+      console.error(`[tb_forwarder_driver list] failed`, { code: dbatchesErr.code, message: dbatchesErr.message });
+    }
     driverBatchIds = ((dbatches ?? []) as { id: number }[]).map((b) => b.id);
     if (driverBatchIds.length === 0) {
       return renderShell({
@@ -246,7 +252,10 @@ export default async function DriverWorkPage({
   // tab cares about "what's still on the road" + a peek at recently done.
   else                       itemQ = itemQ.or("fdistatus.eq.,fdistatus.is.null,fdistatus.eq.1");
   if (driverBatchIds) itemQ = itemQ.in("fdid", driverBatchIds);
-  const { data: itemRows } = await itemQ;
+  const { data: itemRows, error: itemRowsErr } = await itemQ;
+  if (itemRowsErr) {
+    console.error(`[tb_forwarder_driver_item list] failed`, { code: itemRowsErr.code, message: itemRowsErr.message });
+  }
   const items = (itemRows ?? []) as Item[];
 
   // 4. Load matching batches + forwarders only for those items.
@@ -321,18 +330,24 @@ export default async function DriverWorkPage({
 // distinct admin ids (same window as the main query).
 // ─────────────────────────────────────────────────────────────────────
 async function loadDriverDirectory(admin: ReturnType<typeof createAdminClient>) {
-  const { data: batchAdminRows } = await admin
+  const { data: batchAdminRows, error: batchAdminRowsErr } = await admin
     .from("tb_forwarder_driver")
     .select("fdadminid")
     .order("fddate", { ascending: false })
     .limit(500);
+  if (batchAdminRowsErr) {
+    console.error(`[tb_forwarder_driver list] failed`, { code: batchAdminRowsErr.code, message: batchAdminRowsErr.message });
+  }
   const adminIds = Array.from(new Set((batchAdminRows ?? []).map((r) => (r as { fdadminid: string }).fdadminid))).filter(Boolean);
   if (adminIds.length === 0) return [];
 
-  const { data: userRows } = await admin
+  const { data: userRows, error: userRowsErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel")
     .in("userid", adminIds);
+  if (userRowsErr) {
+    console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
+  }
   const users = (userRows ?? []) as DriverUser[];
   const byId  = new Map(users.map((u) => [u.userid, u]));
   return adminIds.map((id) => {

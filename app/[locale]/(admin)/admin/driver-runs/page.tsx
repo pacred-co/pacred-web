@@ -69,7 +69,7 @@ export default async function DriverRunsPage() {
   const admin = createAdminClient();
 
   // Active assignments (1 = waiting accept, 2 = accepted in progress)
-  const { data: activeRaw } = await admin
+  const { data: activeRaw, error: activeRawErr } = await admin
     .from("forwarder_driver")
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
@@ -82,12 +82,15 @@ export default async function DriverRunsPage() {
     .eq("profile_id", user.id)
     .in("status", [1, 2])
     .order("fd_date", { ascending: true });
+  if (activeRawErr) {
+    console.error(`[forwarder_driver list] failed`, { code: activeRawErr.code, message: activeRawErr.message });
+  }
   const activeRows = ((activeRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
   // Completed today (status 4 + completed_at today, BKK)
   const todayBkk = new Date();
   todayBkk.setHours(0, 0, 0, 0);
-  const { data: doneRaw } = await admin
+  const { data: doneRaw, error: doneRawErr } = await admin
     .from("forwarder_driver")
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
@@ -101,6 +104,9 @@ export default async function DriverRunsPage() {
     .eq("status", 4)
     .gte("completed_at", todayBkk.toISOString())
     .order("completed_at", { ascending: false });
+  if (doneRawErr) {
+    console.error(`[forwarder_driver list] failed`, { code: doneRawErr.code, message: doneRawErr.message });
+  }
   const doneRows = ((doneRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
   // Wave 3 cleanup: spine retired (cargo_shipments → tb_forwarder).

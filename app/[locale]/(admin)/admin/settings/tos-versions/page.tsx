@@ -23,10 +23,13 @@ export default async function AdminTosVersionsPage() {
   await requireAdmin(["super"]);
   const admin = createAdminClient();
 
-  const { data: versionsRaw } = await admin
+  const { data: versionsRaw, error: versionsRawErr } = await admin
     .from("tos_versions")
     .select("id, version_no, title, body_md, effective_from, applies_to, is_active, created_at, updated_at")
     .order("effective_from", { ascending: false });
+  if (versionsRawErr) {
+    console.error(`[tos_versions list] failed`, { code: versionsRawErr.code, message: versionsRawErr.message });
+  }
   const versions = (versionsRaw ?? []) as TosVersionRow[];
 
   // Per-version acceptance counts (single aggregate query).

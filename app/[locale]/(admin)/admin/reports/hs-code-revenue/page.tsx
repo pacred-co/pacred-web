@@ -54,7 +54,7 @@ export default async function HsCodeRevenueReport({
   const from = daysAgoIso(days);
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("container_hs_lines")
     .select(`
       hs_code, qty, weight_kg, value_thb, duty_pct_used, container_id,
@@ -63,6 +63,9 @@ export default async function HsCodeRevenueReport({
     `)
     .gte("created_at", from)
     .limit(20000);
+  if (error) {
+    console.error(`[container_hs_lines list] failed`, { code: error.code, message: error.message });
+  }
   const lines = (data ?? []) as unknown as HsLine[];
 
   // Aggregate per HS code.

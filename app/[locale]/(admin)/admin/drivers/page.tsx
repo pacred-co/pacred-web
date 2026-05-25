@@ -68,7 +68,10 @@ export default async function AdminDriversPage({
     if ([1, 2, 3, 4].includes(n)) q = q.eq("status", n);
   }
 
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[forwarder_driver list] failed`, { code: error.code, message: error.message });
+  }
 
   type RawRow = {
     id: string; status: number; fd_date: string;
@@ -84,7 +87,10 @@ export default async function AdminDriversPage({
   }));
 
   // Tally for filter chips
-  const { data: counts } = await admin.from("forwarder_driver").select("status");
+  const { data: counts, error: countsErr } = await admin.from("forwarder_driver").select("status");
+  if (countsErr) {
+    console.error(`[forwarder_driver list] failed`, { code: countsErr.code, message: countsErr.message });
+  }
   const tally = (counts ?? []).reduce<Record<number, number>>((acc, r) => {
     const s = (r as { status: number }).status;
     acc[s] = (acc[s] ?? 0) + 1;

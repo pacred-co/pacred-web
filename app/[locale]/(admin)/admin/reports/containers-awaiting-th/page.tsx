@@ -116,7 +116,10 @@ export default async function ContainersAwaitingThReport({
     .limit(50_000);
   if (sp.date_from) q = q.gte("fdatecontainerclose", sp.date_from);
   if (sp.date_to)   q = q.lte("fdatecontainerclose", sp.date_to + " 23:59:59");
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
+  }
   const grouped = groupByContainer((data ?? []) as ForwarderRow[]);
 
   const overdue = grouped.filter((g) => {

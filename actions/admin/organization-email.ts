@@ -78,12 +78,15 @@ export async function addOrgEmail(
     const admin = createAdminClient();
 
     // Dup check — legacy L23-26
-    const { data: dup } = await admin
+    const { data: dup, error: dupErr } = await admin
       .from("tb_organization_email")
       .select("id")
       .eq("email", d.email)
       .limit(1)
       .maybeSingle<{ id: number }>();
+    if (dupErr) {
+      console.error(`[tb_organization_email list] failed`, { code: dupErr.code, message: dupErr.message });
+    }
     if (dup) return { ok: false, error: "eDuplicate" };
 
     // Insert — legacy L42-43
@@ -136,23 +139,30 @@ export async function updateOrgEmail(
     const admin = createAdminClient();
 
     // Existence — legacy L66-69
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("tb_organization_email")
       .select("id")
       .eq("id", d.ID)
       .limit(1)
       .maybeSingle<{ id: number }>();
+    if (existingErr) {
+      console.error(`[tb_organization_email mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "eSQL" };
 
     // Dup-on-rename check — legacy L72-74
     if (d.email !== d.emailOld) {
-      const { data: dup } = await admin
+      const { data: dup, error: dupErr } = await admin
         .from("tb_organization_email")
         .select("id")
         .eq("email", d.email)
         .neq("email", d.emailOld)
         .limit(1)
         .maybeSingle<{ id: number }>();
+      if (dupErr) {
+        console.error(`[tb_organization_email list] failed`, { code: dupErr.code, message: dupErr.message });
+      }
       if (dup) return { ok: false, error: "eDuplicate" };
     }
 

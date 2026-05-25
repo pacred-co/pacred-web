@@ -137,7 +137,7 @@ async function syncWorkItem(
     "in_progress";
 
   try {
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("work_items")
       .select("id, status")
       .eq("entity_type", "booking")
@@ -145,6 +145,9 @@ async function syncWorkItem(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle<{ id: string; status: string }>();
+    if (rowErr) {
+      console.error(`[work_items list] failed`, { code: rowErr.code, message: rowErr.message });
+    }
 
     if (!row) return;
 
@@ -216,11 +219,15 @@ export async function adminMarkBookingQuoted(
     // profile_id as the booking.  A mismatched profile is allowed but
     // logged — admin may have created a quote against a different profile
     // intentionally (e.g. a juristic switch).
-    const { data: quote } = await admin
+    const { data: quote, error: quoteErr } = await admin
       .from("freight_quotes")
       .select("id, profile_id, quote_no")
       .eq("id", input.freightQuoteId)
       .maybeSingle<{ id: string; profile_id: string | null; quote_no: string | null }>();
+    if (quoteErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: quoteErr.code, message: quoteErr.message });
+      return { ok: false, error: `db_error:${quoteErr.code ?? "unknown"}` };
+    }
     if (!quote) return { ok: false, error: "freight_quote_not_found" };
 
     const res = await flipBookingStatus(admin, input.bookingId, ["submitted", "contacted"], "quoted", {

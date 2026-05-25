@@ -239,10 +239,13 @@ export async function adminCallPriceUser(
 
       // 2. Read tb_users for SMS/email channels in one query.
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
-      const { data: userRows } = await admin
+      const { data: userRows, error: userRowsErr } = await admin
         .from("tb_users")
         .select("userid, username, userlastname, usertel, useremail, userlinenotify")
         .in("userid", uniqueUserIds);
+      if (userRowsErr) {
+        console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
+      }
       const usersById = new Map<string, UserRow>(
         ((userRows ?? []) as unknown as UserRow[]).map((u) => [u.userid, u]),
       );
@@ -487,10 +490,13 @@ export async function adminRemoveFromCheckQueue(
       const admin = createAdminClient();
 
       // Snapshot before delete so the audit log records what was removed.
-      const { data: present } = await admin
+      const { data: present, error: presentErr } = await admin
         .from("tb_check_forwarder")
         .select("fid")
         .in("fid", fids);
+      if (presentErr) {
+        console.error(`[tb_check_forwarder list] failed`, { code: presentErr.code, message: presentErr.message });
+      }
       const presentFids = ((present ?? []) as Array<{ fid: number }>).map((r) => r.fid);
 
       const { error: delErr } = await admin

@@ -49,18 +49,22 @@ export type Carrier = keyof typeof CARRIER_CONFIG;
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const email = user?.email ?? null;
   if (!email) return "system";
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_admin")
     .select("adminid")
     .eq("adminemail", email)
     .maybeSingle<{ adminid: string | null }>();
+  if (error) {
+    console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
+  }
   if (data?.adminid) return data.adminid;
   return email.slice(0, 30);
 }
@@ -287,11 +291,15 @@ export async function adminApiForwarderManualInsert(
 
       // ── Verify customer ───────────────────────────────────────
       const userID = d.userID.toUpperCase();
-      const { data: customer } = await admin
+      const { data: customer, error: customerErr } = await admin
         .from("tb_users")
         .select("userid, coid, usercompany")
         .eq("userid", userID)
         .maybeSingle<{ userid: string; coid: string | null; usercompany: string | null }>();
+      if (customerErr) {
+        console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
+        return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
+      }
       if (!customer) {
         return { ok: false, error: "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)" };
       }
@@ -301,7 +309,7 @@ export async function adminApiForwarderManualInsert(
       if (d.fShipBy === "PCS") {
         addr = { ...PCS_PICKUP_ADDRESS };
       } else if (d.addressID) {
-        const { data: addrRow } = await admin
+        const { data: addrRow, error: addrRowErr } = await admin
           .from("tb_address")
           .select(
             "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
@@ -321,6 +329,10 @@ export async function adminApiForwarderManualInsert(
             addresstel:         string;
             addresstel2:        string | null;
           }>();
+        if (addrRowErr) {
+          console.error(`[tb_address mutation lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+          return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
+        }
         if (!addrRow) {
           return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
         }
@@ -338,13 +350,16 @@ export async function adminApiForwarderManualInsert(
         };
       } else {
         // Fallback to tb_address_main if not explicitly picked.
-        const { data: main } = await admin
+        const { data: main, error: mainErr } = await admin
           .from("tb_address_main")
           .select("addressid")
           .eq("userid", customer.userid)
           .maybeSingle<{ addressid: number }>();
+        if (mainErr) {
+          console.error(`[tb_address_main list] failed`, { code: mainErr.code, message: mainErr.message });
+        }
         if (main?.addressid) {
-          const { data: addrRow } = await admin
+          const { data: addrRow, error: addrRowErr } = await admin
             .from("tb_address")
             .select(
               "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
@@ -364,6 +379,9 @@ export async function adminApiForwarderManualInsert(
               addresstel:         string;
               addresstel2:        string | null;
             }>();
+          if (addrRowErr) {
+            console.error(`[tb_address list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+          }
           addr = addrRow ? {
             addressname:        addrRow.addressname,
             addresslastname:    addrRow.addresslastname ?? "",

@@ -65,7 +65,7 @@ export default async function ForwarderVolumeReport({
   const from = daysAgoIso(days);
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("tb_forwarder")
     .select(
       "fwarehousechina,ftransporttype,famountcount,fweight,fvolume,ftotalprice,fstatus",
@@ -73,6 +73,9 @@ export default async function ForwarderVolumeReport({
     .gte("fdate", from)
     .neq("fstatus", "99")
     .limit(10000);
+  if (error) {
+    console.error(`[tb_forwarder list] failed`, { code: error.code, message: error.message });
+  }
   const rows = (data ?? []) as unknown as FwRow[];
 
   // Aggregate by (warehouse, transport).

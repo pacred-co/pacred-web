@@ -84,7 +84,7 @@ export default async function AdminAccountingPeriodsPage() {
   const oldest = window[window.length - 1];
   const newest = window[0];
 
-  const { data: periodsRaw } = await admin
+  const { data: periodsRaw, error: periodsRawErr } = await admin
     .from("accounting_periods")
     .select(`
       period_yyyymm, status, opened_at, closing_marked_at, closed_at, closing_notes,
@@ -93,17 +93,23 @@ export default async function AdminAccountingPeriodsPage() {
     .gte("period_yyyymm", oldest)
     .lte("period_yyyymm", newest)
     .order("period_yyyymm", { ascending: false });
+  if (periodsRawErr) {
+    console.error(`[accounting_periods list] failed`, { code: periodsRawErr.code, message: periodsRawErr.message });
+  }
   const periods = (periodsRaw ?? []) as PeriodRow[];
   const periodMap = new Map<string, PeriodRow>(periods.map((p) => [p.period_yyyymm, p]));
 
   // Latest close-event row per (period, table) — pulled flat, then
   // bucketed in app code to a Map<period, Map<table, EventRow>>.
-  const { data: eventsRaw } = await admin
+  const { data: eventsRaw, error: eventsRawErr } = await admin
     .from("period_close_event")
     .select("period_yyyymm, table_name, row_count, sum_thb, closed_at")
     .gte("period_yyyymm", oldest)
     .lte("period_yyyymm", newest)
     .order("closed_at", { ascending: false });
+  if (eventsRawErr) {
+    console.error(`[period_close_event list] failed`, { code: eventsRawErr.code, message: eventsRawErr.message });
+  }
   type EventRowWithTs = EventRow & { closed_at: string };
   const events = (eventsRaw ?? []) as EventRowWithTs[];
   const eventMap = new Map<string, Map<string, EventRow>>();

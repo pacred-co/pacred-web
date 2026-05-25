@@ -21,7 +21,10 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  */
 export async function acceptCurrentTos(): Promise<ActionResult> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const active = await getActiveTosVersion("all");
@@ -49,13 +52,16 @@ export async function acceptCurrentTos(): Promise<ActionResult> {
     try {
       const admin = createAdminClient();
       // Look up the version row id by version_no.
-      const { data: versionRow } = await admin
+      const { data: versionRow, error: versionRowErr } = await admin
         .from("tos_versions")
         .select("id")
         .eq("version_no", active.version_no)
         .eq("is_active", true)
         .limit(1)
         .maybeSingle<{ id: string }>();
+      if (versionRowErr) {
+        console.error(`[tos_versions list] failed`, { code: versionRowErr.code, message: versionRowErr.message });
+      }
       if (versionRow) {
         await admin
           .from("tos_acceptances")

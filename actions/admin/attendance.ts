@@ -78,12 +78,15 @@ export async function adminQuickClock(input: z.infer<typeof quickSchema>): Promi
     const now = new Date().toISOString();
 
     // Read existing row to preserve the other timestamp
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("attendance_logs")
       .select("clock_in, clock_out, expected_in, expected_out")
       .eq("profile_id", d.profile_id)
       .eq("work_date", d.work_date)
       .maybeSingle();
+    if (existingErr) {
+      console.error(`[attendance_logs list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     const row = {
       profile_id:   d.profile_id,

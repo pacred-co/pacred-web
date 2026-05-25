@@ -229,13 +229,16 @@ export default async function CartPage() {
   // cart.php L154-161: when userShipBy is blank, fall back to the
   //   customer's most-recent tb_forwarder.fShipBy (ORDER BY ID DESC).
   if (userShipBy === "") {
-    const { data: fwdRow } = await admin
+    const { data: fwdRow, error: fwdRowErr } = await admin
       .from("tb_forwarder")
       .select("fshipby")
       .eq("userid", userID)
       .order("id", { ascending: false })
       .limit(1)
       .maybeSingle<{ fshipby: string | null }>();
+    if (fwdRowErr) {
+      console.error(`[tb_forwarder list] failed`, { code: fwdRowErr.code, message: fwdRowErr.message });
+    }
     if (fwdRow?.fshipby) {
       userShipBy = fwdRow.fshipby;
     }
@@ -257,12 +260,15 @@ export default async function CartPage() {
   //   (provider, shop). PostgREST cannot express the legacy nested
   //   DISTINCT loop in one call, so the rows are fetched once and
   //   grouped in code — same shape the PHP renders.
-  const { data: cartRowsData } = await admin
+  const { data: cartRowsData, error: cartRowsDataErr } = await admin
     .from("tb_cart")
     .select(
       "id, cdetails, curl, ctitle, cnameshop, cprovider, cimages, cprice, camount, ccolor, csize, userid",
     )
     .eq("userid", userID);
+  if (cartRowsDataErr) {
+    console.error(`[tb_cart list] failed`, { code: cartRowsDataErr.code, message: cartRowsDataErr.message });
+  }
   const cartRows = (cartRowsData ?? []) as CartRow[];
 
   // Build the provider → shop → rows grouping. cart.php iterates
@@ -850,11 +856,14 @@ async function resolveAddressBlock(
 > {
   // cart.php L441-442: SELECT addressID FROM tb_address
   //   WHERE userID=… AND addressStatus='1'
-  const { data: anyAddr } = await admin
+  const { data: anyAddr, error: anyAddrErr } = await admin
     .from("tb_address")
     .select("addressid")
     .eq("userid", userID)
     .eq("addressstatus", "1");
+  if (anyAddrErr) {
+    console.error(`[tb_address list] failed`, { code: anyAddrErr.code, message: anyAddrErr.message });
+  }
   const hasAddress = (anyAddr ?? []).length > 0;
 
   // Build the legacy CONCAT(...) AS fullAddress string from a row.
@@ -863,7 +872,7 @@ async function resolveAddressBlock(
 
   if (hasAddress) {
     // cart.php L445-446: the row matching $userAddressID.
-    const { data: matchRow } = await admin
+    const { data: matchRow, error: matchRowErr } = await admin
       .from("tb_address")
       .select(
         "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -872,6 +881,9 @@ async function resolveAddressBlock(
       .eq("addressstatus", "1")
       .eq("addressid", userAddressID)
       .maybeSingle<AddressRow>();
+    if (matchRowErr) {
+      console.error(`[tb_address list] failed`, { code: matchRowErr.code, message: matchRowErr.message });
+    }
 
     if (matchRow) {
       // cart.php L452 — the label: legacy `if($userAddressID!=''
@@ -887,13 +899,16 @@ async function resolveAddressBlock(
 
     // cart.php L454-465: the tb_address_main ⋈ tb_address fallback.
     if (userAddressID !== "PCS") {
-      const { data: mainRow } = await admin
+      const { data: mainRow, error: mainRowErr } = await admin
         .from("tb_address_main")
         .select("addressid")
         .eq("userid", userID)
         .maybeSingle<{ addressid: number }>();
+      if (mainRowErr) {
+        console.error(`[tb_address_main list] failed`, { code: mainRowErr.code, message: mainRowErr.message });
+      }
       if (mainRow) {
-        const { data: mainAddr } = await admin
+        const { data: mainAddr, error: mainAddrErr } = await admin
           .from("tb_address")
           .select(
             "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addresstel, addresstel2",
@@ -901,6 +916,9 @@ async function resolveAddressBlock(
           .eq("addressid", mainRow.addressid)
           .eq("addressstatus", "1")
           .maybeSingle<AddressRow>();
+        if (mainAddrErr) {
+          console.error(`[tb_address list] failed`, { code: mainAddrErr.code, message: mainAddrErr.message });
+        }
         if (mainAddr) {
           // cart.php L465 — label: `if($userAddressID!='')` →
           //   ที่อยู่ล่าสุด, else ที่อยู่หลัก.

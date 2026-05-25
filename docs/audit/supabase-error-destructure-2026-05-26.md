@@ -335,3 +335,86 @@ once that doc lands (referenced by AGENTS.md §0c).
   `app/[locale]/(public)/` pages — could be a follow-up sweep.
 
 — Generated 2026-05-26 by Claude (Opus 4.7 1M ctx) per AGENTS.md §0c.
+
+---
+
+## Sprint A2 — Codemod-apply results (2026-05-26 later that day)
+
+A jscodeshift-equivalent codemod (ts-morph based) was built at
+`scripts/codemod/fix-supabase-error-destructure.ts` + an ESLint rule at
+`eslint-rules/no-bare-supabase-data-destructure.js` (wired into
+`eslint.config.mjs`). Codemod ran cleanly on the 244-file backlog (excluding
+the 6 main-session manual-fix files).
+
+### Codemod sweep totals
+
+| Metric | Count |
+|---|---|
+| Files scanned | 728 |
+| Files changed | 244 |
+| Files skipped (main-session manual list) | 6 |
+| HIGH transforms | 28 |
+| MEDIUM transforms | 105 |
+| LOW transforms | 593 |
+| Skipped (non-Supabase await) | 14 |
+| Already-OK (had `error`) | 303 |
+| **Total transforms** | **726** |
+| TSC errors after sweep | 0 (`tsc --noEmit` exit 0) |
+| ESLint baseline → post-sweep | 741 errors → 66 errors (89% reduction) |
+
+The 66 residual ESLint errors are concentrated in the 6 manual-fix files +
+the same files'`page.tsx` siblings — exactly as expected (main session is
+fixing those by hand).
+
+### HIGH-tier discrepancy with the original audit estimate
+
+The audit estimated ~190 HIGH; the codemod found only 28. The codemod is
+deliberately CONSERVATIVE — it classifies a query as HIGH only if the
+literal next statement matches `if (!<data>) notFound();` or
+`if (!<data>) return null;`. A detail page like `wallet/[id]/page.tsx` has
+10 queries but only the first (the header lookup) is followed by
+`notFound()`; the rest fall through to renderer-tolerant null checks and
+are correctly classified LOW (log only, no throw). The HIGH→LOW
+reclassification is the safer outcome: throwing inside a renderer-tolerant
+path would break otherwise-working pages.
+
+### Edge cases handled
+
+- **Renamed `data: foo` destructure** → snippet emits `, error: fooErr` AND
+  uses `fooErr.code` etc. consistently.
+- **`error` name collision** (the outer scope already has a local `error`,
+  e.g. from `withAdmin`'s callback signature) → codemod auto-renames to
+  `error1`, switches destructure to `error: error1` form.
+- **`.storage.from(...)`** → SKIPPED. `StorageError` has no `.code`; needs
+  a hand-written handler.
+- **`supabase.auth.getUser()`** → not skipped (AuthError DOES have `.code`).
+  Snippet name is a bit ugly (`dataErr` from `{ data: { user } }`); cosmetic.
+- **`const { data } = await q;`** where `q` is a pre-built query — codemod
+  walks back to `q`'s initializer to detect the Supabase chain.
+
+### ⚠️ Files needing manual review (codemod TS-incompatible)
+
+None — after the second codemod pass (with Storage-skip + collision-fix),
+`pnpm exec tsc --noEmit` exits 0 across the 244 transformed files.
+
+### ESLint rule integration
+
+The rule `pacred/no-bare-supabase-data-destructure` is wired into
+`eslint.config.mjs` for `actions/**`, `app/**`, `lib/**` (excluding tests +
+`lib/supabase/**`). Severity: `error`. Auto-fixable for the simple case
+(just adds the missing `, error` to the destructure — the engineer still
+needs to add the `if (error)` handler block, but the auto-fix surfaces the
+issue at lint time so it can't be re-introduced).
+
+Tests for the rule live at
+`eslint-rules/no-bare-supabase-data-destructure.test.js` (10 cases — valid +
+invalid + auto-fix + Storage-skip). Run via
+`pnpm tsx eslint-rules/no-bare-supabase-data-destructure.test.js`.
+
+### Codemod re-run / idempotency
+
+The codemod is idempotent — re-running on already-transformed files reports
+"Already-OK" instead of re-transforming. New code that re-introduces the
+bare-destructure shape is caught by the ESLint rule at CI time.
+
+— Sprint A2 closed 2026-05-26 by Claude (worktree agent, parallel to main session).

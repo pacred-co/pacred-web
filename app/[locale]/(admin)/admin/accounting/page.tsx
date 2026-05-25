@@ -250,7 +250,10 @@ export default async function AdminAccountingPage({
       .limit(500);
     if (dateFrom) q = q.gte("created_at", dateFrom);
     if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+    }
     type Raw = Omit<FRow, "profile"> & { profile: Profile | Profile[] | null };
     forwarderRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
     tabCount = forwarderRows.length;
@@ -266,7 +269,10 @@ export default async function AdminAccountingPage({
       .limit(500);
     if (dateFrom) q = q.gte("created_at", dateFrom);
     if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[yuan_payments list] failed`, { code: error.code, message: error.message });
+    }
     type Raw = Omit<YRow, "profile"> & { profile: Profile | Profile[] | null };
     yuanRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
     tabCount = yuanRows.length;
@@ -282,7 +288,10 @@ export default async function AdminAccountingPage({
       .limit(500);
     if (dateFrom) q = q.gte("created_at", dateFrom);
     if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[service_orders list] failed`, { code: error.code, message: error.message });
+    }
     type Raw = Omit<SRow, "profile"> & { profile: Profile | Profile[] | null };
     shopRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
     tabCount = shopRows.length;
@@ -300,7 +309,10 @@ export default async function AdminAccountingPage({
       .limit(500);
     if (dateFrom) q = q.gte("created_at", dateFrom);
     if (dateTo)   q = q.lte("created_at", dateTo + "T23:59:59");
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      console.error(`[wallet_transactions list] failed`, { code: error.code, message: error.message });
+    }
     type Raw = Omit<WRow, "profile"> & { profile: Profile | Profile[] | null };
     walletRows = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
     tabCount   = walletRows.length;

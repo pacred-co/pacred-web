@@ -37,7 +37,7 @@ export default async function ContainerHsPage({
   const { id } = await params;
   const admin  = createAdminClient();
 
-  const { data: container } = await admin
+  const { data: container, error: containerErr } = await admin
     .from("containers")
     .select("id, container_no, status, origin_warehouse, transport_type, total_weight_kg, total_volume_cbm")
     .eq("id", id)
@@ -51,9 +51,13 @@ export default async function ContainerHsPage({
       total_volume_cbm: number | null;
     }>();
 
+  if (containerErr) {
+    console.error(`[containers lookup] failed`, { code: containerErr.code, message: containerErr.message, details: containerErr.details, hint: containerErr.hint });
+    throw new Error(`Failed to load containers (${containerErr.code ?? "unknown"}): ${containerErr.message}`);
+  }
   if (!container) notFound();
 
-  const { data: lines } = await admin
+  const { data: lines, error: linesErr } = await admin
     .from("container_hs_lines")
     .select(`
       id, hs_code, qty, weight_kg, value_thb, duty_pct_used, note,
@@ -61,17 +65,23 @@ export default async function ContainerHsPage({
     `)
     .eq("container_id", id)
     .order("created_at", { ascending: true });
+  if (linesErr) {
+    console.error(`[container_hs_lines list] failed`, { code: linesErr.code, message: linesErr.message });
+  }
 
   const linesNorm = ((lines ?? []) as HsLine[]).map((l) => ({
     ...l,
     hs: normSingle(l.hs),
   }));
 
-  const { data: hsCodesRaw } = await admin
+  const { data: hsCodesRaw, error: hsCodesRawErr } = await admin
     .from("hs_codes")
     .select("code, description, default_duty_pct, unit")
     .eq("is_active", true)
     .order("code", { ascending: true });
+  if (hsCodesRawErr) {
+    console.error(`[hs_codes list] failed`, { code: hsCodesRawErr.code, message: hsCodesRawErr.message });
+  }
   const hsCodes = (hsCodesRaw ?? []) as HsCode[];
 
   // Aggregates

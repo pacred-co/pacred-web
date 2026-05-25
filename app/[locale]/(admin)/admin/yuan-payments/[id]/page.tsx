@@ -79,21 +79,28 @@ export default async function AdminYuanPaymentDetail({
   if (!Number.isFinite(id) || id <= 0) notFound();
 
   const admin = createAdminClient();
-  const { data: rowRaw } = await admin
+  const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_payment")
     .select(
       "id,paydate,paystatus,paytype,paydetail,payyuan,payrate,paythb,paythbcost,payprofitthb,paydateadmin,userid,adminid,imagesslip,imagesslipadmin",
     )
     .eq("id", id)
     .maybeSingle();
+  if (rowRawErr) {
+    console.error(`[tb_payment lookup] failed`, { code: rowRawErr.code, message: rowRawErr.message, details: rowRawErr.details, hint: rowRawErr.hint });
+    throw new Error(`Failed to load tb_payment (${rowRawErr.code ?? "unknown"}): ${rowRawErr.message}`);
+  }
   if (!rowRaw) notFound();
   const row = rowRaw as unknown as PaymentRow;
 
-  const { data: userRaw } = await admin
+  const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
     .select("userid,username,userlastname,usertel,useremail")
     .eq("userid", row.userid)
     .maybeSingle();
+  if (userRawErr) {
+    console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
+  }
   const user = userRaw as unknown as UserRow | null;
 
   const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";

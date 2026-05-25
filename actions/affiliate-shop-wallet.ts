@@ -110,7 +110,10 @@ const MIN_AMOUNT_THB = 1;
 // ────────────────────────────────────────────────────────────
 export async function getShopWalletSummary(): Promise<ActionResult<ShopWalletSummary>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Balance row — owner-only RLS. Returns null when no row yet (cold
@@ -163,7 +166,10 @@ export async function listShopWalletTransactions(
   opts: { limit?: number } = {},
 ): Promise<ActionResult<ShopWalletTransaction[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const limit = Math.min(Math.max(1, opts.limit ?? 20), 100);
@@ -209,7 +215,10 @@ export async function transferFromPersonalToShopWallet(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const amount = Number(input.amount);
@@ -297,7 +306,10 @@ export async function requestShopWalletWithdraw(
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const amount = Number(input.amount);

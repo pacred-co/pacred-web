@@ -31,13 +31,16 @@ type Row = {
 
 export default async function AdminCarriersPage() {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("carriers")
     .select("id, code, name_th, name_en, tracking_url_template, is_active, sort_order, note, created_at, updated_at")
     .order("is_active", { ascending: false })
     .order("sort_order", { ascending: true })
     .order("name_th",    { ascending: true })
     .returns<Row[]>();
+  if (error) {
+    console.error(`[carriers list] failed`, { code: error.code, message: error.message });
+  }
 
   const rows = data ?? [];
   const activeCount   = rows.filter((r) => r.is_active).length;

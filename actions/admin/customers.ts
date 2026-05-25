@@ -28,7 +28,11 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (beforeErr) {
+      console.error(`[profiles mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -113,11 +117,15 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userid, useractive, userstatus")
       .eq("userid", id)
       .maybeSingle<{ userid: string; useractive: string | null; userstatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[tb_users mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
     // No-op when already active (useractive='1' and not deleted).
     if (before.useractive === "1" && before.userstatus !== "0") return { ok: true };
@@ -179,22 +187,29 @@ export async function adminConvertToJuristic(
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
       .eq("id", d.profile_id)
       .maybeSingle<{ id: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+    if (beforeErr) {
+      console.error(`[profiles mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
     // Block duplicate tax_id collisions early — the partial unique index
     // on corporate(tax_id) only covers 'verified' rows, so we double-check.
-    const { data: clash } = await admin
+    const { data: clash, error: clashErr } = await admin
       .from("corporate")
       .select("profile_id")
       .eq("tax_id", d.tax_id)
       .neq("profile_id", d.profile_id)
       .maybeSingle();
+    if (clashErr) {
+      console.error(`[corporate list] failed`, { code: clashErr.code, message: clashErr.message });
+    }
     if (clash) return { ok: false, error: "tax_id_already_used" };
 
     // Step 1 — flip account_type so the corporate trigger lets the insert through
@@ -263,11 +278,15 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("tb_users")
       .select("userid, userstatus")
       .eq("userid", id)
       .maybeSingle<{ userid: string; userstatus: string | null }>();
+    if (beforeErr) {
+      console.error(`[tb_users mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.userstatus === "0") return { ok: true };  // no-op — already disabled
 

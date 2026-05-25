@@ -13,7 +13,10 @@ export default async function ChangePhonePage() {
   // OAuth-only accounts (no email/password on file) can't re-verify their
   // identity for this flow — send them back to /profile with a notice.
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   const hasPassword = !!user?.email;
 
   const t = await getTranslations("change_phone");

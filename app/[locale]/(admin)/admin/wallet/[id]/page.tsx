@@ -67,19 +67,26 @@ export default async function AdminWalletDetail({ params }: { params: Promise<{ 
   if (!Number.isFinite(id) || id <= 0) notFound();
 
   const admin = createAdminClient();
-  const { data: rowRaw } = await admin
+  const { data: rowRaw, error: rowRawErr } = await admin
     .from("tb_wallet_hs")
     .select("id,date,dateslip,amount,status,type,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank")
     .eq("id", id)
     .maybeSingle();
+  if (rowRawErr) {
+    console.error(`[tb_wallet_hs lookup] failed`, { code: rowRawErr.code, message: rowRawErr.message, details: rowRawErr.details, hint: rowRawErr.hint });
+    throw new Error(`Failed to load tb_wallet_hs (${rowRawErr.code ?? "unknown"}): ${rowRawErr.message}`);
+  }
   if (!rowRaw) notFound();
   const row = rowRaw as unknown as WalletHsRow;
 
-  const { data: userRaw } = await admin
+  const { data: userRaw, error: userRawErr } = await admin
     .from("tb_users")
     .select("userid,username,userlastname,usertel,useremail")
     .eq("userid", row.userid)
     .maybeSingle();
+  if (userRawErr) {
+    console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
+  }
   const user = userRaw as unknown as UserRow | null;
 
   const amount = Number(row.amount ?? 0);

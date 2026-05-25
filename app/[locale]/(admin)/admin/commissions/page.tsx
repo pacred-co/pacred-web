@@ -90,7 +90,10 @@ export default async function AdminCommissionsPage({
     .order("requested_at", { ascending: false })
     .limit(200);
   if (status) query = query.eq("status", status);
-  const { data: rowsRaw } = await query;
+  const { data: rowsRaw, error: rowsRawErr } = await query;
+  if (rowsRawErr) {
+    console.error(`[commission_withdrawals list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   type RawWithdrawal = Omit<WithdrawalRow, "earner"> & {
     earner: WithdrawalRow["earner"] | WithdrawalRow["earner"][] | null;
   };
@@ -102,9 +105,12 @@ export default async function AdminCommissionsPage({
   // ── Status counts (for filter chips) ──
   const counts: Record<WithdrawalStatus, number> = {} as Record<WithdrawalStatus, number>;
   for (const s of WITHDRAWAL_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("commission_withdrawals")
     .select("status");
+  if (countRowsErr) {
+    console.error(`[commission_withdrawals list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: WithdrawalStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -112,11 +118,14 @@ export default async function AdminCommissionsPage({
   // ── Top earners with unpaid balance ──
   // Aggregate via SQL — sum(accrued_amount_thb) where withdrawal_item_id is null.
   // RLS bypassed via admin client.
-  const { data: unpaidRaw } = await admin
+  const { data: unpaidRaw, error: unpaidRawErr } = await admin
     .from("commission_accruals")
     .select("earner_admin_id, accrued_amount_thb")
     .is("withdrawal_item_id", null)
     .limit(2000);
+  if (unpaidRawErr) {
+    console.error(`[commission_accruals list] failed`, { code: unpaidRawErr.code, message: unpaidRawErr.message });
+  }
 
   const earnerMap = new Map<string, { total: number; count: number }>();
   for (const r of (unpaidRaw ?? []) as Array<{ earner_admin_id: string; accrued_amount_thb: number }>) {
@@ -128,10 +137,13 @@ export default async function AdminCommissionsPage({
   const earnerIds = Array.from(earnerMap.keys());
   let earnerBalances: EarnerBalanceRow[] = [];
   if (earnerIds.length > 0) {
-    const { data: profilesRaw } = await admin
+    const { data: profilesRaw, error: profilesRawErr } = await admin
       .from("profiles")
       .select("id, member_code, first_name, last_name")
       .in("id", earnerIds);
+    if (profilesRawErr) {
+      console.error(`[profiles list] failed`, { code: profilesRawErr.code, message: profilesRawErr.message });
+    }
     const profiles = (profilesRaw ?? []) as Array<{
       id: string; member_code: string | null; first_name: string | null; last_name: string | null;
     }>;

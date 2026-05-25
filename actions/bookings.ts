@@ -346,7 +346,10 @@ export async function createDraftBooking(
   let profileId: string | null = null;
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     profileId = user?.id ?? null;
   } catch {
     /* anon path — leave profileId null */
@@ -449,7 +452,10 @@ export async function updateBookingDraft(input: {
   let profileId: string | null = null;
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     profileId = user?.id ?? null;
   } catch {
     /* anon path */
@@ -644,11 +650,14 @@ export async function submitBooking(
 
   // ── Admin fan-out (best-effort — mirrors actions/contact.ts) ──
   try {
-    const { data: targetAdmins } = await admin
+    const { data: targetAdmins, error: targetAdminsErr } = await admin
       .from("admins")
       .select("profile_id")
       .in("role", ["sales_admin", "ops", "super"])
       .eq("is_active", true);
+    if (targetAdminsErr) {
+      console.error(`[admins list] failed`, { code: targetAdminsErr.code, message: targetAdminsErr.message });
+    }
 
     const seen = new Set<string>();
     for (const row of targetAdmins ?? []) {
@@ -695,7 +704,10 @@ export async function submitBooking(
  */
 export async function getMyBookings(): Promise<ActionResult<MyBookingSummary[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -737,7 +749,7 @@ export async function getMyBookingByNo(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -752,6 +764,10 @@ export async function getMyBookingByNo(
     .maybeSingle<MyBookingSummary>();
 
   if (error) return { ok: false, error: error.message };
+  if (dataErr) {
+    console.error(`[supabase mutation lookup] failed`, { code: dataErr.code, message: dataErr.message });
+    return { ok: false, error: `db_error:${dataErr.code ?? "unknown"}` };
+  }
   if (!data) return { ok: false, error: "not_found" };
   return { ok: true, data };
 }
@@ -1011,11 +1027,14 @@ export async function removeBookingDocument(
   if (delErr) return { ok: false, error: `db_delete_failed: ${delErr.message}` };
 
   // Revalidate the surfaces.
-  const { data: booking } = await admin
+  const { data: booking, error: bookingErr } = await admin
     .from("bookings")
     .select("booking_no")
     .eq("id", doc.booking_id)
     .maybeSingle<{ booking_no: string | null }>();
+  if (bookingErr) {
+    console.error(`[bookings list] failed`, { code: bookingErr.code, message: bookingErr.message });
+  }
   if (booking?.booking_no) {
     revalidatePath(`/bookings/${booking.booking_no}`);
     revalidatePath(`/admin/bookings/${booking.booking_no}`);
@@ -1043,21 +1062,28 @@ export async function listBookingDocuments(
   }
 
   const admin = createAdminClient();
-  const { data: booking } = await admin
+  const { data: booking, error: bookingErr } = await admin
     .from("bookings")
     .select("profile_id")
     .eq("id", bookingId)
     .maybeSingle<{ profile_id: string | null }>();
+  if (bookingErr) {
+    console.error(`[bookings mutation lookup] failed`, { code: bookingErr.code, message: bookingErr.message });
+    return { ok: false, error: `db_error:${bookingErr.code ?? "unknown"}` };
+  }
   if (!booking) return { ok: false, error: "booking_not_found" };
 
   const isOwner = booking.profile_id === profile.id;
   let isAdmin = false;
   if (!isOwner) {
-    const { data: adminRow } = await admin
+    const { data: adminRow, error: adminRowErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", profile.id)
       .maybeSingle<{ role: string }>();
+    if (adminRowErr) {
+      console.error(`[admins list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
+    }
     isAdmin = !!adminRow && ["super", "ops", "sales_admin", "accounting"].includes(adminRow.role);
   }
   if (!isOwner && !isAdmin) return { ok: false, error: "forbidden" };

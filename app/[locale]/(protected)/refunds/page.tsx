@@ -54,7 +54,7 @@ export default async function CustomerRefundsHubPage() {
   const sb = await createClient();
 
   // ── Own refund_requests (RLS-filtered to profile_id = auth.uid()) ──
-  const { data: refundsRaw } = await sb
+  const { data: refundsRaw, error: refundsRawErr } = await sb
     .from("refund_requests")
     .select(
       "id, request_no, source, source_ref, amount_thb, reason, status, created_at, approved_at, rejected_at, paid_at, rejected_reason",
@@ -62,6 +62,9 @@ export default async function CustomerRefundsHubPage() {
     .order("created_at", { ascending: false })
     .limit(50)
     .returns<RefundRow[]>();
+  if (refundsRawErr) {
+    console.error(`[refund_requests list] failed`, { code: refundsRawErr.code, message: refundsRawErr.message });
+  }
   const refunds = refundsRaw ?? [];
 
   // ── Source options for the form's type-ahead picker ──

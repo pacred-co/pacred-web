@@ -53,7 +53,10 @@ export default async function AdminSalesPayoutsPage({
     .limit(200);
 
   if (sp.status) q = q.eq("status", sp.status);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[sales_payouts list] failed`, { code: error.code, message: error.message });
+  }
   type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
   type TeamLeader = { team_code: string; commission_pct: number; profile: Profile | Profile[] | null };
   type RawRow = Omit<NonNullable<typeof data>[number], "team_leader"> & { team_leader: TeamLeader | TeamLeader[] | null };

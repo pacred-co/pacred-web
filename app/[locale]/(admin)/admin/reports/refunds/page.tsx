@@ -52,7 +52,10 @@ export default async function RefundsReport({
     .limit(1000);
   q = q.gte("created_at", dateFrom);
   if (dateTo) q = q.lte("created_at", dateTo + "T23:59:59");
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[wallet_transactions list] failed`, { code: error.code, message: error.message });
+  }
 
   const rows: Row[] = ((data ?? []) as Raw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
   const total = rows.reduce((s, r) => s + Math.abs(Number(r.amount ?? 0)), 0);

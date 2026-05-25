@@ -88,9 +88,10 @@ export default async function BookStartPage({
 
   // Resolve auth — the gate's only real branch.
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
 
   if (user) {
     // Signed in → straight into the review step. The draft id rides the

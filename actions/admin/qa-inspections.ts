@@ -422,11 +422,14 @@ export async function adminGetQaInspection(
       if (insErr) return { ok: false, error: insErr.message };
       if (!row) return { ok: true, data: null };
 
-      const { data: fwd } = await admin
+      const { data: fwd, error: fwdErr } = await admin
         .from("tb_forwarder")
         .select("fcabinetnumber, userid, ftrackingchn")
         .eq("id", row.forwarder_id)
         .maybeSingle<{ fcabinetnumber: string | null; userid: string | null; ftrackingchn: string | null }>();
+      if (fwdErr) {
+        console.error(`[tb_forwarder list] failed`, { code: fwdErr.code, message: fwdErr.message });
+      }
 
       return {
         ok: true,

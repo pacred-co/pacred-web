@@ -26,7 +26,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   const { fNo } = await params;
   const admin = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("forwarders")
     .select(`
       id, f_no, profile_id, status, source_warehouse, transport_type, product_type, rate_basis,
@@ -42,6 +42,9 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     `)
     .eq("f_no", fNo)
     .maybeSingle();
+  if (error) {
+    console.error(`[forwarders list] failed`, { code: error.code, message: error.message });
+  }
 
   if (!data) {
     // Wave 3 P0 #1 fallback (2026-05-21): the list page reads tb_forwarder
@@ -57,22 +60,28 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   const f = data as unknown as Omit<typeof data, "profile"> & { profile: ProfileShape | ProfileShape[] | null };
   const profile = Array.isArray(f.profile) ? f.profile[0] ?? null : f.profile;
 
-  const { data: items } = await admin
+  const { data: items, error: itemsErr } = await admin
     .from("forwarder_items")
     .select("id, product_name, product_tracking, product_qty")
     .eq("forwarder_id", f.id);
+  if (itemsErr) {
+    console.error(`[forwarder_items list] failed`, { code: itemsErr.code, message: itemsErr.message });
+  }
 
   // U2-4: load cost adjustments for this forwarder
-  const { data: costAdjRaw } = await admin
+  const { data: costAdjRaw, error: costAdjRawErr } = await admin
     .from("forwarder_cost_adjustments")
     .select("id, kind, amount_thb, note, status, created_at, paid_at, cancellation_reason")
     .eq("forwarder_id", f.id)
     .order("created_at", { ascending: false })
     .returns<CostAdjustmentRow[]>();
+  if (costAdjRawErr) {
+    console.error(`[forwarder_cost_adjustments list] failed`, { code: costAdjRawErr.code, message: costAdjRawErr.message });
+  }
   const costAdjustments = costAdjRaw ?? [];
 
   // T-P1: load all driver assignments (history + active) for this forwarder
-  const { data: assignmentsRaw } = await admin
+  const { data: assignmentsRaw, error: assignmentsRawErr } = await admin
     .from("forwarder_driver")
     .select(`
       id, status, fd_date, accepted_at, completed_at,
@@ -80,6 +89,9 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     `)
     .eq("forwarder_id", f.id)
     .order("fd_date", { ascending: false });
+  if (assignmentsRawErr) {
+    console.error(`[forwarder_driver list] failed`, { code: assignmentsRawErr.code, message: assignmentsRawErr.message });
+  }
   type DriverShape = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
   const assignments = ((assignmentsRaw ?? []) as Array<{
     id: string; status: number; fd_date: string;
@@ -297,11 +309,14 @@ async function renderLegacyForwarderView(
   };
 
   // Customer name lookup
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("userid, username, userlastname, usertel, useremail")
     .eq("userid", r.userid)
     .maybeSingle();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
   const u = userRow as unknown as {
     userid: string; username: string | null; userlastname: string | null;
     usertel: string | null; useremail: string | null;

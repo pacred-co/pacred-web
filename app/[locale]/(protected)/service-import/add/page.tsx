@@ -127,20 +127,26 @@ export default async function ServiceImportAddPage() {
   // The first matching row in the inner join is the "primary" / main
   // address (`[ที่อยู่หลัก]` label); the remaining tb_address rows for
   // the same user (addressStatus=1, excluding the main) follow.
-  const { data: mainAddrRow } = await admin
+  const { data: mainAddrRow, error: mainAddrRowErr } = await admin
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", memberCode)
     .maybeSingle<{ addressid: number | string | null }>();
+  if (mainAddrRowErr) {
+    console.error(`[tb_address_main list] failed`, { code: mainAddrRowErr.code, message: mainAddrRowErr.message });
+  }
   const mainAddressId = mainAddrRow?.addressid ?? null;
 
-  const { data: allAddrs } = await admin
+  const { data: allAddrs, error: allAddrsErr } = await admin
     .from("tb_address")
     .select(
       "addressid, addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode",
     )
     .eq("userid", memberCode)
     .eq("addressstatus", "1");
+  if (allAddrsErr) {
+    console.error(`[tb_address list] failed`, { code: allAddrsErr.code, message: allAddrsErr.message });
+  }
   const addrs = ((allAddrs ?? []) as AddressRow[]).slice();
   // Sort: main first, then the rest by addressid.
   let mainAddr: AddressRow | undefined;

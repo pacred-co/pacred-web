@@ -11,11 +11,15 @@ export default async function ConvertToJuristicPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("id, member_code, account_type, first_name, last_name, phone, email, created_at, status")
     .eq("id", id)
     .maybeSingle();
+  if (profileErr) {
+    console.error(`[profiles lookup] failed`, { code: profileErr.code, message: profileErr.message, details: profileErr.details, hint: profileErr.hint });
+    throw new Error(`Failed to load profiles (${profileErr.code ?? "unknown"}): ${profileErr.message}`);
+  }
   if (!profile) notFound();
 
   type Profile = {
@@ -35,11 +39,14 @@ export default async function ConvertToJuristicPage({
   // Existing draft corporate row (rare — only if someone created it before
   // a successful conversion). Surface its values so admins can finish what
   // someone else started instead of typing the tax id twice.
-  const { data: existingCorporate } = await admin
+  const { data: existingCorporate, error: existingCorporateErr } = await admin
     .from("corporate")
     .select("tax_id, company_name, company_address, status")
     .eq("profile_id", id)
     .maybeSingle<{ tax_id: string | null; company_name: string | null; company_address: string | null; status: string }>();
+  if (existingCorporateErr) {
+    console.error(`[corporate list] failed`, { code: existingCorporateErr.code, message: existingCorporateErr.message });
+  }
 
   const customerName = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "ลูกค้า";
 

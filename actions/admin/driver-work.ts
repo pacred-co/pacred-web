@@ -72,11 +72,14 @@ const ROLES = ["driver", "ops", "super"] as const;
  */
 async function getCallerLegacyUserid(adminId: string): Promise<string | null> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("member_code")
     .eq("id", adminId)
     .maybeSingle<{ member_code: string | null }>();
+  if (error) {
+    console.error(`[profiles list] failed`, { code: error.code, message: error.message });
+  }
   return data?.member_code ?? null;
 }
 
@@ -98,18 +101,26 @@ async function loadItemAndAuthorise(
   | { ok: false; error: string }
 > {
   const admin = createAdminClient();
-  const { data: itemRow } = await admin
+  const { data: itemRow, error: itemRowErr } = await admin
     .from("tb_forwarder_driver_item")
     .select("id, fdid, fid, fdistatus, fdipictureon, fdipictureoff")
     .eq("id", itemId)
     .maybeSingle<{ id: number; fdid: number; fid: number; fdistatus: string; fdipictureon: string | null; fdipictureoff: string | null }>();
+  if (itemRowErr) {
+    console.error(`[tb_forwarder_driver_item mutation lookup] failed`, { code: itemRowErr.code, message: itemRowErr.message });
+    return { ok: false, error: `db_error:${itemRowErr.code ?? "unknown"}` };
+  }
   if (!itemRow) return { ok: false, error: "ไม่พบรายการ" };
 
-  const { data: batchRow } = await admin
+  const { data: batchRow, error: batchRowErr } = await admin
     .from("tb_forwarder_driver")
     .select("id, fdadminid, fdstatus")
     .eq("id", itemRow.fdid)
     .maybeSingle<{ id: number; fdadminid: string; fdstatus: string }>();
+  if (batchRowErr) {
+    console.error(`[tb_forwarder_driver mutation lookup] failed`, { code: batchRowErr.code, message: batchRowErr.message });
+    return { ok: false, error: `db_error:${batchRowErr.code ?? "unknown"}` };
+  }
   if (!batchRow) return { ok: false, error: "ไม่พบรอบจัดส่ง" };
 
   const isAdminOverride = callerRoles.includes("super") || callerRoles.includes("ops");
@@ -152,11 +163,14 @@ async function transitionItemStatus(
     // Re-read caller roles for the self-row gate (the withAdmin wrapper
     // already asserted at-least-one of ROLES, but we need to know which).
     const admin = createAdminClient();
-    const { data: rolesRows } = await admin
+    const { data: rolesRows, error: rolesRowsErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", adminId)
       .eq("is_active", true);
+    if (rolesRowsErr) {
+      console.error(`[admins list] failed`, { code: rolesRowsErr.code, message: rolesRowsErr.message });
+    }
     const callerRoles = (rolesRows ?? []).map((r) => (r as { role: string }).role);
 
     const authz = await loadItemAndAuthorise(itemId, adminId, callerRoles);
@@ -302,11 +316,14 @@ export async function markDriverItemFailed(input: MarkFailedInput): Promise<Admi
 
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: rolesRows } = await admin
+    const { data: rolesRows, error: rolesRowsErr } = await admin
       .from("admins")
       .select("role")
       .eq("profile_id", adminId)
       .eq("is_active", true);
+    if (rolesRowsErr) {
+      console.error(`[admins list] failed`, { code: rolesRowsErr.code, message: rolesRowsErr.message });
+    }
     const callerRoles = (rolesRows ?? []).map((r) => (r as { role: string }).role);
 
     const authz = await loadItemAndAuthorise(itemId, adminId, callerRoles);

@@ -27,7 +27,7 @@ export default async function CsvImportDetailPage({
   const { id } = await params;
   const admin  = createAdminClient();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("csv_imports")
     .select(`
       id, filename, target_table, status,
@@ -39,6 +39,10 @@ export default async function CsvImportDetailPage({
     .eq("id", id)
     .maybeSingle();
 
+  if (error) {
+    console.error(`[csv_imports lookup] failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
+    throw new Error(`Failed to load csv_imports (${error.code ?? "unknown"}): ${error.message}`);
+  }
   if (!data) notFound();
 
   type Row = typeof data;

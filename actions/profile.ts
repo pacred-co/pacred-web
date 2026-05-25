@@ -46,7 +46,10 @@ export async function updateProfileBasic(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -93,15 +96,21 @@ export async function upsertCorporate(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Guard at app layer too: corporate row requires account_type='juristic'
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type")
     .eq("id", user.id)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   if (!profile || profile.account_type !== "juristic") {
     return { ok: false, error: "account_not_juristic" };
@@ -148,7 +157,10 @@ export async function updateNotifyChannels(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -174,7 +186,10 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
     return { ok: false, error: "invalid_url" };
   }
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -208,15 +223,22 @@ export async function completeProfile(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("status, account_type")
     .eq("id", user.id)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
 
+  if (existingErr) {
+    console.error(`[profiles mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+    return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+  }
   if (!existing) return { ok: false, error: "profile_not_found" };
   if (existing.status === "suspended") return { ok: false, error: "account_suspended" };
   // Juristic must use the 3-step register flow — guard at server even if
@@ -282,17 +304,23 @@ export async function linkLineAccount(lineUserId: string): Promise<ActionResult>
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // If this LINE userId is already attached to a *different* Pacred account,
   // fail loud rather than overwriting (the unique index would 23505 anyway,
   // but the lookup gives us a friendlier error string).
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("id")
     .eq("line_user_id", lineUserId)
     .maybeSingle<{ id: string }>();
+  if (existingErr) {
+    console.error(`[profiles list] failed`, { code: existingErr.code, message: existingErr.message });
+  }
 
   if (existing && existing.id !== user.id) {
     return { ok: false, error: "line_already_linked" };
@@ -323,7 +351,10 @@ export async function unlinkLine(): Promise<ActionResult> {
   if (impErr) return impErr;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
@@ -434,11 +465,14 @@ export async function checkEmailAvailability(
   if (ownerId) {
     // Look up the caller's own email to exclude their legacy row (if any).
     // Cheap extra query but only on the profile-edit hot path.
-    const { data: ownProfile } = await admin
+    const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("email")
       .eq("id", ownerId)
       .maybeSingle<{ email: string | null }>();
+    if (ownProfileErr) {
+      console.error(`[profiles list] failed`, { code: ownProfileErr.code, message: ownProfileErr.message });
+    }
     if (ownProfile?.email) {
       legacyQuery = legacyQuery.neq("useremail", ownProfile.email);
     }
@@ -504,11 +538,14 @@ export async function checkPhoneAvailability(
     .neq("userstatus", "0")
     .limit(1);
   if (ownerId) {
-    const { data: ownProfile } = await admin
+    const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("phone")
       .eq("id", ownerId)
       .maybeSingle<{ phone: string | null }>();
+    if (ownProfileErr) {
+      console.error(`[profiles list] failed`, { code: ownProfileErr.code, message: ownProfileErr.message });
+    }
     if (ownProfile?.phone) {
       const ownLocal = ownProfile.phone.startsWith("+66")
         ? "0" + ownProfile.phone.slice(3)

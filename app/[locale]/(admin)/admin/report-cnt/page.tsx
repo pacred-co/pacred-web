@@ -210,7 +210,10 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   const { data: rows, error } = await q;
 
   // Pull paid container codes (tb_cnt_item is the join table; presence = paid)
-  const { data: paidRows } = await admin.from("tb_cnt_item").select("fcabinetnumber").limit(50_000);
+  const { data: paidRows, error: paidRowsErr } = await admin.from("tb_cnt_item").select("fcabinetnumber").limit(50_000);
+  if (paidRowsErr) {
+    console.error(`[tb_cnt_item list] failed`, { code: paidRowsErr.code, message: paidRowsErr.message });
+  }
   const paidSet = new Set((paidRows ?? []).map((r) => r.fcabinetnumber as string));
 
   let grouped: Grouped[] = error || !rows ? [] : groupByContainer(rows as Row[], paidSet);

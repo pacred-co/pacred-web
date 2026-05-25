@@ -33,7 +33,7 @@ export default async function AdminCsvImportsPage() {
   // zombie 'importing' row left behind by a crashed import process.
   await sweepStaleImportingRows(admin);
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("csv_imports")
     .select(`
       id, filename, target_table, status,
@@ -43,6 +43,9 @@ export default async function AdminCsvImportsPage() {
     `)
     .order("created_at", { ascending: false })
     .limit(100);
+  if (error) {
+    console.error(`[csv_imports list] failed`, { code: error.code, message: error.message });
+  }
 
   type RawRow = {
     id: string; filename: string; target_table: string; status: string;
