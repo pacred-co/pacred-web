@@ -110,7 +110,7 @@ export default async function AdminFreightShipmentDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: header } = await admin
+  const { data: header, error: headerErr } = await admin
     .from("freight_shipments")
     .select(`
       id, job_no, status, profile_id, transport_mode, container_code, carrier_container_no,
@@ -123,6 +123,12 @@ export default async function AdminFreightShipmentDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<Header>();
+  if (headerErr) {
+    console.error(`[freight/shipments/[id] header lookup] id=${id}`, {
+      code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint,
+    });
+    throw new Error(`Failed to load freight_shipments (${headerErr.code}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
   // Parties.

@@ -362,7 +362,7 @@ export default async function ServiceImportDetailPage({
   // The `u.userid=<currentUser>` clause IS the ownership gate — if it
   // doesn't match this customer, the legacy include falls through to
   // 404.php. Reproduced as `notFound()` below.
-  const { data: row } = await admin
+  const { data: row, error: rowErr } = await admin
     .from("tb_forwarder")
     .select(
       // tb_forwarder columns
@@ -440,6 +440,14 @@ export default async function ServiceImportDetailPage({
   // forwarder.php L1669: if ($result->num_rows > 0) { … } else { 404 }
   // PLUS the ownership clause in the WHERE — modelled as a notFound()
   // when the row doesn't exist OR doesn't belong to the current member.
+  // §0c (Wave 19): destructure error first so a transient PgBouncer
+  // timeout doesn't fake-404 a real customer's shipment.
+  if (rowErr) {
+    console.error(`[service-import/[fNo] row lookup] fNo=${idNum} member=${memberCode}`, {
+      code: rowErr.code, message: rowErr.message, details: rowErr.details, hint: rowErr.hint,
+    });
+    throw new Error(`Failed to load tb_forwarder (${rowErr.code}): ${rowErr.message}`);
+  }
   if (!row || (row.userid ?? "") !== memberCode) notFound();
 
   // forwarder.php L1666: LEFT JOIN tb_promotion po ON po.fid=f.id

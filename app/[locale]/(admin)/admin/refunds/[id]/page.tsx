@@ -77,7 +77,7 @@ export default async function AdminRefundDetailPage({
 
   const admin = createAdminClient();
 
-  const { data: rowRaw } = await admin
+  const { data: rowRaw, error: rowErr } = await admin
     .from("refund_requests")
     .select(`
       id, request_no, source, source_ref, amount_thb, reason, status,
@@ -87,6 +87,12 @@ export default async function AdminRefundDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<RefundDetailRaw>();
+  if (rowErr) {
+    console.error(`[refunds/[id] row lookup] id=${id}`, {
+      code: rowErr.code, message: rowErr.message, details: rowErr.details, hint: rowErr.hint,
+    });
+    throw new Error(`Failed to load refund_requests (${rowErr.code}): ${rowErr.message}`);
+  }
   if (!rowRaw) notFound();
   const row: RefundDetail = { ...rowRaw, profile: normP(rowRaw.profile) };
 
