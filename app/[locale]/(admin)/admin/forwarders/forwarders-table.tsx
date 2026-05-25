@@ -528,15 +528,30 @@ export function ForwardersTable({
                               className="h-12 w-12 rounded border border-border object-cover bg-surface-alt shrink-0"
                               loading="lazy"
                             />
-                          ) : (
+                          ) : r.ref_order && r.ref_order !== "" ? (
+                            // Wave 20 quick-win 1: shop-spawned row with NO image
+                            // = real bug (URL fetch failed at order time). Surface
+                            // it differently so ops know to investigate.
                             <div
                               aria-hidden
-                              className="h-12 w-12 rounded border border-dashed border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-[10px] text-muted"
-                              title="ไม่มีรูปสินค้า"
+                              className="h-12 w-12 rounded border border-dashed border-amber-300 bg-amber-50/60 shrink-0 flex items-center justify-center text-[10px] text-amber-700"
+                              title={`ฝากสั่งซื้อ ${r.ref_order} — รูปสินค้าหาย`}
                             >
-                              ไม่มี
+                              ⚠️
                               <br />
-                              รูป
+                              ไม่พบ
+                            </div>
+                          ) : (
+                            // Admin-created / user-uploaded forwarder = no product
+                            // image expected (just a shipping container). Show a
+                            // neutral box-icon so the visual distinguishes from
+                            // the ⚠️ shop-spawned case above.
+                            <div
+                              aria-hidden
+                              className="h-12 w-12 rounded border border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-muted"
+                              title={r.admin_creator ? `ฝากนำเข้า admin ${r.admin_creator}` : "ฝากนำเข้าจากลูกค้า"}
+                            >
+                              📦
                             </div>
                           )}
                           <div className="min-w-0 flex-1">

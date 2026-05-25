@@ -117,14 +117,72 @@ export async function resolveLegacyUrl(
   const f = filename.trim();
   if (!f || f === "-" || f === "0") return null;
 
-  // Case 1 — already a fully-qualified URL. Pass through (legacy code
-  // sometimes stamps `https://...` into the same column).
-  if (/^https?:\/\//i.test(f)) return f;
+  // Case 1 — already a fully-qualified URL. Pass through, but rewrite
+  // legacy CDN quirks (zzqss proxy hosts that disappeared, OSS process
+  // params that need stripping) per the `getLinkCoverIMG()` helper in
+  // legacy `member/include/function.php`. Research doc:
+  // `docs/research/marketplace-thumbnails-2026-05-25-night.md`.
+  if (/^https?:\/\//i.test(f)) {
+    return rewriteLegacyCoverUrl(f, kind);
+  }
 
   const resolved = classify(f, kind);
   if (!resolved) return null;
 
   return await getSignedBucketUrl(resolved.bucket, resolved.path, ttlSeconds);
+}
+
+/**
+ * Rewrite a legacy product-cover URL to a clean modern URL.
+ *
+ * Wave 20 P2 (2026-05-25 ค่ำ) — ports the 3 normalisations from legacy
+ * `getLinkCoverIMG()` helper:
+ *
+ * 1. **zzqss → alicdn** — older shop-orders went through a `zzqss.xxx`
+ *    proxy that's offline since 2022. Strip the proxy + reconstruct the
+ *    original alicdn URL.
+ * 2. **Strip OSS process params** — alicdn URLs sometimes have an
+ *    `_<W>x<H>.jpg_.webp` suffix from the Aliyun OSS image processor;
+ *    we drop everything past the first `_!` if present (alicdn keeps the
+ *    raw image under `O1CNxxx_!!yyy.jpg`).
+ * 3. **Append thumb suffix for list views** — alicdn supports an inline
+ *    resize via `_150x150.jpg`. Cheap bandwidth save when 50 rows render
+ *    at once on the forwarders list. Only applied for `kind=cover` (the
+ *    detail page passes the full URL through unchanged for click-to-zoom).
+ *
+ * @param url  Already-trimmed HTTP/HTTPS URL from a legacy fcover column.
+ * @param kind Resolver kind — only "cover" gets the thumb suffix.
+ */
+function rewriteLegacyCoverUrl(url: string, kind: LegacyKind): string {
+  let out = url;
+
+  // 1. zzqss proxy → alicdn passthrough
+  //    Pattern: https://[anything]zzqss[anything]/img/ibank/Oxxx
+  //          → https://img.alicdn.com/img/ibank/Oxxx
+  if (/zzqss/i.test(out)) {
+    const m = out.match(/(\/img\/(ibank|bao)\/[^?#]+)/i);
+    if (m) {
+      out = `https://img.alicdn.com${m[1]}`;
+    }
+  }
+
+  // 2. Strip OSS process params (everything after the first `?x-oss-process=`)
+  if (out.includes("?x-oss-process=")) {
+    out = out.split("?x-oss-process=")[0]!;
+  }
+  // Also strip the .webp / @W_H_jpg suffix some legacy code added
+  out = out.replace(/_\d+x\d+\.jpg(\.webp)?$/i, ".jpg");
+
+  // 3. Thumb suffix for list views (kind === "cover" only)
+  //    Only alicdn / taobao CDN URLs support this — skip for unknown hosts.
+  if (kind === "cover" && /^(https?:\/\/[^/]*(alicdn|taobaocdn|tbcdn|tmall)\.com)/i.test(out)) {
+    // Avoid double-appending if already present
+    if (!/_\d+x\d+\.jpg$/i.test(out)) {
+      out = out + "_150x150.jpg";
+    }
+  }
+
+  return out;
 }
 
 /**
