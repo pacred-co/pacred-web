@@ -27,6 +27,7 @@ Last reviewed: 2026-05-23 night (supabase-rls-patterns +1 — PgBouncer + Postgr
 | [`audit-discipline.md`](audit-discipline.md) | **Audit from PHP SOURCE, not HTML paste** — legacy `*.php` is multi-mode dispatcher (HTML shows ONE mode of N) · 6-step protocol when ภูม asks "is this faithful" · parallel-agents strategy when scope > 10 files · the 2026-05-25 miss-case (report-cnt mode-b + forwarder-check both missed because I trusted ภูม's pasted HTML) | 2026-05-25 |
 | [`verify-deep-flow.md`](verify-deep-flow.md) | **Never claim "wave clean" on smoke-test alone** — 2 case-study bugs (invisible Windows scrollbar on /customers + silent Supabase-error → 404 on /customers/[id]) · 5-step click-through protocol (route-smoke + row-click + overflow-measure + error-destructure + explicit verified-vs-not report) · safe Supabase destructure pattern · visible-scrollbar table pattern | 2026-05-25 |
 | [`pacred-design-philosophy.md`](pacred-design-philosophy.md) | Legacy = workflow source of truth · our UI = our design (Tailwind > BS4 verbatim) · 6 steps before shipping faithful port · proactive comparison not waiting for ภูม to flag | 2026-05-23 |
+| [`pacred-order-taxonomy.md`](pacred-order-taxonomy.md) | The 3 services (ฝากสั่งซื้อ · ฝากนำเข้า · ฝากโอน) + their tables + the shop → forwarder auto-spawn that confuses everyone · 4-tab filter on `/admin/forwarders` decoded · badge truth table · current Pacred port gaps | 2026-05-25 |
 
 ---
 
