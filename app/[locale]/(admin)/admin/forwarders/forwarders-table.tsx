@@ -542,17 +542,45 @@ export function ForwardersTable({
                               ไม่พบ
                             </div>
                           ) : (
-                            // Admin-created / user-uploaded forwarder = no product
-                            // image expected (just a shipping container). Show a
-                            // neutral box-icon so the visual distinguishes from
-                            // the ⚠️ shop-spawned case above.
-                            <div
-                              aria-hidden
-                              className="h-12 w-12 rounded border border-border/60 bg-surface-alt/40 shrink-0 flex items-center justify-center text-muted"
-                              title={r.admin_creator ? `ฝากนำเข้า admin ${r.admin_creator}` : "ฝากนำเข้าจากลูกค้า"}
-                            >
-                              📦
-                            </div>
+                            // Wave 20 fix (2026-05-26 ภูม flag re-check):
+                            // Admin/user-created forwarder = no product image
+                            // expected (just a shipping container). Instead of
+                            // a generic 📦, show the customer's first letter as
+                            // a colored initial avatar — Material-style. Each
+                            // row gets a unique visual identity + ops can scan
+                            // by customer at a glance.
+                            (() => {
+                              const initial = (r.customer?.name ?? "—").trim().charAt(0) || "?";
+                              // Pick a hue from the userid hash so the same
+                              // customer always gets the same color (visual
+                              // recognition across the list).
+                              const hash = [...(r.customer?.userid ?? "")].reduce(
+                                (a, c) => a + c.charCodeAt(0),
+                                0,
+                              );
+                              const palette = [
+                                "bg-blue-100 text-blue-700",
+                                "bg-emerald-100 text-emerald-700",
+                                "bg-violet-100 text-violet-700",
+                                "bg-orange-100 text-orange-700",
+                                "bg-pink-100 text-pink-700",
+                                "bg-cyan-100 text-cyan-700",
+                              ];
+                              const tone = palette[hash % palette.length];
+                              return (
+                                <div
+                                  aria-hidden
+                                  className={`h-12 w-12 rounded-full shrink-0 flex items-center justify-center text-lg font-bold ${tone}`}
+                                  title={
+                                    r.admin_creator
+                                      ? `ฝากนำเข้า admin ${r.admin_creator} · ${r.customer?.name ?? ""}`
+                                      : `ฝากนำเข้าจากลูกค้า · ${r.customer?.name ?? ""}`
+                                  }
+                                >
+                                  {initial}
+                                </div>
+                              );
+                            })()
                           )}
                           <div className="min-w-0 flex-1">
                             <Link
