@@ -1,21 +1,60 @@
 /**
- * /admin/wallet/[id] — rich topup-detail view + edit form (Wave 19 BUG #3).
+ * /admin/wallet/[id] — type-aware wallet event detail (Wave 19 BUG #3 + #4).
  *
  * Faithful port of `pcs-admin/include/pages/wallet/w-s-deposit-detail.php`
- * (~530 LOC). Replaces the Wave 7 read-only stub.
+ * (~530 LOC) PLUS the type-2/3/4/6/7 catch-all behaviour that legacy
+ * implements implicitly (legacy's deposit-detail handler is shared by every
+ * type — slip just renders broken for the no-slip types). Replaces the
+ * Wave 7 read-only stub.
  *
+ * ─────────────────────────────────────────────────────────────────────
+ * Wave 19 BUG #4 (2026-05-25 ค่ำ) — partner topup join via tb_wallet_paydeposit
+ * ─────────────────────────────────────────────────────────────────────
+ * `tb_wallet_hs` holds 7 transaction types. They split into 3 groups by
+ * slip semantics (verified across 104,591 prod rows):
+ *
+ *   type 1: TOPUP-USER     (32,941/32,982 → 99.9% have slip)  → +amount
+ *   type 2: TOPUP-ADMIN    (0/15,980     → never has slip)    → +amount
+ *   type 3: WITHDRAW       (592/641      → 92% have slip)     → -amount
+ *   type 4: SPEND-FORWARDER (0/47,318    → never has slip)    → -amount
+ *   type 5: ADMIN-MANUAL   (0/4,356      → never has slip)    → ±amount
+ *   type 6: SPEND-OTHER    (0/1,460      → never has slip)    → -amount
+ *   type 7: SPEND-OTHER-2  (0/1,854      → never has slip)    → -amount
+ *
+ * Critical discovery: a "spend" row (type 4/6/7) frequently HAS a partner
+ * topup row created in the SAME transaction. The legacy "เติมแล้วใช้จ่าย
+ * ทันที" pattern: customer uploads slip + selects forwarder to pay → system
+ * creates id=N (type 1, with slip) AND id=N+1 (type 4, paying that fwd) in
+ * pair, linked via `tb_wallet_paydeposit { whid → hno }`.
+ *
+ * Example seen on prod:
+ *   id 105410: type 1, +1748.76, imagesslip=PCS10691_xxx.png, reforder=null
+ *   id 105411: type 4, +1748.76, imagesslip=null,            reforder=51201
+ *   tb_wallet_paydeposit: { whid: 105410, hno: '51201' }
+ *
+ * Per ภูม's BUG #4 (2026-05-25): when admin opens id 105411 on the dashboard
+ * "ดู / แก้ไข" link, they expected to see the slip (because the matching
+ * customer/amount/time topup HAS one). Fix: detect type and follow the
+ * paydeposit link to fetch the partner topup's slip + show a banner.
+ *
+ * ─────────────────────────────────────────────────────────────────────
  * Layout (top-to-bottom):
  *   1. TWO TOP CARDS  — left: this customer's wallet + cash-back balance
  *                       right: system-wide wallet + cash-back totals
  *                       Each has a "+ เติมเงินเข้ากระเป๋า" CTA → /admin/wallet/add
- *   2. BREADCRUMB     — หน้าแรก / กระเป๋าสตางค์ / รายการเติมเงิน / #<id>
+ *   2. BREADCRUMB     — หน้าแรก / กระเป๋าสตางค์ / <type-label> / #<id>
  *   3. DETAIL CARD (2-col on md+):
  *      LEFT  — rich row info: timestamp, customer link, target bank,
- *              slip date (with collapsible <EditDateSlipForm>), amount,
- *              (if linked to a wallet-shop spending) reference rows.
+ *              slip date (with collapsible <EditDateSlipForm>), amount
+ *              (signed: + for topup / - for spend/withdraw),
+ *              source/target reference list (paydeposit join):
+ *                · For type 1/2: "เงินก้อนนี้ใช้จ่ายค่า: [F51201] [P22302] ..."
+ *                · For type 4/6/7: "นี่คือการจ่ายค่า: [F51201] · สลิปอยู่ที่
+ *                                    รายการเติมเงินคู่กัน [#105410 →]"
  *      RIGHT — status badge, "ดำเนินรายการแล้ว โดย <admin>" if completed,
  *              <ApproveRejectForm> if still pending (status='1'),
- *              SLIP IMAGE (signed URL, click-to-zoom).
+ *              SLIP IMAGE: own slip OR partner-topup slip OR
+ *              "ไม่มีสลิป (ไม่จำเป็นสำหรับรายการประเภทนี้)" for type 2/4/5/6/7.
  *   4. SIMILAR-TX WARNING — red banner listing other tb_wallet_hs rows with
  *      the same DATE(dateslip) + amount + status='1' (excluding self).
  *
@@ -49,6 +88,51 @@ const STATUS_CLS: Record<string, string> = {
   "2": "bg-green-100 text-green-700 border-green-200",
   "3": "bg-red-100 text-red-700 border-red-200",
 };
+
+// Wave 19 BUG #4: type→label mapping. Covers all 7 wallet types so the
+// page reads truthfully no matter which row admin opens (legacy used the
+// same handler for every type and just rendered a broken slip image —
+// we do better by labelling each type accurately).
+const TYPE_LABEL: Record<string, string> = {
+  "1": "เติมเงิน (ลูกค้าโอน)",
+  "2": "เติมเงิน (แอดมินเพิ่ม)",
+  "3": "ถอนเงิน",
+  "4": "จ่ายค่าฝากนำเข้า",
+  "5": "ปรับยอดโดยแอดมิน",
+  "6": "จ่ายค่าบริการ",
+  "7": "จ่ายค่าบริการ",
+};
+
+// Wave 19 BUG #4: amount sign per type. Topup adds to wallet (+), spend &
+// withdraw remove from wallet (−). Type 5 can go either way so we let the
+// raw amount sign speak for itself (handled at render).
+function isCreditType(t: string | null): boolean {
+  return t === "1" || t === "2";
+}
+function isDebitType(t: string | null): boolean {
+  return t === "3" || t === "4" || t === "6" || t === "7";
+}
+
+// Wave 19 BUG #4: slip semantic per type. Topup-user + withdraw require a
+// slip from the customer; topup-admin + every spend type never has one
+// (verified against 104,591 prod rows: type 1 → 99.9% have slip; types 2,
+// 4, 5, 6, 7 → 0% have slip).
+function typeShouldHaveOwnSlip(t: string | null): boolean {
+  return t === "1" || t === "3";
+}
+
+// Wave 19 BUG #4: hno semantic in tb_wallet_paydeposit. Inferred from prod
+// data — pure-digit IDs are forwarder f_no; "P"+digits are shop-order hNo;
+// "ONS"+timestamp are legacy invoice numbers (pre-2026 imports).
+function classifyHno(hno: string): { kind: "forwarder" | "shop" | "other"; href: string | null; label: string } {
+  if (/^\d+$/.test(hno)) {
+    return { kind: "forwarder", href: `/admin/forwarders/${hno}`, label: `F${hno}` };
+  }
+  if (/^P\d+/.test(hno)) {
+    return { kind: "shop", href: `/admin/service-orders/${hno}`, label: hno };
+  }
+  return { kind: "other", href: null, label: hno };
+}
 
 type WalletHsRow = {
   id: number;
@@ -180,8 +264,74 @@ export default async function AdminWalletDetail({
   const linkedSpentTotal = linkedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const linkedDebitAndCredit = linkedSpentTotal + Number(row.amount ?? 0);
 
-  // ── Resolve slip URL ──
+  // ── Resolve slip URL (the OWN slip of this row) ──
   const slipUrl = await resolveLegacyUrl(row.imagesslip, "slip");
+
+  // ── Wave 19 BUG #4: paydeposit join ──
+  // For TOPUPS (type 1/2)  → look forward: what did this topup pay for?
+  //                          → SELECT hno FROM tb_wallet_paydeposit WHERE whid = row.id
+  //                          → renders as "เงินนี้ใช้จ่ายค่า: [F51201] [P22302]"
+  // For SPENDS (type 4/6/7) → look backward: which topup funded this spend?
+  //                          → SELECT whid FROM tb_wallet_paydeposit WHERE hno = row.reforder
+  //                          → cross-check whid in tb_wallet_hs matching userid+amount
+  //                          → renders the partner topup's slip + "[#105410 →]" link
+  type PayDeposit = { whid: number; hno: string };
+  let paymentTargets: { hno: string }[] = [];
+  let partnerTopupId: number | null = null;
+  let partnerSlipUrl: string | null = null;
+  let partnerSlipFilename: string | null = null;
+
+  if (isCreditType(row.type)) {
+    // Topup → enumerate targets (what got paid)
+    const { data: targets, error: targetsErr } = await admin
+      .from("tb_wallet_paydeposit")
+      .select("hno")
+      .eq("whid", row.id);
+    if (targetsErr) {
+      console.error(`[tb_wallet_paydeposit forward-lookup] failed`, {
+        code: targetsErr.code,
+        message: targetsErr.message,
+      });
+    } else {
+      paymentTargets = (targets ?? []) as { hno: string }[];
+    }
+  } else if (isDebitType(row.type) && row.reforder && row.reforder !== "") {
+    // Spend/withdraw → find partner topup via paydeposit reverse-join
+    const { data: pdRows, error: pdErr } = await admin
+      .from("tb_wallet_paydeposit")
+      .select("whid")
+      .eq("hno", row.reforder);
+    if (pdErr) {
+      console.error(`[tb_wallet_paydeposit reverse-lookup] failed`, {
+        code: pdErr.code,
+        message: pdErr.message,
+      });
+    } else if (pdRows && pdRows.length > 0) {
+      const whids = (pdRows as PayDeposit[]).map((r) => r.whid);
+      // Resolve the partner topup with the EXACT matching user+amount (a topup
+      // can pay multiple targets so paydeposit alone is N→1; user+amount+id-in
+      // disambiguates to the 1 row that funded this specific spend).
+      const { data: matchRow, error: matchErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id,imagesslip,userid,amount")
+        .in("id", whids)
+        .eq("userid", row.userid)
+        .eq("amount", row.amount)
+        .limit(1)
+        .maybeSingle();
+      if (matchErr) {
+        console.error(`[tb_wallet_hs partner-topup] failed`, {
+          code: matchErr.code,
+          message: matchErr.message,
+        });
+      } else if (matchRow) {
+        const partner = matchRow as { id: number; imagesslip: string | null };
+        partnerTopupId = partner.id;
+        partnerSlipFilename = partner.imagesslip;
+        partnerSlipUrl = await resolveLegacyUrl(partner.imagesslip, "slip");
+      }
+    }
+  }
 
   // ── Similar-tx detector (legacy L487-501): same DATE(dateslip) + amount,
   //    type<>5, exclude self. Render as red banner.
@@ -222,6 +372,13 @@ export default async function AdminWalletDetail({
   const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";
   const userAvatar = await resolveLegacyUrl(user?.userpicture ?? null, "profile-thumb");
 
+  // Wave 19 BUG #4: type-aware labels for breadcrumb + page title.
+  const typeKey = row.type ?? "1";
+  const typeLabel = TYPE_LABEL[typeKey] ?? `รายการประเภท ${typeKey}`;
+  const isCredit = isCreditType(typeKey);
+  const isDebit = isDebitType(typeKey);
+  const shouldHaveOwnSlip = typeShouldHaveOwnSlip(typeKey);
+
   // ────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────
@@ -243,13 +400,13 @@ export default async function AdminWalletDetail({
         />
       </section>
 
-      {/* ── 2. BREADCRUMB ── */}
+      {/* ── 2. BREADCRUMB — Wave 19 BUG #4: type-aware label ── */}
       <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
         <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
         <span>/</span>
         <Link href="/admin/wallet" className="hover:text-primary-600">กระเป๋าสตางค์</Link>
         <span>/</span>
-        <Link href="/admin/wallet?view=tx" className="hover:text-primary-600">รายการเติมเงิน</Link>
+        <Link href="/admin/wallet?view=tx" className="hover:text-primary-600">{typeLabel}</Link>
         <span>/</span>
         <span className="font-mono text-foreground">#{row.id}</span>
       </nav>
@@ -260,7 +417,8 @@ export default async function AdminWalletDetail({
           {/* LEFT — info pane */}
           <div className="p-5 space-y-3 border-b md:border-b-0 md:border-r border-border">
             <h2 className="text-lg font-bold">
-              รายการเติมเงินกระเป๋าสตางค์ <span className="font-mono">#{row.id}</span>
+              {/* Wave 19 BUG #4: type-aware title (was hard-coded "รายการเติมเงิน") */}
+              รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono">#{row.id}</span>
             </h2>
 
             <KV label="เวลาทำรายการ" value={row.date ? formatThai(row.date) : "—"} />
@@ -306,11 +464,92 @@ export default async function AdminWalletDetail({
             </div>
 
             <div className="text-sm">
-              <span className="font-semibold text-green-700">จำนวนเงินในสลิป: </span>
-              <span className="font-mono font-bold text-green-700">
-                +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-              </span>
+              {/* Wave 19 BUG #4: sign-aware amount label.
+                  Credit (type 1/2): green "+เข้ากระเป๋า"
+                  Debit (type 3/4/6/7): red "−หักจากกระเป๋า"
+                  type 5 (admin manual): neutral — let the raw sign speak. */}
+              {isCredit ? (
+                <>
+                  <span className="font-semibold text-green-700">จำนวนเงินเข้ากระเป๋า: </span>
+                  <span className="font-mono font-bold text-green-700">
+                    +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  </span>
+                </>
+              ) : isDebit ? (
+                <>
+                  <span className="font-semibold text-red-700">จำนวนเงินที่หักจากกระเป๋า: </span>
+                  <span className="font-mono font-bold text-red-700">
+                    −{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-muted">จำนวนเงิน: </span>
+                  <span className="font-mono font-bold">
+                    {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
+                  </span>
+                </>
+              )}
             </div>
+
+            {/* Wave 19 BUG #4: source/target reference block.
+                Credit → "เงินนี้ใช้จ่ายค่า" + targets
+                Debit  → "นี่คือการจ่ายค่า X · สลิปอยู่ที่ #partnerId" */}
+            {isCredit && paymentTargets.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
+                <p className="font-semibold">💰 เงินก้อนนี้ใช้จ่ายค่า:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {paymentTargets.map((t, i) => {
+                    const c = classifyHno(t.hno);
+                    return c.href ? (
+                      <Link
+                        key={`${t.hno}-${i}`}
+                        href={c.href}
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[11px] text-emerald-700 hover:bg-emerald-100 hover:underline"
+                      >
+                        {c.label} →
+                      </Link>
+                    ) : (
+                      <span
+                        key={`${t.hno}-${i}`}
+                        className="inline-flex items-center rounded-md border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[11px] text-emerald-700"
+                      >
+                        {c.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {isDebit && row.reforder && row.reforder !== "" && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 space-y-1">
+                <p>
+                  <span className="font-semibold">💸 นี่คือการจ่ายค่า: </span>
+                  {(() => {
+                    const c = classifyHno(row.reforder);
+                    return c.href ? (
+                      <Link href={c.href} className="font-mono font-bold text-sky-700 hover:underline">
+                        {c.label} →
+                      </Link>
+                    ) : (
+                      <span className="font-mono font-bold">{c.label}</span>
+                    );
+                  })()}
+                </p>
+                {partnerTopupId !== null && (
+                  <p>
+                    <span className="font-semibold">📎 สลิปอยู่ที่รายการเติมเงินคู่กัน: </span>
+                    <Link
+                      href={`/admin/wallet/${partnerTopupId}`}
+                      className="font-mono font-bold text-sky-700 hover:underline"
+                    >
+                      #{partnerTopupId} →
+                    </Link>
+                  </p>
+                )}
+              </div>
+            )}
 
             {linkedRows.length > 0 && (
               <div className="text-sm space-y-1 rounded-lg border border-border bg-surface-alt/40 p-2">
@@ -359,7 +598,13 @@ export default async function AdminWalletDetail({
               </div>
             )}
 
-            {/* Slip image */}
+            {/* Slip image — Wave 19 BUG #4: 5-branch render.
+                1. own slipUrl present                      → render image (legacy parity)
+                2. own slip filename but resolver failed    → amber warning with filename
+                3. partner topup slipUrl present (spend rows) → render partner's image + banner
+                4. partner topup filename but resolver failed → amber warning with partner filename
+                5. type is no-slip-required (2/4/5/6/7)     → gray "ไม่จำเป็นต้องมีสลิป"
+                6. type SHOULD have slip but doesn't        → red "ลูกค้ายังไม่อัพ" */}
             <div className="pt-2">
               <p className="text-xs font-semibold text-muted mb-2">หลักฐานการโอน (Pay slip)</p>
               {slipUrl ? (
@@ -379,9 +624,44 @@ export default async function AdminWalletDetail({
                     filename = {row.imagesslip}
                   </p>
                 </div>
+              ) : partnerSlipUrl ? (
+                <div className="space-y-2">
+                  <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">
+                    💡 สลิปนี้มาจากรายการเติมเงินคู่กัน{" "}
+                    <Link
+                      href={`/admin/wallet/${partnerTopupId}`}
+                      className="font-mono font-bold text-sky-700 hover:underline"
+                    >
+                      #{partnerTopupId}
+                    </Link>
+                  </div>
+                  <a
+                    href={partnerSlipUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={partnerSlipUrl} alt="สลิป" className="max-w-full max-h-[420px] mx-auto object-contain" />
+                  </a>
+                </div>
+              ) : partnerSlipFilename ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้</p>
+                  <p className="mt-1 font-mono text-[10px] break-all text-amber-800">
+                    partner #{partnerTopupId} · filename = {partnerSlipFilename}
+                  </p>
+                </div>
+              ) : !shouldHaveOwnSlip ? (
+                <div className="rounded-lg border border-dashed border-border bg-surface-alt/40 p-4 text-center text-xs text-muted">
+                  <p className="font-medium">ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้</p>
+                  <p className="mt-1 italic">
+                    ({typeLabel} — ระบบหักเงินจากกระเป๋าโดยตรง ไม่มีการโอนจากธนาคาร)
+                  </p>
+                </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted italic">
-                  ลูกค้าไม่ได้อัพโหลดสลิป
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-xs text-red-700 italic">
+                  ลูกค้ายังไม่ได้อัพโหลดสลิป
                 </div>
               )}
             </div>
