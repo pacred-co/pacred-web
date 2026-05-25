@@ -338,17 +338,84 @@
   max-width: 220px;
 }
 
-/* L475-501 — mobile (max-width: 578px) */
-@media only screen and (max-width: 578px) {
+/* L475-501 — mobile (max-width: 578px)
+ *
+ * 2026-05-26 (เดฟ, Sprint-26): legacy PCS used the DataTables-Responsive
+ * jQuery plugin to collapse the order table on mobile — `<th class="all">`
+ * stays, `<th class="none">` is hidden, and the row gets a "+" widget that
+ * expands the hidden cells inline. We don't ship that JS in Pacred, so on
+ * mobile the table was overflowing with all 7 columns visible AND a
+ * misleading "คลิกดูเพิ่มเติม" hint that did nothing when tapped.
+ *
+ * Pure-CSS emulation of the plugin's collapse:
+ *  - the hint `::after` is REMOVED (was promising functionality we don't
+ *    have)
+ *  - cols 2/3/5/6 (date / orderno / status / price) are hidden — col 4
+ *    (ข้อมูลสินค้า) already carries a `.d-block.d-sm-none` mobile-summary
+ *    div that duplicates all four fields, so no data is lost
+ *  - col 7 (ตัวเลือก / actions) stays visible so the customer can still
+ *    cancel / pay / view / print on mobile
+ *  - col 1 (ID) is narrowed and col 4 stretches to fill the remaining
+ *    width — long Chinese product titles wrap normally instead of
+ *    character-by-character
+ *
+ * Legacy `shops.php` markup is unchanged — the column structure is still
+ * exact 1:1 with the original, we just gate which cols paint on small
+ * screens. Same selector ladder; only the per-cell display flips.
+ */
+@media only screen and (max-width: 767.98px) {
   .pcs-legacy .content-wrapper {
     padding: 0 !important;
   }
   .pcs-legacy .content-header-left {
     margin: 0.5rem !important;
   }
-  .pcs-legacy .tr1::after {
-    content: " \A คลิกดูเพิ่มเติม";
-    white-space: pre-wrap;
+  /* Hide cols 2/3/5/6 — date / orderno / status / price are duplicated
+     in col-4 `.d-block.d-sm-none` mobile-summary block. Scoped to
+     `.pcs-shops-page` so /service-payment + /service-import (which also
+     use `<table id="myTable">` but with different column ordering)
+     keep all their columns at mobile width. */
+  .pcs-shops-page table#myTable thead th:nth-child(2),
+  .pcs-shops-page table#myTable thead th:nth-child(3),
+  .pcs-shops-page table#myTable thead th:nth-child(5),
+  .pcs-shops-page table#myTable thead th:nth-child(6),
+  .pcs-shops-page table#myTable tbody td:nth-child(2),
+  .pcs-shops-page table#myTable tbody td:nth-child(3),
+  .pcs-shops-page table#myTable tbody td:nth-child(5),
+  .pcs-shops-page table#myTable tbody td:nth-child(6) {
+    display: none;
+  }
+  /* Col 1 (ID) compact; col 4 (product info) stretches; col 7 (actions)
+     keeps a tight fixed width. */
+  .pcs-shops-page table#myTable thead th:nth-child(1),
+  .pcs-shops-page table#myTable tbody td:nth-child(1) {
+    width: 1%;
+    white-space: nowrap;
+    padding: 0.5rem 0.4rem;
+    font-size: 11px;
+  }
+  .pcs-shops-page table#myTable thead th:nth-child(4),
+  .pcs-shops-page table#myTable tbody td:nth-child(4) {
+    width: auto;
+    word-break: break-word;
+  }
+  .pcs-shops-page table#myTable thead th:nth-child(7),
+  .pcs-shops-page table#myTable tbody td:nth-child(7) {
+    width: 1%;
+    white-space: nowrap;
+    padding: 0.4rem 0.3rem;
+  }
+  /* Compact the action-button pills inside col 7. */
+  .pcs-shops-page table#myTable tbody td:nth-child(7) .btn {
+    display: block;
+    width: 100%;
+    margin: 0 0 4px 0 !important;
+    padding: 0.2rem 0.4rem !important;
+    font-size: 10px !important;
+  }
+  /* Make sure the row's product-image floats neatly on mobile. */
+  .pcs-shops-page table#myTable .float-right img {
+    width: 50px !important;
   }
   .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > td:first-child,
   .pcs-legacy table.dataTable.dtr-inline.collapsed > tbody > tr[role="row"] > th:first-child {

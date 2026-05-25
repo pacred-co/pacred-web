@@ -268,9 +268,15 @@ export default async function ServiceOrderPage({
   }
 
   return (
-    <div className="pcs-legacy">
+    <div className="pcs-legacy pcs-shops-page">
       {/* Legacy PCS stylesheet — static public/ asset, loaded via a plain
-          <link> so it bypasses the app's Tailwind/PostCSS pipeline. */}
+          <link> so it bypasses the app's Tailwind/PostCSS pipeline.
+          `.pcs-shops-page` modifier scopes Sprint-26 mobile-responsive
+          rules (legacy-overrides.css §11) to THIS page's column layout
+          — shops.php has cols 1/4/7 = "all", 2/3/5/6 = "none", which
+          differs from /service-payment + /service-import. Without the
+          modifier the mobile-collapse rule would hide the wrong cols
+          on those other tables. */}
       <link rel="stylesheet" href="/legacy/pcs/shops.css" />
       {/* shops.php L462 — <title>; rebranded PCS Cargo → Pacred. */}
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>

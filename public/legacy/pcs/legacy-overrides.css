@@ -358,3 +358,94 @@ body.pcs-legacy-body .footer {
   font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
 }
+
+/* ── 11. Mobile DataTables-Responsive emulation (Sprint-26, 2026-05-26) ────
+ *
+ * Legacy PCS Cargo used the jQuery DataTables-Responsive plugin to collapse
+ * its order/cart/payment tables on small screens — `<th class="all">` stays,
+ * `<th class="none">` is hidden, a "+" widget expands the hidden cols inline.
+ * We don't ship that JS in Pacred (D1 = faithful markup port, not faithful
+ * JS port — server-render only), so the legacy CSS shipped TWO half-broken
+ * pieces on every customer table:
+ *
+ *   1. `.tr1::after { content: " \A คลิกดูเพิ่มเติม"; }` — a "click for more"
+ *      hint on col 1 that promised an expand interaction the page can't
+ *      perform without the plugin. Defined in shops.css, cart.css,
+ *      service-import.css, payment.css, forwarder.css (5 files).
+ *   2. `<th class="none">` columns — meant to be hidden by the plugin's
+ *      JS init, but with no JS they kept painting, so 7-column legacy
+ *      tables overflowed 360-390px viewports and squeezed Chinese product
+ *      titles into character-by-character vertical wrap.
+ *
+ * Override here in legacy-overrides.css (loaded after every per-screen
+ * sheet) — KILL the hint globally, and emulate the plugin's collapse in
+ * pure CSS via `th.none` + the corresponding td-position siblings. The
+ * legacy markup `<th class="none">` is preserved unchanged, faithful to
+ * the PHP screens — we just give the class meaning the plugin used to.
+ *
+ * Each affected page has a `.d-block.d-sm-none` mobile-summary block on
+ * its "main" column (col 4 on /service-order, col 4 on /service-import,
+ * etc.) that already duplicates the hidden-column data inline, so no
+ * information is lost when those cols disappear at < 768px.
+ * ────────────────────────────────────────────────────────────────────── */
+.pcs-legacy .tr1::after,
+.pcs-legacy-body .tr1::after {
+  content: none !important;
+}
+
+@media (max-width: 767.98px) {
+  /* DataTables `<th class="none">` and the td under each such heading
+     collapse on mobile. nth-of-type derived from the column position
+     works because every legacy table has a stable col order; the
+     scope `.pcs-legacy table.dataTable th.none, td.none` would be
+     cleaner but the legacy HTML only marks the THs. */
+  .pcs-legacy table.dataTable thead th.none,
+  .pcs-legacy-body table.dataTable thead th.none {
+    display: none !important;
+  }
+  /* For each legacy customer table, hide tds whose header has class
+     "none". A direct sibling selector can't reach td from th, so we
+     spell out the column positions used by the active legacy screens.
+     Each rule is scoped by a per-page `.pcs-<page>-page` modifier
+     because the column ordering differs across pages and any cross-
+     page selector would hide the wrong cells.
+     ──── /service-order (shops.php): cols 2,3,5,6 = none; 1,4,7 = all
+     ──── /service-import/pending (forwarder.php): cols 2,4,5,6 = none
+     ──── /service-payment (payment.php): cols 2,3,4,5 = none */
+  .pcs-shops-page table#myTable tbody td:nth-child(2),
+  .pcs-shops-page table#myTable tbody td:nth-child(3),
+  .pcs-shops-page table#myTable tbody td:nth-child(5),
+  .pcs-shops-page table#myTable tbody td:nth-child(6) {
+    display: none !important;
+  }
+
+  /* Status tabs (`.tab-sm-center` ⇒ ทั้งหมด / รอดำเนินการ / รอชำระเงิน /
+     สั่งสินค้า / รอร้านจีนจัดส่ง / สำเร็จ / ออเดอร์ที่ยกเลิก).
+     Legacy `style.css` line 1015 forces `width: 50%` ⇒ 2-col grid that
+     leaves the 7th tab hanging on its own row with awkward whitespace.
+     Override with a single-row horizontal scroll-snap so all 7 tabs sit
+     in one line and the customer swipes through them. */
+  .pcs-legacy .nav.nav-tabs.nav-underline.pcs-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old IE/Edge */
+    -webkit-overflow-scrolling: touch;
+  }
+  .pcs-legacy .nav.nav-tabs.nav-underline.pcs-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .pcs-legacy .nav.nav-tabs.nav-underline.pcs-tabs .nav-item.tab-sm-center {
+    width: auto !important;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    white-space: nowrap;
+  }
+  .pcs-legacy .nav.nav-tabs.nav-underline.pcs-tabs .nav-item.tab-sm-center .nav-link {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    white-space: nowrap;
+  }
+}
