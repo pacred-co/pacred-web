@@ -60,6 +60,10 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
     children: [
       { label: "รวมบิลสินค้า",            href: "/admin/forwarders/combine-bill" },
       { label: "ประวัติเข้าโกดังไทย",     href: "/admin/forwarders/warehouse-history" },
+      // Wave 20 P1 (ภูม flag 2026-05-26): the dedicated หมายเหตุนำเข้า
+      // page exists at /admin/forwarders/notes but was unreachable from
+      // here; wired into งาน menu group beside the other ops surfaces.
+      { label: "หมายเหตุนำเข้า",         href: "/admin/forwarders/notes" },
       { label: "มอบงานคนขับ",            href: "/admin/drivers" },
       // Wave 7.3 (2026-05-22): wired 2 orphan container-cost pages per
       // ภูม decision in page-inventory-2026-05-21-night.md §🔴 DEAD.
