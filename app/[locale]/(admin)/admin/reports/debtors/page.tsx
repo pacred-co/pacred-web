@@ -132,7 +132,7 @@ export default async function DebtorsReport() {
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-2">
         <span aria-hidden>💡</span>
         <div className="flex-1">
-          <p className="font-medium">หน้านี้แสดงเฉพาะ "หนี้กระเป๋า" (wallet ติดลบ)</p>
+          <p className="font-medium">หน้านี้แสดงเฉพาะ &ldquo;หนี้กระเป๋า&rdquo; (wallet ติดลบ)</p>
           <p className="mt-0.5 text-xs">
             สำหรับลูกค้าที่ค้างจ่ายค่าฝากนำเข้าด้วยเครดิต ดูที่ →{" "}
             <Link href="/admin/reports/credit-pending" className="font-medium underline hover:text-blue-700">
