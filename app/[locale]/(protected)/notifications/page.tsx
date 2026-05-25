@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { listMyNotifications } from "@/actions/notifications";
 import { NotificationsList } from "./notifications-list";
@@ -25,7 +24,6 @@ export default async function NotificationsPage() {
 
         <NotificationsList initial={items} />
       </main>
-      <Footer />
     </>
   );
 }

@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getWallet } from "@/actions/wallet";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -87,7 +86,6 @@ export default async function WalletWithdrawPage() {
           </ol>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

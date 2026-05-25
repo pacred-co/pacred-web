@@ -1,5 +1,4 @@
 import { listOrders } from "@/actions/orders";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { Plus } from "lucide-react";
 
@@ -105,7 +104,6 @@ export default async function OrdersPage() {
           ใหม่ในอนาคต ดู pattern เต็มที่ <code>docs/architecture.md</code> Section 9
         </p>
       </main>
-      <Footer />
     </>
   );
 }

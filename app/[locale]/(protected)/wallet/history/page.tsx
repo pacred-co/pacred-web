@@ -1,4 +1,3 @@
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { getWallet, listWalletTransactions, type WalletTransaction } from "@/actions/wallet";
 import { getMyCredit } from "@/actions/credit";
@@ -274,7 +273,6 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
           )}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

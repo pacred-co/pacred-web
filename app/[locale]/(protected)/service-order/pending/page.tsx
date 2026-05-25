@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { Footer } from "@/components/sections/footer";
 import { Link } from "@/i18n/navigation";
 import { listServiceOrders } from "@/actions/service-order";
 import { ServiceOrderList } from "../service-order-list";
@@ -29,7 +28,6 @@ export default async function ServiceOrderPendingPage() {
 
         <ServiceOrderList items={items} />
       </main>
-      <Footer />
     </>
   );
 }

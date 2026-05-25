@@ -4,7 +4,6 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/navigation";
 import { NavBar } from "@/components/sections/navbar";
-import { Footer } from "@/components/sections/footer";
 import { Button } from "@/components/ui/button";
 import HCaptchaInvisible, { type HCaptchaHandle } from "@/components/hcaptcha-invisible";
 import {
@@ -286,7 +285,6 @@ export default function ForgotPasswordPage() {
       </main>
       {/* Invisible CAPTCHA — shared by both phone+email request flows */}
       <HCaptchaInvisible ref={captchaRef} />
-      <Footer />
     </>
   );
 }
