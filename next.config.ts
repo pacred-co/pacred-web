@@ -40,7 +40,11 @@ const SECURITY_HEADERS = [
     key:   "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://hcaptcha.com https://*.hcaptcha.com",
+      // Analytics / ads pixels — keep this list in sync with the env-driven
+      // tracking pixels wired into <head> (Google Ads, GA4, Meta Pixel, MS
+      // Clarity, Cloudflare beacon, LINE Tag). Missing entries flood the
+      // browser console with CSP violations even though the page still works.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://hcaptcha.com https://*.hcaptcha.com https://www.clarity.ms https://*.clarity.ms https://connect.facebook.net https://*.facebook.net https://static.cloudflareinsights.com https://*.line-scdn.net",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
@@ -61,6 +65,25 @@ const nextConfig: NextConfig = {
   },
   images: {
     qualities: [75, 92],
+  },
+
+  /**
+   * Server Actions used for file uploads (juristic register: ภพ20 +
+   * ใบรับรองบริษัท + บัตรประชาชนกรรมการ — see actions/auth.ts
+   * `uploadJuristicDoc`) need a body-size limit ABOVE the validator's
+   * `MAX_SIZE` (10 MB).
+   *
+   * Next 16 default is 1 MB — silently rejected ~10 MB file uploads as
+   * "stuck on click", which is exactly the 2026-05-25 prod symptom that
+   * survived the requireGuest() + resume-flow fixes (P0 #2 + #3): no
+   * documents in prod despite users completing Step 1–3. The action's
+   * `if (file.size > MAX_SIZE)` check never runs because the platform
+   * blocks the request body first.
+   */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
   },
 
   async headers() {
