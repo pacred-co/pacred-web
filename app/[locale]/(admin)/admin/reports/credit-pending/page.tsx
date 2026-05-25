@@ -1,42 +1,105 @@
+/**
+ * /admin/reports/credit-pending — เครดิตค้างนำเข้า (Wave 20 P0-4 swap)
+ *
+ * **Wave 20 P0-4 (2026-05-26):** previously this read the rebuilt
+ * `forwarders` + `wallet_transactions` tables — both EMPTY on prod
+ * (the 47K real forwarder rows + 104K wallet rows live on legacy
+ * `tb_forwarder` + `tb_wallet_hs`). Staff saw ฿0 outstanding when in
+ * reality dozens of credit-customers owe money. Same bug class as
+ * Wave 3 P0 #1 (/admin/forwarders rewrite) and Wave 19 (`service-orders`).
+ *
+ * **Legacy semantics:** in `tb_forwarder` the credit-pending set is
+ *   fcredit='1' AND paydeposit != '1'
+ * — i.e. the row was flagged as "ส่งก่อนชำระ" (credit terms · admin set
+ * `fcredit='1'` + status=6 in legacy `pcs-admin/forwarder.php` L1431) but
+ * the deposit ledger has NOT been settled (`paydeposit='1'` = paid in full).
+ *
+ * **Outstanding amount:** the legacy total = `calPriceForwarderMain` —
+ * we reuse our port (`lib/forwarder/outstanding.ts` · Wave 15 P0-3). When
+ * `paydeposit='1'` the outstanding is zero by definition (matches the
+ * same rule on `/admin/forwarders` list).
+ *
+ * **Customer join:** 2-pass `tb_users.in("userid", [...])` — same pattern
+ * as `/admin/forwarders/page.tsx` Wave 3 P0 #1 (PostgREST cannot reliably
+ * auto-join on legacy text FK).
+ *
+ * §0c compliance: every Supabase query destructures { data, error }, logs
+ * + throws on the load-bearing reads so a transient PgBouncer timeout
+ * surfaces a real error instead of silently rendering "🎉 ไม่มีเครดิตค้าง".
+ */
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton } from "@/components/admin/csv-button";
+import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 
-// V-B1 #2: "เครดิตค้างนำเข้า" — forwarders that shipped/arrived/delivered
-// but have NO completed import_payment wallet_transaction yet. Common
-// case: cash-on-delivery customer hasn't paid after delivery.
+export const dynamic = "force-dynamic";
 
 // D1 Phase-B Wave-B5 (sidebar fidelity): sidebar routes 1 SLA queue here
 // — เครดิตเกินกำหนด. The page already segments stuck14 (>=14 days) as a
 // stat card; the real "overdue" threshold in legacy PHP is not yet
 // confirmed (could be per-customer credit_terms vs hardcoded N days), so
-// we surface ?sla= as a chip + banner and leave the query untouched
-// until the rule is decoded.
+// we surface ?sla= as a chip + banner and leave the query untouched.
 const SLA_CFG: Record<string, string> = {
   "overdue": "เครดิตเกินกำหนด",
 };
 
-type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null } | null;
-type FwdRaw = {
-  id: string; f_no: string; status: string; total_price: number; transport_type: string;
-  created_at: string; date_shipped_china: string | null;
-  profile: Profile | Profile[] | null;
+type RawForwarder = {
+  id: number;
+  fdate: string | null;
+  fstatus: string;
+  ftransporttype: string;
+  userid: string;
+  fidorco: string | null;
+  paydeposit: string | null;
+  // Outstanding-calc inputs (Wave 15 P0-3 — calcForwarderOutstanding)
+  ftotalprice:           number | string | null;
+  ftransportprice:       number | string | null;
+  fpriceupdate:          number | string | null;
+  fshippingservice:      number | string | null;
+  pricecrate:            number | string | null;
+  ftransportpricechnthb: number | string | null;
+  priceother:            number | string | null;
+  fdiscount:             number | string | null;
+  fusercompany:          number | string | null;
+  // Display
+  fdatestatus3: string | null;  // ออกจีน
+  fdatestatus4: string | null;  // ถึงไทย
 };
-type Fwd = Omit<FwdRaw, "profile"> & { profile: Profile };
 
-// Statuses that mean "shipped or beyond" — customer should have paid by these points
-const SHIPPED_OR_AFTER = ["shipped_china", "in_transit", "arrived_thailand", "out_for_delivery", "delivered"];
+type RawUser = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
 
-function normP(p: Profile | Profile[] | null): Profile {
-  if (!p) return null;
-  return Array.isArray(p) ? (p[0] ?? null) : p;
-}
+type Row = {
+  id: number;
+  order_no: string;                  // "ออเดอร์ #<id>" — legacy display label
+  f_no_cargo: string | null;          // fidorco — separate Cargo API id
+  status: string;                     // fstatus
+  transport_type: string;
+  created_at: string;
+  date_shipped_china: string | null;
+  outstanding_thb: number;
+  paydeposit: string | null;
+  customer: {
+    userid: string;
+    name: string;
+    member_code: string;
+    phone: string;
+  };
+};
+
 function thb(n: number): string {
   return "฿" + n.toLocaleString("th-TH", { minimumFractionDigits: 2 });
 }
-function daysAgo(iso: string): number {
+function daysAgo(iso: string | null): number {
+  if (!iso) return 0;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
@@ -51,68 +114,100 @@ export default async function CreditPendingReport({
   const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
-  // 1) Fetch shipped+ forwarders in window
+  // 1) Fetch credit-flagged forwarders within date window.
+  //    Credit-pending = fcredit='1' AND paydeposit != '1' (not paid in full).
+  //    Legacy 1431: when admin clicks "ให้เครดิต" the row is set to
+  //    paydeposit='2' (deposit-only paid) + fcredit='1'. "paid in full"
+  //    later flips paydeposit='1'. So our exclude rule = paydeposit != '1'.
   let fq = admin
-    .from("forwarders")
-    .select(`id, f_no, status, total_price, transport_type, created_at, date_shipped_china,
-      profile:profiles!profile_id(member_code, first_name, last_name, phone)`)
-    .in("status", SHIPPED_OR_AFTER)
-    .order("created_at", { ascending: true })
+    .from("tb_forwarder")
+    .select(
+      "id,fdate,fstatus,ftransporttype,userid,fidorco,paydeposit," +
+      "ftotalprice,ftransportprice,fpriceupdate,fshippingservice,pricecrate," +
+      "ftransportpricechnthb,priceother,fdiscount,fusercompany," +
+      "fdatestatus3,fdatestatus4",
+    )
+    .eq("fcredit", "1")
+    .neq("paydeposit", "1")
+    .order("fdate", { ascending: true, nullsFirst: false })
     .limit(2000);
-  if (sp.date_from) fq = fq.gte("created_at", sp.date_from);
-  if (sp.date_to)   fq = fq.lte("created_at", sp.date_to + "T23:59:59");
-  const { data: fData, error: fDataErr } = await fq;
-  if (fDataErr) {
-    console.error(`[forwarders list] failed`, { code: fDataErr.code, message: fDataErr.message });
+  if (sp.date_from) fq = fq.gte("fdate", sp.date_from);
+  if (sp.date_to)   fq = fq.lte("fdate", sp.date_to + "T23:59:59");
+  const { data: fData, error: fErr } = await fq;
+  if (fErr) {
+    console.error(`[tb_forwarder credit-pending list] failed`, {
+      code: fErr.code, message: fErr.message, details: fErr.details,
+    });
+    throw new Error(`Failed to load tb_forwarder (${fErr.code ?? "unknown"}): ${fErr.message}`);
   }
-  const forwarders: Fwd[] = ((fData ?? []) as FwdRaw[]).map((r) => ({ ...r, profile: normP(r.profile) }));
-  const fNos = forwarders.map((f) => f.f_no);
+  const forwarders = (fData ?? []) as unknown as RawForwarder[];
 
-  // 2) Fetch wallet_transactions that ALREADY paid these forwarders
-  const paidSet = new Set<string>();
-  if (fNos.length > 0) {
-    const { data: txData, error: txDataErr } = await admin
-      .from("wallet_transactions")
-      .select("reference_id")
-      .eq("reference_type", "forwarder")
-      .eq("kind", "import_payment")
-      .eq("status", "completed")
-      .in("reference_id", fNos);
-    if (txDataErr) {
-      console.error(`[wallet_transactions list] failed`, { code: txDataErr.code, message: txDataErr.message });
-    }
-    for (const t of (txData ?? []) as Array<{ reference_id: string | null }>) {
-      if (t.reference_id) paidSet.add(t.reference_id);
+  // 2) Customer join (2-pass · same pattern as /admin/forwarders).
+  const useridList = Array.from(new Set(forwarders.map((r) => r.userid).filter(Boolean)));
+  let userMap = new Map<string, RawUser>();
+  if (useridList.length > 0) {
+    const { data: usersRaw, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userid,username,userlastname,usertel")
+      .in("userid", useridList);
+    if (usersErr) {
+      console.error(`[tb_users join] failed`, { code: usersErr.code, message: usersErr.message });
+    } else {
+      userMap = new Map((usersRaw ?? []).map((u) => [u.userid, u as RawUser]));
     }
   }
 
-  // 3) Credit-pending = shipped+ but not yet paid
-  const rows = forwarders.filter((f) => !paidSet.has(f.f_no));
-  const total = rows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+  // 3) Shape rows + compute outstanding.
+  const rows: Row[] = forwarders.map((r) => {
+    const u = userMap.get(r.userid);
+    return {
+      id: r.id,
+      order_no: `ออเดอร์ #${r.id}`,
+      f_no_cargo: r.fidorco,
+      status: r.fstatus,
+      transport_type: r.ftransporttype,
+      created_at: r.fdate ?? "",
+      // Legacy "ออกจากจีน" date = fdatestatus3 (in transit), fall back to
+      // fdatestatus4 (arrived TH) or created_at when neither set.
+      date_shipped_china: r.fdatestatus3 || r.fdatestatus4 || null,
+      outstanding_thb: calcForwarderOutstanding(r),
+      paydeposit: r.paydeposit,
+      customer: {
+        userid: r.userid,
+        name: u ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() : "",
+        member_code: r.userid,  // legacy uses userid (e.g. PR10843) as the customer code
+        phone: u?.usertel ?? "",
+      },
+    };
+  });
+
+  const total = rows.reduce((s, r) => s + r.outstanding_thb, 0);
   const stuck14 = rows.filter((r) => {
     const ref = r.date_shipped_china ?? r.created_at;
     return daysAgo(ref) >= 14;
   }).length;
 
   const csvRows = rows.map((r) => ({
-    f_no:            r.f_no,
-    status:          r.status,
-    customer_member: r.profile?.member_code ?? "",
-    customer_name:   [r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" "),
-    customer_phone:  r.profile?.phone ?? "",
-    total_price:     r.total_price,
+    order_no:        r.order_no,
+    f_no_cargo:      r.f_no_cargo ?? "",
+    status:          legacyForwarderStatusThai(r.status),
+    customer_member: r.customer.member_code,
+    customer_name:   r.customer.name,
+    customer_phone:  r.customer.phone,
+    outstanding:     r.outstanding_thb,
     transport:       r.transport_type,
     shipped_at:      r.date_shipped_china ?? "",
     created_at:      r.created_at,
     days_credit:     daysAgo(r.date_shipped_china ?? r.created_at),
   }));
   const csvCols = [
-    { key: "f_no",            label: "เลขที่ฝากนำเข้า" },
+    { key: "order_no",        label: "ออเดอร์" },
+    { key: "f_no_cargo",      label: "Cargo ID" },
     { key: "status",          label: "สถานะ" },
     { key: "customer_member", label: "รหัสลูกค้า" },
     { key: "customer_name",   label: "ชื่อลูกค้า" },
     { key: "customer_phone",  label: "เบอร์" },
-    { key: "total_price",     label: "ยอดค้างชำระ (บาท)" },
+    { key: "outstanding",     label: "ยอดค้างชำระ (บาท)" },
     { key: "transport",       label: "ประเภทขนส่ง" },
     { key: "shipped_at",      label: "วันที่ออกจากจีน" },
     { key: "created_at",      label: "วันที่สร้าง" },
@@ -128,7 +223,9 @@ export default async function CreditPendingReport({
             เครดิตค้างนำเข้า{slaLabel ? ` — ${slaLabel}` : ""}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            ออกจากจีนแล้ว/ถึงไทย/ส่งแล้ว แต่ยังไม่มี wallet_tx <span className="font-mono">import_payment</span> completed
+            อ่านจาก <span className="font-mono">tb_forwarder</span> WHERE{" "}
+            <span className="font-mono">fcredit=&#39;1&#39;</span> AND{" "}
+            <span className="font-mono">paydeposit ≠ &#39;1&#39;</span> · ยอดค้าง = calPriceForwarderMain (Wave 15 P0-3)
           </p>
         </div>
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
@@ -167,16 +264,16 @@ export default async function CreditPendingReport({
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">🎉 ไม่มีเครดิตค้าง</p>
+          <p className="p-12 text-center text-sm text-muted">ไม่มีเครดิตค้างในช่วงเวลานี้</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-4 py-3">เลขที่</th>
+                  <th className="px-4 py-3">ออเดอร์</th>
                   <th className="px-4 py-3">สถานะ</th>
                   <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3 text-right">ค้างชำระ</th>
+                  <th className="px-4 py-3 text-right">ยอดค้างชำระ</th>
                   <th className="px-4 py-3">ออกจีน</th>
                   <th className="px-4 py-3 text-right">เครดิต</th>
                 </tr>
@@ -189,17 +286,24 @@ export default async function CreditPendingReport({
                     : age >= 14 ? "bg-amber-50 text-amber-700 border-amber-200"
                     : "bg-surface-alt text-muted border-border";
                   return (
-                    <tr key={r.id} className="border-t border-border">
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-4 py-3 font-mono text-xs">
-                        <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">{r.f_no}</Link>
+                        <Link href={`/admin/forwarders/${r.id}`} className="text-primary-600 hover:underline">
+                          {r.order_no}
+                        </Link>
+                        {r.f_no_cargo ? (
+                          <div className="text-[10px] text-muted">Cargo: {r.f_no_cargo}</div>
+                        ) : null}
                       </td>
-                      <td className="px-4 py-3 text-xs">{r.status}</td>
                       <td className="px-4 py-3 text-xs">
-                        <p>{[r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" ") || "—"}</p>
-                        {r.profile?.member_code && <p className="font-mono text-[10px] text-muted">{r.profile.member_code}</p>}
-                        {r.profile?.phone && <p className="text-[10px] text-muted">☎ {r.profile.phone}</p>}
+                        {legacyForwarderStatusThai(r.status) || r.status}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">{thb(Number(r.total_price))}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <div>{r.customer.name || "—"}</div>
+                        <div className="font-mono text-[10px] text-muted">{r.customer.member_code}</div>
+                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.outstanding_thb)}</td>
                       <td className="px-4 py-3 text-xs">
                         {r.date_shipped_china ? new Date(r.date_shipped_china).toLocaleDateString("th-TH") : <span className="text-muted">—</span>}
                       </td>
@@ -216,6 +320,10 @@ export default async function CreditPendingReport({
           </div>
         )}
       </div>
+
+      <p className="text-[11px] text-muted">
+        แสดงไม่เกิน 2,000 แถวต่อหน้า · ใช้ตัวกรองช่วงวันเพื่อจำกัดผลลัพธ์
+      </p>
     </main>
   );
 }
