@@ -275,12 +275,10 @@ export function ForwardersTable({
   rows,
   statusLabel,
   modeLabel,
-  warehouseLabel,
 }: {
   rows: Row[];
   statusLabel: Record<string, string>;
   modeLabel: Record<string, string>;
-  warehouseLabel: Record<string, string>;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());

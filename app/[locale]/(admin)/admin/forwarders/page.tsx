@@ -83,21 +83,6 @@ const FORWARDER_MENUBAR: MenubarItem[] = [
   },
 ];
 
-// Sidebar `?segment=` chip — label-only (Wave-B P0.5 pattern); no SQL
-// filter applied. Keep the keys in sync with the sidebar dropdown.
-// TODO: legacy `tb_forwarder` has no cargo-vs-freight or FCL-vs-LCL
-// explicit column. Flagging cargo-vs-freight is Phase C (or needs a
-// schema extension column on tb_forwarder).
-const SEGMENT_LABEL: Record<string, string> = {
-  "cargo-fcl":     "Cargo · FCL",
-  "cargo-lcl":     "Cargo · LCL",
-  "freight-fcl":   "Freight · FCL",
-  "freight-lcl":   "Freight · LCL",
-  "freight-truck": "Freight · รถ",
-  "freight-sea":   "Freight · เรือ",
-  "freight-air":   "Freight · แอร์",
-};
-
 // Legacy STATUS_LABEL — fStatus values (string in legacy too: char(2))
 const STATUS_LABEL: Record<string, string> = {
   "1":   "รอเข้าโกดังจีน",
@@ -118,12 +103,6 @@ const MODE_LABEL: Record<string, string> = {
   "1": "🚛 รถ",
   "2": "🚢 เรือ",
   "3": "✈️ เครื่องบิน",
-};
-
-// Warehouse name (fwarehousename char(1))
-const WAREHOUSE_LABEL: Record<string, string> = {
-  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
-  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
 };
 
 type SearchParams = {
@@ -609,9 +588,6 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     { v: "p",   l: STATUS_LABEL["p"]!,   n: counts.special },
   ];
 
-  // ภูม brief 2026-05-20 ค่ำ — segment chip (label-only · Wave-B P0.5).
-  const segmentLabel = sp.segment && SEGMENT_LABEL[sp.segment] ? SEGMENT_LABEL[sp.segment] : null;
-
   // 2026-05-21 ภูม brief — back-compat: if old `?segment=cargo-fcl` URL hit
   // is taken, split into the new dual-dimension `service` + `container`.
   let service = sp.service;
@@ -669,7 +645,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           <span className="font-medium">Wave 11 status:</span>{" "}
           ✅ 4 top tabs · 14-column legacy layout · ดู/อัปเดต links · product thumbnail ·
           source badges (users / admin_X / ระบบ) ·{" "}
-          <span className="opacity-75">⏳ Wave 12: "+ เพิ่มรายการให้ลูกค้า" form ·
+          <span className="opacity-75">⏳ Wave 12: &ldquo;+ เพิ่มรายการให้ลูกค้า&rdquo; form ·
           slip upload (ต้อง Supabase Storage bucket จาก ก๊อต)</span>
         </div>
       </div>
@@ -887,7 +863,6 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         rows={rows}
         statusLabel={STATUS_LABEL}
         modeLabel={MODE_LABEL}
-        warehouseLabel={WAREHOUSE_LABEL}
       />
     </main>
     </>
