@@ -483,3 +483,42 @@ Verified end-to-end on dev server: signed-in `incomplete` → `/register` HTTP 2
 - `actions/auth.ts:300-306` — Step 1 `signInWithPassword` call
 - `actions/auth.ts:380-425` — `uploadJuristicDoc()` that never ran in prod for 2 weeks
 - [`docs/learnings/supabase-rls-patterns.md`](supabase-rls-patterns.md) — RLS contexts (why Step 2/3 needs the user-context client)
+
+---
+
+## [2026-05-25 2nd] No `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` → every deploy breaks active tabs
+
+**Context:** Right after the P0 #4 deploy (bodySizeLimit + CSP expand · commit `f6c2ab1d`), a user mid-juristic-signup who had `/register` open in a tab from BEFORE the deploy tapped "ถัดไป" on Step 2. The form button spun forever. No error in console, no failing network call surfaced to the user — but `saveJuristicStep2` never ran on the server.
+
+**Symptom:** Server Action invocation hangs silently. Button shows `Loader2 animate-spin` indefinitely. No `setError` call. DevTools Network panel may show the POST but with no useful response, or nothing at all (depends on browser).
+
+**Root cause:** Server Actions in Next 15+ work by encrypting a reference to each action with a per-build key. The client bundle ships that encrypted ID; the server decrypts it on receipt to know WHICH action to run. **Without `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` set, Next.js generates a fresh random key on every build** — and Vercel rebuilds on every git push. So:
+
+1. User opens `/register` at deploy A → browser caches JS chunks with action IDs encrypted under key K_A.
+2. We push a fix → deploy B promoted on Vercel → server now decrypts with key K_B ≠ K_A.
+3. User's stale tab POSTs `Next-Action: <K_A-encrypted-id>` → server can't decrypt → returns an error that `useTransition` does NOT surface to the UI → `pending` stays `true`.
+
+The action wasn't called at all — but the client thinks it's still running.
+
+**Fix — set the key once and never rotate:**
+```bash
+openssl rand -base64 32
+# paste into Vercel → Project → Settings → Environment Variables
+#   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY = <generated value>
+# apply to Production + Preview (NOT Development unless you want it stable across local restarts)
+```
+
+Once set, every deploy uses the SAME key → action IDs stay valid across deploys → users with open tabs from yesterday can still submit forms today.
+
+**User-side workaround when this happens:** Hard-refresh the tab (Ctrl+Shift+R / Cmd+Shift+R) to fetch fresh HTML + JS chunks with the new key.
+
+**Why this matters next time:**
+- This is **invisible** to the developer doing the deploy — every dev tab is fresh post-deploy. Only mid-flow customers feel it.
+- The longer-running the form, the worse — multi-step signups, large CSV uploads, anywhere `useTransition` wraps an action call.
+- Vercel does NOT auto-stabilize this key; setting the env var is a one-time action and easy to forget.
+- Validate by `curl -I https://yzljakczhwrpbxflnmco.supabase.co/auth/v1/health` (Supabase fast) + checking Vercel function logs for `Failed to decrypt action ID` near the user's hang time.
+
+**Cross-links:**
+- [`docs/env.md`](../env.md) §9.6 — operational instructions
+- [Next.js docs — Server Actions encryption key](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions)
+- Vercel deploy `dpl_HB3MAU3TGBoFykvCLBPy1BHoTxQS` (the P0 #4 deploy that surfaced this)
