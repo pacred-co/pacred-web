@@ -346,77 +346,43 @@ export default async function ServiceOrderPage({
                             <h4 className="text-color">
                               <b>สถานะรายการ</b>
                             </h4>
+                            {/*
+                              Status filter tabs — faithful to legacy shops.php L843-895.
+                              Sprint-24 fix (2026-05-25): the previous code only injected
+                              `active` on q="2", so all other tabs ignored the URL state
+                              and the "ทั้งหมด" tab never highlighted on the bare
+                              /service-order route. All 7 tabs now share the same
+                              `q === <key>` conditional (with `!q` for the "ทั้งหมด"
+                              default). Badge colors match the legacy palette per
+                              shops.php — info / warning / danger / warning / warning /
+                              success / danger — NOT the generic "all-warning" the prior
+                              code had.
+                            */}
                             <ul className="nav nav-tabs nav-underline pcs-tabs">
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order">
-                                  ทั้งหมด
-                                  {countStatusAll > 0 && (
-                                    <div className="pcs-badge2 badge-info pcs-badge-pill">
-                                      {numberLimit(countStatusAll)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=1">
-                                  รอดำเนินการ
-                                  {countStatusF1 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF1)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className={`nav-item tab-sm-center ${q === "2" ? "active" : ""}`}>
-                                <Link className={`nav-link ${q === "2" ? "active" : ""}`} href="/service-order?q=2">
-                                  รอชำระเงิน
-                                  {countStatusF2 > 0 && (
-                                    <div className="pcs-badge2 badge-danger pcs-badge-pill">
-                                      {numberLimit(countStatusF2)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=3">
-                                  สั่งสินค้า
-                                  {countStatusF3 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF3)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=4">
-                                  รอร้านจีนจัดส่ง
-                                  {countStatusF4 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF4)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=5">
-                                  สำเร็จ
-                                  {countStatusF5 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF5)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li className="nav-item tab-sm-center">
-                                <Link className="nav-link" href="/service-order?q=6">
-                                  ออเดอร์ที่ยกเลิก
-                                  {countStatusF6 > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {numberLimit(countStatusF6)}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
+                              {([
+                                { key: "",  label: "ทั้งหมด",         count: countStatusAll, badge: "badge-info" },
+                                { key: "1", label: "รอดำเนินการ",      count: countStatusF1,  badge: "badge-warning" },
+                                { key: "2", label: "รอชำระเงิน",       count: countStatusF2,  badge: "badge-danger" },
+                                { key: "3", label: "สั่งสินค้า",       count: countStatusF3,  badge: "badge-info" },
+                                { key: "4", label: "รอร้านจีนจัดส่ง",   count: countStatusF4,  badge: "badge-warning" },
+                                { key: "5", label: "สำเร็จ",           count: countStatusF5,  badge: "badge-success" },
+                                { key: "6", label: "ออเดอร์ที่ยกเลิก", count: countStatusF6,  badge: "badge-warning" },
+                              ] as const).map((tab) => {
+                                const isActive = tab.key === "" ? !q : q === tab.key;
+                                const href = tab.key === "" ? "/service-order" : `/service-order?q=${tab.key}`;
+                                return (
+                                  <li key={tab.key || "all"} className={`nav-item tab-sm-center ${isActive ? "active" : ""}`}>
+                                    <Link className={`nav-link ${isActive ? "active" : ""}`} href={href}>
+                                      {tab.label}
+                                      {tab.count > 0 && (
+                                        <div className={`pcs-badge2 ${tab.badge} pcs-badge-pill`}>
+                                          {numberLimit(tab.count)}
+                                        </div>
+                                      )}
+                                    </Link>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                           <div className="hr-dashed"></div>
