@@ -68,6 +68,33 @@ type PRow = {
 type WRow = {
   wallettotal: number | null;
 };
+// Wave 20 P0-1: juristic company info — legacy `tb_corporate` keyed by
+// userid (mirrors the customer-portal `/profile` + `/service-order/add`
+// reads). `corporatestatus` '1' = approved/verified.
+type CRow = {
+  id: number;
+  corporatename: string | null;
+  corporatenumber: string | null;     // tax id (เลขผู้เสียภาษี · 13 digits)
+  corporateaddress: string | null;
+  corporatestatus: string | null;
+};
+// Wave 20 P0-1: shipping addresses — legacy `tb_address` keyed by userid
+// (mirrors `/addresses` page reads). `addressstatus`='1' filters out
+// soft-deleted rows.
+type ARow = {
+  addressid: number;
+  addressname: string | null;
+  addresslastname: string | null;
+  addresstel: string | null;
+  addresstel2: string | null;
+  addressno: string | null;
+  addresssubdistrict: string | null;
+  addressdistrict: string | null;
+  addressprovince: string | null;
+  addresszipcode: string | null;
+  addressnote: string | null;
+};
+type AMain = { addressid: number };
 
 const STATUS_ACTIVE_CFG: Record<string, { label: string; cls: string }> = {
   "1": { label: "ใช้งานอยู่", cls: "bg-green-100 text-green-700 border-green-200" },
@@ -115,14 +142,39 @@ export async function renderLegacyCustomerView(id: string) {
   // fallback instead of the avatar.
   const userImageUrl = await resolveLegacyUrl(u.userpicture, "profile");
 
-  // Wallet balance + recent activity (parallel)
+  // Wallet balance + corporate + addresses + recent activity (parallel).
+  // Wave 20 P0-1 (audit P0-1 · 2026-05-25 ค่ำ): the four extra reads (corp,
+  // addresses, mainAddr, wallet) are the load-bearing detail-page reads —
+  // all destructure `error` per AGENTS §0c. Activity reads (forwarder /
+  // shop / yuan) are best-effort recents — a transient error there falls
+  // through to an empty list rather than blowing up the page.
   const [
-    { data: walletRaw },
-    { data: forwarderRows },
-    { data: shopRows },
-    { data: yuanRows },
+    walletRes,
+    corpRes,
+    addrRes,
+    mainAddrRes,
+    forwarderRes,
+    shopRes,
+    yuanRes,
   ] = await Promise.all([
     admin.from("tb_wallet").select("wallettotal").eq("userid", u.userid).maybeSingle(),
+    admin
+      .from("tb_corporate")
+      .select("id, corporatename, corporatenumber, corporateaddress, corporatestatus")
+      .eq("userid", u.userid)
+      .maybeSingle(),
+    admin
+      .from("tb_address")
+      .select("addressid, addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
+      .eq("userid", u.userid)
+      .eq("addressstatus", "1")
+      .order("addressid", { ascending: false })
+      .limit(20),
+    admin
+      .from("tb_address_main")
+      .select("addressid")
+      .eq("userid", u.userid)
+      .maybeSingle(),
     admin
       .from("tb_forwarder")
       .select("id,fdate,fidorco,fcabinetnumber,fstatus,ftotalprice")
@@ -143,7 +195,38 @@ export async function renderLegacyCustomerView(id: string) {
       .limit(10),
   ]);
 
-  const wallet = (walletRaw as unknown as WRow | null) ?? null;
+  // §0c — surface real errors on the load-bearing reads (wallet · corp ·
+  // addresses · mainAddr) by throwing into Next's error boundary. A 404
+  // is reserved for "user genuinely missing from tb_users" (handled above).
+  // Activity reads are best-effort (errors degrade silently to empty list).
+  for (const [label, res] of [
+    ["tb_wallet", walletRes],
+    ["tb_corporate", corpRes],
+    ["tb_address", addrRes],
+    ["tb_address_main", mainAddrRes],
+  ] as const) {
+    if (res.error) {
+      console.error("[legacy-view] query failed", {
+        userid: u.userid,
+        table: label,
+        code: res.error.code,
+        message: res.error.message,
+        details: res.error.details,
+        hint: res.error.hint,
+      });
+      throw new Error(
+        `legacy-view: failed to load ${label} for ${u.userid} — ${res.error.code ?? "unknown"}: ${res.error.message}`,
+      );
+    }
+  }
+
+  const wallet = (walletRes.data as unknown as WRow | null) ?? null;
+  const corp = (corpRes.data as unknown as CRow | null) ?? null;
+  const addresses = (addrRes.data ?? []) as unknown as ARow[];
+  const mainAddrId = (mainAddrRes.data as AMain | null)?.addressid ?? null;
+  const forwarderRows = forwarderRes.data;
+  const shopRows = shopRes.data;
+  const yuanRows = yuanRes.data;
   const isJuristic = u.usercompany === "1";
   const fullName = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—";
   const active = u.useractive ?? "1";
@@ -190,7 +273,7 @@ export async function renderLegacyCustomerView(id: string) {
               ) : null}
             </div>
             <p className="text-xs text-muted mt-1">
-              Wave 7 read-only · status mutate + rate-custom editor → Wave 8
+              Wave 20 P0-1 · `tb_*` schema · status mutate / credit-line editor → Phase C
             </p>
           </div>
         </div>
@@ -228,6 +311,80 @@ export async function renderLegacyCustomerView(id: string) {
           </Link>
         </div>
       </div>
+
+      {/* Wave 20 P0-1: deferred-mutation banner. The legacy view is
+          read-only by design — credit-line · status mutate · assign-rep ·
+          impersonation panels relied on the rebuilt `profiles.id` (uuid)
+          and don't apply to the ~8,898 migrated PCS customers. Edit
+          actions are tracked as separate audit items + Phase C work. */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+        <strong>หมายเหตุ:</strong> หน้านี้อ่านอย่างเดียว (Wave 20 schema port).
+        การอนุมัติ / ระงับ / แก้ไขข้อมูล / โอนเซลล์ → ใช้หน้าย่อยเฉพาะทาง
+        (<Link href="/admin/customers/transfer-rep" className="underline">ย้ายเซลล์</Link>
+        {" · "}
+        <Link href="/admin/customers/pending" className="underline">รายการรออนุมัติ</Link>)
+        หรือรอ Phase C สำหรับ inline editor.
+      </div>
+
+      {/* Wave 20 P0-1: juristic company info (tb_corporate) — only render
+          when usercompany='1' AND a corporate row exists. */}
+      {isJuristic && corp ? (
+        <Section title="ข้อมูลบริษัท (นิติบุคคล)">
+          <div className="p-4 grid sm:grid-cols-2 gap-4 text-sm">
+            <KV label="ชื่อบริษัท" value={corp.corporatename ?? "-"} />
+            <KV label="เลขผู้เสียภาษี" value={corp.corporatenumber ?? "-"} mono />
+            <KV
+              label="สถานะอนุมัติ"
+              value={corp.corporatestatus === "1" ? "อนุมัติแล้ว" : "รออนุมัติ"}
+            />
+            <KV label="ที่อยู่บริษัท" value={corp.corporateaddress ?? "-"} />
+          </div>
+        </Section>
+      ) : isJuristic ? (
+        <Section title="ข้อมูลบริษัท (นิติบุคคล)">
+          <Empty>ลูกค้าเลือกประเภทนิติบุคคลแต่ยังไม่ได้กรอกข้อมูลบริษัท</Empty>
+        </Section>
+      ) : null}
+
+      {/* Wave 20 P0-1: shipping addresses (tb_address) — show default
+          flag from tb_address_main. */}
+      <Section title={`ที่อยู่จัดส่ง (${addresses.length})`}>
+        {addresses.length === 0 ? (
+          <Empty>ยังไม่มีที่อยู่จัดส่ง</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {addresses.map((ad) => {
+              const isMain = ad.addressid === mainAddrId;
+              const recipient = `${ad.addressname ?? ""} ${ad.addresslastname ?? ""}`.trim() || "-";
+              const phones = [ad.addresstel, ad.addresstel2].filter(Boolean).join(" · ") || "-";
+              const line = [
+                ad.addressno,
+                ad.addresssubdistrict ? `ต.${ad.addresssubdistrict}` : null,
+                ad.addressdistrict ? `อ.${ad.addressdistrict}` : null,
+                ad.addressprovince ? `จ.${ad.addressprovince}` : null,
+                ad.addresszipcode,
+              ].filter(Boolean).join(" ");
+              return (
+                <li key={ad.addressid} className="px-4 py-3 text-sm space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{recipient}</span>
+                    {isMain ? (
+                      <span className="rounded-full bg-primary-500 text-white px-2 py-0.5 text-[10px]">
+                        ที่อยู่หลัก
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted">📞 {phones}</p>
+                  <p className="text-xs">{line || "-"}</p>
+                  {ad.addressnote ? (
+                    <p className="text-xs text-muted italic">หมายเหตุ: {ad.addressnote}</p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Section>
 
       {/* Recent forwarders */}
       <Section title={`ฝากนำเข้าล่าสุด (${fws.length})`} viewAllHref={`/admin/forwarders?focus=search&q=${u.userid}`}>
