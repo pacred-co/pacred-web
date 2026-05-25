@@ -651,3 +651,119 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
 **Cross-links:**
 - Commit `a8db8b2e` — the refactor
 - File: `app/[locale]/(auth)/register/page.tsx` (server wrapper, ~60 lines) + `register-client.tsx` (the original 1137-line client moved + propified)
+
+---
+
+## [2026-05-26] Route-group chrome leak — `<FloatingTabs />` in `[locale]/layout.tsx` rendered on every route
+
+**Context:** Sprint-25. The owner reviewed the customer portal + admin + auth pages and said *"footter หลุดเข้ามาเยอะอยู่นะ ในหลังบ้านอะ มันไม่ควรหลุดเข้ามานะ"* — the marketing LINE chat bubble + mobile CTA quick-tabs (`<FloatingTabs />`) and the big marketing `<Footer />` were rendering on protected portal pages, admin pages, and auth pages where they shouldn't appear. Commit `691940b`.
+
+**Symptom:** On `/dashboard`, `/service-order`, `/wallet`, `/admin/*`, `/login`, `/forgot-password`, `/complete-profile`, `/reset-password` etc., users saw at the bottom: (a) a floating LINE chat-bubble + mobile CTA quick-tabs (`<FloatingTabs />`), AND (b) the marketing Footer with all the sales contact info / social media / sitemap. Neither belongs on internal/transactional surfaces.
+
+**Root cause — two distinct leaks:**
+
+1. **`<FloatingTabs />` was mounted in `app/[locale]/layout.tsx`** — i.e. at the locale level, the parent of EVERY route group. The Next App Router renders the chain `[locale]/layout > (group)/layout > page` for every page, so any chrome component placed in the locale layout shows on every page under that locale. **Route groups don't isolate parent chrome** — they only nest their own. A common misconception is that "the `(public)` group is sandboxed from `(protected)`" — they're sandboxed for **layouts they declare**, but they all share whatever the locale layout renders.
+
+2. **`<Footer />` was hard-coded in 17 individual page files** — every protected page (`(protected)/notifications/page.tsx`, `(protected)/orders/page.tsx`, etc.), the auth `/forgot-password`, and the root-locale `/complete-profile` + `/reset-password` each ended with `<Footer />`. There was no architectural gate; each page author duplicated the import.
+
+**Fix (the route-group-as-chrome-scope pattern):**
+
+```tsx
+// app/[locale]/layout.tsx — REMOVE <FloatingTabs /> from here
+// ❌ Before: import { FloatingTabs } from "@/components/sections/floating-tabs";
+
+return (
+  <NextIntlClientProvider messages={clientMessages}>
+    <LocaleHtmlLang />
+    {/* ❌ Before: <FloatingTabs /> here = renders on EVERY locale route */}
+    {children}
+  </NextIntlClientProvider>
+);
+
+// app/[locale]/(public)/layout.tsx — NEW FILE, mount marketing chrome here
+import { FloatingTabs } from "@/components/sections/floating-tabs";
+
+export default function PublicLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <FloatingTabs />
+    </>
+  );
+}
+```
+
+For `<Footer />` we deleted the 17 hard-coded imports + JSX usages from non-public pages. The marketing `(public)/page.tsx` etc. keep theirs — they're inside the right group. `(protected)/layout.tsx` keeps `<PcsFooterNav />` because that's the LEGACY mobile bottom-nav for the customer portal, a separate component from the marketing Footer, and it IS at the right layer.
+
+**Why this matters next time:**
+
+- **Rule: components that render visible chrome (header / footer / floating widgets / CTA bars) must live in a route-group layout, not in `[locale]/layout.tsx`** — unless they're truly global (the auth-aware `<NavBar />` is the canonical exception since it lives in every group's layout independently and is auth-aware).
+- **Early-warning sign:** if you're tempted to add `if (pathname.startsWith('/admin'))` or `if (!isPublicRoute)` inside a layout-level chrome component to "conditionally hide" — STOP. That's a smell that the component is mounted at the wrong layer. Move it down into the route group that actually wants it.
+- **Detection grep:** `grep -rn 'from "@/components/sections/footer"' app/\[locale\]` should show ONLY `(public)/*` matches. Anything else outside `(public)` is a leak.
+- **The hard-coded-per-page anti-pattern** (cause #2) is its own smell — when 17 files import the same chrome component at the bottom of their JSX, the chrome belongs in the layout, full stop. A single edit gates 17 pages.
+
+**Cross-links:**
+- Commit `691940b` — Sprint-25 fix (20 files changed, 32+/38−)
+- Files: `app/[locale]/layout.tsx`, NEW `app/[locale]/(public)/layout.tsx`, 17 page files (mostly `(protected)/*/page.tsx`)
+- Sibling rule (admin chrome): `app/[locale]/(admin)/layout.tsx` already mounts its own admin chrome at the group level — that's the correct pattern; the marketing-side just hadn't caught up.
+
+---
+
+## [2026-05-26] Customer-table mobile-collapse without DataTables-Responsive JS
+
+**Context:** Sprint-26. Owner: *"ทำ responsive mobile"*. On 4G mobile the customer's `/service-order` list (the ฝากสั่งซื้อสินค้า table) overflowed 360-390px viewports — Chinese product titles wrapped vertically character-by-character because each of 7 cols got squeezed to ~50px, and every row sprouted a "คลิกดูเพิ่มเติม" hint that promised an expand-on-tap which never fired. Commit `fd1ffd9`.
+
+**Symptom triad:**
+1. 7-column table, total intrinsic width ~570px, painting in full inside a 375px viewport with horizontal overflow.
+2. `<th class="none">` columns (date / orderno / status / price) still visible despite the class — that class is meant to mark "hideable on small screens".
+3. The legacy `.tr1::after { content: " \A คลิกดูเพิ่มเติม"; }` pseudo painted on every ID cell promising tap-to-expand, but tapping did nothing.
+
+**Root cause:** the legacy PHP page was built around the **DataTables-Responsive jQuery plugin** which, at runtime, would (a) read `<th class="none">` and hide those columns under the responsive breakpoint, (b) add a `+` widget bound to a click handler that expands the hidden cols inline below the row. Pacred is server-rendered + no jQuery → the plugin never runs. But the plugin's CSS shipped in 5 stylesheets (`shops.css`, `cart.css`, `service-import.css`, `payment.css`, `forwarder.css`) and those rules are now dead promises:
+
+- The `<th class="none">` class is a plain class with no default browser meaning → cols stay visible.
+- The `.tr1::after` content is decorative — without the JS handler, it's a misleading hint.
+
+**Fix — pure-CSS emulation in `legacy-overrides.css` §11 (the canonical D1 override sheet):**
+
+```css
+/* Kill the dead-promise hint globally — all 5 stylesheets shadow this. */
+.pcs-legacy .tr1::after,
+.pcs-legacy-body .tr1::after { content: none !important; }
+
+@media (max-width: 767.98px) {
+  /* Honour the `<th class="none">` semantic — the legacy markup is right,
+     the plugin just isn't there to enforce it. */
+  .pcs-legacy table.dataTable thead th.none { display: none !important; }
+
+  /* CSS can't reach a `td` from its `th` — there's no parent/sibling
+     selector that walks the column. So per-page modifier classes
+     (`.pcs-shops-page`) wrap the page and we spell out which td positions
+     correspond to the `th.none` cols on THAT page. shops.php has cols
+     2/3/5/6 = none; payment.php has cols 2/3/4/5 = none (different
+     mapping → different rule under a different modifier). */
+  .pcs-shops-page table#myTable tbody td:nth-child(2),
+  .pcs-shops-page table#myTable tbody td:nth-child(3),
+  .pcs-shops-page table#myTable tbody td:nth-child(5),
+  .pcs-shops-page table#myTable tbody td:nth-child(6) {
+    display: none !important;
+  }
+}
+```
+
+The page wrapper picks up the modifier: `<div className="pcs-legacy pcs-shops-page">`. Information isn't lost because each legacy page's "main column" (col 4 on shops.php) already has a `<div className="d-block d-sm-none">` block that duplicates date / orderno / status / price inline — that was the legacy's manual fallback for the collapsed-row "details" view, designed to be visible alongside whatever the plugin painted. With the cols collapsed, the inline block becomes the SOLE mobile renderer of that data → no duplicate.
+
+**Bonus fix in the same media query — the status-tab strip:**
+
+Legacy `style.css` line 1015 forces `.tab-sm-center { width: 50% }` at `<578px` — 7 status tabs into a 2-column grid leaves the 7th hanging on its own row. Override to single-row horizontal `scroll-snap-type: x mandatory; flex-wrap: nowrap; overflow-x: auto` — customer swipes through tabs (iOS Mail / Calendar pattern). Hides scrollbar via `scrollbar-width: none` + `::-webkit-scrollbar { display: none }`.
+
+**Why this matters next time:**
+
+- **When you port a legacy DataTables / Bootstrap-Responsive table** to React + SSR (no jQuery), the chain to look for is: `<table class="dataTable dtr-inline">`, `<th class="all|none">`, `.tr1::after { content: "...คลิกดูเพิ่มเติม" }`. ALL THREE are dead promises. Search legacy-overrides.css §11 for the canonical pure-CSS replacement.
+- **Selector limitation:** CSS can't say "td under a th with class X". You have two options: (a) add a class to each td server-side at render time (verbose markup), or (b) use a per-page modifier wrapper + spell out `td:nth-child(N)` positions. The codebase uses (b) for D1 because the legacy markup is unchanged.
+- **Faithful-port intent intact** — only the CSS layer changes. `<th class="none">`, `<th class="all">`, `class="tr1"`, the `.d-block.d-sm-none` mobile-summary block — all preserved 1:1 with the legacy PHP, so the next 1:1 audit (`legacy-fidelity-check` skill) still passes.
+- **Detection grep:** `grep -rn 'tr1::after' public/legacy` will find the 5 dead rules; `grep -rn '<th class="none"\|<th className="none"' app` will find the dataTables-Responsive-expecting markup. If either grep returns hits AND a customer reports a mobile overflow → you've hit this.
+
+**Cross-links:**
+- Commit `fd1ffd9` — Sprint-26
+- Files: `public/legacy/pcs/legacy-overrides.css` §11 + `public/legacy/pcs/shops.css` mobile media query + `app/[locale]/(protected)/service-order/page.tsx` (wrapper className gains `pcs-shops-page`)
+- Same pattern applies to `/service-payment` (cols 2/3/4/5 = none), `/service-import/pending` (cols 2/4/5/6 = none), `/wallet/history` — when those get the responsive treatment, add `.pcs-payment-page` / `.pcs-forwarder-page` / `.pcs-wallet-page` modifiers + per-page `td:nth-child` rules in legacy-overrides.css §11 (already comment-stubbed there).
