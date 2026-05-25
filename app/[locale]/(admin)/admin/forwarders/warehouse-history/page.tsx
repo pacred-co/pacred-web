@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
+import { TopMenuReport } from "@/components/admin/top-menu-report";
 import {
   WarehouseHistoryRelinkButton,
   WarehouseHistoryDeleteButton,
@@ -10,54 +11,15 @@ import {
 } from "./warehouse-history-row-actions";
 
 /**
- * Admin > "ประวัติเข้าโกดังไทย" — a FAITHFUL 1:1 TRANSCRIPTION of
- * the legacy PCS Cargo admin `pcs-admin/forwarder-import-warehouse.php`
- * default view (L1-606), per D1 / ADR-0017 + the faithful-port
- * transcription runbook (`docs/runbook/faithful-port-transcription.md`
- * §8 — admin pattern).
+ * Admin > "ประวัติเข้าโกดังไทย" — Wave 20 P1 Tailwind v4 rewrite of the
+ * Wave 13 faithful-port (was 1141 LOC Bootstrap-4 + DataTables verbatim).
  *
- * This is the warehouse barcode-scan event log — every time a parcel
- * is scanned-in at the Thailand warehouse `tb_forwarder_import2` gets
- * an event row (keyed off the legacy `keysearch` tracking string).
- * The view groups two parts:
- *   1. ORPHAN scans  — rows where the scanner couldn't auto-link to
- *      a parent `tb_forwarder` (fID IS NULL). Warehouse staff click
- *      "ค้นหาและเชื่อมรายการ" to manually attach to a forwarder
- *      record (legacy AJAX, deferred to Server Actions here).
- *   2. MATCHED scans — rows that successfully linked to a forwarder;
- *      the row displays the customer, container, status, address and
- *      box-count delta (เกินมา/ขาดอีก) plus the dupe warning when
- *      the same tracking is on multiple forwarders.
- * Warehouse staff + ops use this to verify a parcel actually got
- * scanned-in (vs lost), to look up the wave/lot a forwarder arrived
- * on, and to investigate scan errors. The sidebar badge
- * `forwarderWhError` (orphan count) is the queue this page clears.
- *
- * The JSX below is the exact HTML structure
- * `forwarder-import-warehouse.php` renders — same Bootstrap-4 markup,
- * same elements, same labels (Thai hardcoded), same column order. The
- * visual identity comes from the legacy admin CSS, brought in
- * verbatim as the static `.pcs-legacy`-scoped
- * `public/legacy/pcs/admin/admin-base.css` (the shared admin chrome —
- * established by the admin-table pilot) and
- * `public/legacy/pcs/admin/warehouse-history.css` (the page-specific
- * inline `<style>` block from L45-76), both loaded via plain
- * `<link rel="stylesheet">` so they bypass the app's Tailwind v4 /
- * PostCSS pipeline (the rule da4cd79 set).
- *
- * `forwarder-import-warehouse.php` source structure transcribed here:
- *   - Title bar      L39 (window/page title)
- *   - Breadcrumb     L85-94
- *   - Top-menu       L106-108 → include `pcs-admin/include/pages/oop/
- *                                top-menu-report.php` (the 11-link
- *                                report nav — ประวัติเข้าโกดังไทย,
- *                                รายงานตู้, หมายเหตุสั่งซื้อ, …)
- *   - Date filter    L109-123 (form + 3-mode date controls)
- *   - Add CTA        L124-135 ("สแกนรายการเพิ่ม" → barcode-d-import)
- *   - DataTable      L137-351 — two-section table:
- *                       · L182-232 — orphan rows (fID IS NULL)
- *                       · L233-348 — matched rows
- *   - Bottom CTAs    L353-356 — print + คำแนะนำ modal trigger
+ * AGENTS §0a — workflow vs UI:
+ *   We KEEP all legacy logic (schema reads · 3-mode date filter ·
+ *   keysearch dedup · cover thumbnails · scan-event grouping) and
+ *   REPLACE the Bootstrap-4/jQuery/DataTables chrome with Pacred
+ *   Tailwind tokens, mirroring sister pages /admin/forwarders +
+ *   /admin/report-cnt.
  *
  * Data — every `forwarder-import-warehouse.php` mysqli query
  * transcribed 1:1 to the ported legacy `tb_*` schema (Supabase,
@@ -72,14 +34,6 @@ import {
  *   - $sql dupes  → tb_forwarder WHERE fTrackingCHN=? (per row)
  *                   (L248-258 — the "มีรายการซ้ำ" badge query)
  *   - tb_users LEFT JOIN — coid for the badgeVIP2 rendering
- *     (L143-144 of the legacy SELECT)
- *
- * Auth — runbook §3 says keep the Pacred auth chain. The legacy
- * gate is implicit (any logged-in admin can view) — but the action
- * buttons + the data are warehouse-team material. Closest Pacred V3
- * RBAC roles = `warehouse` (the scanning team) + `ops` (cs/import
- * admin) + `super` (implicit via requireAdmin). Same role set as the
- * sister cargo-ops pages.
  *
  * URL filters (transcribed from L111-121, L147-161) — exposed as
  * search params on this Next.js route, same query-string shape as
@@ -87,50 +41,22 @@ import {
  *   ?historyTable=true&date=YYYY-MM-DD%20-%20YYYY-MM-DD
  *                          → date-range filter
  *   ?historyTableAll=true  → no date filter (all data)
- *   (none)                 → default = today (Y-m-d - Y-m-d)
+ *   (none)                 → default = last 7 days (Wave 20 qw2 ·
+ *                            commit 9cf775d)
  *
- * Rebrand: legacy `PCS Cargo Admin` window title → `PR Cargo
- * Admin`; everything else is verbatim Thai. The PCS-scrub stays
- * API-switchover-gated (CLAUDE.md / ADR-0017) and is NOT a
- * faithful-port concern; "branding text + member codes only".
+ * Wave 21 deferred (with clear UI banner, not silently stubbed):
+ *   - Bulk-print "พิมพ์จากหน้ากล่อง" PDF generation — backend not yet built;
+ *     button rendered but disabled with banner.
+ *   - "Mark as no-match" sentinel write (tb_forwarder_import2.fid='0') —
+ *     not in Wave 13 server action surface; deferred.
+ *   - คำแนะนำการใช้งาน modal — empty in legacy too (L371-383); dropped
+ *     from this rewrite (zero content to preserve).
  *
- * Not transcribed (deliberate · documented for the pilot):
- *   - The `updateIm` POST handler (L3-37) — manually links an
- *     orphan scan to a `tb_forwarder` row (the staff-side fix-up
- *     for scans that couldn't auto-match). Becomes a Server Action
- *     on a follow-up. The "ค้นหาและเชื่อมรายการ" button is rendered
- *     so the markup looks identical, but the click handler is wired
- *     in a follow-up. Affected the `tb_forwarder.fStatus -> 4`
- *     transition + `fDateStatus4`/`fPallet`/`adminIDUpdate` write.
- *   - The `deleteForwarderIM()` jQuery+AJAX delete (L513-543) —
- *     deferred to a Server Action; the "ลบยิงเข้า" button is in the
- *     markup but the click handler is a follow-up.
- *   - The `searchForwarderIm()` jQuery+AJAX modal opener (L545-554)
- *     — same deferral; same button-only-markup rule.
- *   - The "พิมพ์จากหน้ากล่อง" submit-to-printAll bulk print + the
- *     DataTables row-checkbox column (L353-358, L431-449) — those
- *     plugins (jquery-datatables-checkboxes, dataTables.responsive,
- *     daterangepicker, magnific-popup) are not in the Pacred
- *     dependency tree. The static markup carries the same wrapper
- *     classes (`.dataTables_wrapper`, `#myTable`, `.dt-buttons`)
- *     and the CSS reproduces the filter chrome so the screen looks
- *     identical at rest. Functional sort/filter/bulk-print is a
- *     follow-up (likely a small React DataTables shim).
- *   - The SweetAlert toasts after add/error (L568-605) — wired
- *     together with the Server Actions.
- *   - The "คำแนะนำการใช้งาน" recommendation modal (L371-383) — empty
- *     in the legacy too (modal-body has no content). Markup
- *     preserved so the open/close hooks remain.
- *   - The dupe-aggregation post-loop (L335-346 — count
- *     `tb_forwarder` rows by `fCabinetNumber`) — the legacy builds
- *     `$arrDataIm` but never displays it (commented-out print_r);
- *     skipped here, can be re-introduced together with whatever
- *     report drives it.
- *   - The top-menu badge counts (`countErrorF4`, `countWaiting`,
- *     `countNoteShop`, …) used by `top-menu-report.php` — those
- *     all come from external admin-globals that aren't in scope
- *     for this pilot; rendered with zero counts so the labels show
- *     but no badge. Wiring badges is a follow-up.
+ * Already wired (Wave 13 server actions in
+ * actions/admin/warehouse-history.ts):
+ *   - "ค้นหาและเชื่อมรายการ" relink modal (orphan rows)
+ *   - "ลบยิงเข้า" delete (both sections)
+ *   - "ดูข้อมูล / อัปเดต" detail links (matched rows)
  */
 
 export const dynamic = "force-dynamic";
@@ -138,12 +64,10 @@ export const dynamic = "force-dynamic";
 // ============================================================================
 // Helpers inlined verbatim — pure functions ported from the legacy admin
 // includes (`pcs-admin/include/function.php`). Kept inline (not extracted
-// to lib/) because this is a pilot; the lift-to-`lib/` happens after a few
-// admin pilots show the repeated callers.
+// to lib/) because they're page-local and the rewrite scope is single-file.
 // ============================================================================
 
-/** Legacy PHP `number_format($n, 2)` — produces "1,234.56" thousand-grouped.
- *  Used inside priceWaiting (L301, function.php L875). */
+/** Legacy PHP `number_format($n, 2)` — produces "1,234.56" thousand-grouped. */
 function numberFormat2(n: number | string | null | undefined): string {
   const v = typeof n === "string" ? Number(n) : (n ?? 0);
   if (Number.isNaN(v)) return "0.00";
@@ -170,73 +94,55 @@ function nameProductsType(t: string | null): string {
 }
 
 /** Legacy `nameTransportType2($int)` — function.php L660-668.
- *  Returns the HTML <span> badge string. */
+ *  Returns a Tailwind <span> pill. */
 function NameTransportType2({ t }: { t: string | null }) {
-  switch (t) {
-    case "1": return <span className="badge badge-info badge-pill">ทางรถ</span>;
-    case "2": return <span className="badge badge-success badge-pill">ทางเรือ</span>;
-    default:  return <>ไม่พบข้อมูล</>;
-  }
+  if (t === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">🚛 ทางรถ</span>;
+  if (t === "2") return <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-medium">🚢 ทางเรือ</span>;
+  return <span className="text-muted text-xs">—</span>;
 }
 
 /** Legacy `statusForwarderAll($fStatus)` — function.php L893-904.
- *  Returns the legacy <span> badge + the 40px icon image. The icon
- *  paths are kept absolute to the legacy CDN (pcscargo.co.th/member/
- *  assets/images/icon/forwarder/forwarder-N.png) as the rule (runbook
- *  §9.2) for legacy WordPress / marketing assets — once ปอน's brand
- *  swap lands, those URLs flip to the Pacred CDN. */
+ *  Wave 20 rewrite: drops the legacy CDN icon image (was a 40px
+ *  pcscargo.co.th asset · unbranded for Pacred); a Tailwind pill alone
+ *  is enough information density and matches the sister page
+ *  `/admin/forwarders` status chips. */
 function StatusForwarderAll({ s }: { s: string | null }) {
   const map: Record<string, { cls: string; text: string }> = {
-    "1": { cls: "badge badge-warning badge-pill", text: "รอสินค้าเข้าโกดังจีน" },
-    "2": { cls: "badge badge-info badge-pill",    text: "สินค้าถึงโกดังจีนแล้ว" },
-    "3": { cls: "badge badge-pink badge-pill",    text: "กำลังส่งมาประเทศไทย" },
-    "4": { cls: "badge badge-brown badge-pill",   text: "สินค้าถึงประเทศไทยแล้ว" },
-    "5": { cls: "badge badge-danger badge-pill",  text: "รอชำระเงิน" },
-    "6": { cls: "badge badge-primary badge-pill", text: "เตรียมส่ง" },
-    "7": { cls: "badge badge-success badge-pill", text: "ส่งแล้ว" },
+    "1": { cls: "bg-amber-100 text-amber-800",   text: "รอสินค้าเข้าโกดังจีน" },
+    "2": { cls: "bg-sky-100 text-sky-800",       text: "ถึงโกดังจีนแล้ว" },
+    "3": { cls: "bg-pink-100 text-pink-800",     text: "กำลังส่งมาไทย" },
+    "4": { cls: "bg-orange-100 text-orange-800", text: "ถึงไทยแล้ว" },
+    "5": { cls: "bg-red-100 text-red-800",       text: "รอชำระเงิน" },
+    "6": { cls: "bg-indigo-100 text-indigo-800", text: "เตรียมส่ง" },
+    "7": { cls: "bg-emerald-100 text-emerald-800", text: "ส่งแล้ว" },
   };
   const m = s ? map[s] : undefined;
-  if (!m) return null;
+  if (!m) return <span className="text-muted text-xs">—</span>;
   return (
-    <>
-      <span className={m.cls}>{m.text}</span>
-      <br />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        className="img-fluid"
-        style={{ maxHeight: 40, padding: 4 }}
-        src={`https://pcscargo.co.th/member/assets/images/icon/forwarder/forwarder-${s}.png`}
-        alt={`forwarder-${s}`}
-      />
-    </>
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${m.cls}`}>
+      {m.text}
+    </span>
   );
 }
 
 /** Legacy `badgeNameWarehouseChina($int)` — function.php L1052-1059 */
 function BadgeNameWarehouseChina({ w }: { w: string | null }) {
-  switch (w) {
-    case "1": return <span className="badge badge-info badge-pill">กวางโจว</span>;
-    case "2": return <span className="badge badge-info badge-pill">อี้อู</span>;
-    default:  return <>ไม่พบข้อมูล</>;
-  }
+  if (w === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">กวางโจว</span>;
+  if (w === "2") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[10px] font-medium">อี้อู</span>;
+  return null;
 }
 
 /** Legacy `badgeVIP2($coID,$conn,$userID)` — function.php L567-596.
- *  Renders the customer-tier badge plus optional SVIP/CPS/นิติ flags.
- *  The full version reads 3 extra tables (tb_rate_custom_cbm / tb_users
- *  for userComparison / tb_corporate) — for this pilot we render the
- *  base coID-tier badge only (PCS hides, others show as a vip pill).
- *  The 3 supplementary flags are a follow-up — the additional queries
- *  per row would N+1 — better to pre-aggregate them once. Markup of the
- *  base badge is faithful. */
+ *  Renders the customer-tier badge. PCS hides; others show as vip pill.
+ *  The 3 supplementary flags (SVIP / CPS / นิติ) are a follow-up — the
+ *  additional queries per row would N+1; better to pre-aggregate them. */
 function BadgeVIP2({ coid }: { coid: string | null }) {
   if (!coid || coid === "PCS") return null;
-  switch (coid) {
-    case "STAR":    return <span className="badge badge-vip badge-pill">STAR</span>;
-    case "DIAMOND": return <span className="badge badge-vip badge-pill">DIAMOND</span>;
-    case "CROWN":   return <span className="badge badge-vip badge-pill">CROWN</span>;
-    default:        return <span className="badge badge-vip badge-pill">{coid}</span>;
-  }
+  return (
+    <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+      {coid}
+    </span>
+  );
 }
 
 // ============================================================================
@@ -289,6 +195,8 @@ type SP = {
   historyTable?: string;
   historyTableAll?: string;
   date?: string;
+  date_from?: string;
+  date_to?: string;
 };
 
 // ============================================================================
@@ -308,20 +216,19 @@ export default async function AdminForwardersWarehouseHistoryPage({
   const admin = createAdminClient();
 
   // ── Date-range resolution — L113, L147-161 ──────────────────────
-  // Legacy parses the `date` input as "YYYY-MM-DD - YYYY-MM-DD".
   // Three modes:
-  //   ?historyTable=true     → use the provided range
+  //   ?historyTable=true     → use the provided range (legacy "date"
+  //                            string OR new date_from/date_to inputs)
   //   ?historyTableAll=true  → no filter
-  //   (default)              → last 7 days (Wave 20 quick-win 2)
+  //   (default)              → last 7 days (Wave 20 qw2)
   //
-  // Wave 20 quick-win 2 (2026-05-25 ค่ำ) — ภูม flagged this as audit
-  // P1 finding: legacy default was "today only", which on slow days
-  // shows an empty page. Staff didn't know to click "ค้นหาข้อมูลทั้งหมด".
-  // Bumped default to last 7 days — matches typical warehouse audit
-  // cycle (yesterday's truck arrives + this morning's scans + 4 day
-  // buffer). Staff who want "today only" can pick a 1-day range on
-  // the date-picker; staff who want "all" still have the existing
-  // ?historyTableAll=true link in the toolbar.
+  // Wave 20 qw2 (2026-05-25 ค่ำ) — ภูม flagged this as audit P1
+  // finding: legacy default was "today only", which on slow days
+  // shows an empty page. Bumped default to last 7 days.
+  // Wave 20 P1 (2026-05-25): Tailwind rewrite also adds native
+  // <input type="date"> fields (in addition to keeping the legacy
+  // "date=YYYY-MM-DD - YYYY-MM-DD" string parser for backwards-compat
+  // with bookmarked URLs).
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const sevenDaysAgo = new Date(today.getTime() - 7 * 86_400_000);
@@ -333,40 +240,23 @@ export default async function AdminForwardersWarehouseHistoryPage({
 
   if (sp.historyTable === "true") {
     mode = "range";
-    const raw = sp.date ?? "";
-    // Legacy substr($_GET['date'],0,10).' - '.substr($_GET['date'],13)
-    startDate = raw.length >= 10 ? raw.slice(0, 10) : todayStr;
-    endDate   = raw.length >= 23 ? raw.slice(13, 23) : startDate;
+    // Prefer the new native date inputs; fall back to the legacy `date=`
+    // string format for bookmarked URLs.
+    if (sp.date_from || sp.date_to) {
+      startDate = sp.date_from || todayStr;
+      endDate   = sp.date_to   || startDate;
+    } else {
+      const raw = sp.date ?? "";
+      startDate = raw.length >= 10 ? raw.slice(0, 10) : todayStr;
+      endDate   = raw.length >= 23 ? raw.slice(13, 23) : startDate;
+    }
   } else if (sp.historyTableAll === "true") {
     mode = "all";
     startDate = null;
     endDate = null;
   }
 
-  // Re-build the displayed input value verbatim — legacy L113.
-  // The default-week mode shows the actual 7-day range in the picker
-  // so staff can see what's being filtered (they can then narrow).
-  const dateInputValue =
-    mode === "range"
-      ? `${startDate} - ${endDate}`
-      : mode === "default-week"
-        ? `${sevenDaysAgoStr} - ${todayStr}`
-        : `${todayStr} - ${todayStr}`;
-
   // ── Build the two scan-event queries (L140-161, L183-184, L234) ──
-  //   SELECT … FROM tb_forwarder_import2 fi
-  //   LEFT JOIN tb_forwarder f ON f.ID = fi.fID
-  //   LEFT JOIN tb_users     u ON u.userID = f.userID
-  //   WHERE … (orphan vs matched)
-  //   [+ date filter on fi2Date]
-  //   ORDER BY fi2Date DESC
-  // Why three sequential queries (scans → forwarders → users) instead
-  // of a single PostgREST embed?
-  //   The full select string with the nested `tb_forwarder(…u:tb_users)`
-  //   embed inflates the PostgREST-generated TypeScript types past the
-  //   compiler's "Type instantiation is excessively deep" gate. Three
-  //   small flat queries + JS-side merge keeps the SQL identical to the
-  //   legacy intent and the types light.
   type ScanRow = {
     id: number;
     fid: number | null;
@@ -380,7 +270,6 @@ export default async function AdminForwardersWarehouseHistoryPage({
   const scanColumns = "id, fid, keysearch, fipallet, fi2amount, fi2date, adminid";
 
   // Date-filter bounds — computed once and applied to both queries.
-  // Wave 20 qw2: default-week mode uses the 7-day range; "all" disables.
   const dateGte =
     mode === "default-week"
       ? `${sevenDaysAgoStr} 00:00:00`
@@ -394,13 +283,21 @@ export default async function AdminForwardersWarehouseHistoryPage({
         ? `${endDate} 23:59:59`
         : null;
 
+  // Wave 20 P1 — `?historyTableAll=true` (mode='all') can return >10k rows
+  // in a large warehouse. Cap at 5k to keep the page responsive; the chip
+  // below banners the cap when applied so staff know to narrow the range.
+  const ALL_MODE_CAP = 5_000;
+
   let matchedScansQ = admin
     .from("tb_forwarder_import2")
     .select(scanColumns)
     .not("fid", "is", null);
   if (dateGte) matchedScansQ = matchedScansQ.gte("fi2date", dateGte);
   if (dateLte) matchedScansQ = matchedScansQ.lte("fi2date", dateLte);
-  const matchedScansFinal = matchedScansQ.order("fi2date", { ascending: false, nullsFirst: false });
+  const matchedScansFinal =
+    mode === "all"
+      ? matchedScansQ.order("fi2date", { ascending: false, nullsFirst: false }).limit(ALL_MODE_CAP)
+      : matchedScansQ.order("fi2date", { ascending: false, nullsFirst: false });
 
   let orphanScansQ = admin
     .from("tb_forwarder_import2")
@@ -408,9 +305,19 @@ export default async function AdminForwardersWarehouseHistoryPage({
     .is("fid", null);
   if (dateGte) orphanScansQ = orphanScansQ.gte("fi2date", dateGte);
   if (dateLte) orphanScansQ = orphanScansQ.lte("fi2date", dateLte);
-  const orphanScansFinal = orphanScansQ.order("fi2date", { ascending: false, nullsFirst: false });
+  const orphanScansFinal =
+    mode === "all"
+      ? orphanScansQ.order("fi2date", { ascending: false, nullsFirst: false }).limit(ALL_MODE_CAP)
+      : orphanScansQ.order("fi2date", { ascending: false, nullsFirst: false });
 
   const [matchedScansRes, orphanScansRes] = await Promise.all([matchedScansFinal, orphanScansFinal]);
+  // §0c — destructure error explicitly (preserved from prior version).
+  if (matchedScansRes.error) {
+    console.error(`[tb_forwarder_import2 matched list] failed`, { code: matchedScansRes.error.code, message: matchedScansRes.error.message });
+  }
+  if (orphanScansRes.error) {
+    console.error(`[tb_forwarder_import2 orphan list] failed`, { code: orphanScansRes.error.code, message: orphanScansRes.error.message });
+  }
   const matchedScans = (matchedScansRes.data ?? []) as unknown as ScanRow[];
   const orphanRaw = (orphanScansRes.data ?? []) as unknown as ScanRow[];
 
@@ -449,7 +356,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
   };
   const forwardersById = new Map<number, ForwarderRow>();
   if (fIds.length > 0) {
-    const forwardersRes = await admin
+    const { data: forwarderRows, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
         "id, fstatus, famount, userid, ftrackingchn, fcabinetnumber, " +
@@ -460,13 +367,15 @@ export default async function AdminForwardersWarehouseHistoryPage({
           "printstatus1, printstatus2, printstatus3",
       )
       .in("id", fIds);
-    for (const r of (forwardersRes.data ?? []) as unknown as ForwarderRow[]) {
+    if (fwdErr) {
+      console.error(`[tb_forwarder list] failed`, { code: fwdErr.code, message: fwdErr.message });
+    }
+    for (const r of (forwarderRows ?? []) as unknown as ForwarderRow[]) {
       forwardersById.set(r.id, r);
     }
   }
 
-  // Look up tb_users.coid for the badgeVIP2 rendering — one IN clause
-  // covering every userID across the matched rows.
+  // Look up tb_users.coid for the badgeVIP2 rendering.
   const userIds = Array.from(
     new Set(
       Array.from(forwardersById.values())
@@ -476,8 +385,14 @@ export default async function AdminForwardersWarehouseHistoryPage({
   );
   const coidByUserId = new Map<string, string | null>();
   if (userIds.length > 0) {
-    const usersRes = await admin.from("tb_users").select("userid, coid").in("userid", userIds);
-    for (const r of (usersRes.data ?? []) as Array<{ userid: string; coid: string | null }>) {
+    const { data: usersRows, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userid, coid")
+      .in("userid", userIds);
+    if (usersErr) {
+      console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
+    }
+    for (const r of (usersRows ?? []) as Array<{ userid: string; coid: string | null }>) {
       coidByUserId.set(r.userid, r.coid);
     }
   }
@@ -524,10 +439,6 @@ export default async function AdminForwardersWarehouseHistoryPage({
   });
 
   // ── Dupe-detection scan (L248-258 inside the matched loop) ──────
-  // Legacy runs SELECT ID FROM tb_forwarder WHERE fTrackingCHN=? per
-  // row → N+1. Pacred pre-aggregates once: collect all trackingCHN
-  // values from the matched rows, query GROUP BY, and the JSX renders
-  // a dupe-warning badge for any tracking with count > 1.
   const trackingChnList = Array.from(
     new Set(
       matchedRows
@@ -537,21 +448,21 @@ export default async function AdminForwardersWarehouseHistoryPage({
   );
   const dupeMap = new Map<string, number[]>();
   if (trackingChnList.length > 0) {
-    const dupeRes = await admin
+    const { data: dupeRows, error: dupeErr } = await admin
       .from("tb_forwarder")
       .select("id, ftrackingchn")
       .in("ftrackingchn", trackingChnList);
-    for (const r of (dupeRes.data ?? []) as Array<{ id: number; ftrackingchn: string }>) {
+    if (dupeErr) {
+      console.error(`[tb_forwarder dupe list] failed`, { code: dupeErr.code, message: dupeErr.message });
+    }
+    for (const r of (dupeRows ?? []) as Array<{ id: number; ftrackingchn: string }>) {
       const arr = dupeMap.get(r.ftrackingchn);
       if (arr) arr.push(r.id);
       else dupeMap.set(r.ftrackingchn, [r.id]);
     }
   }
 
-  // ── Counters for the bottom-of-table chips (L480-486) ───────────
-  // The legacy injects these as DataTables-length appendees via setTimeout;
-  // since the DataTables JS isn't ported, we render them as plain chips
-  // above the table so the numbers remain visible.
+  // ── Counters for the chips strip ────────────────────────────────
   let noBoxAll = 0;
   let countBoxLackAll = 0;
   let countBoxOverflowAll = 0;
@@ -570,20 +481,15 @@ export default async function AdminForwardersWarehouseHistoryPage({
   }
   const noTrackingsAll = orphanRaw.length + matchedRows.length;
 
-  // ── Header banner text for "ผลลัพธ์การค้นหา …" (L116-120) ─────────
+  // ── Header banner text ──────────────────────────────────────────
   const headerText =
     mode === "range"
-      ? `ผลลัพธ์การค้นหา ตั้งแต่วันที่ : ${startDate} - ${endDate}`
+      ? `ผลลัพธ์การค้นหา ตั้งแต่ ${startDate} ถึง ${endDate}`
       : mode === "all"
-      ? "ผลลัพธ์การค้นหา ทั้งหมด "
-      : "ผลลัพธ์การค้นหาวันนี้ ";
+      ? "ผลลัพธ์การค้นหา ทั้งหมด"
+      : `ผลลัพธ์การค้นหา 7 วันล่าสุด (${sevenDaysAgoStr} ถึง ${todayStr})`;
 
-  // ── Cover-image URL — L283-288 ──────────────────────────────────
-  // Wave 13: batch-resolve every forwarder cover filename in parallel.
-  // Legacy schema stores bare filenames in `tb_forwarder.fcover`; after
-  // backfill 06 those live under `forwarder-covers/legacy-shops/`. The
-  // resolver passes through full URLs (legacy mixed both shapes).
-  // Empty / null → null → render the default-cover placeholder image.
+  // ── Cover-image URL (Wave 13 batch resolver) ────────────────────
   const coverUrlByRowId = await resolveLegacyUrlMap(
     matchedRows.map((r) => ({ id: r.id, filename: r.f_fcover })),
     "cover",
@@ -595,9 +501,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
     return { thumb: url, full: url };
   };
 
-  // ── Helpers for the date/time split (L202-203, L263) ────────────
-  // Legacy SELECT yields DATE(fi2Date) + TIME(fi2Date). We split the
-  // ISO timestamp at runtime to match.
+  // ── Helpers for the date/time split ─────────────────────────────
   const splitDateTime = (iso: string | null): { date: string; time: string } => {
     if (!iso) return { date: "", time: "" };
     const parts = iso.includes("T") ? iso.split("T") : iso.split(" ");
@@ -611,542 +515,455 @@ export default async function AdminForwardersWarehouseHistoryPage({
     return `${d}/${m}/${y}`;
   };
 
-  return (
-    <div className="pcs-legacy">
-      {/* Legacy admin chrome + page-specific CSS — both served as
-          static /public/ assets so they bypass Tailwind / PostCSS. */}
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-      <link rel="stylesheet" href="/legacy/pcs/admin/warehouse-history.css" />
+  const totalRows = orphanRaw.length + matchedRows.length;
 
+  return (
+    <>
       {/* Singleton relink-modal host — listens for openRelinkModal()
-          events from the per-row relink buttons. Mounted once here so
-          row buttons stay light-weight (just dispatchEvent + JSX). */}
+          events from the per-row relink buttons. */}
       <WarehouseHistoryModalHost />
 
-      {/* BEGIN: Content — L81-386 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb — L85-96 */}
-          <div className="content-header row">
-            <div className="content-header-left col-12">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item active">ประวัติสินค้าเข้าโกดัง</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      {/* Wave 20 P1 — drop the legacy `nav` from the top so the page reads
+          the same as sister /admin/report-cnt; TopMenuReport already
+          provides the 11-link audit menu. */}
+      <TopMenuReport activeHref="/admin/forwarders/warehouse-history" />
+
+      <main className="p-4 lg:p-6 space-y-4">
+        {/* Header — ADMIN / breadcrumb / title */}
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-500">
+              ADMIN · WAREHOUSE
+            </p>
+            <h1 className="mt-1 text-2xl font-bold">ประวัติเข้าโกดังไทย</h1>
+            <p className="text-sm text-muted mt-0.5">
+              <Link href="/admin" className="hover:underline">หน้าแรก</Link>
+              {" / "}
+              <span className="text-foreground">ประวัติสินค้าเข้าโกดัง</span>
+            </p>
           </div>
+          <Link
+            href="/admin/barcode-d-import"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500 bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition-colors"
+          >
+            + สแกนรายการเพิ่ม
+          </Link>
+        </div>
 
-          {/* ── Content body ── L97-369 ── */}
-          <div className="content-body">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* Filter + CTA row — L105-136 + L106-108 top-menu include */}
-                        <div className="row">
-                          {/* The top-menu-report.php include — 11 report
-                              links (this page is the active first one).
-                              The badge counts come from external admin
-                              globals not in scope here — rendered without
-                              badges; wiring is a follow-up. */}
-                          <div className="col-12 pb-1">
-                            <ul className="nav nav-tabs nav-underline pcs-tabs no-hover-bg text-center">
-                              <li className="nav-item">
-                                <Link
-                                  className="nav-link pcs-menu-report active"
-                                  href="/admin/forwarders/warehouse-history"
-                                >
-                                  <h4 className="text-center">ประวัติเข้าโกดังไทย</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item">
-                                <Link className="nav-link pcs-menu-report" href="/admin/cnt/report">
-                                  <h4 className="text-center">รายงานตู้</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-noteShop">
-                                <Link className="nav-link pcs-menu-report f-noteShop" href={{ pathname: "/admin/forwarders", query: { action: "NoteShop" } }}>
-                                  <h4 className="text-center">หมายเหตุสั่งซื้อ</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-note">
-                                <Link className="nav-link pcs-menu-report f-note" href="/admin/forwarders/notes">
-                                  <h4 className="text-center">หมายเหตุนำเข้า</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-notPhoto">
-                                <Link className="nav-link pcs-menu-report f-notPhoto" href={{ pathname: "/admin/forwarders", query: { q: "4", action: "notPhoto" } }}>
-                                  <h4 className="text-center">ไม่ได้ถ่ายสินค้า</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-notPortage">
-                                <Link className="nav-link pcs-menu-report f-notPortage" href={{ pathname: "/admin/forwarders", query: { q: "4", action: "notPortage" } }}>
-                                  <h4 className="text-center">ไม่ใส่ค่าขนส่ง</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-notContainer">
-                                <Link className="nav-link pcs-menu-report f-notContainer" href={{ pathname: "/admin/forwarders", query: { q: "2", action: "notContainer" } }}>
-                                  <h4 className="text-center">ไม่ใส่เบอร์ตู้</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-NotDateContainerClose">
-                                <Link className="nav-link pcs-menu-report f-NotDateContainerClose" href={{ pathname: "/admin/forwarders", query: { q: "2", action: "NotDateContainerClose" } }}>
-                                  <h4 className="text-center">ไม่ใส่วันที่ปิดตู้</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-NotShipFree">
-                                <Link className="nav-link pcs-menu-report f-NotShipFree" href={{ pathname: "/admin/forwarders", query: { action: "NotShipFree" } }}>
-                                  <h4 className="text-center">ไม่เลือกขนส่งฟรี</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-NotShipFreeError">
-                                <Link className="nav-link pcs-menu-report f-NotShipFreeError" href={{ pathname: "/admin/forwarders", query: { action: "NotShipFreeError" } }}>
-                                  <h4 className="text-center">เลือกขนส่งฟรีผิด</h4>
-                                </Link>
-                              </li>
-                              <li className="nav-item f-CreditError">
-                                <Link className="nav-link pcs-menu-report f-CreditError" href={{ pathname: "/admin/forwarders", query: { action: "fCreditError" } }}>
-                                  <h4 className="text-center">เครติดเกินกำหนด</h4>
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
+        {/* Filter form — 3 modes preserved (default-week / range / all).
+            Native date inputs replace legacy bootstrap-datetimepicker.
+            Submit "ค้นหาข้อมูล" sets ?historyTable=true&date_from=&date_to= ·
+            Submit "ค้นหาข้อมูลทั้งหมด" sets ?historyTableAll=true. */}
+        <form
+          className="rounded-xl border border-border bg-white dark:bg-surface p-3 flex flex-wrap items-end gap-2 text-xs"
+          method="GET"
+          action="/admin/forwarders/warehouse-history"
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted">ตั้งแต่</span>
+            <input
+              type="date"
+              name="date_from"
+              defaultValue={mode === "range" && startDate ? startDate : mode === "default-week" ? sevenDaysAgoStr : ""}
+              className="rounded-lg border border-border px-3 py-2 text-xs"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-wide text-muted">ถึง</span>
+            <input
+              type="date"
+              name="date_to"
+              defaultValue={mode === "range" && endDate ? endDate : mode === "default-week" ? todayStr : ""}
+              className="rounded-lg border border-border px-3 py-2 text-xs"
+            />
+          </label>
+          <button
+            type="submit"
+            name="historyTable"
+            value="true"
+            className="rounded-lg bg-emerald-500 text-white px-3 py-2 text-xs font-medium hover:bg-emerald-600 transition-colors"
+          >
+            ค้นหาข้อมูล
+          </button>
+          <button
+            type="submit"
+            name="historyTableAll"
+            value="true"
+            className="rounded-lg border border-sky-500 bg-white text-sky-700 px-3 py-2 text-xs font-medium hover:bg-sky-50 transition-colors"
+          >
+            ค้นหาข้อมูลทั้งหมด
+          </button>
+          {mode !== "default-week" && (
+            <Link
+              href="/admin/forwarders/warehouse-history"
+              className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt"
+            >
+              กลับ 7 วัน
+            </Link>
+          )}
+          <span className="ml-auto text-[11px] text-red-600 self-end">
+            {headerText}
+          </span>
+        </form>
 
-                          {/* Date filter form — L109-123 */}
-                          <div className="content-header-left col-md-6 col-12">
-                            <div className="text-center text-md-left">
-                              <form className="mb-1" method="GET" action="/admin/forwarders/warehouse-history">
-                                <label className="form-control-label" htmlFor="date">วันที่บันทึกรายการ</label>
-                                <input
-                                  id="date"
-                                  type="text"
-                                  className="form-control2 shawCalRanges"
-                                  name="date"
-                                  defaultValue={dateInputValue}
-                                />
-                                <button
-                                  className="btn btn-outline-success font-12 btn-rounded p-05"
-                                  name="historyTable"
-                                  value="true"
-                                  type="submit"
-                                >
-                                  <i className="fas fa-search"></i> ค้นหาข้อมูล
-                                </button>
-                                <button
-                                  className="btn btn-outline-info font-12 btn-rounded p-05"
-                                  name="historyTableAll"
-                                  value="true"
-                                  type="submit"
-                                >
-                                  <i className="fas fa-search"></i> ค้นหาข้อมูลทั้งหมด
-                                </button>
-                                <span className="font-14 text-danger">{headerText}</span>
-                              </form>
-                            </div>
-                          </div>
-
-                          {/* Add-scan CTA — L124-135 */}
-                          <div className="content-header-right col-md-6 col-12">
-                            <div className="float-md-right">
-                              <div className="text-center text-md-right">
-                                <Link href="/admin/barcode-d-import">
-                                  <button className="btn btn-sm btn-circle btn-success text-white" type="button">
-                                    <i className="ft-plus"></i>
-                                  </button>
-                                  <span className="font-normal text-dark">สแกนรายการเพิ่ม</span>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* ── Summary chips — legacy renders these via
-                            setTimeout into #myTable_length (L480-486).
-                            Pacred renders them statically above the table
-                            so the numbers remain visible without DataTables. */}
-                        <div className="row">
-                          <div className="col-12 p-05">
-                            <span className="ml-1 btn btn-sm font-12 btn-info btn-rounded">
-                              แทรคกิ้งที่ยิง {noTrackingsAll} รายการ
-                            </span>{" "}
-                            <span className="ml-1 btn btn-sm font-12 btn-warning btn-rounded">
-                              กล่องที่ยิง {noBoxAll} รายการ
-                            </span>{" "}
-                            <span className="ml-1 btn btn-sm font-12 btn-danger btn-rounded">
-                              กล่องไม่ครบ {countBoxLackAll} รายการ
-                            </span>{" "}
-                            <span className="ml-1 btn btn-sm font-12 btn-warning btn-rounded">
-                              กล่องเกินมา {countBoxOverflowAll}
-                            </span>{" "}
-                            <span className="ml-1 btn btn-sm font-12 btn-primary btn-rounded">
-                              รายการซ้ำ {countErrorReAll}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* ── DataTable wrapper — L137-359 ── */}
-                        <div className="row">
-                          <div className="col-12 font-12">
-                            <div id="run">
-                              {/* Legacy form submits checkboxes to printAll/.
-                                  The checkbox column + the bulk-print
-                                  workflow are not in this pilot (no
-                                  DataTables JS). Markup kept for parity. */}
-                              <form id="frm-example" action="/admin/forwarders/printAll" method="GET">
-                                <div className="table-responsive p-05">
-                                  <table
-                                    id="myTable"
-                                    className="myTable table display table-bordered table-striped dataTable no-footer dtr-inline"
-                                  >
-                                    <thead>
-                                      <tr className="text-center">
-                                        <th>ID</th>
-                                        <th>วันที่บันทึก</th>
-                                        <th>ข้อมูลสแกน</th>
-                                        <th>รหัสลูกค้า</th>
-                                        <th>รายละเอียด</th>
-                                        <th>ยอดค้างชำระ</th>
-                                        <th>เลขพัสดุ (จีน)</th>
-                                        <th>สถานะ</th>
-                                        <th title="Username Admin ที่อัปเดตสถานะรายการ">อัปเดต</th>
-                                        <th>ตัวเลือก</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {/* ── ORPHAN section (L182-232) ──
-                                          Rows where fi.fID IS NULL — no
-                                          parent forwarder found. */}
-                                      {orphanRaw.map((row) => {
-                                        const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
-                                        return (
-                                          <tr key={`orphan-${row.id}`} className="bg-color">
-                                            <td className="text-center"></td>
-                                            <td className="text-center font-12">
-                                              {scanDate}
-                                              <br />
-                                              {scanTime} น.
-                                            </td>
-                                            <td>{row.keysearch}</td>
-                                            <td>กล่อง : {row.fi2amount}/0</td>
-                                            <td>
-                                              ไม่พบรายการ กรุณาเลือกเชื่อมรายการ
-                                              {/* Relink handler — client
-                                                  island; same markup +
-                                                  data-action-search payload
-                                                  as the legacy. */}
-                                              <WarehouseHistoryRelinkButton
-                                                scanId={row.id}
-                                                keysearch={row.keysearch}
-                                              />
-                                            </td>
-                                            <td className="text-right"></td>
-                                            <td></td>
-                                            <td className="text-center"></td>
-                                            <td className="font-14 text-center">{row.adminid}</td>
-                                            <td className="text-center">
-                                              {/* Delete handler — client
-                                                  island; same markup +
-                                                  data-action-delete payload
-                                                  as the legacy. */}
-                                              <WarehouseHistoryDeleteButton
-                                                scanId={row.id}
-                                              />
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-
-                                      {/* ── MATCHED section (L233-348) ──
-                                          Rows that linked to a parent
-                                          forwarder; full row with customer
-                                          + container + status + address. */}
-                                      {matchedRows.map((row) => {
-                                        const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
-                                        const lacking = row.f_famount != null && row.fi2amount < row.f_famount;
-                                        const over    = row.f_famount != null && row.fi2amount > row.f_famount;
-                                        const dupeIds = row.f_ftrackingchn ? (dupeMap.get(row.f_ftrackingchn) ?? []) : [];
-                                        const hasDupes = dupeIds.length > 1;
-                                        const cover = resolveCover(row.id);
-                                        const sumPrice =
-                                          (Number(row.f_ftotalprice ?? 0) +
-                                            Number(row.f_ftransportprice ?? 0) +
-                                            Number(row.f_fpriceupdate ?? 0) +
-                                            Number(row.f_fshippingservice ?? 0)) -
-                                          Number(row.f_fdiscount ?? 0);
-                                        const volumeTotal =
-                                          row.f_fvolume && row.f_famount
-                                            ? Number(row.f_fvolume) * Number(row.f_famount)
-                                            : null;
-                                        const containerCloseDDMMYYYY = formatDDMMYYYY(row.f_fdatecontainerclose);
-                                        const rowClass =
-                                          `${lacking ? "bg-danger2" : ""} ${hasDupes ? "bg-primary text-white" : ""}`.trim();
-                                        return (
-                                          <tr key={`matched-${row.id}`} className={rowClass}>
-                                            {/* 1 — ID (legacy renders fID) */}
-                                            <td className="text-center">{row.f_id ?? ""}</td>
-                                            {/* 2 — วันที่บันทึก + print badges (L201-206) */}
-                                            <td className="text-center font-12">
-                                              {scanDate}
-                                              <br />
-                                              {scanTime} น.
-                                              {row.f_printstatus1 === "1" && (
-                                                <>
-                                                  <br />
-                                                  <span className="font-10 badge badge-primary badge-pill">พิมพ์แล้ว</span>
-                                                </>
-                                              )}
-                                              {row.f_printstatus2 === "1" && (
-                                                <>
-                                                  <br />
-                                                  <span className="font-10 badge badge-info badge-pill">พิมพ์แล้ว</span>
-                                                </>
-                                              )}
-                                              {row.f_printstatus3 === "1" && (
-                                                <>
-                                                  <br />
-                                                  <span className="font-10 badge badge-success badge-pill">พิมพ์แล้ว</span>
-                                                </>
-                                              )}
-                                            </td>
-                                            {/* 3 — ข้อมูลสแกน (L267-269) */}
-                                            <td>{row.keysearch}</td>
-                                            {/* 4 — รหัสลูกค้า + VIP badges + delta (L271-278) */}
-                                            <td>
-                                              <Link
-                                                href={`/admin/users/profile/${encodeURIComponent(row.f_userid ?? "")}`}
-                                                className="text-info"
-                                              >
-                                                {row.f_userid}{" "}
-                                                <BadgeVIP2 coid={row.u_coid} />
-                                              </Link>
-                                              {lacking && row.f_famount != null && (
-                                                <>
-                                                  <br />
-                                                  <span className="text-danger">
-                                                    ขาดอีก {row.f_famount - row.fi2amount} กล่อง
-                                                  </span>
-                                                </>
-                                              )}
-                                              {over && row.f_famount != null && (
-                                                <>
-                                                  <br />
-                                                  <span className="text-danger">
-                                                    เกินมา {row.fi2amount - row.f_famount} กล่อง
-                                                  </span>
-                                                </>
-                                              )}
-                                              {" "}กล่อง : {row.fi2amount}/{row.f_famount ?? 0}
-                                              {hasDupes && (
-                                                <>
-                                                  <br />
-                                                  <span className="bg-danger text-white">
-                                                    มีรายการซ้ำ :{" "}
-                                                    {dupeIds.map((dupId) => (
-                                                      <Link
-                                                        key={dupId}
-                                                        href={`/admin/forwarder/detail/${dupId}`}
-                                                        target="_blank"
-                                                      >
-                                                        #{dupId}{" "}
-                                                      </Link>
-                                                    ))}
-                                                  </span>
-                                                </>
-                                              )}
-                                            </td>
-                                            {/* 5 — รายละเอียด + cover (L280-299) */}
-                                            <td>
-                                              <div className="float-right">
-                                                <a className="image-popup-vertical-fit el-link" href={cover.full}>
-                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                  <img src={cover.thumb} alt="cover" width={60} />
-                                                </a>
-                                              </div>
-                                              <Link
-                                                className="text-info"
-                                                href={`/admin/forwarder/detail/${row.f_id ?? ""}`}
-                                              >
-                                                <span>เลขที่รายการ #{row.f_id ?? ""}</span>
-                                                <div className="short-text max-w">{row.f_fdetail ?? ""}</div>
-                                              </Link>
-                                              {`ประเภท : ${nameProductsType(row.f_fproductstype)}`}
-                                              {row.f_adminidcreator && row.f_adminidcreator !== "" && (!row.f_reforder || row.f_reforder === "") && (
-                                                <>
-                                                  <br />
-                                                  <div className="">
-                                                    <span className="font-9 badge badge-warning badge-pill">
-                                                      ฝากนำเข้า : {row.f_adminidcreator}
-                                                    </span>
-                                                  </div>
-                                                </>
-                                              )}
-                                              {(!row.f_adminidcreator || row.f_adminidcreator === "") && (!row.f_reforder || row.f_reforder === "") && (
-                                                <>
-                                                  <br />
-                                                  <div className="">
-                                                    <span className="font-9 badge badge-primary badge-pill">
-                                                      ฝากนำเข้าจาก : users
-                                                    </span>
-                                                  </div>
-                                                </>
-                                              )}
-                                              {row.f_reforder && row.f_reforder !== "" && (
-                                                <>
-                                                  <br />
-                                                  <div className="">
-                                                    <Link href={`/admin/shops/detail/${row.f_reforder}`}>
-                                                      <span className="font-9 badge badge-info badge-pill">
-                                                        รายการฝากสั่งซื้อ : {row.f_reforder}
-                                                      </span>
-                                                    </Link>
-                                                  </div>
-                                                </>
-                                              )}
-                                            </td>
-                                            {/* 6 — ยอดค้างชำระ + KG/CBM + admin (L300-305) */}
-                                            <td className="text-right">
-                                              {priceWaiting(sumPrice)}
-                                              <br />
-                                              <span className="font-12">
-                                                {row.f_fweight != null && Number(row.f_fweight) > 0 && (
-                                                  <>{row.f_fweight}Kg</>
-                                                )}
-                                                {volumeTotal != null && Number(volumeTotal) > 0 && (
-                                                  <>
-                                                    <br />
-                                                    {volumeTotal}CBM
-                                                  </>
-                                                )}
-                                              </span>
-                                              <br />
-                                              <span className="font-12" title="admin ที่วัดขนาด">
-                                                {row.f_adminidkey ?? ""}
-                                              </span>
-                                            </td>
-                                            {/* 7 — เลขพัสดุ (จีน) + เลขตู้ + ประเภทขนส่ง + closeDate
-                                                + warehouse + fIDorCO (L306-312) */}
-                                            <td>
-                                              <span className="bg-danger text-white">
-                                                {row.f_ftrackingchn ?? ""}
-                                              </span>
-                                              <br />
-                                              เลขตู้ :{" "}
-                                              <Link
-                                                href={{ pathname: "/admin/cnt/report", query: { id: row.f_fcabinetnumber ?? "" } }}
-                                                target="_blank"
-                                              >
-                                                {" "}{row.f_fcabinetnumber ?? ""}
-                                              </Link>{" "}
-                                              <NameTransportType2 t={row.f_ftransporttype} />
-                                              {containerCloseDDMMYYYY
-                                                ? ` : ${containerCloseDDMMYYYY}`
-                                                : " : "}
-                                              <br />
-                                              <BadgeNameWarehouseChina w={row.f_fwarehousechina} />
-                                              <span className="bg-danger text-white">
-                                                {row.f_fidorco ?? ""}
-                                              </span>
-                                            </td>
-                                            {/* 8 — สถานะ (L313-315) */}
-                                            <td className="text-center">
-                                              <StatusForwarderAll s={row.f_fstatus} />
-                                            </td>
-                                            {/* 9 — อัปเดต — admin who scanned + date arrived in China (L316-321) */}
-                                            <td className="font-14 text-center">
-                                              วันที่สินค้าถึงจีน
-                                              <br />
-                                              : <span className="">{row.f_fdatestatus2 ?? ""}</span>
-                                              <br />
-                                              {row.adminid}
-                                            </td>
-                                            {/* 10 — ตัวเลือก (L322-328) —
-                                                delete + view + update; the
-                                                client island carries the
-                                                delete confirm + Server Action;
-                                                view/update stay plain links. */}
-                                            <td className="text-center">
-                                              <WarehouseHistoryMatchedActions
-                                                scanId={row.id}
-                                                forwarderId={row.f_id}
-                                                forwarderStatus={row.f_fstatus}
-                                              />
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                                <hr />
-                                {/* Bottom CTAs — L353-356.
-                                    Print / recommendation modal trigger.
-                                    The bulk-print action is a follow-up. */}
-                                <div
-                                  className="btn-group"
-                                  role="group"
-                                  aria-label="Basic example"
-                                  style={{ position: "fixed", bottom: 20 }}
-                                >
-                                  <button
-                                    type="submit"
-                                    className="btn btn-primary waves-effect round"
-                                    name="print"
-                                    value="1"
-                                  >
-                                    <i className="fas fa-box-open"></i> พิมพ์จากหน้ากล่อง
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn btn-info waves-effect round"
-                                    data-toggle="modal"
-                                    data-target="#recom"
-                                  >
-                                    {" "}คำแนะนำการใช้งาน
-                                  </button>
-                                </div>
-                                <div id="example-console-rows"></div>
-                              </form>
-                              <div id="list-forwarder-data"></div>
-                              <div id="search-forwarder-data"></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Recommendation modal — L371-383 (empty in legacy too) */}
-            <div id="recom" className="modal fade in" tabIndex={-1} role="dialog" aria-hidden="true">
-              <div className="modal-dialog modal-lg">
-                <div className="modal-content header-from">
-                  <div className="modal-header">
-                    <h4 className="modal-title">การใช้งานระบบบันทึกรายการเข้าโกดัง</h4>
-                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">
-                      <i className="la la-close"> </i>
-                    </button>
-                  </div>
-                  <div className="modal-body header-from"></div>
-                </div>
-              </div>
-            </div>
+        {/* Wave 20 status banner — proactive transparency (AGENTS §0a). */}
+        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+          <span aria-hidden>ℹ️</span>
+          <div className="flex-1">
+            <span className="font-medium">Wave 20 P1:</span>{" "}
+            ✅ Tailwind v4 chrome · 3-mode date filter · relink modal · ลบยิงเข้า · ดู/อัปเดต ·{" "}
+            <span className="opacity-75">
+              ⏳ Wave 21: bulk-print PDF (พิมพ์จากหน้ากล่อง) · &ldquo;Mark as no-match&rdquo; sentinel · DataTables sort
+            </span>
           </div>
         </div>
-      </div>
-      {/* END: Content */}
-    </div>
+
+        {/* Mode = all → cap warning so staff know to narrow the range. */}
+        {mode === "all" && totalRows >= ALL_MODE_CAP && (
+          <div className="rounded-md border border-orange-200 bg-orange-50/70 p-2.5 text-xs text-orange-800">
+            ⚠️ ผลลัพธ์มากกว่า {ALL_MODE_CAP.toLocaleString("th-TH")} รายการ · แสดงเฉพาะล่าสุด · กรุณาเลือกช่วงวันเพื่อดูข้อมูลทั้งหมด
+          </div>
+        )}
+
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-3 py-1 text-xs font-medium">
+            แทรคกิ้งที่ยิง {noTrackingsAll.toLocaleString("th-TH")} รายการ
+          </span>
+          <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
+            กล่องที่ยิง {noBoxAll.toLocaleString("th-TH")} กล่อง
+          </span>
+          {countBoxLackAll > 0 && (
+            <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-3 py-1 text-xs font-medium">
+              กล่องไม่ครบ {countBoxLackAll} รายการ
+            </span>
+          )}
+          {countBoxOverflowAll > 0 && (
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
+              กล่องเกินมา {countBoxOverflowAll} รายการ
+            </span>
+          )}
+          {countErrorReAll > 0 && (
+            <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-3 py-1 text-xs font-medium">
+              รายการซ้ำ {countErrorReAll} รายการ
+            </span>
+          )}
+          {orphanRaw.length > 0 && (
+            <span className="inline-flex items-center rounded-full bg-rose-100 text-rose-800 px-3 py-1 text-xs font-medium">
+              รอเชื่อม (orphan) {orphanRaw.length} รายการ
+            </span>
+          )}
+        </div>
+
+        {/* Empty state */}
+        {totalRows === 0 ? (
+          <div className="rounded-2xl border border-border bg-white dark:bg-surface p-12 text-center text-sm text-muted">
+            ไม่พบรายการสแกนในช่วงเวลานี้
+            <div className="mt-2 text-xs">
+              ลองเปลี่ยนช่วงวันที่ หรือกด &ldquo;ค้นหาข้อมูลทั้งหมด&rdquo;
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-[11px] text-muted">
+              💡 ตารางกว้าง — เลื่อนซ้าย-ขวา ⇆ เพื่อดูข้อมูลครบทุกคอลัมน์
+            </p>
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
+              <div className="overflow-x-auto scrollbar-x-visible">
+                <table className="min-w-[1400px] w-full text-xs">
+                  <thead className="bg-surface-alt text-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">ID</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">วันที่บันทึก</th>
+                      <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">ข้อมูลสแกน</th>
+                      <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">รหัสลูกค้า</th>
+                      <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">รายละเอียด</th>
+                      <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">ยอดค้างชำระ</th>
+                      <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">เลขพัสดุ (จีน)</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">สถานะ</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap" title="Username Admin ที่อัปเดตสถานะรายการ">อัปเดต</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">ตัวเลือก</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {/* ORPHAN section (L182-232) — fi.fID IS NULL */}
+                    {orphanRaw.map((row) => {
+                      const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
+                      return (
+                        <tr key={`orphan-${row.id}`} className="bg-rose-50/40 hover:bg-rose-50">
+                          <td className="px-3 py-2 text-center text-muted">—</td>
+                          <td className="px-3 py-2 text-center whitespace-nowrap">
+                            <div>{scanDate}</div>
+                            <div className="text-[10px] text-muted">{scanTime} น.</div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="font-mono text-[11px] break-all">{row.keysearch}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="text-rose-700">กล่อง : {row.fi2amount}/0</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="text-rose-700 mb-1">ไม่พบรายการ กรุณาเลือกเชื่อมรายการ</div>
+                            <WarehouseHistoryRelinkButton
+                              scanId={row.id}
+                              keysearch={row.keysearch}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right text-muted">—</td>
+                          <td className="px-3 py-2 text-muted">—</td>
+                          <td className="px-3 py-2 text-center text-muted">—</td>
+                          <td className="px-3 py-2 text-center text-[11px] text-muted">{row.adminid}</td>
+                          <td className="px-3 py-2 text-center">
+                            <WarehouseHistoryDeleteButton scanId={row.id} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {/* MATCHED section (L233-348) */}
+                    {matchedRows.map((row) => {
+                      const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
+                      const lacking = row.f_famount != null && row.fi2amount < row.f_famount;
+                      const over    = row.f_famount != null && row.fi2amount > row.f_famount;
+                      const dupeIds = row.f_ftrackingchn ? (dupeMap.get(row.f_ftrackingchn) ?? []) : [];
+                      const hasDupes = dupeIds.length > 1;
+                      const cover = resolveCover(row.id);
+                      const sumPrice =
+                        (Number(row.f_ftotalprice ?? 0) +
+                          Number(row.f_ftransportprice ?? 0) +
+                          Number(row.f_fpriceupdate ?? 0) +
+                          Number(row.f_fshippingservice ?? 0)) -
+                        Number(row.f_fdiscount ?? 0);
+                      const volumeTotal =
+                        row.f_fvolume && row.f_famount
+                          ? Number(row.f_fvolume) * Number(row.f_famount)
+                          : null;
+                      const containerCloseDDMMYYYY = formatDDMMYYYY(row.f_fdatecontainerclose);
+                      const rowClass = lacking
+                        ? "bg-rose-50/30 hover:bg-rose-50"
+                        : hasDupes
+                          ? "bg-indigo-50/30 hover:bg-indigo-50"
+                          : "hover:bg-surface-alt";
+
+                      return (
+                        <tr key={`matched-${row.id}`} className={rowClass}>
+                          {/* 1 — ID */}
+                          <td className="px-3 py-2 text-center whitespace-nowrap font-mono text-xs">
+                            {row.f_id ?? ""}
+                          </td>
+                          {/* 2 — วันที่บันทึก + print badges */}
+                          <td className="px-3 py-2 text-center whitespace-nowrap">
+                            <div>{scanDate}</div>
+                            <div className="text-[10px] text-muted">{scanTime} น.</div>
+                            <div className="mt-1 flex flex-col gap-0.5 items-center">
+                              {row.f_printstatus1 === "1" && (
+                                <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                  พิมพ์แล้ว #1
+                                </span>
+                              )}
+                              {row.f_printstatus2 === "1" && (
+                                <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                  พิมพ์แล้ว #2
+                                </span>
+                              )}
+                              {row.f_printstatus3 === "1" && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                  พิมพ์แล้ว #3
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          {/* 3 — ข้อมูลสแกน */}
+                          <td className="px-3 py-2">
+                            <span className="font-mono text-[11px] break-all">{row.keysearch}</span>
+                          </td>
+                          {/* 4 — รหัสลูกค้า + VIP + delta */}
+                          <td className="px-3 py-2">
+                            <Link
+                              href={`/admin/users/profile/${encodeURIComponent(row.f_userid ?? "")}`}
+                              className="text-sky-700 hover:underline font-medium"
+                            >
+                              {row.f_userid}
+                              <BadgeVIP2 coid={row.u_coid} />
+                            </Link>
+                            {lacking && row.f_famount != null && (
+                              <div className="text-rose-700 text-[11px] mt-0.5">
+                                ขาดอีก {row.f_famount - row.fi2amount} กล่อง
+                              </div>
+                            )}
+                            {over && row.f_famount != null && (
+                              <div className="text-rose-700 text-[11px] mt-0.5">
+                                เกินมา {row.fi2amount - row.f_famount} กล่อง
+                              </div>
+                            )}
+                            <div className="text-[11px] text-muted mt-0.5">
+                              กล่อง : {row.fi2amount}/{row.f_famount ?? 0}
+                            </div>
+                            {hasDupes && (
+                              <div className="mt-1 rounded bg-red-600 text-white px-2 py-1 text-[10px]">
+                                มีรายการซ้ำ:{" "}
+                                {dupeIds.map((dupId, idx) => (
+                                  <Link
+                                    key={dupId}
+                                    href={`/admin/forwarders/${dupId}`}
+                                    target="_blank"
+                                    className="underline ml-1"
+                                  >
+                                    #{dupId}{idx < dupeIds.length - 1 ? "," : ""}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          {/* 5 — รายละเอียด + cover */}
+                          <td className="px-3 py-2">
+                            <div className="flex gap-2">
+                              <a
+                                className="shrink-0"
+                                href={cover.full}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={cover.thumb}
+                                  alt="cover"
+                                  width={60}
+                                  height={60}
+                                  className="rounded border border-border object-cover"
+                                />
+                              </a>
+                              <div className="min-w-0 flex-1">
+                                <Link
+                                  className="text-sky-700 hover:underline text-xs font-medium block"
+                                  href={`/admin/forwarders/${row.f_id ?? ""}`}
+                                >
+                                  เลขที่รายการ #{row.f_id ?? ""}
+                                </Link>
+                                <div className="text-[11px] text-muted line-clamp-2 mt-0.5">
+                                  {row.f_fdetail ?? ""}
+                                </div>
+                                <div className="text-[11px] text-muted mt-0.5">
+                                  ประเภท: {nameProductsType(row.f_fproductstype)}
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {row.f_adminidcreator && row.f_adminidcreator !== "" && (!row.f_reforder || row.f_reforder === "") && (
+                                    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                      ฝากนำเข้า: {row.f_adminidcreator}
+                                    </span>
+                                  )}
+                                  {(!row.f_adminidcreator || row.f_adminidcreator === "") && (!row.f_reforder || row.f_reforder === "") && (
+                                    <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-1.5 py-0.5 text-[9px] font-medium">
+                                      ฝากนำเข้าจาก: users
+                                    </span>
+                                  )}
+                                  {row.f_reforder && row.f_reforder !== "" && (
+                                    <Link href={`/admin/shops/detail/${row.f_reforder}`}>
+                                      <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[9px] font-medium hover:bg-sky-200">
+                                        ฝากสั่งซื้อ: {row.f_reforder}
+                                      </span>
+                                    </Link>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          {/* 6 — ยอดค้างชำระ + KG/CBM + admin */}
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            <div className={sumPrice > 0 ? "text-foreground font-medium" : "text-muted"}>
+                              {priceWaiting(sumPrice)}
+                            </div>
+                            {row.f_fweight != null && Number(row.f_fweight) > 0 && (
+                              <div className="text-[11px] text-muted">{row.f_fweight} Kg</div>
+                            )}
+                            {volumeTotal != null && Number(volumeTotal) > 0 && (
+                              <div className="text-[11px] text-muted">{volumeTotal} CBM</div>
+                            )}
+                            {row.f_adminidkey && (
+                              <div className="text-[10px] text-muted mt-0.5" title="admin ที่วัดขนาด">
+                                @{row.f_adminidkey}
+                              </div>
+                            )}
+                          </td>
+                          {/* 7 — เลขพัสดุ (จีน) + ตู้ + transport */}
+                          <td className="px-3 py-2">
+                            {row.f_ftrackingchn && (
+                              <div className="bg-rose-600 text-white px-2 py-0.5 rounded font-mono text-[10px] break-all mb-1">
+                                {row.f_ftrackingchn}
+                              </div>
+                            )}
+                            <div className="text-[11px]">
+                              เลขตู้:{" "}
+                              <Link
+                                href={{ pathname: "/admin/cnt/report", query: { id: row.f_fcabinetnumber ?? "" } }}
+                                target="_blank"
+                                className="text-sky-700 hover:underline font-medium"
+                              >
+                                {row.f_fcabinetnumber ?? "—"}
+                              </Link>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1 items-center">
+                              <NameTransportType2 t={row.f_ftransporttype} />
+                              <BadgeNameWarehouseChina w={row.f_fwarehousechina} />
+                            </div>
+                            {containerCloseDDMMYYYY && (
+                              <div className="text-[10px] text-muted mt-0.5">
+                                ปิดตู้: {containerCloseDDMMYYYY}
+                              </div>
+                            )}
+                            {row.f_fidorco && (
+                              <div className="bg-rose-600 text-white px-1.5 py-0.5 rounded font-mono text-[10px] inline-block mt-1">
+                                {row.f_fidorco}
+                              </div>
+                            )}
+                          </td>
+                          {/* 8 — สถานะ */}
+                          <td className="px-3 py-2 text-center">
+                            <StatusForwarderAll s={row.f_fstatus} />
+                          </td>
+                          {/* 9 — อัปเดต — admin who scanned + date arrived in China */}
+                          <td className="px-3 py-2 text-center whitespace-nowrap">
+                            <div className="text-[10px] text-muted">วันที่ถึงจีน</div>
+                            <div className="text-[11px]">{row.f_fdatestatus2?.slice(0, 10) ?? "—"}</div>
+                            <div className="text-[10px] text-muted mt-1">@{row.adminid}</div>
+                          </td>
+                          {/* 10 — ตัวเลือก */}
+                          <td className="px-3 py-2 text-center">
+                            <WarehouseHistoryMatchedActions
+                              scanId={row.id}
+                              forwarderId={row.f_id}
+                              forwarderStatus={row.f_fstatus}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer actions — bulk-print (deferred) + back. */}
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <button
+                type="button"
+                disabled
+                className="rounded-lg border border-border bg-surface-alt text-muted px-3 py-2 text-xs cursor-not-allowed"
+                title="Wave 21 — bulk-print PDF ยังไม่เปิด"
+              >
+                📦 พิมพ์จากหน้ากล่อง (Wave 21)
+              </button>
+              <Link
+                href="/admin/forwarders"
+                className="rounded-lg border border-border bg-white text-foreground px-3 py-2 text-xs hover:bg-surface-alt"
+              >
+                ← กลับหน้าฝากนำเข้า
+              </Link>
+            </div>
+          </>
+        )}
+      </main>
+    </>
   );
 }
