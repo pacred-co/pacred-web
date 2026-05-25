@@ -39,7 +39,7 @@ type URow = {
   userlastlogin: string | null;   // ← correct column (legacy schema)
   adminidsale: string | null;
   usernote: string | null;
-  userimage: string | null;       // Wave 13: legacy avatar filename (resolved via legacy-resolver)
+  userpicture: string | null;     // Wave 13: legacy avatar filename (col is `userpicture` not `userimage` — fix Wave 19 BUG#1 2026-05-26)
 };
 
 type FRow = {
@@ -90,7 +90,7 @@ export async function renderLegacyCustomerView(id: string) {
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote,userimage",
+      "userid,username,userlastname,usercompany,useremail,usertel,useractive,userregistered,userlastlogin,adminidsale,usernote,userpicture",
     )
     .eq("userid", id)
     .maybeSingle();
@@ -113,7 +113,7 @@ export async function renderLegacyCustomerView(id: string) {
   // Bare filenames live under `member-docs/legacy-images/users/` after
   // backfill 06. Empty / null → null → header renders the initial-letter
   // fallback instead of the avatar.
-  const userImageUrl = await resolveLegacyUrl(u.userimage, "profile");
+  const userImageUrl = await resolveLegacyUrl(u.userpicture, "profile");
 
   // Wallet balance + recent activity (parallel)
   const [
