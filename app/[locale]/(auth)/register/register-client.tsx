@@ -290,8 +290,11 @@ function PersonalForm() {
       // Return to a pending `?next=` (booking-calculator CTA) if present.
       // The protected layout still re-routes to /complete-profile when the
       // new profile needs it — so an order quote only survives for a
-      // ready-to-order account, which is the intended behaviour.
-      router.replace(nextUrl ?? "/");
+      // ready-to-order account, which is the intended behaviour. Default
+      // landing is `/dashboard` (customer portal launchpad), not `/`
+      // (public marketing) — per d1-fidelity-customer.md §2 + 2026-05-26
+      // brief fix A2: non-admin signups expect to see the signed-in shell.
+      router.replace(nextUrl ?? "/dashboard");
       router.refresh();
     } else {
       setError(ERR[res.error] ?? res.error);
@@ -641,7 +644,9 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
       if (done.ok) {
         trackSignUp("juristic");
         // Return to a pending `?next=` (booking-calculator CTA) if present.
-        router.replace(nextUrl ?? "/");
+        // Default to `/dashboard` (customer portal launchpad), NOT `/` —
+        // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
+        router.replace(nextUrl ?? "/dashboard");
         router.refresh();
       } else setError(ERR[done.error] ?? done.error);
     });

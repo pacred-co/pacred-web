@@ -63,8 +63,12 @@ export default function LoginPage() {
         trackLogin(method);
         // Admins always land in the back-office. A regular user with a
         // pending `?next=` (e.g. routed here from the booking calculator's
-        // "เปิดออเดอร์ราคานี้" CTA) returns to that destination.
-        const dest = res.data?.isAdmin ? "/admin" : (nextUrl ?? "/");
+        // "เปิดออเดอร์ราคานี้" CTA) returns to that destination. Otherwise
+        // land on the customer portal `/dashboard` (the 9-icon launchpad) —
+        // sending them to `/` (public marketing home) made the login look
+        // like it failed because the page looked anonymous. Per
+        // d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
+        const dest = res.data?.isAdmin ? "/admin" : (nextUrl ?? "/dashboard");
         router.replace(dest);
         router.refresh();
       } else {
