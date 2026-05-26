@@ -3,37 +3,24 @@
 /**
  * Admin add-item-to-cart form — client island.
  *
- * Faithful 1:1 of the legacy "สั่งซื้อสินค้าแบบกำหนดเอง" form (pcs-admin/
- * search.php L311-430, the `?product=custom` branch — staff use this when
- * a 1688/Taobao URL doesn't scrape cleanly and they need to type the item
- * fields manually).
+ * Wave 23 P1 #11.c (2026-05-27 ค่ำ · Agent E): Tailwind form-input
+ * rewrite. Field set + Server Action signature + FormData keys are
+ * UNCHANGED from the prior Bootstrap-4 island — preserves contract
+ * with `adminAddItemToCart` (actions/admin/cart) + the Zod schema
+ * in lib/validators/admin-cart (ADMIN_CART_PROVIDERS).
  *
- * Legacy field set (preserved here):
- *   - cURL          ลิงค์หรือชื่อสินค้า              (required)
- *   - cImages       รูปภาพ                          (file upload — staged)
- *   - cDetails      หมายเหตุ                        (required)
- *   - cColor        สี/แบบ                          (optional)
- *   - cSize         ขนาด                            (optional)
- *   - cPrice        ราคา (¥)                        (required, > 0)
- *   - cAmount       จำนวน                           (required, >= 1)
- *
- * Pacred extras (faithful intent — admins target a customer cart):
- *   - userid        รหัสสมาชิก (customer PR<n>)     (required — defaults to
- *                                                    URL search param ?userid=
- *                                                    when CS arrives from the
- *                                                    cart-viewing page)
- *
- * Not yet wired (deferred):
- *   - Image upload — the legacy moves the file to ../images/shops/<uniqid>.<ext>
- *     and stores the filename in cImages. Pacred image-pipeline is post-Phase-A
- *     (customer-images backfill is queued after the Supabase Pro upgrade per
- *     CLAUDE.md). For now the field accepts an optional image URL string
- *     (the legacy 1688/Taobao scrape path also stores a remote URL string
- *     into cImages, so the schema is honest about that).
- *   - The jQuery repeater (legacy "+" button to add multiple items in one
- *     submit) — Pacred's single-item-at-a-time API is simpler; the form
- *     can be re-submitted N times to add N items. The owner-bottleneck on
- *     this surface is rare-edge (custom-URL items, not the common scrape).
+ * Field set (preserved · same FormData keys):
+ *   - userid     เจ้าของรถเข็น (PR<n> · เว้นว่าง = admin's own)
+ *   - cURL       ลิงค์หรือชื่อสินค้า          (required)
+ *   - cTitle     ชื่อย่อสินค้า                (optional)
+ *   - cNameShop  ชื่อร้าน                     (default "pcs")
+ *   - cProvider  ผู้ขาย (1=1688 .. 5=Nice)   (default "4" Shops)
+ *   - cImages    URL รูปภาพ                  (optional)
+ *   - cDetails   หมายเหตุ                     (required)
+ *   - cColor     สี/แบบ                       (optional)
+ *   - cSize      ขนาด                         (optional)
+ *   - cPrice     ราคา ¥                       (required · > 0)
+ *   - cAmount    จำนวน                        (required · >= 1)
  */
 
 import { useState, useTransition } from "react";
@@ -48,6 +35,11 @@ type Props = {
    *  if the staff forgets to fill in a customer userid. */
   myAdminId: string;
 };
+
+// Tailwind shorthand classes for repeat use.
+const LABEL_CLS = "block text-xs font-medium text-muted mb-1.5";
+const INPUT_CLS =
+  "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500";
 
 export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
   const router = useRouter();
@@ -104,7 +96,6 @@ export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
         return;
       }
       setSuccess(`เพิ่มสินค้าลงในรถเข็นแล้ว (ID #${res.data?.id})`);
-      // Redirect back to cart for this customer after a moment.
       setTimeout(() => {
         router.push(`/admin/service-orders/cart?userID=${encodeURIComponent(userid)}`);
       }, 1500);
@@ -112,240 +103,202 @@ export default function AdminAddCartForm({ initialUserId, myAdminId }: Props) {
   }
 
   return (
-    <form
-      className="form-horizontal"
-      method="POST"
-      autoComplete="off"
-      onSubmit={handleSubmit}
-    >
-      <div className="border-shops box-shadow">
-        <div className="p-2 p-md-3">
-          {/* Customer (cart owner) — Pacred extra */}
-          <div className="form-group">
-            <div className="mb-2">
-              <label className="form-control-label" htmlFor="userid">
-                รหัสสมาชิก (เจ้าของรถเข็น) :
-              </label>
-              <input
-                id="userid"
-                name="userid"
-                type="text"
-                className="form-control form-control-lg"
-                placeholder="PR123 (เว้นว่าง = รถเข็นแอดมิน)"
-                defaultValue={initialUserId}
-              />
-            </div>
-          </div>
+    <form method="POST" autoComplete="off" onSubmit={handleSubmit} className="space-y-5">
+      {/* Cart owner */}
+      <div>
+        <label htmlFor="userid" className={LABEL_CLS}>
+          รหัสสมาชิก (เจ้าของรถเข็น)
+        </label>
+        <input
+          id="userid"
+          name="userid"
+          type="text"
+          className={`${INPUT_CLS} font-mono`}
+          placeholder="PR123 (เว้นว่าง = รถเข็นแอดมิน)"
+          defaultValue={initialUserId}
+        />
+      </div>
 
-          {/* 1. URL / shop / provider */}
-          <div className="form-group">
-            <div className="mb-2">
-              <label className="form-control-label" htmlFor="cURL">
-                1. ลิงค์หรือชื่อสินค้า :
-              </label>
-              <input
-                id="cURL"
-                name="cURL"
-                type="text"
-                className="form-control form-control-lg"
-                placeholder="ลิงค์หรือชื่อสินค้า"
-                required
-              />
-            </div>
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-1">
-                  <label className="form-control-label" htmlFor="cTitle">
-                    ชื่อย่อสินค้า :
-                  </label>
-                  <input
-                    id="cTitle"
-                    name="cTitle"
-                    type="text"
-                    className="form-control"
-                    placeholder="ชื่อสินค้า (เว้นว่างได้)"
-                  />
-                </div>
-              </div>
-              <div className="col-md-4">
-                <div className="mb-1">
-                  <label className="form-control-label" htmlFor="cNameShop">
-                    ชื่อร้าน :
-                  </label>
-                  <input
-                    id="cNameShop"
-                    name="cNameShop"
-                    type="text"
-                    className="form-control"
-                    placeholder="pcs"
-                    defaultValue="pcs"
-                  />
-                </div>
-              </div>
-              <div className="col-md-2">
-                <div className="mb-1">
-                  <label className="form-control-label" htmlFor="cProvider">
-                    ผู้ขาย :
-                  </label>
-                  <select
-                    id="cProvider"
-                    name="cProvider"
-                    className="form-control"
-                    defaultValue="4"
-                  >
-                    <option value="1">1688</option>
-                    <option value="2">Taobao</option>
-                    <option value="3">Tmall</option>
-                    <option value="4">Shops</option>
-                    <option value="5">Nice</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
+      <hr className="border-border" />
 
-          {/* 2. Image + details */}
-          <div className="form-group">
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-1">
-                  <label className="form-control-label" htmlFor="cImages">
-                    URL รูปภาพ :
-                  </label>
-                  <input
-                    id="cImages"
-                    name="cImages"
-                    type="text"
-                    className="form-control"
-                    placeholder="https://... (เว้นว่างได้)"
-                  />
-                </div>
-              </div>
-              <div className="col-md-6">
-                <div className="mb-1">
-                  <label className="form-control-label" htmlFor="cDetails">
-                    หมายเหตุ :
-                  </label>
-                  <textarea
-                    id="cDetails"
-                    name="cDetails"
-                    rows={3}
-                    className="form-control"
-                    placeholder="รายละเอียด"
-                    maxLength={1500}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
+      {/* 1. Link + shop */}
+      <div className="space-y-3">
+        <div>
+          <label htmlFor="cURL" className={LABEL_CLS}>
+            1. ลิงก์หรือชื่อสินค้า <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="cURL"
+            name="cURL"
+            type="text"
+            required
+            className={INPUT_CLS}
+            placeholder="https://item.taobao.com/... หรือชื่อสินค้า"
+          />
+        </div>
+        <div className="grid md:grid-cols-12 gap-3">
+          <div className="md:col-span-6">
+            <label htmlFor="cTitle" className={LABEL_CLS}>
+              ชื่อย่อสินค้า
+            </label>
+            <input
+              id="cTitle"
+              name="cTitle"
+              type="text"
+              className={INPUT_CLS}
+              placeholder="ชื่อสินค้า (เว้นว่างได้)"
+            />
           </div>
-
-          {/* 3. Color + size */}
-          <div className="form-group">
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-2">
-                  <label className="form-control-label" htmlFor="cColor">
-                    สี/แบบ :
-                  </label>
-                  <input
-                    id="cColor"
-                    name="cColor"
-                    type="text"
-                    className="form-control form-control-lg"
-                    placeholder="สี"
-                  />
-                </div>
-              </div>
-              <div className="col-md-6">
-                <div className="mb-2">
-                  <label className="form-control-label" htmlFor="cSize">
-                    ขนาด :
-                  </label>
-                  <input
-                    id="cSize"
-                    name="cSize"
-                    type="text"
-                    className="form-control form-control-lg"
-                    placeholder="ขนาด"
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="md:col-span-4">
+            <label htmlFor="cNameShop" className={LABEL_CLS}>
+              ชื่อร้าน
+            </label>
+            <input
+              id="cNameShop"
+              name="cNameShop"
+              type="text"
+              className={INPUT_CLS}
+              placeholder="pcs"
+              defaultValue="pcs"
+            />
           </div>
-
-          {/* 4. Price + qty */}
-          <div className="form-group">
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-2">
-                  <label className="form-control-label" htmlFor="cPrice">
-                    ราคา (¥) :
-                  </label>
-                  <input
-                    id="cPrice"
-                    name="cPrice"
-                    type="number"
-                    className="cPrice form-control form-control-lg text-right"
-                    placeholder="0.00"
-                    min="0.01"
-                    step="0.01"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="col-md-6">
-                <div className="mb-2">
-                  <label className="form-control-label" htmlFor="cAmount">
-                    จำนวน :
-                  </label>
-                  <input
-                    id="cAmount"
-                    name="cAmount"
-                    type="number"
-                    className="cAmount form-control form-control-lg text-right"
-                    defaultValue={1}
-                    min={1}
-                    max={10000}
-                    step={1}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="md:col-span-2">
+            <label htmlFor="cProvider" className={LABEL_CLS}>
+              ผู้ขาย
+            </label>
+            <select
+              id="cProvider"
+              name="cProvider"
+              className={INPUT_CLS}
+              defaultValue="4"
+            >
+              <option value="1">1688</option>
+              <option value="2">Taobao</option>
+              <option value="3">Tmall</option>
+              <option value="4">Shops</option>
+              <option value="5">Nice</option>
+            </select>
           </div>
         </div>
       </div>
 
+      <hr className="border-border" />
+
+      {/* 2. Image + notes */}
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="cImages" className={LABEL_CLS}>
+            2. URL รูปภาพ
+          </label>
+          <input
+            id="cImages"
+            name="cImages"
+            type="text"
+            className={INPUT_CLS}
+            placeholder="https://... (เว้นว่างได้)"
+          />
+        </div>
+        <div>
+          <label htmlFor="cDetails" className={LABEL_CLS}>
+            หมายเหตุ <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            id="cDetails"
+            name="cDetails"
+            rows={3}
+            maxLength={1500}
+            required
+            className={INPUT_CLS}
+            placeholder="รายละเอียด"
+          />
+        </div>
+      </div>
+
+      {/* 3. Color + size */}
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="cColor" className={LABEL_CLS}>
+            3. สี / แบบ
+          </label>
+          <input
+            id="cColor"
+            name="cColor"
+            type="text"
+            className={INPUT_CLS}
+            placeholder="สี (เว้นว่างได้)"
+          />
+        </div>
+        <div>
+          <label htmlFor="cSize" className={LABEL_CLS}>
+            ขนาด
+          </label>
+          <input
+            id="cSize"
+            name="cSize"
+            type="text"
+            className={INPUT_CLS}
+            placeholder="ขนาด (เว้นว่างได้)"
+          />
+        </div>
+      </div>
+
+      {/* 4. Price + qty */}
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="cPrice" className={LABEL_CLS}>
+            4. ราคาต่อชิ้น (¥) <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="cPrice"
+            name="cPrice"
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+            className={`${INPUT_CLS} text-right font-mono`}
+            placeholder="0.00"
+          />
+        </div>
+        <div>
+          <label htmlFor="cAmount" className={LABEL_CLS}>
+            จำนวน <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="cAmount"
+            name="cAmount"
+            type="number"
+            min={1}
+            max={10000}
+            step={1}
+            defaultValue={1}
+            required
+            className={`${INPUT_CLS} text-right font-mono`}
+          />
+        </div>
+      </div>
+
+      {/* Inline alerts */}
       {error && (
-        <div className="alert alert-danger mt-2" role="alert">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       )}
       {success && (
-        <div className="alert alert-success mt-2" role="alert">
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           {success}
         </div>
       )}
 
-      <hr />
-      <div className="border-shops box-shadow card-total">
-        <div className="p-1">
-          <div className="row align-items-center">
-            <div className="col-md-8" />
-            <div className="col-md-4 text-right">
-              <button
-                type="submit"
-                className="btn btn-outline-danger btn-rounded"
-                name="addCart"
-                disabled={pending}
-              >
-                <i className="mdi mdi-cart-outline"></i>{" "}
-                {pending ? "กำลังเพิ่ม..." : "เพิ่มในรถเข็น"}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Submit */}
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        <button
+          type="submit"
+          name="addCart"
+          disabled={pending}
+          className="rounded-lg bg-primary-600 text-white px-5 py-2 text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {pending ? "กำลังเพิ่ม..." : "+ เพิ่มในรถเข็น"}
+        </button>
       </div>
     </form>
   );
