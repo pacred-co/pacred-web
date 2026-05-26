@@ -44,10 +44,19 @@ const SECURITY_HEADERS = [
       // tracking pixels wired into <head> (Google Ads, GA4, Meta Pixel, MS
       // Clarity, Cloudflare beacon, LINE Tag). Missing entries flood the
       // browser console with CSP violations even though the page still works.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://hcaptcha.com https://*.hcaptcha.com https://www.clarity.ms https://*.clarity.ms https://connect.facebook.net https://*.facebook.net https://static.cloudflareinsights.com https://*.line-scdn.net",
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://*.doubleclick.net https://googleads.g.doubleclick.net https://hcaptcha.com https://*.hcaptcha.com https://www.clarity.ms https://*.clarity.ms https://connect.facebook.net https://*.facebook.net https://static.cloudflareinsights.com https://*.line-scdn.net https://translate.google.com https://translate.googleapis.com",
+      // Legacy `member/include/header.php` references external stylesheets
+      // from Google Fonts (Prompt) + cdnjs (intl-tel-input + font-awesome
+      // icons). The protected-portal layout still <link>s them — until
+      // those references are removed (Phase C polish, post-1:1), allow
+      // their origins here so the browser stops console-spamming with
+      // CSP violations on every protected page.
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
       "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
+      // fonts.gstatic.com — Google Fonts serves CSS from googleapis but
+      // the actual woff/woff2 font files come from gstatic. translate.googleapis.com
+      // serves the Google Translate widget's font assets.
+      "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
       "connect-src 'self' https: wss:",
       "frame-src 'self' https://www.google.com https://hcaptcha.com https://*.hcaptcha.com https://www.youtube.com https://www.youtube-nocookie.com",
       "frame-ancestors 'self'",
