@@ -201,23 +201,23 @@ export default async function ServiceOrderPage({
     <>
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
-      <div className="w-full px-3 md:px-6 md:pl-[280px] md:pr-[90px] py-4 md:py-6 max-w-[1280px] mx-auto">
+      <div className="w-full px-3 md:px-6 md:pl-[280px] md:pr-[90px] pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
 
-        {/* ── Header — title + add CTA ── */}
-        <div className="flex items-start md:items-center justify-between gap-3 mb-4">
-          <div>
-            <div className="flex items-center gap-2 text-[11px] text-muted mb-1">
-              <Link href="/dashboard" className="hover:text-foreground transition-colors">หน้าแรก</Link>
-              <span>/</span>
-              <span className="text-foreground font-medium">รายการฝากสั่งซื้อสินค้า</span>
-            </div>
-            <h1 className="flex items-center gap-2 text-[20px] md:text-[26px] font-black tracking-tight text-foreground">
-              <span className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25">
-                <ShoppingBag className="w-5 h-5" strokeWidth={2} />
-              </span>
-              รายการฝากสั่งซื้อสินค้า
-            </h1>
-          </div>
+        {/* ── Breadcrumb (above header row) ── */}
+        <div className="flex items-center gap-2 text-[11px] text-muted mb-2">
+          <Link href="/dashboard" className="hover:text-foreground transition-colors">หน้าแรก</Link>
+          <span>/</span>
+          <span className="text-foreground font-medium">รายการฝากสั่งซื้อสินค้า</span>
+        </div>
+
+        {/* ── Header row — title (icon + text) + add CTA aligned on same line ── */}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <p className="flex items-center gap-2 text-[16px] md:text-[26px] font-black tracking-tight text-foreground whitespace-nowrap min-w-0" role="heading" aria-level={1}>
+            <span className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-600/25 shrink-0">
+              <ShoppingBag className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2} />
+            </span>
+            รายการฝากสั่งซื้อสินค้า
+          </p>
           <Link
             href="/cart/add"
             className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
@@ -241,11 +241,11 @@ export default async function ServiceOrderPage({
           <>
             {/* ── Status tabs — horizontal scrollable pills ── */}
             <div className="mb-4">
-              <h2 className="text-[12px] font-semibold uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5" role="heading" aria-level={2}>
                 <span className="w-1.5 h-1.5 rounded-full bg-primary-600" />
                 สถานะรายการ
-              </h2>
-              <div className="flex overflow-x-auto gap-2 pb-2 -mx-3 px-3 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory">
+              </p>
+              <div className="flex flex-wrap gap-2">
                 {TABS.map((tab) => {
                   const isActive = tab.key === "" ? !q : q === tab.key;
                   const href = tab.key === "" ? "/service-order" : `/service-order?q=${tab.key}`;
@@ -254,7 +254,7 @@ export default async function ServiceOrderPage({
                     <Link
                       key={tab.key || "all"}
                       href={href}
-                      className={`shrink-0 snap-start inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12.5px] font-bold border transition-all ${
+                      className={`inline-flex items-center gap-1 rounded-full px-3 md:px-3.5 py-1.5 text-[11.5px] md:text-[12.5px] font-bold border transition-all ${
                         isActive
                           ? `${tab.activeCls} shadow-md`
                           : "bg-white text-foreground border-border hover:border-primary-300 hover:text-primary-600"
@@ -263,7 +263,7 @@ export default async function ServiceOrderPage({
                       {tab.label}
                       {count > 0 && (
                         <span
-                          className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-black ${
+                          className={`inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full text-[9.5px] font-black ${
                             isActive ? "bg-white/25 text-white" : "bg-primary-50 text-primary-700"
                           }`}
                         >
