@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { linkLineAccount } from "@/actions/profile";
+import { linkLineAccount } from "@/actions/line-settings";
 
 /**
  * Client half of /liff/link — handles the actual @line/liff dance.
@@ -103,7 +103,10 @@ export function LinkLineClient({
     const name = status.displayName;
     setStatus({ kind: "linking" });
     startTransition(async () => {
-      const res = await linkLineAccount(userId);
+      // Pass both userId and displayName — the server action uses the name
+      // to personalise the welcome push (task L, 2026-05-26 replacement
+      // for the now-dead LINE Notify channel).
+      const res = await linkLineAccount(userId, name);
       if (res.ok) {
         setStatus({ kind: "linked", displayName: name });
       } else {
@@ -192,8 +195,11 @@ export function LinkLineClient({
 
 function translateError(code: string, t: ReturnType<typeof useTranslations>): string {
   // Surface known server-action codes as friendly Thai/EN messages; fall back
-  // to the raw code so we don't lose debug context.
+  // to the raw code so we don't lose debug context. The "already_linked_other_account"
+  // is the canonical task-L error name; "line_already_linked" is the historical
+  // alias from actions/profile.ts (kept in case any older callbacks surface).
   switch (code) {
+    case "already_linked_other_account":
     case "line_already_linked":
       return t("errAlreadyLinked");
     case "invalid_line_user_id":

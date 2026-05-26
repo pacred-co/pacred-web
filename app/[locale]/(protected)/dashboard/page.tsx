@@ -180,6 +180,32 @@ export default async function DashboardPage() {
             <div className="mt-6">
               <PcsIconGrid />
             </div>
+
+            {/* 5. SMALL Pacred-additive entry to /line-settings.
+                  Task L (2026-05-26) — the LINE-link replacement for the
+                  dead LINE Notify channel needs a discoverable surface.
+                  Sits BELOW the 9-icon grid so the legacy launchpad fidelity
+                  is preserved as-is; this is clearly secondary chrome.
+                  Status text is derived server-side so it's truthful on
+                  first render (no loading flicker on the dashboard). */}
+            <div className="mt-6 px-4">
+              <Link
+                href="/line-settings"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-100 dark:hover:bg-emerald-900/70"
+              >
+                <span className="flex items-center gap-2">
+                  <i className="fab fa-line text-lg text-[#06C755]" aria-hidden />
+                  <span className="font-medium">
+                    {profile?.line_user_id
+                      ? "เชื่อมต่อ LINE แล้ว — จัดการการแจ้งเตือน"
+                      : "เชื่อมต่อ LINE เพื่อรับการแจ้งเตือน"}
+                  </span>
+                </span>
+                <span aria-hidden className="text-emerald-700/80 dark:text-emerald-300/80">
+                  →
+                </span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
