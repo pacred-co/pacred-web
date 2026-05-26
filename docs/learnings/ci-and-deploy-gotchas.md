@@ -459,3 +459,75 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - AGENTS.md §11 — production deploy gate (route smoke) is also necessary but separate from this
 - `docs/learnings/nextjs-16-quirks.md` 2026-05-16 entry — `react/no-unescaped-entities` (this is the SAME learning I'd captured a week earlier and STILL skipped the lint step — process gap, not knowledge gap)
 - `docs/pacred-info.md` "Brand-split context" — the PCS/TTP/ไอแต้ม split that explains the `-tam` suffix
+
+---
+
+## [2026-05-26] CSP must list every legacy external CSS/font/script origin or the console floods on every protected page
+
+**Context:** เดฟ opened `/cart/add` and pasted a console waterfall — six CSP `style-src` violations + one `script-src` violation, repeated on every page nav. The page rendered (Tailwind worked) but the console was unusable.
+
+**Symptom:**
+```
+Loading the stylesheet 'https://fonts.googleapis.com/css?family=Prompt&display=swap' violates "style-src 'self' 'unsafe-inline'"
+Loading the stylesheet 'https://cdnjs.cloudflare.com/.../intlTelInput.css' violates "style-src 'self' 'unsafe-inline'"
+Loading the stylesheet 'https://cdnjs.cloudflare.com/.../font-awesome/.../all.min.css' violates "style-src 'self' 'unsafe-inline'"
+Loading the script 'https://translate.google.com/translate_a/element.js?...' violates "script-src ..."
+```
+
+Each error was the FALLBACK CSP rule firing — the browser's note "`style-src-elem` was not explicitly set, so `style-src` is used as a fallback" hints the right fix is allow-listing the origin (NOT writing a separate `style-src-elem` rule).
+
+**Root cause:** The protected-portal layout (`app/[locale]/(protected)/layout.tsx`) still `<link>`s legacy header CSS from `fonts.googleapis.com` (Prompt font) + `cdnjs.cloudflare.com` (intl-tel-input + font-awesome icons). Legacy `tam-it.js` (preserved in `public/legacy/pcs/assets/js/`) auto-injects `<script src="https://translate.google.com/translate_a/element.js?...">` on body for the Google Translate widget. None of these origins were in the CSP — ปอน's CSS-bundle SLASH from 2026-05-24 kept the inline `<link>` tags but the corresponding CSP entries were never added.
+
+**Fix:** `next.config.ts` Content-Security-Policy header — extend three directives:
+- `style-src`: add `https://fonts.googleapis.com https://cdnjs.cloudflare.com`
+- `font-src`:  add `https://fonts.gstatic.com https://cdnjs.cloudflare.com`
+- `script-src`: add `https://translate.google.com https://translate.googleapis.com`
+
+**Why two domains for Google Fonts:**
+- `fonts.googleapis.com` serves the CSS file (which contains `@font-face` rules) — needs `style-src`
+- `fonts.gstatic.com` serves the actual woff/woff2 font files — needs `font-src`
+A common mistake is to allow only `googleapis.com` → the CSS loads but the fonts 404 silently and the page falls back to system fonts.
+
+**Why this matters next time:**
+- The protected layout has a legacy chrome bundle (~20 CSS + 10 JS files). Every external origin in that bundle must be in CSP — `inline plugin CSS` and `Google Fonts` are the most-forgotten because they're not "ours". When CSS-bundle changes are pushed, grep `next.config.ts` Content-Security-Policy for any new `https://` host the bundle references.
+- The `style-src-elem` fallback message tricked me once into thinking the directive name was the fix — the FALLBACK firing means the right directive (`style-src`) just doesn't have the host. Don't add a `style-src-elem` rule; fix `style-src`.
+- A legacy script (`tam-it.js`) injecting `<script src="https://...">` at runtime needs `script-src`, not `script-src-elem`. Same fallback logic.
+
+**Cross-links:**
+- Commit `5bc98ec4` — the CSP fix + dead /line-notify link repoint (this entry's PR)
+- `next.config.ts` lines 40-58 — the canonical CSP header config
+- `app/[locale]/(protected)/layout.tsx` L85-95 + L156 — the legacy external <link>s + tam-it.js
+- 2026-05-15 entry "P0 #4 — Server Action bodySizeLimit + CSP allow-list" — the previous CSP miss (img-src for Supabase Storage), same pattern
+
+---
+
+## [2026-05-26] Deleting a route doesn't remove its `<Link href="…">` — Next prefetch surfaces it as `/deleted-route?_rsc=… 404`
+
+**Context:** Same /cart/add console waterfall above included `/line-notify?_rsc=OlrF_NZuVjaChs3k:1  Failed to load resource: the server responded with a status of 404`. We deleted `/line-notify` with the dead-LINE-Notify stack purge (commit `67fc018e`) but dashboard still had `<Link href="/line-notify">` for the right-rail LINE CTA. Next.js auto-prefetches all `<Link>` hrefs in the viewport — and an RSC prefetch to a deleted route fails 404 visibly in console.
+
+**Symptom:** After deleting `/X/page.tsx` + route folder, every `<Link href="/X">` still in the codebase causes `/X?_rsc=<hash> 404` in the console. The visible UI still works (clicking the link 404s gracefully), but Next's prefetcher hits the dead route on every render that includes the Link.
+
+**Root cause:** `<Link>` from `next/link` (or `@/i18n/navigation`) auto-prefetches by default — both on render (above-the-fold links) and on hover (others). Prefetch fires an RSC request (`?_rsc=<hash>`) which 404s if the route is gone. The dev server hides this; production CDN logs it.
+
+**Fix:** After deleting any route `/X`, grep for surviving Links:
+
+```bash
+# any <Link href="/X" …>
+grep -rn '<Link[^>]*href="/X"' app/ components/ --include="*.tsx"
+# or any string-template href that could match
+grep -rn 'href={`/X' app/ components/ --include="*.tsx"
+# also check messages/*.json for translated link targets
+grep -rn '"/X"' messages/
+```
+
+Either repoint (if there's a replacement route) or remove the Link.
+
+**Why this matters next time:**
+- The `<Link>` href is NOT a TypeScript-checked string — `tsc` happily accepts `<Link href="/anything">` for a route that doesn't exist. **Only runtime CDN logs catch it.** No build error. No lint error.
+- A deletion-sweep is incomplete without grepping `href="/<deleted-route>"`. Add it to the deletion checklist alongside `package.json`/`vercel.json`/test-file path grep.
+- For the dashboard repoint specifically: the right-rail "LINE" CTA image + ปอน's styling stays intact — only the href changed. Preserves the branding directive ("ยึดตามของน้องปอนทั้งหมด เรื่อง brandding") because the link wrapper is functionally invisible.
+
+**Cross-links:**
+- Commit `5bc98ec4` — repointed `/line-notify` → `/line-settings`
+- `app/[locale]/(protected)/dashboard/page.tsx` L135-142 — the offending Link
+- 2026-05-26 entry "Deletion sweep missed two consumers" — same pattern for `package.json` test-chain references

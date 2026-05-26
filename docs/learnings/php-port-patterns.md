@@ -211,3 +211,47 @@ already be correct, and the real bug is elsewhere (here: the chrome layer).
 - V-A5 = signed manual adjustments on ANY invoice kind, no wallet move (invoice-total only), free-form reason
 
 **If you ever need to add a 4th invoice kind:** extend the `target_type` CHECK constraint + add a branch in `resolveInvoiceTarget()` (`actions/admin/invoice-adjustments.ts`). The NotifyReferenceType union also needs the new kind if you want notification deep-linking by reference_type.
+
+---
+
+## [2026-05-26] `convertIMGCHN` port copied legacy nested image path but never created the directory
+
+**Context:** ปอน rebuilt `/cart` with Tailwind (commits `c8e06e92` + `fb7939f1`) and reported "รูปบางรูปหาย" — empty-image cart rows rendered a broken-image icon. Cherry-picked her commits cleanly, then chased the missing images.
+
+**Symptom:** The legacy `convertIMGCHN($url, $size)` helper (`member/include/function.php` L1414-1437) was transcribed verbatim into `app/[locale]/(protected)/cart/page.tsx`:
+
+```ts
+function convertIMGCHN(url: string | null, size: string): string {
+  if (!url || url === "") {
+    return "/legacy/pcs/images/shops/default.png";   // ← never existed
+  }
+  // ... split + clean URL ...
+  if (u.includes("/")) { return u + size; }
+  return "/legacy/pcs/images/shops/" + u;             // ← never existed
+}
+```
+
+But `public/legacy/pcs/` only had a `shops/` subdir (with logos + default.png) — there was NO `images/shops/` subdir. So:
+- Empty `cImages` → `/legacy/pcs/images/shops/default.png` → 404
+- Bare-filename `cImages` → `/legacy/pcs/images/shops/<file>` → 404
+
+The shop LOGOS (1688/taobao/tmall/nice) worked fine because `imgProvider()` (the OTHER helper, L35-44) correctly maps to `/legacy/pcs/shops/<logo>.png` (existing dir).
+
+**Root cause:** Legacy PHP's `basePath` for product images was `member/images/shops/` (separate from `member/shops/` which held the brand logos). The transcription kept the path string but the static-mount stager only copied `shops/` (logos), never `images/shops/` (product uploads). Pre-existing bug — predates ปอน's Tailwind rebuild (same paths in `a08e7290`) — surfaced visibly when her cleaner card markup let the broken icon stand out from the noisy Bootstrap markup it replaced.
+
+**Fix:** create `public/legacy/pcs/images/shops/` + copy `default.png` to it (commit `9646dbf7`). The bare-filename branch still 404s for legacy product uploads we don't host — same as legacy PCS behaviour for orphaned image filenames, so faithful to the port.
+
+**Why this matters next time:**
+- When transcribing a legacy helper VERBATIM, the path string is only half the work — the static-mount stager has to actually have the directory at the resolved path. Greppable check after any helper port:
+  ```bash
+  # for every path the helper can resolve to, the dir must exist in public/
+  grep -nE '"/legacy/[^"]+"' lib/ app/ | sort -u
+  ```
+- A bug like this stays INVISIBLE under noisy legacy Bootstrap markup (broken-image icon blends in). A clean Tailwind rebuild surfaces it because the missing image now stands out from the otherwise-clean card. **Surfacing a pre-existing bug ≠ regression** — when a teammate reports a visual bug right after their UI rebuild, check git history first before assuming they introduced it.
+- Helper-to-static-mount audit should be part of any "legacy file port" PR checklist. The faithful-port skill should add a "grep helper paths · ls every dir" gate.
+
+**Cross-links:**
+- Commit `9646dbf7` — the directory + default.png placeholder fix
+- `app/[locale]/(protected)/cart/page.tsx` L134-152 — the verbatim transcription
+- `member/include/function.php` L1414-1437 (legacy source) — original PHP helper
+- `imgProvider()` in same file L94-112 — the helper that got the path RIGHT (shop logos)
