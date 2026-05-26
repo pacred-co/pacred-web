@@ -29,6 +29,7 @@ Last reviewed: **2026-05-26 ค่ำ — agent-orchestration NEW** (6 lessons f
 | [`pacred-design-philosophy.md`](pacred-design-philosophy.md) | Legacy = workflow source of truth · our UI = our design (Tailwind > BS4 verbatim) · 6 steps before shipping faithful port · proactive comparison not waiting for ภูม to flag | 2026-05-23 |
 | [`pacred-order-taxonomy.md`](pacred-order-taxonomy.md) | The 3 services (ฝากสั่งซื้อ · ฝากนำเข้า · ฝากโอน) + their tables + the shop → forwarder auto-spawn that confuses everyone · 4-tab filter on `/admin/forwarders` decoded · badge truth table · current Pacred port gaps | 2026-05-25 |
 | [`agent-orchestration.md`](agent-orchestration.md) | **NEW** — Wave 20 lessons orchestrating 8 parallel agents: stale base needs `git reset --hard origin/<branch>` (not `merge`) · agent dual-write to MAIN worktree via absolute paths · API timeout — scope cut to 1 responsibility per agent · PostgREST silent 1000-row cap on `select` (use `count: "exact", head: true`) · PEAK-style hub chrome (PageTopMenubar + segment pills + cards) · §0c click-through is NOT optional (curl 307 hides everything) | 2026-05-26 |
+| [`debug-discipline.md`](debug-discipline.md) | **NEW** — case studies for the [`debug-mantra`](../../.claude/skills/debug-mantra/SKILL.md) skill · 2026-05-27 "2 Issues" misdiagnosis (patched image qualities, real cause was stale Turbopack chunks) · the cost of skipping reproduce | 2026-05-27 |
 
 ---
 
