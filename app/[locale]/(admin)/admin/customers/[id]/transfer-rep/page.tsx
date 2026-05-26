@@ -86,32 +86,45 @@ export default async function TransferRepPage({
 
   // Resolve the CURRENT rep's display label (combobox no longer pre-fetches
   // the full reps list — see comment in the Promise.all above).
+  //
+  // Wave 22 — fetched admins + contact extras as 2 separate queries (admins
+  // and admin_contact_extras both FK to profiles but NOT to each other →
+  // PostgREST cross-embed fails PGRST200). profile via profiles!profile_id
+  // works (direct FK).
   type RepProfile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
   type RepContact = { display_name: string | null; direct_phone: string | null };
   let currentRepDisplay: string | null = null;
   if (p.sales_admin_id) {
-    const { data: repRow, error: repRowErr } = await admin
-      .from("admins")
-      .select(
-        `profile_id, role,
-         profile:profiles!profile_id ( member_code, first_name, last_name, phone ),
-         contact:admin_contact_extras!profile_id ( display_name, direct_phone )`,
-      )
-      .eq("profile_id", p.sales_admin_id)
-      .in("role", ["sales_admin", "super"])
-      .eq("is_active", true)
-      .limit(1)
-      .maybeSingle<{
-        profile_id: string; role: string;
-        profile: RepProfile | RepProfile[] | null;
-        contact: RepContact | RepContact[] | null;
-      }>();
+    const [{ data: repRow, error: repRowErr }, { data: repContact, error: repContactErr }] = await Promise.all([
+      admin
+        .from("admins")
+        .select(
+          `profile_id, role,
+           profile:profiles!profile_id ( member_code, first_name, last_name, phone )`,
+        )
+        .eq("profile_id", p.sales_admin_id)
+        .in("role", ["sales_admin", "super"])
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle<{
+          profile_id: string; role: string;
+          profile: RepProfile | RepProfile[] | null;
+        }>(),
+      admin
+        .from("admin_contact_extras")
+        .select("display_name, direct_phone")
+        .eq("profile_id", p.sales_admin_id)
+        .maybeSingle<RepContact>(),
+    ]);
     if (repRowErr) {
       console.error(`[admins list] failed`, { code: repRowErr.code, message: repRowErr.message });
     }
+    if (repContactErr) {
+      console.error(`[admins contact lookup] failed`, repContactErr);
+    }
     if (repRow) {
       const prof    = Array.isArray(repRow.profile) ? repRow.profile[0] : repRow.profile;
-      const contact = Array.isArray(repRow.contact) ? repRow.contact[0] : repRow.contact;
+      const contact = repContact;
       const name    = contact?.display_name ?? `${prof?.first_name ?? ""} ${prof?.last_name ?? ""}`.trim() ?? "—";
       const phone   = contact?.direct_phone ?? prof?.phone ?? "—";
       currentRepDisplay = `${name} · ${prof?.member_code ?? ""} · ${phone}`;

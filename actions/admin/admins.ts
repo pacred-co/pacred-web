@@ -288,12 +288,16 @@ export async function searchAdminsByQuery(
     const safeQ = q.replace(/[(),]/g, " ");
     const pattern = `%${safeQ}%`;
 
+    // Wave 22 — removed the inline `contact:admin_contact_extras!profile_id`
+    // embed. There's no direct FK between `admins` and `admin_contact_extras`
+    // (both FK to profiles separately), so PostgREST rejects the embed with
+    // PGRST200. Fetch contact extras separately + merge in JS — dataset is
+    // tiny so the extra round-trip is negligible.
     const { data, error } = await admin
       .from("admins")
       .select(`
         profile_id, role,
-        profile:profiles!profile_id ( member_code, first_name, last_name, phone, company_name ),
-        contact:admin_contact_extras!profile_id ( display_name, direct_phone )
+        profile:profiles!profile_id ( member_code, first_name, last_name, phone, company_name )
       `)
       .in("role", ["sales_admin", "super"])
       .eq("is_active", true)
@@ -314,22 +318,40 @@ export async function searchAdminsByQuery(
       member_code: string | null; first_name: string | null; last_name: string | null;
       phone: string | null; company_name: string | null;
     };
-    type ContactShape = { display_name: string | null; direct_phone: string | null };
     type Row = {
       profile_id: string; role: string;
       profile:    ProfileShape | ProfileShape[] | null;
-      contact:    ContactShape | ContactShape[] | null;
     };
+
+    // Fetch contact extras for the matched admins (de-dupe profile_ids first).
+    const candidateRows = (data ?? []) as Row[];
+    const profileIds = [...new Set(candidateRows.map((r) => r.profile_id))];
+    type ContactShape = { profile_id: string; display_name: string | null; direct_phone: string | null };
+    let contactsMap = new Map<string, ContactShape>();
+    if (profileIds.length > 0) {
+      const { data: contacts, error: contactsErr } = await admin
+        .from("admin_contact_extras")
+        .select("profile_id, display_name, direct_phone")
+        .in("profile_id", profileIds);
+      if (contactsErr) {
+        console.error("[searchAdminsByQuery] contact_extras lookup failed", contactsErr);
+        // Soft-fail: continue without display overrides — names still resolve via profiles.
+      } else {
+        contactsMap = new Map(
+          (contacts ?? []).map((c) => [(c as ContactShape).profile_id, c as ContactShape]),
+        );
+      }
+    }
 
     // De-dupe (a profile can hold multiple roles — `super` + `sales_admin`
     // would surface twice from the IN clause). First role wins; we don't
     // pretend to rank by role here.
     const seen = new Set<string>();
     const hits: AdminSearchHit[] = [];
-    for (const r of (data ?? []) as Row[]) {
+    for (const r of candidateRows) {
       if (seen.has(r.profile_id)) continue;
       const prof    = Array.isArray(r.profile) ? r.profile[0] : r.profile;
-      const contact = Array.isArray(r.contact) ? r.contact[0] : r.contact;
+      const contact = contactsMap.get(r.profile_id) ?? null;
       // The OR filter is on profiles.* — null-profile rows (deleted profile)
       // shouldn't match anyway, but skip defensively.
       if (!prof) continue;
@@ -451,38 +473,56 @@ export async function adminBulkTransferSalesRepTb(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // Validate target admin: must exist as a Pacred admin (admins JOIN
-      // admin_contact_extras WHERE legacy_admin_id = the requested string)
-      // and be active. Wave 22 migration — was reading tb_admin directly
-      // (lowercase against prod's camelCase columns → silent empty).
+      // Validate target admin: must exist as a Pacred admin (lookup via
+      // bridge column admin_contact_extras.legacy_admin_id, then verify
+      // matching profile + admins-role-grant both active).
       //
       // The transfer-rep flow stores the LEGACY varchar adminID string in
       // tb_users.adminidsale to preserve PHP-staff visibility — so we
-      // resolve the requested legacy string via the bridge column
-      // admin_contact_extras.legacy_admin_id that ภูม fills in when
-      // recreating each legacy admin through /admin/admins/new.
-      const { data: target, error: targetErr } = await admin
+      // resolve the requested legacy string via the bridge column ภูม fills
+      // in when recreating each legacy admin through /admin/admins/new.
+      //
+      // 3 separate queries (NOT a PostgREST embed): admins and
+      // admin_contact_extras both FK to profiles but NOT to each other →
+      // cross-embed fails PGRST200. Profile embed via profiles!profile_id
+      // works because that IS a direct FK.
+      const { data: extrasRow, error: extrasErr } = await admin
         .from("admin_contact_extras")
         .select(`
-          legacy_admin_id,
-          nickname,
-          profile:profiles!profile_id ( id, first_name, last_name, is_active ),
-          admin:admins!profile_id ( role, is_active )
+          profile_id, legacy_admin_id, nickname,
+          profile:profiles!profile_id ( id, first_name, last_name, is_active )
         `)
         .eq("legacy_admin_id", d.new_admin_userid)
         .maybeSingle();
-      if (targetErr) {
-        console.error(`[admin transfer lookup] failed`, { code: targetErr.code, message: targetErr.message });
-        return { ok: false, error: `db_error:${targetErr.code ?? "unknown"}` };
+      if (extrasErr) {
+        console.error(`[admin transfer lookup] failed`, { code: extrasErr.code, message: extrasErr.message });
+        return { ok: false, error: `db_error:${extrasErr.code ?? "unknown"}` };
       }
-      if (!target) return { ok: false, error: "ไม่พบ admin ปลายทาง (legacy_admin_id ไม่ตรง · ภูม recreate ผ่าน /admin/admins/new ก่อน)" };
+      if (!extrasRow) {
+        return { ok: false, error: "ไม่พบ admin ปลายทาง (legacy_admin_id ไม่ตรง · ภูม recreate ผ่าน /admin/admins/new ก่อน)" };
+      }
 
-      // The .select() returns profile + admin as either single objects or
-      // arrays depending on the FK shape. Normalise to single.
-      const profile = Array.isArray(target.profile) ? target.profile[0] : target.profile;
-      const adminRow = Array.isArray(target.admin) ? target.admin[0] : target.admin;
+      const profile = Array.isArray(extrasRow.profile) ? extrasRow.profile[0] : extrasRow.profile;
       if (!profile?.is_active) return { ok: false, error: "admin ปลายทางถูก suspend" };
-      if (!adminRow?.is_active) return { ok: false, error: "admin ปลายทางไม่มี role-grant ที่ active" };
+
+      // Verify the profile has at least one active admins row.
+      const { data: adminRow, error: adminErr } = await admin
+        .from("admins")
+        .select("role, is_active")
+        .eq("profile_id", extrasRow.profile_id)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      if (adminErr) {
+        console.error(`[admin transfer lookup] admins gate failed`, adminErr);
+        return { ok: false, error: `db_error:${adminErr.code ?? "unknown"}` };
+      }
+      if (!adminRow) return { ok: false, error: "admin ปลายทางไม่มี role-grant ที่ active" };
+
+      const target = {
+        legacy_admin_id: extrasRow.legacy_admin_id,
+        nickname:        extrasRow.nickname,
+      };
 
       // Normalise user ids to upper-case (PR uses upper case in prod).
       const userIds = d.user_ids.map((u) => u.toUpperCase());
@@ -553,32 +593,46 @@ export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: Tb
     ["sales_admin", "super"],
     async () => {
       const admin = createAdminClient();
-      const { data, error } = await admin
+
+      // 3 separate queries (NOT a PostgREST embed). admins and
+      // admin_contact_extras both FK to profiles but NOT to each other →
+      // PostgREST cross-embed fails PGRST200. profile via profiles!profile_id
+      // works (direct FK); admins fetched separately by profile_id.
+      const { data: extrasRows, error: extrasErr } = await admin
         .from("admin_contact_extras")
         .select(`
-          legacy_admin_id,
-          nickname,
-          department,
-          section,
-          profile:profiles!profile_id ( first_name, last_name, avatar_url, is_active ),
-          admin:admins!profile_id ( is_active )
+          profile_id, legacy_admin_id, nickname, department, section,
+          profile:profiles!profile_id ( first_name, last_name, avatar_url, is_active )
         `)
         .not("legacy_admin_id", "is", null)
         .order("nickname", { ascending: true, nullsFirst: false })
         .limit(500);
-      if (error) return { ok: false, error: error.message };
+      if (extrasErr) return { ok: false, error: extrasErr.message };
 
-      // Flatten the joined shape + filter to active. PostgREST returns the
-      // joined rows as arrays when there can be multiple matches; we
-      // collapse to single record + apply is_active gates here so the
-      // server-side query stays simple.
-      const rows: TbAdminLite[] = (data ?? [])
+      const candidates = extrasRows ?? [];
+      const profileIds = [...new Set(candidates.map((r) => (r as { profile_id: string }).profile_id))];
+
+      // Fetch active admins rows for those profiles
+      let activeProfileIds = new Set<string>();
+      if (profileIds.length > 0) {
+        const { data: adminRows, error: adminErr } = await admin
+          .from("admins")
+          .select("profile_id")
+          .in("profile_id", profileIds)
+          .eq("is_active", true);
+        if (adminErr) return { ok: false, error: adminErr.message };
+        activeProfileIds = new Set(
+          (adminRows ?? []).map((r) => (r as { profile_id: string }).profile_id),
+        );
+      }
+
+      // Flatten + filter to active.
+      const rows: TbAdminLite[] = candidates
         .map((r) => {
           const profile = Array.isArray(r.profile) ? r.profile[0] : r.profile;
-          const adminRow = Array.isArray(r.admin) ? r.admin[0] : r.admin;
-          return { r, profile, adminRow };
+          return { r: r as { profile_id: string; legacy_admin_id: string | null; nickname: string | null; department: string | null; section: string | null }, profile };
         })
-        .filter(({ profile, adminRow }) => profile?.is_active && adminRow?.is_active)
+        .filter(({ r, profile }) => profile?.is_active && activeProfileIds.has(r.profile_id))
         .map(({ r, profile }) => ({
           adminid:       r.legacy_admin_id ?? "",
           adminnickname: r.nickname ?? null,

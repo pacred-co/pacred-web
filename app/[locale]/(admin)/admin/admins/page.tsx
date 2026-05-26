@@ -220,58 +220,24 @@ export default async function AdminTablePage({
   const sp = await searchParams;
   const admin = createAdminClient();
 
-  // ── admins JOIN profiles JOIN admin_contact_extras ─────────────
-  // profiles!profile_id = inner join (every admin row MUST have a profile);
-  // admin_contact_extras!profile_id = left join (4 native admins lack rows).
-  let q = admin
-    .from("admins")
-    .select(
-      `
-      profile_id, role, is_active, granted_at, granted_by,
-      profile:profiles!profile_id (
-        id, member_code, first_name, last_name, email, phone, avatar_url,
-        birthday, sex, last_login_at, is_active, migrated_from_pcs, legacy_pcs_user_id
-      ),
-      extras:admin_contact_extras!profile_id (
-        nickname, display_name, direct_phone, company, employee_type,
-        department, section, work_email, work_phone, hired_at, suspended_at,
-        contract_end_date, legacy_admin_id, ended_at, legacy_admin_type,
-        legacy_admin_status, admin_note
-      )
-      `,
-    );
+  // ── 3 separate queries + JS merge ──────────────────────────────
+  // Why not PostgREST JOIN embed: `admins` and `admin_contact_extras` both
+  // FK to `profiles(id)` but NOT to each other. PostgREST embed syntax
+  // (`extras:admin_contact_extras!profile_id`) requires a direct FK between
+  // the two tables — fails with PGRST200 "Could not find a relationship
+  // between 'admins' and 'admin_contact_extras' in the schema cache" no
+  // matter the schema-cache state. Dataset is tiny (~15 admin rows after
+  // ภูม recreates), so 3 small queries + JS merge is the clean shape.
 
-  // Status filter (legacy `?s=`) — defaults to "1" (active) per legacy UX,
-  // but we render counts for all/active/inactive in the tabs above.
+  // Query 1 — admin role grants (with is_active filter applied here)
+  let adminQ = admin.from("admins").select("profile_id, role, is_active, granted_at, granted_by");
   switch (sp.s) {
-    case "1":   q = q.eq("is_active", true);  break;
-    case "2":   q = q.eq("is_active", false); break;
+    case "1":   adminQ = adminQ.eq("is_active", true);  break;
+    case "2":   adminQ = adminQ.eq("is_active", false); break;
     case "all": /* no action */ break;
     default:    /* not set — render all (matches legacy "no `s` → unfiltered") */ break;
   }
-
-  // Company filter (`?c=`) — applied via the join sidecar.
-  const companyEnum = companyParamToEnum(sp.c);
-  if (companyEnum) q = q.eq("admin_contact_extras.company", companyEnum);
-
-  // Employee type filter (`?type=`)
-  const typeEnums = typeParamToEmployeeTypes(sp.type);
-  if (typeEnums && typeEnums.length === 1) {
-    q = q.eq("admin_contact_extras.employee_type", typeEnums[0]);
-  } else if (typeEnums && typeEnums.length > 1) {
-    q = q.in("admin_contact_extras.employee_type", typeEnums);
-  }
-
-  // Position filter (`?position=`) — best-effort text match on the `section`
-  // column (freeform text in our schema vs numeric in legacy). Bookmarks
-  // pointing at numeric legacy codes won't resolve here.
-  if (sp.position) {
-    q = q.ilike("admin_contact_extras.section", `%${sp.position}%`);
-  }
-
-  // DataTables default order — granted_at desc (newest first, ≈ legacy
-  // adminregistered desc).
-  q = q.order("granted_at", { ascending: false, nullsFirst: false });
+  adminQ = adminQ.order("granted_at", { ascending: false, nullsFirst: false });
 
   // ── Status overview counts (admins table only — fast) ──────────
   const buildCountQ = (statusVal: "active" | "inactive" | "all") => {
@@ -281,41 +247,101 @@ export default async function AdminTablePage({
     return cq;
   };
 
-  const [tableRes, sAllRes, s1Res, s2Res] = await Promise.all([
-    q,
+  const [adminRes, sAllRes, s1Res, s2Res] = await Promise.all([
+    adminQ,
     buildCountQ("all"),
     buildCountQ("active"),
     buildCountQ("inactive"),
   ]);
 
   // §0c — surface real errors instead of swallowing into empty list.
-  if (tableRes.error) {
-    console.error("[admins list] admins JOIN query failed", {
-      code:    tableRes.error.code,
-      message: tableRes.error.message,
-      details: tableRes.error.details,
-      hint:    tableRes.error.hint,
+  if (adminRes.error) {
+    console.error("[admins list] admins query failed", {
+      code:    adminRes.error.code,
+      message: adminRes.error.message,
+      details: adminRes.error.details,
+      hint:    adminRes.error.hint,
     });
     throw new Error(
-      `admins: failed to load admins/profiles/extras — ${tableRes.error.code ?? "unknown"}: ${tableRes.error.message}`,
+      `admins: failed to load admins — ${adminRes.error.code ?? "unknown"}: ${adminRes.error.message}`,
     );
   }
   if (sAllRes.error) console.error("[admins list] count(all) failed", sAllRes.error);
   if (s1Res.error)   console.error("[admins list] count(active) failed", s1Res.error);
   if (s2Res.error)   console.error("[admins list] count(inactive) failed", s2Res.error);
 
-  // Supabase returns joined relations as objects (single FK) — narrow the shape.
-  // Note: when filtering on a joined relation column with `eq("relation.col", v)`,
-  // PostgREST returns rows whose `relation` may be null when the filter excludes
-  // them. We post-filter here to drop those (matches user expectation for an
-  // applied filter).
-  const rawRows = (tableRes.data ?? []) as unknown as AdminRow[];
-  const rows: AdminRow[] = rawRows.filter((r) => {
-    if (companyEnum && !r.extras) return false;
-    if (typeEnums && !r.extras)   return false;
-    if (sp.position && !r.extras) return false;
-    return true;
-  });
+  const adminGrants = adminRes.data ?? [];
+  const profileIds = [...new Set(adminGrants.map((r) => r.profile_id))];
+
+  // Compute extras filter inputs ahead of the second-round queries so they're
+  // available for the JS post-filter pass below too.
+  const companyEnum = companyParamToEnum(sp.c);
+  const typeEnums = typeParamToEmployeeTypes(sp.type);
+
+  // Query 2 + 3 — profiles + extras (parallel) for the matched profile_ids
+  const [profilesRes, extrasRes] = profileIds.length === 0
+    ? [{ data: [], error: null }, { data: [], error: null }] as const
+    : await Promise.all([
+        admin.from("profiles")
+          .select(
+            "id, member_code, first_name, last_name, email, phone, avatar_url, " +
+            "birthday, sex, last_login_at, is_active, migrated_from_pcs, legacy_pcs_user_id",
+          )
+          .in("id", profileIds),
+        admin.from("admin_contact_extras")
+          .select(
+            "profile_id, nickname, display_name, direct_phone, company, employee_type, " +
+            "department, section, work_email, work_phone, hired_at, suspended_at, " +
+            "contract_end_date, legacy_admin_id, ended_at, legacy_admin_type, " +
+            "legacy_admin_status, admin_note",
+          )
+          .in("profile_id", profileIds),
+      ]);
+
+  if (profilesRes.error) {
+    console.error("[admins list] profiles fetch failed", profilesRes.error);
+    throw new Error(`admins: failed to load profiles — ${profilesRes.error.message}`);
+  }
+  if (extrasRes.error) {
+    console.error("[admins list] admin_contact_extras fetch failed", extrasRes.error);
+    throw new Error(`admins: failed to load admin_contact_extras — ${extrasRes.error.message}`);
+  }
+
+  // Build lookup maps (O(1) per merge) + merge into AdminRow shape
+  const profilesMap = new Map(
+    (profilesRes.data ?? []).map((p) => [(p as { id: string }).id, p]),
+  );
+  const extrasMap = new Map(
+    (extrasRes.data ?? []).map((e) => [(e as { profile_id: string }).profile_id, e]),
+  );
+
+  let rawRows: AdminRow[] = adminGrants.map((g) => ({
+    profile_id: g.profile_id,
+    role:       g.role,
+    is_active:  g.is_active,
+    granted_at: g.granted_at,
+    granted_by: g.granted_by,
+    profile:    (profilesMap.get(g.profile_id) ?? null) as AdminRow["profile"],
+    extras:     (extrasMap.get(g.profile_id) ?? null) as AdminRow["extras"],
+  }));
+
+  // Apply extras-dependent filters in JS (previously PostgREST .eq on the
+  // joined relation column — now post-filter since we fetched separately).
+  if (companyEnum) {
+    rawRows = rawRows.filter((r) => r.extras?.company === companyEnum);
+  }
+  if (typeEnums && typeEnums.length > 0) {
+    rawRows = rawRows.filter(
+      (r) => r.extras?.employee_type != null && typeEnums.includes(r.extras.employee_type),
+    );
+  }
+  if (sp.position) {
+    const needle = sp.position.toLowerCase();
+    rawRows = rawRows.filter((r) => r.extras?.section?.toLowerCase().includes(needle) ?? false);
+  }
+
+  // Drop rows with no profile (FK should prevent · defensive).
+  const rows: AdminRow[] = rawRows.filter((r) => r.profile !== null);
 
   const sAll = sAllRes.count ?? 0;
   const s1   = s1Res.count   ?? 0;

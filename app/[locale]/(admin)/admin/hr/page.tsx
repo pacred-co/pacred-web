@@ -6,13 +6,15 @@ export default async function AdminHRPage() {
   await requireAdmin();
   const admin = createAdminClient();
 
-  // Active admin users grouped by role — basic HR roster
+  // Active admin users grouped by department.
+  // Wave 22 — split into 2 queries + JS merge. admins and admin_contact_extras
+  // both FK to profiles but NOT to each other → PostgREST cross-embed fails
+  // PGRST200. profile via profiles!profile_id works (direct FK).
   const { data: adminRows, error: adminRowsErr } = await admin
     .from("admins")
     .select(`
       profile_id, role, is_active, granted_at,
-      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email ),
-      contact:admin_contact_extras!profile_id ( display_name, direct_phone, department, section )
+      profile:profiles!profile_id ( member_code, first_name, last_name, phone, email )
     `)
     .eq("is_active", true);
   if (adminRowsErr) {
@@ -20,18 +22,40 @@ export default async function AdminHRPage() {
   }
 
   type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
-  type Contact = { display_name: string | null; direct_phone: string | null; department: string | null; section: string | null };
+  type Contact = { profile_id: string; display_name: string | null; direct_phone: string | null; department: string | null; section: string | null };
   type Row = {
     profile_id: string; role: string; granted_at: string;
     profile: Profile | Profile[] | null;
-    contact: Contact | Contact[] | null;
+    contact: Contact | null;
   };
 
-  // Group by department (from admin_contact_extras)
+  const profileIds = [...new Set((adminRows ?? []).map((r) => (r as { profile_id: string }).profile_id))];
+
+  // Fetch contact extras for the matched profiles
+  let contactsMap = new Map<string, Contact>();
+  if (profileIds.length > 0) {
+    const { data: contactsRows, error: contactsErr } = await admin
+      .from("admin_contact_extras")
+      .select("profile_id, display_name, direct_phone, department, section")
+      .in("profile_id", profileIds);
+    if (contactsErr) {
+      console.error(`[hr contact_extras] failed`, contactsErr);
+    } else {
+      contactsMap = new Map(
+        (contactsRows ?? []).map((c) => [(c as Contact).profile_id, c as Contact]),
+      );
+    }
+  }
+
+  // Merge contact onto each row + group by department.
+  const mergedRows: Row[] = ((adminRows ?? []) as Array<Omit<Row, "contact">>).map((r) => ({
+    ...r,
+    contact: contactsMap.get(r.profile_id) ?? null,
+  }));
+
   const byDept = new Map<string, Row[]>();
-  for (const r of (adminRows ?? []) as Row[]) {
-    const c = Array.isArray(r.contact) ? r.contact[0] : r.contact;
-    const dept = c?.department ?? "(ไม่ระบุฝ่าย)";
+  for (const r of mergedRows) {
+    const dept = r.contact?.department ?? "(ไม่ระบุฝ่าย)";
     (byDept.get(dept) ?? byDept.set(dept, []).get(dept)!).push(r);
   }
 
