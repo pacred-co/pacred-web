@@ -1,11 +1,53 @@
-# 🌙 Poom save-point — 2026-05-27 ค่ำ (Wave 22 + Wave 23 P0 mega-session)
+# 🌙 Poom save-point — 2026-05-27 ค่ำ (Wave 22 + Wave 23 P0 + Wave 23 P1 batch 1 SHIPPED)
 
-> ภูม กำลังเปลี่ยน machine (ที่ทำงาน → ที่บ้าน). อ่านไฟล์นี้ก่อนทุกอย่าง.
-> ก่อนหน้า: ภูม session เช้า/บ่าย คลีน Wave 20 P1 batch 2 + Wave 21 P0 +
-> Wave 22 tb_admin merge. ค่ำนี้: ภูม flag bug 4 ข้อ → spawn 3 audit agents
-> → tech-debt master inventory → Wave 23 P0 batch 1 (4 fixes parallel).
+> ภูม กำลังเปลี่ยน machine (ที่บ้าน → ที่ทำงาน · resume คืนนี้/พรุ่งนี้).
+> อ่านไฟล์นี้ก่อนทุกอย่าง.
+> ก่อนหน้า: Wave 20 P1 batch 2 + Wave 21 P0 + Wave 22 tb_admin merge + Wave 23 P0 batch 1.
+> รอบนี้ (late ค่ำ ที่บ้าน): Wave 23 P1 batch 1 ปิด 7 ของ 9 P1 items + 2 phantoms flagged + 6 P0 surfaces browser-verified §0c.
 
-## TL;DR — 2 บรรทัด
+## TL;DR — 3 บรรทัด
+
+วันนี้ปิด **33+ commits** บน Poom-pacred · Wave 22 (perf+merge) + Wave 23 P0 batch 1 (4 fixes) + **Wave 23 P1 batch 1 (5 commits late ค่ำ · 5 parallel agents)** · 10+ agents · 4 intel docs + tech-debt master + browser-verify §0c ครบ.
+**Late ค่ำ ผ่าน:** /admin/customers + /admin/accounting catch-all + /forwarders/combine-bill + /admin/organization-email + /barcode/driver/import + /admin/admins/[uuid] ทั้งหมดเช็คผ่าน Chrome MCP จริง (ไม่ใช่ route smoke). ภูม apply 0091 + 0110 เสร็จ.
+**ไปทำต่อที่ทำงาน:** pickup Wave 23 P1 batch 2 (6 Bootstrap pages เหลือ) หรือ batch 3 (#15 PCS Freight port) หรือ D apply 13 admins recreate.
+
+---
+
+## 🔥 Wave 23 P1 batch 1 (late ค่ำ · 5 commits `d4638057..ba494715`)
+
+5 parallel agents (A · B · D · E ทำพร้อมกัน · C theme normalize ทำ last หลัง batch ส่งออกแล้ว) ปิด **7 ของ 9 P1 items + 2 phantoms flagged**:
+
+| Commit | Item | Agent | Type |
+|---|---|---|---|
+| `d4638057` | P1-8a yuan-payments label "ดู / แก้ไข" → "ดู" (86 rows) | A | fix |
+| `682ff170` | P1-7 withdrawals URL forward (kind+status+view=tx) | B | fix |
+| `44d31964` | P1-13 5 disbursement adopt PageTopMenubar + new `lib/admin/disbursement-menubar.ts` | D | fix |
+| `cd21c4f0` | P1-11+9 cnt-hs + cart + cart/add Tailwind rewrite (-791 LOC · GZE truncate absorbed) | E | feat |
+| `ba494715` | P1-14 theme normalize (157 files · primary-600 + amber pending) | C | fix |
+
+**Phantoms flagged (Agent A discipline · debug-mantra in action):**
+- ❌ #8b service-orders/[id] "แก้ไข" → "ดู" — page **NOT read-only** (embeds AdminServiceOrderUpdateForm + BillToOverridePanel + SpawnForwarderForm). Brief in master tech-debt was wrong premise.
+- ❌ #10 /admin/disbursements + /admin/hr/employees 404 — **zero `<Link href>` refs in repo**. Live route is `/admin/accounting/disbursements` (exists). Master tech-debt confused old-vs-new path.
+
+**Browser-verified §0c click-through (not just curl smoke · per AGENTS.md §0c):**
+
+| Surface | Verified |
+|---|---|
+| `/admin/customers` | 200 rows · `.scrollbar-x-visible` works · table overflows 1675>884 · `<dialog>` mounted (PacredDialog Wave 23 P0 #1) · 200 suspend buttons |
+| `/admin/accounting/cargo/income/quotation/shop/new` | catch-all stub renders ✅ (Wave 23 P0 #2) |
+| `/admin/forwarders/combine-bill` + `/print?id=10015` | 989 rows · h1 OK · print invoice renders |
+| `/admin/organization-email` | 4 `<dialog>` mounted (PacredDialog modals) |
+| `/admin/barcode/driver/import` | 1 `<dialog>` mounted · scanner UI · "คำอธิบายระบบ" button live |
+| `/admin/admins/[uuid]` | h1="Pond 007" · **is500=false** ✅ (Wave 22 PGRST200 + Wave 23 P0 #3 rewrite both confirmed) · action toolbar + role-grants history · sidecar bannered |
+| `/admin/cnt-hs` | h1="รายการเบิกเงินค่าตู้" · 200 rows · scrollbar visible · no `.pcs-legacy` (Agent E rewrite live) |
+| `/admin/service-orders/cart` | h1="รถเข็นสินค้า" · no `.pcs-legacy` (Agent E rewrite live) |
+| `/admin/sales-payouts` | 5 disbursement menubar links mounted (Agent D PageTopMenubar live) |
+
+**ผ่านครบ 6 ของ 6 Wave 23 P0 batch 1 surfaces + ทุก P1 batch 1 surfaces.**
+
+---
+
+## TL;DR เดิม (Wave 22 + P0 batch 1) — 2 บรรทัด
 
 วันนี้ปิด **26+ commits** บน Poom-pacred · Wave 22 (perf+merge) + Wave 23 P0 batch 1 (4 critical fixes ที่ภูม flag) · 10+ agents · 4 intel docs + tech-debt master · ภูม apply 0091 + 0110 เสร็จ. พรุ่งนี้ pickup ที่ Wave 23 P1 batch (9 items) หรือ verify P0 ที่บ้าน
 
@@ -20,14 +62,15 @@ git rev-list --left-right --count HEAD...origin/Poom-pacred  # ต้อง 0/0
 git log --oneline -8
 ```
 
-**Expected HEAD:** `19ae7ff` (Agent P combine-bill) · or this save-point commit if pushed later
+**Expected HEAD:** `ba494715` (Agent C theme normalize · 5th of late-ค่ำ batch) · or this save-point commit if pushed later
 
 | Branch | HEAD | สถานะ |
 |---|---|---|
-| `main` | `9d8467b` | production (ภูม Wave 20+22+23 ยังไม่ merge) |
-| `Poom-pacred` | `19ae7ff` (or later) | **active · all Wave 20-23-P0 work landed** |
-| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel lane) |
-| Our worktree | `19ae7ff` | ✅ in sync with Poom-pacred |
+| `main` | `8d452e87` (= dave-pacred) | production · เดฟ promote D1 customer port (LIFF + cart Tailwind + mobile polish) |
+| `Poom-pacred` | **`ba494715`** | **active · Wave 20-23-P0 + Wave 23 P1 batch 1 (5 commits late-ค่ำ) landed** |
+| `dave-pacred` | `8d452e87` | = main · customer-side D1 (don't merge — parallel lane) |
+| `Poom` (V3) | `32285b05` | 🥶 FROZEN since 2026-05-19 (last commit = "FROZEN" marker doc) |
+| Our worktree | `ba494715` | ✅ in sync 0/0 |
 
 ---
 
@@ -114,34 +157,38 @@ git log --oneline -8
    ```sql
    DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';
    ```
-3. **Browser-verify Wave 23 P0 batch 1** (after session) — 6 surfaces above
+3. ✅ **Wave 23 P0 batch 1 — browser-verified ✅** (late-ค่ำ session · 6/6 surfaces passed §0c)
+4. 🟢 **Recreate 13 admins via `/admin/admins/new`** (Wave 22 follow-up · 45-60 min · use `docs/research/tb-admin-13-row-reference.md`)
 
 ---
 
 ## 🎯 Pickup สำหรับ session ถัดไป
 
-### Option A — Wave 23 P1 batch (9 items · ~5-7h wallclock with parallel agents) 🟠
-Per `docs/research/admin-tech-debt-master-2026-05-27.md`:
-- /admin/withdrawals strips ?kind ?status URL params
-- ดู/แก้ไข labels mislead — yuan-payments/[id] + service-orders/[id] are READ-ONLY
-- /admin/cnt-hs "ข้อมูลเพิ่มเติม" GZE overflow
-- /admin/disbursements + /admin/hr/employees 404
-- 9 Bootstrap-chrome pages (cnt-hs · service-orders/cart + add · reports/sales-by-rep · user-sales-history × 2 · reports/system · withdrawal/freight-th)
-- 5 disbursement pages roll own header (no PageTopMenubar)
-- brand-red 2 shades + Pending status 2 colors normalize
-- PCS Freight report-shops-profit-pay port gap
+### Option A — Wave 23 P1 batch 2 (6 Bootstrap pages เหลือ · ~3-5h with parallel agents) 🟠
+6 ของ 9 Bootstrap pages ที่ยังไม่ Tailwind rewrite (batch 1 ทำไป 3 หน้า cnt-hs + cart + cart/add):
+- /admin/reports/sales-by-rep
+- /admin/reports/user-sales-history (× 2 routes)
+- /admin/reports/system
+- /admin/withdrawal/freight-th (#12 separate · `.pcs-legacy` stub)
+- (ตรวจชื่อหน้าจริงๆ ก่อน spawn agents · ภูม flag ใน L audit)
 
-### Option B — Wave 23 P2 polish (~6-8h) 🟡
+### Option B — Wave 23 P1 batch 3 (#15 PCS Freight port) 🟠
+PCS Freight `report-shops-profit-pay.php` no Pacred equivalent · port properly จาก legacy:
+- Read legacy at `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-shops-profit-pay.php`
+- New page at `app/[locale]/(admin)/admin/reports/shops-profit-pay/page.tsx`
+- ~3h estimate
+
+### Option C — Wave 23 P2 polish (~6-8h) 🟡
 - 4 form-legacy pages (wallet/add · yuan-payments/new · customers/transfer-rep · forwarders/combine-bill/add) Tailwind rewrite
 - /admin/reports V-G6 analytics cards = 0 (wire SUM/COUNT RPCs)
 - admin-profile-client form-control verify
 
-### Option C — Wave 21 P2 Phase C RPC consolidation (~4h)
+### Option D — Recreate 13 admins via /admin/admins/new (ภูม manual ~45-60 min) 🟢
+Currently /admin/admins shows only 4 native super-admins · 13 legacy admins ต้อง recreate ผ่าน form. Reference: `docs/research/tb-admin-13-row-reference.md` (เปิดข้างกัน sip coffee).
+
+### Option E — Wave 21 P2 Phase C RPC consolidation (~4h)
 - `get_admin_sidebar_counts()` (cut 22 RTTs → 1)
 - `get_dashboard_kpi()` + `get_wallet_system_totals()` (unlock 3 Phase A TODO SUM cards)
-
-### Option D — Verify ภูม เอง ที่บ้าน (~30-45 min) 🟢
-Browser-test 6 surfaces ที่เพิ่ง fix · ดูว่าใช้งานได้จริง · จับบั๊กที่ Agent ยังไม่เจอ
 
 ---
 
