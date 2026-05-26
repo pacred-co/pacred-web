@@ -39,6 +39,14 @@ export type RegisterResumeState = {
 };
 type ServiceId = "import" | "export" | "customs" | "order" | "payment";
 type SourceId = "line" | "fb" | "google" | "youtube" | "tiktok" | "ig" | "friend" | "ad";
+/**
+ * Legacy `register.php` `<select name="shopUser">` values — the
+ * "ซื้อไปใช้เอง" / "ซื้อไปขาย" question. Stored verbatim as the legacy
+ * varchar(1) `"1"` / `"2"`; the server action maps "1"→shop_user=false
+ * (use-self), "2"→shop_user=true (resell). Per the legacy column
+ * comment in 0081_pcs_legacy_schema.sql: `'1=ซื้อไปใข้เอง'`.
+ */
+type ShopUserId = "1" | "2";
 
 /* ─────────────────────────── CONSTANTS ─────────────────────────── */
 const ERR: Record<string, string> = {
@@ -264,6 +272,9 @@ function PersonalForm({ recom }: { recom: string | null }) {
   const [showPwd, setShowPwd]     = useState(false);
   const [services, setServices]   = useState<ServiceId[]>([]);
   const [source, setSource]       = useState<SourceId | null>(null);
+  // Legacy register.php <select name="shopUser"> — "ซื้อไปใช้เอง" / "ซื้อไปขาย".
+  // Required field per legacy; null means the customer has not picked yet.
+  const [shopUser, setShopUser]   = useState<ShopUserId | null>(null);
   const [email, setEmail]         = useState("");
   const [agreed, setAgreed]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -296,6 +307,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
       services,
       howKnow: source ?? null,
       recom,
+      shopUser,
       email: email || "",
       otp,
       agreed,
@@ -320,6 +332,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
 
   function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
+    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
@@ -420,6 +433,13 @@ function PersonalForm({ recom }: { recom: string | null }) {
         </FieldWrap>
       </div>
 
+      {/* Shop-user — legacy <select name="shopUser"> on register.php
+          "ซื้อไปใช้เอง / ซื้อไปขาย". Required field per legacy. Feeds
+          sales segmentation (profiles.shop_user boolean). */}
+      <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
+        <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+      </FieldWrap>
+
       {/* Email (optional) */}
       <FieldWrap
         label={<>อีเมล <span className="ml-1 rounded bg-surface px-1.5 py-0.5 text-[11px] font-normal text-muted">ไม่จำเป็น</span></>}
@@ -464,6 +484,9 @@ function JuristicForm({
   const [showPwd, setShowPwd]   = useState(false);
   const [services, setServices] = useState<ServiceId[]>([]);
   const [source, setSource]     = useState<SourceId | null>(null);
+  // Legacy register.php <select name="shopUser"> — same as PersonalForm.
+  // Required for the new account; null means the customer has not picked yet.
+  const [shopUser, setShopUser] = useState<ShopUserId | null>(null);
 
   /* step 1 OTP phase (B1 — Sunday-night blocker) */
   const [step1Phase, setStep1Phase] = useState<"form" | "otp">("form");
@@ -573,6 +596,7 @@ function JuristicForm({
       services,
       howKnow: source ?? null,
       recom,
+      shopUser,
       otp,
       captchaToken,
     });
@@ -587,6 +611,7 @@ function JuristicForm({
   }
 
   function nextStep1() {
+    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     setError(null);
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
@@ -704,6 +729,12 @@ function JuristicForm({
               <SourceChips selected={source} onSelect={setSource} />
             </FieldWrap>
           </div>
+
+          {/* Shop-user — legacy register.php <select name="shopUser">.
+              Required per legacy; feeds sales segmentation. */}
+          <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
+            <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+          </FieldWrap>
 
           {error && <ErrorBox msg={error} />}
           <HCaptchaInvisible ref={captchaRef} />
@@ -988,6 +1019,35 @@ function SourceChips({ selected, onSelect }: { selected: SourceId | null; onSele
             {s.label}
           </option>
         ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+    </div>
+  );
+}
+
+/**
+ * ShopUserSelect — legacy `register.php` `<select name="shopUser">`.
+ *
+ *   Legacy options:
+ *     value="1" — ซื้อไปใช้เอง  (use-self · default sales segment)
+ *     value="2" — ซื้อไปขาย     (resell · reseller segment)
+ *
+ * Values stored in `tb_users.shopuser` / `tb_register.shopuser` as a
+ * varchar(1) (column comment: `'1=ซื้อไปใข้เอง'`). The server action
+ * maps `"1"`→`profiles.shop_user=false`, `"2"`→`true`. Per
+ * d1-fidelity-customer.md §3.2.
+ */
+function ShopUserSelect({ selected, onSelect }: { selected: ShopUserId | null; onSelect: (id: ShopUserId) => void }) {
+  return (
+    <div className="relative">
+      <select
+        value={selected ?? ""}
+        onChange={(e) => onSelect(e.target.value as ShopUserId)}
+        className={`${INPUT_BASE} appearance-none pr-9 cursor-pointer ${selected ? "text-foreground" : "text-muted"}`}
+      >
+        <option value="" disabled>เลือกประเภทการซื้อสินค้า</option>
+        <option value="1" className="text-foreground">ซื้อไปใช้เอง</option>
+        <option value="2" className="text-foreground">ซื้อไปขาย</option>
       </select>
       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
     </div>
