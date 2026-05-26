@@ -2,7 +2,85 @@
 
 ---
 
-# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX + tb_admin MERGE SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
+# 🌙 2026-05-27 ค่ำ — WAVE 22 + WAVE 23 P0 SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
+
+ภูม mega-session วันนี้ — เช้า/บ่าย Wave 22 (perf root-cause + tb_admin merge) · ค่ำ ภูม flag 4 bugs → 3 audit agents → master tech-debt doc → Wave 23 P0 batch 1 ครบ 4 fixes. ภูม กลับบ้านจาก work computer → resume ที่บ้าน.
+
+**📦 28+ commits today (push range `22d5e37..<see save-point>` on Poom-pacred):**
+
+**Wave 20-22 sweep (เช้า/บ่าย):**
+- Wave 20 P1 batch 2 (wallet/add · yuan-payments/new · reports/{payment,shop,forwarder}) — Tailwind chrome
+- Wave 21 P0 — shop→forwarder auto-spawn · Wave 21 deferred admin-profile jQuery → native dialog
+- Wave 21 P2 — migration 0109 (23 partial indexes · applied to prod · /admin warm 1.88s vs cold 2.6s confirmed) + Phase A 4 quick wins
+- NEW skills (`debug-mantra` + `management-talk` · 16 total) + learning (`debug-discipline.md` · "2 Issues" case study)
+- **Wave 22 tb_admin → admins merge** (5 phases · migration 0110 + 3 intel docs + list page + CRUD forms + pre-existing bug fix · 10+ agents)
+- **PostgREST PGRST200 cross-embed fix** (4 files · captured as learning in `supabase-rls-patterns.md`)
+
+**Wave 22 close-out (ค่ำ · ภูม 4-issue flag):**
+- fix · sanitize 9 placeholders (พี่ป๊อป's name leaked into form examples · my brief mistake)
+- fix · sidebar 4 icons missing (Banknote · KanbanSquare · Smartphone · Save) + dev-only console.warn
+- fix · 2 dangling-Bootstrap modals (organization-email + barcode/driver/import) + extract shared `components/ui/pacred-dialog.tsx`
+- docs · master tech-debt inventory `admin-tech-debt-master-2026-05-27.md` (19 items prioritized · 6 closed in-session)
+
+**Wave 23 P0 batch 1 (ค่ำ · 4 critical fixes per master tech-debt):**
+- `0dce2b9` Agent O — `/admin/customers` suspend + Approve confirm wrapper (no more instant mutate)
+- `f48dea8` Main — `/admin/accounting` menubar 96+ 404 leaves → catch-all stub "🚧 Wave 24+" + 4 placeholder no-op fixes
+- `cddeea3` Agent N — `/admin/admins/[uuid]` detail rewrite (admins JOIN profiles JOIN admin_contact_extras · -83 LOC · 5 sidecar areas banner'd as Wave 23 follow-up)
+- `19ae7ff` Agent P — `/admin/forwarders/combine-bill` 4 bugs FIXED (built ใบส่งสินค้า A4 print route · bill# clickable · items column root-cause = PGRST200 family · ลบรายการ PacredDialog confirm)
+
+**🟢 Wave 23 P0 done · awaiting ภูม browser-verify ที่บ้าน (6 surfaces):**
+1. /admin/customers suspend/Approve → confirm dialog
+2. /admin/accounting menubar → ทุก dropdown ไป stub (no 404)
+3. /admin/organization-email "เพิ่มใหม่" + "คำอธิบายระบบ" modal
+4. /admin/barcode/driver/import "คำอธิบายระบบ" modal
+5. /admin/admins/[uuid] detail
+6. /admin/forwarders/combine-bill (list + print + delete confirm)
+
+**⚠️ Pending ภูม manual actions (carried over):**
+1. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (carry over many sessions)
+2. **#136** cleanup test row #51972:
+   ```sql
+   DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';
+   ```
+3. **Browser-verify Wave 23 P0 6 surfaces** above
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-27-night.md`](docs/research/poom-save-point-2026-05-27-night.md) — **canonical resume** (28+ commits · 13 agents · Wave 23 P0 ครบ)
+2. 🔥 [`docs/research/admin-tech-debt-master-2026-05-27.md`](docs/research/admin-tech-debt-master-2026-05-27.md) — **THE NEXT-SESSION SOT** · 19 items prioritized · 10 closed today · 9 P1 + 4 P2 remain (~12-18h dev sprint)
+3. 📋 3 audit reports (`admin-click-through-audit` · `admin-ui-design-audit` · `admin-sidebar-and-disbursement-audit` — all 2026-05-27)
+4. 📋 Wave 22 intel trio (`tb-admin-merge-intel` · `tb-admin-code-audit` · `tb-admin-13-row-reference` — all 2026-05-27)
+5. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) + [`docs/learnings/supabase-rls-patterns.md`](docs/learnings/supabase-rls-patterns.md) (PGRST200 entry NEW today)
+6. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`management-talk`](.claude/skills/management-talk/SKILL.md) + [`components/ui/pacred-dialog.tsx`](components/ui/pacred-dialog.tsx) — NEW today
+
+**🟡 Pickup options for next session:**
+- **A** Wave 23 P1 batch (9 items · ~5-7h wallclock with parallel agents) — withdrawals param drop · ดู/แก้ไข labels mislead · cnt-hs GZE overflow · 2 dead routes · 9 Bootstrap chrome pages · disbursement header drift · brand-red 2 shades · PCS Freight legacy port gap
+- **B** Wave 23 P2 polish (~6-8h) — 4 form-legacy pages · /admin/reports V-G6 cards wire-up · admin-profile-client form-control verify
+- **C** Wave 21 P2 Phase C RPC consolidation (~4h) — get_admin_sidebar_counts() + 2 more RPCs (unlocks 3 Phase A TODO SUM cards)
+- **D** Browser-verify ภูม เอง (~30-45min) — 6 Wave 23 P0 surfaces ที่บ้าน
+
+**🗺 Branch state (post-push · 2026-05-27 ค่ำ final):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม Wave 20+22+23 ยัง merge) |
+| `Poom-pacred` | `19ae7ff` (+ save-point) | **active · all Wave 20-21-22-23-P0 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel lane) |
+| Our worktree | `19ae7ff` (+ save-point) | ✅ in sync |
+
+**Resume command (ที่บ้าน):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # ต้อง 0/0
+cat docs/research/poom-save-point-2026-05-27-night.md
+cat docs/research/admin-tech-debt-master-2026-05-27.md
+pnpm dev   # port 3000
+# Then pick option A/B/C/D from above
+```
+
+---
+
+# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX + tb_admin MERGE SHIPPED (mid-session · superseded by ค่ำ above)
 
 ภูม กลับมา session เย็น · Wave 22 = perf root-cause kill + 5+2 parallel agents (10 total this session) + 2 new skills + tb_admin → admins consolidation Phase 1-5.
 
