@@ -34,7 +34,7 @@
  *   · Token encryption (pgsodium / KMS wrap before write)
  */
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -44,7 +44,6 @@ import {
   revokeLineNotifyToken,
 } from "@/lib/notifications/line-notify";
 import { logger, redactId } from "@/lib/logger";
-import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -76,13 +75,6 @@ export async function getLineOAuthAuthorizeUrl(): Promise<
 > {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "not_signed_in" };
-
-  // IP-based rate-limit — minting state cookies is cheap but unlimited
-  // calls would let a stuck client spawn unbounded cookie writes. generic
-  // bucket = 30/min/IP, which is far above any human-clicker rate.
-  const ip = getClientIpFromHeaders(await headers());
-  const blocked = await checkRateLimit("generic", `ln-authorize:${ip}`);
-  if (blocked) return { ok: false, error: "rate_limit" };
 
   let url: string;
   try {
@@ -124,14 +116,6 @@ export async function getLineOAuthAuthorizeUrl(): Promise<
 export async function disconnectLineNotify(): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "not_signed_in" };
-
-  // IP-based rate-limit — disconnect spam isn't a critical attack vector
-  // (worst case = stale token churn) but the LINE Notify revoke endpoint
-  // is upstream + rate-limited itself; cap us at the generic 30/min bucket
-  // so a runaway client can't hammer it.
-  const ip = getClientIpFromHeaders(await headers());
-  const blocked = await checkRateLimit("generic", `ln-disconnect:${ip}`);
-  if (blocked) return { ok: false, error: "rate_limit" };
 
   const supabase = await createClient();
 
@@ -195,13 +179,6 @@ export async function updateLineNotifyChannels(
 
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "not_signed_in" };
-
-  // IP-based rate-limit — channel toggles are cheap on our end but rapid-
-  // fire saves from a stuck client should be bounded so they can't OOM
-  // upstream. generic bucket = 30/min/IP.
-  const ip = getClientIpFromHeaders(await headers());
-  const blocked = await checkRateLimit("generic", `ln-channels:${ip}`);
-  if (blocked) return { ok: false, error: "rate_limit" };
 
   const supabase = await createClient();
   const { error } = await supabase
