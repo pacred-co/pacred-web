@@ -438,18 +438,38 @@ export async function adminBulkTransferSalesRepTb(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // Validate target admin: must exist in tb_admin + be active.
+      // Validate target admin: must exist as a Pacred admin (admins JOIN
+      // admin_contact_extras WHERE legacy_admin_id = the requested string)
+      // and be active. Wave 22 migration — was reading tb_admin directly
+      // (lowercase against prod's camelCase columns → silent empty).
+      //
+      // The transfer-rep flow stores the LEGACY varchar adminID string in
+      // tb_users.adminidsale to preserve PHP-staff visibility — so we
+      // resolve the requested legacy string via the bridge column
+      // admin_contact_extras.legacy_admin_id that ภูม fills in when
+      // recreating each legacy admin through /admin/admins/new.
       const { data: target, error: targetErr } = await admin
-        .from("tb_admin")
-        .select("adminid, adminstatusa, adminnickname")
-        .eq("adminid", d.new_admin_userid)
-        .maybeSingle<{ adminid: string; adminstatusa: string; adminnickname: string | null }>();
+        .from("admin_contact_extras")
+        .select(`
+          legacy_admin_id,
+          nickname,
+          profile:profiles!profile_id ( id, first_name, last_name, is_active ),
+          admin:admins!profile_id ( role, is_active )
+        `)
+        .eq("legacy_admin_id", d.new_admin_userid)
+        .maybeSingle();
       if (targetErr) {
-        console.error(`[tb_admin mutation lookup] failed`, { code: targetErr.code, message: targetErr.message });
+        console.error(`[admin transfer lookup] failed`, { code: targetErr.code, message: targetErr.message });
         return { ok: false, error: `db_error:${targetErr.code ?? "unknown"}` };
       }
-      if (!target) return { ok: false, error: "ไม่พบ admin ปลายทาง (tb_admin.adminid ไม่ตรง)" };
-      if (target.adminstatusa !== "1") return { ok: false, error: "admin ปลายทางไม่ใช่ active" };
+      if (!target) return { ok: false, error: "ไม่พบ admin ปลายทาง (legacy_admin_id ไม่ตรง · ภูม recreate ผ่าน /admin/admins/new ก่อน)" };
+
+      // The .select() returns profile + admin as either single objects or
+      // arrays depending on the FK shape. Normalise to single.
+      const profile = Array.isArray(target.profile) ? target.profile[0] : target.profile;
+      const adminRow = Array.isArray(target.admin) ? target.admin[0] : target.admin;
+      if (!profile?.is_active) return { ok: false, error: "admin ปลายทางถูก suspend" };
+      if (!adminRow?.is_active) return { ok: false, error: "admin ปลายทางไม่มี role-grant ที่ active" };
 
       // Normalise user ids to upper-case (PR uses upper case in prod).
       const userIds = d.user_ids.map((u) => u.toUpperCase());
@@ -468,13 +488,14 @@ export async function adminBulkTransferSalesRepTb(
 
       const { error: updErr, count } = await admin
         .from("tb_users")
-        .update({ adminidsale: target.adminid }, { count: "exact" })
+        .update({ adminidsale: target.legacy_admin_id }, { count: "exact" })
         .in("userid", validIds);
       if (updErr) return { ok: false, error: updErr.message };
 
       await logAdminAction(adminId, "tb_users.bulk_transfer_rep", "tb_users", validIds.join(","), {
-        new_admin_userid: target.adminid,
-        new_admin_nick:   target.adminnickname,
+        new_admin_userid: target.legacy_admin_id,
+        new_admin_nick:   target.nickname,
+        new_admin_name:   profile ? `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim() : null,
         affected_userids: validIds,
         requested_count:  userIds.length,
         valid_count:      validIds.length,
@@ -491,12 +512,19 @@ export async function adminBulkTransferSalesRepTb(
 // listActiveTbAdmins — for the transfer-rep target dropdown
 // ────────────────────────────────────────────────────────────
 //
-// Returns active admins from `tb_admin` (the legacy source-of-truth
-// for sales-rep assignment). Used by /admin/customers/transfer-rep
-// to populate the "Target admin" select.
+// Returns active Pacred admins eligible to receive customer rep
+// reassignment. Used by /admin/customers/transfer-rep dropdown.
 //
-// Filter: adminstatusa='1' (active) — the same gate the legacy PHP
-// admin list uses.
+// Wave 22 migration — was reading tb_admin directly (lowercase against
+// prod's camelCase columns → silently returned empty for months).
+// Now reads admins JOIN profiles JOIN admin_contact_extras and filters
+// to rows that have `legacy_admin_id` set — that's the bridge column
+// ภูม fills when recreating each legacy admin through /admin/admins/new.
+// Only admins WITH a legacy_admin_id can be sales-rep targets because
+// tb_users.adminidsale stores the legacy string (not a profile UUID).
+//
+// Empty dropdown until ภูม recreates the 13 legacy admins (Phase 3 of
+// this wave). The page is used quarterly for rep-rotation, not daily.
 export type TbAdminLite = {
   adminid:        string;
   adminnickname:  string | null;
@@ -513,13 +541,42 @@ export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: Tb
     async () => {
       const admin = createAdminClient();
       const { data, error } = await admin
-        .from("tb_admin")
-        .select("adminid, adminnickname, adminname, adminlastname, adminpicture, department, section")
-        .eq("adminstatusa", "1")
-        .order("adminnickname", { ascending: true })
+        .from("admin_contact_extras")
+        .select(`
+          legacy_admin_id,
+          nickname,
+          department,
+          section,
+          profile:profiles!profile_id ( first_name, last_name, avatar_url, is_active ),
+          admin:admins!profile_id ( is_active )
+        `)
+        .not("legacy_admin_id", "is", null)
+        .order("nickname", { ascending: true, nullsFirst: false })
         .limit(500);
       if (error) return { ok: false, error: error.message };
-      return { ok: true, data: { rows: (data ?? []) as unknown as TbAdminLite[] } };
+
+      // Flatten the joined shape + filter to active. PostgREST returns the
+      // joined rows as arrays when there can be multiple matches; we
+      // collapse to single record + apply is_active gates here so the
+      // server-side query stays simple.
+      const rows: TbAdminLite[] = (data ?? [])
+        .map((r) => {
+          const profile = Array.isArray(r.profile) ? r.profile[0] : r.profile;
+          const adminRow = Array.isArray(r.admin) ? r.admin[0] : r.admin;
+          return { r, profile, adminRow };
+        })
+        .filter(({ profile, adminRow }) => profile?.is_active && adminRow?.is_active)
+        .map(({ r, profile }) => ({
+          adminid:       r.legacy_admin_id ?? "",
+          adminnickname: r.nickname ?? null,
+          adminname:     profile?.first_name ?? null,
+          adminlastname: profile?.last_name ?? null,
+          adminpicture:  profile?.avatar_url ?? null,
+          department:    r.department ?? null,
+          section:       r.section ?? null,
+        }));
+
+      return { ok: true, data: { rows } };
     },
   );
 }
