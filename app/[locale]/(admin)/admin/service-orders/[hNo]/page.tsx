@@ -4,6 +4,8 @@ import { Link } from "@/i18n/navigation";
 import { AdminServiceOrderUpdateForm } from "./update-form";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { renderLegacyServiceOrderView } from "./legacy-view";
+import SpawnForwarderForm, { type TrackingRow } from "./spawn-form";
+import { buildSpawnRows } from "./spawn-utils";
 
 // Wave 3 cleanup (2026-05-20 ค่ำ): the "Cargo shipments (spine)" section
 // was removed when cargo_shipments/cargo_containers were retired under
@@ -74,6 +76,33 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
   if (itemsErr) {
     console.error(`[service_order_items list] failed`, { code: itemsErr.code, message: itemsErr.message });
   }
+
+  // Wave 21 P0 · Task #106 — load tb_order rows for the spawn form. We
+  // GROUP BY (cnameshop, cshippingnumber) so a single shop with 1 box gets
+  // 1 row, and a shop with N parcels (comma-sep cshippingnumber) gets
+  // displayed as N rows after expansion. Each row maps to ONE tb_forwarder
+  // candidate (refOrder=hNo + fTrackingCHN=<the one cTrackingNumber>).
+  // We also load header.hshipby + header.htransporttype as defaults.
+  const { data: trackingItems, error: trackingErr } = await admin
+    .from("tb_order")
+    .select("cnameshop, cshippingnumber, ctrackingnumber")
+    .eq("hno", o.h_no!)
+    .limit(200);
+  if (trackingErr) {
+    console.error(`[tb_order spawn list] failed`, { code: trackingErr.code, message: trackingErr.message });
+  }
+  const { data: legacyHeader, error: legacyHeaderErr } = await admin
+    .from("tb_header_order")
+    .select("hshipby, htransporttype")
+    .eq("hno", o.h_no!)
+    .maybeSingle<{ hshipby: string | null; htransporttype: string | null }>();
+  if (legacyHeaderErr) {
+    console.error(`[tb_header_order spawn-defaults lookup] failed`, {
+      code: legacyHeaderErr.code, message: legacyHeaderErr.message,
+    });
+  }
+
+  const spawnRows: TrackingRow[] = buildSpawnRows(trackingItems ?? []);
 
   return (
     <main className="p-6 lg:p-8 space-y-6">
@@ -159,6 +188,19 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
               <p className="text-sm whitespace-pre-wrap">{o.note_user}</p>
             </Section>
           )}
+
+          {/* Wave 21 P0 · Task #106 — shop→forwarder auto-spawn form.
+              Mirrors legacy `pcs-admin/include/pages/shops/update/update4.php`
+              L88-116 inline `<form>` (one per cTrackingNumber). Each "สร้าง
+              ฝากนำเข้า" press creates a tb_forwarder row with refOrder=hNo +
+              adminIDCreator=<staff>. Idempotent — re-submit returns existing
+              fNo via the (refOrder, fTrackingCHN) natural key. */}
+          <SpawnForwarderForm
+            hNo={o.h_no!}
+            rows={spawnRows}
+            defaultShipBy={legacyHeader?.hshipby ?? undefined}
+            defaultTransportType={legacyHeader?.htransporttype ?? undefined}
+          />
         </div>
 
         <aside className="space-y-4">
@@ -194,3 +236,4 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

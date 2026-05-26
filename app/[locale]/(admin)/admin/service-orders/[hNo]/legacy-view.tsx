@@ -21,6 +21,8 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import SpawnForwarderForm from "./spawn-form";
+import { buildSpawnRows } from "./spawn-utils";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอดำเนินการ",
@@ -111,6 +113,21 @@ export async function renderLegacyServiceOrderView(hno: string) {
     console.error(`[tb_users list] failed`, { code: userRawErr.code, message: userRawErr.message });
   }
   const u = userRaw as unknown as URow | null;
+
+  // Wave 21 P0 · Task #106 — load tb_order line items for the spawn form.
+  // Same pattern as the rebuilt-path branch in page.tsx; expansion lives
+  // in spawn-utils.buildSpawnRows so server + client share the contract.
+  const { data: trackingItems, error: trackingErr } = await admin
+    .from("tb_order")
+    .select("cnameshop, cshippingnumber, ctrackingnumber")
+    .eq("hno", r.hno)
+    .limit(200);
+  if (trackingErr) {
+    console.error(`[tb_order spawn list legacy-view] failed`, {
+      code: trackingErr.code, message: trackingErr.message,
+    });
+  }
+  const spawnRows = buildSpawnRows(trackingItems ?? []);
 
   const customerName = `${u?.username ?? ""} ${u?.userlastname ?? ""}`.trim() || "—";
   const status = r.hstatus ?? "1";
@@ -209,6 +226,15 @@ export async function renderLegacyServiceOrderView(hno: string) {
           </a>
         </div>
       ) : null}
+
+      {/* Wave 21 P0 · Task #106 — shop→forwarder auto-spawn. Mirrors legacy
+          `pcs-admin/include/pages/shops/update/update4.php` L88-116. */}
+      <SpawnForwarderForm
+        hNo={r.hno}
+        rows={spawnRows}
+        defaultShipBy={r.hshipby ?? undefined}
+        defaultTransportType={r.htransporttype ?? undefined}
+      />
 
       <div className="flex gap-2 flex-wrap pt-2">
         <Link
