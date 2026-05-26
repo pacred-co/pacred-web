@@ -32,6 +32,7 @@ import {
   PackagePlus, PackageCheck, UserPlus, Plus, History, Landmark, Layers,
   SlidersHorizontal, Network, ListOrdered, Barcode, ScanLine, Camera,
   Printer, Calculator, BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
+  Banknote, KanbanSquare, Smartphone, Save,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -95,11 +96,26 @@ const ICONS: Record<string, LucideIcon> = {
   PackageCheck, UserPlus, Plus, History, Landmark, Layers, SlidersHorizontal,
   Network, ListOrdered, Barcode, ScanLine, Camera, Printer, Calculator,
   BadgeCheck, ShieldAlert, UserCheck, Wand2, RefreshCw,
+  // 2026-05-27 (Wave 22 Agent M finding) — these 4 were referenced from
+  // lib/admin/sidebar-menu.ts but missing from this map → Icon() silently
+  // returned a blank 18×18 spacer (visually = "icon missing"). Added all 4.
+  Banknote,        // รายการเบิกเงิน parent + 5 sub-items
+  KanbanSquare,    // /admin/board workboard
+  Smartphone,      // driver mobile leaves + super
+  Save,            // extension / audit
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
-  const Cmp = name ? ICONS[name] : undefined;
-  if (!Cmp) return <span className="w-[18px] h-[18px] shrink-0" />;
+  if (!name) return <span className="w-[18px] h-[18px] shrink-0" />;
+  const Cmp = ICONS[name];
+  if (!Cmp) {
+    // Dev-only warning so the next icon name we forget to register is
+    // surfaced immediately instead of silently rendering a blank spacer.
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[admin-sidebar] unknown icon name '${name}' — add to ICONS map in components/sections/admin-sidebar.tsx`);
+    }
+    return <span className="w-[18px] h-[18px] shrink-0" />;
+  }
   return <Cmp className={`w-[18px] h-[18px] shrink-0 ${active ? "text-white" : "text-muted"}`} />;
 }
 
