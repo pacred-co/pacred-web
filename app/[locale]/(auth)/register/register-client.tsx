@@ -171,9 +171,15 @@ const INPUT_BASE =
 export function RegisterClient({
   initialTab = "personal",
   juristicResume = null,
+  initialRecom = null,
 }: {
   initialTab?: TabId;
   juristicResume?: RegisterResumeState | null;
+  /** Affiliate / co-brand code captured from `?recom=` on the landing URL —
+   *  forwarded into both Personal + Juristic submissions. The server wrapper
+   *  in `page.tsx` already sanitized + validated it; we just render the
+   *  attribution badge + ship it. Legacy parity for `regis-tam.php`. */
+  initialRecom?: string | null;
 }) {
   const [tab, setTab] = useState<TabId>(initialTab);
 
@@ -231,7 +237,16 @@ export function RegisterClient({
             })}
           </div>
 
-          {tab === "personal" ? <PersonalForm /> : <JuristicForm resume={juristicResume} />}
+          {initialRecom && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12.5px] text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+              คุณกำลังสมัครภายใต้กลุ่ม{" "}
+              <span className="font-semibold notranslate">{initialRecom}</span>
+            </div>
+          )}
+
+          {tab === "personal"
+            ? <PersonalForm recom={initialRecom} />
+            : <JuristicForm resume={juristicResume} recom={initialRecom} />}
         </div>
       </main>
     </>
@@ -239,7 +254,7 @@ export function RegisterClient({
 }
 
 /* ─────────────────────────── PERSONAL FORM ─────────────────────────── */
-function PersonalForm() {
+function PersonalForm({ recom }: { recom: string | null }) {
   const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   const [firstName, setFirstName] = useState("");
@@ -280,6 +295,7 @@ function PersonalForm() {
       firstName, lastName, phone, password,
       services,
       howKnow: source ?? null,
+      recom,
       email: email || "",
       otp,
       agreed,
@@ -428,7 +444,13 @@ function PersonalForm() {
 }
 
 /* ─────────────────────────── JURISTIC FORM ─────────────────────────── */
-function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
+function JuristicForm({
+  resume,
+  recom,
+}: {
+  resume: RegisterResumeState | null;
+  recom: string | null;
+}) {
   const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   // When resuming a juristic signup mid-flow (P0 fix 2026-05-25), skip Step 1
@@ -550,6 +572,7 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
       phone, password,
       services,
       howKnow: source ?? null,
+      recom,
       otp,
       captchaToken,
     });

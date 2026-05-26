@@ -37,6 +37,21 @@ const SERVICE_IDS = [
 ] as const;
 export const serviceIdSchema = z.enum(SERVICE_IDS);
 
+/**
+ * Affiliate / co-brand attribution code captured from a `?recom=<code>` URL
+ * param on the /register landing — legacy parity for `regis-tam.php` which
+ * accepted `?recom=THADA|SIN|OOAEOM|SWAN` and persisted to `tb_users.coID`.
+ * Pacred maps this to `profiles.customer_group` (default 'PR'). Pattern
+ * intentionally permissive so we can mint new partner codes without a
+ * schema migration; rejects only obvious script/SQL-injection vectors.
+ */
+const recomCodeField = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._-]{1,30}$/, "รหัสกลุ่มไม่ถูกต้อง")
+  .optional()
+  .nullable();
+
 export const registerPersonalSchema = z.object({
   // 2026-05-22 — relaxed signup validation per sales-urgent ask:
   // name + surname ≥ 2 chars · phone ≥ 9 chars. OTP is bypassed in
@@ -49,6 +64,7 @@ export const registerPersonalSchema = z.object({
   password: passwordSchema,
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),
+  recom: recomCodeField,
   email: z.email("อีเมลไม่ถูกต้อง").optional().or(z.literal("")),
   otp: z.string().min(1, "กรอก OTP"),
   agreed: z
@@ -63,6 +79,7 @@ export const registerJuristicStep1Schema = z.object({
   password: passwordSchema,
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),
+  recom: recomCodeField,
   otp: z.string().min(1, "กรอก OTP"),
   captchaToken: captchaTokenField,
 });
