@@ -5,10 +5,17 @@
  * to legacy `tb_payment` via `adminCreateYuanPaymentManual` in
  * actions/admin/yuan-payments-tb.ts.
  *
- * Replaces the Wave 7.1 "ยังไม่เปิด" banner. The previous version did
- * a silent redirect to /admin/yuan-payments which made "+ เพิ่มรายการ"
- * feel broken. The new flow uses the same `tb_payment` table the list
- * + detail page read.
+ * Wave 20 P1 batch 2-a (2026-05-26): UI rewrite ONLY — drop
+ * `.pcs-legacy` scope + `<link>` to admin-base.css + Bootstrap-4
+ * markup → Pacred Tailwind v4 (chrome modeled on
+ * `/admin/customers/transfer-rep/page.tsx` and
+ * `/admin/forwarders/combine-bill/add/page.tsx`).
+ *
+ * Existing wired functionality preserved:
+ *   - AdminYuanPaymentNewForm — client island with controlled inputs +
+ *     adminCreateYuanPaymentManual. The form's Bootstrap-4 class chrome
+ *     renders unstyled here (no `.pcs-legacy` scope) but is fully
+ *     functional; Wave 21 will restyle that island in Tailwind.
  *
  * Query-param prefill: `?q=PR1234` to pre-select a customer.
  * Default rate pulled from tb_settings.rsdefault (sell-rate default).
@@ -73,65 +80,61 @@ export default async function AdminYuanPaymentNewPage({
   const defaultRate = Number(settingsRaw?.rsdefault ?? 5);
 
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-
+    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
       <title>เพิ่มรายการฝากโอนหยวน | PR Admin</title>
 
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top ">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb ">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">
-                        <span className="menu-home">หน้าแรก</span>
-                      </Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/yuan-payments">ฝากโอนหยวน</Link>
-                    </li>
-                    <li className="breadcrumb-item active">เพิ่มรายการ</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Breadcrumb */}
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
+        <Link href="/admin/yuan-payments" className="hover:text-primary-600">ฝากโอนหยวน</Link>
+        <span>/</span>
+        <span className="text-foreground">เพิ่มรายการ</span>
+      </nav>
 
-          <div className="content-body body-new">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <h2 className="text-color-main">เพิ่มรายการฝากโอนหยวน</h2>
-                        <div className="pcs-sequence">
-                          <ol>
-                            <li>ใช้เมื่อต้องสร้างรายการแทนลูกค้า (เช่นลูกค้าโทรมาขอ admin บันทึก)</li>
-                            <li>เรทดีฟอลต์อ่านจาก <code>tb_settings.rsdefault</code> — เปลี่ยนได้</li>
-                            <li>เมื่อบันทึก รายการจะอยู่ในสถานะ &quot;อนุมัติ&quot; ทันที (admin เป็นผู้ยืนยัน)</li>
-                          </ol>
-                        </div>
+      {/* Header */}
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากโอนหยวน</p>
+        <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการฝากโอนหยวน</h1>
+        <p className="mt-1 text-sm text-muted">
+          บันทึกรายการแทนลูกค้า · เขียนลงตาราง{" "}
+          <code className="rounded bg-surface-alt px-1 text-xs">tb_payment</code> ในสถานะ &ldquo;อนุมัติ&rdquo; ทันที
+        </p>
+      </div>
 
-                        <AdminYuanPaymentNewForm
-                          preset={preset}
-                          recent={recent}
-                          defaultRate={defaultRate}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
+      {/* Wave 20 status banner */}
+      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+        <span aria-hidden>ℹ️</span>
+        <div className="flex-1">
+          <span className="font-medium">Wave 20 P1 status:</span>{" "}
+          ✅ Tailwind page chrome · breadcrumb · role gate · form wired ·{" "}
+          <span className="opacity-75">
+            ⏳ Wave 21: restyle form island (Bootstrap-4 → Tailwind)
+          </span>
         </div>
       </div>
-    </div>
+
+      {/* How-to card */}
+      <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <p className="font-medium mb-1.5">วิธีใช้</p>
+        <ol className="list-decimal list-inside space-y-1 text-xs">
+          <li>ใช้เมื่อต้องสร้างรายการแทนลูกค้า (เช่นลูกค้าโทรมาขอ admin บันทึก)</li>
+          <li>
+            เรทดีฟอลต์อ่านจาก{" "}
+            <code className="rounded bg-white px-1 py-0.5">tb_settings.rsdefault</code> — เปลี่ยนได้
+          </li>
+          <li>เมื่อบันทึก รายการจะอยู่ในสถานะ &ldquo;อนุมัติ&rdquo; ทันที (admin เป็นผู้ยืนยัน)</li>
+        </ol>
+      </section>
+
+      {/* Form card — wraps the existing wired client island */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <AdminYuanPaymentNewForm
+          preset={preset}
+          recent={recent}
+          defaultRate={defaultRate}
+        />
+      </section>
+    </main>
   );
 }
