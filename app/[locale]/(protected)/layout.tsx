@@ -9,6 +9,7 @@ import { PcsFooterNav } from "@/components/legacy/pcs-footer-nav";
 import { PcsChromeInit } from "@/components/legacy/pcs-chrome-init";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
+import { FloatingTabs } from "@/components/sections/floating-tabs";
 
 /**
  * Layout for the (protected) customer portal — the D1 faithful PCS Cargo port.
@@ -211,6 +212,14 @@ export default async function ProtectedLayout({
       <PcsFooterNav data={chrome} />
 
       <ImpersonationBanner />
+
+      {/* Mobile bottom nav + floating LINE bubble — same chrome as the public
+          site. Restored on protected per user 2026-05-26 (the FloatingTabs gate
+          to (public)-only on 2026-05-25 left the customer back-office with no
+          mobile bottom nav since the legacy `.nav-footer-pcs` is hidden in
+          legacy-overrides.css §0). Auto-hides itself on /admin /login /register
+          /forgot-password via its own isHidden check, so adding it here is safe. */}
+      <FloatingTabs />
 
       {/* 7. Legacy JS bundle — rendered last so the full chrome DOM exists when
             it runs. jQuery → Popper → Bootstrap-4 (vendors.min.js) → the

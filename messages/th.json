@@ -861,7 +861,18 @@
     "freeShipping": "ส่งฟรี (พื้นที่ Pacred)",
     "cancelOrder": "ยกเลิกออเดอร์",
     "cancelling": "กำลังยกเลิก...",
-    "cancelConfirm": "ยกเลิกออเดอร์ {hNo}? — ไม่สามารถกู้คืนได้"
+    "cancelConfirm": "ยกเลิกออเดอร์ {hNo}? — ไม่สามารถกู้คืนได้",
+    "backToList": "← กลับหน้ารายการ",
+    "payMethodOrigin": "เก็บต้นทาง (ที่จีน)",
+    "payMethodDestination": "เก็บปลายทาง (ที่ไทย)",
+    "transport": {
+      "1": "ทางรถ",
+      "2": "ทางเรือ",
+      "3": "ทางอากาศ",
+      "truck": "ทางรถ",
+      "ship": "ทางเรือ",
+      "air": "ทางอากาศ"
+    }
   },
   "forwarder": {
     "kicker": "ฝากนำเข้า",

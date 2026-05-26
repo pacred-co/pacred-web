@@ -64,7 +64,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname),
   },
   images: {
-    qualities: [75, 92],
+    qualities: [75, 92, 95, 100],
   },
 
   /**

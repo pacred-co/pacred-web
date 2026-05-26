@@ -173,8 +173,8 @@ export function FloatingTabs() {
               <span className={`text-[11px] leading-tight font-medium ${active === 1 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("services")}</span>
             </button>
 
-            {/* 3 — ออเดอร์ */}
-            <Link href="/service-order" onClick={() => setActive(2)}
+            {/* 3 — ออเดอร์ → customer dashboard */}
+            <Link href="/dashboard" onClick={() => setActive(2)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/images/home/iconfloating/pcs-cart.png" alt={t("orders")}
@@ -203,8 +203,9 @@ export function FloatingTabs() {
               <span className={`text-[11px] leading-tight font-medium ${active === 4 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("chat")}</span>
             </a>
 
-            {/* 6 — เมนู → หลังบ้านลูกค้า */}
-            <Link href="/dashboard" onClick={() => setActive(5)}
+            {/* 6 — เมนู → mobile launchpad (/m/dashboard auto-redirects to
+                /dashboard on desktop, so this href is safe on both viewports) */}
+            <Link href="/m/dashboard" onClick={() => setActive(5)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               <Menu className={`w-8 h-8 transition-all duration-300 ${active === 5 ? "text-primary-600 scale-110" : "text-muted opacity-75"}`} strokeWidth={2.2} />
               <span className={`text-[11px] leading-tight font-medium ${active === 5 ? "text-primary-600 font-bold" : "text-muted"}`}>{t("menu")}</span>

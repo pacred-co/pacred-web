@@ -67,7 +67,6 @@ const MODES = [
     accent: "from-amber-400/35 to-orange-600/35",
     price: "2,800",
     featured: true,
-    promoText: "ยอดนิยม · เคลียร์เร็วที่สุด · เคลียร์ทันก่อนค่าฝากเก็บขึ้น",
     stats: [
       { icon: Clock, label: "เคลียร์ใน", value: "1 วัน" },
       { icon: Package, label: "รองรับ", value: "Air Cargo" },
@@ -373,21 +372,6 @@ export function CustomsModeCards() {
                     );
                   })}
                 </div>
-
-                {/* Recommendation promo banner — yellow accent strip, ONLY on
-                    the AIR (isRecommended) card. Stays put regardless of which
-                    card is currently active. */}
-                {isRecommended && c.promoText && (
-                  <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-yellow-300 via-yellow-200 to-yellow-300 px-3 py-2 shadow-[0_4px_14px_rgba(255,213,0,0.35)]">
-                    <p className="text-[11px] md:text-[11.5px] font-black text-primary-800 leading-snug tracking-tight">
-                      🔥 {c.promoText}
-                    </p>
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_3s_ease-in-out_infinite]"
-                    />
-                  </div>
-                )}
 
                 {/* Services — compact 3 bullets */}
                 <ul

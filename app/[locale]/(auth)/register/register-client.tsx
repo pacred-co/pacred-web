@@ -191,20 +191,44 @@ export function RegisterClient({
 }) {
   const [tab, setTab] = useState<TabId>(initialTab);
 
+  // Lock body scroll on mobile while register is mounted. The NavBar's
+  // mobile-menu drawer is `position:fixed` with `translate-y-full` (closed),
+  // which the browser still counts toward `documentElement.scrollHeight` —
+  // causing a ~64px scrollable tail under the otherwise-pinned viewport-height
+  // form. Lock body+html overflow on mobile to make scroll truly impossible;
+  // restore on unmount so other pages keep their normal scroll behavior.
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const apply = (lock: boolean) => {
+      document.documentElement.style.overflow = lock ? "hidden" : "";
+      document.body.style.overflow = lock ? "hidden" : "";
+    };
+    apply(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => apply(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => {
+      mql.removeEventListener("change", onChange);
+      apply(false);
+    };
+  }, []);
+
   return (
     <>
       <NavBar />
-      <main className="flex items-start justify-center bg-background px-4 py-3">
-        <div className="w-full max-w-[540px] rounded-[24px] border border-white/80 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7">
+      <main className="flex items-start justify-center bg-background px-4 pt-0 pb-0 md:py-3 overflow-hidden md:overflow-visible">
+        <div className="w-full max-w-[540px] h-[calc(100dvh-56px)] flex flex-col rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:h-auto md:block md:rounded-[24px] md:border md:border-white/80">
 
-          {/* Logo */}
-          <div className="-mb-1 flex h-[40px] items-end justify-center">
+          {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
+              110px square + tight negative margins so title hugs the wordmark baseline.
+              HIDDEN on mobile — navbar already shows the Pacred wordmark + saves
+              ~88px vertical so the whole form fits in one phone viewport. */}
+          <div className="hidden md:-mt-2 md:-mb-7 md:flex h-[88px] items-end justify-center overflow-visible">
             <Image
               src="/images/pacred-logo-red.png"
               alt="Pacred"
               width={140}
               height={140}
-              className="h-[52px] w-[52px]"
+              className="h-[110px] w-[110px] object-contain"
               priority
             />
           </div>
@@ -394,7 +418,7 @@ function PersonalForm({ recom }: { recom: string | null }) {
   }
 
   return (
-    <form onSubmit={handleRequestOtp} className="space-y-2.5">
+    <form onSubmit={handleRequestOtp} className="space-y-2.5 flex flex-1 flex-col min-h-0 md:block">
       {/* Name row */}
       <div className="flex gap-3">
         <FieldWrap label="ชื่อจริง">
@@ -450,15 +474,21 @@ function PersonalForm({ recom }: { recom: string | null }) {
         </IconInput>
       </FieldWrap>
 
-      <AgreeRow checked={agreed} onChange={setAgreed} />
-      {error && <ErrorBox msg={error} />}
-      <HCaptchaInvisible ref={captchaRef} />
-      <p className="text-center text-[12px] leading-[1.5] text-muted">
-        กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วสมัครเสร็จในขั้นถัดไป
-      </p>
-      <SubmitBtn pending={pending}>
-        <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
-      </SubmitBtn>
+      {/* Action area — mt-auto pushes the submit button group to the BOTTOM
+          of the form on mobile (form is flex-1 inside full-viewport card),
+          so "ขอรหัส OTP" hugs the bottom edge with no empty space below.
+          Desktop reverts to normal stacked flow (md:block on form). */}
+      <div className="mt-auto space-y-2.5 pt-2">
+        <AgreeRow checked={agreed} onChange={setAgreed} />
+        {error && <ErrorBox msg={error} />}
+        <HCaptchaInvisible ref={captchaRef} />
+        <p className="text-center text-[12px] leading-[1.5] text-muted">
+          กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วสมัครเสร็จในขั้นถัดไป
+        </p>
+        <SubmitBtn pending={pending}>
+          <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
+        </SubmitBtn>
+      </div>
     </form>
   );
 }
