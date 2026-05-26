@@ -837,7 +837,18 @@
     "freeShipping": "Free shipping (Pacred zone)",
     "cancelOrder": "Cancel order",
     "cancelling": "Cancelling...",
-    "cancelConfirm": "Cancel order {hNo}? This cannot be undone."
+    "cancelConfirm": "Cancel order {hNo}? This cannot be undone.",
+    "backToList": "← Back to list",
+    "payMethodOrigin": "Pay at origin (China)",
+    "payMethodDestination": "Pay at destination (Thailand)",
+    "transport": {
+      "1": "By truck",
+      "2": "By sea",
+      "3": "By air",
+      "truck": "By truck",
+      "ship": "By sea",
+      "air": "By air"
+    }
   },
   "forwarder": {
     "kicker": "IMPORT",
