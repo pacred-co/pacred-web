@@ -198,6 +198,12 @@ export async function registerPersonal(
   // `customer_group` only set when ?recom URL param was present on /register
   // — legacy parity for regis-tam.php affiliate signup (THADA.VIP / SIN.VIP /
   // OOAEOM.VIP / SWAN). When absent, the column default 'PR' applies.
+  //
+  // `shop_user` — legacy <select name="shopUser"> on register.php:
+  //   "1" = ซื้อไปใช้เอง (use-self) → false
+  //   "2" = ซื้อไปขาย   (resell)   → true
+  // (`tb_users.shopuser` column comment in 0081 schema: '1=ซื้อไปใข้เอง'.)
+  // Migrates onto profiles.shop_user (boolean, default false — 0003).
   const { error: profileErr } = await admin.from("profiles").insert({
     id: created.user.id,
     account_type: "personal",
@@ -208,6 +214,7 @@ export async function registerPersonal(
     services: data.services,
     how_know: data.howKnow ?? null,
     ...(data.recom ? { customer_group: data.recom } : {}),
+    ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
     status: "active",
   });
   if (profileErr) {
@@ -279,6 +286,9 @@ export async function registerJuristicStep1(
 
   // `customer_group` only set when ?recom URL param was present on /register
   // — legacy parity for regis-tam.php affiliate signup. Default 'PR' otherwise.
+  //
+  // `shop_user` — legacy <select name="shopUser"> on register.php (see
+  // registerPersonal above for the "1"/"2" → boolean mapping).
   const { error: profileErr } = await admin.from("profiles").insert({
     id: created.user.id,
     account_type: "juristic",
@@ -286,6 +296,7 @@ export async function registerJuristicStep1(
     services: data.services,
     how_know: data.howKnow ?? null,
     ...(data.recom ? { customer_group: data.recom } : {}),
+    ...(data.shopUser ? { shop_user: data.shopUser === "2" } : {}),
     status: "incomplete",
   });
   if (profileErr) {

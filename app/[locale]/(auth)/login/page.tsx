@@ -46,6 +46,13 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  // Legacy parity for `login.php` `<input id="rememberMe" checked>` —
+  // checked by default like the legacy. Supabase session length is
+  // server-controlled, so toggling this is purely UI parity today
+  // (kept for the legacy expectation and future use). Per
+  // d1-fidelity-customer.md §2.2: "Re-add a 'จำฉันไว้ในระบบ' checkbox,
+  // checked by default."
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -181,6 +188,22 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {/* Remember-me — legacy login.php "จำฉันไว้ในระบบ" checkbox,
+                checked by default. Supabase session length is set
+                server-side so the value is currently UI-only; legacy
+                parity per d1-fidelity-customer.md §2. */}
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 cursor-pointer accent-primary-600"
+              />
+              <span className="text-[13px] text-foreground">
+                {t("rememberMe")}
+              </span>
+            </label>
 
             {/* Error */}
             {error && (

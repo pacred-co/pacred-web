@@ -182,7 +182,13 @@ export default async function AddressesPage({
               <div className="row">
                 <div className="col-md-12 col-sm-12">
                   <div className="card p-1">
-                    {/* L420-438 — header: title + add-address button */}
+                    {/* L420-438 — header: title + add-address button.
+                        Pacred-fidelity addition (d1-fidelity-customer.md
+                        §9.2): legacy customers reach "ที่อยู่โกดังจีน" from
+                        the top-bar dropdown. Surface the same link here so
+                        the link is reachable on the addresses screen
+                        itself — it is the most common follow-up action for
+                        a customer who just shipped from a Thai address. */}
                     <div className="row">
                       <div className="content-header-left col-md-6 col-12">
                         <div className="text-center text-md-left">
@@ -191,7 +197,17 @@ export default async function AddressesPage({
                       </div>
                       <div className="content-header-right col-md-6 col-12">
                         <div className="float-md-right">
-                          <div className="text-center text-md-right">
+                          <div className="text-center text-md-right d-inline-flex align-items-center" style={{ gap: "1rem" }}>
+                            {/* Pacred fidelity-addition link — see header comment.
+                                Routes to the existing /china-address page. */}
+                            <Link
+                              href="/china-address"
+                              className="d-inline-flex align-items-center text-info"
+                              style={{ gap: "0.35rem" }}
+                            >
+                              <i className="ft-map-pin"></i>
+                              <span className="font-normal">ที่อยู่โกดังจีน</span>
+                            </Link>
                             {/* address.php L429 — the legacy <a> points at
                                 `address/add`, a URL-rewrite alias of THIS
                                 same address.php screen with the add-modal
