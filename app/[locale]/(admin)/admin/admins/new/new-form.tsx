@@ -262,7 +262,7 @@ export function AdminCreateNewForm({
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
               maxLength={254}
-              placeholder="admin_pop@pacred.co"
+              placeholder="sales01@pacred.co"
               disabled={pending}
               autoComplete="off"
               className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("email")}`}
@@ -317,7 +317,7 @@ export function AdminCreateNewForm({
               value={firstName}
               onChange={(e) => { setFirstName(e.target.value); clearFieldError("firstName"); }}
               maxLength={200}
-              placeholder="วิสิฐ"
+              placeholder="ชื่อจริง"
               disabled={pending}
               className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("firstName")}`}
               required
@@ -332,7 +332,7 @@ export function AdminCreateNewForm({
               value={lastName}
               onChange={(e) => { setLastName(e.target.value); clearFieldError("lastName"); }}
               maxLength={200}
-              placeholder="ศิลปเลิศลักษณ์"
+              placeholder="นามสกุล"
               disabled={pending}
               className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("lastName")}`}
               required
@@ -377,7 +377,7 @@ export function AdminCreateNewForm({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={50}
-              placeholder="0948782006"
+              placeholder="0xx-xxx-xxxx"
               disabled={pending}
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             />
@@ -391,7 +391,7 @@ export function AdminCreateNewForm({
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               maxLength={120}
-              placeholder="ป๊อบ"
+              placeholder="ชื่อเล่น"
               disabled={pending}
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             />
@@ -459,7 +459,7 @@ export function AdminCreateNewForm({
               value={workEmail}
               onChange={(e) => setWorkEmail(e.target.value)}
               maxLength={254}
-              placeholder="pop@pacred.co"
+              placeholder="sales01.work@pacred.co"
               disabled={pending}
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             />
@@ -471,7 +471,7 @@ export function AdminCreateNewForm({
               value={workPhone}
               onChange={(e) => setWorkPhone(e.target.value)}
               maxLength={50}
-              placeholder="02-444-7046 ต่อ 101"
+              placeholder="02-xxx-xxxx ต่อ xxx"
               disabled={pending}
               className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
             />
@@ -560,7 +560,7 @@ export function AdminCreateNewForm({
                 value={legacyAdminId}
                 onChange={(e) => setLegacyAdminId(e.target.value)}
                 maxLength={64}
-                placeholder="admin_pop / admin_nat / …"
+                placeholder="legacy adminID เช่น admin_xxxx (ถ้า port มาจาก PCS เก่า)"
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm font-mono outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
@@ -595,7 +595,7 @@ export function AdminCreateNewForm({
                 onChange={(e) => setAdminNote(e.target.value)}
                 rows={3}
                 maxLength={2000}
-                placeholder="เช่น &quot;ลาออกแล้วกลับมาใหม่ 2026-04&quot; / &quot;เคยเป็น admin_pop ใน PCS เก่า&quot;"
+                placeholder="บันทึก HR เช่น &quot;ลาออกแล้วกลับมาใหม่ 2026-04&quot; / &quot;เคยเป็น sales01 ใน PCS เก่า&quot;"
                 disabled={pending}
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200"
               />
