@@ -92,7 +92,7 @@ pnpm audit:i18n     # th vs en key parity + intentional-same classification
 | [`STRATEGY.md`](STRATEGY.md) | **Master strategic single-read** — every brief / ADR / plan condensed into one ~370-line read. Open every session for full context. |
 | [`UPGRADE_PLAN.md`](UPGRADE_PLAN.md) | **The D1 phase plan** — Phase A data migration → Phase B workflow fidelity → Phase C enhancements + a per-role work-split. Open every session for "what's next". |
 | [`research/capability-tools-strategy-2026-05-18.md`](research/capability-tools-strategy-2026-05-18.md) | The 2026-05-18 capability synthesis — the Tier 0/1/2/3 analysis, now **deferred to Phase C** by D1. |
-| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 14 skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep · branch-integrate-loop · mobile-first-verify · legacy-fidelity-check · landing-conversion-audit) |
+| [`../.claude/skills/INDEX.md`](../.claude/skills/INDEX.md) | 16 skills — playbooks the agent follows when triggered (phase-verify · qa-flow-simulator · bug-swarm · debug-mantra · management-talk · KPI dashboard · test writer · refactor · perf hunter · scholar · copyist · legacy PHP sweep · branch-integrate-loop · mobile-first-verify · legacy-fidelity-check · landing-conversion-audit) |
 | [`learnings/_index.md`](learnings/_index.md) | Compounding knowledge corpus — every dev / agent adds new gotchas via `scholar-immortal` skill. 1-min scan each session. |
 
 ### 🧑‍💻 Role briefs (force-read — open YOUR file first)

@@ -167,8 +167,10 @@ When the user says "จัดมาเลย / รันยาวๆ / ลุย
 
 ## 9. Skills are playbooks — invoke them
 
-The `.claude/skills/` directory contains 14 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
+The `.claude/skills/` directory contains 16 skills (see [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md)):
 
+- `debug-mantra` — every bug session starts here: reproduce → fail path → falsify → breadcrumb (no fix before reliable repro)
+- `management-talk` — translate engineer-to-engineer content for the channel (JIRA / Slack / standup / email / meeting) — for "report ส่งพี่ป๊อป"
 - `phase-verify-loop` — close every phase with assume → check → verify → analyze → fix
 - `bug-swarm-loop` — hard bug? Spawn 4-5 hunter sub-agents in parallel
 - `audit-kpi-dashboard` — generate dashboards from operational data

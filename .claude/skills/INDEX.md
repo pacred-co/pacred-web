@@ -4,14 +4,16 @@
 
 > **How they fit into Pacred's workflow:** The role briefs say WHAT to work on. ADRs say WHAT was decided. Skills say HOW to execute repeatable patterns — bug hunts, audits, refactors, ports, knowledge capture — without the agent reinventing the approach each time.
 
-Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px customer-surface mobile check; +branch-integrate-loop — the integrate→verify→distribute consolidation cycle; +qa-flow-simulator — agent-driven end-to-end flow verification) · 2026-05-19 (+legacy-fidelity-check — the D1 owner-mandate fidelity gate; +landing-conversion-audit — the pre-ads landing CRO + tracking check)
+Last reviewed: 2026-05-18 (+mobile-first-verify — the render-at-360/390px customer-surface mobile check; +branch-integrate-loop — the integrate→verify→distribute consolidation cycle; +qa-flow-simulator — agent-driven end-to-end flow verification) · 2026-05-19 (+legacy-fidelity-check — the D1 owner-mandate fidelity gate; +landing-conversion-audit — the pre-ads landing CRO + tracking check) · 2026-05-27 (+debug-mantra — reproduce → fail path → falsify → breadcrumb discipline; +management-talk — engineer-to-leadership channel translator)
 
 ---
 
-## The skill set (14 skills — all `.claude/skills/<name>/SKILL.md`)
+## The skill set (16 skills — all `.claude/skills/<name>/SKILL.md`)
 
 | Skill | Trigger keywords / context | One-line purpose |
 |---|---|---|
+| **debug-mantra** | "/debug-mantra" · any bug report · "broken" / "throwing" / "failing" · stack trace pasted · "ช่วยดูบัค" · "เช็คให้หน่อย" | Recite the 4-step mantra (reproduce → fail path → falsify → breadcrumb), then apply in order — no fix before reliable repro |
+| **management-talk** | "เขียนให้พี่ป๊อปอ่าน" · "exec summary" · "ทำให้เป็น non-tech" · "Slack/email/standup version" · "report leadership" | Translate engineer-to-engineer content for engineering-org leadership, shaped to the channel (JIRA/Slack/standup/email/meeting) |
 | **phase-verify-loop** | "เสร็จ phase / batch / sprint" · "verify everything" · "make sure nothing broke" | Assume → check → verify → analyze → fix loop until clean |
 | **bug-swarm-loop** | "บัค repro ไม่ได้" · "intermittent failure" · "cross-cutting bug" · "spawn agents to find" | Spawn parallel hunter agents to isolate intermittent / wide bugs |
 | **audit-kpi-dashboard** | "KPI" · "dashboard" · "how are we doing on X" · "visualise metric" | Generate a metrics dashboard from existing data tables |

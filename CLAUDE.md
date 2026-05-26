@@ -363,7 +363,7 @@ goal. Goal stays: faithful PCS Cargo port · zero retraining · D1.
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
 
 **🛠 Skills kit (playbooks the agent follows when triggered):**
-- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 12 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 16 skills: phase-verify-loop · bug-swarm-loop · debug-mantra · management-talk · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify · legacy-fidelity-check · landing-conversion-audit
 
 **📚 Learnings (compounding knowledge — read before re-debugging):**
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
