@@ -577,8 +577,9 @@ export default async function ServiceOrderAddPage({
                                                     href={`/service-order/${row.hno}`}
                                                     className="text-info"
                                                   >
-                                                    {row.hno} <ProBadge promoId={promoId} />
-                                                  </Link>
+                                                    {row.hno}
+                                                  </Link>{" "}
+                                                  <ProBadge promoId={promoId} />
                                                 </td>
                                                 {/* col 4 — ข้อมูลสินค้า */}
                                                 <td>
@@ -591,8 +592,9 @@ export default async function ServiceOrderAddPage({
                                                       href={`/service-order/${row.hno}`}
                                                       className="text-info"
                                                     >
-                                                      {row.hno} <ProBadge promoId={promoId} />
-                                                    </Link>
+                                                      {row.hno}
+                                                    </Link>{" "}
+                                                    <ProBadge promoId={promoId} />
                                                     <br />
                                                     สถานะ : <StatusBadgeAllM hStatus={row.hstatus} />
                                                     <br />
@@ -897,7 +899,7 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
   const linked = LINKED[promoId];
   if (linked) {
     return (
-      <a href={linked.href} target="_blank">
+      <a href={linked.href} target="_blank" rel="noopener noreferrer">
         <span className="badge badge-vip badge-pill" title={linked.title}>
           {linked.label}
         </span>
