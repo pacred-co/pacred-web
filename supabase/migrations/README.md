@@ -137,6 +137,18 @@
 >   render. Apply in a quiet window (build locks queue writes briefly,
 >   ~10-15 min total worst case on Pro tier). Full plan + per-query
 >   evidence: [`docs/research/wave-21-p2-query-survey.md`](../../docs/research/wave-21-p2-query-survey.md).
+>
+> 🔧 **Admin-merge migration (`0110`) — apply when starting Wave 22 Phase 3.**
+> - [`0110_admin_contact_extras_legacy_bridge.sql`](0110_admin_contact_extras_legacy_bridge.sql)
+>   — 5 sidecar columns on `admin_contact_extras` (legacy_admin_id +
+>   ended_at + legacy_admin_type + legacy_admin_status + admin_note)
+>   that the new `/admin/admins/new` form writes when ภูม manually
+>   recreates the 13 legacy PCS admins under fresh Pacred auth.users.
+>   Unique partial index on legacy_admin_id keeps the bridge to
+>   `tb_users.adminidsale` working during transition. Adds ~50ms lock
+>   on the 0-row table — apply anytime. Full intel:
+>   [`docs/research/tb-admin-merge-intel-2026-05-27.md`](../../docs/research/tb-admin-merge-intel-2026-05-27.md)
+>   + [`docs/research/tb-admin-code-audit-2026-05-27.md`](../../docs/research/tb-admin-code-audit-2026-05-27.md).
 
 > 📋 **Phase-I2 batch (`0044`-`0052` + `0060`) — ภูม applies.** ภูม owns running
 > these on **dev + production** Supabase — paste each file into the SQL Editor in
