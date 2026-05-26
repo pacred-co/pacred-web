@@ -1,35 +1,71 @@
 /**
- * /admin/admins/[id] — โปรไฟล์พนักงาน (Wave 20 P1 rewrite)
+ * /admin/admins/[id] — Pacred admin profile (read-only · Wave 23 P0 rewrite)
  *
- * Per `docs/audit/admin-pages-audit-2026-05-25-night.md` P1 + AGENTS §0a:
- * KEEP the legacy `tb_admin` + 12 join-table reads (org chart · org email/
- * tel/line/wechat · bank accounts · education history · interpreter
- * commission · address), REPLACE the Bootstrap-4 + `.pcs-legacy` chrome
- * with Pacred Tailwind v4 design tokens — mirroring
- * `/admin/customers/[id]/legacy-view.tsx`.
+ * ── Why this rewrite (Task #150) ────────────────────────────────────
+ * Wave 22 swapped the admin list (`/admin/admins`) + edit form (`/admin/
+ * admins/[id]/edit`) onto the NEW Pacred shape:
  *
- * Behaviour preserved 1:1 from the prior `.pcs-legacy` version:
- *   - Identity card (avatar · name · adminID · company/type badges · dept/section)
- *   - General info (birthday · age · religion · nationality · marital · sex ·
- *     emails/phones personal + org · trainee dates · current address)
- *   - Education summary (latest entry by graduateYear desc)
- *   - Personal docs (national ID · expiry · file links)
- *   - Bank accounts table (tb_account_pcs)
- *   - Education history table (tb_education_background)
- *   - Self-edit gate (signed-in admin matches row email)
- *   - Mutate gate (`super` role)
- *   - Accounting gate (`super` OR `accounting`)
- *   - Interpreter commission cog (CSPurchasing or admin_jeen + super)
- *   - Bonus card (SaleCargo or SalesAll)
+ *     admins  JOIN  profiles  JOIN  admin_contact_extras
  *
- * Mutations — the legacy `admin-profile-client.tsx` houses 7 jQuery+BS4
- * modals (set-comm · set-furlough · edit-profile · add-bank · delete-bank ·
- * add-education · delete-education). Wave 20 P1 keeps that file UNTOUCHED
- * (per task scope: 2 file edits). The BS4 modals won't open inside this
- * Tailwind chrome (no jQuery loaded), so the action buttons in this rewrite
- * link to a clearly bannered Wave-21 placeholder rather than render a
- * non-functional modal trigger. Wave 21 will port `admin-profile-client.tsx`
- * to native HTML5 `<dialog>` + Tailwind, restoring full inline edits.
+ * The list now passes a `profile_id` (UUID) as the row link, NOT the
+ * legacy `tb_admin.adminid` string. The Wave 20 P1 read-only detail page
+ * (the prior version of this file) was still keyed by `tb_admin.adminid`
+ * and queried 13 legacy tables → on prod it 500'd with
+ * `column tb_admin.adminid does not exist` because prod uses camelCase
+ * (`adminID`) and our lowercase port never resolved.
+ *
+ * This rewrite mirrors the patterns Agents I + J established:
+ *   - 3 parallel queries (admins · profiles · admin_contact_extras),
+ *     NOT a PostgREST cross-embed (PGRST200 — no direct FK between
+ *     admins and admin_contact_extras; both FK to profiles)
+ *   - UUID-keyed lookup against `profiles.id`
+ *   - §0c discipline: destructure { data, error } from every supabase
+ *     call · throw on hard error · soft-log when optional row missing
+ *   - notFound() ONLY when profile genuinely doesn't exist (never as a
+ *     fall-through for transient DB errors)
+ *
+ * ── UI scope (kept faithful to legacy admin-profile.php; design Pacred) ──
+ * Per AGENTS §0a — copy WORKFLOW, apply Pacred Tailwind:
+ *   - Identity card        — avatar · ชื่อ-นามสกุล · nickname · member_code
+ *                            · role badge · status pill
+ *   - Identity section     — email · phone · birthday · sex
+ *   - HR section           — company · employee_type · department · section
+ *                            · hired_at · work_email · work_phone
+ *   - Legacy bridge        — legacy_admin_id + recreated_at banner
+ *   - Notes/contract       — admin_note · contract_end_date · suspended_at
+ *                            · ended_at
+ *   - Role grants list     — every (profile_id, role) row from admins,
+ *                            historical inactives included
+ *   - Action buttons       — "แก้ไข" → /[id]/edit · "Reset password" →
+ *                            Supabase Dashboard link · "Audit log" →
+ *                            /admin/admin-audit-log?admin_id=…
+ *
+ * ── What this rewrite deferred (Wave 23 follow-up) ─────────────────
+ * The Wave 20 P1 page rendered 5 extra sections that read JOIN tables
+ * which DON'T exist on the new Pacred shape (only on the legacy `tb_admin`
+ * universe — and ภูม chose NOT to auto-migrate the 13 legacy admins):
+ *   - Personal docs (national ID + file links)            — Wave 23
+ *   - Bank accounts table (tb_account_pcs)                — Wave 23
+ *   - Education history table (tb_education_background)   — Wave 23
+ *   - Organisation channel labels (email/tel/line/wechat) — Wave 23
+ *   - Interpreter commission cog (tb_set_comm_interpreter) — Wave 23
+ *
+ * These are NOT removed — they were never wired into the new shape
+ * (the Pacred-native 4 super-admins don't have them; the 13 legacy ones
+ * will be recreated through /admin/admins/new without them). When a
+ * future migration ports those join tables into a Pacred-shape sidecar,
+ * re-add the sections here.
+ *
+ * The `admin-profile-client.tsx` (jQuery+BS4 → native dialog) bundle is
+ * also NOT imported — its server actions still target legacy `tb_admin`
+ * and would 500 the same way. The action buttons here point to the
+ * Pacred-native `/edit` subroute instead.
+ *
+ * ── References ─────────────────────────────────────────────────────
+ * - List/source pattern:    app/[locale]/(admin)/admin/admins/page.tsx
+ * - Edit/source pattern:    app/[locale]/(admin)/admin/admins/[id]/edit/page.tsx
+ * - PGRST200 lesson:        docs/learnings/supabase-rls-patterns.md
+ * - §0c verify-deep-flow:   AGENTS.md §0c
  */
 
 import { notFound } from "next/navigation";
@@ -40,9 +76,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 // ============================================================================
-// Inline helpers (label lookups · date formatting · org chart) — preserved
-// verbatim from the prior `.pcs-legacy` version. Citations point to
-// pcs-admin/include/function.php in the legacy source tree.
+// Inline helpers (label lookups · date formatting)
 // ============================================================================
 
 const BADGE_CLS: Record<string, string> = {
@@ -83,395 +117,242 @@ function diffDateNow(iso: string | null | undefined): string {
   return `${y} ปี ${m} เดือน ${d} วัน`;
 }
 
-/** Legacy `nameCompanyType($int)` — function.php L2899-2907 */
-function nameCompanyType(t: string | null): { label: string; color: string } | null {
+/** Pacred `profiles.sex` enum → display label */
+function nameSex(sex: string | null | undefined): string {
+  switch (sex) {
+    case "male":   return "ชาย";
+    case "female": return "หญิง";
+    case "other":  return "อื่นๆ / ไม่ระบุ";
+    default:       return "ไม่ระบุ";
+  }
+}
+
+/** Pacred `admin_contact_extras.company` enum → display label */
+function nameCompany(c: string | null | undefined): { label: string; color: string } | null {
+  switch (c) {
+    case "pacred-cargo":   return { label: "Pacred Cargo",   color: "danger" };
+    case "pacred-freight": return { label: "Pacred Freight", color: "success" };
+    case "pacred":         return { label: "Pacred",         color: "warning" };
+    default:               return null;
+  }
+}
+
+/** Pacred `admin_contact_extras.employee_type` enum → display label */
+function nameEmployeeType(t: string | null | undefined): { label: string; color: string } | null {
   switch (t) {
-    case "1": return { label: "Freight & Cargo", color: "danger" };
-    case "2": return { label: "Pacred Freight",  color: "success" };
-    case "3": return { label: "Pacred",          color: "warning" };
-    default:  return null;
+    case "full_time": return { label: "พนักงานประจำ",       color: "danger" };
+    case "probation": return { label: "ทดลองงาน",            color: "warning" };
+    case "intern":    return { label: "เด็กฝึกงาน/สหกิจ",   color: "info" };
+    case "partner":   return { label: "พาสเนอร์",            color: "primary" };
+    case "contract":  return { label: "สัญญาจ้าง",           color: "secondary" };
+    case "daily":     return { label: "รายวัน",              color: "secondary" };
+    default:          return null;
   }
 }
 
-/** Legacy `nameAdminType($int)` — function.php L3139-3151 */
-function nameAdminType(t: string | null): { label: string; color: string } | null {
-  switch (t) {
-    case "1": return { label: "พนักงานประจำ", color: "danger" };
-    case "2": return { label: "ทดลองงาน",     color: "warning" };
-    case "3": return { label: "เด็กฝึกงาน",    color: "info" };
-    case "4": return { label: "สหกิจศึกษา",    color: "success" };
-    case "5": return { label: "พาสเนอร์",      color: "danger" };
-    case "6": return { label: "ฟรีแลนซ์",     color: "warning" };
-    case "7": return { label: "คนในบ้าน",     color: "primary" };
-    default:  return null;
-  }
-}
-
-/** Legacy `nameSex($data)` — function.php L3351-3358 */
-function nameSex(data: string | null | undefined): string {
-  switch (data) {
-    case "1": return "ชาย";
-    case "2": return "หญิง";
-    case "3": return "LGBTQ";
-    default:  return "ไม่ระบุ";
-  }
-}
-
-/** Legacy `showReligion($data)` — function.php L3392-3408 */
-function showReligion(data: string | null | undefined): string {
-  const map: Record<string, string> = {
-    "1": "พุทธ", "2": "คริสต์", "3": "อิสลาม", "4": "ฮินดู",
-    "5": "ซิกข์", "6": "ยูดาห์", "7": "ไม่มีศาสนา", "8": "ศาสนาอื่น ๆ",
-  };
-  return data && map[data] ? map[data] : "ไม่ได้ระบุไว้";
-}
-
-/** Legacy `showMaritalStatus($data)` — function.php L3421-3437 */
-function showMaritalStatus(data: string | null | undefined): string {
-  const map: Record<string, string> = {
-    "1": "โสด", "2": "แต่งงานแล้ว", "3": "หย่าร้าง", "4": "ม่าย",
-    "5": "แยกกันอยู่", "6": "มีความสัมพันธ์", "7": "หมั้น", "8": "อื่น ๆ",
-  };
-  return data && map[data] ? map[data] : "ไม่ได้ระบุไว้";
-}
-
-/** Legacy `showEducationLevel($level)` — function.php L3360-3379 */
-function showEducationLevel(level: string | null | undefined): string {
-  const map: Record<string, string> = {
-    "1": "ต่ำกว่ามัธยมศึกษา", "2": "มัธยมศึกษาตอนต้น", "3": "มัธยมศึกษาตอนปลาย",
-    "4": "ปวช.", "5": "ปวท.", "6": "ปวส.", "7": "อนุปริญญา",
-    "8": "ปริญญาตรี", "9": "ปริญญาโท", "10": "ปริญญาเอก",
-  };
-  return level && map[level] ? map[level] : "ระดับการศึกษาไม่ถูกต้อง";
-}
-
-/** Legacy `nameBank($ID)` — function.php L299-321 */
-function nameBank(id: string | null | undefined): string {
-  const map: Record<string, string> = {
-    "1": "กรุงเทพ", "2": "กสิกรไทย", "3": "กรุงไทย", "4": "ทหารไทย", "5": "ไทยพาณิชย์",
-    "6": "กรุงศรีอยุธยา", "7": "เกียรตินาคิน", "8": "ซีไอเอ็มบีไทย", "9": "ทิสโก้",
-    "10": "ธนชาต", "11": "ยูโอบี", "12": "แลนด์ แอนด์ เฮาส์", "13": "ออมสิน",
-    "14": "พร้อมเพย์", "15": "CIMB", "16": "ICBC",
-  };
-  return id && map[id] ? map[id] : "ไม่พบข้อมูล";
-}
-
-/** Legacy `checkRightsName(...)` — function.php L3023-3054 */
-type OrgRow = {
-  companyNo: number; departmentNo: number; sectionNo: number;
-  departmentName: string; sectionName: string;
-};
-const ORG_CHART: OrgRow[] = [
-  { companyNo: 1, departmentNo: 0, sectionNo: 0,  departmentName: "CEO",         sectionName: "CEO" },
-  { companyNo: 1, departmentNo: 1, sectionNo: 1,  departmentName: "Manager",     sectionName: "Manager" },
-  { companyNo: 1, departmentNo: 2, sectionNo: 2,  departmentName: "HR",          sectionName: "HR Manager" },
-  { companyNo: 1, departmentNo: 2, sectionNo: 3,  departmentName: "HR",          sectionName: "HR" },
-  { companyNo: 1, departmentNo: 2, sectionNo: 4,  departmentName: "HR",          sectionName: "Maid" },
-  { companyNo: 1, departmentNo: 3, sectionNo: 5,  departmentName: "QA & QC",     sectionName: "QA Manager" },
-  { companyNo: 1, departmentNo: 3, sectionNo: 6,  departmentName: "QA & QC",     sectionName: "QA" },
-  { companyNo: 1, departmentNo: 3, sectionNo: 7,  departmentName: "QA & QC",     sectionName: "QC" },
-  { companyNo: 1, departmentNo: 4, sectionNo: 8,  departmentName: "Accounting",  sectionName: "Accounting Manager" },
-  { companyNo: 1, departmentNo: 4, sectionNo: 9,  departmentName: "Accounting",  sectionName: "Admin Accounting" },
-  { companyNo: 1, departmentNo: 5, sectionNo: 10, departmentName: "Marketing",   sectionName: "Manager Marketing" },
-  { companyNo: 1, departmentNo: 5, sectionNo: 11, departmentName: "Marketing",   sectionName: "Pricing" },
-  { companyNo: 1, departmentNo: 5, sectionNo: 12, departmentName: "Marketing",   sectionName: "Marketing/Creative" },
-  { companyNo: 1, departmentNo: 5, sectionNo: 13, departmentName: "Marketing",   sectionName: "Graphic/Editing" },
-  { companyNo: 1, departmentNo: 6, sectionNo: 14, departmentName: "ITDT",        sectionName: "IT Project Manager" },
-  { companyNo: 1, departmentNo: 6, sectionNo: 15, departmentName: "ITDT",        sectionName: "Front End" },
-  { companyNo: 1, departmentNo: 6, sectionNo: 16, departmentName: "ITDT",        sectionName: "Back End" },
-  { companyNo: 1, departmentNo: 6, sectionNo: 17, departmentName: "ITDT",        sectionName: "Full Stack" },
-  { companyNo: 2, departmentNo: 1, sectionNo: 1,  departmentName: "Sales Freight", sectionName: "Sales Manager" },
-  { companyNo: 2, departmentNo: 1, sectionNo: 2,  departmentName: "Sales Freight", sectionName: "Sales" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 3,  departmentName: "Freight Export", sectionName: "Manager Export" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 4,  departmentName: "Freight Export", sectionName: "CS/Doc Export" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 5,  departmentName: "Freight Export", sectionName: "Shipping Doc Export" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 6,  departmentName: "Freight Export", sectionName: "Shipping Clearance Export" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 7,  departmentName: "Freight Export", sectionName: "Shipping Clearance Import & Export" },
-  { companyNo: 2, departmentNo: 2, sectionNo: 8,  departmentName: "Freight Export", sectionName: "Messenger" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 9,  departmentName: "Freight Import", sectionName: "Manager Import" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 10, departmentName: "Freight Import", sectionName: "CS/Doc Import" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 11, departmentName: "Freight Import", sectionName: "Shipping Doc Import" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 12, departmentName: "Freight Import", sectionName: "Shipping Clearance Import" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 13, departmentName: "Freight Import", sectionName: "Shipping Clearance Import & Export" },
-  { companyNo: 2, departmentNo: 3, sectionNo: 14, departmentName: "Freight Import", sectionName: "Messenger" },
-  { companyNo: 3, departmentNo: 1, sectionNo: 1,  departmentName: "Sales Cargo",   sectionName: "Sales Manager" },
-  { companyNo: 3, departmentNo: 1, sectionNo: 2,  departmentName: "Sales Cargo",   sectionName: "Sales" },
-  { companyNo: 3, departmentNo: 2, sectionNo: 3,  departmentName: "CS Purchasing", sectionName: "Manager Purchasing" },
-  { companyNo: 3, departmentNo: 2, sectionNo: 4,  departmentName: "CS Purchasing", sectionName: "Purchasing" },
-  { companyNo: 3, departmentNo: 3, sectionNo: 5,  departmentName: "Warehouse",     sectionName: "Manager warehouse" },
-  { companyNo: 3, departmentNo: 3, sectionNo: 6,  departmentName: "Warehouse",     sectionName: "Warehouse" },
-  { companyNo: 3, departmentNo: 3, sectionNo: 7,  departmentName: "Warehouse",     sectionName: "Driver" },
-  { companyNo: 1, departmentNo: 5, sectionNo: 18, departmentName: "Marketing",     sectionName: "Sales All" },
-];
-function checkRightsName(
-  companyType: string | null, department: string | null, section: string | null, adminType: string | null,
-): { departmentName: string; sectionName: string } {
-  const c = Number(companyType ?? 0);
-  const dep = Number(department ?? 0);
-  const s = Number(section ?? 0);
-  const row = ORG_CHART.find((r) => r.companyNo === c && r.departmentNo === dep && r.sectionNo === s);
-  if (row) return { departmentName: row.departmentName, sectionName: row.sectionName };
-  if (adminType === "7") return { departmentName: "คนในบ้าน", sectionName: "คนในบ้าน" };
-  return { departmentName: "unknown", sectionName: "unknown" };
-}
-
-/** Legacy `generateBadgeDepartment($role)` — function.php L3256-3279 */
-function generateBadgeDepartment(role: string): { label: string; color: string } {
+/** Pacred admin `role` (RBAC) → display label + color */
+function nameRole(role: string): { label: string; color: string } {
   switch (role) {
-    case "CEO": case "Manager": case "HR": case "QA & QC":
-    case "Accounting": case "Marketing": case "ITDT":
-      return { label: role, color: "danger" };
-    case "Sales Freight": case "Sales Cargo":
-      return { label: role, color: "info" };
-    case "FREIGHT Export":
-      return { label: role, color: "primary" };
-    case "FREIGHT Import": case "CS Purchasing":
-      return { label: role, color: "success" };
-    case "Warehouse":
-      return { label: role, color: "warning" };
+    case "super":            return { label: "Super Admin",       color: "danger" };
+    case "ops":              return { label: "Ops",               color: "primary" };
+    case "accounting":       return { label: "Accounting",        color: "success" };
+    case "sales_admin":      return { label: "Sales Mgr (Cargo)", color: "info" };
+    case "sales":            return { label: "Sales (Cargo)",     color: "info" };
+    case "qa":               return { label: "QA / QC",           color: "warning" };
+    case "warehouse":        return { label: "Warehouse",         color: "warning" };
+    case "driver":           return { label: "Driver",            color: "warning" };
+    case "interpreter":      return { label: "ล่ามจีน",            color: "secondary" };
     default:
-      return { label: role, color: "secondary" };
+      return { label: role.replace(/_/g, " "), color: "secondary" };
   }
 }
-
-/** Legacy `generateBadgeSection($role)` — function.php L3281-3328 */
-function generateBadgeSection(role: string): { label: string; color: string } {
-  const dangerSet = new Set([
-    "CEO", "Manager", "HR Manager", "HR", "Maid",
-    "QA Manager", "QA", "QC", "Accounting Manager", "Admin Accounting",
-    "Manager Marketing", "Pricing", "Marketing/Creative", "Graphic/Editing",
-    "IT Project Manager", "Front End", "Back End", "Full Stack",
-    "Sales Manager", "Manager Export", "Manager Import",
-    "Manager Purchasing", "Manager Warehouse",
-  ]);
-  const warningSet = new Set([
-    "Shipping Doc Export", "Shipping Clearance Export",
-    "Shipping Clearance Import & Export", "Messenger",
-    "CS/Doc Import", "Shipping Doc Import", "Shipping Clearance Import",
-    "Driver", "Warehouse",
-  ]);
-  if (dangerSet.has(role))  return { label: role, color: "danger" };
-  if (role === "Sales" || role === "Sales All") return { label: role, color: "info" };
-  if (role === "CS/Doc Export" || role === "Purchasing")
-                            return { label: role, color: "success" };
-  if (warningSet.has(role)) return { label: role, color: "warning" };
-  return { label: role, color: "secondary" };
-}
-
-/** Legacy `nameDepartmentText($data1,$data2)` — function.php L3165-3194 */
-function nameDepartmentText(d: string | null, c: string | null): string {
-  const dep = Number(d ?? 0);
-  const co  = Number(c ?? 0);
-  if (co === 1) {
-    switch (dep) {
-      case 0: return "CEO";
-      case 1: return "Manager";
-      case 2: return "HR";
-      case 3: return "QAAndQC";
-      case 4: return "Accounting";
-      case 5: return "Marketing";
-      case 6: return "ITDT";
-    }
-  } else if (co === 2) {
-    switch (dep) {
-      case 1: return "SaleFreight";
-      case 2: return "FreightExport";
-      case 3: return "FreightImport";
-    }
-  } else if (co === 3) {
-    switch (dep) {
-      case 1: return "SaleCargo";
-      case 2: return "CSPurchasing";
-      case 3: return "Warehouse";
-      case 5: return "Marketing";
-    }
-  }
-  return "";
-}
-
-/** Legacy `nameSectionText($data1,$data2)` — function.php L3195-3250 */
-function nameSectionText(s: string | null, c: string | null): string {
-  const sec = Number(s ?? 0);
-  const co  = Number(c ?? 0);
-  if (co === 1) {
-    const map: Record<number, string> = {
-      0: "CEO", 1: "Manager", 2: "HRManager", 3: "HR", 4: "Maid",
-      5: "QAManager", 6: "QA", 7: "QC", 8: "AccountingManager", 9: "AdminAccounting",
-      10: "ManagerMarketing", 11: "Pricing", 12: "MarketingORCreative", 13: "GraphicOrEditing",
-      14: "ITProjectManager", 15: "FrontEnd", 16: "BackEnd", 17: "FullStack", 18: "SalesAll",
-    };
-    return map[sec] ?? "";
-  }
-  return "";
-}
-
-// ============================================================================
-// Row + lookup types
-// ============================================================================
-type AdminRow = {
-  id: number;
-  adminid: string;
-  adminstatusa: string | null;
-  adminname: string | null;
-  adminlastname: string | null;
-  adminnickname: string | null;
-  adminemail: string | null;
-  admintel: string | null;
-  adminsex: string | null;
-  adminbirthday: string | null;
-  adminpicture: string | null;
-  adminregistered: string | null;
-  admintype: string | null;
-  department: string | null;
-  section: string | null;
-  companytype: string | null;
-  startdate: string | null;
-  enddate: string | null;
-  enddateoflogin: string | null;
-  admintmp: string | null;
-  adminemailorg: number | string | null;
-  admintelorg: number | string | null;
-  salarytype: string | null;
-  salary: number | string | null;
-  nationalidcard: string | null;
-  expirydate: string | null;
-  religion: string | null;
-  nationality: string | null;
-  maritalstatus: string | null;
-  nationalidcardfile: string | null;
-  copyhouseregistrationfile: string | null;
-  resumefile: string | null;
-};
-
-type AddressRow = {
-  addressno: string | null;
-  district: string | null;
-  amphoe: string | null;
-  province: string | null;
-  zipcode: string | null;
-  addressnote: string | null;
-};
 
 // ============================================================================
 // Page
 // ============================================================================
+
 export default async function AdminProfilePage({
   params,
 }: { params: Promise<{ id: string }> }) {
   const { id: idParam } = await params;
-  const adminIDGet = decodeURIComponent(idParam);
+  const profileId = decodeURIComponent(idParam);
 
-  // Auth — any signed-in admin can view. The mutate gate (`canMutate`)
-  // mirrors the legacy `departmentKey == 'CEO'|'Manager'|'ITDT'|'HR'`.
+  // Auth — any signed-in admin can view. `super` gates the mutate buttons.
   const { roles, user } = await requireAdmin();
-  const canMutate    = roles.includes("super");
-  const isCEOOrITDT  = roles.includes("super"); // narrower legacy gate
-  const isAccounting = roles.includes("super") || roles.includes("accounting");
+  const canMutate = roles.includes("super");
+
+  // Defensive — the page is keyed by profile UUID (set by Wave 22 list).
+  // If the caller landed here with a non-UUID string (legacy bookmark to
+  // the old tb_admin.adminid path), 404 cleanly so the link is visibly
+  // broken instead of silently mis-querying.
+  if (!/^[0-9a-f-]{32,36}$/i.test(profileId)) {
+    notFound();
+  }
 
   const admin = createAdminClient();
 
-  // ── Main admin row + LEFT JOIN address (admin-profile.php L256-260) ──
-  // §0c — destructure { data, error }; raise on real error so we don't
-  // silently 404 a row that exists.
-  const [adminRes, addressRes] = await Promise.all([
-    admin.from("tb_admin").select("*").eq("adminid", adminIDGet).maybeSingle<AdminRow>(),
-    admin.from("tb_admin_address").select("addressno, district, amphoe, province, zipcode, addressnote").eq("adminid", adminIDGet).maybeSingle<AddressRow>(),
+  // ── 3 parallel queries (admins · profiles · admin_contact_extras) ──
+  // Why not a PostgREST embed: `admins` and `admin_contact_extras` both
+  // FK to `profiles(id)` but NOT to each other → cross-embed fails
+  // PGRST200 (docs/learnings/supabase-rls-patterns.md 2026-05-27 entry).
+  // The 3-query merge is the proven pattern from Agent I's list + Agent
+  // J's loadAdminForEdit.
+  const [profileRes, rolesRes, extrasRes] = await Promise.all([
+    admin
+      .from("profiles")
+      .select(
+        "id, member_code, first_name, last_name, email, phone, avatar_url, " +
+        "birthday, sex, last_login_at, is_active, created_at, " +
+        "migrated_from_pcs, legacy_pcs_user_id",
+      )
+      .eq("id", profileId)
+      .maybeSingle<{
+        id: string;
+        member_code: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        phone: string | null;
+        avatar_url: string | null;
+        birthday: string | null;
+        sex: string | null;
+        last_login_at: string | null;
+        is_active: boolean | null;
+        created_at: string | null;
+        migrated_from_pcs: boolean | null;
+        legacy_pcs_user_id: string | null;
+      }>(),
+    admin
+      .from("admins")
+      .select("role, is_active, granted_at, granted_by")
+      .eq("profile_id", profileId)
+      .order("is_active", { ascending: false })
+      .order("granted_at", { ascending: false, nullsFirst: false }),
+    admin
+      .from("admin_contact_extras")
+      .select(
+        "nickname, display_name, direct_phone, company, employee_type, " +
+        "department, section, work_email, work_phone, hired_at, suspended_at, " +
+        "contract_end_date, legacy_admin_id, ended_at, legacy_admin_type, " +
+        "legacy_admin_status, admin_note, updated_at",
+      )
+      .eq("profile_id", profileId)
+      .maybeSingle<{
+        nickname: string | null;
+        display_name: string | null;
+        direct_phone: string | null;
+        company: string | null;
+        employee_type: string | null;
+        department: string | null;
+        section: string | null;
+        work_email: string | null;
+        work_phone: string | null;
+        hired_at: string | null;
+        suspended_at: string | null;
+        contract_end_date: string | null;
+        legacy_admin_id: string | null;
+        ended_at: string | null;
+        legacy_admin_type: string | null;
+        legacy_admin_status: string | null;
+        admin_note: string | null;
+        updated_at: string | null;
+      }>(),
   ]);
-  if (adminRes.error) {
-    console.error("[admins/[id]] tb_admin query failed", {
-      adminid: adminIDGet,
-      code: adminRes.error.code,
-      message: adminRes.error.message,
-      details: adminRes.error.details,
+
+  // §0c — hard errors throw (Next renders error boundary, never silent 404).
+  if (profileRes.error) {
+    console.error("[admins/[id]] profiles query failed", {
+      profileId,
+      code:    profileRes.error.code,
+      message: profileRes.error.message,
+      details: profileRes.error.details,
+      hint:    profileRes.error.hint,
     });
     throw new Error(
-      `admins/[id]: failed to load tb_admin for ${adminIDGet} — ${adminRes.error.code ?? "unknown"}: ${adminRes.error.message}`,
+      `admins/[id]: profiles load failed — ${profileRes.error.code ?? "unknown"}: ${profileRes.error.message}`,
     );
   }
-  if (!adminRes.data) notFound();
-  const rowMain = adminRes.data;
-  const addr = addressRes.data;
+  if (rolesRes.error) {
+    console.error("[admins/[id]] admins query failed", {
+      profileId,
+      code:    rolesRes.error.code,
+      message: rolesRes.error.message,
+    });
+    throw new Error(
+      `admins/[id]: role grants load failed — ${rolesRes.error.code ?? "unknown"}: ${rolesRes.error.message}`,
+    );
+  }
+  // extras is OPTIONAL — 4 native super-admins have no admin_contact_extras
+  // row (created before HR sidecar existed). Soft-log + continue with null.
+  if (extrasRes.error) {
+    console.error("[admins/[id]] admin_contact_extras query failed (soft)", {
+      profileId,
+      code:    extrasRes.error.code,
+      message: extrasRes.error.message,
+    });
+  }
 
-  // Self-edit gate — approximated by email match (Pacred admins use
-  // Supabase auth UUID; legacy uses `adminid` string code).
-  const isSelf =
-    (user.email !== null && rowMain.adminemail !== null &&
-      user.email.toLowerCase() === rowMain.adminemail.toLowerCase());
+  if (!profileRes.data) notFound();
+  const p = profileRes.data;
+  const x = extrasRes.data;
+  const grantRows = (rolesRes.data ?? []) as Array<{
+    role: string; is_active: boolean; granted_at: string | null; granted_by: string | null;
+  }>;
+  const activeGrants = grantRows.filter((g) => g.is_active);
 
-  // ── Org-channel current values + dropdown options + bank + education
-  //    + interpreter commission (admin-profile.php L989-1024 / L1226 /
-  //    L1328 / L1072 / L366) ────────────────────────────────────────
-  const [emailOrgRes, telOrgRes, lineOrgRes, wechatOrgRes,
-         bankAccountsRes, educationRes, educationLatestRes,
-         interpreterCommRes] = await Promise.all([
-    admin.from("tb_org_email_ships").select("oeid").eq("adminid", adminIDGet).maybeSingle(),
-    admin.from("tb_org_tell_ships").select("otid").eq("adminid", adminIDGet).maybeSingle(),
-    admin.from("tb_org_line_ships").select("olid").eq("adminid", adminIDGet).maybeSingle(),
-    admin.from("tb_org_wechat_ships").select("owcid").eq("adminid", adminIDGet).maybeSingle(),
-    admin.from("tb_account_pcs").select("id, bankname, accountnumber, accountname").eq("adminid", adminIDGet).order("id"),
-    admin.from("tb_education_background").select("id, educationlevel, institution, faculty, educationdepartment, graduateyear, gpa").eq("adminid", adminIDGet).order("graduateyear", { ascending: false, nullsFirst: false }),
-    admin.from("tb_education_background").select("educationlevel, institution, faculty, educationdepartment, graduateyear").eq("adminid", adminIDGet).order("graduateyear", { ascending: true, nullsFirst: true }).order("id", { ascending: false }).limit(1).maybeSingle(),
-    admin.from("tb_set_comm_interpreter").select("percom").eq("adminid", adminIDGet).maybeSingle(),
-  ]);
+  // If a profile has zero role grants at all (admins row never inserted),
+  // it isn't a Pacred admin → notFound. Mirrors the list which only shows
+  // profiles WITH at least one admins row.
+  if (grantRows.length === 0) notFound();
 
-  // We need org-label lookups for the email/tel display (the legacy LEFT
-  // JOIN). Fire those only if there's a ship row to look up.
-  const oeid  = (emailOrgRes.data  as { oeid:  number } | null)?.oeid  ?? null;
-  const otid  = (telOrgRes.data    as { otid:  number } | null)?.otid  ?? null;
-  const olid  = (lineOrgRes.data   as { olid:  number } | null)?.olid  ?? null;
-  const owcid = (wechatOrgRes.data as { owcid: number } | null)?.owcid ?? null;
-  const [orgEmailRowRes, orgTelRowRes, orgLineRowRes, orgWechatRowRes] = await Promise.all([
-    oeid  ? admin.from("tb_organization_email").select("email").eq("id", oeid).maybeSingle()  : Promise.resolve({ data: null }),
-    otid  ? admin.from("tb_organization_tell").select("tell").eq("id", otid).maybeSingle()    : Promise.resolve({ data: null }),
-    olid  ? admin.from("tb_organization_line").select("line").eq("id", olid).maybeSingle()    : Promise.resolve({ data: null }),
-    owcid ? admin.from("tb_organization_wechat").select("wechat").eq("id", owcid).maybeSingle() : Promise.resolve({ data: null }),
-  ]);
+  // ── Resolve granted_by uuids → names (single round-trip) ─────────
+  // The history table on prod is small (a handful of grants per admin),
+  // so one IN-query is plenty. Soft-failure shows the raw uuid suffix.
+  const granterIds = [...new Set(grantRows.map((g) => g.granted_by).filter((v): v is string => v != null))];
+  const grantersMap = new Map<string, { name: string; member_code: string | null }>();
+  if (granterIds.length > 0) {
+    const { data: granters, error: grantersErr } = await admin
+      .from("profiles")
+      .select("id, first_name, last_name, member_code")
+      .in("id", granterIds);
+    if (grantersErr) {
+      console.error("[admins/[id]] granters lookup failed (soft)", {
+        code: grantersErr.code, message: grantersErr.message,
+      });
+    }
+    for (const row of (granters ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null; member_code: string | null }>) {
+      const fullName = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
+      grantersMap.set(row.id, {
+        name:        fullName || "(ไม่มีชื่อ)",
+        member_code: row.member_code,
+      });
+    }
+  }
 
-  const currentEmailOrgLabel  = (orgEmailRowRes.data  as { email:  string } | null)?.email  ?? "-";
-  const currentTelOrgLabel    = (orgTelRowRes.data    as { tell:   string } | null)?.tell   ?? "-";
-  const currentLineOrgLabel   = (orgLineRowRes.data   as { line:   string } | null)?.line   ?? "-";
-  const currentWechatOrgLabel = (orgWechatRowRes.data as { wechat: string } | null)?.wechat ?? "-";
+  // ── Derived display values ──────────────────────────────────────
+  const fullName = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || "(ยังไม่มีชื่อ)";
+  const nickname = x?.nickname ?? x?.display_name ?? null;
+  const avatar   = p.avatar_url && p.avatar_url.trim() !== ""
+    ? p.avatar_url
+    : "/legacy/pcs/admin/images/user.jpg";
 
-  const bankAccounts = (bankAccountsRes.data ?? []) as Array<{ id: number; bankname: string | null; accountnumber: string | null; accountname: string | null }>;
-  const educationRows = (educationRes.data ?? []) as Array<{ id: number; educationlevel: string | null; institution: string | null; faculty: string | null; educationdepartment: string | null; graduateyear: number | null; gpa: number | null }>;
-  const educationLatest = educationLatestRes.data as { educationlevel: string | null; institution: string | null; faculty: string | null; educationdepartment: string | null; graduateyear: number | null } | null;
-  const perCom = ((interpreterCommRes.data as { percom: number | null } | null)?.percom ?? 0);
+  const companyBadge = nameCompany(x?.company);
+  const typeBadge    = nameEmployeeType(x?.employee_type);
 
-  // Derived display values (admin-profile.php L284-288 + L833-843)
-  const rights = checkRightsName(rowMain.companytype, rowMain.department, rowMain.section, rowMain.admintype);
-  const departmentKeyData = nameDepartmentText(rowMain.department, rowMain.companytype);
-  const sectionKeyData    = nameSectionText(rowMain.section, rowMain.companytype);
-  const companyBadge = nameCompanyType(rowMain.companytype);
-  const typeBadge    = nameAdminType(rowMain.admintype);
-  const deptBadge    = generateBadgeDepartment(rights.departmentName);
-  const sectBadge    = generateBadgeSection(rights.sectionName);
-  const isTrainee    = rowMain.admintype === "2" || rowMain.admintype === "3" || rowMain.admintype === "4";
+  // Status precedence (matches list page): ended > suspended > !is_active > active
+  const isEnded     = !!x?.ended_at;
+  const isSuspended = !!x?.suspended_at;
+  const hasActiveGrant = activeGrants.length > 0;
 
-  // Legacy L364 — interpreter-commission cog visible only for CSPurchasing
-  // / admin_jeen, AND only to CEO/Manager/ITDT.
-  const showInterpreterCog =
-    (departmentKeyData === "CSPurchasing" || rowMain.adminid === "admin_jeen") && isCEOOrITDT;
+  // Self-edit signal — true if the signed-in admin IS this admin.
+  const isSelf = user.id === p.id;
 
-  // Legacy L917 — bonus card visible only for SaleCargo / SalesAll.
-  const showBonusCard = departmentKeyData === "SaleCargo" || sectionKeyData === "SalesAll";
-
-  // Avatar path — default to legacy user.jpg until customer-images backfill runs.
-  const adminPicture = (rowMain.adminpicture && rowMain.adminpicture.trim() !== "")
-    ? rowMain.adminpicture : "user.jpg";
-  const adminPictureUrl = `/legacy/pcs/admin/images/${adminPicture}`;
-
-  // Section visibility gates
-  const showAddBankSection       = isSelf || isAccounting;
-  const showEducationListSection = isSelf || isAccounting;
-  const showEditProfile          = isSelf || canMutate;
-  const showFurlough             = isCEOOrITDT;
-  const showPersonalIDCard       = isSelf || isAccounting;
-
-  const fullName = `${rowMain.adminname ?? ""} ${rowMain.adminlastname ?? ""}`.trim() || "-";
-  const isInactive = rowMain.adminstatusa === "0";
+  // Probation countdown (kept consistent with the list page UX).
+  const isProbation = x?.employee_type === "probation";
+  const probationRemaining = isProbation ? diffDateNow(x?.contract_end_date) : "";
 
   return (
-    <main className="p-6 lg:p-8 max-w-5xl mx-auto space-y-5">
+    <main className="p-4 lg:p-8 max-w-5xl mx-auto space-y-5">
       {/* Breadcrumb + back link */}
       <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
         <nav className="flex items-center gap-1.5 text-muted">
@@ -490,7 +371,7 @@ export default async function AdminProfilePage({
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 flex items-start gap-5 flex-wrap">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={adminPictureUrl}
+          src={avatar}
           alt={fullName}
           className="w-24 h-24 rounded-full object-cover border-2 border-border shrink-0"
         />
@@ -498,256 +379,313 @@ export default async function AdminProfilePage({
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · พนักงาน</p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <h1 className="text-2xl font-bold">{fullName}</h1>
-            {rowMain.adminnickname && (
-              <span className="text-sm text-muted">({rowMain.adminnickname})</span>
+            {nickname && (
+              <span className="text-sm text-muted">({nickname})</span>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-sm font-medium">{rowMain.adminid}</span>
-            {isInactive && (
-              <span className="rounded-full bg-red-500 text-white px-2.5 py-0.5 text-[10px] font-medium">
-                บัญชีถูกลบ
+          <div className="mt-2 flex items-center gap-2 flex-wrap text-sm">
+            <span className="font-mono font-medium">{p.member_code ?? "(no member_code)"}</span>
+            {x?.legacy_admin_id && (
+              <span
+                className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-medium"
+                title="PCS adminID เดิม (legacy bridge)"
+              >
+                legacy: {x.legacy_admin_id}
               </span>
             )}
-            {rowMain.admintmp === "2" && (
+            {/* Status pill — precedence: ended > suspended > inactive > active */}
+            {isEnded && (
+              <span className="rounded-full bg-red-500 text-white px-2.5 py-0.5 text-[10px] font-medium">
+                ลาออกแล้ว
+              </span>
+            )}
+            {!isEnded && isSuspended && (
               <span className="rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-[10px] font-medium">
                 พักงานชั่วคราว
               </span>
             )}
+            {!isEnded && !isSuspended && !hasActiveGrant && (
+              <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 text-[10px] font-medium">
+                ปิดสิทธิ์ทั้งหมด
+              </span>
+            )}
+            {!isEnded && !isSuspended && hasActiveGrant && (
+              <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-medium">
+                ทำงานอยู่
+              </span>
+            )}
+            {p.is_active === false && (
+              <span className="rounded-full bg-slate-500 text-white px-2.5 py-0.5 text-[10px] font-medium">
+                profile inactive
+              </span>
+            )}
           </div>
+          {/* Role + company + type badges */}
           <div className="mt-3 flex flex-wrap gap-1.5">
+            {activeGrants.length > 0 ? (
+              activeGrants.map((g) => {
+                const r = nameRole(g.role);
+                return <Pill key={g.role} label={r.label} color={r.color} />;
+              })
+            ) : (
+              <span className="text-[11px] text-muted italic">(ไม่มี role ที่ active)</span>
+            )}
             {companyBadge && <Pill {...companyBadge} />}
             {typeBadge    && <Pill {...typeBadge} />}
-            <Pill {...deptBadge} />
-            <Pill {...sectBadge} />
+            {x?.department && (
+              <Pill label={x.department} color="secondary" />
+            )}
           </div>
+          {/* Probation countdown — only when probation + has end date */}
+          {isProbation && x?.contract_end_date && (
+            <div className="mt-2 text-xs text-amber-700">
+              ทดลองงาน — เหลือ <span className="font-medium">{probationRemaining}</span>
+              {" "}(ครบ {DateThai2(x.contract_end_date)})
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Wave 20 P1 status banner — proactive transparency per AGENTS §0a. */}
-      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+      {/* Legacy recreated-from banner */}
+      {x?.legacy_admin_id && (
+        <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
+          <span aria-hidden>🔗</span>
+          <div className="flex-1">
+            <span className="font-medium">ระบบบันทึก:</span>{" "}
+            ผู้ใช้นี้สร้างใหม่ในระบบ Pacred ผ่าน /admin/admins/new
+            {p.created_at && (
+              <> เมื่อ <span className="font-mono">{DateThai2(p.created_at)}</span></>
+            )}
+            {" "}· ก่อนหน้านี้คือ <span className="font-mono font-semibold">{x.legacy_admin_id}</span> ใน PCS เก่า
+          </div>
+        </div>
+      )}
+
+      {/* Wave 23 status banner — proactive transparency per AGENTS §0a. */}
+      <div className="rounded-md border border-sky-200 bg-sky-50/60 p-2.5 text-xs text-sky-800 flex items-start gap-2">
         <span aria-hidden>ℹ️</span>
         <div className="flex-1">
-          <span className="font-medium">Wave 20 P1 status:</span>{" "}
-          ✅ อ่านอย่างเดียว · ครบทุก field จาก tb_admin + 12 join tables ·
-          Tailwind chrome ·{" "}
-          <span className="opacity-75">⏳ Wave 21: inline edit (แก้ไขข้อมูล / เพิ่มบัญชีธนาคาร /
-          เพิ่มประวัติการศึกษา / พักงาน / ตั้งค่าคอมล่าม) → ต้อง port modals จาก
-          `admin-profile-client.tsx` (jQuery+BS4) ให้เป็น native dialog</span>
+          <span className="font-medium">Wave 23 status:</span>{" "}
+          ✅ Pacred-native detail · query admins/profiles/extras JOIN ·{" "}
+          <span className="opacity-75">
+            ⏳ Wave 23 follow-up: bank accounts · ประวัติการศึกษา · org channels
+            (LINE/WeChat) · interpreter commission cog — these lived only in
+            legacy tb_admin sidecar tables and aren&apos;t part of the new shape
+          </span>
         </div>
       </div>
 
-      {/* Action toolbar — placeholders for the deferred modal actions */}
-      {(showEditProfile || showFurlough || showInterpreterCog) && (
-        <div className="rounded-xl border border-border bg-surface-alt/40 p-3 flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-muted font-medium">การจัดการ:</span>
-          {showEditProfile && (
-            // TODO Wave 21: open native dialog with EditProfileButton form
-            // (currently the BS4 modal in admin-profile-client.tsx is loaded
-            // but won't open — no jQuery in scope).
-            <span
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 cursor-not-allowed opacity-70"
-              title="Wave 21: port BS4 modal to native dialog"
-            >
-              ✏️ แก้ไขข้อมูลส่วนตัว (Wave 21)
-            </span>
-          )}
-          {showFurlough && (
-            // TODO Wave 21: SetFurloughCog dialog
-            <span
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 cursor-not-allowed opacity-70"
-              title="Wave 21: port BS4 modal to native dialog"
-            >
-              ⏸ ตั้งสถานะพักงาน (Wave 21)
-            </span>
-          )}
-          {showInterpreterCog && (
-            // TODO Wave 21: SetCommCog dialog · perCom currently = {perCom}%
-            <span
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700 cursor-not-allowed opacity-70"
-              title={`Wave 21: port BS4 modal to native dialog · ปัจจุบัน ${perCom}%`}
-            >
-              ⚙️ ค่าคอมล่ามจีน ({perCom}%) (Wave 21)
-            </span>
-          )}
-        </div>
-      )}
+      {/* Action toolbar */}
+      <div className="rounded-xl border border-border bg-surface-alt/40 p-3 flex items-center gap-2 flex-wrap text-xs">
+        <span className="text-muted font-medium">การจัดการ:</span>
+        {(canMutate || isSelf) && (
+          <Link
+            href={`/admin/admins/${p.id}/edit`}
+            className="rounded-lg border border-sky-500 bg-sky-500 px-3 py-1.5 text-white hover:bg-sky-600"
+            title="แก้ไขข้อมูล HR + role + is_active"
+          >
+            ✏️ แก้ไขข้อมูล
+          </Link>
+        )}
+        <Link
+          href={`/admin/admin-audit-log?admin_id=${encodeURIComponent(p.id)}`}
+          className="rounded-lg border border-border bg-white px-3 py-1.5 text-foreground hover:bg-surface-alt"
+          title="Audit log ของพนักงานคนนี้"
+        >
+          📜 Audit log
+        </Link>
+        {canMutate && (
+          <a
+            href="https://supabase.com/dashboard"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-muted hover:bg-surface-alt"
+            title="เปิด Supabase Dashboard → Authentication → Users เพื่อ reset password"
+          >
+            🔐 Reset password (Supabase) →
+          </a>
+        )}
+      </div>
 
-      {/* KPI cards — visible to self or accounting (legacy L847-944).
-          All values are placeholders (legacy showed 0 too — the actual
-          wallet/KPI/leave data lives in Pacred Phase C). */}
-      {(isSelf || isAccounting) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="กระเป๋าสตางค์สำรองจ่าย" value="0" unit="บาท" />
-          <KpiCard label="KPI ที่ได้" value="0" />
-          <KpiCard label="วันลาที่เหลือ" value="0" unit="วัน" />
-          {showBonusCard && <KpiCard label="โบนัสที่ได้" value="0" unit="บาท" />}
-        </div>
-      )}
-
-      {/* General info — two columns */}
-      <Section title="ข้อมูลทั่วไป">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 p-5 text-sm">
-          {/* Left column */}
+      {/* Identity */}
+      <Section title="ข้อมูลส่วนตัว (Personal)">
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
           <div className="space-y-1">
-            <KV label="วันเกิด"        value={DateThai2(rowMain.adminbirthday)} />
-            <KV label="อายุ"           value={diffDateNow(rowMain.adminbirthday)} />
-            <KV label="ศาสนา"          value={showReligion(rowMain.religion)} />
-            <KV label="สัญชาติ"        value={rowMain.nationality ?? "-"} />
-            <KV label="สถานะภาพ"      value={showMaritalStatus(rowMain.maritalstatus)} />
-            <KV label="เพศ"            value={nameSex(rowMain.adminsex)} />
-            <KV label="อีเมลส่วนตัว"  value={rowMain.adminemail ?? "-"} />
-            <KV label="อีเมลองค์กร"   value={currentEmailOrgLabel} />
-            <KV label="โทรส่วนตัว"    value={rowMain.admintel ?? "-"} mono />
-            <KV label="โทรองค์กร"     value={currentTelOrgLabel} mono />
-            <KV label="LINE องค์กร"    value={currentLineOrgLabel} />
-            <KV label="WeChat องค์กร"  value={currentWechatOrgLabel} />
-          </div>
-          {/* Right column */}
-          <div className="space-y-1">
-            <KV label="วันที่เริ่มงาน"   value={DateThai2(rowMain.startdate)} />
-            <KV label="วันที่สิ้นสุดงาน" value={DateThai2(rowMain.enddate)} />
-            {isTrainee && (
-              <>
-                <KV label="ฝึกงานมาแล้ว"    value={diffDateNow(rowMain.startdate)} />
-                <KV label="เหลือเวลาฝึกงาน" value={diffDateNow(rowMain.enddate)} />
-              </>
+            <KV label="อีเมล (login)" value={p.email ?? "-"} mono />
+            <KV label="เบอร์โทรส่วนตัว"
+                value={
+                  p.phone
+                    ? <a href={`tel:${p.phone}`} className="text-primary-600 hover:underline">{p.phone}</a>
+                    : "-"
+                }
+                mono />
+            {x?.direct_phone && (
+              <KV label="เบอร์โทรตรง (HR)"
+                  value={<a href={`tel:${x.direct_phone}`} className="text-primary-600 hover:underline">{x.direct_phone}</a>}
+                  mono />
             )}
-            <KV label="วันที่สมัครระบบ"  value={DateThai2(rowMain.adminregistered)} />
-            {addr && (
-              <div className="pt-3 border-t border-border/40 mt-2">
-                <p className="text-muted mb-1">ที่อยู่ปัจจุบัน</p>
-                <p className="text-sm">
-                  {addr.addressno ?? ""} ตำบล/แขวง {addr.district ?? "-"} อำเภอ/เขต {addr.amphoe ?? "-"} จังหวัด {addr.province ?? "-"} {addr.zipcode ?? ""}
-                </p>
-                {addr.addressnote && (
-                  <p className="text-xs text-muted italic mt-0.5">หมายเหตุ: {addr.addressnote}</p>
-                )}
-              </div>
+            <KV label="วันเกิด" value={DateThai2(p.birthday)} />
+            <KV label="อายุ"     value={diffDateNow(p.birthday)} />
+            <KV label="เพศ"      value={nameSex(p.sex)} />
+          </div>
+          <div className="space-y-1">
+            <KV label="member_code"   value={p.member_code ?? "-"} mono />
+            <KV label="profile UUID"  value={<span className="text-[10px] break-all">{p.id}</span>} mono />
+            <KV label="วันที่สร้างบัญชี" value={DateThai2(p.created_at)} />
+            <KV label="ล็อกอินล่าสุด"     value={DateThai2(p.last_login_at)} />
+            <KV label="สถานะ profile"    value={p.is_active === false ? "ปิด" : "เปิด"} />
+            {p.migrated_from_pcs && (
+              <KV label="legacy PCS userid"
+                  value={p.legacy_pcs_user_id ?? "(unknown)"}
+                  mono />
             )}
           </div>
         </div>
       </Section>
 
-      {/* Education summary */}
-      <Section title="ประวัติการศึกษาล่าสุด">
-        {educationLatest ? (
+      {/* HR */}
+      <Section title="ข้อมูลพนักงาน (HR)">
+        {x ? (
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-            <KV label="ระดับการศึกษา" value={showEducationLevel(educationLatest.educationlevel)} />
-            <KV label="สถานศึกษา"     value={educationLatest.institution ?? "-"} />
-            <KV label="คณะ"           value={educationLatest.faculty ?? "-"} />
-            <KV label="สาขา"          value={educationLatest.educationdepartment ?? "-"} />
-            <KV label="ปีที่จบ"       value={educationLatest.graduateyear ? String(educationLatest.graduateyear) : "-"} />
+            <div className="space-y-1">
+              <KV label="ชื่อเล่น"        value={x.nickname ?? "-"} />
+              <KV label="display_name"   value={x.display_name ?? "-"} />
+              <KV label="บริษัท"          value={companyBadge ? <Pill {...companyBadge} /> : "-"} />
+              <KV label="ประเภทพนักงาน"  value={typeBadge ? <Pill {...typeBadge} /> : "-"} />
+              <KV label="แผนก"            value={x.department ?? "-"} />
+              <KV label="ตำแหน่ง"         value={x.section ?? "-"} />
+            </div>
+            <div className="space-y-1">
+              <KV label="อีเมลบริษัท"
+                  value={
+                    x.work_email
+                      ? <a href={`mailto:${x.work_email}`} className="text-primary-600 hover:underline break-all">{x.work_email}</a>
+                      : "-"
+                  } />
+              <KV label="โทรบริษัท"
+                  value={
+                    x.work_phone
+                      ? <a href={`tel:${x.work_phone}`} className="text-primary-600 hover:underline">{x.work_phone}</a>
+                      : "-"
+                  }
+                  mono />
+              <KV label="วันเริ่มงาน"        value={DateThai2(x.hired_at)} />
+              <KV label="วันสิ้นสุดสัญญา"   value={DateThai2(x.contract_end_date)} />
+              <KV label="พักงานชั่วคราว"     value={x.suspended_at ? DateThai2(x.suspended_at) : "-"} />
+              <KV label="ลาออก"             value={x.ended_at ? DateThai2(x.ended_at) : "-"} />
+              <KV label="อัปเดตข้อมูลล่าสุด"  value={DateThai2(x.updated_at)} />
+            </div>
           </div>
         ) : (
-          <Empty>ไม่ระบุประวัติการศึกษา</Empty>
+          <Empty>ยังไม่มีข้อมูล HR (admin_contact_extras row ว่าง) — กด ✏️ แก้ไขข้อมูล เพื่อเพิ่ม</Empty>
         )}
       </Section>
 
-      {/* Personal docs / national ID */}
-      {showPersonalIDCard && (
-        <Section title="ข้อมูลส่วนตัว">
+      {/* Legacy bridge — only render when there is bridge data */}
+      {x && (x.legacy_admin_id || x.legacy_admin_type || x.legacy_admin_status) && (
+        <Section title="ตัวเชื่อมระบบเก่า (Legacy bridge)">
           <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-            <KV label="เลขบัตรประชาชน"   value={rowMain.nationalidcard ?? "-"} mono />
-            <KV label="วันหมดอายุบัตร"   value={DateThai2(rowMain.expirydate)} />
-            <KV label="ไฟล์บัตรประชาชน" value={rowMain.nationalidcardfile
-              ? <a href={`/legacy/pcs/admin/store/${rowMain.nationalidcardfile}`} className="text-primary-600 hover:underline">ดูไฟล์</a>
-              : "ยังไม่แนบไฟล์"} />
-            <KV label="ไฟล์สำเนาทะเบียนบ้าน" value={rowMain.copyhouseregistrationfile
-              ? <a href={`/legacy/pcs/admin/store/${rowMain.copyhouseregistrationfile}`} className="text-primary-600 hover:underline">ดูไฟล์</a>
-              : "ยังไม่แนบไฟล์"} />
-            <KV label="ไฟล์ resume" value={rowMain.resumefile
-              ? <a href={`/legacy/pcs/admin/store/${rowMain.resumefile}`} className="text-primary-600 hover:underline">ดูไฟล์</a>
-              : "ยังไม่แนบไฟล์"} />
+            <div className="space-y-1">
+              <KV label="legacy_admin_id"
+                  value={x.legacy_admin_id ?? "-"}
+                  mono />
+              <KV label="legacy_admin_type" value={x.legacy_admin_type ?? "-"} mono />
+              <KV label="legacy_admin_status" value={x.legacy_admin_status ?? "-"} mono />
+            </div>
+            <div className="space-y-1 text-xs text-muted">
+              <p>
+                <strong>legacy_admin_id</strong> = `tb_admin.adminID` เดิม (e.g.
+                <span className="font-mono"> admin_nat</span>). ใช้ในการ JOIN กับ
+                <span className="font-mono"> tb_users.adminidsale</span> เพื่อให้
+                ลูกค้า ~8,890 คน ยังจำคู่ sales rep ได้ระหว่างย้ายระบบ.
+              </p>
+              <p>
+                <strong>legacy_admin_type / status</strong> = raw value จาก
+                tb_admin (เก็บไว้เป็น audit trail · ของจริงใช้ employee_type +
+                role ของ Pacred แทน).
+              </p>
+            </div>
           </div>
         </Section>
       )}
 
-      {/* Bank accounts */}
-      {showAddBankSection && (
-        <Section
-          title={`บัญชีธนาคารในระบบ (${bankAccounts.length})`}
-          actionLabel={canMutate ? "+ เพิ่มบัญชี (Wave 21)" : undefined}
-        >
-          {bankAccounts.length === 0 ? (
-            <Empty>ยังไม่มีบัญชีธนาคาร</Empty>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>#</Th>
-                  <Th>ธนาคาร</Th>
-                  <Th>เลขที่บัญชี</Th>
-                  <Th>ชื่อบัญชี</Th>
-                  {canMutate && <Th>ตัวเลือก</Th>}
-                </tr>
-              </thead>
-              <tbody>
-                {bankAccounts.map((row, idx) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <Td>{idx + 1}</Td>
-                    <Td>{nameBank(row.bankname)}</Td>
-                    <Td mono>{row.accountnumber ?? "-"}</Td>
-                    <Td>{row.accountname ?? "-"}</Td>
-                    {canMutate && (
-                      <Td>
-                        {/* TODO Wave 21: DeleteBankButton confirm flow */}
-                        <span className="text-[10px] text-muted italic">(ลบ — Wave 21)</span>
-                      </Td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
+      {/* Notes */}
+      {x?.admin_note && (
+        <Section title="หมายเหตุภายใน (HR note)">
+          <div className="p-5 text-sm whitespace-pre-wrap">{x.admin_note}</div>
         </Section>
       )}
 
-      {/* Education history */}
-      {showEducationListSection && (
-        <Section
-          title={`ประวัติการศึกษาทั้งหมด (${educationRows.length})`}
-          actionLabel={canMutate ? "+ เพิ่มประวัติการศึกษา (Wave 21)" : undefined}
-        >
-          {educationRows.length === 0 ? (
-            <Empty>ยังไม่มีประวัติการศึกษา</Empty>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>#</Th>
-                  <Th>ระดับ</Th>
-                  <Th>สถานศึกษา</Th>
-                  <Th>คณะ</Th>
-                  <Th>สาขา</Th>
-                  <Th>ปีที่จบ</Th>
-                  <Th>เกรด</Th>
-                  {canMutate && <Th>ตัวเลือก</Th>}
+      {/* Role grants history */}
+      <Section
+        title={`สิทธิ์ที่ได้รับ (${activeGrants.length} active / ${grantRows.length} total)`}
+      >
+        <Table>
+          <thead>
+            <tr>
+              <Th>Role</Th>
+              <Th>สถานะ</Th>
+              <Th>วันที่ให้สิทธิ์</Th>
+              <Th>ให้สิทธิ์โดย</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {grantRows.map((g) => {
+              const r = nameRole(g.role);
+              const granter = g.granted_by ? grantersMap.get(g.granted_by) : null;
+              return (
+                <tr key={g.role} className="border-t border-border">
+                  <Td>
+                    <div className="flex items-center gap-1.5">
+                      <Pill label={r.label} color={r.color} />
+                      <span className="font-mono text-[10px] text-muted">{g.role}</span>
+                    </div>
+                  </Td>
+                  <Td>
+                    {g.is_active
+                      ? <span className="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px]">active</span>
+                      : <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 text-[10px]">inactive</span>}
+                  </Td>
+                  <Td>{DateThai2(g.granted_at)}</Td>
+                  <Td>
+                    {granter
+                      ? (
+                        <Link
+                          href={`/admin/admins/${g.granted_by}`}
+                          className="text-primary-600 hover:underline"
+                        >
+                          {granter.name}
+                          {granter.member_code && <span className="text-muted text-[10px] ml-1">({granter.member_code})</span>}
+                        </Link>
+                      )
+                      : (g.granted_by
+                          ? <span className="font-mono text-[10px] text-muted" title={g.granted_by}>{g.granted_by.slice(0, 8)}…</span>
+                          : <span className="text-muted">-</span>)}
+                  </Td>
                 </tr>
-              </thead>
-              <tbody>
-                {educationRows.map((row, idx) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <Td>{idx + 1}</Td>
-                    <Td>{showEducationLevel(row.educationlevel)}</Td>
-                    <Td>{row.institution ?? "-"}</Td>
-                    <Td>{row.faculty ?? "-"}</Td>
-                    <Td>{row.educationdepartment ?? "-"}</Td>
-                    <Td mono>{row.graduateyear ?? "-"}</Td>
-                    <Td mono>{row.gpa ?? "-"}</Td>
-                    {canMutate && (
-                      <Td>
-                        {/* TODO Wave 21: DeleteEducationButton confirm flow */}
-                        <span className="text-[10px] text-muted italic">(ลบ — Wave 21)</span>
-                      </Td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Section>
-      )}
+              );
+            })}
+          </tbody>
+        </Table>
+      </Section>
+
+      {/* Footer */}
+      <div className="flex gap-2 flex-wrap pt-2">
+        <Link
+          href="/admin/admins"
+          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
+        >
+          ← รายชื่อพนักงาน
+        </Link>
+        {(canMutate || isSelf) && (
+          <Link
+            href={`/admin/admins/${p.id}/edit`}
+            className="rounded-md border border-sky-500 bg-sky-500 px-3 py-2 text-xs text-white hover:bg-sky-600"
+          >
+            ✏️ แก้ไขข้อมูล
+          </Link>
+        )}
+      </div>
     </main>
   );
 }
@@ -774,38 +712,17 @@ function KV({ label, value, mono }: { label: string; value: React.ReactNode; mon
     </div>
   );
 }
-function KpiCard({ label, value, unit }: { label: string; value: string; unit?: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 text-center">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-bold font-mono">
-        {value}
-        {unit && <span className="text-sm font-normal text-muted ml-1">{unit}</span>}
-      </p>
-    </div>
-  );
-}
 function Section({
   title,
-  actionLabel,
   children,
 }: {
   title: string;
-  actionLabel?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
       <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
-        {actionLabel && (
-          <span
-            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] text-amber-700 cursor-not-allowed opacity-70"
-            title="Wave 21: port BS4 modal to native dialog"
-          >
-            {actionLabel}
-          </span>
-        )}
       </div>
       {children}
     </div>
