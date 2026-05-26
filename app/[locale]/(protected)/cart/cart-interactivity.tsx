@@ -4,6 +4,15 @@ import { useEffect, useMemo, useState, useTransition, type ReactNode } from "rea
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
 import {
+  ShoppingBag,
+  Trash2,
+  Tag,
+  CheckCircle2,
+  X,
+  Gift,
+  ExternalLink,
+} from "lucide-react";
+import {
   applyPromoToCart,
   calculateCartTotal,
   deleteCartItem,
@@ -14,32 +23,22 @@ import {
 } from "@/actions/cart";
 
 /**
- * Client-side interactivity for /cart — faithful port of the jQuery
- * block in `member/cart.php` L788-1143 (D1 / ADR-0017).
+ * Client-side interactivity for /cart — Tailwind-rebuilt (ปอน 2026-05-26).
  *
- * The SSR page (`app/[locale]/(protected)/cart/page.tsx`) renders the
- * static chrome (address card, transport/crate radios, promotion
- * modal, etc.) and groups the cart rows by provider → shop. This
- * component takes that pre-grouped tree as a prop and owns the
- * interactive surface:
- *
+ * Behaviour is faithful to the legacy jQuery block (cart.php L788-1143):
  *   - per-row "ID[]" checkbox toggle           (cart.php L842-855)
  *   - "เลือกทั้งหมด" (.check-all) toggle        (cart.php L800-806 / L856-869)
  *   - per-row quantity input + "ราคารวม"        (cart.php L1100-1128 / L817-840)
  *   - pro2 (3.3 promo) checkbox → rsDefault 5.10 (cart.php L1035-1043 / calculateCart.php L10-12)
- *   - live #countID / #cart-subtotal / #cart-total / #rsDefault
- *     fed by the calculateCart.php AJAX endpoint, replaced here by
- *     the `calculateCartTotal` Server Action.
- *   - "สั่งซื้อสินค้า" submit disabled when nothing selected
- *     (cart.php L895-899).
+ *   - live #countID / cart-subtotal / cart-total / rsDefault fed by
+ *     the `calculateCartTotal` Server Action
+ *   - "สั่งซื้อสินค้า" submit disabled when nothing selected (cart.php L895-899)
  *
- * Note — the legacy CSS classes (.product / .product-check /
- * .dt-checkboxes / .check-all / .product-line-price / .cart-subtotal
- * / .cart-total / #rsDefault / #countID / .totals-value /
- * .totals-value2 / .totals-value4 / .ele-shopping-cart / .shopping-cart
- * / .column-labels / .ele-item-2 / .ele-item-3 / .border-main19-de
- * etc.) are kept verbatim so the static `/legacy/pcs/cart.css` styles
- * match the SSR markup 1:1.
+ * The legacy Bootstrap-4 classes (.product / .product-check / .check-all
+ * / .ele-shopping-cart / .column-labels / .ele-price-cart / etc.) are
+ * REMOVED — Tailwind covers the visual layer entirely. Form `name=`
+ * attributes are PRESERVED (`ID[]`, `cAmount[]`, `pro`, `pro2`, `checkAll`,
+ * etc.) because the form submits to /service-order which parses them.
  */
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
@@ -132,13 +131,7 @@ export function CartInteractivity({
     () => new Set(allIds),
   );
 
-  // Per-row amount (the quantity input — cart.php L573-575). The
-  // legacy lets the user edit it inline + recalculates the row line
-  // total via the recalculateCart() helper (cart.php L817-840). Kept
-  // here as controlled state so the row total + grand total stay
-  // consistent without a roundtrip to updateQuantity.php for the
-  // display (the persistence to tb_cart still needs that endpoint —
-  // unwired in the read view; FLAGGED in the page header).
+  // Per-row amount (the quantity input — cart.php L573-575).
   const [amounts, setAmounts] = useState<Map<number, number>>(() => {
     const m = new Map<number, number>();
     for (const p of groupedProviders) {
@@ -157,11 +150,8 @@ export function CartInteractivity({
   const [proMaomao, setProMaomao] = useState(false);
 
   // Listen for the popup "รับโปรโมชัน เหมา ๆ" accept dispatched from
-  // <CartAddressShipBy> (cart.php L1018-1024 — legacy `btn-getMaoMao`
-  // also ticks `#input-12`). The two client islands aren't parented
-  // by a shared wrapper, so a `CustomEvent` is the lightest-touch
-  // bridge. Safe (not a cascading render — triggered by DOM event,
-  // not by another state change).
+  // <CartAddressShipBy>. The two client islands aren't parented by a
+  // shared wrapper, so a `CustomEvent` is the lightest-touch bridge.
   useEffect(() => {
     function handler() {
       setProMaomao(true);
@@ -171,23 +161,12 @@ export function CartInteractivity({
   }, []);
 
   // ── G1 promo-code input — typed legacy `tagPro()` codes ──
-  // Sprint-2 wire of `validatePromoCode` + `applyPromoToCart` /
-  // `removePromoFromCart` (actions/cart.ts). Discount applies on top of
-  // the server-computed `priceThb` — the legacy `calculateCart.php`
-  // doesn't fold typed-code discounts into its result, only the static
-  // `pro=19` rate override, so the math runs client-side here.
   const [promoCode,    setPromoCode]    = useState("");
   const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
   const [promoBusy,    setPromoBusy]    = useState(false);
   const [promoMsg,     setPromoMsg]     = useState<{ tone: "err" | "ok"; text: string } | null>(null);
 
   // Server-driven totals — match the legacy AJAX response shape.
-  // Defaults match the page-first-load behaviour: legacy calls
-  // calculateCart() on the very first render (cart.php L816), with
-  // ALL rows ticked, so we precompute the same total inline from the
-  // initial rsDefault. The first transition replaces it with the
-  // server result, so any rate drift between SSR + the action is
-  // resolved (defensive against stale-on-bfcache).
   const initialTotals = useMemo(() => {
     let priceCny = 0;
     for (const id of selectedIds) {
@@ -200,17 +179,13 @@ export function CartInteractivity({
       priceThb: numberFormat(priceCny * rate),
       rate: String(rate),
     };
-    // We deliberately compute once on mount; recompute is driven by
-    // the action call below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [totals, setTotals] = useState(initialTotals);
   const [, startTransition] = useTransition();
 
-  // Server-action driven recompute — the calculateCart.php AJAX
-  // replacement (cart.php L885-894). useTransition keeps UI responsive
-  // when many rows toggle in quick succession (e.g. "เลือกทั้งหมด").
+  // Server-action driven recompute — the calculateCart.php AJAX replacement.
   function recompute(nextSelected: Set<number>, nextPro2: boolean) {
     startTransition(async () => {
       const res = await calculateCartTotal({
@@ -246,16 +221,6 @@ export function CartInteractivity({
     const nm = new Map(amounts);
     nm.set(id, safe);
     setAmounts(nm);
-    // cart.php L1100-1128: updateQuantity() recomputes via
-    // recalculateCart() (client-side per-row) AND POSTs to
-    // updateQuantity.php (persistence). The persistence write needs
-    // a separate Server Action ("updateCartItemAmount") — out of
-    // scope for the interactivity wiring; the recompute via the
-    // calculateCart endpoint is sufficient for the visible totals
-    // because the action re-reads the row from tb_cart on each call.
-    // To avoid stale grand-total against the typed-amount, we do the
-    // grand-total client-side here (mirrors legacy recalculateCart
-    // which is also client-side at cart.php L823-826).
     let priceCny = 0;
     for (const sel of selectedIds) {
       const r = findRow(groupedProviders, sel);
@@ -275,18 +240,12 @@ export function CartInteractivity({
   }
 
   // ── promo-code apply/remove handlers ──
-  // Apply runs validate → apply (persists to tb_pro_valentine). The
-  // discount value comes from validate's response so we can show it
-  // immediately without a second server round-trip on a separate read.
   function handleApplyPromo() {
     const code = promoCode.trim();
     if (!code || promoBusy) return;
     setPromoBusy(true);
     setPromoMsg(null);
     startTransition(async () => {
-      // Pass the server's current ฿ subtotal as the validation cart-total.
-      // Strip the formatting commas before Number() since priceThb is
-      // already `number_format`-style ("1,234.56").
       const total = Number(totals.priceThb.replace(/,/g, ""));
       const v = await validatePromoCode(code, Number.isFinite(total) ? total : 0);
       if (!v.ok) {
@@ -340,7 +299,6 @@ export function CartInteractivity({
     if (appliedPromo.discountType === "pct") {
       return subtotalThb * (appliedPromo.discount / 100);
     }
-    // fixed THB — capped to the subtotal so the final never goes negative
     return Math.min(appliedPromo.discount, subtotalThb);
   })();
   const finalThb = Math.max(0, subtotalThb - discountThb);
@@ -349,10 +307,7 @@ export function CartInteractivity({
   // nothing is selected.
   const submitDisabled = selectedIds.size === 0;
 
-  // ── deleteItem.php wire — remove a row from tb_cart. Optimistic:
-  //    drop from selectedIds + amounts immediately, then router.refresh
-  //    to refetch the SSR tree (gives the server-rendered grouped
-  //    providers tree the correct shape with the row gone). ──
+  // ── deleteItem.php wire — remove a row from tb_cart. ──
   const router = useRouter();
   const [busyDeleteId, setBusyDeleteId] = useState<number | null>(null);
   function handleDelete(id: number) {
@@ -366,7 +321,6 @@ export function CartInteractivity({
         window.alert("ลบไม่สำเร็จ: " + res.error);
         return;
       }
-      // Drop from local state so the totals recompute without it.
       const ns = new Set(selectedIds);
       ns.delete(id);
       setSelectedIds(ns);
@@ -374,29 +328,18 @@ export function CartInteractivity({
       nm.delete(id);
       setAmounts(nm);
       recompute(ns, pro2Checked);
-      // Refetch SSR tree to remove the row visually (the grouped-
-      // providers tree is server-rendered + needs a fresh fetch).
       router.refresh();
     });
   }
 
-  // ── updateQuantity.php wire — when the user types a new amount we
-  //    update local state instantly (done by changeAmount above) and
-  //    fire-and-forget the persistence write to tb_cart. The recompute
-  //    via calculateCartTotal already re-reads tb_cart server-side, so
-  //    the next total it returns reflects the persisted amount. ──
+  // ── updateQuantity.php wire — fire-and-forget the persistence write. ──
   function persistAmount(id: number, amount: number) {
     startTransition(async () => {
       await updateCartItemQuantity({ id, quantity: amount });
     });
   }
 
-  // ── addOrder wire — "สั่งซื้อสินค้า" submit. The form fields
-  //    (addressID, hTransportType, crate, hShipBy, payMethod, pro,
-  //    pro2, hNote) are rendered SSR by the outer page; we read them
-  //    via the form's FormData rather than mirroring them into client
-  //    state (keeps the SSR markup 1:1). On success → router.push
-  //    to the new order's detail page. ──
+  // ── addOrder wire — "สั่งซื้อสินค้า" submit. ──
   const [submitting, setSubmitting] = useState(false);
   function handleSubmitOrder(e: React.MouseEvent<HTMLButtonElement>) {
     if (selectedIds.size === 0 || submitting) return;
@@ -456,161 +399,205 @@ export function CartInteractivity({
   }
 
   const countDisplay = selectedIds.size;
+  const allChecked = selectedIds.size > 0 && selectedIds.size === allIds.length;
 
   return (
     <>
       {/* ── Shopping-cart item list — cart.php L510-600 ── */}
-      <div className="ele-shopping-cart mb-2">
-        <div className="shopping-cart">
-          {/* cart.php L512-521 — the column-label header row */}
-          <div className="ele-item-3 column-labels">
-            <label className="product-check">
-              <input
-                type="checkbox"
-                name="checkAll"
-                className="dt-checkboxes check-all"
-                value="all"
-                checked={
-                  selectedIds.size > 0 && selectedIds.size === allIds.length
-                }
-                onChange={(e) => toggleAll(e.target.checked)}
-              />
-            </label>
-            <label className="product-count"></label>
-            <label className="product-image"></label>
-            <label className="product-details">รายละเอียดสินค้า</label>
-            <label className="product-price">ราคาต่อชิ้น</label>
-            <label className="product-quantity">จำนวน</label>
-            <label className="product-removal">ตัวเลือก</label>
-            <label className="product-line-price">ราคารวม</label>
-          </div>
-          {/* cart.php L522-598 — provider → shop → rows */}
+      <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
+        {/* Section header — select-all bar */}
+        <div className="flex items-center gap-3 px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              name="checkAll"
+              value="all"
+              checked={allChecked}
+              onChange={(e) => toggleAll(e.target.checked)}
+              className="w-4 h-4 rounded border-2 border-border accent-primary-600 cursor-pointer"
+            />
+            <span className="text-[12.5px] md:text-[13px] font-bold text-foreground">
+              เลือกทั้งหมด
+            </span>
+          </label>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] md:text-[12px] text-muted">
+            <ShoppingBag className="w-3.5 h-3.5" strokeWidth={2.2} />
+            <span className="notranslate">{totalRowCount}</span> รายการในตะกร้า
+          </span>
+        </div>
+
+        {/* Provider → Shop → Rows */}
+        <div className="divide-y divide-border">
           {groupedProviders.map((provider) => (
             <div key={provider.providerCode || "p"}>
-              <div className="text-center bg-white box-shadow2">
-                <h5 className="p-0">
-                  <b>
-                    {provider.providerImg.kind === "img" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={provider.providerImg.src}
-                        style={{ height: "30px" }}
-                        alt=""
-                      />
-                    ) : (
-                      provider.providerImg.text
-                    )}
-                  </b>
-                </h5>
+              {/* Provider header (1688 / Taobao / Tmall / Nice / Shops) */}
+              <div className="px-4 md:px-5 py-2 bg-surface/60 border-b border-border">
+                <div className="flex items-center gap-2">
+                  {provider.providerImg.kind === "img" ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={provider.providerImg.src}
+                      style={{ height: "22px" }}
+                      alt=""
+                    />
+                  ) : (
+                    <span className="text-[12.5px] font-black text-foreground tracking-wider">
+                      {provider.providerImg.text}
+                    </span>
+                  )}
+                </div>
               </div>
+
               {provider.shops.map((shop) => (
-                <div className="ele-item-2" key={shop.shopName || "s"}>
-                  <div className="text-center bg-light box-shadow2">
-                    <h5 className="p-05">
-                      <b>{"ชื่อร้าน : " + shop.shopName}</b>
-                    </h5>
+                <div key={shop.shopName || "s"}>
+                  {/* Shop subheader */}
+                  <div className="px-4 md:px-5 py-1.5 bg-amber-50/40 border-b border-amber-100/50">
+                    <p className="text-[11.5px] md:text-[12px] font-bold text-amber-800">
+                      <span className="text-muted font-medium">ชื่อร้าน : </span>
+                      {shop.shopName}
+                    </p>
                   </div>
+
+                  {/* Product rows */}
                   {shop.rows.map((r) => {
                     const amt = amounts.get(r.id) ?? r.camount;
                     const checked = selectedIds.has(r.id);
+                    const lineTotal = r.cprice * amt;
                     return (
-                      <div className="product" key={r.id}>
-                        <input
-                          type="hidden"
-                          className="product-id"
-                          value={r.id}
-                          readOnly
-                        />
-                        <div className="product-check text-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            name="ID[]"
-                            className="dt-checkboxes"
-                            value={r.id}
-                            checked={checked}
-                            onChange={(e) =>
-                              toggleRow(r.id, e.target.checked)
-                            }
-                          />
-                        </div>
-                        <div className="product-count text-center">{r.count}</div>
-                        <div className="product-image">
+                      <div
+                        key={r.id}
+                        className={`px-3 md:px-5 py-3 md:py-4 border-b border-border last:border-b-0 transition-colors ${
+                          checked ? "bg-rose-50/20" : ""
+                        }`}
+                      >
+                        <input type="hidden" className="product-id" value={r.id} readOnly />
+                        <div className="grid grid-cols-[20px_64px_1fr] md:grid-cols-[24px_24px_72px_1fr_90px_90px_90px] gap-2 md:gap-3 items-start">
+                          {/* Checkbox */}
+                          <label className="flex items-start pt-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              name="ID[]"
+                              value={r.id}
+                              checked={checked}
+                              onChange={(e) => toggleRow(r.id, e.target.checked)}
+                              className="w-4 h-4 rounded border-2 border-border accent-primary-600 cursor-pointer"
+                            />
+                          </label>
+                          {/* Index (desktop only) */}
+                          <div className="hidden md:flex pt-1 text-[12px] font-bold text-muted justify-center">
+                            {r.count}
+                          </div>
+                          {/* Image */}
                           <a
-                            className="image-popup-vertical-fit el-link"
                             href={r.imageFullUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block w-16 h-16 md:w-[72px] md:h-[72px] rounded-xl overflow-hidden bg-surface border border-border shrink-0"
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              className="img-fluid imageClass"
                               src={r.imageThumbUrl}
                               alt=""
+                              className="w-full h-full object-cover"
+                              loading="lazy"
                             />
                           </a>
-                        </div>
-                        <div className="product-details">
-                          <div className="product-title">
+                          {/* Details */}
+                          <div className="min-w-0">
                             <a
                               href={r.curl ?? ""}
-                              className="text-info"
                               target="_blank"
                               rel="noreferrer"
+                              className="inline-flex items-start gap-1 text-[12.5px] md:text-[13px] font-bold text-foreground hover:text-primary-600 line-clamp-2 transition-colors"
                             >
-                              {r.ctitle ? r.ctitle : r.curl}
+                              <span className="line-clamp-2">{r.ctitle ? r.ctitle : r.curl}</span>
+                              <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 opacity-60" strokeWidth={2.2} />
                             </a>
+                            {(r.ccolor || r.csize) && (
+                              <p className="mt-1 text-[11.5px] text-muted">
+                                <span className="font-medium">{r.ccolor}</span>
+                                {r.csize ? <> : <span className="font-medium">{r.csize}</span></> : null}
+                              </p>
+                            )}
+                            {r.cdetails && (
+                              <p className="mt-1 text-[11px] text-muted line-clamp-2">
+                                <span className="font-bold">หมายเหตุ:</span> {r.cdetails}
+                              </p>
+                            )}
+
+                            {/* Mobile-only inline price + qty row */}
+                            <div className="md:hidden mt-2 flex items-center justify-between gap-2 flex-wrap">
+                              <div className="text-[11.5px] text-muted">
+                                <span className="notranslate font-mono">{numberFormat(r.cprice)}</span> ¥ ×
+                                <input
+                                  type="number"
+                                  value={amt}
+                                  name="cAmount[]"
+                                  min="1"
+                                  step="1"
+                                  onChange={(e) => changeAmount(r.id, Number(e.target.value))}
+                                  onBlur={(e) => {
+                                    const val = Number(e.target.value);
+                                    const safe = Number.isFinite(val) && val >= 1 ? Math.floor(val) : 1;
+                                    persistAmount(r.id, safe);
+                                  }}
+                                  className="ml-1 w-14 px-1.5 py-0.5 text-[12px] text-center rounded border border-border focus:border-primary-500 focus:ring-1 focus:ring-primary-100 focus:outline-none"
+                                />
+                              </div>
+                              <div className="text-[13px] font-black text-primary-600 notranslate">
+                                {numberFormat(lineTotal)} ¥
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(r.id)}
+                                disabled={busyDeleteId === r.id}
+                                className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2 py-0.5 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3 h-3" strokeWidth={2.2} />
+                                {busyDeleteId === r.id ? "กำลังลบ..." : "ลบ"}
+                              </button>
+                            </div>
                           </div>
-                          <p className="mb-0">
-                            <b>
-                              <span>{r.ccolor}</span> :{" "}
-                              <span>{r.csize}</span>
-                            </b>
-                          </p>
-                          <p className="product-description">
-                            <b>หมายเหตุ :</b> {r.cdetails}
-                          </p>
-                        </div>
-                        <div className="product-price notranslate">
-                          {numberFormat(r.cprice)}
-                        </div>
-                        <div className="product-quantity">
-                          <input
-                            type="number"
-                            className="input-product-quantity"
-                            value={amt}
-                            name="cAmount[]"
-                            min="1"
-                            step="1"
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              changeAmount(r.id, val);
-                            }}
-                            onBlur={(e) => {
-                              // Persist to tb_cart on blur (avoids hammering
-                              // the action on every keystroke; matches the
-                              // legacy DataTables-style "commit on blur"
-                              // expectation).
-                              const val = Number(e.target.value);
-                              const safe = Number.isFinite(val) && val >= 1 ? Math.floor(val) : 1;
-                              persistAmount(r.id, safe);
-                            }}
-                          />
-                        </div>
-                        <div className="product-removal">
-                          {/* cart.php L576-578: .remove-product trash
-                              button. Wired to `deleteCartItem` (1:1 of
-                              legacy deleteItem.php AJAX). Confirm popup
-                              matches the legacy SweetAlert prompt. */}
-                          <button
-                            type="button"
-                            className="remove-product font-12 btn btn-outline-danger round"
-                            onClick={() => handleDelete(r.id)}
-                            disabled={busyDeleteId === r.id}
-                          >
-                            <i className="ft-trash"></i>{" "}
-                            {busyDeleteId === r.id ? "กำลังลบ..." : "ลบ"}
-                          </button>
-                        </div>
-                        <div className="product-line-price notranslate">
-                          {numberFormat(r.cprice * amt)}
+
+                          {/* Desktop-only — price, qty, remove, line-total columns */}
+                          <div className="hidden md:flex flex-col items-end pt-1">
+                            <div className="text-[12px] text-muted">ราคา/ชิ้น</div>
+                            <div className="text-[13px] font-bold notranslate font-mono">
+                              {numberFormat(r.cprice)}
+                            </div>
+                          </div>
+                          <div className="hidden md:flex flex-col items-center pt-1">
+                            <div className="text-[12px] text-muted mb-1">จำนวน</div>
+                            <input
+                              type="number"
+                              value={amt}
+                              name="cAmount[]"
+                              min="1"
+                              step="1"
+                              onChange={(e) => changeAmount(r.id, Number(e.target.value))}
+                              onBlur={(e) => {
+                                const val = Number(e.target.value);
+                                const safe = Number.isFinite(val) && val >= 1 ? Math.floor(val) : 1;
+                                persistAmount(r.id, safe);
+                              }}
+                              className="w-16 px-2 py-1 text-[13px] text-center rounded-lg border border-border focus:border-primary-500 focus:ring-2 focus:ring-primary-100 focus:outline-none"
+                            />
+                          </div>
+                          <div className="hidden md:flex flex-col items-end pt-1">
+                            <div className="text-[12px] text-muted mb-1">ราคารวม</div>
+                            <div className="text-[13.5px] font-black text-primary-600 notranslate font-mono">
+                              {numberFormat(lineTotal)}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(r.id)}
+                              disabled={busyDeleteId === r.id}
+                              className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-bold px-2 py-0.5 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3 h-3" strokeWidth={2.2} />
+                              {busyDeleteId === r.id ? "ลบ..." : "ลบ"}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -622,323 +609,247 @@ export function CartInteractivity({
         </div>
       </div>
 
-      {/* ── China→Thailand shipping card (passes through as SSR JSX) ──
-          cart.php L601-651 — the .ele-addressCHN-cart sits between
-          the shopping-cart list and the price card. It has no own
-          interactivity (transport-type / crate radios are plain form
-          inputs that submit with the form), so it's rendered SSR-side
-          and threaded through as a prop. */}
+      {/* ── China→Thailand shipping card (SSR JSX) ── */}
       {shippingCard}
 
       {/* ── Promotion + order-summary card — cart.php L652-727 ── */}
-      <div className="ele-price-cart p-1 mb-2">
-        <div className="row">
-          <div className="col-md-7">
-            <div className="ele-promotion-cart box-shadow">
-              <div className="p-1">
-                <h3 className="text-color mb-1">
-                  <i className="fa fa-shopping-bag"></i>{" "}
-                  โปรโมชันสำหรับคุณ
-                </h3>
-                <div className="row">
-                  <div className="col-12 col-md-4 text-center maomao">
-                    <fieldset
-                      className={
-                        proMaomao
-                          ? "border-main12-de cursor-pointer border-main"
-                          : "border-main12-de cursor-pointer"
-                      }
-                    >
-                      <div className="">
-                        <input
-                          type="checkbox"
-                          className="checkboxes-color"
-                          style={{ display: "block" }}
-                          name="pro"
-                          id="input-12"
-                          value="f"
-                          checked={proMaomao}
-                          onChange={(e) => setProMaomao(e.target.checked)}
-                        />
-                      </div>
-                      <label
-                        htmlFor="input-12"
-                        className="text-center"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          className="img-fluid cursor-pointer card-promotion"
-                          src="/legacy/pcs/theme/free50-3.png"
-                          alt=""
-                        />
-                        <br />
-                        <Link href="/services/import-china">
-                          <span className="text-info">
-                            ดูพื้นที่จัดส่งและรายละเอียด
-                          </span>
-                        </Link>
-                      </label>
-                    </fieldset>
-                  </div>
-                  {/* cart.php L667-676 — the time-boxed 3.3 promo */}
-                  {promo33Active && (
-                    <div className="col-12 col-md-4 text-center">
-                      <fieldset
-                        className={
-                          pro2Checked
-                            ? "border-main19-de cursor-pointer border-main"
-                            : "border-main19-de cursor-pointer"
-                        }
-                      >
-                        <div className="">
-                          <input
-                            type="checkbox"
-                            className="checkboxes-color"
-                            style={{ display: "block" }}
-                            name="pro2"
-                            id="input-19"
-                            value="77"
-                            checked={pro2Checked}
-                            onChange={(e) => togglePro2(e.target.checked)}
-                          />
-                        </div>
-                        <label
-                          htmlFor="input-19"
-                          className="text-center"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            className="img-fluid cursor-pointer card-promotion"
-                            src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-07-768x477.jpg"
-                            alt=""
-                          />
-                          <br />
-                          <Link href="/services/import-china">
-                            <span className="text-info">
-                              ดูรายละเอียดโปรโมชัน
-                            </span>
-                          </Link>
-                        </label>
-                      </fieldset>
-                    </div>
-                  )}
-                  <div
-                    className="col-12 col-md-8 note-ship"
-                    style={{}}
-                  >
-                    {/* cart.php L677-688 — the per-user "no 50฿" list
-                        (include/pages/oop/user-not-50.json). FLAGGED:
-                        the JSON file is a static config asset, not a
-                        tb_* table — not ported. The block renders
-                        nothing for users not in the file. */}
-                    <div className="pr-1 text-right" style={{}}>
-                      <span className="text-danger">
-                        *หากสินค้ามีขนาดเล็กบริษัทแนะนำให้เลือกขนส่งเป็น
-                        Flash Express (เริ่มต้น 30 บ.)
-                        <br />
-                      </span>
-                    </div>
-                  </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        {/* Promotions (left) */}
+        <div className="lg:col-span-7 rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] p-4 md:p-5">
+          <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground mb-3">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-rose-50 text-primary-600">
+              <Gift className="w-4 h-4" strokeWidth={2.2} />
+            </span>
+            โปรโมชันสำหรับคุณ
+          </h3>
 
-                  {/* ── G1 promo-code input — typed code with validate +
-                       apply.  Sprint-2 wire of validatePromoCode +
-                       applyPromoToCart + removePromoFromCart.  Sits at
-                       the bottom of the promotion section so the static
-                       legacy cards remain primary.  ── */}
-                  <div className="col-12">
-                    <div className="mt-1 pt-1 border-top">
-                      {appliedPromo ? (
-                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                          <span className="badge bg-success" style={{
-                            background: "#198754",
-                            color:      "#fff",
-                            padding:    "4px 10px",
-                            borderRadius: 4,
-                            fontWeight: 600,
-                          }}>
-                            ✓ {appliedPromo.label}
-                          </span>
-                          <span className="text-muted" style={{ fontSize: 13 }}>
-                            ส่วนลด{" "}
-                            {appliedPromo.discountType === "pct"
-                              ? `${appliedPromo.discount}%`
-                              : `${numberFormat(appliedPromo.discount)} ฿`}
-                          </span>
-                          <button
-                            type="button"
-                            className="btn btn-link p-0"
-                            style={{
-                              border: "none",
-                              background: "transparent",
-                              color: "#dc3545",
-                              textDecoration: "underline",
-                              cursor: promoBusy ? "wait" : "pointer",
-                              fontSize: 13,
-                              padding: 0,
-                            }}
-                            onClick={handleRemovePromo}
-                            disabled={promoBusy}
-                          >
-                            ลบ
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                          <label
-                            htmlFor="promo-code-input"
-                            className="mb-0"
-                            style={{ fontWeight: 600, fontSize: 14 }}
-                          >
-                            มีโค้ดส่วนลด?
-                          </label>
-                          <input
-                            id="promo-code-input"
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="กรอกโค้ด เช่น PCSF"
-                            value={promoCode}
-                            onChange={(e) => setPromoCode(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleApplyPromo();
-                              }
-                            }}
-                            maxLength={32}
-                            disabled={promoBusy}
-                            style={{
-                              flex: "0 1 180px",
-                              minWidth: 140,
-                              padding: "4px 8px",
-                              border: "1px solid #ced4da",
-                              borderRadius: 4,
-                              fontSize: 13,
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={handleApplyPromo}
-                            disabled={promoBusy || promoCode.trim().length === 0}
-                            style={{
-                              border: "1px solid #b30000",
-                              background: promoBusy ? "#e9ecef" : "#fff",
-                              color: "#b30000",
-                              padding: "4px 14px",
-                              borderRadius: 4,
-                              cursor: promoBusy ? "wait" : "pointer",
-                              fontSize: 13,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {promoBusy ? "กำลังตรวจ..." : "ใช้โค้ด"}
-                          </button>
-                        </div>
-                      )}
-                      {promoMsg && (
-                        <div
-                          className="mt-1"
-                          style={{
-                            fontSize: 12,
-                            color: promoMsg.tone === "err" ? "#dc3545" : "#198754",
-                          }}
-                        >
-                          {promoMsg.text}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-5 ele-total-price box-shadow p-1">
-            <div className="float-right">
-              <label>
-                เลือกทั้งหมด <span id="countID">{countDisplay}</span> รายการ
-              </label>
-            </div>
-            <h3 className="text-color mb-1">
-              <i className="fa fa-shopping-bag"></i>{" "}
-              สรุปรายการสั่งซื้อ
-            </h3>
-            <div className="row">
-              <div className="col-6 col-md-8 text-right">
-                <h4>รวม : </h4>
-              </div>
-              <div className="col-6 col-md-4 text-right">
-                <div
-                  className="totals-value cart-subtotal notranslate"
-                  id="cart-subtotal"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {/* maomao promo card */}
+            <label
+              htmlFor="input-12"
+              className={`relative rounded-xl border-2 cursor-pointer overflow-hidden transition-all ${
+                proMaomao
+                  ? "border-primary-500 ring-2 ring-primary-100 shadow-md shadow-primary-600/10"
+                  : "border-border hover:border-primary-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                name="pro"
+                id="input-12"
+                value="f"
+                checked={proMaomao}
+                onChange={(e) => setProMaomao(e.target.checked)}
+                className="sr-only"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/legacy/pcs/theme/free50-3.png"
+                alt="Pacred เหมา ๆ ฟรี 50 บาท"
+                className="block w-full h-auto"
+              />
+              <div className="px-2.5 py-1.5 bg-white text-center">
+                <Link
+                  href="/services/import-china"
+                  className="text-[11.5px] font-bold text-primary-600 hover:underline inline-flex items-center gap-0.5"
                 >
-                  {totals.priceCny}
-                </div>
+                  ดูพื้นที่จัดส่งและรายละเอียด
+                  <ExternalLink className="w-2.5 h-2.5" strokeWidth={2.2} />
+                </Link>
               </div>
-              <div className="col-6 col-md-8 text-right">
-                <h4>เรทแลกเปลี่ยน : </h4>
-              </div>
-              <div className="col-6 col-md-4">
-                <div
-                  className="totals-value4 notranslate"
-                  id="rsDefault"
-                >
-                  {totals.rate}
-                </div>
-              </div>
-              {appliedPromo && (
-                <>
-                  <div className="col-6 col-md-8 text-right">
-                    <h4 style={{ color: "#198754" }}>
-                      ส่วนลด ({appliedPromo.label}) :{" "}
-                    </h4>
-                  </div>
-                  <div className="col-6 col-md-4 text-right">
-                    <div
-                      className="totals-value notranslate"
-                      style={{ color: "#198754", fontWeight: 600 }}
-                      id="cart-promo-discount"
-                    >
-                      -{numberFormat(discountThb)}
-                    </div>
-                  </div>
-                </>
+              {proMaomao && (
+                <span className="absolute top-1.5 right-1.5 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-600 text-white shadow-md">
+                  <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </span>
               )}
-              <div className="col-6 col-md-8 text-right">
-                <h4>ราคารวมสุทธิ : </h4>
-              </div>
-              <div className="col-6 col-md-4">
-                <b>
-                  <div
-                    className="totals-value2 font-18 text-danger cart-total notranslate"
-                    id="cart-total"
-                  >
-                    {appliedPromo ? numberFormat(finalThb) : totals.priceThb}
-                  </div>
-                </b>
-              </div>
-            </div>
-            <div className="float-right pt-1">
-              {/* Wired to `submitCartOrder` (1:1 of legacy shops.php
-                  addOrder handler). type="button" + onClick — captures
-                  the parent form's FormData (the SSR-rendered address /
-                  transport / crate / shipBy / payMethod / pro / note
-                  inputs) + posts via Server Action. Disabled until at
-                  least 1 row is ticked. */}
-              <button
-                type="button"
-                className="checkout2 btn btn-main round btn-min-width waves-effect submit-wait animate__animated animate__infinite animate__headShake"
-                name="addOrder"
-                disabled={submitDisabled || submitting}
-                onClick={handleSubmitOrder}
+            </label>
+
+            {/* 3.3 time-window promo */}
+            {promo33Active && (
+              <label
+                htmlFor="input-19"
+                className={`relative rounded-xl border-2 cursor-pointer overflow-hidden transition-all ${
+                  pro2Checked
+                    ? "border-primary-500 ring-2 ring-primary-100 shadow-md shadow-primary-600/10"
+                    : "border-border hover:border-primary-300"
+                }`}
               >
-                {submitting ? "กำลังส่งออเดอร์..." : "สั่งซื้อสินค้า"}
-              </button>
-            </div>
+                <input
+                  type="checkbox"
+                  name="pro2"
+                  id="input-19"
+                  value="77"
+                  checked={pro2Checked}
+                  onChange={(e) => togglePro2(e.target.checked)}
+                  className="sr-only"
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-07-768x477.jpg"
+                  alt="โปรโมชัน 3.3"
+                  className="block w-full h-auto"
+                />
+                <div className="px-2.5 py-1.5 bg-white text-center">
+                  <Link
+                    href="/services/import-china"
+                    className="text-[11.5px] font-bold text-primary-600 hover:underline inline-flex items-center gap-0.5"
+                  >
+                    ดูรายละเอียดโปรโมชัน
+                    <ExternalLink className="w-2.5 h-2.5" strokeWidth={2.2} />
+                  </Link>
+                </div>
+                {pro2Checked && (
+                  <span className="absolute top-1.5 right-1.5 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-600 text-white shadow-md">
+                    <CheckCircle2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </span>
+                )}
+              </label>
+            )}
+          </div>
+
+          <p className="mt-3 text-[11px] text-rose-700 leading-relaxed">
+            * หากสินค้ามีขนาดเล็กบริษัทแนะนำให้เลือกขนส่งเป็น Flash Express (เริ่มต้น 30 บ.)
+          </p>
+
+          {/* ── G1 promo-code input ── */}
+          <div className="mt-3 pt-3 border-t border-border">
+            {appliedPromo ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11.5px] font-bold px-2.5 py-1">
+                  <CheckCircle2 className="w-3 h-3" strokeWidth={2.5} />
+                  {appliedPromo.label}
+                </span>
+                <span className="text-[12px] text-muted">
+                  ส่วนลด{" "}
+                  <span className="font-bold text-emerald-700 notranslate">
+                    {appliedPromo.discountType === "pct"
+                      ? `${appliedPromo.discount}%`
+                      : `${numberFormat(appliedPromo.discount)} ฿`}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRemovePromo}
+                  disabled={promoBusy}
+                  className="ml-auto text-[12px] text-rose-600 hover:text-rose-700 hover:underline disabled:opacity-50"
+                >
+                  ลบ
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <label htmlFor="promo-code-input" className="inline-flex items-center gap-1 text-[12.5px] font-bold text-foreground">
+                  <Tag className="w-3.5 h-3.5 text-primary-600" strokeWidth={2.2} />
+                  มีโค้ดส่วนลด?
+                </label>
+                <input
+                  id="promo-code-input"
+                  type="text"
+                  placeholder="เช่น PCSF"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleApplyPromo();
+                    }
+                  }}
+                  maxLength={32}
+                  disabled={promoBusy}
+                  className="flex-1 min-w-[140px] max-w-[200px] px-3 py-1.5 text-[12.5px] rounded-lg border border-border focus:border-primary-500 focus:ring-2 focus:ring-primary-100 focus:outline-none disabled:bg-surface"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyPromo}
+                  disabled={promoBusy || promoCode.trim().length === 0}
+                  className="inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {promoBusy ? "กำลังตรวจ..." : "ใช้โค้ด"}
+                </button>
+              </div>
+            )}
+            {promoMsg && (
+              <div className={`mt-1.5 text-[11.5px] ${promoMsg.tone === "err" ? "text-rose-600" : "text-emerald-700"}`}>
+                {promoMsg.text}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Order summary (right) */}
+        <div className="lg:col-span-5 rounded-2xl bg-gradient-to-br from-white via-rose-50/30 to-rose-100/40 border border-rose-100 shadow-[0_6px_20px_rgba(179,0,0,0.08)] p-4 md:p-5 flex flex-col">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <h3 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white shadow-md shadow-primary-600/25">
+                <ShoppingBag className="w-4 h-4" strokeWidth={2.2} />
+              </span>
+              สรุปรายการสั่งซื้อ
+            </h3>
+            <span className="text-[11px] text-muted shrink-0">
+              เลือก <span id="countID" className="font-bold text-primary-600 notranslate">{countDisplay}</span> รายการ
+            </span>
+          </div>
+
+          <dl className="space-y-1.5 text-[13px]">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted">รวม (¥)</dt>
+              <dd id="cart-subtotal" className="font-bold notranslate font-mono">
+                {totals.priceCny}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-muted">เรทแลกเปลี่ยน</dt>
+              <dd id="rsDefault" className="font-bold notranslate font-mono">
+                {totals.rate}
+              </dd>
+            </div>
+            {appliedPromo && (
+              <div className="flex items-baseline justify-between gap-2 text-emerald-700">
+                <dt>ส่วนลด ({appliedPromo.label})</dt>
+                <dd id="cart-promo-discount" className="font-bold notranslate font-mono">
+                  -{numberFormat(discountThb)}
+                </dd>
+              </div>
+            )}
+            <div className="pt-2 mt-2 border-t border-rose-200/60 flex items-baseline justify-between gap-2">
+              <dt className="text-[13.5px] font-bold text-foreground">ราคารวมสุทธิ</dt>
+              <dd id="cart-total" className="text-[20px] md:text-[22px] font-black text-primary-600 notranslate font-mono leading-none">
+                {appliedPromo ? numberFormat(finalThb) : totals.priceThb}
+                <span className="text-[12px] font-bold text-muted ml-1">฿</span>
+              </dd>
+            </div>
+          </dl>
+
+          {/* Submit CTA — wired to `submitCartOrder`. */}
+          <button
+            type="button"
+            name="addOrder"
+            disabled={submitDisabled || submitting}
+            onClick={handleSubmitOrder}
+            className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[14px] md:text-[15px] font-bold px-4 py-2.5 md:py-3 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-lg"
+          >
+            {submitting ? (
+              <>
+                <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                กำลังส่งออเดอร์...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
+                สั่งซื้อสินค้า
+              </>
+            )}
+          </button>
+          {submitDisabled && (
+            <p className="mt-2 text-[11px] text-rose-600 text-center inline-flex items-center justify-center gap-1">
+              <X className="w-3 h-3" strokeWidth={2.5} />
+              กรุณาเลือกสินค้าอย่างน้อย 1 รายการ
+            </p>
+          )}
+        </div>
       </div>
-      {/* cart.php L841 — totalRowCount carried as data so the
-          server-side count stays inspectable for QA. */}
+
+      {/* totalRowCount carried as hidden data for QA. */}
       <span hidden data-total-rows={totalRowCount} />
     </>
   );
