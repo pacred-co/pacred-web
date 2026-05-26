@@ -307,13 +307,13 @@ export default async function AdminTablePage({
     throw new Error(`admins: failed to load admin_contact_extras — ${extrasRes.error.message}`);
   }
 
-  // Build lookup maps (O(1) per merge) + merge into AdminRow shape
-  const profilesMap = new Map(
-    (profilesRes.data ?? []).map((p) => [(p as { id: string }).id, p]),
-  );
-  const extrasMap = new Map(
-    (extrasRes.data ?? []).map((e) => [(e as { profile_id: string }).profile_id, e]),
-  );
+  // Build lookup maps (O(1) per merge) + merge into AdminRow shape.
+  // Cast via `unknown` first — Supabase's typed-helper response widens to
+  // include the error-state variant which can't be narrowed inline.
+  const profilesArr = (profilesRes.data ?? []) as unknown as Array<{ id: string } & Record<string, unknown>>;
+  const extrasArr = (extrasRes.data ?? []) as unknown as Array<{ profile_id: string } & Record<string, unknown>>;
+  const profilesMap = new Map(profilesArr.map((p) => [p.id, p]));
+  const extrasMap = new Map(extrasArr.map((e) => [e.profile_id, e]));
 
   let rawRows: AdminRow[] = adminGrants.map((g) => ({
     profile_id: g.profile_id,

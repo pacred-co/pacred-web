@@ -381,3 +381,56 @@ $$ language plpgsql;
 - Commits: `f6922dd` (initial sequence-based attempt) → `4123f86` (4 renames applied) → `bac69fa` (final MAX()+1 rewrite)
 - Diagnostic scripts: `scripts/survey-pr-sequence.ts` · `scripts/survey-pr-collisions.ts` · `scripts/verify-0095.ts`
 - Companion lesson — backfill-image flow leaned on the same Supabase pool but didn't hit this trap because uploads don't read sequences. Worth knowing the trap exists before the next migration touches sequences.
+
+---
+
+## [2026-05-27] PostgREST cross-embed PGRST200 — two tables sharing a parent FK ≠ direct FK
+
+**Context:** Wave 22 tb_admin → admins merge. Wrote queries like `admins.select("*, extras:admin_contact_extras!profile_id(*)")` to JOIN the role grant with HR sidecar in one call. Page 500 on prod immediately.
+
+**Symptom:** `PGRST200: Could not find a relationship between 'admins' and 'admin_contact_extras' in the schema cache. Searched for a foreign key relationship between 'admins' and 'admin_contact_extras' using the hint 'profile_id' in the schema 'public', but no matches were found.`
+
+**Root cause:** `admins.profile_id` FK → `profiles(id)`. `admin_contact_extras.profile_id` FK → `profiles(id)`. Both tables FK to the same parent, but **neither has a FK to the other.** PostgREST embed syntax (`!profile_id`) is a hint for which FK to use, NOT a way to bridge tables through a common parent. Without a direct FK, PostgREST rejects — schema-cache reload (`NOTIFY pgrst, 'reload schema'`) doesn't help; the relationship literally doesn't exist.
+
+**Fix (the pattern that works):** Replace the cross-embed with 2-3 separate queries + JS merge. The forward FK embed (`profile:profiles!profile_id(...)`) still works because that IS a direct FK.
+
+```ts
+// ❌ FAILS — no direct FK between admins and admin_contact_extras
+const { data } = await admin
+  .from("admins")
+  .select(`
+    profile_id, role, is_active,
+    profile:profiles!profile_id (...),       // ✅ works — direct FK
+    extras:admin_contact_extras!profile_id (...) // 💥 PGRST200
+  `);
+
+// ✅ WORKS — 3 queries + JS merge
+const adminGrants = await admin.from("admins").select("profile_id, role, is_active").returns<...>();
+const profileIds = [...new Set(adminGrants.data?.map(g => g.profile_id) ?? [])];
+const [profiles, extras] = await Promise.all([
+  admin.from("profiles").select("*").in("id", profileIds),
+  admin.from("admin_contact_extras").select("profile_id, *").in("profile_id", profileIds),
+]);
+const profilesMap = new Map(profiles.data?.map(p => [p.id, p]) ?? []);
+const extrasMap   = new Map(extras.data?.map(e => [e.profile_id, e]) ?? []);
+const rows = adminGrants.data?.map(g => ({
+  ...g,
+  profile: profilesMap.get(g.profile_id) ?? null,
+  extras:  extrasMap.get(g.profile_id)  ?? null,
+}));
+```
+
+**Why this matters next time:** Pacred's admin storage is **deliberately split into 3 tables** (profiles · admins · admin_contact_extras · per ADR-0002). The composite-PK on `admins` (profile_id, role) means even adding a FK from extras → admins is awkward (one profile can have multiple roles). The split is right; the query shape needs to accept it. **Anytime you embed two child tables that share a parent FK, ask: is there a DIRECT FK between them?** If not — split into separate queries.
+
+**Early-warning signs in code review:**
+- `from("tableA").select("..., somename:tableB!shared_col(...)")` where `shared_col` is a FK on BOTH A and B pointing to a third table C, NOT a FK between A and B
+- PostgREST error mentioning "Could not find a relationship between 'X' and 'Y'"
+- Pages that 500 with "schema cache" wording — check FK shape, NOT just the cache
+
+**Detection — TypeScript narrowing gotcha post-fix:** After splitting, Supabase's `{ data, error }` discriminated union widens via `error: true` so `(data ?? []).map(p => p.id)` will TS2352 unless you narrow first. Pattern: `const arr = (res.data ?? []) as unknown as Array<{ id: string } & Record<string, unknown>>;` after the `if (res.error) throw` guard. Or define explicit per-row types and cast through `unknown`.
+
+**Cross-links:**
+- Commit `61696d3` — the 4-file fix (page.tsx + actions + hr + transfer-rep)
+- Commit `f2e731d` — Agent I's original (with the broken cross-embed pattern)
+- `docs/research/tb-admin-merge-intel-2026-05-27.md` — the architecture context (why admins + admin_contact_extras are split tables)
+- ADR-0002 admin-architecture — the design rationale for the 3-table split
