@@ -3,6 +3,8 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AdminDateFilter } from "@/components/admin/date-filter";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { LeaderPicker } from "./leader-picker";
 
 // Port of legacy `pcs-admin/forwarder-sale.php` — sales commission
@@ -174,7 +176,9 @@ export default async function AdminForwarderSalesPage({
   });
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/forwarder-sales" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SALES</p>
@@ -307,6 +311,7 @@ export default async function AdminForwarderSalesPage({
         </table>
       </section>
     </main>
+    </>
   );
 }
 

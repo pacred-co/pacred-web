@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import {
   WITHDRAWAL_STATUSES,
   WITHDRAWAL_STATUS_LABEL,
@@ -166,7 +168,9 @@ export default async function AdminCommissionsPage({
   }
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/commissions" />
+      <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ค่าคอม + Payouts</p>
@@ -278,5 +282,6 @@ export default async function AdminCommissionsPage({
         )}
       </div>
     </main>
+    </>
   );
 }

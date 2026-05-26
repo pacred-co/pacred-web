@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { SalesPayoutActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -67,7 +69,9 @@ export default async function AdminSalesPayoutsPage({
   });
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/sales-payouts" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">
@@ -137,6 +141,7 @@ export default async function AdminSalesPayoutsPage({
         )}
       </div>
     </main>
+    </>
   );
 }
 

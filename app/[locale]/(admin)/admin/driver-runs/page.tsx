@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { DriverActionButtons } from "./action-buttons";
 
 // CT-7 — Driver "งานของฉัน" landing.
@@ -115,7 +117,9 @@ export default async function DriverRunsPage() {
   // the deleted spine join.
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/driver-runs" />
+      <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">DRIVER · งานของฉัน</p>
@@ -211,5 +215,6 @@ export default async function DriverRunsPage() {
         Tip: รับงานภายใน 17 ชม.ไม่งั้นระบบจะปล่อยให้ admin มอบหมายใหม่ (status → หมดเวลา)
       </p>
     </main>
+    </>
   );
 }

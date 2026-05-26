@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { ShopPayoutActions } from "./actions-cell";
 
 /**
@@ -76,7 +78,9 @@ export default async function AdminShopPayoutsPage({
   });
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/shop-payouts" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div>
         <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
@@ -160,6 +164,7 @@ export default async function AdminShopPayoutsPage({
         )}
       </div>
     </main>
+    </>
   );
 }
 
