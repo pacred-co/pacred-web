@@ -419,4 +419,43 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - Commit `42f92434` — the affiliate signup port (actual file behaviour)
 - `docs/research/d1-deep-audit-2026-05-24.md` §5 — the original (mis-described) gap
 - `C:/xampp/htdocs/pcscargo/member/regis-tam.php` — the legacy source (444 lines, read in full)
+
+---
+
+## [2026-05-26] Deletion sweep missed two consumers (lint + test:unit) — pre-push gate must run `pnpm verify`, not just tsc + build
+
+**Context:** Did a "dead-LINE-Notify stack purge" today (commit `67fc018e`) that deleted ~10 files including `lib/notifications/line-notify.ts`, `lib/notifications/line-notify.test.ts`, the cron route, the OAuth callback route, and 4 docs/admin references. Pre-push gate ran `tsc --noEmit && next build` — both passed. Pushed. CI failed TWICE in succession on the same commit chain:
+
+1. **Lint failure** (commit `d2a0fd15`) — `react/no-unescaped-entities`: I'd written `EOL'd` and `"push now"` inside JSX in the admin dispatch banner. Fixed in `ef8868b4`.
+2. **Test failure** (this fix, commit `0020b82f`) — `pnpm test:unit` chained `tsx --tsconfig tsconfig.test.json lib/notifications/line-notify.test.ts` but the file was DELETED in `67fc018e`. Test runner ran through 47 test files (~1500 assertions passed) then crashed with `ERR_MODULE_NOT_FOUND` on the missing file.
+
+**Symptom:** TWO separate CI failures landed in production CI logs in the span of an hour. Both were preventable with one pre-push command.
+
+**Root cause:** My pre-push gate was `tsc --noEmit && next build`. Neither catches:
+- `react/no-unescaped-entities` lint errors (only `eslint` does — `next build` doesn't run lint by default in Next 16)
+- Test files chained in `package.json` `test:unit` that reference deleted modules (only `pnpm test:unit` does — `tsc` doesn't care because `tsx` runs the chain at runtime, not at typecheck time)
+
+**Fix — pre-push gate is `pnpm verify` (or its 4 parts).** The `verify` script in `package.json` is *literally* `pnpm lint && tsc --noEmit && pnpm test:unit && pnpm audit:all` — the canonical CI mirror. Running it locally before push catches what CI catches. The `tsc + build` shortcut I'd been using is **necessary but not sufficient**.
+
+**The deletion-sweep checklist** that would have caught both:
+1. After deleting any file `X`, grep for `X` across **everything**, not just imports:
+   ```bash
+   grep -rn "lib/notifications/line-notify" .  # catches package.json AND .ts imports
+   grep -rn "line-notify\|line.notify" docs/ .github/ vercel.json package.json
+   ```
+2. Run `pnpm verify` (the full 4-part gate), not `tsc + build`.
+3. If you touch JSX, `pnpm lint` is non-negotiable (`react/no-unescaped-entities` is the most common silent break).
+
+**Why this matters next time:**
+- `next build` in Next 16 does NOT run eslint as part of the build (changed from earlier Next versions where build implied lint). You must run `pnpm lint` separately.
+- `package.json` script chains (`test`, `test:unit`) reference files by string path — `tsx` resolves them at runtime, so file deletion silently breaks the chain until CI runs it. **Always grep `package.json` for any path you delete.**
+- A "small docs cleanup" commit (`d2a0fd15`) introduced the lint error — even non-feature commits need the full gate.
+
+**Cross-links:**
+- Commit `67fc018e` — the original purge
+- Commit `ef8868b4` — lint fix
+- Commit `0020b82f` — test:unit fix (this one)
+- `package.json` `verify` script — the canonical pre-push gate
+- AGENTS.md §11 — production deploy gate (route smoke) is also necessary but separate from this
+- `docs/learnings/nextjs-16-quirks.md` 2026-05-16 entry — `react/no-unescaped-entities` (this is the SAME learning I'd captured a week earlier and STILL skipped the lint step — process gap, not knowledge gap)
 - `docs/pacred-info.md` "Brand-split context" — the PCS/TTP/ไอแต้ม split that explains the `-tam` suffix
