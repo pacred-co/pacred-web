@@ -42,7 +42,7 @@ Push range: `22d5e37..5372346+` on `origin/Poom-pacred`
 | `cbed382` | docs(wave-21-p2): query optimization survey | 305-LOC doc identifying sidebar-counts as the 4-7s/page bottleneck |
 | `5372346` | **Wave 21 P2** — migration `0109_pcs_legacy_admin_hot_indexes.sql` | 23 partial indexes · IF NOT EXISTS + ANALYZE · **applied to prod** |
 
-### Wave 22 — 3 parallel agents (this session)
+### Wave 22 — 9 parallel agents (this session)
 
 | Agent | Task | Result |
 |---|---|---|
@@ -51,6 +51,22 @@ Push range: `22d5e37..5372346+` on `origin/Poom-pacred`
 | **C** | Wave 21 P2 query optimization SURVEY (no code changes) | 305-LOC doc `docs/research/wave-21-p2-query-survey.md` · 23 indexes proposed · 3-phase plan |
 | **D** | browse-verify modal port + post-0109 perf | **0109 CONFIRMED** (/admin warm 1.88s · /customers 0.52-0.72s) · modal port code clean · **NEW BUG found:** `/admin/admins` 500 (tb_admin schema mismatch) |
 | **E** | Phase A — 4 quick-win count:exact swaps | commit `5b065c6` · 3 TODOs (SUM cards · need Phase C RPC) + 1 real fix (report-cnt `.in(visibleCabs)`) · lint+tsc clean |
+| **F** | tb_admin/admins/profiles intelligence (read-only) | 300-LOC doc `tb-admin-merge-intel-2026-05-27.md` · 13 rows (not 50-100) · 4 native admins · 0 overlap · 20/23 orphan adminidsale |
+| **G** | tb_admin code audit (24 files) | 400-LOC doc `tb-admin-code-audit-2026-05-27.md` · severity 🔴3 🟠18 🟡11 🟢3 · bridge-then-cutover sequence |
+| **H** | dump 13 tb_admin rows → reference doc | doc `tb-admin-13-row-reference.md` · 17K chars · role suggestions per person · ภูม checklist for manual recreate |
+| **I** | rewrite `/admin/admins` list → admins JOIN | commit `f2e731d` · net -9 LOC · removes all tb_admin reads · preserves status pills + filters |
+| **J** | build `/admin/admins/new` + `/[id]/edit` CRUD forms | commit `1a40af6` · 1734 LOC new + 544 mod · 5 server actions · lib/validators/admin-form.ts · password generator |
+
+### Wave 22 — tb_admin → admins merge (Phase 1-5 SHIPPED)
+
+| Phase | Surface | Commit | Status |
+|---|---|---|---|
+| 1 | Migration 0110 (5 sidecar columns on admin_contact_extras) | `09f410d` | written + pushed · **ภูม apply via Dashboard** |
+| 2 | /admin/admins list page (admins JOIN profiles JOIN admin_contact_extras) | `f2e731d` | shipped |
+| 3 | /admin/admins/new form (create) | `1a40af6` | shipped |
+| 4 | /admin/admins/[id]/edit form (update + role toggle) | `1a40af6` | shipped |
+| 5 | listActiveTbAdmins + adminBulkTransferSalesRepTb (pre-existing bug fix) | `7a9e019` | shipped |
+| 6 (defer) | /admin/admins/[id] detail page rewrite | — | **Task #150 next session** (row-click still 404 until done) |
 
 ---
 
@@ -74,28 +90,27 @@ Push range: `22d5e37..5372346+` on `origin/Poom-pacred`
     WHERE id = 51972
       AND ftrackingchn = 'TEST-SPAWN-WAVE21-A';
    ```
-3. 🔴 **#141 NEW — /admin/admins 500 (tb_admin schema mismatch)** — Agent D found both list + detail pages 500 on prod. Try first (5-sec fix · PostgREST stale schema cache):
-   ```sql
-   NOTIFY pgrst, 'reload schema';
-   ```
-   If still 500 after reload, run diagnostic:
-   ```sql
-   SELECT column_name, data_type
-     FROM information_schema.columns
-    WHERE table_name = 'tb_admin'
-    ORDER BY ordinal_position;
-   ```
-   Migration `0081_pcs_legacy_schema.sql` L611 declares `id integer NOT NULL` + L613 `adminid character varying(20) NOT NULL`. If prod is missing them, the data load may have shaped the table differently than 0081 declares. Send the output to next session — fix path depends on actual schema.
+3. 🔧 **#141 RESOLVED in-session** — tb_admin schema mismatch traced to camelCase prod columns. NOT fixed via column rename; instead **Wave 22 merge SHIPPED** (Phase 1-5) which makes Pacred read `admins` table (new) instead of `tb_admin` (legacy). To activate:
+   - **Apply migration 0110** in Supabase Dashboard SQL Editor:
+     paste `supabase/migrations/0110_admin_contact_extras_legacy_bridge.sql` → Run (~50ms · 0-row table)
+   - **Browse /admin/admins** — should load instead of 500 (will show 4 native super-admins until step 3)
+   - **Recreate 13 legacy admins via `/admin/admins/new`** — open reference doc `docs/research/tb-admin-13-row-reference.md` alongside · ภูม fills email + password + role + HR fields + `legacy_admin_id` (string from reference doc, e.g. `admin_pop`) per person. ~3-5 min per admin · ~45-60 min total
+   - After 13 recreated: `/admin/customers/transfer-rep` dropdown works again · tb_users.adminidsale joins resolve via `admin_contact_extras.legacy_admin_id`
+   - Future: drop tb_admin once 24 legacy-reading files all migrate to admins (Task #150 + others)
 
 ---
 
 ## 🎯 Pickup สำหรับ session ถัดไป
 
-### Option A — Phase A quick wins (~1-2h) — likely DONE by Agent E this session
-4 surgical count:exact swaps · 200-500ms additional gain · no migration
+### Option A — Wave 22 Phase 6 (Task #150) + cleanup leftovers (~1-2h) 🟢
+After ภูม recreates 13 admins:
+- Rewrite `/admin/admins/[id]` detail page (still queries tb_admin · row-click 404 now)
+- Wire avatar file upload (Agent J deferred · "Wave 23" banner in form)
+- Multi-role assignment UX (currently single-role per create form)
+- Test #136 cleanup row #51972
 
-### Option B — Phase C RPC consolidation (~4h) 🟠
-Per survey: `get_admin_sidebar_counts()` PLpgSQL function (22 RTTs → 1) + `get_dashboard_kpi()` RPC. Medium impact after 0109 already hit the big win.
+### Option B — Wave 21 Phase C RPC consolidation (~4h) 🟠
+Per survey: `get_admin_sidebar_counts()` PLpgSQL function (22 RTTs → 1) + `get_dashboard_kpi()` RPC + `get_wallet_system_totals()` RPC (unlocks the 3 TODO SUM cards Agent E left)
 
 ### Option C — Resume Wave 21 batch 3 (~3-4h) 🟢
 - `service-orders/cart` + `cart/add` (legacy `cart.php`)
@@ -105,6 +120,9 @@ Per survey: `get_admin_sidebar_counts()` PLpgSQL function (22 RTTs → 1) + `get
 - combine-bill backend stubs (PDF print · daterangepicker · bulk-select)
 - warehouse-history backend (bulk-print · "mark as no-match" action)
 - task #137: paginate /reports/forwarder (lift 1000-row cap)
+
+### Option E — Migrate remaining 16 `resolveLegacyAdminId` callers (~2h)
+Per Agent G audit · helper still reads tb_admin · swap to query admins+admin_contact_extras. Cuts the file count for Phase 7 (eventual `DROP TABLE tb_admin CASCADE`)
 
 ### Option E — Browser-verify ภูม เอง (~30min) 🟢
 ภูม กดดูจริง prod หรือ localhost · เจอ bugs ที่ agents มองไม่เห็น

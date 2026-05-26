@@ -2,18 +2,19 @@
 
 ---
 
-# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
+# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX + tb_admin MERGE SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
 
-ภูม กลับมา session เย็น · Wave 22 = perf root-cause kill + 3+2 parallel agents + 2 new skills. **Migration `0109` (23 partial indexes) applied to prod → admin chrome 1.5-3s → ~300ms confirmed by Agent D measurement** (/admin warm 1.88s vs cold 2.6s).
+ภูม กลับมา session เย็น · Wave 22 = perf root-cause kill + 5+2 parallel agents (10 total this session) + 2 new skills + tb_admin → admins consolidation Phase 1-5.
 
-**📦 9 commits today (push range `22d5e37..5372346+5b065c6`):**
+**📦 13 commits today (push range `22d5e37..1a40af6` on Poom-pacred):**
 - **Wave 20 P1 batch 2** — wallet/add · yuan-payments/new (`fc9aabe`) + reports/{payment,shop,forwarder} (`f47c179`) Tailwind chrome
 - **Wave 21 P0** — shop→forwarder auto-spawn (`fe98da3` · closes taxonomy §6 gap)
 - **Wave 21 deferred (Task #128)** — admin-profile-client jQuery → native dialog (`003439b` · 5 modals + 2 confirms · 3 inline helpers `PacredDialog` + `DialogFooter` + `useConfirmDialogs`)
-- **Wave 21 P2 perf fix** — query survey (`cbed382`) → migration 0109 (`5372346` · 23 partial indexes) → Phase A 4 quick wins (`5b065c6` · 3 TODOs + 1 real fix on `report-cnt`)
+- **Wave 21 P2 perf fix** — query survey (`cbed382`) → migration 0109 (`5372346` · 23 partial indexes) → Phase A 4 quick wins (`5b065c6` · 3 TODOs + 1 real fix on `report-cnt`). **Applied to prod** → admin chrome 1.5-3s → 100-300ms confirmed (/admin warm 1.88s vs cold 2.6s)
 - **NEW skills** — `debug-mantra` + `management-talk` (`8050eef` · 16 total)
 - **Learnings** — `debug-discipline.md` case study of today's "2 Issues" misdiagnosis (`c9b5446`)
 - **Off-target fix kept as evidence** — `a2e7b25` (image qualities · doc'd in debug-discipline)
+- **🆕 Wave 22 tb_admin → admins merge (Phase 1-5)** — migration 0110 + 3 intel docs (`09f410d`) + list page rewrite (`f2e731d`) + pre-existing bug fix (`7a9e019`) + CRUD forms (`1a40af6` · 1734 LOC new · 5 server actions)
 
 **🟢 Verified working (post-0109):**
 - /admin home — 1.88s warm (was 2.6s)
@@ -22,34 +23,39 @@
 - /admin/reports/{payment,shop,forwarder} — full Tailwind · prod data flowing
 - /admin/admins/[id] modal port — code clean (jQuery/BS4 zero · all 7 modals native `<dialog>`)
 
-**🔴 NEW BUG found today (Task #141):**
-`/admin/admins` list AND detail both return 500 on prod — `column tb_admin.id does not exist` (list) + `column tb_admin.adminid does not exist` (detail). Likely stale PostgREST schema cache OR data-load shape mismatch. **Try first** (5-sec fix): `NOTIFY pgrst, 'reload schema';` in Supabase SQL Editor. If still 500, run diagnostic + paste output (see save-point §Pending #3).
+**🟠 Wave 22 tb_admin → admins merge — code shipped · awaits 2 actions ภูม:**
+1. **Apply migration 0110** in Supabase Dashboard SQL Editor (paste `0110_admin_contact_extras_legacy_bridge.sql` · ~50ms · 0-row table)
+2. **Recreate 13 legacy admins via `/admin/admins/new`** form (use reference doc `docs/research/tb-admin-13-row-reference.md` alongside · ~45-60 min)
+- After both: /admin/admins shows 4 native + 13 new admins · transfer-rep dropdown works · all 24 legacy tb_admin readers eventually swap to admins (gradual decommission over future sessions)
 
-**⚠️ Pending ภูม manual actions:**
-1. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (still not done · leaked วันแรก)
-2. **#136** cleanup test row #51972 — `DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';`
-3. **#141** /admin/admins 500 — try `NOTIFY pgrst, 'reload schema';` first · escalate to schema inspection if still 500
+**⚠️ Pending ภูม manual actions (priority order):**
+1. 🟠 **Apply migration `0110`** in Supabase SQL Editor — unblocks /admin/admins (currently 500)
+2. 🟠 **Recreate 13 admins via `/admin/admins/new`** form — open reference doc + sip coffee · 45-60 min
+3. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (still not done · leaked วันแรก)
+4. **#136** cleanup test row #51972 — `DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';`
 
 **🎯 SOTs for tomorrow's resume — read in order:**
-1. 🌅 [`docs/research/poom-save-point-2026-05-27-evening.md`](docs/research/poom-save-point-2026-05-27-evening.md) — **canonical resume** (9 commits · agents output · verified pages · pickup options)
+1. 🌅 [`docs/research/poom-save-point-2026-05-27-evening.md`](docs/research/poom-save-point-2026-05-27-evening.md) — **canonical resume** (13 commits · 10 agents output · verified pages · pickup options A-E)
 2. 🔥 [`docs/research/wave-21-p2-query-survey.md`](docs/research/wave-21-p2-query-survey.md) — perf root-cause + 3-phase plan (Phase B done · Phase A done · Phase C waits)
-3. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) — **NEW** "2 Issues" case study · pair with debug-mantra skill
-4. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`.claude/skills/management-talk/SKILL.md`](.claude/skills/management-talk/SKILL.md) — **NEW skills** (16 total)
+3. 🔧 [`docs/research/tb-admin-merge-intel-2026-05-27.md`](docs/research/tb-admin-merge-intel-2026-05-27.md) + [`docs/research/tb-admin-code-audit-2026-05-27.md`](docs/research/tb-admin-code-audit-2026-05-27.md) + [`docs/research/tb-admin-13-row-reference.md`](docs/research/tb-admin-13-row-reference.md) — Wave 22 merge intelligence (read together · the 13-row reference is the action checklist for ภูม)
+4. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) — **NEW** "2 Issues" case study · pair with debug-mantra skill
+5. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`.claude/skills/management-talk/SKILL.md`](.claude/skills/management-talk/SKILL.md) — **NEW skills** (16 total)
 
 **🟡 Pickup options for next session (ภูม pick when resuming):**
-- **A** Fix Task #141 (tb_admin 500) — depends on diagnostic output (~30 min to 2h)
+- **A** Wave 22 Phase 6 + cleanup leftovers (~1-2h · after 13-admin recreate) — rewrite `/admin/admins/[id]` detail page (Task #150 · still queries tb_admin · row-click 404 now) · avatar upload (Wave 23 deferred · Agent J) · #136 cleanup
 - **B** Phase C RPC consolidation (~4h) — `get_admin_sidebar_counts()` + `get_dashboard_kpi()` + `get_wallet_system_totals()` (cuts 22 RTTs → 1 + unlocks the 3 TODO surfaces from Phase A)
 - **C** Wave 21 batch 3 — `/admin/service-orders/cart` + `cart/add` (port `cart.php`)
 - **D** Wave 21 P1 follow-ups — #137 paginate /reports/forwarder · combine-bill PDF print · warehouse-history bulk-print
+- **E** Migrate remaining 16 `resolveLegacyAdminId` callers (~2h · Agent G audit) — swap to query admins+admin_contact_extras · cuts files for eventual `DROP TABLE tb_admin CASCADE`
 
 **🗺 Branch state (post-push · 2026-05-27 เย็น):**
 
 | Branch | HEAD | สถานะ |
 |---|---|---|
 | `main` | `9d8467b` | production (ภูม Wave 20+22 ยัง merge) |
-| `Poom-pacred` | `5b065c6` (or later) | **active · all Wave 20+21+22 work landed** |
+| `Poom-pacred` | `1a40af6` (or later) | **active · all Wave 20+21+22 work landed** |
 | `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel) |
-| Our worktree | `5b065c6` | ✅ in sync with Poom-pacred 0/0 |
+| Our worktree | `1a40af6` | ✅ in sync with Poom-pacred 0/0 |
 
 **Resume command (next session):**
 ```bash
@@ -58,7 +64,7 @@ git fetch origin --prune
 git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
 cat docs/research/poom-save-point-2026-05-27-evening.md       # canonical resume
 pnpm dev   # port 3000 (if not running)
-# Then: pick option A/B/C/D from above
+# Then: pick option A/B/C/D/E from above
 ```
 
 ---
