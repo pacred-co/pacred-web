@@ -60,7 +60,12 @@ const nextConfig: NextConfig = {
     root: path.resolve(__dirname),
   },
   images: {
-    qualities: [75, 92],
+    // Quality values used across the codebase: 75 (default thumbs · table avatars),
+    // 92 (hi-res shop covers · forwarder thumbs), 95 (marketing banners · office
+    // photos), 100 (hero banner desktop · pristine source). Next 16 dev overlay
+    // throws an Issue per <Image quality={N}> where N isn't in this allowlist —
+    // so keep all 4 values listed even if some are only used by 1-2 components.
+    qualities: [75, 92, 95, 100],
   },
 
   async headers() {
