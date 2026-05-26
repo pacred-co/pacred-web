@@ -142,20 +142,9 @@ export default async function CombineBillPage({
       .lte("date", `${filterEnd}T23:59:59`);
   }
 
-  // ── tb_bill_item JOIN tb_bill (forwarder-bill.php L133-146) ──
-  let itemsQ = admin
-    .from("tb_bill_item")
-    .select("id, billid, fid, tb_bill!inner(date)");
+  const billsRes = await billsQ;
 
-  if (filterStart && filterEnd) {
-    itemsQ = itemsQ
-      .gte("tb_bill.date", `${filterStart}T00:00:00`)
-      .lte("tb_bill.date", `${filterEnd}T23:59:59`);
-  }
-
-  const [billsRes, itemsRes] = await Promise.all([billsQ, itemsQ]);
-
-  // §0c — destructure error + log on the load-bearing reads.
+  // §0c — destructure error + log on the load-bearing read.
   if (billsRes.error) {
     console.error("[combine-bill] tb_bill query failed", {
       code: billsRes.error.code,
@@ -166,16 +155,53 @@ export default async function CombineBillPage({
       `combine-bill: failed to load tb_bill — ${billsRes.error.code ?? "unknown"}: ${billsRes.error.message}`,
     );
   }
-  if (itemsRes.error) {
-    console.error("[combine-bill] tb_bill_item query failed", {
-      code: itemsRes.error.code,
-      message: itemsRes.error.message,
-    });
-    // Don't throw — items can be empty; just log.
-  }
 
   const bills: BillRow[] = (billsRes.data ?? []) as unknown as BillRow[];
-  const rawItems = (itemsRes.data ?? []) as unknown as BillItemRow[];
+
+  // ── tb_bill_item — Wave 23 P0 fix #3 (Task #153, 2026-05-26 ค่ำ) ──
+  //
+  // Legacy SQL (forwarder-bill.php L133-146):
+  //   SELECT bi.ID, bi.billID, bi.fID FROM tb_bill_item AS bi
+  //     LEFT JOIN tb_bill AS b ON b.billID = bi.billID
+  //     WHERE 1=1 [same date filter]
+  //
+  // Earlier port used `tb_bill_item.select("…, tb_bill!inner(date)")` to
+  // express the join — but the ported schema (migration 0081, transcribed
+  // verbatim from the legacy MySQL) declares NO foreign key between
+  // `tb_bill_item.billid` and `tb_bill.billid` (the legacy MySQL didn't
+  // either). PostgREST therefore can't resolve the embed and the call
+  // returns `PGRST200` "Could not find a relationship between
+  // 'tb_bill_item' and 'tb_bill' in the schema cache" — leaving every
+  // "รายการฝากนำเข้า" cell empty (Agent K click-through audit,
+  // 2026-05-26).
+  //
+  // Fix: collapse to a 2-query pattern. The bills load above already
+  // narrows by date; now load items only for the visible bills via
+  // .in("billid", visibleBillIds) — same shape that Wave 22 used to
+  // fix the tb_admin casing failure in actions/admin/admins.ts.
+  let rawItems: BillItemRow[] = [];
+  if (bills.length > 0) {
+    const visibleBillIds = bills.map((b) => b.billid);
+    const itemsRes = await admin
+      .from("tb_bill_item")
+      .select("id, billid, fid")
+      .in("billid", visibleBillIds);
+    if (itemsRes.error) {
+      // §0c — log + surface; do NOT swallow. Items being null here is
+      // a real bug (already-visible bills must have item rows by
+      // construction), not a benign empty.
+      console.error("[combine-bill] tb_bill_item query failed", {
+        visibleBillCount: visibleBillIds.length,
+        code: itemsRes.error.code,
+        message: itemsRes.error.message,
+        details: itemsRes.error.details,
+      });
+      throw new Error(
+        `combine-bill: failed to load tb_bill_item — ${itemsRes.error.code ?? "unknown"}: ${itemsRes.error.message}`,
+      );
+    }
+    rawItems = (itemsRes.data ?? []) as unknown as BillItemRow[];
+  }
 
   // Build the (billID -> fID[]) Map — replaces legacy `search()` helper.
   const itemsByBill = new Map<number, number[]>();
@@ -228,14 +254,14 @@ export default async function CombineBillPage({
         )}
       </div>
 
-      {/* Wave 20 status banner */}
-      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-800 flex items-start gap-2">
-        <span aria-hidden>ℹ️</span>
+      {/* Wave 23 status banner — 4 P0 bugs from click-through audit closed */}
+      <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✓</span>
         <div className="flex-1">
-          <span className="font-medium">Wave 20 P1 status:</span>{" "}
-          ✅ Tailwind chrome · tb_bill + tb_bill_item reads · date-range filter · สร้าง/ลบบิล wired ·{" "}
+          <span className="font-medium">Wave 23 P0:</span>{" "}
+          ✅ Tailwind chrome · tb_bill + tb_bill_item reads · สร้าง/ลบบิล wired · บิล # คลิกได้ → print · พิมพ์บิลรวม (browser) ·{" "}
           <span className="opacity-75">
-            ⏳ Wave 21: daterangepicker · bulk-select+print · PDF render (@react-pdf)
+            ⏳ Future polish: daterangepicker JS · bulk-select+print · @react-pdf PDF download
           </span>
         </div>
       </div>
@@ -311,10 +337,31 @@ export default async function CombineBillPage({
                 {bills.map((row) => {
                   const fids = itemsByBill.get(row.billid) ?? [];
                   const printHref = buildCombineBillPrintHref(fids);
+                  // Wave 23 P0 fix #2 (Task #153): bill # is now a link to
+                  // the print route — the canonical "view this bill"
+                  // surface (no dedicated detail page exists; the print
+                  // view shows every forwarder ID + the consignee).
+                  // Disabled (rendered as muted text) when fids is empty
+                  // so we never link to a 404 print page.
                   return (
                     <tr key={row.billid} className="border-t border-border align-top hover:bg-surface-alt/40">
                       <td className="px-4 py-3 text-xs font-mono text-muted">{row.billid}</td>
-                      <td className="px-4 py-3 text-xs font-mono font-semibold">#{row.billid}</td>
+                      <td className="px-4 py-3 text-xs font-mono font-semibold">
+                        {fids.length > 0 ? (
+                          <Link
+                            href={printHref}
+                            target="_blank"
+                            className="text-primary-600 hover:text-primary-700 hover:underline"
+                            title="เปิดบิลรวม (พิมพ์ได้)"
+                          >
+                            #{row.billid}
+                          </Link>
+                        ) : (
+                          <span className="text-muted" title="บิลนี้ไม่มีรายการฝากนำเข้า — ไม่สามารถเปิดบิลได้">
+                            #{row.billid}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs">
                         {fids.length === 0 ? (
                           <span className="text-muted">—</span>
