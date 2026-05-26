@@ -231,6 +231,12 @@ export default async function AdminWalletDetail({
       .select("cbtotal")
       .eq("userid", row.userid)
       .maybeSingle(),
+    // Wave 21 P2 Phase A: System-wide wallet + cash_back totals — fetched
+    // here to render the "ยอดรวมทั้งหมดในระบบ" card. Detail page pulls ALL
+    // ~8,898 wallet rows just to display one summary card. Survey
+    // docs/research/wave-21-p2-query-survey.md §6 — to be replaced by a
+    // `get_wallet_system_totals()` RPC in Phase C (saves ~500ms per detail
+    // page-load). Leaving the fetches for now: PostgREST has no SUM endpoint.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
     admin.from("tb_cash_back").select("cbtotal").limit(50_000),
     admin

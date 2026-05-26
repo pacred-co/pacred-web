@@ -48,6 +48,10 @@ export async function WalletBalanceView({ q }: BalanceViewProps) {
   // PostgREST has no aggregate-fn endpoint; we pull the rows + sum in app.
   // .limit(50_000) matches the admin/page.tsx walletAll precedent (8,898
   // customers → comfortably under cap).
+  // Wave 21 P2 Phase A: Two SUMs (wallet + cash_back) — both fetch full tables
+  // to reduce in JS. Survey docs/research/wave-21-p2-query-survey.md §2 + §6 —
+  // to be replaced by a `get_wallet_system_totals()` RPC in Phase C. Leaving
+  // the fetches for now: PostgREST has no SUM endpoint + staff want fresh data.
   const [{ data: allWalletsForSum }, { data: allCbForSum }] = await Promise.all([
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
     admin.from("tb_cash_back").select("cbtotal").limit(50_000),

@@ -209,12 +209,25 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
 
   const { data: rows, error } = await q;
 
-  // Pull paid container codes (tb_cnt_item is the join table; presence = paid)
-  const { data: paidRows, error: paidRowsErr } = await admin.from("tb_cnt_item").select("fcabinetnumber").limit(50_000);
-  if (paidRowsErr) {
-    console.error(`[tb_cnt_item list] failed`, { code: paidRowsErr.code, message: paidRowsErr.message });
+  // Wave 21 P2 Phase A: scope tb_cnt_item fetch to ONLY the cabinet numbers
+  // visible on this page instead of pulling the entire join table. Per survey
+  // docs/research/wave-21-p2-query-survey.md §4 — only ~30-100 distinct
+  // containers render at once, so a full-table fetch is wasteful. Saves
+  // ~200-500ms per page-load + smaller wire payload.
+  const visibleCabs = Array.from(
+    new Set(((rows ?? []) as Row[]).map((r) => r.fcabinetnumber).filter(Boolean)),
+  );
+  let paidSet = new Set<string>();
+  if (visibleCabs.length > 0) {
+    const { data: paidRows, error: paidRowsErr } = await admin
+      .from("tb_cnt_item")
+      .select("fcabinetnumber")
+      .in("fcabinetnumber", visibleCabs);
+    if (paidRowsErr) {
+      console.error(`[tb_cnt_item list] failed`, { code: paidRowsErr.code, message: paidRowsErr.message });
+    }
+    paidSet = new Set((paidRows ?? []).map((r) => r.fcabinetnumber as string));
   }
-  const paidSet = new Set((paidRows ?? []).map((r) => r.fcabinetnumber as string));
 
   let grouped: Grouped[] = error || !rows ? [] : groupByContainer(rows as Row[], paidSet);
 

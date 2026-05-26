@@ -115,6 +115,11 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("tb_payment").select("paythb").gte("paydate", monthStart).eq("paystatus", "2"),
     admin.from("tb_payment").select("paythb").gte("paydate", todayStart).eq("paystatus", "2"),
     // Wallet total — running balance per customer (`wallettotal`); summed in app.
+    // Wave 21 P2 Phase A: This SUM fetches ALL ~8,898 rows just to reduce in JS.
+    // Survey docs/research/wave-21-p2-query-survey.md §2 + §7 — to be replaced
+    // by `get_dashboard_kpi()` RPC in Phase C (collapses 8 sum-reduces to 1 RTT).
+    // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
+    // stale cache here would diverge from staff "always fresh" expectation.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
     // Customer counts — useractive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
     admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "0"),
