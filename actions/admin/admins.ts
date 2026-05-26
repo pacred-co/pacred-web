@@ -6,6 +6,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import {
+  AdminCreateSchema,
+  AdminUpdateSchema,
+  AdminToggleActiveSchema,
+  AdminChangeRoleSchema,
+  hasAnyHRField,
+} from "@/lib/validators/admin-form";
+import type {
+  AdminCreateInput,
+  AdminUpdateInput,
+  AdminToggleActiveInput,
+  AdminChangeRoleInput,
+} from "@/lib/validators/admin-form";
 
 // U4-1 RBAC console upgrade — full 7-role enum matching the
 // `admins.role` CHECK constraint (extended by migrations 0033 +
@@ -579,4 +592,535 @@ export async function listActiveTbAdmins(): Promise<AdminActionResult<{ rows: Tb
       return { ok: true, data: { rows } };
     },
   );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Wave 22 Phase 3+4 — Pacred admin CRUD
+// ════════════════════════════════════════════════════════════════════════
+// The four functions below back the new /admin/admins/new + /[id]/edit
+// forms. They replace the legacy tb_admin INSERT/UPDATE that ภูม used to
+// do directly in phpMyAdmin — every Pacred admin is now provisioned via
+// Supabase Auth Admin API + a profiles row + an admins role grant +
+// (optional) admin_contact_extras HR sidecar.
+//
+// Per AGENTS.md §0c — every Supabase call destructures { data, error }.
+// On failure the auth.user is rolled back (deleteUser) so the next attempt
+// is clean instead of leaving an orphan auth row.
+//
+// Validators live in lib/validators/admin-form.ts (importable from both
+// the server action and the client form).
+// ════════════════════════════════════════════════════════════════════════
+
+// ────────────────────────────────────────────────────────────
+// adminCreateNew — provision auth + profile + admin grant + HR extras
+// ────────────────────────────────────────────────────────────
+//
+// Flow (rollback-safe):
+//   1. supabase.auth.admin.createUser({ email, password, email_confirm: true })
+//   2. profiles INSERT (member_code auto-assigned by trigger to PR<n>)
+//   3. admins INSERT (role grant + is_active=true + granted_by)
+//   4. admin_contact_extras INSERT (only if any HR field provided)
+//
+// On any step ≥ 2 failure → deleteUser(profileId) so the next /new POST
+// can re-use the email cleanly.
+//
+// Auth gate: super only (admin RBAC mutation).
+export async function adminCreateNew(
+  input: AdminCreateInput,
+): Promise<AdminActionResult<{ profileId: string; member_code: string | null }>> {
+  const parsed = AdminCreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin<{ profileId: string; member_code: string | null }>(
+    ["super"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // ── 1. Provision Supabase auth.user ────────────────────────
+      const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+        email:         d.email,
+        password:      d.password,
+        email_confirm: true,                  // skip Supabase's confirmation email
+        user_metadata: {
+          first_name:        d.first_name,
+          last_name:         d.last_name,
+          provisioned_by:    adminId,
+          provisioned_via:   "admin-create-form",
+          provisioned_at:    new Date().toISOString(),
+          legacy_admin_id:   d.legacy_admin_id ?? null,
+        },
+      });
+
+      if (authErr) {
+        // Most common: "User already registered" → email collision.
+        // Surface the raw Supabase message so the operator can react
+        // (use /edit if they meant to update an existing admin).
+        return { ok: false, error: `auth.createUser: ${authErr.message}` };
+      }
+      if (!authData?.user?.id) {
+        return { ok: false, error: "auth.createUser returned no user id" };
+      }
+      const profileId = authData.user.id;
+
+      // ── 2-4. Profile + admins + extras (rollback on failure) ──
+      try {
+        // 2. profiles row.
+        // - member_code: omitted → trigger `generate_member_code` assigns PR<n>
+        // - status: 'active' so the admin can sign in immediately
+        // - is_active: true (gates the customer-side `active` filter)
+        // - account_type: 'personal' (admins are individuals — juristic
+        //   would force company-fields; not applicable here)
+        const { error: profErr } = await admin.from("profiles").insert({
+          id:            profileId,
+          email:         d.email,
+          first_name:    d.first_name,
+          last_name:     d.last_name,
+          phone:         d.phone ?? null,
+          avatar_url:    d.avatar_url ?? null,
+          birthday:      d.birthday ?? null,
+          sex:           d.sex ?? null,
+          account_type:  "personal",
+          status:        "active",
+          is_active:     true,
+          register_with: "email",
+        });
+        if (profErr) {
+          throw new Error(`profiles insert: ${profErr.message}`);
+        }
+
+        // 3. admins role grant (UPSERT to be idempotent on the
+        //    extremely rare retry where step 2 succeeded but step 3
+        //    failed on the first attempt — without UPSERT a retry
+        //    would surface a duplicate-key error and confuse ภูม).
+        const { error: roleErr } = await admin
+          .from("admins")
+          .upsert(
+            {
+              profile_id: profileId,
+              role:       d.role,
+              is_active:  true,
+              granted_by: adminId,
+              granted_at: new Date().toISOString(),
+            },
+            { onConflict: "profile_id,role" },
+          );
+        if (roleErr) {
+          throw new Error(`admins insert: ${roleErr.message}`);
+        }
+
+        // 4. admin_contact_extras (only if any HR field is set).
+        if (hasAnyHRField(d)) {
+          const { error: extrasErr } = await admin
+            .from("admin_contact_extras")
+            .insert({
+              profile_id:        profileId,
+              display_name:      d.nickname ?? null,    // legacy display_name reused for chat-cards
+              nickname:          d.nickname ?? null,
+              company:           d.company ?? "pacred",
+              employee_type:     d.employee_type ?? "full_time",
+              department:        d.department ?? null,
+              section:           d.section ?? null,
+              work_email:        d.work_email ?? null,
+              work_phone:        d.work_phone ?? null,
+              hired_at:          d.hired_at ?? null,
+              contract_end_date: d.contract_end_date ?? null,
+              legacy_admin_id:   d.legacy_admin_id ?? null,
+              admin_note:        d.admin_note ?? null,
+            });
+          if (extrasErr) {
+            throw new Error(`admin_contact_extras insert: ${extrasErr.message}`);
+          }
+        }
+
+        // ── 5. Read back member_code (trigger-assigned) for the
+        //       success toast on the create form.
+        const { data: created, error: readErr } = await admin
+          .from("profiles")
+          .select("member_code")
+          .eq("id", profileId)
+          .maybeSingle<{ member_code: string | null }>();
+        if (readErr) {
+          // Non-fatal: the row was created, we just can't display the code.
+          console.error("[adminCreateNew member_code read]", { code: readErr.code, message: readErr.message });
+        }
+
+        await logAdminAction(adminId, "admin.create", "profiles", profileId, {
+          email:           d.email,
+          role:            d.role,
+          legacy_admin_id: d.legacy_admin_id ?? null,
+          has_hr_fields:   hasAnyHRField(d),
+        });
+
+        revalidatePath("/admin/admins");
+        revalidatePath(`/admin/admins/${profileId}`);
+        return {
+          ok:   true,
+          data: { profileId, member_code: created?.member_code ?? null },
+        };
+      } catch (e) {
+        // Rollback the auth.user so the next retry sees a clean slate.
+        // deleteUser failure is logged but not surfaced — the original
+        // error is more useful to the operator.
+        const { error: delErr } = await admin.auth.admin.deleteUser(profileId);
+        if (delErr) {
+          console.error("[adminCreateNew rollback deleteUser failed]", {
+            profileId,
+            message: delErr.message,
+          });
+        }
+        const message = e instanceof Error ? e.message : String(e);
+        return { ok: false, error: `provisioning_failed: ${message}` };
+      }
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// adminUpdateProfile — edit profiles + admin_contact_extras
+// ────────────────────────────────────────────────────────────
+//
+// Updates the editable fields on an existing Pacred admin's profile
+// row + their HR sidecar. Does NOT touch:
+//   - email   (changing the email = changing the login key → separate flow)
+//   - password (rotation = separate flow)
+//   - role    (use adminToggleActive or adminChangeRole)
+//
+// The admin_contact_extras row is UPSERTed so an admin who was created
+// without HR data can have HR data added later (the legacy 13 admins
+// fall into this case: ภูม fills HR via /edit after the bare /new POST).
+//
+// Auth gate: super only.
+//
+// NOTE — this is intentionally distinct from the EXISTING
+// `adminUpdateProfile` in `actions/admin/admin-profile.ts`, which targets
+// the LEGACY tb_admin table (admin-profile.php port). That action stays
+// for the legacy detail page (`/admin/admins/[id]`); THIS action targets
+// the Pacred-native `profiles` + `admin_contact_extras` tables (Wave 22
+// merge target). Different function name (`adminUpdateProfileFields`) to
+// avoid an import-time naming collision.
+export async function adminUpdateProfileFields(
+  input: AdminUpdateInput,
+): Promise<AdminActionResult> {
+  const parsed = AdminUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // ── Profile fields ─────────────────────────────────────────
+    // Only set columns the caller actually supplied (undefined = leave
+    // alone). Empty string from the form is treated as "clear field"
+    // by the Zod transform → null reaches the DB.
+    const profileUpdate: Record<string, unknown> = {};
+    if (d.first_name !== undefined) profileUpdate.first_name = d.first_name;
+    if (d.last_name  !== undefined) profileUpdate.last_name  = d.last_name;
+    if (d.phone      !== undefined) profileUpdate.phone      = d.phone ?? null;
+    if (d.avatar_url !== undefined) profileUpdate.avatar_url = d.avatar_url ?? null;
+    if (d.birthday   !== undefined) profileUpdate.birthday   = d.birthday ?? null;
+    if (d.sex        !== undefined) profileUpdate.sex        = d.sex ?? null;
+
+    if (Object.keys(profileUpdate).length > 0) {
+      const { error: profErr } = await admin
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", d.profile_id);
+      if (profErr) {
+        console.error("[adminUpdateProfileFields profiles update]", {
+          code: profErr.code, message: profErr.message,
+        });
+        return { ok: false, error: `profiles update: ${profErr.message}` };
+      }
+    }
+
+    // ── HR sidecar (admin_contact_extras) — UPSERT ─────────────
+    // Only fire when at least one HR field was provided; otherwise an
+    // UPSERT with all-null columns would clear a row the form simply
+    // didn't render.
+    if (hasAnyHRField(d)) {
+      const extrasRow: Record<string, unknown> = { profile_id: d.profile_id };
+      if (d.nickname           !== undefined) {
+        extrasRow.nickname     = d.nickname ?? null;
+        extrasRow.display_name = d.nickname ?? null;  // keep customer-card label in sync
+      }
+      if (d.company            !== undefined) extrasRow.company            = d.company;
+      if (d.employee_type      !== undefined) extrasRow.employee_type      = d.employee_type;
+      if (d.department         !== undefined) extrasRow.department         = d.department ?? null;
+      if (d.section            !== undefined) extrasRow.section            = d.section ?? null;
+      if (d.work_email         !== undefined) extrasRow.work_email         = d.work_email ?? null;
+      if (d.work_phone         !== undefined) extrasRow.work_phone         = d.work_phone ?? null;
+      if (d.hired_at           !== undefined) extrasRow.hired_at           = d.hired_at ?? null;
+      if (d.contract_end_date  !== undefined) extrasRow.contract_end_date  = d.contract_end_date ?? null;
+      if (d.legacy_admin_id    !== undefined) extrasRow.legacy_admin_id    = d.legacy_admin_id ?? null;
+      if (d.admin_note         !== undefined) extrasRow.admin_note         = d.admin_note ?? null;
+
+      const { error: extrasErr } = await admin
+        .from("admin_contact_extras")
+        .upsert(extrasRow, { onConflict: "profile_id" });
+      if (extrasErr) {
+        console.error("[adminUpdateProfileFields admin_contact_extras upsert]", {
+          code: extrasErr.code, message: extrasErr.message,
+        });
+        return { ok: false, error: `admin_contact_extras upsert: ${extrasErr.message}` };
+      }
+    }
+
+    await logAdminAction(adminId, "admin.update_profile", "profiles", d.profile_id, {
+      profile_fields: Object.keys(profileUpdate),
+      hr_updated:     hasAnyHRField(d),
+    });
+
+    revalidatePath("/admin/admins");
+    revalidatePath(`/admin/admins/${d.profile_id}`);
+    revalidatePath(`/admin/admins/${d.profile_id}/edit`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// adminToggleActive — flip is_active on a specific role grant
+// ────────────────────────────────────────────────────────────
+//
+// Mirrors the existing `adminToggleRole` (kept above for back-compat),
+// but uses the validator from `lib/validators/admin-form.ts` so the
+// /edit form can call ONE schema-typed action without depending on the
+// older inline `toggleSchema`.
+//
+// Auth gate: super only.
+export async function adminToggleActive(
+  input: AdminToggleActiveInput,
+): Promise<AdminActionResult> {
+  const parsed = AdminToggleActiveSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("admins")
+      .update({ is_active: d.is_active })
+      .eq("profile_id", d.profile_id)
+      .eq("role", d.role);
+    if (error) {
+      console.error("[adminToggleActive admins update]", { code: error.code, message: error.message });
+      return { ok: false, error: error.message };
+    }
+
+    await logAdminAction(adminId, "admin.toggle_active", "admins", `${d.profile_id}/${d.role}`, d);
+    revalidatePath("/admin/admins");
+    revalidatePath(`/admin/admins/${d.profile_id}`);
+    revalidatePath(`/admin/admins/${d.profile_id}/edit`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// adminChangeRole — swap a role grant on a profile
+// ────────────────────────────────────────────────────────────
+//
+// Pattern: INSERT the new role first (so the admin always has at least
+// one active role between operations), then soft-delete (is_active=false)
+// the old role row. Both rows stay in the table for audit trail — the
+// old row is still visible in /admin/admins history but no longer grants
+// access.
+//
+// If the new role row already exists (admin had it before and was
+// toggled inactive), we upsert it back to active.
+//
+// Auth gate: super only.
+export async function adminChangeRole(
+  input: AdminChangeRoleInput,
+): Promise<AdminActionResult> {
+  const parsed = AdminChangeRoleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const d = parsed.data;
+
+  return withAdmin(["super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const now = new Date().toISOString();
+
+    // 1. UPSERT new role to active.
+    const { error: insErr } = await admin
+      .from("admins")
+      .upsert(
+        {
+          profile_id: d.profile_id,
+          role:       d.new_role,
+          is_active:  true,
+          granted_by: adminId,
+          granted_at: now,
+        },
+        { onConflict: "profile_id,role" },
+      );
+    if (insErr) {
+      console.error("[adminChangeRole admins upsert new]", { code: insErr.code, message: insErr.message });
+      return { ok: false, error: `grant new role: ${insErr.message}` };
+    }
+
+    // 2. Soft-delete old role (is_active=false). Leave the row so the
+    //    history is preserved.
+    const { error: oldErr } = await admin
+      .from("admins")
+      .update({ is_active: false })
+      .eq("profile_id", d.profile_id)
+      .eq("role", d.old_role);
+    if (oldErr) {
+      // The new role is already active; surface the warning but don't
+      // roll back (the admin can still sign in, just with extra roles).
+      console.error("[adminChangeRole admins soft-delete old]", {
+        code: oldErr.code, message: oldErr.message,
+      });
+      // Audit-log the partial success so HR can clean up later.
+      await logAdminAction(adminId, "admin.change_role.partial", "admins", `${d.profile_id}`, {
+        old_role:   d.old_role,
+        new_role:   d.new_role,
+        soft_delete_error: oldErr.message,
+      });
+      return { ok: false, error: `revoke old role: ${oldErr.message}` };
+    }
+
+    await logAdminAction(adminId, "admin.change_role", "admins", `${d.profile_id}`, d);
+    revalidatePath("/admin/admins");
+    revalidatePath(`/admin/admins/${d.profile_id}`);
+    revalidatePath(`/admin/admins/${d.profile_id}/edit`);
+    return { ok: true };
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// loadAdminForEdit — read back an admin for the /edit form
+// ────────────────────────────────────────────────────────────
+//
+// Server-side fetch the /edit page hits before rendering. Returns the
+// joined profiles + admins + admin_contact_extras row, or null if no
+// matching admin (the page should notFound() in that case).
+export type AdminEditLoad = {
+  profile_id:       string;
+  email:            string | null;
+  first_name:       string | null;
+  last_name:        string | null;
+  phone:            string | null;
+  avatar_url:       string | null;
+  birthday:         string | null;
+  sex:              "male" | "female" | "other" | null;
+  member_code:      string | null;
+  is_active:        boolean;
+  roles:            Array<{ role: string; is_active: boolean }>;
+  // HR sidecar (null if no admin_contact_extras row exists yet)
+  nickname:           string | null;
+  company:            string | null;
+  employee_type:      string | null;
+  department:         string | null;
+  section:            string | null;
+  work_email:         string | null;
+  work_phone:         string | null;
+  hired_at:           string | null;
+  contract_end_date:  string | null;
+  legacy_admin_id:    string | null;
+  admin_note:         string | null;
+};
+
+export async function loadAdminForEdit(
+  profileId: string,
+): Promise<AdminActionResult<{ row: AdminEditLoad | null }>> {
+  return withAdmin<{ row: AdminEditLoad | null }>(["super"], async () => {
+    const admin = createAdminClient();
+
+    const [profileRes, rolesRes, extrasRes] = await Promise.all([
+      admin
+        .from("profiles")
+        .select(
+          "id, email, first_name, last_name, phone, avatar_url, birthday, sex, member_code, is_active",
+        )
+        .eq("id", profileId)
+        .maybeSingle<{
+          id: string; email: string | null; first_name: string | null; last_name: string | null;
+          phone: string | null; avatar_url: string | null; birthday: string | null;
+          sex: "male" | "female" | "other" | null; member_code: string | null; is_active: boolean;
+        }>(),
+      admin
+        .from("admins")
+        .select("role, is_active")
+        .eq("profile_id", profileId),
+      admin
+        .from("admin_contact_extras")
+        .select(
+          "nickname, company, employee_type, department, section, work_email, work_phone, hired_at, contract_end_date, legacy_admin_id, admin_note",
+        )
+        .eq("profile_id", profileId)
+        .maybeSingle<{
+          nickname: string | null; company: string | null; employee_type: string | null;
+          department: string | null; section: string | null;
+          work_email: string | null; work_phone: string | null;
+          hired_at: string | null; contract_end_date: string | null;
+          legacy_admin_id: string | null; admin_note: string | null;
+        }>(),
+    ]);
+
+    if (profileRes.error) {
+      console.error("[loadAdminForEdit profiles read]", {
+        code: profileRes.error.code, message: profileRes.error.message,
+      });
+      return { ok: false, error: `profiles read: ${profileRes.error.message}` };
+    }
+    if (rolesRes.error) {
+      console.error("[loadAdminForEdit admins read]", {
+        code: rolesRes.error.code, message: rolesRes.error.message,
+      });
+      return { ok: false, error: `admins read: ${rolesRes.error.message}` };
+    }
+    if (extrasRes.error) {
+      // Non-fatal — the row may not exist for legacy/native admins
+      // who never set HR fields. We still want to show the profile.
+      console.error("[loadAdminForEdit admin_contact_extras read]", {
+        code: extrasRes.error.code, message: extrasRes.error.message,
+      });
+    }
+
+    if (!profileRes.data) {
+      return { ok: true, data: { row: null } };
+    }
+    const p = profileRes.data;
+    const e = extrasRes.data;
+    const roles = (rolesRes.data ?? []) as Array<{ role: string; is_active: boolean }>;
+
+    return {
+      ok:   true,
+      data: {
+        row: {
+          profile_id:       p.id,
+          email:            p.email,
+          first_name:       p.first_name,
+          last_name:        p.last_name,
+          phone:            p.phone,
+          avatar_url:       p.avatar_url,
+          birthday:         p.birthday,
+          sex:              p.sex,
+          member_code:      p.member_code,
+          is_active:        p.is_active,
+          roles,
+          nickname:           e?.nickname           ?? null,
+          company:            e?.company            ?? null,
+          employee_type:      e?.employee_type      ?? null,
+          department:         e?.department         ?? null,
+          section:            e?.section            ?? null,
+          work_email:         e?.work_email         ?? null,
+          work_phone:         e?.work_phone         ?? null,
+          hired_at:           e?.hired_at           ?? null,
+          contract_end_date:  e?.contract_end_date  ?? null,
+          legacy_admin_id:    e?.legacy_admin_id    ?? null,
+          admin_note:         e?.admin_note         ?? null,
+        },
+      },
+    };
+  });
 }

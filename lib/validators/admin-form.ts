@@ -1,0 +1,297 @@
+/**
+ * Zod schemas for the Pacred admin CRUD forms (Wave 22 Phase 3+4).
+ *
+ *   - `AdminCreateSchema` — backs /admin/admins/new (POST `adminCreateNew`).
+ *     Provisions a fresh Supabase auth.user + `profiles` row +
+ *     `admins` role grant + optional `admin_contact_extras` HR sidecar.
+ *
+ *   - `AdminUpdateSchema` — backs /admin/admins/[id]/edit (POST
+ *     `adminUpdateProfile`). Edits HR fields on an existing Pacred
+ *     admin's profile/extras row. Does NOT change email/password
+ *     (separate flow).
+ *
+ *   - `AdminToggleActiveSchema` + `AdminChangeRoleSchema` — admin RBAC
+ *     mutations (paired server actions in `actions/admin/admins.ts`).
+ *
+ * Why a separate validator file (rather than tacking onto
+ * `lib/validators/auth.ts`):
+ *
+ *   - The /admin/admins/new form lives on the admin-management surface
+ *     and is invoked only by `super` admins recreating PCS legacy admins
+ *     (Wave 22 manual port path) or onboarding fresh Pacred hires.
+ *     It is NOT a customer signup flow — different field set, different
+ *     defaults, different validation rules (no OTP, password is a
+ *     suggestion not user-typed, captcha not relevant).
+ *
+ *   - Keeps `auth.ts` focused on customer-facing auth forms (signin /
+ *     register / OTP / password reset).
+ *
+ * Per AGENTS.md §0c — every server action that consumes these schemas
+ * MUST destructure `{ data, error }` from every Supabase call (never
+ * just `{ data }`). The Zod parse here is the FIRST gate; the DB error
+ * surfacing is the SECOND gate.
+ */
+
+import { z } from "zod";
+
+// ─── enums ──────────────────────────────────────────────────────────────
+
+/**
+ * AdminRole — the 22-value enum from `lib/auth/require-admin.ts` (kept
+ * in sync; do not narrow without updating the require-admin source).
+ * The form UI exposes ALL 22 so a super-admin can grant any role.
+ */
+export const ADMIN_ROLES = [
+  "super",
+  "ops",
+  "accounting",
+  "sales_admin",
+  "sales",
+  "qa",
+  "warehouse",
+  "driver",
+  "interpreter",
+  "freight_sales_manager",
+  "freight_sales",
+  "freight_export_manager",
+  "freight_export_cs",
+  "freight_export_doc",
+  "freight_export_clearance",
+  "freight_clearance_both",
+  "freight_export_messenger",
+  "freight_import_manager",
+  "freight_import_cs",
+  "freight_import_doc",
+  "freight_import_clearance",
+  "freight_import_messenger",
+] as const;
+export const adminRoleSchema = z.enum(ADMIN_ROLES);
+export type AdminRoleEnum = z.infer<typeof adminRoleSchema>;
+
+/**
+ * `admin_contact_extras.company` CHECK constraint (migration 0018).
+ * Default = 'pacred' on the form.
+ */
+export const COMPANY_VALUES = ["pacred", "pacred-cargo", "pacred-freight"] as const;
+export const companySchema = z.enum(COMPANY_VALUES);
+
+/**
+ * `admin_contact_extras.employee_type` CHECK constraint (migration 0018).
+ * Default = 'full_time' on the form.
+ */
+export const EMPLOYEE_TYPES = [
+  "full_time",
+  "probation",
+  "contract",
+  "daily",
+  "intern",
+  "partner",
+] as const;
+export const employeeTypeSchema = z.enum(EMPLOYEE_TYPES);
+
+/**
+ * profiles.sex CHECK constraint (migration 0003).
+ */
+export const SEX_VALUES = ["male", "female", "other"] as const;
+export const sexSchema = z.enum(SEX_VALUES);
+
+// ─── atoms ──────────────────────────────────────────────────────────────
+
+/**
+ * Pacred admin password rule: ≥ 8 chars (one tighter than the customer-
+ * facing `passwordSchema` from `auth.ts`, which still allows ≥ 6 for
+ * legacy users). Admins have privileged access — short passwords are
+ * the worst kind of leak.
+ */
+const adminPasswordSchema = z
+  .string()
+  .min(8, "รหัสผ่านขั้นต่ำ 8 ตัวอักษร")
+  .max(72, "รหัสผ่านยาวสุด 72 ตัวอักษร"); // bcrypt cap
+
+const emailAddress = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("รูปแบบอีเมลไม่ถูกต้อง")
+  .max(254, "อีเมลยาวเกินไป");
+
+const optionalEmail = z
+  .union([emailAddress, z.literal("")])
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? undefined : v));
+
+const optionalText = (max = 200) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? undefined : v));
+
+const optionalDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD")
+  .optional()
+  .or(z.literal("").transform(() => undefined));
+
+const optionalUrl = z
+  .string()
+  .trim()
+  .max(512)
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? undefined : v));
+
+// ─── create schema ──────────────────────────────────────────────────────
+//
+// Backs /admin/admins/new. The HR fields are split into "recommended"
+// (always shown in the form) and "advanced" (collapsible block). The
+// schema treats them all as optional so an admin can save a minimal
+// row first and fill in HR details later via /edit.
+
+export const AdminCreateSchema = z
+  .object({
+    // ── required ─────────────────────────────────────────────────
+    email:        emailAddress,
+    password:     adminPasswordSchema,
+    first_name:   z.string().trim().min(1, "กรุณากรอกชื่อ").max(200),
+    last_name:    z.string().trim().min(1, "กรุณากรอกนามสกุล").max(200),
+    role:         adminRoleSchema,
+
+    // ── recommended (HR) ─────────────────────────────────────────
+    phone:         optionalText(50),
+    nickname:      optionalText(120),
+    company:       companySchema.optional().default("pacred"),
+    employee_type: employeeTypeSchema.optional().default("full_time"),
+    department:    optionalText(100),
+    section:       optionalText(100),
+    work_email:    optionalEmail,
+    work_phone:    optionalText(50),
+    hired_at:      optionalDate,
+    avatar_url:    optionalUrl,
+
+    // ── advanced ─────────────────────────────────────────────────
+    birthday:           optionalDate,
+    sex:                sexSchema.optional(),
+    legacy_admin_id:    optionalText(64),
+    admin_note:         optionalText(2000),
+    contract_end_date:  optionalDate,
+  })
+  .strict();
+export type AdminCreateInput = z.infer<typeof AdminCreateSchema>;
+
+// ─── update schema ──────────────────────────────────────────────────────
+//
+// Backs /admin/admins/[id]/edit. Mirrors AdminCreateSchema EXCEPT:
+//   - email + password REMOVED (rotation is a separate flow)
+//   - profile_id is mandatory (target of the update)
+//   - role is OPTIONAL — when present, the action treats it as a
+//     role change (insert new row + soft-delete old; see
+//     AdminChangeRoleSchema for the dedicated mutation)
+//   - is_active boolean toggle on the active role grant (paired
+//     mutation via AdminToggleActiveSchema)
+
+export const AdminUpdateSchema = z
+  .object({
+    profile_id: z.uuid("profile_id ต้องเป็น UUID"),
+
+    // identity
+    first_name:    z.string().trim().min(1, "กรุณากรอกชื่อ").max(200).optional(),
+    last_name:     z.string().trim().min(1, "กรุณากรอกนามสกุล").max(200).optional(),
+    phone:         optionalText(50),
+    avatar_url:    optionalUrl,
+    birthday:      optionalDate,
+    sex:           sexSchema.optional(),
+
+    // HR sidecar
+    nickname:           optionalText(120),
+    company:            companySchema.optional(),
+    employee_type:      employeeTypeSchema.optional(),
+    department:         optionalText(100),
+    section:            optionalText(100),
+    work_email:         optionalEmail,
+    work_phone:         optionalText(50),
+    hired_at:           optionalDate,
+    contract_end_date:  optionalDate,
+    legacy_admin_id:    optionalText(64),
+    admin_note:         optionalText(2000),
+  })
+  .strict();
+export type AdminUpdateInput = z.infer<typeof AdminUpdateSchema>;
+
+// ─── role toggle / change ───────────────────────────────────────────────
+
+export const AdminToggleActiveSchema = z
+  .object({
+    profile_id: z.uuid("profile_id ต้องเป็น UUID"),
+    role:       adminRoleSchema,
+    is_active:  z.boolean(),
+  })
+  .strict();
+export type AdminToggleActiveInput = z.infer<typeof AdminToggleActiveSchema>;
+
+export const AdminChangeRoleSchema = z
+  .object({
+    profile_id: z.uuid("profile_id ต้องเป็น UUID"),
+    old_role:   adminRoleSchema,
+    new_role:   adminRoleSchema,
+  })
+  .strict()
+  .refine((d) => d.old_role !== d.new_role, {
+    message: "old_role และ new_role ต้องไม่ตรงกัน",
+    path:    ["new_role"],
+  });
+export type AdminChangeRoleInput = z.infer<typeof AdminChangeRoleSchema>;
+
+// ─── helpers exported for the client form ───────────────────────────────
+
+/**
+ * Heuristic — does this AdminCreateInput carry ANY HR-sidecar field?
+ * If so, the server action should insert an `admin_contact_extras`
+ * row; if not, skip the insert (keeps the table empty for admins
+ * who don't need HR data tracked).
+ *
+ * Used as `hasAnyHRField()` inside `actions/admin/admins.ts`.
+ */
+export function hasAnyHRField(input: AdminCreateInput | AdminUpdateInput): boolean {
+  return Boolean(
+    input.nickname ||
+    input.company ||
+    input.employee_type ||
+    input.department ||
+    input.section ||
+    input.work_email ||
+    input.work_phone ||
+    input.hired_at ||
+    input.contract_end_date ||
+    input.legacy_admin_id ||
+    input.admin_note,
+  );
+}
+
+/**
+ * Generate a short strong-ish suggestion password for the "🎲 สุ่ม"
+ * button in the create form. Browser-safe (uses `crypto.getRandomValues`).
+ *
+ * - 12 chars (≥ 8 minimum, gives headroom over the bcrypt minimum)
+ * - Excludes ambiguous chars (0/O · 1/l/I · etc.) to ease verbal sharing
+ *   with the new admin on a phone call.
+ *
+ * NOTE: the admin re-types this themselves before storing — Pacred doesn't
+ * email the generated password (we don't trust SMTP delivery to admin
+ * addresses); they read it back during the call to confirm.
+ */
+export function suggestAdminPassword(): string {
+  const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const len = 12;
+  const buf = new Uint8Array(len);
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.getRandomValues) {
+    globalThis.crypto.getRandomValues(buf);
+  } else {
+    // SSR fallback — should not actually run (suggestion is browser-only)
+    for (let i = 0; i < len; i++) buf[i] = Math.floor(Math.random() * 256);
+  }
+  let out = "";
+  for (let i = 0; i < len; i++) out += ALPHA[buf[i] % ALPHA.length];
+  return out;
+}
