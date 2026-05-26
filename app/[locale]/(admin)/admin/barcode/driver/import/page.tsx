@@ -128,91 +128,10 @@ export default async function BarcodeDriverImportPage() {
         </div>
       </div>
       {/* END: Content */}
-
-      {/* "คำอธิบายระบบ" modal — barcode-d-import.php L135-161.
-          Faithful structure; bootstrap data-toggle/data-target work
-          when the `bootstrap.bundle.js` vendor script is present
-          (`docs/runbook/faithful-port-plan.md` cross-cutting infra
-          item — staged for `/admin/*` per the evening pivot). */}
-      <div
-        id="recom"
-        className="modal fade in"
-        tabIndex={-1}
-        role="dialog"
-        aria-hidden="true"
-      >
-        <div className="modal-dialog modal-lg">
-          <div className="modal-content header-from">
-            <div className="modal-header">
-              <h4 className="modal-title">
-                การใช้งานระบบบันทึกรายการเข้าโกดัง
-              </h4>
-              <button
-                type="button"
-                className="close"
-                data-dismiss="modal"
-                aria-hidden="true"
-              >
-                <i className="la la-close"> </i>
-              </button>
-            </div>
-            <div className="modal-body header-from">
-              <ol className="">
-                <li>
-                  ต้องระบุ location เริ่มต้นก่อนทำรายการ
-                  ครั้งต่อ ๆ ไประบบจะจำค่าล่าสุดที่เคยใช้ไว้
-                </li>
-                <li>
-                  หากต้องการเปลี่ยน location
-                  ให้ยิงรายการใหม่ ระบบจะอ่านค่าอัตโนมัติโดยดูจากข้อมูลที่กรอกไปในช่องค้นหา
-                  หากข้อมูลอยู่ระหว่าง A1, A2, A3, B1, B2, B3, C1, C2, C3, D1, D2,
-                  D3, E1, E2, E3, F1, F2, F3, G1, G2, G3, H1, H2, H3, I1, I2, I3,
-                  J1, J2, J3, K1, K2, K3, L2, L3, M1-1, M1-2, M1-3, M2, M3, Z1,
-                  Z2, Z3, Z4, Z5 and Z6 ระบบจะมองว่าเป็น location
-                </li>
-                <li>
-                  ระบบจะเปลี่ยนสถานะรายการถึงไทยแล้ว
-                  เมื่อจำนวนกล่องที่ยิงมากกว่าหรือเท่ากับจำนวนกล่องจริงในระบบ
-                </li>
-                <li>
-                  กรณีระบบขึ้นกรอบสีเขียว
-                  มาหลังจากการยิงแสดงว่าระบบบันทึกสำเร็จและทำการเชื่อมโยงออเดอร์นำเข้าได้
-                </li>
-                <li>
-                  กรณีระบบขึ้นเป็นสีส้ม และมีเสียงแจ้งไม่พบรายการ บันทึกสำเร็จ
-                  นั่นแสดงว่า เจ้าหน้าที่ฝ่ายที่อยู่หน้าประว้ติสินค้าเข้าโกดังจะต้องทำการเชื่อมรายการนั้น
-                  โดยจะอธิบายในหน้าดังกล่าวอีกครั้ง
-                </li>
-                <li>
-                  การค้นหารายการระบบจะรับค่ามาจากช่องค้นหา
-                  แล้วแบ่งการทำงานเป็นลำดับดังนี้
-                  <ol>
-                    <li>
-                      ค้นหารายการที่ตรงกันด้วยเลข ID CO หรือ เลขแทรคกิ้ง
-                      โดยที่สถานะจะต้องน้อยกว่ารอชำระเงินลงมา
-                      ข้อมูลที่เจอมากกว่า 1 รายการ ระบบจะใช้ รายการจากระบบ
-                      รายการจากแอดมินและรายการจากลูกค้าตามลำดับ
-                    </li>
-                    <li>
-                      หากไม่เจอข้างต้น จะทำการ ตัดข้อมูลตัวอักษรนำหน้า 2
-                      ตัวออกแล้วเทียบรายการ แต่ในกรณที่เลขเป็น SF1234 SF1234-001
-                      SF1234-002 ระบบจะมองว่ารายการเป็นของ SF1234
-                      หากผิดพลาดให้แก้ไขในหน้าประวัติเข้าโกดังไทย
-                    </li>
-                  </ol>
-                </li>
-                <li>
-                  หากต้องการลบประวัติหารยิงเข้าให้ไปที่หน้าประวัติเข้าโกดังไทย
-                </li>
-                <li>
-                  หากยิงไม่เข้าให้ตรวจสอบว่ารายการนั้นมี เลขแทรคนี้มากกว่า 2
-                  รายการหรือไม่
-                </li>
-              </ol>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Wave 22 — the "คำอธิบายระบบ" modal moved INTO ImportScannerPanel
+          (native <dialog> via components/ui/pacred-dialog). The previous
+          Bootstrap data-toggle="#recom" target lived here but no longer
+          worked after Wave 21 dropped jQuery. */}
     </div>
   );
 }

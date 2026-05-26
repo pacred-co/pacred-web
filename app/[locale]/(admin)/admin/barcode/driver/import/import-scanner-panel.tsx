@@ -33,6 +33,7 @@ import {
   adminBarcodeImportScan,
   type BarcodeImportScanOk,
 } from "@/actions/admin/barcode-import";
+import { PacredDialog } from "@/components/ui/pacred-dialog";
 
 // Legacy L192-199 — the 46 hardcoded location codes that switch
 // `fPallet` when scanned.
@@ -201,6 +202,7 @@ export function ImportScannerPanel() {
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recomDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const cached = readCookie(COOKIE_NAME);
@@ -331,13 +333,13 @@ export function ImportScannerPanel() {
             </div>
             <div className="col-7">
               <div className="input-group mb-2">
-                <span
-                  className="badge badge-success badge-pill cursor-pointer"
-                  data-toggle="modal"
-                  data-target="#recom"
+                <button
+                  type="button"
+                  onClick={() => recomDialogRef.current?.showModal()}
+                  className="badge badge-success badge-pill cursor-pointer border-0"
                 >
                   คำอธิบายระบบ
-                </span>
+                </button>
               </div>
             </div>
             <div className="col-5">
@@ -447,6 +449,73 @@ export function ImportScannerPanel() {
           />
         </div>
       </div>
+
+      {/* Wave 22 — "คำอธิบายระบบ" native <dialog> (moved out of page.tsx
+          when Bootstrap data-toggle stopped working after Wave 21
+          dropped jQuery). Help content unchanged from barcode-d-import.php L135-161. */}
+      <PacredDialog
+        dialogRef={recomDialogRef}
+        title="การใช้งานระบบบันทึกรายการเข้าโกดัง"
+        size="lg"
+      >
+        <ol className="list-decimal pl-5 space-y-2 text-sm text-gray-700">
+          <li>
+            ต้องระบุ location เริ่มต้นก่อนทำรายการ
+            ครั้งต่อ ๆ ไประบบจะจำค่าล่าสุดที่เคยใช้ไว้
+          </li>
+          <li>
+            หากต้องการเปลี่ยน location ให้ยิงรายการใหม่
+            ระบบจะอ่านค่าอัตโนมัติโดยดูจากข้อมูลที่กรอกไปในช่องค้นหา
+            หากข้อมูลอยู่ระหว่าง A1, A2, A3, B1, B2, B3, C1, C2, C3, D1, D2,
+            D3, E1, E2, E3, F1, F2, F3, G1, G2, G3, H1, H2, H3, I1, I2, I3,
+            J1, J2, J3, K1, K2, K3, L2, L3, M1-1, M1-2, M1-3, M2, M3, Z1, Z2,
+            Z3, Z4, Z5 and Z6 ระบบจะมองว่าเป็น location
+          </li>
+          <li>
+            ระบบจะเปลี่ยนสถานะรายการถึงไทยแล้ว
+            เมื่อจำนวนกล่องที่ยิงมากกว่าหรือเท่ากับจำนวนกล่องจริงในระบบ
+          </li>
+          <li>
+            กรณีระบบขึ้นกรอบสีเขียว
+            มาหลังจากการยิงแสดงว่าระบบบันทึกสำเร็จและทำการเชื่อมโยงออเดอร์นำเข้าได้
+          </li>
+          <li>
+            กรณีระบบขึ้นเป็นสีส้ม และมีเสียงแจ้งไม่พบรายการ บันทึกสำเร็จ
+            นั่นแสดงว่า เจ้าหน้าที่ฝ่ายที่อยู่หน้าประวัติสินค้าเข้าโกดังจะต้องทำการเชื่อมรายการนั้น
+            โดยจะอธิบายในหน้าดังกล่าวอีกครั้ง
+          </li>
+          <li>
+            การค้นหารายการระบบจะรับค่ามาจากช่องค้นหา
+            แล้วแบ่งการทำงานเป็นลำดับดังนี้
+            <ol className="list-[lower-alpha] pl-5 mt-2 space-y-1">
+              <li>
+                ค้นหารายการที่ตรงกันด้วยเลข ID CO หรือ เลขแทรคกิ้ง
+                โดยที่สถานะจะต้องน้อยกว่ารอชำระเงินลงมา
+                ข้อมูลที่เจอมากกว่า 1 รายการ ระบบจะใช้ รายการจากระบบ
+                รายการจากแอดมินและรายการจากลูกค้าตามลำดับ
+              </li>
+              <li>
+                หากไม่เจอข้างต้น จะทำการ ตัดข้อมูลตัวอักษรนำหน้า 2 ตัวออกแล้วเทียบรายการ
+                แต่ในกรณีที่เลขเป็น SF1234 SF1234-001 SF1234-002 ระบบจะมองว่ารายการเป็นของ
+                SF1234 หากผิดพลาดให้แก้ไขในหน้าประวัติเข้าโกดังไทย
+              </li>
+            </ol>
+          </li>
+          <li>หากต้องการลบประวัติการยิงเข้าให้ไปที่หน้าประวัติเข้าโกดังไทย</li>
+          <li>
+            หากยิงไม่เข้าให้ตรวจสอบว่ารายการนั้นมี เลขแทรคนี้มากกว่า 2 รายการหรือไม่
+          </li>
+        </ol>
+        <div className="mt-6 flex justify-end gap-2 border-t border-gray-200 pt-4">
+          <button
+            type="button"
+            onClick={() => recomDialogRef.current?.close()}
+            className="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            เข้าใจแล้ว
+          </button>
+        </div>
+      </PacredDialog>
     </div>
   );
 }

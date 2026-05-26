@@ -31,6 +31,7 @@ import {
   adminUpdateFurlough, adminAddEducation, adminDeleteEducation,
   adminUpdateInterpreterCommission, adminUpdateProfile,
 } from "@/actions/admin/admin-profile";
+import { PacredDialog, DialogFooter, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 // ============================================================================
 // Shared bits
@@ -52,177 +53,11 @@ function StatusLine({ status }: { status: { kind: "ok" | "err"; msg: string } | 
   );
 }
 
-/**
- * Pacred admin dialog shell — native `<dialog>` with Tailwind chrome.
- * Click-on-backdrop closes; Esc closes; explicit close button in header.
- */
-function PacredDialog({
-  dialogRef,
-  title,
-  size = "md",
-  children,
-  onClose,
-}: {
-  dialogRef: React.RefObject<HTMLDialogElement | null>;
-  title: string;
-  size?: "md" | "lg";
-  children: React.ReactNode;
-  onClose?: () => void;
-}) {
-  function handleDialogClick(e: React.MouseEvent<HTMLDialogElement>) {
-    // Native <dialog> backdrop emits a click with target === dialog.
-    if (e.target === dialogRef.current) {
-      dialogRef.current?.close();
-      onClose?.();
-    }
-  }
-
-  const widthClass =
-    size === "lg" ? "w-[min(960px,95vw)]" : "w-[min(560px,95vw)]";
-
-  return (
-    <dialog
-      ref={dialogRef}
-      onClick={handleDialogClick}
-      onClose={onClose}
-      className={`rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 max-h-[90vh] ${widthClass}`}
-    >
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        <button
-          type="button"
-          aria-label="ปิด"
-          onClick={() => {
-            dialogRef.current?.close();
-            onClose?.();
-          }}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <line x1={18} y1={6} x2={6} y2={18} />
-            <line x1={6} y1={6} x2={18} y2={18} />
-          </svg>
-        </button>
-      </div>
-      <div className="overflow-y-auto max-h-[calc(90vh-3.5rem)] px-5 py-4 text-left">
-        {children}
-      </div>
-    </dialog>
-  );
-}
-
-/** Standard cancel + submit footer — matches Pacred admin idiom. */
-function DialogFooter({
-  onCancel,
-  pending,
-  submitLabel = "บันทึก",
-  pendingLabel = "กำลังบันทึก...",
-}: {
-  onCancel: () => void;
-  pending: boolean;
-  submitLabel?: string;
-  pendingLabel?: string;
-}) {
-  return (
-    <div className="mt-6 flex justify-end gap-2 border-t border-gray-200 pt-4">
-      <button
-        type="button"
-        onClick={onCancel}
-        className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-      >
-        ยกเลิก
-      </button>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-      >
-        {pending ? pendingLabel : submitLabel}
-      </button>
-    </div>
-  );
-}
-
-/**
- * Native-dialog confirm + alert — replaces window.confirm / window.alert
- * for the destructive flows so the experience matches the rest of the
- * Pacred admin (no browser-native popup, no jQuery). Imperative API:
- *
- *   const { confirm, alert, dialogs } = useConfirmDialogs();
- *   ...
- *   <button onClick={async () => { if (await confirm("ต้องการลบ?")) {...} }} />
- *   {dialogs}
- */
-type ConfirmState = {
-  open: boolean;
-  message: string;
-  kind: "confirm" | "alert";
-  resolve: (ok: boolean) => void;
-} | null;
-
-function useConfirmDialogs() {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const [state, setState] = useState<ConfirmState>(null);
-
-  function open(message: string, kind: "confirm" | "alert"): Promise<boolean> {
-    return new Promise((resolve) => {
-      setState({ open: true, message, kind, resolve });
-      // Defer to next tick — ref must be attached when we call .showModal()
-      queueMicrotask(() => dialogRef.current?.showModal());
-    });
-  }
-  function close(ok: boolean) {
-    state?.resolve(ok);
-    dialogRef.current?.close();
-    setState(null);
-  }
-
-  const dialogs = (
-    <dialog
-      ref={dialogRef}
-      onClick={(e) => {
-        if (e.target === dialogRef.current) close(false);
-      }}
-      onClose={() => {
-        if (state) state.resolve(false);
-        setState(null);
-      }}
-      className="rounded-lg p-0 border border-gray-200 shadow-xl backdrop:bg-black/40 w-[min(420px,95vw)]"
-    >
-      <div className="px-5 py-4">
-        <p className="text-sm text-gray-800">{state?.message ?? ""}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          {state?.kind === "confirm" && (
-            <button
-              type="button"
-              onClick={() => close(false)}
-              className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              ยกเลิก
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => close(true)}
-            className={
-              state?.kind === "confirm"
-                ? "rounded-md bg-red-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
-                : "rounded-md bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
-            }
-          >
-            {state?.kind === "confirm" ? "ยืนยัน" : "ตกลง"}
-          </button>
-        </div>
-      </div>
-    </dialog>
-  );
-
-  return {
-    confirm: (message: string) => open(message, "confirm"),
-    alert:   (message: string) => open(message, "alert"),
-    dialogs,
-  };
-}
+// Pacred dialog kit (PacredDialog · DialogFooter · useConfirmDialogs) is
+// now in `components/ui/pacred-dialog.tsx` — extracted on 2026-05-27 so
+// organization-email/client.tsx + barcode/driver/import/import-scanner-panel.tsx
+// can share the same idiom (both had Bootstrap data-toggle="modal" left
+// dangling after Wave 21 dropped jQuery).
 
 // ============================================================================
 // Set comm-interpreter cog (legacy L363-404)
