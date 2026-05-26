@@ -40,7 +40,6 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notifications";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";

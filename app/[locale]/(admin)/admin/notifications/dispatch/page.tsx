@@ -230,7 +230,7 @@ export default async function AdminNotificationsDispatchPage({
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · notifications · dispatch</p>
           <h1 className="mt-1 text-2xl font-bold">Dispatch supervisor</h1>
           <p className="mt-1 text-sm text-muted">
-            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อรีเซ็ตแถวให้ dispatcher ลองส่งใหม่. ⚠️ 2026-05-26 — cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">/api/cron/dispatch-line-notify</code> ถูกลบ (LINE Notify EOL'd 2025-03-31); งานนี้รอ task L (LIFF + Messaging API dispatcher) เพื่อกลับมาวิ่งอัตโนมัติ. ระหว่างนี้ใช้ปุ่ม "push now" บนรายละเอียดของ notification เพื่อ redeliver ทันที.
+            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อรีเซ็ตแถวให้ dispatcher ลองส่งใหม่. ⚠️ 2026-05-26 — cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">/api/cron/dispatch-line-notify</code> ถูกลบ (LINE Notify EOL 2025-03-31); งานนี้รอ task L (LIFF + Messaging API dispatcher) เพื่อกลับมาวิ่งอัตโนมัติ. ระหว่างนี้ใช้ปุ่ม push-now บนรายละเอียดของ notification เพื่อ redeliver ทันที.
           </p>
         </div>
         <div className="flex gap-2">
