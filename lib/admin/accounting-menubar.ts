@@ -117,21 +117,22 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       // TODO — legacy `acc-system-cargo.php` (header-menu/index.php L204-363):
       // ดูภาพรวม / ใบสั่งซื้อ / ใบจ่ายเงินมัดจำ / บันทึกค่าใช้จ่าย / ใบกำกับ
       // ภาษีซื้อ / รับใบลดหนี้ / รับใบเพิ่มหนี้ / นำเข้าเอกสาร.
-      { label: "อยู่ระหว่างพัฒนา", href: "#" },
+      // Wave 23 P0 (2026-05-27): href → catch-all stub (was "#" → no-op click).
+      { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/expenses/coming-soon" },
     ],
   },
   {
     label: "ผู้ติดต่อ",
     children: [
       // TODO — legacy L364-423: ดูภาพรวม / ลูกค้า (ค้นหา / บุคคลธรรมดา / นิติบุคคล / SVIP / VIP / เครดิต / ค่าเทียบ / ดูทั้งหมด).
-      { label: "อยู่ระหว่างพัฒนา", href: "#" },
+      { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/contacts/coming-soon" },
     ],
   },
   {
     label: "การเงิน",
     children: [
       // TODO — legacy L424-495: ดูภาพรวม / เงินสด-ธนาคาร-eWallet / เช็ครับ / เช็คจ่าย / สำรองรับจ่าย / ภาษีถูกหัก / ภาษีหัก / โอนเงิน.
-      { label: "อยู่ระหว่างพัฒนา", href: "#" },
+      { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/finance/coming-soon" },
     ],
   },
   {
@@ -142,7 +143,8 @@ export const CARGO_MENUBAR: MenubarItem[] = [
       { label: "งวดบัญชี",  href: "/admin/accounting/periods" },
       { label: "กระทบยอด", href: "/admin/accounting/reconcile" },
       // TODO — legacy L496-597: ผังบัญชี / บัญชีรายวัน / บัญชีแยกประเภท / งบทดลอง / งบฐานะ / งบกำไรขาดทุน / งบกระแสเงินสด / DBD e-Filing / สินทรัพย์.
-      { label: "อยู่ระหว่างพัฒนา", href: "#" },
+      // Wave 23 P0 (2026-05-27): stub instead of no-op "#".
+      { label: "🚧 อยู่ระหว่างพัฒนา (Wave 24+)", href: "/admin/accounting/cargo/income/ledger/coming-soon" },
     ],
   },
 ];
