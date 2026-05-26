@@ -224,6 +224,30 @@ LINE Notify EOL April 2025 — ADR-0001 documents migration to LINE Messaging AP
 
 ---
 
+## 7.5 LINE Notify per-user (legacy port — transition) 🟡 set 2026-05-26
+
+> ⚠️ **TRANSITION-ONLY.** LINE Notify itself is EOL'd by LINE Corp (announced April 2025). These vars keep the legacy "Connect LINE Notify" button on `/line-notify-settings` working for the ~8,898 migrated PCS customers + any new customer who wants per-user push during the cut-over to the Messaging-API channel above. Long-term replacement: §7.
+
+Powers Gap #3 of the D1 deep-audit — per-user OAuth, callback handler (`app/api/linenotify/callback/route.ts`), settings page (`/line-notify-settings`), disconnect, and channel preferences.
+
+| Var | Value | Powers |
+|---|---|---|
+| `LINE_NOTIFY_CLIENT_ID` | from https://notify-bot.line.me → My Services → New service | OAuth authorize URL builder · gates connect-button render |
+| `LINE_NOTIFY_CLIENT_SECRET` | same registration | Token-exchange in callback handler |
+| `LINE_NOTIFY_CALLBACK_URL` | prod: `https://pacred.co.th/api/linenotify/callback` · preview: `https://<vercel-url>/api/linenotify/callback` · dev: `http://localhost:3000/api/linenotify/callback` | Round-trip target — MUST match the Callback URL registered on notify-bot.line.me exactly (LINE's OAuth refuses any mismatch) |
+
+**Activation checklist (owner / ก๊อต):**
+1. Register a new service at https://notify-bot.line.me → My Services → New service. Service URL = `https://pacred.co.th`, Callback URL = `https://pacred.co.th/api/linenotify/callback`.
+2. Copy the issued Client ID + Client Secret into Vercel env (Production + Preview). Set `LINE_NOTIFY_CALLBACK_URL` to the production value above.
+3. For preview deploys: register a SECOND service whose Callback URL matches the preview Vercel domain, OR set the preview `LINE_NOTIFY_CALLBACK_URL` to the production URL (the OAuth round-trip just bounces preview→prod for callback).
+4. Locally: leave the three vars blank in `.env.local` → connect button renders disabled with "service unavailable" copy (UI gates on `LINE_NOTIFY_CLIENT_ID`).
+
+**Behaviour with no creds set:** `getLineOAuthAuthorizeUrl` server action returns `{ ok:false, error:"line_notify_unavailable" }`. The settings page renders the "unavailable" hint + a disabled CTA — no crash, just no connect path.
+
+**Code:** `lib/notifications/line-notify.ts` (helpers) · `actions/line-notify.ts` (server actions) · `app/api/linenotify/callback/route.ts` (callback) · `app/[locale]/(protected)/line-notify-settings/page.tsx` (UI).
+
+---
+
 ## 8. Email Fallback — Resend 🟡
 
 | Var | Value | Powers |

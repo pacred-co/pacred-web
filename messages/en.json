@@ -2857,5 +2857,59 @@
     "openPdf": "Open PDF",
     "slipAlt": "Container payment slip",
     "slipMissing": "No slip file"
+  },
+  "lineNotify": {
+    "kicker": "LINE NOTIFICATIONS",
+    "title": "Connect LINE Notify",
+    "subtitle": "Get order, import, payment, and refund updates pushed straight to your LINE.",
+    "backToDashboard": "← Back to dashboard",
+    "eolNote": "Note: LINE Notify is being retired by LINE Corp (announced April 2025). Pacred is rolling out the replacement via the Pacred LINE OA (Messaging API) in parallel. Existing connections keep working until LINE shuts the service down.",
+    "notConnectedTitle": "LINE Notify not connected",
+    "notConnectedBlurb": "Once connected, Pacred will push status updates for your jobs straight to your LINE — never miss an update.",
+    "connect": "Click to connect LINE Notify",
+    "connecting": "Opening connect page…",
+    "unavailable": "LINE Notify is temporarily unavailable — please contact an admin.",
+    "connectedTitle": "LINE Notify connected",
+    "connectedAt": "Connected on {when}",
+    "disconnect": "Disconnect LINE Notify",
+    "disconnecting": "Disconnecting…",
+    "disconnectConfirm": "Disconnect LINE Notify from your account?",
+    "channelsLegend": "Choose notification types",
+    "channelsBlurb": "Pick which events Pacred should push to LINE Notify. You can change this any time.",
+    "saveChannels": "Save preferences",
+    "saving": "Saving…",
+    "channel": {
+      "order_updates": {
+        "label": "Shopping order updates",
+        "desc": "When your overseas shopping order status changes."
+      },
+      "import_updates": {
+        "label": "Import / container updates",
+        "desc": "When your import job, container, or shipment tracking changes."
+      },
+      "payment_updates": {
+        "label": "Payments",
+        "desc": "Wallet top-ups, receipts, overseas-transfer payments."
+      },
+      "refund_updates": {
+        "label": "Refunds",
+        "desc": "When your refund request is updated."
+      }
+    },
+    "flashConnectedTitle": "Connected",
+    "flashConnectedBody": "Pacred will push the selected notifications to your LINE.",
+    "flashErrorTitle": "Could not connect",
+    "flashErrorDenied": "You cancelled the LINE Notify connect.",
+    "flashErrorGeneric": "Something went wrong ({reason}) — please try again or contact an admin.",
+    "feedback": {
+      "channelsSaved": "Preferences saved",
+      "generic": "Something went wrong. Please try again.",
+      "not_signed_in": "Please sign in again.",
+      "line_notify_unavailable": "LINE Notify is temporarily unavailable.",
+      "read_failed": "Could not read your settings. Please try again.",
+      "update_failed": "Could not save. Please try again.",
+      "invalid_channels": "Invalid preferences.",
+      "rate_limit": "Too many requests. Please wait a moment."
+    }
   }
 }

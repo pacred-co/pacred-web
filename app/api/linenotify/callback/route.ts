@@ -13,10 +13,14 @@
  *      OR (denied):
  *        ?error=access_denied
  *   3. We validate state cookie → exchange code for token → persist token
- *      on the caller's profiles row → redirect to /profile?ln=connected
+ *      on the caller's profiles row → redirect to
+ *      /line-notify-settings?status=connected
  *
  * Legacy reference:
  *   pcsc/public_html/member/api/linenotify/callback/index.php
+ *      (redirects to line-notify/succeed/ on success, line-notify/error/
+ *      on failure — Gap #3 ports the equivalent flash-on-redirect to
+ *      ?status= query params consumed by the settings page).
  *
  * Note: this route does NOT live under app/[locale] — LINE Notify's
  * registered callback URL is locale-free (and we don't want the redirect
@@ -32,10 +36,21 @@ import { exchangeLineNotifyCode } from "@/lib/notifications/line-notify";
 import { logger, redactId } from "@/lib/logger";
 
 const STATE_COOKIE = "ln_oauth_state";
-// Where the user lands after the round-trip — UI surfaces a toast based on
-// the `ln=` query string (later sprint). Defined here so both success +
-// failure paths share the same destination.
-const RETURN_PATH  = "/profile";
+// Where the user lands after the round-trip — the settings page reads
+// ?status=connected|error and ?reason=<key> to render a flash banner.
+// Path is locale-free; next-intl middleware (proxy.ts) injects the locale.
+const RETURN_PATH  = "/line-notify-settings";
+
+function redirectBack(
+  origin: string,
+  status: "connected" | "error",
+  reason?: string,
+): NextResponse {
+  const back = new URL(RETURN_PATH, origin);
+  back.searchParams.set("status", status);
+  if (reason) back.searchParams.set("reason", reason);
+  return NextResponse.redirect(back);
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -51,15 +66,18 @@ export async function GET(request: Request) {
 
   // ── 1. user-denied or LINE-side error ──
   if (errorParam) {
-    logger.info("line-notify", "callback received error param", { error: errorParam });
-    return NextResponse.redirect(
-      new URL(`${RETURN_PATH}?ln=${encodeURIComponent(errorParam)}`, url.origin),
-    );
+    logger.info("line-notify", "callback received error param", {
+      error: errorParam.slice(0, 64),
+    });
+    // `access_denied` is the OAuth-standard "user clicked cancel" code —
+    // surface a friendlier `denied` reason so the UI can say
+    // "คุณยกเลิกการเชื่อมต่อ" instead of a generic error.
+    return redirectBack(url.origin, "error", errorParam === "access_denied" ? "denied" : "line_error");
   }
 
   // ── 2. missing required params ──
   if (!code || !state) {
-    return NextResponse.redirect(new URL(`${RETURN_PATH}?ln=missing_params`, url.origin));
+    return redirectBack(url.origin, "error", "missing_params");
   }
 
   // ── 3. CSRF state check ──
@@ -68,7 +86,7 @@ export async function GET(request: Request) {
       hadCookie: Boolean(expectedState),
       match:     expectedState === state,
     });
-    return NextResponse.redirect(new URL(`${RETURN_PATH}?ln=invalid_state`, url.origin));
+    return redirectBack(url.origin, "error", "state_mismatch");
   }
 
   // ── 4. session check — must be signed-in to bind the token ──
@@ -88,15 +106,15 @@ export async function GET(request: Request) {
       reason: exchange.error,
       userId: redactId(user.id),
     });
-    return NextResponse.redirect(
-      new URL(`${RETURN_PATH}?ln=${encodeURIComponent(exchange.error)}`, url.origin),
-    );
+    return redirectBack(url.origin, "error", exchange.error);
   }
 
   // ── 6. persist token on the user's profile ──
   // TODO (hardening): encrypt access_token via pgsodium / KMS wrapper
   // before writing. Tracked in the G5 follow-up task — for now stored as
   // plain text per the migration comment on profiles.line_notify_token.
+  // line_notify_channels NOT touched — preserve any existing subscription
+  // map so re-connecting after a revoke restores the user's prefs.
   const nowIso = new Date().toISOString();
   const { error: updErr } = await supabase
     .from("profiles")
@@ -110,10 +128,10 @@ export async function GET(request: Request) {
     logger.error("line-notify", "callback persist failed", updErr, {
       userId: redactId(user.id),
     });
-    return NextResponse.redirect(new URL(`${RETURN_PATH}?ln=persist_failed`, url.origin));
+    return redirectBack(url.origin, "error", "persist_failed");
   }
 
   // ── 7. success ──
   logger.info("line-notify", "user connected", { userId: redactId(user.id) });
-  return NextResponse.redirect(new URL(`${RETURN_PATH}?ln=connected`, url.origin));
+  return redirectBack(url.origin, "connected");
 }
