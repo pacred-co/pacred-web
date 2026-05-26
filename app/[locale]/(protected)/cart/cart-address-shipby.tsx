@@ -1,32 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  MapPin,
+  Truck,
+  ChevronRight,
+  X,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react";
 
 /**
- * Cart address + ship-by + maomao popup client wiring.
+ * Cart address + ship-by + maomao popup client wiring — Tailwind-rebuilt
+ * (ปอน 2026-05-26).
  *
  * Replaces three legacy AJAX endpoints with server-rendered prop maps
  * (D1 / ADR-0017 · the cart-list of AJAX ports — see cart/page.tsx
  * header FLAG #1):
  *
- *   - `option-address-thai.php`  → the เปลี่ยนที่อยู่ modal listing
- *     every saved address + the warehouse-pickup row. cart.php L929-939
- *     POSTed to load this; now rendered SSR once, revealed on click.
- *   - `api-shipBy.php`           → the `#selectShipBy` <select>
- *     options. cart.php L982-994 POSTed on every address change; now
- *     a pre-computed `shipByByAddress[addressID]` lookup.
- *   - `checkPCSMaoMao.php`       → the `#pro-maomao` popup + the
- *     `.maomao` promo card reveal. cart.php L996-1014 POSTed on
- *     mount + address change; now a pre-computed
- *     `maomaoByAddress[addressID]` boolean.
+ *   - `option-address-thai.php`  → the เปลี่ยนที่อยู่ modal
+ *   - `api-shipBy.php`           → the `hShipBy` <select> options
+ *   - `checkPCSMaoMao.php`       → the maomao popup + promo card reveal
  *
- * Why this lives as a separate client file (not merged into
- * `cart-interactivity.tsx`): the address card sits ABOVE the shopping-
- * cart list in the DOM (cart.php L434-509 / cart.php L510-600). Keeping
- * the two interactivity blocks colocated in page.tsx via two
- * client islands matches the legacy layout 1:1, and keeps
- * cart-interactivity.tsx focused on the cart-row interactivity that
- * the order-summary card depends on.
+ * The form-input contract is preserved verbatim: `name="addressID"` (the
+ * hidden text input that the parent form reads) and `name="hShipBy"`
+ * (the carrier <select>). Don't rename.
  */
 
 export type CartAddressOption = {
@@ -60,8 +58,7 @@ export type CartAddressShipByProps = {
   shipByByAddress:     Record<string, ShipByOption[]>;
   /** `addressID → maomao-eligible`. */
   maomaoByAddress:     Record<string, boolean>;
-  /** The customer's stored `userShipBy` (`tb_users.usershipby` or the
-      most-recent `tb_forwarder.fshipby`). Drives the default-selected
+  /** The customer's stored `userShipBy`. Drives the default-selected
       carrier in the `<select>`. cart.php L1132-1141. */
   userShipBy:          string;
   /** Pacred warehouse address — the "รับเองโกดัง" row label. */
@@ -92,51 +89,30 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
   }, [initialAddressBlock]);
 
   const [selectedID, setSelectedID]   = useState<string>(initialAddressID);
-  // The เปลี่ยนที่อยู่ modal — cart.php L929-939 click-to-load.
   const [modalOpen,   setModalOpen]   = useState<boolean>(false);
-  // The maomao popup — cart.php L1015 `$("#pro-maomao").modal("show")`.
   // Tracks the LAST `selectedID` we dismissed/accepted; when the
   // selection changes to a new eligible address the popup re-opens.
-  // Tracking the dismissed id (not a boolean) lets us derive
-  // `maomaoOpen` from props instead of setting state in an effect.
   const [maomaoDismissedFor, setMaomaoDismissedFor] = useState<string | null>(null);
-  // The promo-checked state — cart.php L1018-1024 `btn-getMaoMao`.
   // userShipBy === 'PCSF' on initial load reflects the legacy
   // pre-tick (cart.php L1132-1136).
   const [proMaomao,   setProMaomao]   = useState<boolean>(
     () => userShipBy === "PCSF",
   );
 
-  // Current ship-by list — looked up by the selected addressID. The
-  // "PCS" warehouse pickup has no ship-by select (cart.php L188 — the
-  // legacy clears `#selectShipBy` and shows a "ดูแผนที่" link instead).
+  // Current ship-by list — looked up by the selected addressID.
   const currentShipBy = shipByByAddress[selectedID] ?? [];
 
-  // Eligibility is a pure prop lookup — no state. Legacy fires
-  // `checkPCSMaoMao()` on mount (cart.php L995) AND on address change
-  // (cart.php L186). When qualifies → `.maomao` shows + `#pro-maomao`
-  // opens; when not → `.maomao` hides + the promo checkbox is
-  // forcibly unchecked.
+  // Eligibility is a pure prop lookup — no state.
   const eligible = maomaoByAddress[selectedID] === true;
   // The maomao popup is OPEN exactly when the address is eligible AND
-  // the user hasn't dismissed/accepted it for THIS address. Switching
-  // address re-opens because `selectedID` differs from
-  // `maomaoDismissedFor`. Derived — no state-in-effect needed.
+  // the user hasn't dismissed/accepted it for THIS address.
   const maomaoOpen = eligible && maomaoDismissedFor !== selectedID;
 
-  function openModal() {
-    setModalOpen(true);
-  }
-  function closeModal() {
-    setModalOpen(false);
-  }
+  function openModal() { setModalOpen(true); }
+  function closeModal() { setModalOpen(false); }
   function selectAddress(addressID: string) {
     setSelectedID(addressID);
     setModalOpen(false);
-    // If the new address is NOT eligible, uncheck the legacy promo —
-    // cart.php L1004-1006. Done in the click handler (not an effect)
-    // so the next render reflects the change without a cascading
-    // setState.
     if (maomaoByAddress[addressID] !== true) {
       setProMaomao(false);
     }
@@ -145,9 +121,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
     setProMaomao(true);
     setMaomaoDismissedFor(selectedID);
     // Bridge to <CartInteractivity>: legacy `btn-getMaoMao` click also
-    // ticks `#input-12` in the order-summary card (cart.php L1020).
-    // Our two client islands don't share state by parent — a custom
-    // DOM event keeps them coupled minimally without a wrapper.
+    // ticks `#input-12` in the order-summary card.
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("cart-maomao-accepted"));
     }
@@ -156,10 +130,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
     setMaomaoDismissedFor(selectedID);
   }
 
-  // Display fields for the address card "address-select-now" block.
-  // Resolves the current `selectedID` against the addresses prop +
-  // falls back to the initialAddressBlock for the modes the modal
-  // can't re-enter (warehouse + none).
+  // Display fields for the address card.
   const display = (() => {
     if (selectedID === "PCS") {
       return {
@@ -178,10 +149,6 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
     if (!a) {
       return { kind: "none" as const };
     }
-    // The legacy modal click sets `address-select-now` to the picked
-    // row's fullAddress; the box-lastaddress label is dropped after
-    // the user picks a new address (legacy `$('.address-select-now')
-    // .html(addressName)` on L180 — no box-lastaddress kept).
     return {
       kind:        "saved" as const,
       fullAddress: a.fullAddress,
@@ -193,380 +160,336 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
     };
   })();
 
-  // The hidden `#input-12` checkbox lives inside `<CartInteractivity>`
-  // (it's part of the order-summary card). The `.maomao` CLASS toggle
-  // on the legacy `.col-12.col-md-4.text-center.maomao` div is mirrored
-  // here by signalling via `data-maomao-eligible` on a sibling node;
-  // the legacy promo card's interactivity stays inside CartInteractivity.
-  // We expose a hidden input that participates in the form submit so
-  // `submitCartOrder` sees `pro=f` when the user accepted the promo.
   return (
     <>
-      <div className="ele-address-thai box-shadow mb-2">
-        <div className="top-address-thai"></div>
-        <div className="p-1">
-          <h3 className="text-color mb-1">
-            <span className="fa fa-map"></span> ที่อยู่ในการจัดส่งในไทย{" "}
-            <i className="flag-icon flag-icon-th"></i>
+      <div className="rounded-2xl bg-white border border-border shadow-[0_4px_14px_rgba(0,0,0,0.04)] overflow-hidden">
+        {/* Header strip */}
+        <div className="px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-rose-50/60 via-white to-white">
+          <h3 className="flex items-center gap-2 text-[14px] md:text-[15px] font-bold text-foreground">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-50 text-primary-600">
+              <MapPin className="w-4 h-4" strokeWidth={2.2} />
+            </span>
+            ที่อยู่ในการจัดส่งในไทย
+            <span className="inline-block w-5 h-3.5 rounded-sm overflow-hidden border border-border align-middle relative" aria-label="Thailand">
+              <span className="absolute inset-0 grid grid-rows-5">
+                <span className="bg-[#A51931]"></span>
+                <span className="bg-white"></span>
+                <span className="bg-[#2D2A4A] row-span-1"></span>
+                <span className="bg-white"></span>
+                <span className="bg-[#A51931]"></span>
+              </span>
+            </span>
           </h3>
-          <div className="address-select">
-            <input
-              type="text"
-              name="addressID"
-              id="addressIDMain"
-              value={selectedID}
-              required
-              readOnly
-              hidden
-            />
-            {display.kind === "saved" && (
-              <>
-                <span className="address-select-now">
+        </div>
+
+        {/* Body */}
+        <div className="p-4 md:p-5">
+          {/* Hidden form input — the form-submit contract.  REQUIRED so
+              the legacy /service-order addOrder validation sees a value. */}
+          <input
+            type="text"
+            name="addressID"
+            id="addressIDMain"
+            value={selectedID}
+            required
+            readOnly
+            hidden
+          />
+
+          {/* Address display */}
+          {display.kind === "saved" && (
+            <div className="flex items-start gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] md:text-[13.5px] text-foreground leading-relaxed">
                   {display.fullAddress}
-                  {display.label && (
-                    <span className="box-lastaddress">{display.label}</span>
-                  )}
-                </span>
-                <span
-                  className="btn-change-address-thai cursor-pointer"
-                  onClick={openModal}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openModal();
-                  }}
-                >
-                  เปลี่ยนที่อยู่
-                </span>
-              </>
-            )}
-            {display.kind === "warehouse" && (
-              <>
-                <span className="address-select-now">
-                  {display.fullAddress}
-                  {display.label && (
-                    <span className="box-lastaddress">{display.label}</span>
-                  )}
-                  {warehouseMapUrl && (
-                    <div>
-                      <a
-                        href={warehouseMapUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-info"
-                      >
-                        <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred
-                        ในไทย
-                      </a>
-                    </div>
-                  )}
-                </span>
-                {addresses.length > 0 ? (
-                  <span
-                    className="btn-change-address-thai cursor-pointer"
-                    onClick={openModal}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") openModal();
-                    }}
-                  >
-                    เปลี่ยนที่อยู่
-                  </span>
-                ) : (
-                  <span
-                    className="ml-1 btn-add-address-thai cursor-pointer"
-                    onClick={openModal}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") openModal();
-                    }}
-                  >
-                    เปลี่ยนที่อยู่
+                </p>
+                {display.label && (
+                  <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10.5px] font-bold px-2 py-0.5">
+                    <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
+                    {display.label}
                   </span>
                 )}
-              </>
-            )}
-            {display.kind === "none" && (
-              <>
-                <span className="address-select-now"></span>
-                <span
-                  className="btn-add-address-thai cursor-pointer"
-                  onClick={openModal}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") openModal();
-                  }}
-                >
-                  เพิ่มที่อยู่ หรือ เลือกรับเองโกดัง Pacred กทม
-                </span>
-              </>
-            )}
-          </div>
-          {/* The `#selectShipBy` div — cart.php L488 / L982-994 — now
-              an inline <select> populated from `shipByByAddress`.
-              When the warehouse is picked, legacy shows the warehouse-
-              map link in its place (cart.php L188-190). */}
-          <div className="shipBy-select pt-1 mb-05">
-            <div id="selectShipBy">
-              {selectedID === "PCS" ? (
-                <a
-                  href={
-                    warehouseMapUrl ||
-                    "https://goo.gl/maps/MJd56S6saebaDBQr7"
-                  }
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-info"
-                >
-                  <i className="fa fa-map"></i> ดูแผนที่โกดัง Pacred Cargo ในไทย
-                </a>
-              ) : (
-                <>
-                  <span className="title-shipBy text-color">
-                    <i className="fa fa-truck"></i> บริษัทขนส่งในไทย :{" "}
-                  </span>{" "}
-                  <select
-                    name="hShipBy"
-                    id="hShipBy"
-                    required={!proMaomao}
-                    defaultValue={
-                      userShipBy && userShipBy !== "PCSF" ? userShipBy : ""
-                    }
-                    // When the maomao promo is accepted the legacy
-                    // hides this whole select + drops the required flag
-                    // (cart.php L1022-1023). We keep the element in DOM
-                    // so its name is still in the form, but the
-                    // required flag is the load-bearing legacy gate.
-                  >
-                    {currentShipBy.length > 1 && (
-                      <option value="">กรุณาเลือกบริษัทขนส่ง</option>
-                    )}
-                    {currentShipBy.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.name}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              )}
+              </div>
+              <button
+                type="button"
+                onClick={openModal}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors"
+              >
+                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                เปลี่ยนที่อยู่
+              </button>
             </div>
+          )}
+
+          {display.kind === "warehouse" && (
+            <div className="flex items-start gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] md:text-[13.5px] text-foreground leading-relaxed">
+                  {display.fullAddress}
+                </p>
+                {display.label && (
+                  <span className="inline-flex items-center gap-1 mt-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10.5px] font-bold px-2 py-0.5">
+                    <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
+                    {display.label}
+                  </span>
+                )}
+                {warehouseMapUrl && (
+                  <a
+                    href={warehouseMapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[12px] font-bold text-primary-600 hover:underline"
+                  >
+                    <MapPin className="w-3 h-3" strokeWidth={2.2} />
+                    ดูแผนที่โกดัง Pacred ในไทย
+                  </a>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={openModal}
+                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12px] font-bold px-3 py-1.5 hover:bg-primary-50 transition-colors"
+              >
+                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+                เปลี่ยนที่อยู่
+              </button>
+            </div>
+          )}
+
+          {display.kind === "none" && (
+            <div className="text-center py-3">
+              <button
+                type="button"
+                onClick={openModal}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[13px] font-bold px-4 py-2 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
+              >
+                <MapPin className="w-4 h-4" strokeWidth={2.2} />
+                เพิ่มที่อยู่ หรือเลือกรับเองโกดัง Pacred
+              </button>
+            </div>
+          )}
+
+          {/* Ship-by carrier — cart.php L488 / L982-994 */}
+          <div className="mt-3 pt-3 border-t border-border">
+            {selectedID === "PCS" ? (
+              <a
+                href={warehouseMapUrl || "https://goo.gl/maps/MJd56S6saebaDBQr7"}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-primary-600 hover:underline"
+              >
+                <MapPin className="w-4 h-4" strokeWidth={2.2} />
+                ดูแผนที่โกดัง Pacred Cargo ในไทย
+              </a>
+            ) : (
+              <div className="flex items-center gap-3 flex-wrap">
+                <label
+                  htmlFor="hShipBy"
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-foreground"
+                >
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-sky-50 text-sky-700">
+                    <Truck className="w-3.5 h-3.5" strokeWidth={2.2} />
+                  </span>
+                  บริษัทขนส่งในไทย
+                </label>
+                <select
+                  name="hShipBy"
+                  id="hShipBy"
+                  required={!proMaomao}
+                  defaultValue={
+                    userShipBy && userShipBy !== "PCSF" ? userShipBy : ""
+                  }
+                  className="flex-1 min-w-[180px] max-w-[280px] px-3 py-1.5 text-[12.5px] rounded-lg border border-border bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-100 focus:outline-none"
+                >
+                  {currentShipBy.length > 1 && (
+                    <option value="">กรุณาเลือกบริษัทขนส่ง</option>
+                  )}
+                  {currentShipBy.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-          <div className="text-danger font-0_85rem">
-            หมายเหตุ : หากพื้นที่นอกเขตขนส่งของ Pacred
-            ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
+
+          <p className="mt-2.5 text-[11px] text-rose-600 leading-relaxed">
+            หมายเหตุ: หากพื้นที่นอกเขตขนส่งของ Pacred ทางบริษัทจะเก็บเงินปลายทางเท่านั้น{" "}
             <a
               href="/services/import-china"
               target="_blank"
               rel="noreferrer"
+              className="underline font-bold"
             >
               (เช็คพื้นที่ได้ที่นี่)
             </a>
-          </div>
+          </p>
         </div>
       </div>
 
-      {/* ── เปลี่ยนที่อยู่ modal — cart.php's option-address-thai.php
-          rendered server-side prop list, revealed on click. The legacy
-          DataTables-styled markup is preserved 1:1. ── */}
+      {/* ── เปลี่ยนที่อยู่ modal — cart.php's option-address-thai.php ── */}
       {modalOpen && (
         <div
-          id="option-address-thai-form"
-          className="modal fade show notranslate"
-          tabIndex={-1}
-          role="dialog"
-          aria-hidden="false"
-          style={{
-            display:        "block",
-            backgroundColor: "rgba(0,0,0,0.5)",
-          }}
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeModal();
           }}
+          role="dialog"
+          aria-modal="true"
         >
-          <div className="modal-dialog">
-            <div className="modal-content header-from">
-              <div className="modal-header">
-                <h4 className="modal-title">
-                  ที่อยู่จัดส่งสินค้าของฉัน
-                </h4>
-                <button
-                  type="button"
-                  className="close"
-                  onClick={closeModal}
-                  aria-label="ปิด"
-                  style={{
-                    border:      "none",
-                    background:  "transparent",
-                    fontSize:    "1.5rem",
-                    cursor:      "pointer",
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className="modal-body header-from p-05">
-                <div className="table-responsive p-0">
-                  <table
-                    id="table-address-thai-user"
-                    className="p-0 table display table-bordered table-striped dataTable no-footer dtr-inline"
+          <div className="w-full md:max-w-2xl bg-white rounded-t-2xl md:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-4 md:px-5 py-3 border-b border-border bg-gradient-to-r from-primary-50 via-white to-white">
+              <h4 className="flex items-center gap-2 text-[15px] md:text-[16px] font-bold text-foreground">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white">
+                  <MapPin className="w-4 h-4" strokeWidth={2.2} />
+                </span>
+                ที่อยู่จัดส่งสินค้าของฉัน
+              </h4>
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="ปิด"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-border text-muted hover:text-foreground hover:border-primary-300 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 md:p-4">
+              <ul className="space-y-2">
+                {addresses.map((a) => {
+                  const isCurrent = a.addressID === selectedID;
+                  return (
+                    <li key={a.addressID}>
+                      <button
+                        type="button"
+                        onClick={() => selectAddress(a.addressID)}
+                        className={`w-full text-left rounded-xl border-2 px-3 py-3 flex items-start gap-3 transition-all ${
+                          isCurrent
+                            ? "border-primary-500 bg-rose-50/50 shadow-sm"
+                            : "border-border bg-white hover:border-primary-300 hover:bg-rose-50/20"
+                        }`}
+                      >
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
+                          isCurrent ? "bg-primary-600 text-white" : "bg-surface text-muted"
+                        }`}>
+                          {isCurrent ? (
+                            <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
+                          ) : (
+                            <MapPin className="w-4 h-4" strokeWidth={2.2} />
+                          )}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10.5px] text-muted font-mono mb-0.5 notranslate">
+                            ID: {a.addressID}
+                          </div>
+                          <div className="text-[12.5px] md:text-[13px] text-foreground leading-relaxed">
+                            {a.fullAddress}
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+                {/* The legacy "PCS" warehouse pickup row — always present
+                    at the bottom (cart.php L110-114). */}
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => selectAddress("PCS")}
+                    className={`w-full text-left rounded-xl border-2 px-3 py-3 flex items-start gap-3 transition-all ${
+                      selectedID === "PCS"
+                        ? "border-primary-500 bg-rose-50/50 shadow-sm"
+                        : "border-border bg-white hover:border-primary-300 hover:bg-rose-50/20"
+                    }`}
                   >
-                    <thead>
-                      <tr className="text-center">
-                        <th>ID</th>
-                        <th>ที่อยู่</th>
-                        <th>เลือก</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {addresses.map((a) => (
-                        <tr
-                          key={a.addressID}
-                          className="cursor-pointer addressIDOptionPCS"
-                        >
-                          <td
-                            className="font-0"
-                            style={{ minWidth: "25px" }}
-                          >
-                            {a.addressID}
-                          </td>
-                          <td>{a.fullAddress}</td>
-                          <td className="text-center">
-                            <button
-                              type="button"
-                              className="btn btn-outline-success btn-rounded btn-sm"
-                              onClick={() => selectAddress(a.addressID)}
-                            >
-                              เลือก
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {/* The legacy "PCS" warehouse pickup row — always
-                          present at the bottom (cart.php L110-114). */}
-                      <tr className="cursor-pointer addressIDOptionPCS">
-                        <td className="font-0">PCS</td>
-                        <td>{warehouseAddress}</td>
-                        <td className="text-center">
-                          <button
-                            type="button"
-                            className="btn btn-outline-success btn-rounded btn-sm"
-                            onClick={() => selectAddress("PCS")}
-                          >
-                            เลือก
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-min-width round btn-cart"
-                  onClick={closeModal}
-                >
-                  ยกเลิก
-                </button>
-              </div>
+                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${
+                      selectedID === "PCS" ? "bg-primary-600 text-white" : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {selectedID === "PCS" ? (
+                        <CheckCircle2 className="w-4 h-4" strokeWidth={2.5} />
+                      ) : (
+                        <Truck className="w-4 h-4" strokeWidth={2.2} />
+                      )}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10.5px] text-muted font-mono mb-0.5 notranslate">
+                        ID: PCS
+                      </div>
+                      <div className="text-[12.5px] md:text-[13px] text-foreground leading-relaxed">
+                        {warehouseAddress}
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="px-4 md:px-5 py-3 border-t border-border bg-surface/30 flex justify-end">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-full bg-white text-foreground border border-border text-[12.5px] font-bold px-4 py-2 hover:border-primary-300 hover:text-primary-600 transition-colors"
+              >
+                ยกเลิก
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── PCS เหมาๆ promo modal — cart.php L737-754. Shown when the
-          selected address qualifies (eligible map = true). Accepting
-          ticks the `pro` checkbox in the order-summary card via the
-          `pro` form input below (sibling form input keeps the legacy
-          submit shape — addOrder reads `pro=f`). ── */}
+      {/* ── PCS เหมาๆ promo modal — cart.php L737-754 ── */}
       {maomaoOpen && eligible && (
         <div
-          id="pro-maomao"
-          className="modal fade show"
-          tabIndex={-1}
-          role="dialog"
-          aria-hidden="false"
-          style={{
-            display:        "block",
-            backgroundColor: "rgba(0,0,0,0.5)",
-          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) dismissMaomao();
           }}
+          role="dialog"
+          aria-modal="true"
         >
-          <div className="pcs-notify modal-dialog modal-sm">
-            <div
-              className="modal-content modal-content-pcs"
-              style={{ backgroundColor: "unset" }}
-            >
-              <div className="modal-header">
-                <span className="text-white font-1_7rem">
-                  คุณได้รับสิทธิ์ร่วมโปรโมชัน Pacred เหมา ๆ{" "}
-                </span>
-                <button
-                  type="button"
-                  className="close text-white"
-                  onClick={dismissMaomao}
-                  aria-label="ปิด"
-                  style={{
-                    opacity:      1,
-                    border:       "2px solid",
-                    borderRadius: "20px",
-                  }}
-                >
-                  <i
-                    className="la la-close text-white"
-                    style={{ fontSize: "1.5rem" }}
-                  ></i>
-                </button>
+          <div className="relative w-full max-w-sm bg-gradient-to-br from-primary-600 to-primary-800 rounded-3xl shadow-2xl shadow-primary-900/40 overflow-hidden">
+            <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
+              <h4 className="text-white text-[17px] font-black leading-tight flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-yellow-300 shrink-0" strokeWidth={2.5} />
+                คุณได้รับสิทธิ์ร่วมโปรโมชัน
+                <br />Pacred เหมา ๆ
+              </h4>
+              <button
+                type="button"
+                onClick={dismissMaomao}
+                aria-label="ปิด"
+                className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/15 border-2 border-white/60 text-white hover:bg-white/25 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="px-4 pb-4">
+              <div className="rounded-2xl bg-white/10 p-2 backdrop-blur-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/legacy/pcs/theme/free50-3.png"
+                  className="block w-full h-auto rounded-xl"
+                  alt="โปรโมชัน Pacred เหมา ๆ ฟรี 50 บาท"
+                />
               </div>
-              <div className="modal-body">
-                <div className="bg-pro-valentine">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/legacy/pcs/theme/free50-3.png"
-                    className="img-fluid"
-                    alt=""
-                  />
-                </div>
-                <div
-                  className="modal-footer text-center"
-                  style={{ display: "inherit" }}
-                >
-                  <span
-                    className="btn btn-main round btn-min-width animate__animated animate__infinite animate__headShake cursor-pointer"
-                    id="btn-getMaoMao"
-                    onClick={acceptMaomao}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") acceptMaomao();
-                    }}
-                  >
-                    รับโปรโมชัน เหมา ๆ
-                  </span>
-                </div>
-              </div>
+
+              <button
+                type="button"
+                onClick={acceptMaomao}
+                className="mt-4 w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-white text-primary-700 text-[14px] font-black px-4 py-2.5 shadow-xl shadow-black/30 hover:bg-primary-50 hover:-translate-y-0.5 transition-all animate-pulse"
+              >
+                <Sparkles className="w-4 h-4" strokeWidth={2.5} />
+                รับโปรโมชัน เหมา ๆ
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* The visible `name="pro"` checkbox lives in <CartInteractivity>
-          (the order-summary promotion card — cart.php L658-666). We
-          DON'T render a second `pro` input here to avoid duplicate
-          form fields. The bridge:
-            - On accept → dispatch `cart-maomao-accepted` event;
-              <CartInteractivity> ticks its `#input-12` checkbox.
-            - The `.maomao` visibility toggle that legacy fires on
-              eligibility changes (cart.php L1004-1011) is a cosmetic
-              class swap; <CartInteractivity> keeps the card visible
-              by default — same as the legacy initial-render state.
-          The `proMaomao` state here is local to drive the popup +
-          `<select id="hShipBy">`'s `required` flag (cart.php L1023). */}
+      {/* Hidden debug pings (kept from previous iteration). */}
       <span
         hidden
         data-maomao-eligible={eligible ? "1" : "0"}

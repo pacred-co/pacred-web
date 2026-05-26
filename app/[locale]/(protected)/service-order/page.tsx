@@ -219,7 +219,7 @@ export default async function ServiceOrderPage({
             </h1>
           </div>
           <Link
-            href="/service-order/add"
+            href="/cart/add"
             className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[12.5px] md:text-[14px] font-bold px-3.5 md:px-4 py-2 md:py-2.5 shadow-lg shadow-primary-600/30 hover:shadow-primary-600/40 hover:-translate-y-0.5 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={2.5} />
@@ -285,17 +285,6 @@ export default async function ServiceOrderPage({
               <EmptyState title="คุณยังไม่มีข้อมูลฝากสั่งซื้อ" showCta={false} />
             ) : (
               <>
-                {/* Bulk cancel — UI placeholder until matching Server Action wires up */}
-                <div className="mb-3">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[12px] font-bold px-3 py-1.5 hover:bg-rose-100 transition-colors"
-                  >
-                    <XCircle className="w-3.5 h-3.5" strokeWidth={2.2} />
-                    ยกเลิกออเดอร์รายการที่เลือก
-                  </button>
-                </div>
-
                 {/* Order cards — responsive (card-stack on mobile, row-grid on desktop) */}
                 <div className="space-y-2.5">
                   {rows.map((row) => (
