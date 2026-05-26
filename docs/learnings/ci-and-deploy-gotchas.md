@@ -372,3 +372,51 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - `AGENTS.md` §11 — the `next start` smoke rule this entry bounds.
 
 ---
+
+## [2026-05-26] Vercel can return TWO consecutive `dpl_id`s for ONE git push — the first may not have your code
+
+**Context:** Pushed commit `42f92434` (affiliate signup) to `main`. Polled `https://pacred.co.th/register?recom=THADA.VIP` for the `dpl_id` to flip. It did: `dpl_A77HcE7G…` → `dpl_8WTuGXY…`. Spot-checked the page for the new badge — **not there**. Spent 10 minutes investigating cache, build, tree-shaking — all dead ends. Re-checked moments later and a THIRD `dpl_id` had appeared: `dpl_5FYMBUZS…`. The badge was rendered. Problem was: the first dpl-flip was for an intermediate build that did NOT contain my commit.
+
+**Symptom:** "I pushed, waited for the dpl_id to change, verified — and my change isn't on prod even though the deploy ID is new + `x-vercel-cache: MISS`."
+
+**Root cause:** Vercel queues per-branch builds. When `dave-pacred` + `main` both get pushed near-simultaneously, Vercel sometimes builds + promotes BOTH in quick succession — promoting one first, then re-promoting with the newer one ~30-60s later. The first dpl-flip is real; it just isn't your latest. The "fresh from origin, no cache" signal proves nothing about WHICH commit was built — only that the build was rendered fresh.
+
+**Fix — verify the COMMIT, not just the deploy ID:**
+* `curl https://pacred.co.th/status | grep -oE '[a-f0-9]{40}'` — `/status` page renders `VERCEL_GIT_COMMIT_SHA`, the real commit Vercel built from. Match the short SHA against `git log origin/main -1 --oneline`.
+* Or wait ~60s after the first dpl-flip and re-check — if a SECOND dpl-flip appears, that's the one that has your code.
+* For changes that can be probed via a unique string (a new CSS class, new copy), grep that string in the prod HTML — its presence is ground-truth.
+
+**Why this matters next time:**
+- The "I waited for dpl_id to change" heuristic is necessary but not sufficient.
+- Wasted-debugging signature: "dpl_id changed, x-vercel-cache:MISS, cf-cache:DYNAMIC, my code STILL isn't there" → don't chase build/tree-shake/runtime — re-poll dpl_id 60s later.
+- Add `/status` (or `/api/version`) to any debugging runbook for "did MY commit deploy?"
+
+**Cross-links:**
+- Commit `42f92434` — the affiliate signup feature that surfaced this
+- Vercel deploy `dpl_5FYMBUZSj56jxKnvtvcNrJN6DrFu` — the actual deploy with my code (the earlier `dpl_8WTuGXY` was an intermediate)
+- `app/[locale]/status/page.tsx` — renders `VERCEL_GIT_COMMIT_SHA`
+
+---
+
+## [2026-05-26] Audit doc described `regis-tam.php` as "Thai-ID verification" — actual file is affiliate signup
+
+**Context:** d1-deep-audit-2026-05-24.md gap #5: "TAMIT (Thai ID) identity verification — `member/regis-tam.php` — Real-time Thai ID validation during signup/KYC". Owner-priority gap. I started porting based on the audit description (Thai-ID validation flow). Then I read all 444 lines of the actual `regis-tam.php` and it does NOT verify Thai IDs at all — it's a registration page that accepts `?recom=THADA|SIN|OOAEOM|SWAN` URL params and persists `tb_users.coID = <THADA.VIP|SIN.VIP|OOAEOM.VIP|SWAN>`. Pure **affiliate-attribution signup**.
+
+**Symptom:** You start implementing the audit-described feature, then realize the legacy file doesn't actually have that behaviour. Scope ambiguity: do you port the audit's INTENT (build a new feature from scratch) or the file's ACTUAL CONTENT (a different feature)?
+
+**Root cause:** The audit was assembled by walking the legacy directory + summarizing filenames. `regis-tam.php` got summarized as "TAM(IT) = Thai" verification — semantic guess from the filename, not from reading the file. The TAM in the filename actually refers to one of the co-brand affiliates ("tam" = ไอแต้ม, per the brand-split context in CLAUDE.md).
+
+**Fix — ALWAYS read the legacy source in full before trusting the audit description.** The audit is a starting index; the source is the spec. When a gap card says "Port file X", spend 5 minutes reading X first to confirm WHAT it actually does, then update the gap card with corrected scope BEFORE writing port code. If the file doesn't match the audit description, raise the discrepancy explicitly (`AskUserQuestion` with the 3-4 plausible interpretations) rather than silently picking one.
+
+**Why this matters next time:**
+- The deep-audit doc has 10 critical gaps. Each one is owner-priority. The cost of building the wrong thing is high.
+- File names can be misleading especially across brand-splits (PCS/TTP/ไอแต้ม → Pacred) — `regis-tam.php` was the ไอแต้ม-co-branded register, not Thai-related.
+- Time-investment: 5 min reading the legacy beats 1 hour of "why doesn't this look like the audit said it would?"
+
+**What we shipped instead:** ported the file's ACTUAL behaviour — `?recom=<code>` URL param → `profiles.customer_group` (default 'PR' otherwise), with an attribution badge in the form. Owner can request the original Thai-ID verification stub as a separate task (it would be a NEW feature, not a port).
+
+**Cross-links:**
+- Commit `42f92434` — the affiliate signup port (actual file behaviour)
+- `docs/research/d1-deep-audit-2026-05-24.md` §5 — the original (mis-described) gap
+- `C:/xampp/htdocs/pcscargo/member/regis-tam.php` — the legacy source (444 lines, read in full)
+- `docs/pacred-info.md` "Brand-split context" — the PCS/TTP/ไอแต้ม split that explains the `-tam` suffix
