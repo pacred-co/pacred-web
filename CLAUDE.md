@@ -2,6 +2,67 @@
 
 ---
 
+# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
+
+ภูม กลับมา session เย็น · Wave 22 = perf root-cause kill + 3+2 parallel agents + 2 new skills. **Migration `0109` (23 partial indexes) applied to prod → admin chrome 1.5-3s → ~300ms confirmed by Agent D measurement** (/admin warm 1.88s vs cold 2.6s).
+
+**📦 9 commits today (push range `22d5e37..5372346+5b065c6`):**
+- **Wave 20 P1 batch 2** — wallet/add · yuan-payments/new (`fc9aabe`) + reports/{payment,shop,forwarder} (`f47c179`) Tailwind chrome
+- **Wave 21 P0** — shop→forwarder auto-spawn (`fe98da3` · closes taxonomy §6 gap)
+- **Wave 21 deferred (Task #128)** — admin-profile-client jQuery → native dialog (`003439b` · 5 modals + 2 confirms · 3 inline helpers `PacredDialog` + `DialogFooter` + `useConfirmDialogs`)
+- **Wave 21 P2 perf fix** — query survey (`cbed382`) → migration 0109 (`5372346` · 23 partial indexes) → Phase A 4 quick wins (`5b065c6` · 3 TODOs + 1 real fix on `report-cnt`)
+- **NEW skills** — `debug-mantra` + `management-talk` (`8050eef` · 16 total)
+- **Learnings** — `debug-discipline.md` case study of today's "2 Issues" misdiagnosis (`c9b5446`)
+- **Off-target fix kept as evidence** — `a2e7b25` (image qualities · doc'd in debug-discipline)
+
+**🟢 Verified working (post-0109):**
+- /admin home — 1.88s warm (was 2.6s)
+- /admin/customers list — 0.52-0.72s
+- /admin/wallet/add + /admin/yuan-payments/new (Tailwind chrome · BS4 form-island banner-flagged)
+- /admin/reports/{payment,shop,forwarder} — full Tailwind · prod data flowing
+- /admin/admins/[id] modal port — code clean (jQuery/BS4 zero · all 7 modals native `<dialog>`)
+
+**🔴 NEW BUG found today (Task #141):**
+`/admin/admins` list AND detail both return 500 on prod — `column tb_admin.id does not exist` (list) + `column tb_admin.adminid does not exist` (detail). Likely stale PostgREST schema cache OR data-load shape mismatch. **Try first** (5-sec fix): `NOTIFY pgrst, 'reload schema';` in Supabase SQL Editor. If still 500, run diagnostic + paste output (see save-point §Pending #3).
+
+**⚠️ Pending ภูม manual actions:**
+1. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (still not done · leaked วันแรก)
+2. **#136** cleanup test row #51972 — `DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';`
+3. **#141** /admin/admins 500 — try `NOTIFY pgrst, 'reload schema';` first · escalate to schema inspection if still 500
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌅 [`docs/research/poom-save-point-2026-05-27-evening.md`](docs/research/poom-save-point-2026-05-27-evening.md) — **canonical resume** (9 commits · agents output · verified pages · pickup options)
+2. 🔥 [`docs/research/wave-21-p2-query-survey.md`](docs/research/wave-21-p2-query-survey.md) — perf root-cause + 3-phase plan (Phase B done · Phase A done · Phase C waits)
+3. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) — **NEW** "2 Issues" case study · pair with debug-mantra skill
+4. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`.claude/skills/management-talk/SKILL.md`](.claude/skills/management-talk/SKILL.md) — **NEW skills** (16 total)
+
+**🟡 Pickup options for next session (ภูม pick when resuming):**
+- **A** Fix Task #141 (tb_admin 500) — depends on diagnostic output (~30 min to 2h)
+- **B** Phase C RPC consolidation (~4h) — `get_admin_sidebar_counts()` + `get_dashboard_kpi()` + `get_wallet_system_totals()` (cuts 22 RTTs → 1 + unlocks the 3 TODO surfaces from Phase A)
+- **C** Wave 21 batch 3 — `/admin/service-orders/cart` + `cart/add` (port `cart.php`)
+- **D** Wave 21 P1 follow-ups — #137 paginate /reports/forwarder · combine-bill PDF print · warehouse-history bulk-print
+
+**🗺 Branch state (post-push · 2026-05-27 เย็น):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม Wave 20+22 ยัง merge) |
+| `Poom-pacred` | `5b065c6` (or later) | **active · all Wave 20+21+22 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel) |
+| Our worktree | `5b065c6` | ✅ in sync with Poom-pacred 0/0 |
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-27-evening.md       # canonical resume
+pnpm dev   # port 3000 (if not running)
+# Then: pick option A/B/C/D from above
+```
+
+---
+
 # 🚨 2026-05-26 ค่ำ — WAVE 20 ALL DONE · read FIRST (supersedes 2026-05-25 below)
 
 ภูม **mega-session วันนี้ · 30+ commits บน `Poom-pacred`** (เกือบทั้งวัน). ที่ผ่านมา Wave 19 ปิด BUG #1-4 เสร็จ → วันนี้ดำเนินการ Wave 20 ครบทั้ง 5 layer (P0 schema swaps + P0-4 reports + P1 batch 1 Tailwind rewrites + qw1/qw2 + bonus). **ทุกหน้า browser-verified §0c** (ไม่ใช่แค่ route smoke).
