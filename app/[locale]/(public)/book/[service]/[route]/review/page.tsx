@@ -201,7 +201,7 @@ export default async function BookingReviewPage({
     <>
       <main className="mx-auto w-full max-w-[920px] px-4 py-10">
         {/* i18n-key: booking.review.kicker */}
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           REVIEW · ตรวจสอบการจอง
         </p>
         {/* i18n-key: booking.review.title */}
@@ -349,7 +349,7 @@ function EstimatePanel({
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
       {/* i18n-key: booking.review.estimate.title */}
-      <p className="text-xs font-semibold tracking-widest text-primary-500">
+      <p className="text-xs font-semibold tracking-widest text-primary-600">
         ราคาประมาณการ
       </p>
 

@@ -23,7 +23,7 @@ import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 export const dynamic = "force-dynamic";
 
 const STATUS_BADGE: Record<string, string> = {
-  pending:    "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending:    "bg-amber-50 text-amber-700 border-amber-200",
   processing: "bg-blue-50 text-blue-700 border-blue-200",
   completed:  "bg-green-50 text-green-700 border-green-200",
   failed:     "bg-red-50 text-red-700 border-red-200",
@@ -83,7 +83,7 @@ export default async function YuanPaymentDetailPage({
       <main className="mx-auto w-full max-w-[900px] px-4 py-6 space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากโอนหยวน</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากโอนหยวน</p>
             <h1 className="mt-1 text-2xl font-bold font-mono text-foreground">{yp.id.slice(0, 8)}…</h1>
             <p className="text-xs text-muted mt-1">
               สร้างเมื่อ {new Date(yp.created_at).toLocaleString("th-TH")}

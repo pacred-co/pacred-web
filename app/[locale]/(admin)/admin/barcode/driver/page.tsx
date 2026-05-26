@@ -31,7 +31,7 @@ export default async function AdminBarcodeDriverPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · DRIVER</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · DRIVER</p>
           <h1 className="mt-1 text-2xl font-bold">สแกนปล่อยคนขับ</h1>
           <p className="text-sm text-muted mt-0.5">
             สแกนก่อนส่งของให้ลูกค้า — สแกนซ้ำเมื่อส่งสำเร็จ

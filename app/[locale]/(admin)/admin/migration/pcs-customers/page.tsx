@@ -53,7 +53,7 @@ export default async function PcsMigrationPage() {
           <Database className="h-6 w-6" />
         </div>
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · U2-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · U2-1</p>
           <h1 className="mt-1 text-xl sm:text-2xl font-bold">PCS → Pacred customer migration</h1>
           <p className="text-xs text-muted mt-0.5">
             One-shot backfill of legacy <code>tb_users</code> rows → Pacred <code>profiles</code>.

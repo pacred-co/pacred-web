@@ -151,7 +151,7 @@ export default async function ClosingReportPage({
     <main className="p-6 lg:p-8 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ACCOUNTING · CLOSING
           </p>
           <h1 className="mt-1 text-2xl font-bold text-foreground">ปิดงบฝากนำเข้ารายเดือน</h1>

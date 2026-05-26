@@ -445,7 +445,7 @@ export default async function AdminReportCntDetailPage({
         <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 lg:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
+              <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
               <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
                 รายงานตู้สินค้า
                 <span className="font-mono text-primary-600">{fCabinetNumber}</span>

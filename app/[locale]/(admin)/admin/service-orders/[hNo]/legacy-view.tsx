@@ -146,7 +146,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
     <main className="p-6 lg:p-8 max-w-4xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ฝากสั่งซื้อ</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากสั่งซื้อ</p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <h1 className="text-2xl font-bold font-mono">{r.hno}</h1>
             <span

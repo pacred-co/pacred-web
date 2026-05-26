@@ -193,7 +193,7 @@ export default async function BookingConfirmationPage({
         {/* ── Estimate breakdown (frozen snapshot) ──────────────── */}
         <section className="mt-5 rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
           {/* i18n-key: booking.confirmation.estimate.title */}
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ราคาประมาณการ
           </p>
 

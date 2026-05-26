@@ -78,7 +78,7 @@ export default async function AdminSalesPayoutDetail({
     <main className="p-6 lg:p-8 max-w-3xl mx-auto space-y-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ADMIN · เบิกค่าสินค้า / โบนัสเซลล์
           </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">

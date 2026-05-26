@@ -135,7 +135,7 @@ export default async function TransferRepPage({
     <main className="p-6 lg:p-8 space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · โอนเซลล์</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · โอนเซลล์</p>
           <h1 className="mt-1 text-2xl font-bold text-foreground">โอนเซลล์ที่ดูแลลูกค้า</h1>
           <p className="text-sm text-muted mt-1">
             {customerDisplay} · <span className="font-mono">{p.member_code ?? "—"}</span>

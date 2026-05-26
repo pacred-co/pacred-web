@@ -119,7 +119,7 @@ export default async function AdminCronHealthPage() {
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · system · U4-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · system · U4-1</p>
           <h1 className="mt-1 text-2xl font-bold">Cron health</h1>
           <p className="mt-1 text-sm text-muted">
             สถานะ cron ทั้ง {CRON_REGISTRY.length} งาน (last fire · 7-day success rate · last error).

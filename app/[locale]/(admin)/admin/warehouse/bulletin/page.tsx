@@ -22,7 +22,7 @@ export default async function BulletinPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ปฏิบัติการ</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
         <h1 className="mt-1 text-2xl font-bold">บุลเลตินตู้คอนเทนเนอร์รายวัน</h1>
       </div>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 space-y-2">

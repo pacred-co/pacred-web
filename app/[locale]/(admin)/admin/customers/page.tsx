@@ -251,7 +251,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">
             ลูกค้า{group ? ` — ${GROUP_CFG[group].label}` : ""}
           </h1>

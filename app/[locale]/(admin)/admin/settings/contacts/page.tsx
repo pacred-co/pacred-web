@@ -77,7 +77,7 @@ export default async function AdminOrgContactsPage({
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SETTINGS</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">ข้อมูลติดต่อองค์กร</h1>
         <p className="text-xs text-muted mt-1">
           จัดการอีเมล/เบอร์/LINE/Social/ที่อยู่. รายการที่ <code className="font-mono text-[10px]">active=true</code> จะ

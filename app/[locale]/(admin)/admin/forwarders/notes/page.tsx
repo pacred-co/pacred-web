@@ -122,7 +122,7 @@ export default async function ForwarderNotesPage({
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากนำเข้า</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
         <h1 className="mt-1 text-2xl font-bold">หมายเหตุนำเข้า</h1>
         <p className="mt-1 text-sm text-muted">
           รายการฝากนำเข้าที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ

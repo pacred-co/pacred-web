@@ -59,7 +59,7 @@ function customerLabel(p: Profile | null): string {
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  unpaid:    "bg-yellow-50 text-yellow-700 border-yellow-200",
+  unpaid:    "bg-amber-50 text-amber-700 border-amber-200",
   paid:      "bg-green-50  text-green-700  border-green-200",
   cancelled: "bg-gray-50   text-gray-700   border-gray-200",
 };
@@ -181,7 +181,7 @@ export default async function AdminForwarderSalesPage({
       <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SALES</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SALES</p>
           <h1 className="mt-1 text-2xl font-bold">รายงานค่าคอมมิชชันฝากนำเข้า</h1>
           <p className="text-sm text-muted mt-1">
             ติดตาม commission ที่เกิดจากออเดอร์ + forwarder ของลูกค้าในทีม — auto-emit เมื่อ status เปลี่ยนเป็น delivered/completed

@@ -65,7 +65,7 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
     pending: "รอตรวจ", verified: "ยืนยันแล้ว", rejected: "ปฏิเสธ",
   };
   const STATUS_BADGE: Record<string, string> = {
-    pending:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+    pending:  "bg-amber-50 text-amber-700 border-amber-200",
     verified: "bg-green-50 text-green-700 border-green-200",
     rejected: "bg-red-50 text-red-700 border-red-200",
   };
@@ -73,7 +73,7 @@ export default async function AdminJuristicCheckPage({ searchParams }: { searchP
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · EXTENSION</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · EXTENSION</p>
         <h1 className="mt-1 text-2xl font-bold">🏢 เช็คข้อมูลลูกค้านิติบุคคล</h1>
         <p className="mt-1 text-sm text-muted">ตรวจหนังสือรับรอง + ภ.พ.20 ของลูกค้านิติบุคคล แล้วยืนยันสถานะ</p>
       </div>

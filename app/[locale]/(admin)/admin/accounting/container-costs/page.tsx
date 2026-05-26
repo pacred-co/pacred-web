@@ -76,7 +76,7 @@ export default async function AdminContainerCostsPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ACCOUNTING</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ACCOUNTING</p>
         <h1 className="mt-1 text-2xl font-bold">Carrier rate cards (container_costs)</h1>
         <p className="mt-1 text-sm text-muted">
           U2-2: ราคาที่ carrier เก็บกับ Pacred ต่อตู้/ต่อ route — ใช้เป็น cost basis คำนวณ margin

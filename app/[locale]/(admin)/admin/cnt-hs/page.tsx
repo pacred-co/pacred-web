@@ -178,7 +178,7 @@ export default async function CntHsPage({
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
             <h1 className="mt-1 text-2xl font-bold">รายการเบิกเงินค่าตู้</h1>
             <p className="mt-1 text-sm text-muted">
               จัดการการชำระเงินค่าตู้คอนเทนเนอร์ (tb_cnt) · {countAll.toLocaleString()} รายการทั้งหมด

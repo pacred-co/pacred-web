@@ -29,7 +29,7 @@ export default async function NewQaInspectionPage({
   return (
     <main className="p-4 lg:p-6 space-y-5 max-w-3xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA</p>
         <h1 className="mt-1 text-2xl font-bold">{t("newTitle")}</h1>
         <p className="text-sm text-muted">{t("newSubtitle")}</p>
       </div>

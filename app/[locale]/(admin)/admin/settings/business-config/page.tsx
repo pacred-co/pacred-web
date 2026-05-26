@@ -33,7 +33,7 @@ export default async function AdminBusinessConfigPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SETTINGS</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">Business Config (super)</h1>
         <p className="mt-1 text-sm text-muted">
           ค่าคงที่ทางธุรกิจ — OTP TTL, ขั้นต่ำเงินฝาก/ถอน, % แคชแบ็ค, บัญชีธนาคารสำหรับฝาก, feature flags. แก้แล้วมีผลภายใน 1 นาที (60-second cache).

@@ -155,7 +155,7 @@ export default async function AdminForwarderNewPage({
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · ฝากนำเข้า · สร้างออเดอร์ใหม่
         </p>
         <h1 className="mt-1 text-2xl font-bold">สร้างออเดอร์ฝากนำเข้าสินค้า</h1>

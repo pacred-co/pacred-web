@@ -376,7 +376,7 @@ export default async function AdminProfilePage({
           className="w-24 h-24 rounded-full object-cover border-2 border-border shrink-0"
         />
         <div className="flex-1 min-w-[240px]">
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · พนักงาน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · พนักงาน</p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <h1 className="text-2xl font-bold">{fullName}</h1>
             {nickname && (

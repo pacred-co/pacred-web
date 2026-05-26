@@ -386,7 +386,7 @@ function renderShell(props: {
     <main className="px-4 py-5 sm:p-6 lg:p-8 max-w-3xl mx-auto space-y-4">
       {/* Header */}
       <div className="space-y-1">
-        <p className="text-xs font-semibold tracking-widest text-primary-500">DRIVER · งานวันนี้</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">DRIVER · งานวันนี้</p>
         <h1 className="text-2xl font-bold leading-tight">
           {isAdminOverride && filterDriver
             ? `งานของ ${filterDriver}`

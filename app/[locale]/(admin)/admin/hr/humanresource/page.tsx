@@ -107,7 +107,7 @@ export default async function AdminHrHumanResourceHubPage() {
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการทรัพยากรบุคคล</h1>
         <p className="mt-1 text-sm text-muted">
           ผังองค์กร · สรรหา · พนักงาน · เวลาเข้างาน · นโยบาย · ออดิท

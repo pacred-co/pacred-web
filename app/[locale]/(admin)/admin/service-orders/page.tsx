@@ -142,7 +142,7 @@ export default async function AdminServiceOrdersPage({ searchParams }: { searchP
       <PageTopMenubar items={PURCHASING_MENUBAR} activeHref="/admin/service-orders" />
       <main className="p-6 lg:p-8 space-y-5">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">ฝากสั่งซื้อ — Ops</h1>
           <p className="mt-1 text-xs text-muted">
             {rows.length} รายการ ({legacyStatusCode ? `กรอง: ${legacyOrderStatusThai(legacyStatusCode)}` : "ทั้งหมด"})

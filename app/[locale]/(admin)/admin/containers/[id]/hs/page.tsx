@@ -100,7 +100,7 @@ export default async function ContainerHsPage({
       </Link>
 
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">
           HS code lines · <span className="font-mono">{container.container_no ?? "—"}</span>
         </h1>

@@ -145,7 +145,7 @@ export default async function CustomUserRatesPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · RATES · ตามกลุ่ม VIP
         </p>
         <h1 className="mt-1 text-2xl font-bold">Rate Override ตามกลุ่ม VIP</h1>

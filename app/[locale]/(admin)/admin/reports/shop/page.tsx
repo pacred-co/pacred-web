@@ -251,7 +251,7 @@ export default async function AdminReportShopPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รายงาน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รายงาน</p>
           <h1 className="mt-1 text-2xl font-bold">รายงานฝากสั่งซื้อสินค้า</h1>
           <p className="mt-1 text-sm text-muted">
             <span className="font-mono">tb_header_order</span> · ฟิลเตอร์ตามสถานะ + ช่วงวันที่สร้างออเดอร์

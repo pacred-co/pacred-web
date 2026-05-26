@@ -204,7 +204,7 @@ export default async function AdminReportPaymentPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · รายงาน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รายงาน</p>
           <h1 className="mt-1 text-2xl font-bold">รายงานฝากชำระเงิน</h1>
           <p className="mt-1 text-sm text-muted">
             <span className="font-mono">tb_payment</span> · ฟิลเตอร์ตามสถานะ + ช่วงวันที่ทำรายการ

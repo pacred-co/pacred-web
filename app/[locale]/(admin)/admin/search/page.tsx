@@ -193,7 +193,7 @@ export default async function AdminGlobalSearchPage({
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · U4-1 global search</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · U4-1 global search</p>
         <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
           <Search className="w-6 h-6" /> ค้นหาทุกที่
         </h1>

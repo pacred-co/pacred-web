@@ -64,7 +64,7 @@ export default async function AdminCartAddPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">เพิ่มสินค้าในรถเข็น (กำหนดเอง)</h1>
           <p className="mt-1 text-sm text-muted">
             ใช้เมื่อ URL จาก 1688/Taobao scrape ไม่ขึ้น · กรอกฟิลด์เองทีละชิ้น

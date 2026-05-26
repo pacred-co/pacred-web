@@ -94,7 +94,7 @@ export default async function AdminYuanPaymentNewPage({
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากโอนหยวน</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากโอนหยวน</p>
         <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการฝากโอนหยวน</h1>
         <p className="mt-1 text-sm text-muted">
           บันทึกรายการแทนลูกค้า · เขียนลงตาราง{" "}

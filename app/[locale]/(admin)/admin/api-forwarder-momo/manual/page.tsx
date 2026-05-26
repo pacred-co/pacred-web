@@ -40,7 +40,7 @@ export default async function AdminApiForwarderMomoManualPage() {
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · MOMO · อัปเดตด้วยมือ
         </p>
         <h1 className="mt-1 text-2xl font-bold">อัปเดต MOMO ด้วยมือ</h1>

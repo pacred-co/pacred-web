@@ -141,7 +141,7 @@ export default async function ForwarderVolumeReport({
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ADMIN · REPORTS (V-G6)
           </p>
           <h1 className="mt-1 text-2xl font-bold">

@@ -582,7 +582,7 @@ export default async function AdminAccountingPage({
           - "ปิดงบรายเดือน" CTA stays right-side */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <div className="mt-1 flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
             <AccountingSegmentPills active="cargo" />

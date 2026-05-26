@@ -86,7 +86,7 @@ export default async function ShipmentsPage() {
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")}</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
           <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>
         </div>

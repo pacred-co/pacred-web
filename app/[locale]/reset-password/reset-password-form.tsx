@@ -34,7 +34,7 @@ export function ResetPasswordForm({ email }: Props) {
   return (
     <>
       <div className="mb-6 text-center">
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           {t("kicker")}
         </p>
         <h1 className="mt-1 text-2xl font-bold text-foreground">

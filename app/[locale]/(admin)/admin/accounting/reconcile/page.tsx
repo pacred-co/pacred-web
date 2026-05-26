@@ -200,7 +200,7 @@ export default async function ReconcilePage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · บัญชี</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี</p>
         <h1 className="mt-1 text-2xl font-bold">Payment ↔ Order Reconciliation</h1>
         <p className="mt-1 text-sm text-muted">
           เช็คความตรงระหว่าง forwarder status กับ wallet_tx (90 วันล่าสุด).

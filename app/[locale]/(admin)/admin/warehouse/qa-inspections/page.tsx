@@ -88,7 +88,7 @@ export default async function QaInspectionsListPage({
     <main className="p-4 lg:p-6 space-y-5 max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA</p>
           <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
           <p className="text-sm text-muted">{t("subtitle")}</p>
         </div>

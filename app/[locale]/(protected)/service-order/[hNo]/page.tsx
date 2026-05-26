@@ -80,7 +80,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")} · {t("detailTitle")}</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")} · {t("detailTitle")}</p>
             <div className="mt-1 flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold font-mono text-foreground">{o.h_no}</h1>
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[o.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>

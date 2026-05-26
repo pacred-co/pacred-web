@@ -101,7 +101,7 @@ export default async function ServiceOrderNotesPage({
         </div>
 
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากสั่งสินค้า</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากสั่งสินค้า</p>
           <h1 className="mt-1 text-2xl font-bold">หมายเหตุฝากสั่ง</h1>
           <p className="mt-1 text-sm text-muted">
             รายการฝากสั่งที่มีหมายเหตุ · {rows.length} รายการ · เรียงตามวันอัปเดตล่าสุด · จำกัด 500 รายการ

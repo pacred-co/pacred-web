@@ -41,7 +41,7 @@ export default async function AdminApiForwarderCnManualPage() {
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · CargoCenter · อัปเดตด้วยมือ
         </p>
         <h1 className="mt-1 text-2xl font-bold">อัปเดต CargoCenter ด้วยมือ</h1>

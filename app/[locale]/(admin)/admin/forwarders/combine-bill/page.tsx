@@ -238,7 +238,7 @@ export default async function CombineBillPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากนำเข้า</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
           <h1 className="mt-1 text-2xl font-bold">ประวัติรายการรวมบิล</h1>
           <p className="mt-1 text-sm text-muted">
             รวมหลายรายการฝากนำเข้าของลูกค้าเดียวกันเป็นบิลค่าส่งเดียว · {bills.length.toLocaleString("th-TH")} รายการ

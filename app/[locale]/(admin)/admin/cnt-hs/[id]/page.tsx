@@ -214,7 +214,7 @@ export default async function CntHsDetailPage({
       {/* Header */}
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ADMIN · เบิกเงินค่าตู้
           </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">

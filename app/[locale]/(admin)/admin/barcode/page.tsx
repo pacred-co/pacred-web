@@ -34,7 +34,7 @@ export default async function AdminBarcodePage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
           <h1 className="mt-1 text-2xl font-bold">สแกนรับเข้าโกดัง</h1>
           <p className="text-sm text-muted mt-0.5">
             สแกนบาร์โค้ดหรือ tracking เพื่ออัพเดทสถานะ

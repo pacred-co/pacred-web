@@ -173,7 +173,7 @@ export default async function AdminCommissionsPage({
       <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ค่าคอม + Payouts</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ค่าคอม + Payouts</p>
           <h1 className="mt-1 text-2xl font-bold">ค่าคอม + Payouts (V-E8)</h1>
           <p className="text-xs text-muted mt-1">
             ระบบจ่ายค่าคอมล่ามจีน + Sales rep · workflow: pending → approved → paid (slip required)

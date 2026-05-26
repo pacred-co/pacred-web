@@ -56,7 +56,7 @@ export default async function QaInspectionDetailPage({
     <main className="p-4 lg:p-6 space-y-5 max-w-4xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA</p>
           <h1 className="mt-1 text-2xl font-bold">
             {t("detailTitle")} <span className="font-mono text-base text-muted">{row.id.slice(0, 8)}</span>
           </h1>

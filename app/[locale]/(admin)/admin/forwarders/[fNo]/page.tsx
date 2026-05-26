@@ -118,7 +118,7 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
     <main className="p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ฝากนำเข้า</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากนำเข้า</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{f.f_no}</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

@@ -532,7 +532,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
         {/* Header — ADMIN / breadcrumb / title */}
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               ADMIN · WAREHOUSE
             </p>
             <h1 className="mt-1 text-2xl font-bold">ประวัติเข้าโกดังไทย</h1>

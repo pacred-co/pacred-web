@@ -108,7 +108,7 @@ export default async function AdminServiceOrderDetail({ params }: { params: Prom
     <main className="p-6 lg:p-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ฝากสั่ง</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ฝากสั่ง</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{o.h_no}</h1>
         </div>
         <Link href="/admin/service-orders" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">

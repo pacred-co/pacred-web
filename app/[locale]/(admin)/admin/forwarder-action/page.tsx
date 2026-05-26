@@ -137,7 +137,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
         <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
         <main className="p-4 lg:p-6 space-y-4">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · AUDIT</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
             <h1 className="mt-1 text-2xl font-bold">{label}</h1>
             <p className="mt-1 text-xs text-muted">
               Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action]}</code>
@@ -288,7 +288,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
       <TopMenuReport activeHref={`/admin/forwarder-action?action=${action}`} />
       <main className="p-4 lg:p-6 space-y-4">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · AUDIT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · AUDIT</p>
           <h1 className="mt-1 text-2xl font-bold">{label}</h1>
           <p className="mt-1 text-xs text-muted">
             Legacy condition: <code className="rounded bg-surface-alt px-1 py-0.5">{ACTION_CONDITION[action] ?? "TBD"}</code>

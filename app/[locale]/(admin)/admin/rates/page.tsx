@@ -38,7 +38,7 @@ export default async function AdminRatesPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">อัตราค่าบริการ</h1>
           <p className="mt-1 text-sm text-muted">อัตราปัจจุบันที่ใช้คำนวณราคาออเดอร์ใหม่</p>
         </div>

@@ -258,7 +258,7 @@ export async function renderLegacyCustomerView(id: string) {
             </div>
           )}
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               ADMIN · ลูกค้า {isJuristic ? "นิติบุคคล" : "บุคคล"}
             </p>
             <div className="flex items-center gap-3 mt-1 flex-wrap">

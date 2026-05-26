@@ -111,7 +111,7 @@ export default async function AdminRefundsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · การเงิน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · การเงิน</p>
           <h1 className="mt-1 text-2xl font-bold">คำขอคืนเงิน (Refunds — U1-6)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: pending → อนุมัติ → จ่ายแล้ว (เครดิตเข้ากระเป๋าลูกค้า) · approve+mark-paid = super/accounting

@@ -260,7 +260,7 @@ export default async function AdminKpiPage() {
     <main className="p-4 lg:p-6 space-y-5">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · KPI</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · KPI</p>
           <h1 className="mt-1 text-2xl font-bold">KPI ภาพรวมธุรกิจ</h1>
           <p className="mt-1 text-sm text-muted">
             ตัวเลขสำคัญของบริษัท — รายได้ · ออเดอร์ · ตู้ · ลูกค้าใหม่ · ยอดเติมเงิน · เทียบกับเดือน{prevMonthLabel}

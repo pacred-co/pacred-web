@@ -53,7 +53,7 @@ export default async function MyBookingsPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {/* i18n-key: booking.list.kicker */}
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             BOOKINGS
           </p>
           {/* i18n-key: booking.list.title */}

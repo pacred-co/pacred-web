@@ -89,7 +89,7 @@ export default async function AdminContactMessagesPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ข้อความติดต่อจากเว็บไซต์</h1>
         <p className="mt-1 text-sm text-muted">
           ฟอร์มติดต่อจากหน้า /contact — รับเรื่อง ตอบกลับ ปิดเคส

@@ -77,7 +77,7 @@ export default async function AdminBroadcastsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · V-G3</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · V-G3</p>
           <h1 className="mt-1 text-2xl font-bold">📢 Broadcasts</h1>
           <p className="text-xs text-muted mt-1">
             push popup ออกหาลูกค้า (in-app + LINE in V-G3.1) — workflow: draft → ส่งทันที / กำหนดเวลา → sent

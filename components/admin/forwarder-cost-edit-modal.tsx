@@ -230,7 +230,7 @@ export function ForwarderCostEditModal({
         {/* Header */}
         <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold tracking-widest text-primary-500 uppercase">
+            <p className="text-[10px] font-semibold tracking-widest text-primary-600 uppercase">
               Admin · ต้นทุน
             </p>
             <h2

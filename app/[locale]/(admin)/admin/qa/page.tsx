@@ -81,7 +81,7 @@ export default async function AdminQaHubPage() {
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · PHASE 2</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · PHASE 2</p>
         <h1 className="mt-1 text-2xl font-bold">QA &amp; QC — Service-Level Queues</h1>
         <p className="mt-1 text-sm text-muted">
           คาดการณ์ล่าช้า · งานที่ค้างเกิน SLA — เปิดดูรายชื่อ + จัดการ

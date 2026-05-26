@@ -51,7 +51,7 @@ export default async function CombineBillAddPage() {
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ฝากนำเข้า</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ฝากนำเข้า</p>
         <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการรวมบิล</h1>
         <p className="mt-1 text-sm text-muted">
           กรอกเลขที่ออเดอร์นำเข้าของลูกค้าคนเดียวกัน (คอมมาคั่น) เพื่อรวมเป็นบิลค่าส่งเดียว

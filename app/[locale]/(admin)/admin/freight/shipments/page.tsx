@@ -106,7 +106,7 @@ export default async function AdminFreightShipmentsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · FREIGHT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold">งานขนส่ง freight (shipments)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: draft → ยืนยัน → ขนส่ง → ผ่านศุลฯ → ส่งมอบ · มาจาก quotation (V-E6) หรือสร้างตรง

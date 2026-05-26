@@ -20,7 +20,7 @@ import { ShopPayoutActions } from "./actions-cell";
  */
 
 const STATUS_BADGE: Record<string, string> = {
-  pending:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending:   "bg-amber-50 text-amber-700 border-amber-200",
   completed: "bg-green-50 text-green-700 border-green-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
   failed:    "bg-gray-50 text-gray-600 border-gray-200",
@@ -82,7 +82,7 @@ export default async function AdminShopPayoutsPage({
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/shop-payouts" />
       <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">เบิกกระเป๋าร้าน (shop wallet)</h1>
         <p className="mt-1 text-sm text-muted">
           คำขอถอนเงิน/โอนออกจากกระเป๋าร้านของลูกค้า (affiliate / partner). อนุมัติแล้วเงินถึงโอนจริง — โอนสำเร็จกด &ldquo;โอนแล้ว&rdquo; ระบบจะหักยอดของลูกค้าโดยอัตโนมัติ

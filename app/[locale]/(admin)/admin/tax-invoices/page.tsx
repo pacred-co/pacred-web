@@ -14,7 +14,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
  */
 
 const STATUS_BADGE: Record<string, string> = {
-  pending:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending:   "bg-amber-50 text-amber-700 border-amber-200",
   issued:    "bg-green-50 text-green-700 border-green-200",
   cancelled: "bg-gray-50 text-gray-600 border-gray-200",
 };
@@ -87,7 +87,7 @@ export default async function AdminTaxInvoicesPage({
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · บัญชี</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี</p>
         <h1 className="mt-1 text-2xl font-bold">ใบกำกับภาษี</h1>
         <p className="mt-1 text-sm text-muted">
           อนุมัติคำขอใบกำกับภาษี · ออกใบ + สร้าง PDF · ดูประวัติ

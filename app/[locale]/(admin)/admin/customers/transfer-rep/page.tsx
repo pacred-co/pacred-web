@@ -101,7 +101,7 @@ export default async function TransferSalesRepPage({
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">ย้ายเซลล์ผู้ดูแลลูกค้า (bulk)</h1>
         <p className="mt-1 text-sm text-muted">
           อัปเดต <code className="rounded bg-surface-alt px-1 text-xs">tb_users.adminidsale</code> หลายรายในครั้งเดียว

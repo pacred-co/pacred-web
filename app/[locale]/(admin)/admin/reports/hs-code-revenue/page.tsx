@@ -136,7 +136,7 @@ export default async function HsCodeRevenueReport({
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · REPORTS (V-G6)</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · REPORTS (V-G6)</p>
           <h1 className="mt-1 text-2xl font-bold">รายได้ตาม HS code</h1>
           <p className="mt-1 text-sm text-muted">
             มูลค่าที่ประกาศต่อ HS code ({days} วันล่าสุด) — ช่วยตัดสินใจว่าควร specialise ในกลุ่มไหน

@@ -183,7 +183,7 @@ export default async function AdminForwarderEditPage({
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · ฝากนำเข้า · แก้ไขขนาด/น้ำหนัก
         </p>
         <h1 className="mt-1 text-2xl font-bold font-mono">{r.fidorco ?? `#${r.id}`}</h1>

@@ -28,7 +28,7 @@ export default async function OrdersPage() {
       <main className="mx-auto w-full max-w-[1140px] px-4 py-12">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold tracking-widest text-primary-500">
+            <p className="text-sm font-semibold tracking-widest text-primary-600">
               ORDERS
             </p>
             <h1 className="mt-1 text-3xl font-bold text-foreground">

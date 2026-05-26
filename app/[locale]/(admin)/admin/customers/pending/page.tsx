@@ -63,7 +63,7 @@ export default async function AdminCustomersPendingPage() {
             <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               ADMIN · APPROVAL QUEUE
             </p>
             <h1 className="mt-0.5 text-2xl font-bold">รอ Approve</h1>

@@ -51,7 +51,7 @@ const STATUS_LABEL: Record<number, string> = {
   4: "ส่งงานเสร็จ",
 };
 const STATUS_BADGE: Record<number, string> = {
-  1: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  1: "bg-amber-50 text-amber-700 border-amber-200",
   2: "bg-blue-50 text-blue-700 border-blue-200",
   3: "bg-gray-50 text-gray-600 border-gray-200",
   4: "bg-green-50 text-green-700 border-green-200",
@@ -122,7 +122,7 @@ export default async function DriverRunsPage() {
       <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">DRIVER · งานของฉัน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">DRIVER · งานของฉัน</p>
           <h1 className="mt-1 text-2xl font-bold">งานขนส่งที่ได้รับมอบหมาย</h1>
           <p className="mt-1 text-sm text-muted">รับงาน → ออกของจากโกดัง (สแกน) → ส่งถึงลูกค้า (สแกนซ้ำ) → กดเสร็จ</p>
         </div>

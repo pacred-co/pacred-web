@@ -103,7 +103,7 @@ export default async function PrepareOverduePage() {
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA · SLA</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA</p>
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">เตรียมส่งเกินกำหนด</h1>
           <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">

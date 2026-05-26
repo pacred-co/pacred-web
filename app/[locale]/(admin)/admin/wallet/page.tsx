@@ -109,7 +109,7 @@ export default async function AdminWalletPage({
       <main className="p-6 lg:p-8 space-y-5">
         <div className="flex items-baseline justify-between flex-wrap gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
             <div className="mt-1 flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold">
                 กระเป๋าสตางค์ —{" "}

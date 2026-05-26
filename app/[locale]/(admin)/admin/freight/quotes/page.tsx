@@ -87,7 +87,7 @@ export default async function AdminFreightQuotesListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · FREIGHT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold">ใบเสนอราคา (Freight quotes)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: draft → รออนุมัติ → อนุมัติ → ส่ง → ลูกค้ายืนยัน · approve/reject = super only

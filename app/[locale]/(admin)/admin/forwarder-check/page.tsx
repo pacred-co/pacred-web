@@ -413,7 +413,7 @@ function PageHeader({
     <div className="space-y-3">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · CARGO</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · CARGO</p>
           <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
             <span aria-hidden>💰</span>
             เรียกเก็บเงินลูกค้า — รายการนำเข้า

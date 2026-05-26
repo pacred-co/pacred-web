@@ -43,7 +43,7 @@ export default async function ApiSheetsCttPage({
       </nav>
 
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · อัปเดตฝากนำเข้า · {carrier.label}
         </p>
         <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการ — {carrier.label}</h1>

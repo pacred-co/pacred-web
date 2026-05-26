@@ -364,7 +364,7 @@ export default async function AdminTablePage({
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">รายชื่อพนักงานทั้งหมด</h1>
           <p className="text-sm text-muted mt-0.5">
             {rows.length.toLocaleString("th-TH")} รายการ (จาก {sAll.toLocaleString("th-TH")} ทั้งหมด)

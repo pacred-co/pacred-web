@@ -32,7 +32,7 @@ export default async function ChangePhonePage() {
 
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-6 sm:p-8 shadow-sm">
           <div className="mb-6">
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               {t("kicker")}
             </p>
             <h1 className="mt-1 text-2xl font-bold text-foreground">{t("title")}</h1>

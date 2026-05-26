@@ -52,7 +52,7 @@ export default async function AdminTosVersionsPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · SETTINGS</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · SETTINGS</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการเวอร์ชัน TOS (ข้อตกลงและเงื่อนไข)</h1>
         <p className="text-xs text-muted mt-1">
           เพิ่ม/แก้/เปิดใช้เวอร์ชัน TOS. <strong>Active = 1 row</strong> ที่ <code className="font-mono text-[10px]">is_active=true</code> —

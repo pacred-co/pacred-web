@@ -168,7 +168,7 @@ async function fetchUsersByUserId(
 // Sales-payout status (Pacred-native sales_payouts.status enum) — used by
 // the sales tab. Order/forwarder/payment use the legacy maps below.
 const PAYOUT_STATUS_BADGE: Record<string, string> = {
-  pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
   approved: "bg-blue-50 text-blue-700 border-blue-200",
   paid: "bg-green-50 text-green-700 border-green-200",
   rejected: "bg-red-50 text-red-700 border-red-200",
@@ -686,7 +686,7 @@ export default async function AdminReportsPage({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">รายงาน</h1>
           {(dateFrom || dateTo) && (
             <p className="text-sm text-muted mt-0.5">

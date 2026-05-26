@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CsvImportDetailActions } from "./detail-actions";
 
 const STATUS_BADGE: Record<string, string> = {
-  uploaded:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  uploaded:  "bg-amber-50 text-amber-700 border-amber-200",
   previewed: "bg-blue-50 text-blue-700 border-blue-200",
   importing: "bg-amber-50 text-amber-700 border-amber-200",
   imported:  "bg-green-50 text-green-700 border-green-200",
@@ -62,7 +62,7 @@ export default async function CsvImportDetailPage({
       </Link>
 
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold truncate">{row.filename}</h1>
         <p className="mt-1 text-xs text-muted font-mono">{row.id}</p>
       </div>

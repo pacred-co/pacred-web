@@ -82,7 +82,7 @@ export default async function AdminWalletAddPage({
 
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">กระเป๋าสตางค์</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">กระเป๋าสตางค์</p>
         <h1 className="mt-1 text-2xl font-bold">เพิ่มรายการ Wallet ด้วยมือ</h1>
         <p className="mt-1 text-sm text-muted">
           เขียนแถวลงตาราง <code className="rounded bg-surface-alt px-1 text-xs">tb_wallet_hs</code> + อัปเดต{" "}

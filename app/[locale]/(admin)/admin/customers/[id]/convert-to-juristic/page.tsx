@@ -54,7 +54,7 @@ export default async function ConvertToJuristicPage({
     <main className="p-6 lg:p-8 space-y-6 max-w-3xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
             ADMIN · อัพเกรดบัญชี
           </p>
           <h1 className="mt-1 text-2xl font-bold text-foreground">

@@ -76,7 +76,7 @@ export default async function AdminEditPage({
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · พนักงาน · แก้ไข
         </p>
         <h1 className="mt-1 text-2xl font-bold">{fullName}</h1>

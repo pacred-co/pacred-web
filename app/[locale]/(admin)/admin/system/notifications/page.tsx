@@ -178,7 +178,7 @@ export default async function AdminNotificationsLogPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · system · U4-1</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · system · U4-1</p>
           <h1 className="mt-1 text-2xl font-bold">Notification delivery log</h1>
           <p className="mt-1 text-sm text-muted">
             ค้นหา notifications ที่ส่งให้ลูกค้า · ดู delivery status · debug LINE/email push.

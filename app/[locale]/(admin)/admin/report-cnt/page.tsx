@@ -245,7 +245,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       <TopMenuReport activeHref="/admin/report-cnt" />
       <main className="p-4 lg:p-6 space-y-4">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · WAREHOUSE</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
           <h1 className="mt-1 text-2xl font-bold">รายงานตู้</h1>
           <p className="text-sm text-muted">
             กลุ่มตามหมายเลขตู้ (fCabinetNumber) — รวมจาก tb_forwarder

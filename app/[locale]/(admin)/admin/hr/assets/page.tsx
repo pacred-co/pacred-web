@@ -66,7 +66,7 @@ export default async function AdminHrAssetsHubPage() {
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการทรัพย์สินองค์กร</h1>
         <p className="mt-1 text-sm text-muted">
           บำรุงรักษา · สั่งซื้อ · คงเหลือ — ครุภัณฑ์และทรัพย์สินของบริษัท

@@ -201,7 +201,7 @@ export default async function AdminAccountingFreightHubPage() {
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">ระบบบัญชี</h1>
           {/* 2026-05-21 ภูม brief — sidebar dropdown removed; Cargo/Freight

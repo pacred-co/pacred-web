@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
  */
 
 const STATUS_BADGE: Record<string, string> = {
-  pending:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending:   "bg-amber-50 text-amber-700 border-amber-200",
   issued:    "bg-green-50 text-green-700 border-green-200",
   cancelled: "bg-gray-50 text-gray-600 border-gray-200",
 };

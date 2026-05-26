@@ -50,7 +50,7 @@ export default async function AdminCreatePage({
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · พนักงาน · สร้างใหม่
         </p>
         <h1 className="mt-1 text-2xl font-bold">เพิ่มพนักงานใหม่</h1>

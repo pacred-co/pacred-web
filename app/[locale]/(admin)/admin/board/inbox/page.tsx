@@ -280,7 +280,7 @@ export default async function AdminBoardInboxPage({
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · งานของฉัน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · งานของฉัน</p>
           <h1 className="mt-1 text-2xl font-bold">กล่องงานของฉัน (My Inbox)</h1>
           <p className="mt-1 text-sm text-muted">
             งานที่มอบหมายให้คุณ + งานของแผนก ({roles.map((r) => WORK_ROLE_LABEL[r as WorkAssignableRole] ?? r).join(" · ")}) ที่ยังไม่มีคนรับ

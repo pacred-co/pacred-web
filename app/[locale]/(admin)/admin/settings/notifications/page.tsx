@@ -62,7 +62,7 @@ export default async function AdminNotificationsSettingsPage() {
   return (
     <main className="p-6 lg:p-8 space-y-6 max-w-2xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">การแจ้งเตือนของฉัน</h1>
         <p className="mt-1 text-sm text-muted">
           ตั้งค่าช่องทางที่จะรับการแจ้งเตือนเป็นการส่วนตัว — ใช้กับ admin บัญชีนี้คนเดียว

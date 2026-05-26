@@ -159,7 +159,7 @@ export default async function BookingDetailPage({
             กลับรายการการจอง
           </Link>
           {/* i18n-key: booking.detail.kicker */}
-          <p className="mt-2 text-xs font-semibold tracking-widest text-primary-500">
+          <p className="mt-2 text-xs font-semibold tracking-widest text-primary-600">
             BOOKING
           </p>
           <h1 className="mt-1 text-xl font-bold font-mono text-foreground sm:text-2xl">
@@ -249,7 +249,7 @@ export default async function BookingDetailPage({
       {/* Estimate breakdown — frozen snapshot */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         {/* i18n-key: booking.detail.estimate.title */}
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ราคาประมาณการ
         </p>
 

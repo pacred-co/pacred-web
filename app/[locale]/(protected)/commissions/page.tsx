@@ -110,7 +110,7 @@ export default async function CommissionsPage() {
           <Coins className="h-6 w-6" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold tracking-widest text-primary-500">{t("kicker")}</p>
+          <p className="text-[10px] font-semibold tracking-widest text-primary-600">{t("kicker")}</p>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground mt-0.5">{t("title")}</h1>
           <p className="text-xs text-muted mt-0.5 max-w-[60ch]">{t("subtitle")}</p>
         </div>

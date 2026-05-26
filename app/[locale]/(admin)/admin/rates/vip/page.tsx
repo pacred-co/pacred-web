@@ -51,7 +51,7 @@ export default async function AdminRatesVipPage({
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · อัตราขนส่ง (VIP)</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · อัตราขนส่ง (VIP)</p>
           <h1 className="mt-1 text-2xl font-bold">ตารางเรท VIP — แก้ไขได้</h1>
           <p className="mt-1 text-sm text-muted">
             เรท flat (ราคาเดียว ไม่ tier) — ใช้แทน general เมื่อกลุ่มลูกค้านี้มี VIP rate ตามคีย์

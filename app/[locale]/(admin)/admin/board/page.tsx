@@ -216,7 +216,7 @@ export default async function AdminBoardPage({
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · OPERATING SYSTEM</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · OPERATING SYSTEM</p>
           <h1 className="mt-1 text-2xl font-bold">กระดานงานข้ามแผนก (Work Board)</h1>
           <p className="mt-1 text-sm text-muted">
             ทุกแผนกเห็นงานในที่เดียว — มอบหมาย · เลื่อนสถานะ · ส่งต่อ ไม่ต้องไล่ถามใน LINE

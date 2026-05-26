@@ -99,7 +99,7 @@ export default async function AdminQaOrderOver10MinPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · QA · SLA-BREACH</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA-BREACH</p>
         <div className="mt-1 flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-bold">สั่งซื้อรอเกิน 10 นาที</h1>
           {breachCount ? (

@@ -37,7 +37,7 @@ export default async function AdminApiForwarderCnPage() {
 
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           ADMIN · ฝากนำเข้า · CargoCenter Integration
         </p>
         <h1 className="mt-1 text-2xl font-bold">แดชบอร์ด Cargo Center · CN</h1>
