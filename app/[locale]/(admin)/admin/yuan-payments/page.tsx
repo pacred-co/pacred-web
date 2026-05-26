@@ -395,7 +395,7 @@ export default async function AdminYuanPaymentsPage({
                           href={`/admin/yuan-payments/${r.id}`}
                           className="text-primary-600 hover:underline"
                         >
-                          ดู / แก้ไข
+                          ดู
                         </Link>
                       </td>
                     </tr>
