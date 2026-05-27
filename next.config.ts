@@ -59,6 +59,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // Next 16 Server Actions default body limit = 1 MB. Admin file-upload forms
+  // accept up to 5 MB images (cover photos · slip uploads · driver photos —
+  // per per-form client-side validation), and phone-shot HEIC files routinely
+  // land at 8-12 MB. Bumping to 10 MB matches what the storage helper allows
+  // and prevents the silent "Body exceeded 1 MB limit" 500 ภูม hit on
+  // /admin/forwarders/new (2026-05-27 · pre-existing config gap since
+  // Wave 12-C built the cover-upload modal).
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   images: {
     // Quality values used across the codebase: 75 (default thumbs · table avatars),
     // 92 (hi-res shop covers · forwarder thumbs), 95 (marketing banners · office
