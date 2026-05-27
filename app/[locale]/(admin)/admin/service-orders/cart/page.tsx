@@ -253,44 +253,27 @@ export default async function AdminCartPage({
         </nav>
       </div>
 
-      {/* Top actions strip */}
+      {/* Top actions strip — single CTA into /cart/add (which hosts the
+          link-paste search with TAMIT variant picker + the manual entry form
+          fallback for "กรณีลิงก์ไม่ขึ้น"). Wave 24 #188 cleanup: removed the
+          3 dead surfaces that used to live here (URL search form → /admin/search,
+          + 2 chip Links → /admin/search?product=custom|custom2) — `/admin/search`
+          is the keyword china-search hub, NOT a cart-add surface, so every click
+          dumped the admin out of the cart context with stale-URL artefacts
+          (Next router intercepts left the URL bar showing /cart while body
+          rendered /admin/search). The /cart/add panel covers all 3 jobs:
+          paste-link search, "เพิ่มเอง (กรณีลิงก์ไม่ขึ้น)" manual form, and
+          customer-cart owner selection. */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        {/* Left: URL search → /admin/search */}
-        <form action="/admin/search" method="GET" className="flex flex-1 min-w-[260px] items-center gap-2">
-          <input
-            type="text"
-            name="url"
-            placeholder="วางลิงก์สินค้า 1688 / Taobao / Tmall..."
-            className="flex-1 rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            className="rounded-lg bg-primary-600 text-white px-4 py-2 text-sm font-medium hover:bg-primary-700"
-          >
-            ค้นหา
-          </button>
-        </form>
-        {/* Right: add-custom CTAs */}
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={{ pathname: "/admin/search", query: { product: "custom" } }}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
-          >
-            + ตระกร้าแอดมิน (กำหนดเอง)
-          </Link>
-          <Link
-            href={{ pathname: "/admin/search", query: { product: "custom2" } }}
-            className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-100"
-          >
-            + ตระกร้าลูกค้า (กรณีลิงก์ไม่ขึ้น)
-          </Link>
-          <Link
-            href="/admin/service-orders/cart/add"
-            className="rounded-lg bg-primary-600 text-white px-3 py-2 text-xs font-medium hover:bg-primary-700"
-          >
-            + สั่งสินค้าเพิ่ม
-          </Link>
-        </div>
+        <p className="text-xs text-muted">
+          วาง URL จาก 1688 / Taobao / Tmall ระบบจะดึง <strong>รูป · ชื่อสินค้า · ตัวเลือกสี/ขนาด · ราคา ¥</strong> มาให้อัตโนมัติ — หรือกรอกเองได้กรณีลิงก์ไม่ขึ้น
+        </p>
+        <Link
+          href="/admin/service-orders/cart/add"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-4 py-2 text-sm font-semibold hover:bg-primary-700 whitespace-nowrap"
+        >
+          + เพิ่มสินค้าในรถเข็น
+        </Link>
       </div>
 
       {/* Customer-search row */}
