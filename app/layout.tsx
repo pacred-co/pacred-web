@@ -85,6 +85,17 @@ export default function RootLayout({
     >
       <head>
         {/*
+          Opt out of Google Translate (browser-side + Web Translate Element).
+          Pacred has its own TH/EN switcher in NavBar (next-intl) so Chrome's
+          built-in translate prompt + the legacy `tam-it.js` Google Translate
+          widget are both redundant + visually noisy (the "ความต้นฉบับ /
+          ให้คะแนนคำแปลนี้" rating overlay on every protected page). With
+          `<meta name="google" content="notranslate">` Chrome does NOT offer
+          translation + the legacy widget no-ops even if injected. CSS in
+          globals.css hides any residual `.skiptranslate`/`.goog-te-*` chrome.
+        */}
+        <meta name="google" content="notranslate" />
+        {/*
           Pre-hydration theme script — paints `light` before first paint to
           prevent FOUC. Lives in public/theme-init.js as an external file so
           React 19 hoists it via the script-resource pipeline (any inline

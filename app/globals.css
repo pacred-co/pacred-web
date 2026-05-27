@@ -130,3 +130,49 @@ body {
 @media (max-width: 1023px) {
   .protected-content { padding-left: 0; }
 }
+
+/* ────────────────────────────────────────────────────────────
+ * Hide Google Translate residual UI 2026-05-27.
+ *
+ * Pacred opts out of Google Translate via <meta name="google"
+ * content="notranslate"> in app/layout.tsx + neutered the legacy
+ * `tam-it.js` auto-injector. These rules belt-and-suspender the
+ * opt-out:
+ *
+ * 1. Chrome's built-in page-translate banner / rating overlay
+ *    ("ความต้นฉบับ / ให้คะแนนคำแปลนี้ / Google แปลภาษา 👎") —
+ *    `.goog-te-banner-frame` + `.skiptranslate`.
+ *
+ * 2. The legacy `tam-it.js` widget anchor divs
+ *    (`#google_translate_element` + `#google_translate_element2`)
+ *    in pcs-footer-nav.tsx + search/page.tsx — empty now, but
+ *    Google Translate's top-bar inserter would push body down with
+ *    `body { top: 40px !important }` if it ever ran, so we lock
+ *    `top: 0`.
+ *
+ * 3. Any `font-style: italic` Google injects on translated text
+ *    nodes (the rating overlay sometimes italicises the source
+ *    language).
+ *
+ * The user-facing complaint that triggered this:
+ *   "ความต้นฉบับ / ให้คะแนนคำแปลนี้ ... แบบนี้เราเรียกบัคนะ
+ *    แก้เอาออก หรือ ซ่อนเลย" — เดฟ 2026-05-27
+ * ──────────────────────────────────────────────────────────── */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-gadget,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip-popup,
+#google_translate_element,
+#google_translate_element2,
+#goog-gt-tt,
+.VIpgJd-ZVi9od-ORHb-OEVmcd {
+  display: none !important;
+  visibility: hidden !important;
+}
+/* Google Translate forcibly pushes body down with `top: 40px` when
+ * the banner injects. Lock body to 0 so the layout doesn't shift
+ * even if the banner sneaks in. */
+body {
+  top: 0 !important;
+}
