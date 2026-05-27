@@ -549,10 +549,11 @@ export async function adminBulkUpdateForwarderTbStatus(
   return withAdmin<{ updated: number }>(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Snapshot before — for audit log + change detection (skip notify on no-op).
+    // Snapshot before — for audit log + change detection + the cabinet-close
+    // date back-fill (Wave 24 #192 · 2026-05-27 ดึก · see comment below).
     const { data: before, error: readErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, userid, fidorco")
+      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose")
       .in("id", fids);
     if (readErr) return { ok: false, error: readErr.message };
     if (!before || before.length === 0) return { ok: false, error: "not_found" };
@@ -562,6 +563,8 @@ export async function adminBulkUpdateForwarderTbStatus(
       fstatus: string;
       userid: string;
       fidorco: string | null;
+      fcabinetnumber: string | null;
+      fdatecontainerclose: string | null;
     }>;
 
     const nowIso = new Date().toISOString();
@@ -571,6 +574,36 @@ export async function adminBulkUpdateForwarderTbStatus(
     // Sister bug-fix 2026-05-27 — ภูม bulk-update of #51973 hit the same
     // ceiling because adminId ("admin_pasit_pap" etc) was inserted raw.
     const adminIdSafe = String(adminId).slice(0, 10);
+
+    // 🚨 Wave 24 #192 (2026-05-27 ดึก · ภูม live walkthrough · order #51974):
+    //
+    // Legacy `report-cnt.php` filters the "เข้าโกดังไทยแล้ว" view by
+    // DATE(fDateContainerClose) BETWEEN start AND end. Rows with NULL
+    // fDateContainerClose are invisible on that report — even if fstatus is
+    // already 4 (ถึงไทย) and the cabinet number is set.
+    //
+    // The legacy partner-API integrations (api-forwarder-cn.php · momo.php ·
+    // gogo.php · api-sheets-* etc) ALL set fDateContainerClose at the same
+    // time they set fCabinetNumber (when fStatus transitions to '3'). When
+    // admin assigns a cabinet manually via our bulk-bar OR detail-panel
+    // (Wave 24 #179/#180), we forgot the parallel fDateContainerClose write
+    // → orders never surface on /admin/report-cnt.
+    //
+    // Fix: when admin sets `cabinet_number` for an order whose row currently
+    // has NULL/empty fdatecontainerclose, stamp fdatecontainerclose=now().
+    // Per-row decision: a multi-row bulk where some rows already have a
+    // close-date keeps the EXISTING value (don't clobber legacy data).
+    //
+    // The legacy partner-API path used `manifest_date` from the carrier's
+    // payload. Admin manual path has no manifest — `now()` is the honest
+    // proxy ("the moment admin sealed/assigned the container"). When ภูม
+    // later wires manifest_date through (Wave 25+), this back-fill becomes
+    // an upper bound + can be overridden.
+    const cabinetAssigned = cabinet_number !== undefined && cabinet_number.trim() !== "";
+    const needsBackfillSet = cabinetAssigned
+      ? new Set(beforeRows.filter((r) => !r.fdatecontainerclose).map((r) => r.id))
+      : new Set<number>();
+
     const update: Record<string, unknown> = {
       fstatus,
       fdateadminstatus: nowIso,
@@ -584,11 +617,37 @@ export async function adminBulkUpdateForwarderTbStatus(
       ...(fnote          !== undefined ? { fnote: fnote || null }            : {}),
     };
 
-    const { error: updErr } = await admin
-      .from("tb_forwarder")
-      .update(update)
-      .in("id", fids);
-    if (updErr) return { ok: false, error: updErr.message };
+    // Path A — no back-fill rows: single bulk update covers everything.
+    // Path B — some rows need fdatecontainerclose stamped: split into 2 updates
+    //          (the back-fill subset gets the extra column; the rest don't).
+    //          A 2-statement split is honest about which rows changed when,
+    //          and keeps the audit log accurate. Cheaper than a per-row loop.
+    if (needsBackfillSet.size === 0) {
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update(update)
+        .in("id", fids);
+      if (updErr) return { ok: false, error: updErr.message };
+    } else {
+      const backfillIds = Array.from(needsBackfillSet);
+      const otherIds = fids.filter((id) => !needsBackfillSet.has(id));
+
+      // 1) rows that need the close-date back-fill
+      const { error: updWithCloseErr } = await admin
+        .from("tb_forwarder")
+        .update({ ...update, fdatecontainerclose: nowIso })
+        .in("id", backfillIds);
+      if (updWithCloseErr) return { ok: false, error: updWithCloseErr.message };
+
+      // 2) rows that already had a close-date — keep it intact
+      if (otherIds.length > 0) {
+        const { error: updOthersErr } = await admin
+          .from("tb_forwarder")
+          .update(update)
+          .in("id", otherIds);
+        if (updOthersErr) return { ok: false, error: updOthersErr.message };
+      }
+    }
 
     await logAdminAction(adminId, "forwarder.bulk_update_tb", "tb_forwarder", "bulk", {
       fids,
