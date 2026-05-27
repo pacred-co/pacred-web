@@ -4,15 +4,20 @@
  * Client island for the "เพิ่มรายการรวมบิล" form on
  * `/admin/forwarders/combine-bill/add`.
  *
- * Faithful-port mapping:
+ * Faithful-port mapping (logic preserved per AGENTS §0a):
  *   - The legacy form (forwarder-bill.php L472-487) is one `<input>`
  *     accepting a comma-separated forwarder-ID list + a single submit
- *     button. Identical markup here; the onSubmit hooks into
+ *     button. Same logic here; the onSubmit hooks into
  *     adminCreateCombineBill instead of the legacy `<form action>` POST.
  *   - The legacy success SweetAlert (L516-526) becomes a `window.alert`
  *     (the SweetAlert lift is a follow-up across admin UI). Same UX
  *     shape (success → redirect to the list page; error → message popup
  *     + stay on the form so the user can fix it).
+ *
+ * Wave 23 P2 (2026-05-27): Bootstrap-4 markup (form-control · input-group ·
+ * btn btn-color-main · font-14) → Tailwind utilities. Pattern source:
+ * /admin/reports/payment filter form. Page chrome already Tailwind
+ * (Wave 20 P1-b) — this finishes the form-internals sweep.
  */
 
 import { useState, useTransition } from "react";
@@ -51,42 +56,35 @@ export function CombineBillAddForm() {
   return (
     <form
       id="form"
-      className="my-2 my-lg-0 justify-content-center"
-      style={{ paddingTop: "30%" }}
+      className="space-y-3"
       autoComplete="off"
       onSubmit={handleSubmit}
     >
-      <h3 className="text-center text-color-main">เพิ่มรายการรวมบิล</h3>
-      <div className="input-group mb-1">
-        <span className="font-14">
-          {" "}กรอกเลขที่ออเดอร์นำเข้า โดยใช้เครื่องหมายคอมมาคั่นรายการ EX.
-          1,5,6
-        </span>
-      </div>
-      <div className="input-group">
-        <div className="w-100">
-          <input
-            type="text"
-            id="search-tracking"
-            name="ID"
-            className="w-100 form-control product-search br-30"
-            placeholder="กรอกเลขที่ออเดอร์นำเข้า EX. 1,5,6"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            disabled={pending}
-          />
-        </div>
+      <p className="text-xs text-muted">
+        กรอกเลขที่ออเดอร์นำเข้า โดยใช้เครื่องหมายคอมมาคั่นรายการ EX. 1,5,6
+      </p>
+      <div>
+        <input
+          type="text"
+          id="search-tracking"
+          name="ID"
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+          placeholder="กรอกเลขที่ออเดอร์นำเข้า EX. 1,5,6"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          disabled={pending}
+        />
       </div>
       {error && (
-        <div className="text-center pt-1">
-          <span className="text-danger font-14">{error}</span>
+        <div className="text-center">
+          <span className="text-xs text-red-700">{error}</span>
         </div>
       )}
       <div className="text-center pt-2">
         <button
           type="submit"
           name="add"
-          className="btn btn-color-main round btn-min-width waves-effect"
+          className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600 disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={pending}
         >
           {pending ? "กำลังสร้าง…" : "สร้างรายการ"}
