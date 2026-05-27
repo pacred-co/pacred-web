@@ -99,11 +99,15 @@ export default async function AdminRefundDetailPage({
   // Parent context lookup — best-effort; show the parent if we can resolve it.
   let parentCtx: { label: string; details: Array<{ k: string; v: string }> } | null = null;
   if (row.source === "forwarder" && row.source_ref) {
-    const { data } = await admin
+    const { data, error: fErr } = await admin
       .from("forwarders")
       .select("f_no, status, total_price, created_at")
       .eq("f_no", row.source_ref)
       .maybeSingle<{ f_no: string; status: string; total_price: number | null; created_at: string }>();
+    if (fErr) {
+      // Soft-fail — parent context is best-effort; page still renders the refund detail without it.
+      console.error(`[refunds/[id] forwarder parent lookup] ref=${row.source_ref}`, { code: fErr.code, message: fErr.message });
+    }
     if (data) {
       parentCtx = {
         label: `Forwarder ${data.f_no}`,
@@ -115,11 +119,14 @@ export default async function AdminRefundDetailPage({
       };
     }
   } else if (row.source === "service_order" && row.source_ref) {
-    const { data } = await admin
+    const { data, error: soErr } = await admin
       .from("service_orders")
       .select("h_no, status, total_thb, created_at")
       .eq("h_no", row.source_ref)
       .maybeSingle<{ h_no: string; status: string; total_thb: number | null; created_at: string }>();
+    if (soErr) {
+      console.error(`[refunds/[id] service_order parent lookup] ref=${row.source_ref}`, { code: soErr.code, message: soErr.message });
+    }
     if (data) {
       parentCtx = {
         label: `Service order ${data.h_no}`,
@@ -131,11 +138,14 @@ export default async function AdminRefundDetailPage({
       };
     }
   } else if (row.source === "yuan_payment" && row.source_ref) {
-    const { data } = await admin
+    const { data, error: ypErr } = await admin
       .from("yuan_payments")
       .select("id, status, yuan_amount, thb_amount, channel, created_at")
       .eq("id", row.source_ref)
       .maybeSingle<{ id: string; status: string; yuan_amount: number; thb_amount: number; channel: string; created_at: string }>();
+    if (ypErr) {
+      console.error(`[refunds/[id] yuan_payment parent lookup] ref=${row.source_ref}`, { code: ypErr.code, message: ypErr.message });
+    }
     if (data) {
       parentCtx = {
         label: `Yuan payment ${data.id.slice(0, 8)}…`,
@@ -156,13 +166,19 @@ export default async function AdminRefundDetailPage({
   }
 
   // Audit timeline.
-  const { data: auditRaw } = await admin
+  const { data: auditRaw, error: auditErr } = await admin
     .from("admin_audit_log")
     .select("id, action, created_at, payload, admin_id, admin:profiles!admin_id ( member_code, first_name, last_name )")
     .eq("target_type", "refund_request")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (auditErr) {
+    console.error(`[refunds/[id] audit log lookup] id=${id}`, {
+      code: auditErr.code, message: auditErr.message, details: auditErr.details, hint: auditErr.hint,
+    });
+    throw new Error(`Failed to load admin_audit_log (${auditErr.code}): ${auditErr.message}`);
+  }
   type AuditRaw = {
     id: string; action: string; created_at: string; payload: unknown;
     admin: { member_code: string | null; first_name: string | null; last_name: string | null }
@@ -181,11 +197,15 @@ export default async function AdminRefundDetailPage({
   // Resolve paid wallet tx amount/note for transparency when status='paid'.
   let paidTxNote: string | null = null;
   if (row.paid_wallet_tx_id) {
-    const { data: w } = await admin
+    const { data: w, error: wErr } = await admin
       .from("wallet_transactions")
       .select("id, amount, note, created_at")
       .eq("id", row.paid_wallet_tx_id)
       .maybeSingle<{ id: string; amount: number; note: string | null; created_at: string }>();
+    if (wErr) {
+      // Soft-fail — transparency note is best-effort; page still renders the refund.
+      console.error(`[refunds/[id] paid wallet_tx lookup] txId=${row.paid_wallet_tx_id}`, { code: wErr.code, message: wErr.message });
+    }
     if (w) {
       paidTxNote = `wallet_tx ${w.id.slice(0, 8)}… +${thb(Number(w.amount))} @ ${new Date(w.created_at).toLocaleString("th-TH")}`;
     }

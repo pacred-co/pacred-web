@@ -452,11 +452,15 @@ export default async function ServiceImportDetailPage({
 
   // forwarder.php L1666: LEFT JOIN tb_promotion po ON po.fid=f.id
   // (read as a separate query — the legacy gets promoID off the same row)
-  const { data: promoRow } = await admin
+  const { data: promoRow, error: promoErr } = await admin
     .from("tb_promotion")
     .select("promoid")
     .eq("fid", idNum)
     .maybeSingle<{ promoid: number | string | null }>();
+  if (promoErr) {
+    // Soft-fail — promotion is optional decoration; legacy uses LEFT JOIN.
+    console.error(`[service-import/[fNo] tb_promotion lookup] fid=${idNum}`, { code: promoErr.code, message: promoErr.message });
+  }
   const promoIdStr = promoRow ? String(promoRow.promoid) : null;
 
   // forwarder.php L1725-1739: tb_forwarder_driver_item fdi
@@ -465,10 +469,14 @@ export default async function ServiceImportDetailPage({
   //   WHERE fdi.fid = <id>
   // Tables have no declared FKs → use parallel queries (same pattern as
   // the LIST page's tb_forwarder_driver_item lookup).
-  const { data: driverItemRows } = await admin
+  const { data: driverItemRows, error: driverItemErr } = await admin
     .from("tb_forwarder_driver_item")
     .select("fid, fdid, fdistatus")
     .eq("fid", idNum);
+  if (driverItemErr) {
+    // Soft-fail — driver join is decorative for the FID_driver2 flag.
+    console.error(`[service-import/[fNo] tb_forwarder_driver_item lookup] fid=${idNum}`, { code: driverItemErr.code, message: driverItemErr.message });
+  }
   // The legacy reads tb_forwarder_driver's fdstatus (`fd.fdStatus`)
   // for the FID_driver2 flag (L1731-1735).
   let FID_driver2: 0 | 1 = 0;
@@ -480,10 +488,14 @@ export default async function ServiceImportDetailPage({
     ),
   );
   if (fdIds.length > 0) {
-    const { data: drvRows } = await admin
+    const { data: drvRows, error: drvErr } = await admin
       .from("tb_forwarder_driver")
       .select("id, fdadminid, fdstatus")
       .in("id", fdIds);
+    if (drvErr) {
+      // Soft-fail — driver info is decorative for adminTel/adminName + FID_driver2.
+      console.error(`[service-import/[fNo] tb_forwarder_driver lookup] fdIds=${JSON.stringify(fdIds)}`, { code: drvErr.code, message: drvErr.message });
+    }
     const adminIds = Array.from(
       new Set(
         ((drvRows ?? []) as { fdadminid: string }[]).map((r) => r.fdadminid),
@@ -491,10 +503,14 @@ export default async function ServiceImportDetailPage({
     );
     const adminMap: Record<string, { adminname: string | null; admintel: string | null }> = {};
     if (adminIds.length > 0) {
-      const { data: admRows } = await admin
+      const { data: admRows, error: admErr } = await admin
         .from("tb_admin")
         .select("adminid, adminname, admintel")
         .in("adminid", adminIds);
+      if (admErr) {
+        // Soft-fail — admin name/tel is decorative.
+        console.error(`[service-import/[fNo] tb_admin lookup] adminIds=${JSON.stringify(adminIds)}`, { code: admErr.code, message: admErr.message });
+      }
       for (const a of (admRows ?? []) as Array<{
         adminid: string;
         adminname: string | null;
@@ -518,35 +534,49 @@ export default async function ServiceImportDetailPage({
   }
 
   // forwarder.php L1786-1793: tb_receipt_item WHERE fid=<id>
-  const { data: receiptRow } = await admin
+  const { data: receiptRow, error: receiptErr } = await admin
     .from("tb_receipt_item")
     .select("rid")
     .eq("fid", idNum)
     .maybeSingle<{ rid: string | null }>();
+  if (receiptErr) {
+    // Soft-fail — receipt link is decorative (legacy uses LEFT JOIN).
+    console.error(`[service-import/[fNo] tb_receipt_item lookup] fid=${idNum}`, { code: receiptErr.code, message: receiptErr.message });
+  }
   const rID = receiptRow?.rid ?? null;
 
   // forwarder.php L2024-2039: tb_forwarder_tran_th_sub multi-bill warning
-  const { data: tranThSub } = await admin
+  const { data: tranThSub, error: tranThSubErr } = await admin
     .from("tb_forwarder_tran_th_sub")
     .select("ftthhid")
     .eq("fid", idNum)
     .maybeSingle<{ ftthhid: string | number | null }>();
+  if (tranThSubErr) {
+    // Soft-fail — multi-bill warning is decorative.
+    console.error(`[service-import/[fNo] tb_forwarder_tran_th_sub lookup] fid=${idNum}`, { code: tranThSubErr.code, message: tranThSubErr.message });
+  }
   let multiBillSiblings: { fID: number; fTrackingCHN: string | null }[] = [];
   if (tranThSub?.ftthhid != null) {
     // forwarder.php L2029-2031 — no FKs declared, parallel fetch:
     //   SELECT fid FROM tb_forwarder_tran_th_sub WHERE ftthhid=… AND fid<>…
     //   then join tb_forwarder.id IN (fids) for the ftrackingchn column.
-    const { data: siblingIds } = await admin
+    const { data: siblingIds, error: siblingErr } = await admin
       .from("tb_forwarder_tran_th_sub")
       .select("fid")
       .eq("ftthhid", tranThSub.ftthhid)
       .neq("fid", idNum);
+    if (siblingErr) {
+      console.error(`[service-import/[fNo] tb_forwarder_tran_th_sub siblings lookup] ftthhid=${tranThSub.ftthhid}`, { code: siblingErr.code, message: siblingErr.message });
+    }
     const fids = ((siblingIds ?? []) as { fid: number }[]).map((s) => s.fid);
     if (fids.length > 0) {
-      const { data: fwdRows } = await admin
+      const { data: fwdRows, error: fwdErr } = await admin
         .from("tb_forwarder")
         .select("id, ftrackingchn")
         .in("id", fids);
+      if (fwdErr) {
+        console.error(`[service-import/[fNo] tb_forwarder siblings lookup] fids=${JSON.stringify(fids)}`, { code: fwdErr.code, message: fwdErr.message });
+      }
       multiBillSiblings = ((fwdRows ?? []) as Array<{
         id: number;
         ftrackingchn: string | null;
@@ -555,11 +585,15 @@ export default async function ServiceImportDetailPage({
   }
 
   // forwarder.php L2050-2056: tb_forwarder_driver_item ⋈ tb_forwarder_driver
-  const { data: driverRow } = await admin
+  const { data: driverRow, error: driverRowErr } = await admin
     .from("tb_forwarder_driver_item")
     .select("fdistatus")
     .eq("fid", idNum)
     .maybeSingle<{ fdistatus: string | null }>();
+  if (driverRowErr) {
+    // Soft-fail — driver status is decorative for legacy display.
+    console.error(`[service-import/[fNo] tb_forwarder_driver_item secondary lookup] fid=${idNum}`, { code: driverRowErr.code, message: driverRowErr.message });
+  }
 
   // Normalised row aliases.
   const fStatusValue = row.fstatus ?? "";

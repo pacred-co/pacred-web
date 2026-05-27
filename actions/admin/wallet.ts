@@ -30,11 +30,15 @@ export async function adminUpdateWalletTransaction(input: AdminUpdateWalletTxInp
 
   return withAdmin(["accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("wallet_transactions")
       .select("id, profile_id, kind, amount, status")
       .eq("id", d.id)
       .maybeSingle<{ id: string; profile_id: string; kind: string; amount: number; status: string }>();
+    if (existingErr) {
+      console.error("[admin/wallet updateTx lookup] id=", d.id, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === d.status) return { ok: true };  // no-op
 
@@ -109,11 +113,15 @@ export async function adminGetWalletTxSlipSignedUrl(
     ["super", "accounting"],
     async () => {
       const admin = createAdminClient();
-      const { data: row } = await admin
+      const { data: row, error: rowErr } = await admin
         .from("wallet_transactions")
         .select("id, slip_url")
         .eq("id", parsed.data.id)
         .maybeSingle<{ id: string; slip_url: string | null }>();
+      if (rowErr) {
+        console.error("[admin/wallet getSlipUrl lookup] id=", parsed.data.id, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code}` };
+      }
       if (!row) return { ok: false, error: "not_found" };
       if (!row.slip_url) return { ok: true, data: { url: null, mime: null } };
 
@@ -354,11 +362,15 @@ export async function adminCreateManualWalletEntry(
       const admin = createAdminClient();
 
       // Verify the target customer exists.
-      const { data: prof } = await admin
+      const { data: prof, error: profErr } = await admin
         .from("profiles")
         .select("id, member_code")
         .eq("id", d.profile_id)
         .maybeSingle<{ id: string; member_code: string | null }>();
+      if (profErr) {
+        console.error("[admin/wallet manual profile lookup] profileId=", d.profile_id, { code: profErr.code, message: profErr.message });
+        return { ok: false, error: `db_error:${profErr.code}` };
+      }
       if (!prof) return { ok: false, error: "ไม่พบสมาชิก" };
 
       let slipDateIso: string | null = null;
