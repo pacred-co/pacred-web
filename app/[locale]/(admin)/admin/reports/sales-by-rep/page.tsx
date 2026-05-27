@@ -1,35 +1,44 @@
 /**
- * V-G6 #2 — Sales revenue per sales rep (Wave 8 backlog item #7 · D1 port).
+ * /admin/reports/sales-by-rep — รายได้แยกตามเซลล์ผู้ดูแล
  *
- * Reads `vw_sales_by_rep` (Postgres VIEW from migration 0094 — applied to
- * prod manually by ภูม via the Supabase dashboard). The view aggregates
- * `tb_users.adminidsale × { tb_forwarder, tb_header_order, tb_payment }`
- * per month with the legacy `report-sale-new.php` (~700 LOC) status
- * gates: fstatus IN ('6','7') / hstatus IN ('5','6') / paystatus = '3'.
+ * **Wave 23 P1 batch 2-A (2026-05-27 ค่ำ):** UI rewrite only — the underlying
+ * `vw_sales_by_rep` read (Postgres VIEW from migration 0094) is already correct
+ * and stays intact. Replaces the .pcs-legacy / Bootstrap-4 / admin-base.css
+ * chrome (~422 LOC) with the Pacred Tailwind v4 reports template (mirrors
+ * `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
  *
- * Replaces the Wave 7.2 "Wave 8 banner" stub that rendered ฿0 for every
- * rep because the rebuilt-schema 3-way join was empty on prod.
+ * **Workflow preserved (per AGENTS §0a):** same SQL, same filters, same data
+ * fields, same role gate (super + ops + accounting + sales_admin), same
+ * aggregation logic. Only the chrome moves from Bootstrap-4 to Tailwind.
  *
- * URL filters:
- *   ?from=YYYY-MM  → start month (inclusive · default = first day of THIS month)
- *   ?to=YYYY-MM    → end month   (inclusive · default = first day of THIS month)
- *   ?sort=revenue|customers|forwarders|shop|payments   (default = revenue)
+ * **Legacy PHP source:** `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-sale.php`
+ *   - The legacy "ยอดพนักงานขาย" page (CEO/Manager/QA/Accounting/IT gate)
+ *   - Reads tb_sales_report (rebuilt on each visit from tb_forwarder fStatus=7)
+ *   - Aggregates SUM(fTotalPrice + fTransportPrice + fPriceUpdate) per rep × month
+ *   - "ยอดที่ได้จริง" = price × 0.01 (the 1% commission line — for Phase C reference)
  *
- * Gate: super + accounting + sales_admin (mirrors the legacy export-chip
- * gate which restricts CSV/Excel/print to CEO / Manager / Accounting; we
- * narrow the *view* to those same roles since the table IS the report).
+ * **Pacred richer than legacy (intentional Phase C polish):**
+ *   - Pacred uses month-range filter (from/to) vs legacy single-month dropdown
+ *   - Pacred aggregates 3 income streams (forwarder + shop + payment) vs legacy
+ *     fStatus=7 only (forwarder). The vw_sales_by_rep view does the heavy lift.
+ *   - Pacred sort options (revenue / customers / forwarders / shop / payments)
+ *
+ * **§0c compliance:** vw_sales_by_rep read destructures { data, error }, logs
+ * + surfaces the error in a styled banner instead of throwing (so the page
+ * still renders if the migration 0094 view is missing on a fresh env).
  */
-
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CsvButton } from "@/components/admin/csv-button";
+import { nowDate } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
-// ── Helpers (PHP `date(...)` parity) ─────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────
 
 function firstDayOfThisMonth(): string {
-  const d = new Date();
+  const d = nowDate();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -63,7 +72,7 @@ function intFmt(n: number): string {
   return Number(n || 0).toLocaleString("en-US");
 }
 
-// ── Row shape — vw_sales_by_rep ──────────────────────────────────────
+// ── Row shape — vw_sales_by_rep ──────────────────────────────────────────
 
 type VRow = {
   admin_userid: string | null;
@@ -102,6 +111,16 @@ type SP = {
 
 type SortKey = NonNullable<SP["sort"]>;
 
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: "revenue",    label: "รายได้รวม" },
+  { value: "customers",  label: "จำนวนลูกค้า" },
+  { value: "forwarders", label: "จำนวนนำเข้า" },
+  { value: "shop",       label: "จำนวนฝากสั่ง" },
+  { value: "payments",   label: "จำนวนฝากโอน" },
+];
+
+// ── Page ─────────────────────────────────────────────────────────────────
+
 export default async function SalesByRepReport({
   searchParams,
 }: {
@@ -110,7 +129,7 @@ export default async function SalesByRepReport({
   await requireAdmin(["super", "ops", "accounting", "sales_admin"]);
   const sp = await searchParams;
 
-  // ── Resolve the month window ────────────────────────────────────
+  // Resolve the month window + sort.
   const fromMonth = parseMonth(sp.from) ?? firstDayOfThisMonth();
   const toMonth = parseMonth(sp.to) ?? firstDayOfThisMonth();
   const sort: SortKey = (["revenue", "customers", "forwarders", "shop", "payments"] as const).includes(
@@ -121,10 +140,10 @@ export default async function SalesByRepReport({
 
   const admin = createAdminClient();
 
-  // Read the view — server-side filter on activity_month range
-  // (vw_sales_by_rep is bucketed per month; per-rep aggregation
-  // happens below in TS).
-  const { data: viewData, error } = await admin
+  // Read the view — server-side filter on activity_month range.
+  // (vw_sales_by_rep is bucketed per month; per-rep aggregation happens
+  // below in TS.)
+  const { data: viewData, error: viewErr } = await admin
     .from("vw_sales_by_rep")
     .select(
       "admin_userid, adminnickname, admin_fullname, customer_count, activity_month, forwarder_revenue_thb, forwarder_count, shop_revenue_thb, shop_count, payment_revenue_thb, payment_count, total_revenue_thb",
@@ -132,9 +151,17 @@ export default async function SalesByRepReport({
     .gte("activity_month", monthStartISO(fromMonth))
     .lt("activity_month", monthEndExclusiveISO(toMonth));
 
+  if (viewErr) {
+    console.error(`[vw_sales_by_rep read] failed`, {
+      code: viewErr.code, message: viewErr.message, details: viewErr.details,
+    });
+    // Soft-fail: render the banner so the admin can see WHY the table is empty.
+    // (vw_sales_by_rep needs migration 0094 — soft path keeps the page usable.)
+  }
+
   const rows = (viewData ?? []) as unknown as VRow[];
 
-  // Aggregate per rep across the window
+  // Aggregate per rep across the window.
   const byRep = new Map<string, RepAggregate>();
   for (const r of rows) {
     const key = r.admin_userid ?? "";
@@ -202,221 +229,205 @@ export default async function SalesByRepReport({
     },
   );
 
+  // CSV rows.
+  const csvRows = aggregates.map((r) => ({
+    nickname:        r.adminnickname || r.admin_fullname || "",
+    admin_userid:    r.admin_userid,
+    customer_count:  r.customer_count,
+    forwarder_count: r.forwarder_count,
+    forwarder_thb:   r.forwarder_revenue_thb,
+    shop_count:      r.shop_count,
+    shop_thb:        r.shop_revenue_thb,
+    payment_count:   r.payment_count,
+    payment_thb:     r.payment_revenue_thb,
+    total_thb:       r.total_revenue_thb,
+  }));
+  const csvCols = [
+    { key: "nickname",        label: "เซลล์" },
+    { key: "admin_userid",    label: "รหัสแอดมิน" },
+    { key: "customer_count",  label: "ลูกค้า" },
+    { key: "forwarder_count", label: "ฝากนำเข้า (รายการ)" },
+    { key: "forwarder_thb",   label: "ฝากนำเข้า (บาท)" },
+    { key: "shop_count",      label: "ฝากสั่ง (รายการ)" },
+    { key: "shop_thb",        label: "ฝากสั่ง (บาท)" },
+    { key: "payment_count",   label: "ฝากโอน (รายการ)" },
+    { key: "payment_thb",     label: "ฝากโอน (บาท)" },
+    { key: "total_thb",       label: "รวมรายได้ (บาท)" },
+  ];
+
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รายงาน</p>
+          <h1 className="mt-1 text-2xl font-bold">รายได้แยกตามเซลล์ผู้ดูแล</h1>
+          <p className="mt-1 text-sm text-muted">
+            <span className="font-mono">vw_sales_by_rep</span> (migration 0094) · ฝากนำเข้า (fstatus 6,7) +
+            ฝากสั่ง (hstatus 5,6) + ฝากโอน (paystatus 3) — คิดต่อเซลล์ที่ดูแลลูกค้า
+          </p>
+        </div>
+        <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+          ← กลับรีพอร์ตหลัก
+        </Link>
+      </div>
 
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/reports">รายงาน</Link>
-                    </li>
-                    <li className="breadcrumb-item active">รายได้แยกตามเซลล์ผู้ดูแล</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      {/* Filter banner */}
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        ผลลัพธ์: <span className="font-semibold">{fromMonth}</span> ถึง <span className="font-semibold">{toMonth}</span>
+        {" · "}
+        เรียงตาม: <span className="font-semibold">{SORT_OPTIONS.find((o) => o.value === sort)?.label}</span>
+        {" · "}
+        เซลล์ <span className="font-semibold">{aggregates.length}</span> คน
+      </div>
+
+      {/* Filter form (GET) */}
+      <form method="GET" action="/admin/reports/sales-by-rep" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label htmlFor="from" className="block text-xs text-muted mb-1">เดือนเริ่มต้น</label>
+            <input
+              id="from"
+              type="month"
+              name="from"
+              defaultValue={fromMonth}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
           </div>
-
-          <div className="content-body">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-md-12">
-                            <h3 className="text-center text-md-left">
-                              <span className="ft-box font-30" style={{ fontSize: "2.2rem" }}></span>{" "}
-                              รายได้แยกตามเซลล์ผู้ดูแล
-                            </h3>
-                            <p className="font-12 text-muted">
-                              สรุปยอดรายได้จาก ฝากนำเข้า (fstatus 6,7) + ฝากสั่ง (hstatus 5,6) + ฝากโอน (paystatus 3)
-                              คิดต่อเซลล์ที่ดูแลลูกค้า · view: <code>vw_sales_by_rep</code> (migration 0094)
-                            </p>
-
-                            {/* Filter form */}
-                            <form
-                              method="GET"
-                              action="/admin/reports/sales-by-rep"
-                              className="mb-2"
-                            >
-                              <div className="row">
-                                <div className="col-md-3 col-6">
-                                  <label className="form-control-label" htmlFor="from">
-                                    เดือนเริ่มต้น
-                                  </label>
-                                  <input
-                                    type="month"
-                                    className="form-control"
-                                    name="from"
-                                    defaultValue={fromMonth}
-                                  />
-                                </div>
-                                <div className="col-md-3 col-6">
-                                  <label className="form-control-label" htmlFor="to">
-                                    เดือนสิ้นสุด
-                                  </label>
-                                  <input
-                                    type="month"
-                                    className="form-control"
-                                    name="to"
-                                    defaultValue={toMonth}
-                                  />
-                                </div>
-                                <div className="col-md-3 col-12">
-                                  <label className="form-control-label" htmlFor="sort">
-                                    เรียงตาม
-                                  </label>
-                                  <select
-                                    className="form-control"
-                                    name="sort"
-                                    defaultValue={sort}
-                                  >
-                                    <option value="revenue">รายได้รวม</option>
-                                    <option value="customers">จำนวนลูกค้า</option>
-                                    <option value="forwarders">จำนวนนำเข้า</option>
-                                    <option value="shop">จำนวนฝากสั่ง</option>
-                                    <option value="payments">จำนวนฝากโอน</option>
-                                  </select>
-                                </div>
-                                <div className="col-md-3 col-12 d-flex align-items-end">
-                                  <button
-                                    type="submit"
-                                    className="btn btn-block btn-rounded btn-info"
-                                  >
-                                    <i className="fas fa-search"></i> ค้นหา
-                                  </button>
-                                </div>
-                              </div>
-                            </form>
-
-                            <h4 className="text-center text-md-left d-inline-block">
-                              <span className="font-14 text-danger">
-                                ผลลัพธ์: {fromMonth} ถึง {toMonth} · เซลล์ {aggregates.length} คน
-                              </span>
-                            </h4>
-
-                            {error && (
-                              <div className="alert alert-danger mt-2 font-12">
-                                อ่านข้อมูลไม่สำเร็จ: {error.message}
-                                <br />
-                                <span className="text-muted">
-                                  ตรวจสอบว่า migration 0094_view_sales_by_rep.sql ได้รัน
-                                  บน Supabase dashboard แล้วหรือยัง
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Table */}
-                            <div className="table-responsive mt-1">
-                              <table
-                                id="myTable"
-                                className="table report-table display table-bordered table-striped dataTable no-footer dtr-inline"
-                              >
-                                <thead>
-                                  <tr className="text-center">
-                                    <th>เซลล์</th>
-                                    <th>รหัสแอดมิน</th>
-                                    <th className="text-right">ลูกค้า</th>
-                                    <th className="text-right">ฝากนำเข้า (รายการ)</th>
-                                    <th className="text-right">ฝากนำเข้า (บาท)</th>
-                                    <th className="text-right">ฝากสั่ง (รายการ)</th>
-                                    <th className="text-right">ฝากสั่ง (บาท)</th>
-                                    <th className="text-right">ฝากโอน (รายการ)</th>
-                                    <th className="text-right">ฝากโอน (บาท)</th>
-                                    <th className="text-right">รวมรายได้ (บาท)</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {aggregates.length === 0 && (
-                                    <tr>
-                                      <td colSpan={10} className="text-center font-12">
-                                        ไม่พบข้อมูลในช่วงนี้
-                                      </td>
-                                    </tr>
-                                  )}
-                                  {aggregates.map((r) => (
-                                    <tr key={r.admin_userid}>
-                                      <td className="font-12">
-                                        {r.adminnickname || r.admin_fullname || "—"}
-                                      </td>
-                                      <td className="text-center font-12">
-                                        <Link
-                                          className="text-info"
-                                          href={`/admin/admins/${encodeURIComponent(r.admin_userid)}`}
-                                        >
-                                          {r.admin_userid}
-                                        </Link>
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {intFmt(r.customer_count)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {intFmt(r.forwarder_count)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {thb(r.forwarder_revenue_thb)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {intFmt(r.shop_count)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {thb(r.shop_revenue_thb)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {intFmt(r.payment_count)}
-                                      </td>
-                                      <td className="text-right font-12">
-                                        {thb(r.payment_revenue_thb)}
-                                      </td>
-                                      <td className="text-right font-12 font-weight-bold">
-                                        {thb(r.total_revenue_thb)}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                                {aggregates.length > 0 && (
-                                  <tfoot>
-                                    <tr className="text-right font-weight-bold">
-                                      <td colSpan={2} className="text-left font-12">
-                                        รวมทั้งหมด
-                                      </td>
-                                      <td className="font-12">{intFmt(totals.customer_count)}</td>
-                                      <td className="font-12">{intFmt(totals.forwarder_count)}</td>
-                                      <td className="font-12">{thb(totals.forwarder_revenue_thb)}</td>
-                                      <td className="font-12">{intFmt(totals.shop_count)}</td>
-                                      <td className="font-12">{thb(totals.shop_revenue_thb)}</td>
-                                      <td className="font-12">{intFmt(totals.payment_count)}</td>
-                                      <td className="font-12">{thb(totals.payment_revenue_thb)}</td>
-                                      <td className="font-12">{thb(totals.total_revenue_thb)}</td>
-                                    </tr>
-                                  </tfoot>
-                                )}
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+          <div>
+            <label htmlFor="to" className="block text-xs text-muted mb-1">เดือนสิ้นสุด</label>
+            <input
+              id="to"
+              type="month"
+              name="to"
+              defaultValue={toMonth}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+          </div>
+          <div>
+            <label htmlFor="sort" className="block text-xs text-muted mb-1">เรียงตาม</label>
+            <select
+              id="sort"
+              name="sort"
+              defaultValue={sort}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
         </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button
+            type="submit"
+            className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600"
+          >
+            ค้นหาข้อมูล
+          </button>
+          <CsvButton rows={csvRows} cols={csvCols} filename={`sales-by-rep-${fromMonth}-to-${toMonth}.csv`} />
+        </div>
+      </form>
+
+      {/* Error banner (soft-fail — page still renders) */}
+      {viewErr && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold">อ่านข้อมูลไม่สำเร็จ: {viewErr.message}</p>
+          <p className="mt-1 text-xs text-red-700">
+            ตรวจสอบว่า migration <span className="font-mono">0094_view_sales_by_rep.sql</span> ได้รันบน Supabase
+            dashboard แล้วหรือยัง
+          </p>
+        </div>
+      )}
+
+      {/* Stat cards */}
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Card label="เซลล์" value={String(aggregates.length)} />
+        <Card label="ลูกค้ารวม" value={intFmt(totals.customer_count)} />
+        <Card label="รายการรวม" value={intFmt(totals.forwarder_count + totals.shop_count + totals.payment_count)} />
+        <Card label="รายได้รวม (บาท)" value={thb(totals.total_revenue_thb)} highlight />
       </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {aggregates.length === 0 ? (
+          <p className="p-12 text-center text-sm text-muted">ไม่พบข้อมูลในช่วงนี้</p>
+        ) : (
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3">เซลล์</th>
+                  <th className="px-4 py-3">รหัสแอดมิน</th>
+                  <th className="px-4 py-3 text-right">ลูกค้า</th>
+                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากนำเข้า<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากสั่ง<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[10px] font-normal normal-case">(รายการ)</span></th>
+                  <th className="px-4 py-3 text-right">ฝากโอน<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
+                  <th className="px-4 py-3 text-right">รวมรายได้<br/><span className="text-[10px] font-normal normal-case">(บาท)</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {aggregates.map((r) => (
+                  <tr key={r.admin_userid} className="border-t border-border hover:bg-surface-alt/30 align-top">
+                    <td className="px-4 py-3 text-xs">
+                      {r.adminnickname || r.admin_fullname || "—"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <Link
+                        href={`/admin/admins/${encodeURIComponent(r.admin_userid)}`}
+                        className="text-primary-600 hover:underline"
+                      >
+                        {r.admin_userid}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(r.customer_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(r.forwarder_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.forwarder_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(r.shop_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.shop_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(r.payment_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(r.payment_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs font-semibold text-red-700">
+                      {thb(r.total_revenue_thb)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {aggregates.length > 0 && (
+                <tfoot className="bg-surface-alt/50 font-semibold">
+                  <tr className="border-t border-border">
+                    <td className="px-4 py-3 text-xs" colSpan={2}>รวมทั้งหมด</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(totals.customer_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(totals.forwarder_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(totals.forwarder_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(totals.shop_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(totals.shop_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{intFmt(totals.payment_count)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">{thb(totals.payment_revenue_thb)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs text-red-700">{thb(totals.total_revenue_thb)}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted">
+        ค่าเริ่มต้น = เดือนปัจจุบัน · ปรับช่วงเดือน + sort key ผ่าน filter ด้านบน · กดรหัสแอดมินเพื่อดูโปรไฟล์
+      </p>
+    </main>
+  );
+}
+
+function Card({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-2xl border bg-white dark:bg-surface p-4 shadow-sm ${highlight ? "border-red-200" : "border-border"}`}>
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-bold font-mono ${highlight ? "text-red-700" : ""}`}>{value}</p>
     </div>
   );
 }
