@@ -73,6 +73,13 @@ export function AdminYuanPaymentNewForm({
 
   function selectSlip(f: File | null) {
     setError(null);
+    // Client-side 5 MB guard — matches the label promise ("≤ 5 MB") and
+    // gives a friendly Thai error instead of the opaque server 500 the
+    // 10 MB bodySizeLimit cap would otherwise produce on phone HEIC files.
+    if (f && f.size > 5 * 1024 * 1024) {
+      setError("ไฟล์สลิปใหญ่เกิน 5 MB — กรุณาเลือกไฟล์ใหม่");
+      return;
+    }
     setSlipFile(f);
     if (slipPreview) URL.revokeObjectURL(slipPreview);
     if (f && f.type.startsWith("image/")) {

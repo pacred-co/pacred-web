@@ -13,6 +13,17 @@ export function UploadCsvForm({ disabled = false }: { disabled?: boolean }) {
 
   function onSubmit(formData: FormData) {
     setError(null);
+    // Client-side 5 MB guard — matches the server cap (MAX_SIZE in
+    // actions/admin/csv-imports.ts:31) + label promise below. Catches it
+    // BEFORE upload so the user doesn't wait the full upload time only to
+    // hit a server "file_too_large" reject. CSV bulk-loads for tb_forwarder
+    // routinely sit at 1-3 MB so 5 MB is comfortable headroom; bump both
+    // sides if real workflows need bigger files.
+    const file = formData.get("file");
+    if (file instanceof File && file.size > 5 * 1024 * 1024) {
+      setError(`ไฟล์ใหญ่เกิน 5 MB — ขนาดปัจจุบัน ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+      return;
+    }
     formData.set("target_table", target);
     startTransition(async () => {
       const res = await uploadCsv(formData);
