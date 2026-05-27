@@ -370,253 +370,159 @@ export default async function ServiceImportPage({
   const showPayBar =
     (countForwarder5 ?? 0) > 0 || q === "" || q === "5" || q === "c";
 
+  // Tailwind rebuild (เดฟ 2026-05-27 — ปอน: "rebuild css เป็น tailwind ให้
+  // หน่อย ห้ามแก้ relation อะไร ต้องให้ฟังก์ชั่นทุกอย่างทำงานเหมือนเดิม").
+  // The wrapper + tab strip + status-filter chips + add-button + corporate-
+  // pending block are converted from Bootstrap-4 / Modern-Admin theme
+  // classes to Tailwind. All hrefs, data-toggle attrs, ids, form names
+  // preserved so the legacy jQuery + Server Actions still trigger exactly
+  // as before. ForwarderInteractivity (row cards + bottom pay-bar +
+  // maomao strip) is unchanged this pass — pending its own rebuild. Modals
+  // likewise stay legacy-styled (Bootstrap data-toggle handles open/close).
+  //
+  // Status-chip badge colors map the legacy `badge-*` palette to Tailwind.
+  const statusChips: { href: string; label: string; count: number; chipColor: string }[] = [
+    { href: "/service-import",       label: "ทั้งหมด",         count: arrStatusSum,                    chipColor: "bg-slate-100 text-slate-700"   },
+    { href: "/service-import?q=1",   label: "รอเข้าโกดัง",     count: arrStatus[1],                    chipColor: "bg-amber-100 text-amber-700"   },
+    { href: "/service-import?q=2",   label: "ถึงโกดังจีนแล้ว", count: arrStatus[2],                    chipColor: "bg-sky-100 text-sky-700"       },
+    { href: "/service-import?q=3",   label: "กำลังส่งมาไทย",   count: arrStatus[3],                    chipColor: "bg-pink-100 text-pink-700"     },
+    { href: "/service-import?q=4",   label: "ถึงไทยแล้ว",      count: arrStatus[4],                    chipColor: "bg-amber-200 text-amber-900"   },
+    { href: "/service-import?q=5",   label: "รอชำระเงิน",       count: arrStatus[5],                    chipColor: "bg-red-100 text-red-700"       },
+    { href: "/service-import?q=6",   label: "เตรียมส่ง",        count: arrStatus[6] - statusDriverItem, chipColor: "bg-indigo-100 text-indigo-700" },
+    { href: "/service-import?q=6.1", label: "กำลังจัดส่ง",      count: statusDriverItem,                chipColor: "bg-cyan-100 text-cyan-700"     },
+    { href: "/service-import?q=7",   label: "ส่งแล้ว",          count: arrStatus[7],                    chipColor: "bg-emerald-100 text-emerald-700" },
+  ];
+
   return (
     <div className="pcs-legacy">
-      {/* Legacy PCS stylesheets — static public/ assets, loaded via a
-          plain <link> so they bypass the app's Tailwind/PostCSS
-          pipeline. forwarder.php L430-435 loads the DataTables /
-          dropify / magnific-popup / animate plugin CSS + its own
-          forwarder.css; all the rules the screen actually renders
-          with are consolidated verbatim into service-import.css. */}
+      {/* Legacy PCS stylesheet — kept ONLY for the modals + row card
+          (forwarder-row-view + forwarder-pay-modal still on legacy CSS).
+          Drop once those are rebuilt to Tailwind. */}
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
 
       {/* forwarder.php <title> L436 (Next.js owns <head> — kept here
           as a comment for the fidelity record):
           รายการฝากนำเข้า | Pacred */}
 
-      {/* BEGIN: Content — forwarder.php L443 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body pr110">
-            {/* forwarder.php L452 — corporate gate */}
-            {!showFullScreen ? (
-              // forwarder.php L874 — pending corporate-approval block
-              <div className="text-center">
-                <h2
-                  style={{ maxWidth: "670px", margin: "auto", marginTop: "10%" }}
-                  className="text-white bg-danger p-1"
-                >
-                  รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.{" "}
-                  <br /> (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
-                </h2>
-              </div>
-            ) : (
-              <section>
-                <div className="row">
-                  <div className="col-md-12 col-sm-12">
-                    <div className="card border-black">
-                      <div className="card-content">
-                        <div className="card-body p-1">
-                          {/* ── tab strip + add button — L460-489 ── */}
-                          <div className="row">
-                            <div className="content-header-left col-md-8 col-12">
-                              <div className="text-center text-md-left">
-                                <ul className="nav nav-tabs nav-underline pcs-tabs">
-                                  <li className="nav-item tab-sm-center">
-                                    <Link className="nav-link active" href="/service-import">
-                                      <h3 className="text-center text-md-left active">
-                                        <span className="ft-box"></span> รายการฝากนำเข้าสินค้าแบบเต็ม
-                                      </h3>
-                                    </Link>
-                                  </li>
-                                  <li className="nav-item tab-sm-center">
-                                    <Link className="nav-link" href="/service-import/table">
-                                      <h3 className="text-center text-md-left">
-                                        <span className="fas fa-table"></span> รายการฝากนำเข้าสินค้าแบบตาราง
-                                      </h3>
-                                    </Link>
-                                  </li>
-                                </ul>
-                              </div>
-                            </div>
-                            <div className="content-header-right col-md-4 col-12">
-                              <div className="float-md-right">
-                                <div className="text-center text-md-right">
-                                  {/* Legacy nests <button> inside <a> — invalid
-                                      HTML5; browser renders the inner button at
-                                      wrong size + can swallow the modal trigger.
-                                      Use <span role="presentation"> styled as
-                                      the green pill instead. */}
-                                  <a
-                                    href="#add-forwarder"
-                                    data-toggle="modal"
-                                    data-target="#add-forwarder"
-                                    className="d-inline-flex align-items-center"
-                                    style={{ gap: "0.5rem" }}
-                                  >
-                                    <span
-                                      className="btn btn-sm btn-circle btn-success text-white d-inline-flex align-items-center justify-content-center"
-                                      role="presentation"
-                                    >
-                                      <i className="ft-plus"></i>
-                                    </span>
-                                    <span className="font-normal text-dark lang-add-forwarder">
-                                      เพิ่มรายการนำเข้า
-                                    </span>
-                                  </a>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ── status-filter tabs — L516-592 ── */}
-                          <div className="row">
-                            <div className="col-12 p-m-0">
-                              <h4 className="text-color">
-                                <b>สถานะรายการ</b>
-                              </h4>
-                              <ul className="nav nav-tabs nav-underline pcs-tabs">
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import">
-                                    ทั้งหมด
-                                    {arrStatusSum > 0 && (
-                                      <div className="pcs-badge2 badge-secondary pcs-badge-pill">
-                                        {arrStatusSum}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=1">
-                                    รอเข้าโกดัง
-                                    {arrStatus[1] > 0 && (
-                                      <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                        {arrStatus[1]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=2">
-                                    ถึงโกดังจีนแล้ว
-                                    {arrStatus[2] > 0 && (
-                                      <div className="pcs-badge2 badge-info pcs-badge-pill">
-                                        {arrStatus[2]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=3">
-                                    กำลังส่งมาไทย
-                                    {arrStatus[3] > 0 && (
-                                      <div className="pcs-badge2 badge-pink pcs-badge-pill">
-                                        {arrStatus[3]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=4">
-                                    ถึงไทยแล้ว
-                                    {arrStatus[4] > 0 && (
-                                      <div className="pcs-badge2 badge-brown pcs-badge-pill">
-                                        {arrStatus[4]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=5">
-                                    รอชำระเงิน
-                                    {arrStatus[5] > 0 && (
-                                      <div className="pcs-badge2 badge-danger pcs-badge-pill">
-                                        {arrStatus[5]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=6">
-                                    เตรียมส่ง
-                                    {arrStatus[6] - statusDriverItem > 0 && (
-                                      <div className="pcs-badge2 badge-primary pcs-badge-pill">
-                                        {arrStatus[6] - statusDriverItem}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=6.1">
-                                    กำลังจัดส่ง
-                                    {statusDriverItem > 0 && (
-                                      <div className="pcs-badge2 badge-info2 pcs-badge-pill">
-                                        {statusDriverItem}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import?q=7">
-                                    ส่งแล้ว
-                                    {arrStatus[7] > 0 && (
-                                      <div className="pcs-badge2 badge-success pcs-badge-pill">
-                                        {arrStatus[7]}
-                                      </div>
-                                    )}
-                                  </Link>
-                                </li>
-                                {creditUser === 1 && (
-                                  <li className="nav-item">
-                                    <Link className="nav-link" href="/service-import?q=c">
-                                      เครดิตสินค้า
-                                      {(fCreditCount ?? 0) > 0 && (
-                                        <div className="pcs-badge badge-danger pcs-badge-pill">
-                                          {fCreditCount}
-                                        </div>
-                                      )}
-                                    </Link>
-                                  </li>
-                                )}
-                              </ul>
-                              <div className="p-m-0">
-                                <div className="hr-dashed"></div>
-                                {/* forwarder.php L595 `btn-pay-pc` empty
-                                    positioning anchor — kept SSR (cosmetic
-                                    only; the bottom pay-bar is positioned
-                                    via the absolute `.b-pay` rule). */}
-                                {countStatusF5 > 0 && (
-                                  <div className="pt-1 text-center text-md-left">
-                                    <div style={{ position: "relative" }} className="btn-pay-pc"></div>
-                                  </div>
-                                )}
-                                {/* ── #frm-example2 form + #myTable +
-                                    "โปรเหมาๆ" + "รวมบิลจ่าย" + bottom
-                                    pay-bar ── forwarder.php L595-862
-                                    All five render together inside the
-                                    `<ForwarderInteractivity>` client
-                                    component (1 client island, no
-                                    function-prop crossing). The Server
-                                    Action `calculateForwarderTotal` is
-                                    the legacy `calPrice.php` recompute. */}
-                                <ForwarderInteractivity
-                                  rowsData={rows}
-                                  arrFidDriver={Array.from(arrFidDriver)}
-                                  q={q}
-                                  isJuristic={isJuristic}
-                                  showPayBar={showPayBar}
-                                  showMaoStrip={showMaoStrip}
-                                  showPayStrip={
-                                    countStatusF5 > 0 &&
-                                    (countPricePCSFDatabase ?? 0) > 1
-                                  }
-                                  columnCount={q === "c" ? 10 : 8}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
+      {/* Page content — Tailwind rebuild. Wrapped in `.pcs-content-pad` so
+          the (protected) layout's desktop padding (sidebar clearance +
+          FloatingTabs clearance) kicks in automatically. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24 max-w-[1280px] mx-auto">
+        {!showFullScreen ? (
+          // Corporate-pending banner — forwarder.php L874
+          <div className="mx-auto max-w-[670px] mt-16 md:mt-24 text-center">
+            <h2 className="rounded-2xl bg-red-600 text-white px-4 py-6 text-base md:text-lg font-bold leading-relaxed shadow-md">
+              รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม.
+              <br />
+              <span className="text-sm font-normal opacity-90">
+                (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
+              </span>
+            </h2>
           </div>
-        </div>
+        ) : (
+          <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+            {/* ── Tab strip + add CTA ── */}
+            <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+              {/* View tabs (เต็ม / ตาราง). Active tab = red underline. */}
+              <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
+                <Link
+                  href="/service-import"
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap"
+                >
+                  <span aria-hidden className="ft-box" />
+                  รายการฝากนำเข้าสินค้าแบบเต็ม
+                </Link>
+                <Link
+                  href="/service-import/table"
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-medium text-muted hover:text-foreground border-b-2 border-transparent hover:border-border whitespace-nowrap transition-colors"
+                >
+                  <span aria-hidden className="fas fa-table" />
+                  รายการฝากนำเข้าสินค้าแบบตาราง
+                </Link>
+              </div>
+
+              {/* Add-forwarder CTA — `data-toggle="modal"` + `data-target`
+                  are REQUIRED for the Bootstrap-4 vendor JS to open the
+                  legacy #add-forwarder modal. DO NOT REMOVE. */}
+              <a
+                href="#add-forwarder"
+                data-toggle="modal"
+                data-target="#add-forwarder"
+                className="inline-flex items-center gap-2 self-stretch md:self-auto justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all"
+              >
+                <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
+                  +
+                </span>
+                <span className="lang-add-forwarder">เพิ่มรายการนำเข้า</span>
+              </a>
+            </div>
+
+            {/* ── Status filter chips + content ── */}
+            <div className="px-3 py-3 md:px-4 md:py-4">
+              <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
+                สถานะรายการ
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {statusChips.map((chip) => (
+                  <Link
+                    key={chip.href}
+                    href={chip.href}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt/60 hover:bg-surface-alt px-3 py-1.5 text-xs md:text-sm font-medium text-foreground border border-border transition-colors"
+                  >
+                    <span>{chip.label}</span>
+                    {chip.count > 0 && (
+                      <span className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${chip.chipColor}`}>
+                        {chip.count}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+                {creditUser === 1 && (
+                  <Link
+                    href="/service-import?q=c"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt/60 hover:bg-surface-alt px-3 py-1.5 text-xs md:text-sm font-medium text-foreground border border-border transition-colors"
+                  >
+                    <span>เครดิตสินค้า</span>
+                    {(fCreditCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 bg-red-100 text-red-700">
+                        {fCreditCount}
+                      </span>
+                    )}
+                  </Link>
+                )}
+              </div>
+              <hr className="my-3 border-t border-dashed border-border" />
+
+              {/* forwarder.php L595 `btn-pay-pc` empty positioning anchor —
+                  kept (cosmetic only; the bottom pay-bar is positioned via
+                  the absolute `.b-pay` rule inside ForwarderInteractivity). */}
+              {countStatusF5 > 0 && (
+                <div className="pt-1 text-center md:text-left">
+                  <div style={{ position: "relative" }} className="btn-pay-pc"></div>
+                </div>
+              )}
+
+              {/* Row cards + "โปรเหมาๆ" strip + "รวมบิลจ่าย" PCSF strip +
+                  bottom .b-pay bar — all render inside this client island
+                  (1 client component, no function-prop crossing). Still on
+                  legacy CSS — its own Tailwind rebuild is a follow-up. */}
+              <ForwarderInteractivity
+                rowsData={rows}
+                arrFidDriver={Array.from(arrFidDriver)}
+                q={q}
+                isJuristic={isJuristic}
+                showPayBar={showPayBar}
+                showMaoStrip={showMaoStrip}
+                showPayStrip={
+                  countStatusF5 > 0 &&
+                  (countPricePCSFDatabase ?? 0) > 1
+                }
+                columnCount={q === "c" ? 10 : 8}
+              />
+            </div>
+          </section>
+        )}
       </div>
-      {/* END: Content — forwarder.php L880 */}
 
       {/* ── #add-forwarder modal — forwarder.php L881-1039 ──
           Transcribed 1:1. The Bootstrap-4 data-toggle open/close works
@@ -948,7 +854,7 @@ export default async function ServiceImportPage({
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               className="img-fluid cursor-pointer card-promotion"
-                              src="/images/customertheme/free50-3.png"
+                              src="/legacy/pcs/theme/free50-3.png"
                               alt=""
                             />
                             <br />
@@ -1039,7 +945,7 @@ export default async function ServiceImportPage({
               <div className="bg-pro-valentine">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/images/customertheme/free50-3.png"
+                  src="/legacy/pcs/theme/free50-3.png"
                   className="img-fluid"
                   alt=""
                 />

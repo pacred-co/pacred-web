@@ -49,6 +49,15 @@ export function FloatingTabs() {
     (/^(?:\/[a-z]{2})?\/admin(?:\/|$)/.test(pathname) ||
       /^(?:\/[a-z]{2})?\/(?:login|register|forgot-password)(?:\/|$)/.test(pathname));
 
+  // Hide just the "เมนู" tab on the mobile launchpad (/m/dashboard) — the
+  // tab links to /m/dashboard so it's a no-op when the user is already
+  // there. We render it as an invisible placeholder so the bottom-nav grid
+  // template stays balanced (3 tabs · FAB · 3 tabs) and the centre FAB
+  // remains centred. Per ปอน 2026-05-27 ("ในมือถือหน้าเมนู ผมไม่อยากให้มี …
+  // แต่หน้าอื่นเหลือไว้เหมือนเดิม").
+  const isOnMobileLaunchpad =
+    !!pathname && /^(?:\/[a-z]{2})?\/m\/dashboard(?:\/|$)/.test(pathname);
+
   // Toggle a body class so globals.css can drop the bottom-padding clearance.
   useEffect(() => {
     if (!isHidden) return;
@@ -204,7 +213,12 @@ export function FloatingTabs() {
             </a>
 
             {/* 6 — เมนู → mobile launchpad (/m/dashboard auto-redirects to
-                /dashboard on desktop, so this href is safe on both viewports) */}
+                /dashboard on desktop, so this href is safe on both viewports).
+                Always rendered on every page — incl. /m/dashboard itself —
+                so the bottom-nav stays consistent across the customer portal
+                (เดฟ 2026-05-27 — ปอน: "ปุ่มเมนูหายในมือถืออะ ที่เป็น 3 ขีด",
+                reverting the earlier /m/dashboard hide). On /m/dashboard the
+                tap is a no-op page-refresh, which is acceptable. */}
             <Link href="/m/dashboard" onClick={() => setActive(5)}
               className="group flex flex-col items-center justify-center gap-1 pt-2 pb-4 transition-colors active:bg-primary-50/60">
               <Menu className={`w-8 h-8 transition-all duration-300 ${active === 5 ? "text-primary-600 scale-110" : "text-muted opacity-75"}`} strokeWidth={2.2} />

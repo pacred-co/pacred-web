@@ -90,30 +90,31 @@ export const dynamic = "force-dynamic";
 
 // ── Legacy helper: statusForwarderAll4($fStatus,$fStatusDriver) ──
 // member/include/function.php L563-580. The status badge for the
-// table's last column. Returns the exact legacy <span> markup.
+// table's last column. Rebuilt to the Tailwind chip pattern that
+// matches forwarder-row-view.tsx's STATUS_CHIP map — same tones, same
+// labels, same 6.1 driver-item split.
+const TABLE_STATUS_CHIP: Record<string, { label: string; cls: string }> = {
+  "1":   { label: "รอเข้าโกดังจีน",  cls: "bg-amber-100 text-amber-700 border-amber-200"      },
+  "2":   { label: "ถึงโกดังจีนแล้ว", cls: "bg-sky-100 text-sky-700 border-sky-200"            },
+  "3":   { label: "กำลังส่งมาไทย",   cls: "bg-pink-100 text-pink-700 border-pink-200"         },
+  "4":   { label: "ถึงไทยแล้ว",      cls: "bg-amber-200 text-amber-900 border-amber-300"      },
+  "5":   { label: "รอชำระเงิน",      cls: "bg-red-100 text-red-700 border-red-200"            },
+  "6":   { label: "เตรียมส่ง",       cls: "bg-indigo-100 text-indigo-700 border-indigo-200"   },
+  "6.1": { label: "กำลังจัดส่ง",     cls: "bg-cyan-100 text-cyan-700 border-cyan-200"         },
+  "7":   { label: "ส่งแล้ว",         cls: "bg-emerald-100 text-emerald-700 border-emerald-200"},
+};
 function statusForwarderAll4(fStatus: string, fStatusDriver: number): React.ReactNode {
-  switch (fStatus) {
-    case "1":
-      return <span className="badge badge-warning badge-pill">รอเข้าโกดังจีน</span>;
-    case "2":
-      return <span className="badge badge-info badge-pill">ถึงโกดังจีนแล้ว</span>;
-    case "3":
-      return <span className="badge badge-pink badge-pill">กำลังส่งมาไทย</span>;
-    case "4":
-      return <span className="badge badge-brown badge-pill">ถึงไทยแล้ว</span>;
-    case "5":
-      return <span className="badge badge-danger badge-pill">รอชำระเงิน</span>;
-    case "6":
-      return fStatusDriver === 1 ? (
-        <span className="badge badge-info2 badge-pill">กำลังจัดส่ง</span>
-      ) : (
-        <span className="badge badge-primary badge-pill">เตรียมส่ง</span>
-      );
-    case "7":
-      return <span className="badge badge-success badge-pill">ส่งแล้ว</span>;
-    default:
-      return null;
-  }
+  let key: string = fStatus;
+  if (fStatus === "6" && fStatusDriver === 1) key = "6.1";
+  const chip = TABLE_STATUS_CHIP[key];
+  if (!chip) return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${chip.cls}`}
+    >
+      {chip.label}
+    </span>
+  );
 }
 
 // ── Legacy helper: nameProductsType2($productsType) ──
@@ -482,327 +483,219 @@ export default async function ForwarderTablePage({
   // server we render the desktop variant (the legacy default for
   // width>=578 — the .nowrap table). DataTables JS init is a follow-up.
 
+  // Tailwind rebuild (เดฟ 2026-05-27 — ปอน: "rebuild css เป็น tailwind ให้
+  // หน่อย ห้ามแก้ relation อะไร ต้องให้ฟังก์ชั่นทุกอย่างทำงานเหมือนเดิม").
+  // The wrapper + tab strip + status-filter chips + search form + pay-bar
+  // are converted from Bootstrap-4 / Modern-Admin theme classes to Tailwind
+  // — matching the sibling `/service-import` page.tsx so the two views feel
+  // visually identical. All hrefs, name attrs, ids, data-toggle attrs,
+  // <form action/method> contracts preserved so legacy jQuery + Server
+  // Actions still trigger exactly as before. The <table id="myTable">
+  // body + summary row stay legacy-styled (DataTables JS may attach to
+  // them) and the add-forwarder modal stays Bootstrap-4 markup
+  // (data-toggle handles open/close).
+  //
+  // Status-chip badge colors map the legacy `badge-*` palette to Tailwind,
+  // exactly mirroring page.tsx's statusChips for visual parity.
+  const statusChips: { href: string; label: string; count: number; chipColor: string }[] = [
+    { href: "/service-import/table?q=all", label: "ทั้งหมด",         count: countAll,                          chipColor: "bg-slate-100 text-slate-700"   },
+    { href: "/service-import/table?q=1",   label: "รอเข้าโกดัง",     count: arrStatus[1],                      chipColor: "bg-amber-100 text-amber-700"   },
+    { href: "/service-import/table?q=2",   label: "ถึงโกดังจีนแล้ว", count: arrStatus[2],                      chipColor: "bg-sky-100 text-sky-700"       },
+    { href: "/service-import/table?q=3",   label: "กำลังส่งมาไทย",   count: arrStatus[3],                      chipColor: "bg-pink-100 text-pink-700"     },
+    { href: "/service-import/table?q=4",   label: "ถึงไทยแล้ว",      count: arrStatus[4],                      chipColor: "bg-amber-200 text-amber-900"   },
+    { href: "/service-import/table?q=5",   label: "รอชำระเงิน",       count: arrStatus[5],                      chipColor: "bg-red-100 text-red-700"       },
+    { href: "/service-import/table?q=6",   label: "เตรียมส่ง",        count: arrStatus[6] - statusDriverItem,   chipColor: "bg-indigo-100 text-indigo-700" },
+    { href: "/service-import/table?q=6.1", label: "กำลังจัดส่ง",      count: statusDriverItem,                  chipColor: "bg-cyan-100 text-cyan-700"     },
+    { href: "/service-import/table?q=7",   label: "ส่งแล้ว",          count: arrStatus[7],                      chipColor: "bg-emerald-100 text-emerald-700" },
+  ];
+
+  const isQActive = (val: string) => q === val || (val === "all" && (q === "" || q === "all"));
+
   return (
     <div className="pcs-legacy">
       {/* Legacy PCS stylesheets — static public/ assets, loaded via plain
           <link>s so they bypass the app's Tailwind/PostCSS pipeline.
-          service-import.css = the shared BS4 + theme chrome base;
-          forwarder-table.css = this screen's own inline <style> block. */}
+          service-import.css = the shared BS4 + theme chrome base (still
+          needed for legacy `badge-*` colours inside the table body + the
+          modal markup); forwarder-table.css = the DataTables wrapper
+          chrome the legacy JS expects. */}
       <link rel="stylesheet" href="/legacy/pcs/service-import.css" />
       <link rel="stylesheet" href="/legacy/pcs/forwarder-table.css" />
 
-      {/* BEGIN: Content — forwarder-table.php L730 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card border-black">
-                    <div className="card-content">
-                      <div className="card-body">
-                        {/* ── header row: the forwarder/forwarder-table tab
-                            strip + the search form + the add button ── */}
-                        <div className="row">
-                          <div className="content-header-left col-md-4 col-12">
-                            <div className="text-center text-md-left">
-                              <ul className="nav nav-tabs nav-underline pcs-tabs">
-                                <li className="nav-item tab-sm-center">
-                                  <Link className="nav-link" href="/service-import">
-                                    <h3 className="text-center text-md-left">
-                                      <span className=" ft-box"></span> ฝากนำเข้าสินค้าแบบเต็ม
-                                    </h3>
-                                  </Link>
-                                </li>
-                                <li className="nav-item tab-sm-center active">
-                                  <Link className="nav-link active" href="/service-import/table">
-                                    <h3 className="text-center text-md-left">
-                                      <span className=" fas fa-table"></span> ฝากนำเข้าสินค้าแบบตาราง
-                                    </h3>
-                                  </Link>
-                                </li>
-                              </ul>
-                            </div>
-                          </div>
-                          <div className="col-md-6 col-12">
-                            <form
-                              className="form-horizontal"
-                              id="search"
-                              method="GET"
-                              action="/service-import/table"
-                              autoComplete="off"
-                            >
-                              <label className="form-control-label" htmlFor="fTrackingCHN">
-                                ค้นหา Tracking :
-                              </label>
-                              <input
-                                className=""
-                                name="fTrackingCHN"
-                                id="fTrackingCHN"
-                                type="text"
-                                placeholder="เลขแทรคกิ้ง"
-                                defaultValue={fTrackingCHNRaw}
-                              />
-                              <label className="form-control-label" htmlFor="fCabinetNumber">
-                                ล๊อตสินค้า :
-                              </label>
-                              <select
-                                className=""
-                                name="fCabinetNumber"
-                                id="fCabinetNumber"
-                                defaultValue={fCabinetNumberRaw || "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                {cabinetOptions.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="submit"
-                                className="btn btn-sm btn-color-main round waves-effect"
-                                name="search"
-                              >
-                                ค้นหารายการ
-                              </button>
-                              {sp.fTrackingCHN !== undefined && (
-                                <div className="text-danger">
-                                  ผลลัพธ์การค้นหาโดย{" "}
-                                  {sp.fTrackingCHN ? <>เลขแทรคกิ้ง : {sp.fTrackingCHN}</> : null}
-                                  {sp.fCabinetNumber ? <> ล๊อตสินค้า : {sp.fCabinetNumber}</> : null}
-                                </div>
-                              )}
-                            </form>
-                          </div>
-                          <div className="content-header-right col-md-2 col-12">
-                            <div className="float-md-right">
-                              <div className="text-center text-md-right">
-                                <Link className="nav-link" href="/service-import/add">
-                                  <button className="btn btn-sm btn-circle btn-success text-white">
-                                    <i className="ft-plus"></i>
-                                  </button>
-                                  <span className="font-normal text-dark">เพิ่มรายการนำเข้า</span>
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+      {/* Page content — Tailwind rebuild matching /service-import page.tsx.
+          Wrapped in `.pcs-content-pad` so the (protected) layout's desktop
+          padding (sidebar clearance + FloatingTabs clearance) kicks in. */}
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24 max-w-[1280px] mx-auto">
+        <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
+          {/* ── Tab strip + add CTA ── */}
+          <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
+            {/* View tabs (เต็ม / ตาราง). Active = ตาราง = red underline. */}
+            <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
+              <Link
+                href="/service-import"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-medium text-muted hover:text-foreground border-b-2 border-transparent hover:border-border whitespace-nowrap transition-colors"
+              >
+                <span aria-hidden className="ft-box" />
+                รายการฝากนำเข้าสินค้าแบบเต็ม
+              </Link>
+              <Link
+                href="/service-import/table"
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 text-sm md:text-base font-bold text-red-600 border-b-2 border-red-600 whitespace-nowrap"
+              >
+                <span aria-hidden className="fas fa-table" />
+                รายการฝากนำเข้าสินค้าแบบตาราง
+              </Link>
+            </div>
 
-                        {/* ── the status-tab strip + the table ── */}
-                        <div className="row">
-                          <div className="col-12">
-                            <h4 className="text-color">
-                              <b>สถานะรายการ</b>
-                            </h4>
-                            {/* forwarder-table.php wraps the status tabs +
-                                the table inside one <form method=GET> whose
-                                buttons carry name="q". A nested <form> is
-                                invalid HTML in React — each status tab is
-                                transcribed as a <Link> to the same ?q= URL
-                                (1:1 navigation behaviour; the legacy submit
-                                just builds that URL). */}
-                            <ul className="nav nav-tabs nav-underline pcs-tabs">
-                              <li
-                                className={
-                                  "nav-all nav-item tab-sm-center" +
-                                  (q === "all" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=all"
-                                  className={"nav-link" + (q === "all" ? " active" : "")}
-                                >
-                                  ทั้งหมด
-                                  {countAll > 0 && (
-                                    <div className="pcs-badge2 badge-secondary pcs-badge-pill">
-                                      {countAll}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-1 nav-item tab-sm-center" + (q === "1" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=1"
-                                  className={"nav-link" + (q === "1" ? " active" : "")}
-                                >
-                                  รอเข้าโกดัง
-                                  {arrStatus[1] > 0 && (
-                                    <div className="pcs-badge2 badge-warning pcs-badge-pill">
-                                      {arrStatus[1]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-2 nav-item tab-sm-center" + (q === "2" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=2"
-                                  className={"nav-link" + (q === "2" ? " active" : "")}
-                                >
-                                  ถึงโกดังจีนแล้ว
-                                  {arrStatus[2] > 0 && (
-                                    <div className="pcs-badge2 badge-info pcs-badge-pill">
-                                      {arrStatus[2]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-3 nav-item tab-sm-center" + (q === "3" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=3"
-                                  className={"nav-link" + (q === "3" ? " active" : "")}
-                                >
-                                  กำลังส่งมาไทย
-                                  {arrStatus[3] > 0 && (
-                                    <div className="pcs-badge2 badge-pink pcs-badge-pill">
-                                      {arrStatus[3]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-4 nav-item tab-sm-center" + (q === "4" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=4"
-                                  className={"nav-link" + (q === "4" ? " active" : "")}
-                                >
-                                  ถึงไทยแล้ว
-                                  {arrStatus[4] > 0 && (
-                                    <div className="pcs-badge2 badge-brown pcs-badge-pill">
-                                      {arrStatus[4]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-5 nav-item tab-sm-center" + (q === "5" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=5"
-                                  className={"nav-link" + (q === "5" ? " active" : "")}
-                                >
-                                  รอชำระเงิน
-                                  {arrStatus[5] > 0 && (
-                                    <div className="pcs-badge2 badge-danger pcs-badge-pill">
-                                      {arrStatus[5]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-6 nav-item tab-sm-center" + (q === "6" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=6"
-                                  className={"nav-link" + (q === "6" ? " active" : "")}
-                                >
-                                  เตรียมส่ง
-                                  {arrStatus[6] - statusDriverItem > 0 && (
-                                    <div className="pcs-badge2 badge-primary pcs-badge-pill">
-                                      {arrStatus[6] - statusDriverItem}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-6-1 nav-item tab-sm-center" +
-                                  (q === "6.1" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=6.1"
-                                  className={"nav-link" + (q === "6.1" ? " active" : "")}
-                                >
-                                  กำลังจัดส่ง
-                                  {statusDriverItem > 0 && (
-                                    <div className="pcs-badge2 badge-info2 pcs-badge-pill">
-                                      {statusDriverItem}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                              <li
-                                className={
-                                  "nav-7 nav-item tab-sm-center" + (q === "7" ? " active" : "")
-                                }
-                              >
-                                <Link
-                                  href="/service-import/table?q=7"
-                                  className={"nav-link" + (q === "7" ? " active" : "")}
-                                >
-                                  ส่งแล้ว
-                                  {arrStatus[7] > 0 && (
-                                    <div className="pcs-badge2 badge-success pcs-badge-pill">
-                                      {arrStatus[7]}
-                                    </div>
-                                  )}
-                                </Link>
-                              </li>
-                            </ul>
-                          </div>
+            {/* Add-forwarder CTA — legacy goes to /service-import/add.
+                Matches the emerald pill shape from page.tsx. */}
+            <Link
+              href="/service-import/add"
+              className="inline-flex items-center gap-2 self-stretch md:self-auto justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all"
+            >
+              <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
+                +
+              </span>
+              <span>เพิ่มรายการนำเข้า</span>
+            </Link>
+          </div>
 
-                          <div className="col-12 p-m-0 notranslate">
-                            <div className="p-m-0">
-                              <div className="hr-dashed"></div>
-                              <form id="frm-example2">
-                                <div className="pt-1 text-center text-md-left ">
-                                  {arrStatus[5] > 0 && (
-                                    <div style={{ position: "relative" }} className="btn-pay-pc"></div>
-                                  )}
-                                </div>
-                                <div className="table-responsive2 mb-5">
-                                  <table
-                                    id="myTable"
-                                    className="table display table-bordered table-striped dataTable no-footer nowrap"
-                                  >
-                                    <thead>
-                                      <tr className="text-center bg-danger2">
-                                        <th className="all add-text-all">ID</th>
-                                        <th className="d-none-1200">วันที่สร้าง</th>
-                                        <th>เลขแทรคกิ้งจีน</th>
-                                        <th className="d-none-1200">ออเดอร์สั่งซื้อ</th>
-                                        <th className="d-none-578">ล๊อต/ลำดับ</th>
-                                        <th className="d-none-578">รายละเอียด</th>
-                                        <th>ลัง</th>
-                                        <th>หนัก</th>
-                                        <th className="d-none-1200">กว้าง</th>
-                                        <th className="d-none-1200">สูง</th>
-                                        <th className="d-none-1200">ยาว</th>
-                                        <th>คิว</th>
-                                        <th className="d-none-578">ประเภท</th>
-                                        <th className="d-none-578">ค่าตีลัง</th>
-                                        <th className="d-none-578">ขนส่งจีน+</th>
-                                        <th className="d-none-578">ค่าอื่นๆ</th>
-                                        <th className="d-none-578">ขนส่งไทย</th>
-                                        <th className="d-none-578">เข้าโกดังจีน</th>
-                                        <th className="d-none-578">ออกโกดังจีน</th>
-                                        <th className="d-none-578">ถึงโกดังไทย</th>
-                                        <th>ราคา</th>
-                                        <th>สถานะ</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
+          {/* ── Search form ── */}
+          <div className="border-b border-border px-3 py-3 md:px-4 md:py-3 bg-surface-alt/30">
+            <form
+              className="flex flex-col md:flex-row md:items-end gap-2 md:gap-3"
+              id="search"
+              method="GET"
+              action="/service-import/table"
+              autoComplete="off"
+            >
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs font-medium text-muted mb-1" htmlFor="fTrackingCHN">
+                  ค้นหา Tracking
+                </label>
+                <input
+                  className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+                  name="fTrackingCHN"
+                  id="fTrackingCHN"
+                  type="text"
+                  placeholder="เลขแทรคกิ้ง"
+                  defaultValue={fTrackingCHNRaw}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs font-medium text-muted mb-1" htmlFor="fCabinetNumber">
+                  ล๊อตสินค้า
+                </label>
+                <select
+                  className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-colors"
+                  name="fCabinetNumber"
+                  id="fCabinetNumber"
+                  defaultValue={fCabinetNumberRaw || "all"}
+                >
+                  <option value="all">ทั้งหมด</option>
+                  {cabinetOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-lg bg-red-600 text-white px-5 py-2 text-sm font-bold shadow-sm hover:bg-red-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                name="search"
+              >
+                ค้นหารายการ
+              </button>
+            </form>
+            {sp.fTrackingCHN !== undefined && (
+              <div className="text-xs text-red-600 mt-2">
+                ผลลัพธ์การค้นหาโดย{" "}
+                {sp.fTrackingCHN ? <>เลขแทรคกิ้ง: {sp.fTrackingCHN}</> : null}
+                {sp.fCabinetNumber ? <> ล๊อตสินค้า: {sp.fCabinetNumber}</> : null}
+              </div>
+            )}
+          </div>
+
+          {/* ── Status filter chips + table content ── */}
+          <div className="px-3 py-3 md:px-4 md:py-4">
+            <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
+              สถานะรายการ
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {statusChips.map((chip) => {
+                const active = isQActive(
+                  chip.href.split("?q=")[1] ?? "all",
+                );
+                return (
+                  <Link
+                    key={chip.href}
+                    href={chip.href}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                      active
+                        ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700"
+                        : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                    }`}
+                  >
+                    <span>{chip.label}</span>
+                    {chip.count > 0 && (
+                      <span
+                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${chip.chipColor}`}
+                      >
+                        {chip.count}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+            <hr className="my-3 border-t border-dashed border-border" />
+
+            {/* the `btn-pay-pc` anchor — kept for legacy positioning hooks */}
+            {arrStatus[5] > 0 && (
+              <div className="pt-1 text-center md:text-left">
+                <div style={{ position: "relative" }} className="btn-pay-pc"></div>
+              </div>
+            )}
+
+            {/* ── The table form. Form id + table id + checkbox/total classes
+                preserved verbatim — DataTables JS attaches to `#myTable`,
+                live pay-recalc JS reads/writes `.countPay` + `.price-all`.
+                Inner <tbody> rows + summary row keep their legacy classes
+                because DataTables column toggles target `.d-none-578` etc. */}
+            <form id="frm-example2">
+              <div className="table-responsive2 -mx-3 md:-mx-4 px-3 md:px-4 overflow-x-auto">
+                <table
+                  id="myTable"
+                  className="dataTable w-full text-xs md:text-sm border-collapse"
+                >
+                  <thead className="bg-red-50 dark:bg-red-950/20">
+                    <tr className="text-center">
+                      <th className="all add-text-all px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ID</th>
+                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">วันที่สร้าง</th>
+                      <th className="all add-text-all px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">เลขแทรคกิ้งจีน</th>
+                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ออเดอร์สั่งซื้อ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ล๊อต/ลำดับ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">รายละเอียด</th>
+                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ลัง</th>
+                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">หนัก</th>
+                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">กว้าง</th>
+                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">สูง</th>
+                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ยาว</th>
+                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">คิว</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ประเภท</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ค่าตีลัง</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ขนส่งจีน+</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ค่าอื่นๆ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ขนส่งไทย</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">เข้าโกดังจีน</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ออกโกดังจีน</th>
+                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ถึงโกดังไทย</th>
+                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ราคา</th>
+                      <th className="all add-text-all px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">สถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                                       {/* forwarder-table.php L975-998 — the
                                           "รวม" summary row. Every cell is
                                           rendered EMPTY by the legacy PHP
@@ -810,56 +703,61 @@ export default async function ForwarderTablePage({
                                           filled later by the DataTables
                                           footer-callback JS, not at server
                                           render). Transcribed 1:1 — empty. */}
-                                      <tr className="bg-color no-sort">
-                                        <td className="t1 d-none2 "></td>
-                                        <td className="t2 d-none-1200"></td>
-                                        <td className="t3"></td>
-                                        <td className="t4 d-none-1200"></td>
-                                        <td className="t5 d-none-578"></td>
-                                        <td className="t6 text-right d-none-578">รวม</td>
-                                        <td className="t7 text-right"></td>
-                                        <td className="t8 text-right"></td>
-                                        <td className="t9 d-none-1200"></td>
-                                        <td className="t10 d-none-1200"></td>
-                                        <td className="t11 d-none-1200"></td>
-                                        <td className="t12 text-right"></td>
-                                        <td className="t13 d-none-578"></td>
-                                        <td className="t14 d-none-578"></td>
-                                        <td className="t15 d-none-578"></td>
-                                        <td className="t15-1 d-none-578"></td>
-                                        <td className="t15-2 d-none-578"></td>
-                                        <td className="t15-3 d-none-578"></td>
-                                        <td className="t16 d-none-578"></td>
-                                        <td className="t17 d-none-578"></td>
-                                        <td className="t19 text-right"></td>
-                                        <td className="t18"></td>
+                                      <tr className="bg-amber-50 dark:bg-amber-950/20 no-sort">
+                                        <td className="t1 d-none2 px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t2 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t3 px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t4 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t5 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t6 text-right hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground">รวม</td>
+                                        <td className="t7 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t8 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t9 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t10 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t11 hidden xl:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t12 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t13 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t14 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t15 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t15-1 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t15-2 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t15-3 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground tabular-nums font-mono"></td>
+                                        <td className="t16 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t17 hidden sm:table-cell px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
+                                        <td className="t19 text-right px-2 py-1.5 border-b border-border text-xs font-semibold text-red-600 tabular-nums font-mono"></td>
+                                        <td className="t18 px-2 py-1.5 border-b border-border text-xs font-semibold text-foreground"></td>
                                       </tr>
                                       {rows.map((row) => {
                                         const fStatusDriver = arrFIDDriver.has(row.id) ? 1 : 0;
                                         const cover = resolveCover(row.fcover);
                                         const net = rowNet.get(row.id) ?? 0;
                                         const isHan = /\p{Script=Han}/u.test(row.fdetail ?? "");
+                                        const isAnchor = anchorID && anchorID === String(row.id);
                                         return (
                                           <tr
                                             key={row.id}
-                                            {...(anchorID && anchorID === String(row.id)
-                                              ? { className: "bg-danger2 anchor", id: `F${row.id}` }
-                                              : {})}
+                                            className={
+                                              "border-b border-border hover:bg-surface-alt/40 transition-colors " +
+                                              (isAnchor ? "bg-red-50 anchor" : "")
+                                            }
+                                            {...(isAnchor ? { id: `F${row.id}` } : {})}
                                           >
                                             <td
-                                              className={
-                                                "text-center tr1 " +
-                                                (row.fstatus !== "5" ? "d-none2" : "")
+                                              className="tr1 px-2 py-1.5 text-center text-xs md:text-sm font-bold text-foreground"
+                                              style={
+                                                row.fstatus !== "5"
+                                                  ? { display: "none" }
+                                                  : undefined
                                               }
                                             >
                                               {row.id}
                                             </td>
-                                            <td className="text-center font-12 d-none-1200">
+                                            <td className="hidden xl:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdate)}
                                             </td>
-                                            <td className="">
+                                            <td className="px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
                                               <Link
-                                                className="text-info"
+                                                className="text-red-600 hover:underline font-mono"
                                                 href={`/service-import/${row.id}`}
                                               >
                                                 {row.ftrackingchn2
@@ -871,19 +769,24 @@ export default async function ForwarderTablePage({
                                                 href={cover}
                                               >
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img src={cover} width={25} alt="" />
+                                                <img
+                                                  src={cover}
+                                                  alt=""
+                                                  className="w-6 h-6 rounded object-cover border border-border inline-block ml-1"
+                                                />
                                               </a>
                                             </td>
-                                            <td className="d-none-1200">
+                                            <td className="hidden xl:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
                                               {row.reforder ? (
-                                                <div className="">
-                                                  <Link href={`/service-order/${row.reforder}`}>
-                                                    {row.reforder}
-                                                  </Link>
-                                                </div>
+                                                <Link
+                                                  href={`/service-order/${row.reforder}`}
+                                                  className="text-sky-600 hover:underline text-xs"
+                                                >
+                                                  {row.reforder}
+                                                </Link>
                                               ) : null}
                                             </td>
-                                            <td className="d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground whitespace-nowrap">
                                               {row.ftransporttype === "1" ? "รถ:" : "เรือ:"}
                                               {countText(
                                                 (row.fcabinetnumber ?? "")
@@ -893,15 +796,15 @@ export default async function ForwarderTablePage({
                                               )}
                                               /
                                               <Link
-                                                className="text-info"
+                                                className="text-red-600 hover:underline font-mono"
                                                 href={`/service-import/${row.id}`}
                                               >
                                                 {row.id}
                                               </Link>
                                             </td>
-                                            <td className="d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-xs md:text-sm text-foreground">
                                               <Link
-                                                className="text-info"
+                                                className="text-red-600 hover:underline"
                                                 href={`/service-import/${row.id}`}
                                               >
                                                 {isHan
@@ -909,72 +812,72 @@ export default async function ForwarderTablePage({
                                                   : countText(row.fdetail, 12)}
                                               </Link>
                                             </td>
-                                            <td className="text-right">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.famount ?? 0) > 0 ? row.famount : ""}
                                             </td>
-                                            <td className="text-right">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.fweight ?? 0) > 0
                                                 ? numberFormat(row.fweight!, 2)
                                                 : ""}
                                             </td>
-                                            <td className="text-right d-none-1200">
+                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.fwidth ?? 0) > 0
                                                 ? numberFormat(row.fwidth!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right d-none-1200">
+                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.fheight ?? 0) > 0
                                                 ? numberFormat(row.fheight!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right d-none-1200">
+                                            <td className="hidden xl:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.flength ?? 0) > 0
                                                 ? numberFormat(row.flength!, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {(row.fvolume ?? 0) > 0
                                                 ? numberFormat(row.fvolume!, 3)
                                                 : "-"}
                                             </td>
-                                            <td className="text-center d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs md:text-sm text-foreground">
                                               {nameProductsType2(row.fproductstype)}
                                             </td>
-                                            <td className="text-right d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.pricecrate ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.ftransportpricechnthb ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.priceother ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-right d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-right text-xs md:text-sm text-foreground tabular-nums font-mono">
                                               {Number(row.fstatus) > 4
                                                 ? numberFormat(row.ftransportprice ?? 0, 2)
                                                 : "-"}
                                             </td>
-                                            <td className="text-center font-12 d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus2)}
                                             </td>
-                                            <td className="text-center font-12 d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus3)}
                                             </td>
-                                            <td className="text-center font-12 d-none-578">
+                                            <td className="hidden sm:table-cell px-2 py-1.5 text-center text-xs text-foreground">
                                               {fmtDate(row.fdatestatus4)}
                                             </td>
-                                            <td className="text-right">
-                                              <span className="text-danger">
+                                            <td className="px-2 py-1.5 text-right text-xs md:text-sm tabular-nums font-mono">
+                                              <span className="text-red-600 font-semibold">
                                                 {numberFormat(net, 2)}
                                               </span>
                                             </td>
-                                            <td className="text-center">
+                                            <td className="px-2 py-1.5 text-center">
                                               {statusForwarderAll4(
                                                 row.fstatus ?? "",
                                                 fStatusDriver,
@@ -983,64 +886,57 @@ export default async function ForwarderTablePage({
                                           </tr>
                                         );
                                       })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                                <div id="example-console-rows"></div>
-                              </form>
-                            </div>
-                            {/* the bottom fixed pay-bar — forwarder-table.php L1071 */}
-                            <div
-                              className="p-1 p-m-0"
-                              style={{ position: "fixed", bottom: 0, width: "90%" }}
-                            >
-                              <div className="b-pay">
-                                <div className="row">
-                                  <div className="col-md-6 offset-md-3">
-                                    <div className="row">
-                                      <div className="col-3 p-05 text-center">
-                                        <input
-                                          type="checkbox"
-                                          className="dt-checkboxes check-all c6"
-                                          defaultChecked
-                                        />
-                                        <br />
-                                        เลือกทั้งหมด
-                                      </div>
-                                      <div className="col-6 p-05">
-                                        จำนวนรายการ : <span className="countPay">-</span>
-                                        <br />
-                                        <b>
-                                          ยอดชำระรวม :{" "}
-                                          <span className="text-danger price-all">0.00</span> บ.
-                                        </b>
-                                      </div>
-                                      <div className="col-3 p-05 text-right">
-                                        <button
-                                          type="button"
-                                          className="btn btn-color-main waves-effect round animate__animated animate__infinite animate__headShake"
-                                          id="select"
-                                        >
-                                          ชำระเงิน
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  </tbody>
+                </table>
               </div>
-            </section>
+              <div id="example-console-rows"></div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      {/* ── Bottom pay-bar — Tailwind rebuild matching forwarder-interactivity.tsx.
+            ·  Mobile: bottom-24 to clear FloatingTabs bottom-nav; rounded top
+               corners + backdrop-blur for floating-card look.
+            ·  Desktop: `md:bottom-0` flush to viewport bottom edge.
+            ·  Kept `id="select"` for the legacy pay handler, kept the
+               `check-all c6` + `countPay` + `price-all` classes that
+               the legacy DataTables JS reads/writes. */}
+      {arrStatus[5] > 0 && (
+        <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[40] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
+          <div className="max-w-[1280px] mx-auto flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
+            <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                className="dt-checkboxes check-all c6 w-4 h-4 rounded border-border accent-red-600 cursor-pointer"
+                defaultChecked
+              />
+              <span className="text-[10.5px] md:text-xs text-muted whitespace-nowrap">ทั้งหมด</span>
+            </label>
+
+            <div className="flex-1 min-w-0 leading-tight">
+              <div className="text-[10px] md:text-xs text-muted">
+                จำนวน <span className="countPay font-bold text-foreground notranslate">-</span> รายการ
+              </div>
+              <div className="font-bold text-foreground text-xs md:text-sm">
+                รวม{" "}
+                <span className="notranslate price-all text-red-600 text-base md:text-lg">
+                  0.00
+                </span>{" "}
+                <span className="text-[10px] md:text-xs text-muted font-normal">บ.</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="select"
+              className="shrink-0 inline-flex items-center justify-center gap-1 rounded-full bg-red-600 text-white px-4 md:px-6 py-2 md:py-2.5 text-sm md:text-base font-bold hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/30 animate__animated animate__infinite animate__headShake transition-all"
+            >
+              ชำระเงิน
+            </button>
           </div>
         </div>
-      </div>
-      {/* END: Content */}
+      )}
 
       {/* ── the add-forwarder modal — forwarder-table.php L1105-1181 ──
           Verbatim BS4 markup. The legacy modal POSTs to forwarder/ with

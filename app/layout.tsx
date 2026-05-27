@@ -80,10 +80,19 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${prompt.variable} h-full antialiased`}
+      translate="no"
+      className={`${prompt.variable} notranslate h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
+        {/* We ship our own i18n (next-intl th/en) — tell Chrome / Edge / any
+            UA-level translator not to offer translation. Without this, the
+            browser's translate tooltip ("ข้อความต้นฉบับ" / thumbs up-down /
+            "ให้คะแนนคำแปลนี้") leaks on top of the page. The `translate="no"`
+            attribute + `notranslate` class are the defensive belt-and-braces;
+            CSS in globals.css hides the overlay if a user enables translate
+            manually. */}
+        <meta name="google" content="notranslate" />
         {/*
           Opt out of Google Translate (browser-side + Web Translate Element).
           Pacred has its own TH/EN switcher in NavBar (next-intl) so Chrome's

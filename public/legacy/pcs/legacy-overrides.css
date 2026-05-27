@@ -182,25 +182,36 @@ nav.nav-footer-pcs { display: none !important; }
     width: 0;
     height: 0;
   }
-  /* Push body content so it clears the fixed 260px sidebar — applies to
-     the page content. NavBar + SearchBar (the top chrome) stay full-width
-     because the sidebar now sits below them. */
-  body.vertical-layout > .mx-auto {
-    padding-left: 260px;
-    transition: padding-left 0.3s ease-out;
+  /* Content padding — opt-in via `.pcs-content-pad` on a page's outer
+     wrapper. Adapts to the sidebar-toggle state (เดฟ 2026-05-27 fix —
+     content was cramped on desktop because the previous `md:pl-[280px]
+     md:pr-[90px]` Tailwind classes were hardcoded on each page and didn't
+     respond to the sidebar-collapsed state — so even with sidebar hidden,
+     content kept the 280px left padding):
+     · base — reserve 88px right padding so the FloatingTabs vertical
+       icon bar (72px, fixed right:0) never overlaps text
+     · sidebar EXPANDED — additional 280px left padding so content clears
+       the 260px-wide sidebar
+     · sidebar COLLAPSED (default) — no left padding, content fills the
+       max-w-[1280px] wrapper edge-to-edge
+     The previous `body.vertical-layout > .mx-auto` selector targeted any
+     mx-auto direct child of body, which was overly broad — `.pcs-content-pad`
+     scopes the rule to the intended wrappers only. */
+  body.pcs-legacy-body .pcs-content-pad {
+    padding-right: 88px;
+    transition: padding 0.3s ease-out;
+  }
+  body.pcs-legacy-body:not(.pcs-sidebar-collapsed) .pcs-content-pad {
+    padding-left: 280px;
   }
 
   /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
-     Sidebar slides off-screen + content reclaims the 260px. Smooth
-     transition matches the toggle button's chevron flip. */
+     Sidebar slides off-screen so content can reclaim the space. */
   #pcs-left-menu.main-menu {
     transition: transform 0.3s ease-out;
   }
   body.pcs-sidebar-collapsed.vertical-layout > #pcs-left-menu.main-menu {
     transform: translateX(-100%);
-  }
-  body.pcs-sidebar-collapsed.vertical-layout > .mx-auto {
-    padding-left: 0;
   }
 }
 /* Mobile: hide the sidebar entirely (legacy theme would slide it in via

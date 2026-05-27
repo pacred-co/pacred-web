@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   // until staff approve (legacy index.php L154-156).
   if (isJuristicPending) {
     return (
-      <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+      <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
         <div className="max-w-[670px] mx-auto">
           <div className="rounded-2xl bg-primary-600 text-white px-6 py-8 text-center shadow-md">
             รอเจ้าหน้าที่ดำเนิน อนุมัติการเป็นนิติบุคคล ภายใน 24 ชม. (ยกเว้นวันอาทิตย์และวันหยุดนักขัตฤกษ์)
@@ -91,7 +91,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="w-full px-[10px] md:pl-[280px] md:pr-[90px] py-3 md:py-5">
+    <div className="pcs-content-pad w-full px-[10px] py-3 md:py-5">
       {/* Top section — 2/3 carousel + 1/3 side-banner stack (md+); banners
           hidden < sm to match legacy `d-none d-sm-block`. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">

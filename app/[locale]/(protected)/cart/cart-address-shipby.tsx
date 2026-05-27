@@ -470,7 +470,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
               <div className="rounded-2xl bg-white/10 p-2 backdrop-blur-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/images/customertheme/free50-3.png"
+                  src="/legacy/pcs/theme/free50-3.png"
                   className="block w-full h-auto rounded-xl"
                   alt="โปรโมชัน Pacred เหมา ๆ ฟรี 50 บาท"
                 />

@@ -202,7 +202,7 @@ export default async function ServiceOrderPage({
     <>
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
-      <div className="w-full px-3 md:px-6 md:pl-[280px] md:pr-[90px] pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
 
         {/* ── Breadcrumb (above header row) ── */}
         <div className="flex items-center gap-2 text-[11px] text-muted mb-2">
@@ -467,7 +467,7 @@ function EmptyState({ title, showCta }: { title: string; showCta: boolean }) {
     <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-sm">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/images/customertheme/pacredmonkey2.png"
+        src="/legacy/pcs/shop-2-300x300.png"
         alt=""
         className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
       />
