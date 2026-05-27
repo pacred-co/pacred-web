@@ -62,9 +62,11 @@ const REPORTS_MENUBAR: MenubarItem[] = [
   {
     label: "ฝั่งบัญชี",
     children: [
-      { label: "ฝากสั่ง",    href: "/admin/reports/shop" },
-      { label: "ฝากนำเข้า", href: "/admin/reports/forwarder" },
-      { label: "ฝากชำระ",   href: "/admin/reports/payment" },
+      { label: "ฝากสั่ง",                   href: "/admin/reports/shop" },
+      { label: "ฝากนำเข้า",                 href: "/admin/reports/forwarder" },
+      { label: "ฝากชำระ",                   href: "/admin/reports/payment" },
+      // Wave 23 P1 batch 3 (2026-05-27 · port report-shops-profit-pay.php)
+      { label: "เบิกเงินส่วนแบ่งร้านค้า",   href: "/admin/reports/shops-profit-pay" },
     ],
   },
   { label: "การเข้าถึงระบบ", href: "/admin/reports/system" },
