@@ -267,10 +267,20 @@ export default async function CntHsPage({
                   </thead>
                   <tbody>
                     {rows.map((row) => {
-                      const cabinets = arrItem.get(row.id) ?? [];
-                      // Cabinet preview + click-to-expand modal logic lives in
-                      // CabinetListCell client island (3 chips visible + the
-                      // rest behind a PacredDialog · Wave 23 P1 #E fix).
+                      // Prefer the normalized `tb_cnt_item` fan-out · fall back
+                      // to parsing the legacy `tb_cnt.cntname` CSV when the
+                      // fan-out is empty (legacy data often wrote the CSV but
+                      // never populated tb_cnt_item — would show "—" if we
+                      // relied on fan-out only). Either way the chip island
+                      // (CabinetListCell) gets a clean string[].
+                      const fanOut = arrItem.get(row.id) ?? [];
+                      const cabinets =
+                        fanOut.length > 0
+                          ? fanOut
+                          : (row.cntname ?? "")
+                              .split(/[,\s]+/)
+                              .map((s) => s.trim())
+                              .filter(Boolean);
                       const isPaid = row.cntstatus === "2";
                       return (
                         <tr key={row.id} className="border-t border-border hover:bg-surface-alt/30">
