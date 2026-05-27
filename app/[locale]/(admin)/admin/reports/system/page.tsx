@@ -1,123 +1,46 @@
+/**
+ * /admin/reports/system — รายงานการเข้าถึงเว็บ (Wave 23 P1 batch 2-C Tailwind rewrite)
+ *
+ * **Wave 23 P1 batch 2-C (2026-05-27 ค่ำ):** UI rewrite only — the underlying
+ * tb_web_hs / tb_page_name reads + the six in-JS aggregations (a..f) are
+ * unchanged. Replaces the `.pcs-legacy` / Bootstrap-4 / admin-base.css
+ * verbatim transcription (~998 LOC heavy with `card card-header
+ * heading-elements` repeated 6×) with the Pacred Tailwind v4 reports
+ * template (mirrors `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
+ *
+ * Legacy source: `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-system.php`
+ * (L1-980 · single-mode page · NO `?page=` dispatch · NO POST handlers).
+ *
+ * **Workflow preserved (per AGENTS §0a):** same six aggregations, same
+ * filter form (date range + device type + 4 group-by toggles), same role
+ * gate (admin/super only — sensitive telemetry incl. session_id, IP,
+ * user_agent), same 5000-row detail cap, same tb_page_name overflow lookup
+ * for namePageName page IDs > 29. The chart fallbacks (Chart.js never
+ * shipped in Pacred) stay as scrollable tables — same data, prettier chrome.
+ *
+ * **Bloat removed:** Bootstrap `.card-header` + `.heading-elements`
+ * collapse/reload/expand icon buttons (6× duplicated, ~120 LOC) ·
+ * `.app-content content content-overlay content-wrapper content-body
+ * section row col-md-12 col-sm-12 card2 card-content card-body p-05` deep
+ * nesting (each card 8 levels deep) · the `<tr class="no-sort">` template
+ * placeholder row · `.pcs-legacy` wrapper + 2 legacy CSS `<link>` tags.
+ *
+ * §0c compliance: every Supabase query destructures { data, error } and
+ * logs on failure. Detail query throws on hard fail; the tb_page_name
+ * lookup tolerates failure (page labels degrade to "Unknown" — not a hub 500).
+ */
+
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { createAdminClient } from "@/lib/supabase/admin";
-
-/**
- * Admin > "รายงานการเข้าถึงเว็บ" — a FAITHFUL 1:1 TRANSCRIPTION
- * of the legacy PCS Cargo admin `pcs-admin/report-system.php`
- * (L1-980), per D1 / ADR-0017 + the faithful-port transcription
- * runbook (`docs/runbook/faithful-port-transcription.md` §8 —
- * admin pattern). Upgraded from P0.5 v1 stub.
- *
- * The legacy `report-system.php` is the SYSTEM-ACCESS report. It
- * is NOT a "report hub with 4 sub-cards" — that was the v1 stub's
- * incorrect framing. The page is a single inline report against
- * `tb_web_hs` (the web hit-log) that renders:
- *
- *   1. Filter form (L67-122) — date range + device-type filter +
- *      4 "group-by" toggles (ip / userID / sessionID / userAgent).
- *   2. Detail log (L123-225) — 10-column DataTable of every hit
- *      matching the filter (datetime / IP / device / OS / browser /
- *      load-time / page-name / userID / session_id / user_agent).
- *   3. SIX chart cards in a 2-column grid (L226-441):
- *      a. จำนวนการใช้งานรายวัน         — area chart (L229-251)
- *      b. ชื่อหน้าเว็บที่มีคนเข้าถึง 20 อันดับ — bar  (L254-289)
- *      c. ชื่อหน้าเว็บโหลดช้าสุด 20 อันดับ    — bar  (L291-326)
- *      d. สมาชิกที่ใช้งานระบบ 20 อันดับ      — bar  (L328-363)
- *      e. ประเภทอุปกรณ์ที่เข้าถึง          — pie  (L365-400)
- *      f. ชนิดของ Browser ที่เข้าถึง       — doughnut (L402-437)
- *
- * Sub-reports listed in the v1 stub (`report-api-cn.php` /
- * `report-search.php` / `report-api-sms.php` / `report-otp.php`)
- * are SEPARATE legacy files reached from the sidebar — they are
- * not children of this page. Their faithful ports land as their
- * own pilots in a later batch; this stub had them grouped by
- * mistake. The 4-card stub grid is removed.
- *
- * The JSX below is the exact HTML structure `report-system.php`
- * renders — same Bootstrap-4 markup, same elements, same labels
- * (Thai hardcoded), same column order. Visual identity comes from
- * the shared admin chrome (`admin-base.css`) plus a small
- * page-specific stylesheet (`reports-system.css`) carrying the
- * inline <style> block at L9-40 + the chart-fallback wrapper
- * styling, both loaded via plain `<link rel="stylesheet">` so
- * they bypass the app's Tailwind v4 / PostCSS pipeline (the rule
- * da4cd79 set).
- *
- * `report-system.php` source structure transcribed here:
- *   - Title bar      L5
- *   - Inline <style> L9-40   → extracted to reports-system.css
- *   - Filter form    L65-122 (card2 wrapper + 6 inputs)
- *   - Filter helper  L106-120 (sql_action + sql_group_by build)
- *   - Detail table   L123-225
- *   - Chart card a   L226-252 (area — daily views, count_by_date)
- *   - Chart card b   L254-289 (bar — top-20 pages by hit count)
- *   - Chart card c   L291-326 (bar — slowest-20 pages by avg load)
- *   - Chart card d   L328-363 (bar — top-20 users by hit count)
- *   - Chart card e   L365-400 (pie — device-type breakdown)
- *   - Chart card f   L402-437 (doughnut — browser breakdown)
- *
- * Data — every `report-system.php` mysqli query transcribed 1:1
- * to the ported legacy `tb_*` schema (Supabase, migration 0081).
- * `tb_*` is RLS-locked to service_role so reads go through the
- * admin client. All seven SQL statements run against `tb_web_hs`
- * (the legacy web-hit log).
- *   - sql_Table1     → detail rows  (L132)
- *   - sql_top20_pages → top-20 pages by count(page_name) (L274)
- *   - sql_low20_pages → slowest-20 by avg load_time (L311)
- *   - sql_topuser20  → top-20 userIDs by hit count (L348)
- *   - sql_device     → device count breakdown (L385)
- *   - sql_browser    → browser count breakdown (L422)
- *   - count_by_date  → daily-views series, built JS-side from
- *                      detail-row dates (L186-201 in legacy).
- *
- * Auth — runbook §3 says keep the Pacred auth chain. The legacy
- * gate is implicit (any logged-in admin can view); this is
- * sensitive web-analytics + per-session data so we narrow to
- * `super` only (admin telemetry — the most restrictive sensible
- * gate). Matches the v1 stub.
- *
- * URL filters (transcribed from L54-119) — exposed as search
- * params on this Next.js route with the same query-string shape
- * as the legacy:
- *   ?date=YYYY-MM-DD - YYYY-MM-DD  → date-range filter
- *   ?type=all|1|2|3                → device filter
- *                                    (all/Mobile/Desktop/Unspecified)
- *   ?ip=all|1                      → group-by IP toggle
- *   ?userID=all|1                  → group-by userID toggle
- *   ?sessionID=all|1               → group-by session_id toggle
- *   ?userAgent=all|1               → group-by user_agent toggle
- *
- * Rebrand: legacy `PCS Cargo Admin` window title → admin chrome
- * already drops the "Cargo" suffix; everything else verbatim Thai.
- *
- * Not transcribed (deliberate · documented for the pilot):
- *   - Chart.js canvases (L243, L269, L306, L343, L380, L417) —
- *     Pacred doesn't ship Chart.js. Each `<canvas>` is replaced
- *     by a static `<table>` fallback inside a same-sized wrapper.
- *     Functional charts are a follow-up (likely a small Chart.js
- *     / Recharts client island per card).
- *   - daterangepicker JS init (L473-488) — date input renders as
- *     plain `<input type="text">`. Date typed manually works.
- *   - DataTables JS init + export buttons (L536-583) — static
- *     markup keeps the wrapper classes; functional sort / export
- *     / per-page is a follow-up.
- *   - `tb_page_name` lookup table (function.php L2713-2720) for
- *     namePageName() page IDs > 29 — inlined as a small fetched
- *     map (one extra IN-clause query) so badge labels render
- *     correctly, mirroring the legacy CONSTANT behaviour.
- *   - The page-load default `<select>` re-selection JS at L489-530
- *     — handled in JSX via `defaultValue` (no client island needed).
- *   - The detail table's "no-sort" template row (L162-173) — that's
- *     a DataTables footer hook that the JS removes + re-injects on
- *     redraw (L533-535, L551). Skipped (no DT JS).
- */
+import { CsvButton } from "@/components/admin/csv-button";
+import { nowDate } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
 // ============================================================================
 // Helpers — inlined from the legacy admin function.php (pure functions only).
-// Kept inline because this is a pilot.
+// Carried verbatim from the prior Bootstrap version (Wave 6 transcription).
 // ============================================================================
 
 /** Legacy `nameGetDevice($int)` — function.php L2667-2674. */
@@ -217,16 +140,16 @@ function isoDate(d: Date): string {
 }
 
 /** Legacy `date("Y-m-d", strtotime("-3 days", strtotime(date("Y-m-d"))))`
- *  (report-system.php L58, L76). */
+ *  (report-system.php L58, L76). Uses `nowDate()` per Next 16 purity rule. */
 function threeDaysAgo(): string {
-  const d = new Date();
+  const d = nowDate();
   d.setDate(d.getDate() - 3);
   return isoDate(d);
 }
 
-/** Legacy `date("Y-m-d")` — today as YYYY-MM-DD. */
+/** Legacy `date("Y-m-d")` — today as YYYY-MM-DD. Uses `nowDate()` per Next 16 purity rule. */
 function todayISO(): string {
-  return isoDate(new Date());
+  return isoDate(nowDate());
 }
 
 /** Legacy date-range parser — daterangepicker emits "YYYY-MM-DD - YYYY-MM-DD"
@@ -239,6 +162,21 @@ function parseDateRange(raw: string | undefined): { start: string; end: string }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(end))   return null;
   return { start, end };
+}
+
+// ============================================================================
+// Filter option sets — kept inline (small, readable, dropdown-friendly).
+// ============================================================================
+
+const DEVICE_OPTIONS = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "1",   label: "มือถือ" },
+  { value: "2",   label: "คอมพิวเตอร์" },
+  { value: "3",   label: "ไม่ระบุ" },
+];
+
+function deviceFilterLabel(s: string): string {
+  return DEVICE_OPTIONS.find((o) => o.value === s)?.label ?? "ทั้งหมด";
 }
 
 // ============================================================================
@@ -302,21 +240,13 @@ export default async function ReportSystemPage({
   }
 
   // ── Filter shape: device + group-by toggles (L106-119) ───────
-  // Legacy concatenates SQL — we re-implement the semantics:
-  //   ?type=1 → device=1 ; ?type=2 → device=2 ; ?type=3 → device='' (legacy
-  //   uses empty-string match for "ไม่ระบุ")
   const deviceFilter = sp.type ?? "all";
+  const groupByIp        = sp.ip        === "1";
+  const groupByUserID    = sp.userID    === "1";
+  const groupBySessionID = sp.sessionID === "1";
+  const groupByUserAgent = sp.userAgent === "1";
 
   // ── Detail rows query (L132) ─────────────────────────────────
-  //   SELECT datetime, ip, device, os, browser, load_time, user_agent,
-  //          session_id, userID, page_name FROM tb_web_hs
-  //   WHERE <sql_action> <sql_date> <sql_group_by1>;
-  // Legacy supports a GROUP BY built from the 4 toggles — PostgREST
-  // can't express arbitrary GROUP BY without an aggregate column, so
-  // the runbook (§3) allows preserving INTENT: we fetch the rows
-  // without GROUP BY, then apply distinct-by in JS when toggles are
-  // on. The visible effect is identical for the analyst (each
-  // distinct combination appears once).
   let detailQ = admin
     .from("tb_web_hs")
     .select(
@@ -333,16 +263,23 @@ export default async function ReportSystemPage({
 
   const { data: detailData, error: detailDataErr } = await detailQ;
   if (detailDataErr) {
-    console.error(`[tb_web_hs list] failed`, { code: detailDataErr.code, message: detailDataErr.message });
+    console.error(`[tb_web_hs list] failed`, {
+      code: detailDataErr.code, message: detailDataErr.message, details: detailDataErr.details,
+    });
+    throw new Error(`Failed to load tb_web_hs (${detailDataErr.code ?? "unknown"}): ${detailDataErr.message}`);
   }
   const rawHits = (detailData ?? []) as unknown as WebHitRow[];
 
   // Apply the group-by JS-side (mirrors the legacy GROUP BY semantics).
+  // PostgREST can't express arbitrary GROUP BY without an aggregate column,
+  // so the runbook (§3) allows preserving INTENT: fetch rows without GROUP
+  // BY, then apply distinct-by in JS when toggles are on. The visible
+  // effect is identical for the analyst (each distinct combination shown once).
   const groupByCols: (keyof WebHitRow)[] = [];
-  if (sp.ip === "1") groupByCols.push("ip");
-  if (sp.userID === "1") groupByCols.push("userid");
-  if (sp.sessionID === "1") groupByCols.push("session_id");
-  if (sp.userAgent === "1") groupByCols.push("user_agent");
+  if (groupByIp)        groupByCols.push("ip");
+  if (groupByUserID)    groupByCols.push("userid");
+  if (groupBySessionID) groupByCols.push("session_id");
+  if (groupByUserAgent) groupByCols.push("user_agent");
 
   let detailRows: WebHitRow[] = rawHits;
   if (groupByCols.length > 0) {
@@ -357,14 +294,10 @@ export default async function ReportSystemPage({
   }
 
   // ── Aggregations a/b/c/d/e/f — six chart datasets ────────────
-  // Legacy runs 5 separate SQL aggregations + 1 JS-side per-day
-  // count built from the detail loop. We compute all six in JS
-  // off the same detailRows (post-filter) — identical semantics,
-  // one round-trip instead of six.
+  // Computed in JS off the same detail-row fetch (one round-trip
+  // instead of legacy's six). Identical semantics.
 
   // (a) count_by_date — per-day hit counts, in the range (L143-201).
-  //   Legacy pre-fills the date_array with 0s then walks the detail
-  //   rows incrementing per day. Re-implement identically.
   const dayLabels = (() => {
     const arr: string[] = [];
     const s = new Date(startDate);
@@ -385,7 +318,7 @@ export default async function ReportSystemPage({
     if (countByDate.has(lbl)) countByDate.set(lbl, (countByDate.get(lbl) ?? 0) + 1);
   }
 
-  // (b) top-20 pages by count (L274). Aggregate by page_name.
+  // (b) top-20 pages by count (L274).
   const pageCount = new Map<number, number>();
   for (const r of rawHits) {
     const k = r.page_name ?? 0;
@@ -437,8 +370,8 @@ export default async function ReportSystemPage({
   const browserRows = Array.from(browserCount.entries()).sort((a, b) => b[1] - a[1]);
 
   // ── tb_page_name lookup for the namePageName helper (L2714) ──
-  // Pull only the page-name IDs we'll actually display (top-20 +
-  // slowest-20 + detail rows) above the 29 hardcoded values.
+  // Pull only the page-name IDs we'll actually display above the
+  // 29 hardcoded values. Soft-fails to "Unknown" — not a hub 500.
   const usedPageIds = new Set<number>();
   for (const r of rawHits) if (r.page_name != null) usedPageIds.add(r.page_name);
   for (const [k] of top20Pages) usedPageIds.add(k);
@@ -458,541 +391,387 @@ export default async function ReportSystemPage({
     }
   }
 
-  // Input default for the date control — legacy L76 echoes the URL
-  // value if set else "-3days - today".
-  const dateInputDefault = sp.date ?? `${threeDaysAgo()} - ${todayISO()}`;
+  // ── Top-level stat cards (page summary) ──────────────────────
+  const totalHits     = rawHits.length;
+  const uniqueIPs     = new Set(rawHits.map((r) => r.ip).filter(Boolean)).size;
+  const uniqueUsers   = new Set(rawHits.map((r) => r.userid).filter(Boolean)).size;
+  const uniqueSessions = new Set(rawHits.map((r) => r.session_id).filter(Boolean)).size;
+
+  // ── CSV export of the detail rows ────────────────────────────
+  const csvRows = detailRows.map((r) => ({
+    datetime:   r.datetime ?? "",
+    ip:         r.ip ?? "",
+    device:     nameGetDevice(r.device),
+    os:         nameGetOS(r.os),
+    browser:    nameBrowserName(r.browser),
+    load_time:  r.load_time ?? "",
+    page_name:  namePageName(r.page_name, pageNameLookup),
+    userid:     r.userid ?? "",
+    session_id: r.session_id ?? "",
+    user_agent: r.user_agent ?? "",
+  }));
+  const csvCols = [
+    { key: "datetime",   label: "วันที่ค้นหา" },
+    { key: "ip",         label: "IP Address" },
+    { key: "device",     label: "ประเภทอุปกรณ์" },
+    { key: "os",         label: "ระบบปฏิบัติการ" },
+    { key: "browser",    label: "Browser" },
+    { key: "load_time",  label: "เวลาโหลด (วินาที)" },
+    { key: "page_name",  label: "ชื่อหน้า" },
+    { key: "userid",     label: "userID" },
+    { key: "session_id", label: "session_id" },
+    { key: "user_agent", label: "user_agent" },
+  ];
+
+  // Submitted-banner predicate (any explicit filter set in URL).
+  const submitted =
+    sp.date !== undefined ||
+    sp.type !== undefined ||
+    sp.ip !== undefined ||
+    sp.userID !== undefined ||
+    sp.sessionID !== undefined ||
+    sp.userAgent !== undefined;
+
+  // Input default for the date control — preserves the legacy "YYYY-MM-DD - YYYY-MM-DD" shape.
+  const dateInputDefault = sp.date ?? `${startDate} - ${endDate}`;
 
   return (
-    <div className="pcs-legacy">
-      {/* Legacy admin chrome + page-specific CSS — both static assets so
-          they bypass Tailwind / PostCSS (the rule da4cd79 set). */}
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
-      <link rel="stylesheet" href="/legacy/pcs/admin/reports-system.css" />
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รายงาน</p>
+          <h1 className="mt-1 text-2xl font-bold">รายงานการเข้าถึงเว็บ</h1>
+          <p className="mt-1 text-sm text-muted">
+            <span className="font-mono">tb_web_hs</span> · ฟิลเตอร์ช่วงวันที่ + ประเภทอุปกรณ์ + จัดกลุ่ม
+          </p>
+        </div>
+        <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+          ← กลับรีพอร์ตหลัก
+        </Link>
+      </div>
 
-      {/* BEGIN: Content — report-system.php L45-451 */}
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          <div className="content-body">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card2">
-                    <div className="card-content">
-                      <div className="card-body p-05">
-                        {/* ── Filter form — L66-122 ─────────────── */}
-                        <div className="row">
-                          <div className="card col-12 p-05">
-                            <h3 className="d text-center text-md-left d-inline-block">
-                              <span className="font-30 ft-users"></span> รายงานการเข้าถึงเว็บ
-                            </h3>
-                            {/* Method preserved as GET — already GET in legacy. */}
-                            <form
-                              className="d-inline-block"
-                              method="GET"
-                              action="/admin/reports/system"
-                            >
-                              <span className="font-14 text-danger">ผลลัพธ์การค้นหา : </span>
-                              <label className="form-control-label" htmlFor="date">
-                                วันที่ค้นหา
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control2 shawCalRanges"
-                                name="date"
-                                defaultValue={dateInputDefault}
-                              />{" "}
-                              <label className="form-control-label" htmlFor="type">
-                                ประเภทอุปกรณ์
-                              </label>
-                              <select
-                                name="type"
-                                id="type"
-                                defaultValue={sp.type ?? "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                <option value="1">มือถือ</option>
-                                <option value="2">คอมพิวเตอร์</option>
-                                <option value="3">ไม่ระบุ</option>
-                              </select>{" "}
-                              <label className="form-control-label" htmlFor="ip">
-                                จัดกลุ่ม IP Address
-                              </label>
-                              <select
-                                name="ip"
-                                id="ip"
-                                defaultValue={sp.ip ?? "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                <option value="1">IP</option>
-                              </select>{" "}
-                              <label className="form-control-label" htmlFor="userID">
-                                จัดกลุ่ม userID
-                              </label>
-                              <select
-                                name="userID"
-                                id="userID"
-                                defaultValue={sp.userID ?? "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                <option value="1">userID</option>
-                              </select>{" "}
-                              <label className="form-control-label" htmlFor="sessionID">
-                                จัดกลุ่ม session_id
-                              </label>
-                              <select
-                                name="sessionID"
-                                id="sessionID"
-                                defaultValue={sp.sessionID ?? "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                <option value="1">session id</option>
-                              </select>{" "}
-                              <label className="form-control-label" htmlFor="userAgent">
-                                จัดกลุ่ม user_agent
-                              </label>
-                              <select
-                                name="userAgent"
-                                id="userAgent"
-                                defaultValue={sp.userAgent ?? "all"}
-                              >
-                                <option value="all">ทั้งหมด</option>
-                                <option value="1">user agent</option>
-                              </select>{" "}
-                              <button
-                                className="btn btn-color-main btn-rounded"
-                                type="submit"
-                              >
-                                <i className="fas fa-search"></i> ค้นหาข้อมูล
-                              </button>
-                            </form>
-                          </div>
-                        </div>
+      {/* Filter banner (when submitted) */}
+      {submitted && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ผลลัพธ์การค้นหา · ประเภทอุปกรณ์: <span className="font-semibold">{deviceFilterLabel(deviceFilter)}</span>
+          {" · "}
+          ช่วงวันที่: <span className="font-semibold">{startDate}</span> ถึง <span className="font-semibold">{endDate}</span>
+          {(groupByIp || groupByUserID || groupBySessionID || groupByUserAgent) && (
+            <>
+              {" · จัดกลุ่ม: "}
+              <span className="font-semibold">
+                {[
+                  groupByIp && "IP",
+                  groupByUserID && "userID",
+                  groupBySessionID && "session_id",
+                  groupByUserAgent && "user_agent",
+                ].filter(Boolean).join(" + ")}
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
-                        {/* ── Detail log + 6 chart cards — L123-441 */}
-                        <div className="row">
-                          {/* Detail log card — L124-225 (display order 3) */}
-                          <div className="col-12 order-3 order-md-3 p-0">
-                            <div className="card p-05">
-                              <h4 className="mb-0">ข้อมูลแบบละเอียด</h4>
-                              <div className="table-responsive">
-                                <table
-                                  id="myTable"
-                                  className="table display table-bordered table-striped dataTable no-footer dtr-inlind"
-                                >
-                                  <thead>
-                                    <tr className="text-center bg-white">
-                                      <th>วันที่ค้นหา</th>
-                                      <th>IP Address</th>
-                                      <th>ประเภทอุปกรณ์</th>
-                                      <th>ระบบปฏิบัติการ</th>
-                                      <th>Browser</th>
-                                      <th>เวลาโหลดหน้านี้ (วินาที)</th>
-                                      <th>ชื่อหน้า</th>
-                                      <th>userID</th>
-                                      <th>session_id</th>
-                                      <th>user_agent</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {detailRows.map((row, i) => (
-                                      <tr key={`${i}-${row.session_id ?? ""}-${row.datetime ?? ""}`}>
-                                        <td className="font-12">{row.datetime ?? ""}</td>
-                                        <td>{row.ip ?? ""}</td>
-                                        <td className="text-center">
-                                          {nameGetDevice(row.device)}
-                                        </td>
-                                        <td className="text-center">
-                                          {nameGetOS(row.os)}
-                                        </td>
-                                        <td className="text-center">
-                                          {nameBrowserName(row.browser)}
-                                        </td>
-                                        <td className="text-right">{row.load_time ?? ""}</td>
-                                        <td>{namePageName(row.page_name, pageNameLookup)}</td>
-                                        <td>
-                                          {row.userid ? (
-                                            <Link
-                                              href={`/admin/users/profile/${row.userid}`}
-                                              target="_blank"
-                                            >
-                                              {row.userid}
-                                            </Link>
-                                          ) : null}
-                                        </td>
-                                        <td className="font-12">{row.session_id ?? ""}</td>
-                                        <td className="font-12">{row.user_agent ?? ""}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* 6 chart cards — L226-441 (display order 1) */}
-                          <div className="col-12 order-1 order-md-1 p-0">
-                            <div className="row">
-                              {/* (a) จำนวนการใช้งานรายวัน — area chart fallback */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">จำนวนการใช้งานรายวัน</h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="area-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>วันที่</th>
-                                              <th>จำนวนการเข้าชม</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {Array.from(countByDate.entries()).map(
-                                              ([d, n]) => (
-                                                <tr key={d}>
-                                                  <td>{d}</td>
-                                                  <td>{n}</td>
-                                                </tr>
-                                              ),
-                                            )}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* (b) ชื่อหน้าเว็บที่มีคนเข้าถึงมากสุด 20 อันดับแรก */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">
-                                      ชื่อหน้าเว็บที่มีคนเข้าถึงมากสุด 20 อันดับแรก
-                                    </h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="top-pages-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>ชื่อหน้าเว็บ</th>
-                                              <th>จำนวนครั้ง</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {top20Pages.map(([pid, n]) => (
-                                              <tr key={pid}>
-                                                <td>
-                                                  {namePageName(pid, pageNameLookup)}
-                                                </td>
-                                                <td>{n}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* (c) ชื่อหน้าเว็บโหลดช้าสุด 20 อันดับแรก */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">
-                                      ชื่อหน้าเว็บโหลดช้าสุด 20 อันดับแรก
-                                    </h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="low-pages-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>ชื่อหน้าเว็บ</th>
-                                              <th>เวลาที่ใช้เฉลี่ย (วินาที)</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {low20Pages.map(([pid, avg]) => (
-                                              <tr key={pid}>
-                                                <td>
-                                                  {namePageName(pid, pageNameLookup)}
-                                                </td>
-                                                <td>{avg.toFixed(4)}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* (d) สมาชิกที่ใช้งานระบบมากสุด 20 อันดับแรก */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">
-                                      สมาชิกที่ใช้งานระบบมากสุด 20 อันดับแรก
-                                    </h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="topuser-pages-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>รหัสสมาชิก</th>
-                                              <th>จำนวนครั้ง</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {top20Users.map(([uid, n]) => (
-                                              <tr key={uid}>
-                                                <td>{uid}</td>
-                                                <td>{n}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* (e) ประเภทอุปกรณ์ที่เข้าถึง — pie chart fallback */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">ประเภทอุปกรณ์ที่เข้าถึง</h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="type-device-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>อุปกรณ์</th>
-                                              <th>จำนวนครั้ง</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {deviceRows.map(([d, n]) => (
-                                              <tr key={d}>
-                                                <td>{nameGetDevice(d)}</td>
-                                                <td>{n}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* (f) ชนิดของ Browser ที่เข้าถึง — doughnut fallback */}
-                              <div className="col-md-6">
-                                <div className="card">
-                                  <div className="card-header">
-                                    <h4 className="mb-0">ชนิดของ Browser ที่เข้าถึง</h4>
-                                    <a className="heading-elements-toggle">
-                                      <i className="la la-ellipsis-v font-medium-3"></i>
-                                    </a>
-                                    <div className="heading-elements">
-                                      <ul className="list-inline mb-0">
-                                        <li>
-                                          <a data-action="collapse">
-                                            <i className="ft-minus"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="reload">
-                                            <i className="ft-rotate-cw"></i>
-                                          </a>
-                                        </li>
-                                        <li>
-                                          <a data-action="expand">
-                                            <i className="ft-maximize"></i>
-                                          </a>
-                                        </li>
-                                      </ul>
-                                    </div>
-                                  </div>
-                                  <div className="card-content collapse show">
-                                    <div className="card-body chartjs">
-                                      <div
-                                        id="type-browser-chart"
-                                        className="report-chart-fallback"
-                                      >
-                                        <table>
-                                          <thead>
-                                            <tr>
-                                              <th>Browser</th>
-                                              <th>จำนวนครั้ง</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {browserRows.map(([b, n]) => (
-                                              <tr key={b}>
-                                                <td>{nameBrowserName(b)}</td>
-                                                <td>{n}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+      {/* Filter form (GET) */}
+      <form method="GET" action="/admin/reports/system" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div>
+            <label htmlFor="date" className="block text-xs text-muted mb-1">วันที่ค้นหา</label>
+            <input
+              id="date"
+              type="text"
+              name="date"
+              defaultValue={dateInputDefault}
+              placeholder="YYYY-MM-DD - YYYY-MM-DD"
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+            <p className="mt-1 text-[10px] text-muted">รูปแบบ: <code>2025-12-01 - 2025-12-31</code></p>
+          </div>
+          <div>
+            <label htmlFor="type" className="block text-xs text-muted mb-1">ประเภทอุปกรณ์</label>
+            <select
+              id="type"
+              name="type"
+              defaultValue={deviceFilter}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            >
+              {DEVICE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
         </div>
+
+        {/* Group-by toggles — 4 in one row (compact label per legacy). */}
+        <div>
+          <p className="block text-xs text-muted mb-1">จัดกลุ่มผลลัพธ์ (DISTINCT)</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <GroupByToggle name="ip"        defaultValue={sp.ip}        label="IP Address" />
+            <GroupByToggle name="userID"    defaultValue={sp.userID}    label="userID" />
+            <GroupByToggle name="sessionID" defaultValue={sp.sessionID} label="session_id" />
+            <GroupByToggle name="userAgent" defaultValue={sp.userAgent} label="user_agent" />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button
+            type="submit"
+            className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600"
+          >
+            ค้นหาข้อมูล
+          </button>
+          <CsvButton rows={csvRows} cols={csvCols} filename={`web-hits-${startDate}-${endDate}.csv`} />
+        </div>
+      </form>
+
+      {/* Top stat cards — page summary */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card label="จำนวน Hits"      value={totalHits.toLocaleString("th-TH")} />
+        <Card label="IP ที่ไม่ซ้ำ"     value={uniqueIPs.toLocaleString("th-TH")} />
+        <Card label="userID ที่ไม่ซ้ำ" value={uniqueUsers.toLocaleString("th-TH")} />
+        <Card label="Session ที่ไม่ซ้ำ" value={uniqueSessions.toLocaleString("th-TH")} />
       </div>
-      {/* END: Content */}
+
+      {/* Six aggregation cards — 2-col grid on lg+. */}
+      <div className="grid lg:grid-cols-2 gap-3">
+        {/* (a) daily views — area chart fallback as scrollable mini-table */}
+        <ChartCard title="จำนวนการใช้งานรายวัน" subtitle={`${dayLabels.length} วัน · area chart fallback`}>
+          <ChartTable
+            head={["วันที่", "จำนวนการเข้าชม"]}
+            rows={Array.from(countByDate.entries()).map(([d, n]) => [d, n.toLocaleString("th-TH")])}
+            rightAlignLast
+            empty="ไม่มีข้อมูลในช่วงเวลานี้"
+          />
+        </ChartCard>
+
+        {/* (b) top-20 pages by hit count */}
+        <ChartCard title="ชื่อหน้าเว็บที่มีคนเข้าถึงมากสุด 20 อันดับแรก" subtitle="bar chart fallback">
+          <ChartTable
+            head={["ชื่อหน้าเว็บ", "จำนวนครั้ง"]}
+            rows={top20Pages.map(([pid, n]) => [namePageName(pid, pageNameLookup), n.toLocaleString("th-TH")])}
+            rightAlignLast
+            empty="ไม่มีข้อมูล"
+          />
+        </ChartCard>
+
+        {/* (c) slowest-20 pages by avg load_time */}
+        <ChartCard title="ชื่อหน้าเว็บโหลดช้าสุด 20 อันดับแรก" subtitle="bar chart fallback · เฉลี่ย load_time">
+          <ChartTable
+            head={["ชื่อหน้าเว็บ", "เวลาที่ใช้เฉลี่ย (วินาที)"]}
+            rows={low20Pages.map(([pid, avg]) => [namePageName(pid, pageNameLookup), avg.toFixed(4)])}
+            rightAlignLast
+            empty="ไม่มีข้อมูล"
+          />
+        </ChartCard>
+
+        {/* (d) top-20 users by hit count */}
+        <ChartCard title="สมาชิกที่ใช้งานระบบมากสุด 20 อันดับแรก" subtitle="bar chart fallback">
+          <ChartTable
+            head={["รหัสสมาชิก", "จำนวนครั้ง"]}
+            rows={top20Users.map(([uid, n]) => [
+              <Link key={uid} href={`/admin/users/profile/${uid}`} className="text-primary-600 hover:underline font-mono text-xs">
+                {uid}
+              </Link>,
+              n.toLocaleString("th-TH"),
+            ])}
+            rightAlignLast
+            empty="ไม่มีสมาชิกที่ล็อกอินในช่วงนี้"
+          />
+        </ChartCard>
+
+        {/* (e) device pie */}
+        <ChartCard title="ประเภทอุปกรณ์ที่เข้าถึง" subtitle="pie chart fallback">
+          <ChartTable
+            head={["อุปกรณ์", "จำนวนครั้ง"]}
+            rows={deviceRows.map(([d, n]) => [nameGetDevice(d), n.toLocaleString("th-TH")])}
+            rightAlignLast
+            empty="ไม่มีข้อมูล"
+          />
+        </ChartCard>
+
+        {/* (f) browser doughnut */}
+        <ChartCard title="ชนิดของ Browser ที่เข้าถึง" subtitle="doughnut chart fallback">
+          <ChartTable
+            head={["Browser", "จำนวนครั้ง"]}
+            rows={browserRows.map(([b, n]) => [nameBrowserName(b), n.toLocaleString("th-TH")])}
+            rightAlignLast
+            empty="ไม่มีข้อมูล"
+          />
+        </ChartCard>
+      </div>
+
+      {/* Detail table — full hit log */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        <div className="border-b border-border bg-surface-alt/50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold">ข้อมูลแบบละเอียด</h2>
+            <p className="text-[11px] text-muted">{detailRows.length.toLocaleString("th-TH")} แถว · เลื่อนซ้าย-ขวา ⇆ เพื่อดูคอลัมน์ทั้งหมด</p>
+          </div>
+        </div>
+
+        {detailRows.length === 0 ? (
+          <p className="p-12 text-center text-sm text-muted">ไม่มี hit ในช่วงเวลานี้</p>
+        ) : (
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-3 py-3 whitespace-nowrap">วันที่</th>
+                  <th className="px-3 py-3 whitespace-nowrap">IP</th>
+                  <th className="px-3 py-3 whitespace-nowrap">อุปกรณ์</th>
+                  <th className="px-3 py-3 whitespace-nowrap">OS</th>
+                  <th className="px-3 py-3 whitespace-nowrap">Browser</th>
+                  <th className="px-3 py-3 text-right whitespace-nowrap">โหลด (s)</th>
+                  <th className="px-3 py-3 whitespace-nowrap">ชื่อหน้า</th>
+                  <th className="px-3 py-3 whitespace-nowrap">userID</th>
+                  <th className="px-3 py-3 whitespace-nowrap">session_id</th>
+                  <th className="px-3 py-3">user_agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detailRows.map((row, i) => (
+                  <tr key={`${i}-${row.session_id ?? ""}-${row.datetime ?? ""}`} className="border-t border-border hover:bg-surface-alt/30 align-top">
+                    <td className="px-3 py-2 text-[11px] font-mono whitespace-nowrap text-muted">
+                      {row.datetime ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 text-[11px] font-mono whitespace-nowrap">{row.ip ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs">{nameGetDevice(row.device)}</td>
+                    <td className="px-3 py-2 text-xs">{nameGetOS(row.os)}</td>
+                    <td className="px-3 py-2 text-xs">{nameBrowserName(row.browser)}</td>
+                    <td className="px-3 py-2 text-right text-xs font-mono">{row.load_time ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs">{namePageName(row.page_name, pageNameLookup)}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">
+                      {row.userid ? (
+                        <Link
+                          href={`/admin/users/profile/${row.userid}`}
+                          className="text-primary-600 hover:underline font-mono"
+                        >
+                          {row.userid}
+                        </Link>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-[10px] font-mono text-muted whitespace-nowrap">{row.session_id ?? "—"}</td>
+                    <td className="px-3 py-2 text-[10px] text-muted max-w-md truncate" title={row.user_agent ?? ""}>
+                      {row.user_agent ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted">
+        แสดงไม่เกิน 5,000 แถวต่อหน้า · ใช้ตัวกรองช่วงวันที่เพื่อจำกัดผลลัพธ์ · จัดกลุ่มเพื่อแสดงเฉพาะค่าที่ไม่ซ้ำ
+      </p>
+    </main>
+  );
+}
+
+// ============================================================================
+// Subcomponents (kept local — same-file scope keeps the page self-contained)
+// ============================================================================
+
+function Card({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-2xl font-bold font-mono">{value}</p>
+    </div>
+  );
+}
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+      <div className="border-b border-border bg-surface-alt/50 px-4 py-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {subtitle && <p className="text-[11px] text-muted">{subtitle}</p>}
+      </div>
+      <div className="max-h-72 overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ChartTable({
+  head,
+  rows,
+  rightAlignLast,
+  empty,
+}: {
+  head: string[];
+  rows: Array<Array<string | number | React.ReactNode>>;
+  rightAlignLast?: boolean;
+  empty: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="p-6 text-center text-xs text-muted">{empty}</p>;
+  }
+  return (
+    <table className="w-full text-xs">
+      <thead className="bg-surface-alt/30 text-left uppercase tracking-wide text-muted">
+        <tr>
+          {head.map((h, i) => (
+            <th
+              key={i}
+              className={`px-3 py-2 ${rightAlignLast && i === head.length - 1 ? "text-right" : ""}`}
+            >
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, ri) => (
+          <tr key={ri} className="border-t border-border hover:bg-surface-alt/20">
+            {row.map((cell, ci) => (
+              <td
+                key={ci}
+                className={`px-3 py-1.5 ${rightAlignLast && ci === row.length - 1 ? "text-right font-mono" : ""}`}
+              >
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function GroupByToggle({
+  name,
+  defaultValue,
+  label,
+}: {
+  name: string;
+  defaultValue: string | undefined;
+  label: string;
+}) {
+  // We use a <select> instead of a checkbox to preserve URL shape — the
+  // legacy GET endpoint expects `?ip=all` or `?ip=1`. A native checkbox
+  // would send `?ip=on`, breaking the bookmarkable URL contract.
+  const cur = defaultValue ?? "all";
+  return (
+    <div className="rounded-lg border border-border bg-white dark:bg-surface px-3 py-2">
+      <label htmlFor={name} className="block text-[10px] uppercase tracking-wide text-muted mb-1">
+        {label}
+      </label>
+      <select
+        id={name}
+        name={name}
+        defaultValue={cur}
+        className="w-full bg-transparent text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/30 rounded"
+      >
+        <option value="all">ทั้งหมด</option>
+        <option value="1">จัดกลุ่มตาม {label}</option>
+      </select>
     </div>
   );
 }
