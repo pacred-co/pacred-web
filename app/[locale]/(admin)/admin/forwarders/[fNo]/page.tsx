@@ -710,7 +710,11 @@ async function renderLegacyForwarderView(
             </Link>
             {r.fcabinetnumber && (
               <Link
-                href={`/admin/report-cnt?id=${encodeURIComponent(r.fcabinetnumber)}`}
+                // URL-segment route per Wave 16 P0-1 (per-container detail
+                // lives at /admin/report-cnt/[fCabinetNumber]); the earlier
+                // `?id=` query-string link incorrectly fell through to the
+                // list page. Wave 23 walkthrough fix.
+                href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
                 className="block w-full rounded-lg bg-primary-500 px-3 py-2 text-sm text-white font-medium hover:bg-primary-600 text-center"
               >
                 📦 ดูตู้คอนเทนเนอร์ →
