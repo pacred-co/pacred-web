@@ -4,6 +4,33 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-05-27] `googleapis` package OOMs the Next 16 / tsc build — use `google-auth-library` + raw fetch instead
+
+**Symptom.** `pnpm build` on Next 16.2.6 (Turbopack) compiled the app in 30s but then crashed during the TypeScript phase with:
+
+```
+FATAL ERROR: Ineffective mark-compacts near heap limit
+Allocation failed - JavaScript heap out of memory
+Next.js build worker exited with code: 134
+```
+
+The crash happened the moment a single file imported `googleapis` (`import { google } from "googleapis"`).
+
+**Root cause.** The official `googleapis@172.0.0` package ships type definitions for EVERY Google API surface (Sheets, Drive, Gmail, Calendar, Cloud, YouTube — ~3500 `.d.ts` files totalling ~3.5 MB). Even though only `google.sheets({...})` is referenced, tsc has to type-check the whole declaration graph because the namespace import exposes them all. Default Node heap (2 GB) is not enough.
+
+**What to do.** Don't use `googleapis` for narrow integrations. Two cheaper alternatives:
+
+1. **`google-auth-library`** (~300 KB) — JWT/OAuth helpers only. Pair with raw `fetch` to the target REST API. Best when the surface is small (Sheets v4 read = one `GET /v4/spreadsheets/{id}/values/{range}` endpoint).
+2. **`google-spreadsheet`** (~200 KB) — purpose-built Sheets wrapper. Easier ergonomics, slightly heavier.
+
+The Pacred Google Sheets sync (Gap #1) uses option 1 — see `lib/integrations/google-sheets/client.ts`. The auth client memoises the JWT; `jwt.getRequestHeaders()` handles access-token refresh transparently.
+
+**If you really need `googleapis`.** Bump Node heap for the build: `NODE_OPTIONS=--max-old-space-size=4096 pnpm build`. But this is a papering-over — the production build slows down + Vercel still uses the default ceiling unless you also configure that. Swap to the lighter library instead.
+
+**Anti-pattern.** Reaching for `googleapis` because it's the "official" client is a trap on Next 16. Always prefer the narrowest dependency.
+
+---
+
 ## [2026-05-15] CI fails with `ERR_PNPM_BAD_PM_VERSION`
 
 **Context:** Pushed commit `f06c394` to `main`; GitHub Actions CI run #23 failed immediately at the "Install pnpm" step.

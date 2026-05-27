@@ -57,7 +57,7 @@ enhancements (the old Tier roadmap, *deferred not cancelled*).
 You're the **1:1 customer-backend lead + ปอน integrator**. ก๊อต takes the admin 1:1 lane. ภูม keeps V3 alive on Poom-pacred (UNLOCKED 2026-05-24). Concretely you:
 
 - **Own customer-portal `(protected)/*` 1:1 fidelity** — 15/24 screens transcribed; ~9 remaining (login/register fidelity check, forgot-password, regis-tam, line-notify, etc.). Drive these to done.
-- **Wire missing customer-side integrations** — TAMIT verification, LINE Notify per-user OAuth (gaps #3 + #5 in deep audit).
+- ~~**Wire missing customer-side integrations**~~ ✅ Gaps #3 (LINE Notify → LIFF + Messaging API replacement) + #5 (TAMIT was DBD lookup misroute — switched to internal `/api/dbd/[taxId]`) both closed 2026-05-27. Gap #1 (Google Sheets sync) foundation also shipped — CTT pilot DRY-RUN + Sheets v4 client + migration `0112` + cron `/api/cron/sheets-sync-ctt`; ก๊อต provisions credentials + sheet column mapping to go live.
 - **Integrate ปอน's frontend** — merge `podeng` into `dave-pacred`, run `pnpm verify`, smoke-test, push to main.
 - **Coordinate with ก๊อต** on the admin lane — agree on which routes are 1:1-ported (ก๊อต) vs V3-enhanced (ภูม merges later from Poom-pacred).
 - ~~**Phase A close-out**~~ ✅ Phase A DONE — Pro upgrade done, 3 log tables backfilled, customer images uploaded to Supabase S3 prod by ภูม 2026-05-24, REALSHITDATAPCS.rar extracted. Only remaining: resolve prod table-naming conflicts (rebuilt-era vs `tb_*` — joint with ภูม).

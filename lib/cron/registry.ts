@@ -90,6 +90,19 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ดึง tb_tmp_forwarder_cargothai สดจาก partner API + reconcile กับ forwarders ใน Pacred",
     scheduleLabel: "ทุกวัน 02:30 ICT (19:30 UTC ก่อนหน้า)",
   },
+  // Gap #1 foundation 2026-05-27 — CTT warehouse Google Sheet pull
+  // (pilot for the 4-sheet sync: CTT / MX / MK / Sang). Runs in DRY-RUN
+  // until ก๊อต provisions GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON +
+  // GOOGLE_SHEETS_CTT_ID + the per-sheet column-mapping is finalized.
+  // Adapter: lib/integrations/google-sheets/ctt-adapter.ts. The other
+  // 3 sheets (MX/MK/Sang) get their own crons after CTT verifies live.
+  {
+    path:          "/api/cron/sheets-sync-ctt",
+    schedule:      "0 * * * *",
+    label:         "Sync sheet CTT warehouse",
+    description:   "ดึง row ใหม่จาก Google Sheet ของคลัง CTT → tb_forwarder + แจ้งทีม ops (DRY-RUN จนกว่า ก๊อต wire credentials)",
+    scheduleLabel: "ทุก 1 ชม.",
+  },
 ] as const;
 
 /** Look up a registry entry by path; returns null if unknown (means

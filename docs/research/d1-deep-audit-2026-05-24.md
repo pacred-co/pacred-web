@@ -15,7 +15,7 @@
 
 | # | Gap | Severity | Effort | Owner (owner-assigned 2026-05-24) | Status |
 |---|---|---|---|---|---|
-| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | ❌ NONE |
+| 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | 🟡 **Foundation shipped 2026-05-27** — `lib/integrations/google-sheets/{client,ctt-adapter}.ts` + migration `0112` (the 3 missing `tb_notify_sheet_{mx,mk,sang}` cursor tables) + `/api/cron/sheets-sync-ctt` (DRY-RUN) + vercel.json + cron registry. **Open handoff (ก๊อต):** provision a Pacred Google Cloud service account + share the 4 sheets with it; set `GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON` + per-sheet `GOOGLE_SHEETS_*_ID`/`_RANGE` env vars; finalize the per-sheet column→`tb_forwarder` mapping (the adapter currently logs the new-rows count + sample without inserting). Once wired: copy CTT adapter to MX/MK/Sang. |
 | 2 | **JMF / TTP / CN forwarder partner APIs** | 🔴 HIGH | L | **ก๊อต** | 🔴 only MOMO JMF stubbed |
 | 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ✅ **CLOSED via replacement** — LINE Notify service EOL'd 2025-03-31; replaced by LIFF + LINE Messaging API per-user (`af4bebe9` task L). `/line-settings` page + `actions/line-settings.ts` + `lib/notifications/sendNotification` push. |
 | 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | **เดฟ** | ❌ NONE |
@@ -36,7 +36,7 @@ S = ≤1 day · M = 2–5 days · L = ≥1 week
 ### What's in legacy that pacred-web doesn't have
 
 **External integrations missing (most critical):**
-- **Google Sheets sync** — `member/pcs-admin/api-sheets-{ctt,mx,mk,sang-2023}.php` + cron at `run-time/cttupdate/index.php`. Pulls shipping data from 4 different Google Sheets, dedupes against `tb_notify_sheet_*`, posts LINE Notify on new rows. Used daily by ops team.
+- **Google Sheets sync** — `member/pcs-admin/api-sheets-{ctt,mx,mk,sang-2023}.php` + cron at `run-time/cttupdate/index.php`. Pulls shipping data from 4 different Google Sheets, dedupes against `tb_notify_sheet_*`, posts LINE Notify on new rows. Used daily by ops team. **🟡 Foundation shipped 2026-05-27** (CTT pilot DRY-RUN — `lib/integrations/google-sheets/{client,ctt-adapter}.ts` + migration `0112` for the 3 missing dedupe tables + `/api/cron/sheets-sync-ctt` cron). Open handoff: ก๊อต provisions Pacred Google Cloud service account + the per-sheet column mapping; then MX/MK/Sang clone CTT adapter. LINE notify channel switches from dead LINE Notify → LINE Messaging API (Pacred OA).
 - **JMF / TTP / CN forwarder APIs** — `api-forwarder-{jmf,ttp,cn}.php`. Pulls partner forwarder quotes/availability/status. Pacred has only MOMO JMF wrapper (stubbed, API surface mismatch).
 - ~~**LINE Notify (per-user OAuth)**~~ ✅ **CLOSED via replacement** — Legacy `member/line-notify.php` + `member/api/linenotify/callback/` + `run-time/line/index.php` cron. Original port attempted; LINE Notify service EOL'd 2025-03-31 → reverted. Replaced 2026-05-26 by **LIFF + LINE Messaging API per-user model** in commit `af4bebe9` (task L) — `/line-settings` page + `actions/line-settings.ts` + push via `lib/notifications/sendNotification`. Customer flow: add Pacred LINE OA friend → /line-settings → LIFF auth → `profiles.line_user_id` set → Messaging API push.
 - **CargoThai (api.newcargothai.net) PO sync** — `test-api/api-new.php` + `test-api/update-data-cargothai/index.php`. Two-way sync of Pacred POs with CargoThai partner system.
@@ -153,7 +153,7 @@ These are flows that work but degraded (rebuilt-era differs from legacy):
 4. ~~**Gap #5 — TAMIT integration stub**~~ ✅ DONE 2026-05-27 — `register-client.tsx fetchCompany()` switched from retired `opendata.dbd.go.th/api/v1/*` direct call → Pacred's own `/api/dbd/[taxId]` (CKAN 2.10 + WAF bypass).
 
 ### Sprint 2 (next week)
-5. **Gap #1 — Google Sheets sync cron** — Vercel cron + Sheets API client + dedupe logic + LINE Notify dispatcher
+5. ~~**Gap #1 — Google Sheets sync cron**~~ 🟡 **Foundation shipped 2026-05-27** — Vercel cron `/api/cron/sheets-sync-ctt` (DRY-RUN) + `lib/integrations/google-sheets/client.ts` (Sheets v4 REST via google-auth-library JWT) + CTT pilot adapter + migration `0112` (3 missing `tb_notify_sheet_*` cursor tables) + LINE dispatcher switched from dead LINE Notify → Messaging API. Open: ก๊อต provisions Google Cloud creds + sheet column mapping; then clone CTT → MX/MK/Sang.
 6. ~~**Gap #3 — LINE Notify per-user OAuth**~~ ✅ DONE via LIFF + Messaging API replacement (`af4bebe9`, 2026-05-26)
 7. **Gap #2 (start) — JMF partner API** — fully wire the MOMO JMF client (currently stubbed)
 
