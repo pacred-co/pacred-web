@@ -446,19 +446,18 @@ function EditProfileButton({
             </div>
             <div className="row mb-1">
               <div className="col-6">
-                <label className="form-control-label"> สำเนาบัตรประชาชน (.pdf/images)</label>
-                <div className="fallback">
-                  <input type="file" className="dropify mb-1" accept="image/*,.pdf" data-max-file-size="5M" />
-                </div>
-                <br />
-                <label className="form-control-label"> สำเนาทะเบียนบ้าน (.pdf/images)</label>
-                <div className="fallback">
-                  <input type="file" className="dropify mb-1" accept="image/*,.pdf" data-max-file-size="5M" />
-                </div>
-                <br />
-                <label className="form-control-label"> Resume (.pdf/images)</label>
-                <div className="fallback">
-                  <input type="file" className="dropify mb-1" accept="image/*,.pdf" data-max-file-size="5M" />
+                <label className="form-control-label"> สำเนาบัตรประชาชน + ทะเบียนบ้าน + Resume</label>
+                {/* Wave 23 audit (2026-05-27): the legacy `<input type="file" class="dropify"
+                    data-max-file-size="5M">` markup is jQuery-Dropify decoration only — never
+                    wired to a Pacred storage bucket / server action. Banner the gap honestly
+                    per AGENTS §0a; real upload backend (admin-docs bucket + 3 URL columns on
+                    `admin_contact_extras` + server action + delete UI) is Wave 24/Phase C. */}
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-900 leading-relaxed">
+                  🚧 อัพโหลดเอกสาร HR (บัตรประชาชน · ทะเบียนบ้าน · Resume) — <strong>ยังไม่เปิดใช้งานจริง</strong>.
+                  ระหว่างนี้: ส่งไฟล์ทาง LINE OA หรือ HR แล้วให้ admin บันทึก path ที่ <code className="font-mono">admin_note</code> ใต้ &quot;Note ภายใน&quot;.
+                  Backend (storage bucket + server action + 3 URL columns) กำหนดส่งใน Phase C / Wave 24+ ตาม
+                  <code className="font-mono"> docs/research/admin-tech-debt-master-2026-05-27.md </code>
+                  ข้อ #2 (P1 ที่ deferred จาก audit วันนี้).
                 </div>
               </div>
               <div className="col-md-6">
