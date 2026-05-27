@@ -459,7 +459,7 @@ function EmptyCartState() {
     <div className="rounded-2xl bg-white border border-border p-8 md:p-12 text-center shadow-[0_4px_14px_rgba(0,0,0,0.04)]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/legacy/pcs/shop-2-300x300.png"
+        src="/images/customertheme/pacredmonkey2.png"
         alt=""
         className="mx-auto w-40 h-40 md:w-52 md:h-52 object-contain opacity-70 mb-4"
       />

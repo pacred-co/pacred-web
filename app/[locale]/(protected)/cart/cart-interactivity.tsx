@@ -644,7 +644,7 @@ export function CartInteractivity({
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/legacy/pcs/theme/free50-3.png"
+                src="/images/customertheme/free50-3.png"
                 alt="Pacred เหมา ๆ ฟรี 50 บาท"
                 className="block w-full h-auto"
               />

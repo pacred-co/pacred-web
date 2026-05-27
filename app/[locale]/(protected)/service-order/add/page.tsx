@@ -742,7 +742,7 @@ export default async function ServiceOrderAddPage({
                                   <div className="text-center">
                                     <h4 className="text-color-main">คุณยังไม่มีข้อมูลฝากสั่งซื้อ</h4>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img className="img-fluid" src="/legacy/pcs/shop-2-300x300.png" alt="" />
+                                    <img className="img-fluid" src="/images/customertheme/pacredmonkey2.png" alt="" />
                                   </div>
                                 )
                               ) : (
@@ -758,7 +758,7 @@ export default async function ServiceOrderAddPage({
                                     </div>
                                   </Link>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img className="img-fluid" src="/legacy/pcs/shop-2-300x300.png" alt="" />
+                                  <img className="img-fluid" src="/images/customertheme/pacredmonkey2.png" alt="" />
                                 </div>
                               )}
 

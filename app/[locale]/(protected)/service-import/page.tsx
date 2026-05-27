@@ -948,7 +948,7 @@ export default async function ServiceImportPage({
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               className="img-fluid cursor-pointer card-promotion"
-                              src="/legacy/pcs/theme/free50-3.png"
+                              src="/images/customertheme/free50-3.png"
                               alt=""
                             />
                             <br />
@@ -1039,7 +1039,7 @@ export default async function ServiceImportPage({
               <div className="bg-pro-valentine">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/legacy/pcs/theme/free50-3.png"
+                  src="/images/customertheme/free50-3.png"
                   className="img-fluid"
                   alt=""
                 />
