@@ -7,6 +7,14 @@
  * transcription (~696 LOC) with the Pacred Tailwind v4 reports template
  * (mirrors `reports/refunds/page.tsx` Wave 20 P0-4 commit `8071a3d`).
  *
+ * **Wave 24 #185 (2026-05-27 ค่ำ):** drop the silent `.limit(1000)` PostgREST
+ * cap → swap for `?offset=`-based pagination (200 rows per page) + a separate
+ * `count: "exact", head: true` query for the grand total. Footer renders
+ * Prev/Next + "หน้า X จาก Y · แสดง M-N จาก T". Same pattern Agent B used on
+ * `/admin/reports/forwarder` (commit `399ed01`). Why it mattered: with > 1000
+ * tb_payment rows in a date range, accounting saw a silently truncated list
+ * and missed payment entries (Wave 22 Agent B side-finding).
+ *
  * **Workflow preserved (per AGENTS §0a):** same logic, same filters, same
  * data fields, same role gate — only the chrome moves from Bootstrap-4 to
  * Tailwind. The legacy .pcs-legacy / admin-base.css / DataTables / jQuery
@@ -28,6 +36,9 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
 
 export const dynamic = "force-dynamic";
+
+// ── Pagination constants (Wave 24 #185) ──────────────────────────────────
+const PAGE_SIZE = 200;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -103,6 +114,7 @@ type SP = {
   payStatus?: string;
   date_from?: string;
   date_to?: string;
+  offset?: string;
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────
@@ -123,25 +135,55 @@ export default async function AdminReportPaymentPage({
   const dateTo    = sp.date_to   ?? lastDayOfThisMonth();
   const payStatus = sp.payStatus ?? "all";
 
-  // 1) Fetch tb_payment within window, optional status filter.
+  // Wave 24 #185 — parse + clamp ?offset= (default 0, never negative).
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
+  // 1) Fetch tb_payment within window + status filter, paginated 200/page.
+  //    Wave 24 #185: dropped the silent `.limit(1000)` cap → `.range()` +
+  //    a separate `count: "exact", head: true` query for the grand total
+  //    (same pattern as /admin/reports/forwarder commit 399ed01).
   let q = admin
     .from("tb_payment")
     .select("id, paydate, paystatus, paytype, paydetail, paythb, userid, adminidupdate")
     .gte("paydate", `${dateFrom} 00:00:00`)
     .lte("paydate", `${dateTo} 23:59:59`)
     .order("paydate", { ascending: false, nullsFirst: false })
-    .limit(1000);
+    .range(offset, offset + PAGE_SIZE - 1);
   if (payStatus !== "all") {
     q = q.eq("paystatus", payStatus);
   }
-  const { data: payData, error: payErr } = await q;
+
+  // 2) Exact-count head query (mirrors the same filter set so the footer
+  //    total reflects the same window the table renders).
+  let totalQ = admin
+    .from("tb_payment")
+    .select("id", { count: "exact", head: true })
+    .gte("paydate", `${dateFrom} 00:00:00`)
+    .lte("paydate", `${dateTo} 23:59:59`);
+  if (payStatus !== "all") {
+    totalQ = totalQ.eq("paystatus", payStatus);
+  }
+
+  const [
+    { data: payData, error: payErr },
+    { count: grandTotal, error: countErr },
+  ] = await Promise.all([q, totalQ]);
+
   if (payErr) {
     console.error(`[tb_payment list] failed`, {
       code: payErr.code, message: payErr.message, details: payErr.details,
     });
     throw new Error(`Failed to load tb_payment (${payErr.code ?? "unknown"}): ${payErr.message}`);
   }
+  if (countErr) {
+    // Count is a UX nicety, not load-bearing — log + fall through with 0.
+    console.error(`[tb_payment count] failed`, {
+      code: countErr.code, message: countErr.message,
+    });
+  }
   const payments = (payData ?? []) as RawPayment[];
+  const totalRows = grandTotal ?? payments.length;
 
   // 2) 2-pass tb_users join on userid (PostgREST can't auto-join legacy text FK).
   const userIds = Array.from(new Set(payments.map((p) => p.userid).filter(Boolean)));
@@ -173,7 +215,28 @@ export default async function AdminReportPaymentPage({
   const total = rows.reduce((s, r) => s + Number(r.paythb ?? 0), 0);
   const successCount = rows.filter((r) => r.paystatus === "2").length;
 
-  // 4) CSV.
+  // Wave 24 #185 — pagination boundary + Prev/Next href builder. Mirrors
+  // /admin/reports/forwarder commit 399ed01 (which mirrors cnt-hs/page.tsx).
+  const hasPrev = offset > 0;
+  const hasNext = offset + rows.length < totalRows;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const rangeFrom = totalRows === 0 ? 0 : offset + 1;
+  const rangeTo = Math.min(offset + rows.length, totalRows);
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.report_paymentTable) params.set("report_paymentTable", sp.report_paymentTable);
+    if (sp.payStatus)           params.set("payStatus", sp.payStatus);
+    if (sp.date_from)           params.set("date_from", sp.date_from);
+    if (sp.date_to)             params.set("date_to", sp.date_to);
+    if (newOffset > 0)          params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/reports/payment?${qs}` : "/admin/reports/payment";
+  };
+
+  // 4) CSV (page-scoped — see file header doc for why).
   const csvRows = rows.map((r) => ({
     id:       r.id,
     paydate:  r.paydate ?? "",
@@ -223,6 +286,17 @@ export default async function AdminReportPaymentPage({
           ช่วงวันที่: <span className="font-semibold">{dateFrom}</span> ถึง <span className="font-semibold">{dateTo}</span>
         </div>
       )}
+
+      {/* Wave 24 #185 — pagination notice (replaces the silent 1000-cap). */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✓</span>
+        <div className="flex-1">
+          <span className="font-semibold">ลบเพดาน 1,000 แถวต่อหน้าแล้ว</span> ·
+          แบ่งหน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ ·
+          ใช้ปุ่ม &ldquo;ก่อนหน้า / ถัดไป&rdquo; ใต้ตารางเพื่อดูทั้งหมด.
+          <span className="text-emerald-700/80">{" "}(Wave 22 Agent B side-finding · #185)</span>
+        </div>
+      </div>
 
       {/* Filter form (GET) */}
       <form method="GET" action="/admin/reports/payment" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
@@ -274,11 +348,15 @@ export default async function AdminReportPaymentPage({
         </div>
       </form>
 
-      {/* Stat cards */}
-      <div className="grid sm:grid-cols-3 gap-3">
-        <Card label="จำนวนรายการ" value={String(rows.length)} />
-        <Card label="ยอดรวม" value={thb(total)} />
-        <Card label="สำเร็จ" value={String(successCount)} />
+      {/* Stat cards (page-scoped) — Wave 24 #185 added "ทั้งหมด" so the
+          grand-total isn't misread as the page subtotal. ยอดรวม / สำเร็จ
+          remain page-scoped (only the visible page) — the only honest
+          framing while paginated. */}
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
+        <Card label={`หน้านี้ (${rangeFrom.toLocaleString("th-TH")}–${rangeTo.toLocaleString("th-TH")})`} value={String(rows.length)} />
+        <Card label="ยอดรวม (หน้านี้)" value={thb(total)} />
+        <Card label="สำเร็จ (หน้านี้)" value={String(successCount)} />
       </div>
 
       {/* Table */}
@@ -286,63 +364,112 @@ export default async function AdminReportPaymentPage({
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการในช่วงเวลานี้</p>
         ) : (
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">วันที่</th>
-                  <th className="px-4 py-3">รหัส</th>
-                  <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3">รายละเอียด</th>
-                  <th className="px-4 py-3">ประเภท</th>
-                  <th className="px-4 py-3 text-right">จำนวนเงิน</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3">อัปเดต</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
-                    <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                      {r.paydate ? new Date(r.paydate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <Link href={`/admin/payment/update/${r.id}`} className="text-primary-600 hover:underline">
-                        {r.id}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
-                        {r.customer.name || "—"}
-                      </Link>
-                      <div className="font-mono text-[10px] text-muted">{r.userid}</div>
-                      {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.paydetail ?? ""}>
-                      {r.paydetail ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {TYPE_LABEL[r.paytype] ?? r.paytype}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-red-700">
-                      -{thb(Number(r.paythb ?? 0))}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.paystatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                        {STATUS_LABEL[r.paystatus] ?? r.paystatus}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+          <>
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">วันที่</th>
+                    <th className="px-4 py-3">รหัส</th>
+                    <th className="px-4 py-3">ลูกค้า</th>
+                    <th className="px-4 py-3">รายละเอียด</th>
+                    <th className="px-4 py-3">ประเภท</th>
+                    <th className="px-4 py-3 text-right">จำนวนเงิน</th>
+                    <th className="px-4 py-3">สถานะ</th>
+                    <th className="px-4 py-3">อัปเดต</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {r.paydate ? new Date(r.paydate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        <Link href={`/admin/payment/update/${r.id}`} className="text-primary-600 hover:underline">
+                          {r.id}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
+                          {r.customer.name || "—"}
+                        </Link>
+                        <div className="font-mono text-[10px] text-muted">{r.userid}</div>
+                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.paydetail ?? ""}>
+                        {r.paydetail ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {TYPE_LABEL[r.paytype] ?? r.paytype}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold text-red-700">
+                        -{thb(Number(r.paythb ?? 0))}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.paystatus] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {STATUS_LABEL[r.paystatus] ?? r.paystatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Wave 24 #185 — Prev/Next footer (only when there's >1 page). */}
+            {(hasPrev || hasNext) && (
+              <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
+                <span>
+                  หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
+                  <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
+                  {" · "}
+                  แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
+                  –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
+                  <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
+                </span>
+                <div className="flex gap-2">
+                  {hasPrev ? (
+                    <Link
+                      href={buildPageHref(prevOffset)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                    >
+                      ← ก่อนหน้า
+                    </Link>
+                  ) : (
+                    <span
+                      aria-disabled="true"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                    >
+                      ← ก่อนหน้า
+                    </span>
+                  )}
+                  {hasNext ? (
+                    <Link
+                      href={buildPageHref(nextOffset)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                    >
+                      ถัดไป →
+                    </Link>
+                  ) : (
+                    <span
+                      aria-disabled="true"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                    >
+                      ถัดไป →
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 1,000 รายการต่อหน้า · ใช้ตัวกรองช่วงวันที่เพื่อจำกัดผลลัพธ์
+        หน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ · ใช้ตัวกรองช่วงวันที่/สถานะเพื่อจำกัดผลลัพธ์ ·
+        CSV ดาวน์โหลดเฉพาะหน้าที่แสดง (หากต้องการครบทุกหน้า ให้ไล่กดถัดไปแล้วโหลดทีละหน้า)
       </p>
     </main>
   );
