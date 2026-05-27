@@ -7,6 +7,17 @@
  * transcription (~675 LOC) with the Pacred Tailwind v4 reports template
  * (mirrors `reports/refunds/page.tsx` Wave 20 P0-4 commit `8071a3d`).
  *
+ * **Wave 23 P1 #137 (2026-05-27 ค่ำ · close-out Agent B):** drop the silent
+ * `.limit(1000)` PostgREST cap → swap for `?offset=`-based pagination (200
+ * rows per page) + a separate `count: "exact", head: true` query for the
+ * grand total. Footer renders Prev/Next + "หน้า X จาก Y · แสดง M-N จาก T".
+ * Mirrors the working pattern in `app/(admin)/admin/cnt-hs/page.tsx`.
+ *
+ * Why it mattered: with > 1000 forwarder rows in a date range, the staff
+ * saw a silently truncated list and assumed the rest didn't exist (Wave 22
+ * Agent D side-finding). Stat cards + CSV are now scoped to the visible
+ * page — the only honest framing while paginated.
+ *
  * **Workflow preserved (per AGENTS §0a):** same fStatus filter set
  * (all / 1-7), same date range default = month-to-date, same tb_forwarder
  * columns, same role gate.
@@ -27,6 +38,9 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 
 export const dynamic = "force-dynamic";
+
+// ── Pagination constants (Wave 23 P1 #137) ───────────────────────────────
+const PAGE_SIZE = 200;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -107,6 +121,7 @@ type SP = {
   fStatus?: string;
   date_from?: string;
   date_to?: string;
+  offset?: string;
 };
 
 // ── Page ─────────────────────────────────────────────────────────────────
@@ -126,7 +141,13 @@ export default async function ReportForwarderPage({
   const dateTo    = sp.date_to   ?? lastDayOfThisMonth();
   const fStatus   = sp.fStatus   ?? "all";
 
-  // 1) Fetch tb_forwarder within window, optional status filter.
+  // Wave 23 P1 #137 — parse + clamp ?offset= (default 0, never negative).
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
+  // 1) Fetch tb_forwarder within window + status filter, paginated 200/page.
+  //    Wave 23 P1 #137: dropped the silent `.limit(1000)` cap → `.range()`
+  //    + a separate `count: "exact", head: true` query for the grand total.
   let q = admin
     .from("tb_forwarder")
     .select(
@@ -137,20 +158,43 @@ export default async function ReportForwarderPage({
     .gte("fdate", `${dateFrom} 00:00:00`)
     .lte("fdate", `${dateTo} 23:59:59`)
     .order("fdate", { ascending: false, nullsFirst: false })
-    .limit(1000);
+    .range(offset, offset + PAGE_SIZE - 1);
   if (fStatus !== "all") {
     q = q.eq("fstatus", fStatus);
   }
-  const { data: fData, error: fErr } = await q;
+
+  // 2) Exact-count head query (mirrors the same filter set so the footer
+  //    total reflects the same window the table renders).
+  let totalQ = admin
+    .from("tb_forwarder")
+    .select("id", { count: "exact", head: true })
+    .gte("fdate", `${dateFrom} 00:00:00`)
+    .lte("fdate", `${dateTo} 23:59:59`);
+  if (fStatus !== "all") {
+    totalQ = totalQ.eq("fstatus", fStatus);
+  }
+
+  const [
+    { data: fData, error: fErr },
+    { count: grandTotal, error: countErr },
+  ] = await Promise.all([q, totalQ]);
+
   if (fErr) {
     console.error(`[tb_forwarder list] failed`, {
       code: fErr.code, message: fErr.message, details: fErr.details,
     });
     throw new Error(`Failed to load tb_forwarder (${fErr.code ?? "unknown"}): ${fErr.message}`);
   }
+  if (countErr) {
+    // Count is a UX nicety, not load-bearing — log + fall through with 0.
+    console.error(`[tb_forwarder count] failed`, {
+      code: countErr.code, message: countErr.message,
+    });
+  }
   const forwarders = (fData ?? []) as unknown as RawForwarder[];
+  const totalRows = grandTotal ?? forwarders.length;
 
-  // 2) 2-pass tb_users join.
+  // 3) 2-pass tb_users join.
   const userIds = Array.from(new Set(forwarders.map((f) => f.userid).filter(Boolean) as string[]));
   const userMap = new Map<string, RawUser>();
   if (userIds.length > 0) {
@@ -165,7 +209,7 @@ export default async function ReportForwarderPage({
     }
   }
 
-  // 3) Shape rows (legacy revenue = ftotalprice + ftransportprice + fpriceupdate - fdiscount).
+  // 4) Shape rows (legacy revenue = ftotalprice + ftransportprice + fpriceupdate - fdiscount).
   const rows: Row[] = forwarders.map((f) => {
     const u = f.userid ? userMap.get(f.userid) : undefined;
     const totalThb =
@@ -186,7 +230,29 @@ export default async function ReportForwarderPage({
   const total = rows.reduce((s, r) => s + r.total_thb, 0);
   const sentCount = rows.filter((r) => r.fstatus === "7").length;
 
-  // 4) CSV.
+  // Wave 23 P1 #137 — pagination boundary + Prev/Next href builder.
+  // Mirrors `app/(admin)/admin/cnt-hs/page.tsx` (the working canonical
+  // pattern for offset-based admin lists).
+  const hasPrev = offset > 0;
+  const hasNext = offset + rows.length < totalRows;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const rangeFrom = totalRows === 0 ? 0 : offset + 1;
+  const rangeTo = Math.min(offset + rows.length, totalRows);
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.report_forwarderTable) params.set("report_forwarderTable", sp.report_forwarderTable);
+    if (sp.fStatus)               params.set("fStatus", sp.fStatus);
+    if (sp.date_from)             params.set("date_from", sp.date_from);
+    if (sp.date_to)               params.set("date_to", sp.date_to);
+    if (newOffset > 0)            params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/reports/forwarder?${qs}` : "/admin/reports/forwarder";
+  };
+
+  // 5) CSV (page-scoped — see file header doc for why).
   const csvRows = rows.map((r) => ({
     fdate:        r.fdate ?? "",
     id:           r.id,
@@ -239,6 +305,17 @@ export default async function ReportForwarderPage({
         </div>
       )}
 
+      {/* Wave 23 P1 #137 — pagination notice (replaces the silent 1000-cap). */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✗</span>
+        <div className="flex-1">
+          <span className="font-semibold">ลบเพดาน 1,000 แถวต่อหน้าแล้ว</span> ·
+          แบ่งหน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ ·
+          ใช้ปุ่ม &ldquo;ก่อนหน้า / ถัดไป&rdquo; ใต้ตารางเพื่อดูทั้งหมด.
+          <span className="text-emerald-700/80">{" "}(Wave 22 Agent D side-finding · #137)</span>
+        </div>
+      </div>
+
       {/* Filter form (GET) */}
       <form method="GET" action="/admin/reports/forwarder" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3">
         <div className="grid sm:grid-cols-3 gap-3">
@@ -289,11 +366,14 @@ export default async function ReportForwarderPage({
         </div>
       </form>
 
-      {/* Stat cards */}
-      <div className="grid sm:grid-cols-3 gap-3">
-        <Card label="จำนวนรายการ" value={String(rows.length)} />
-        <Card label="ยอดรวม" value={thb(total)} />
-        <Card label="ส่งแล้ว" value={String(sentCount)} />
+      {/* Stat cards (page-scoped) — clarified copy after Wave 23 P1 #137
+          pagination landed; ยอดรวม / ส่งแล้ว reflect the visible page only,
+          ทั้งหมด shows the grand total across the date+status filter. */}
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
+        <Card label={`หน้านี้ (${rangeFrom.toLocaleString("th-TH")}–${rangeTo.toLocaleString("th-TH")})`} value={String(rows.length)} />
+        <Card label="ยอดรวม (หน้านี้)" value={thb(total)} />
+        <Card label="ส่งแล้ว (หน้านี้)" value={String(sentCount)} />
       </div>
 
       {/* Table */}
@@ -301,67 +381,116 @@ export default async function ReportForwarderPage({
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการในช่วงเวลานี้</p>
         ) : (
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">วันที่สร้าง</th>
-                  <th className="px-4 py-3">ออเดอร์</th>
-                  <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3">รายละเอียด</th>
-                  <th className="px-4 py-3">เลขพัสดุ</th>
-                  <th className="px-4 py-3 text-right">ยอดรวม</th>
-                  <th className="px-4 py-3">สถานะ</th>
-                  <th className="px-4 py-3">อัปเดต</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
-                    <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                      {r.fdate ? new Date(r.fdate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">
-                      <Link href={`/admin/forwarders/${r.id}`} className="text-primary-600 hover:underline">
-                        #{r.id}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {r.userid ? (
-                        <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
-                          {r.customer.name || "—"}
-                        </Link>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                      <div className="font-mono text-[10px] text-muted">{r.userid ?? ""}</div>
-                      {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.fdetail ?? ""}>
-                      {r.fdetail ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono">
-                      {r.ftrackingth  && <div>TH: {r.ftrackingth}</div>}
-                      {r.ftrackingchn && <div className="text-muted">CN: {r.ftrackingchn}</div>}
-                      {!r.ftrackingth && !r.ftrackingchn && <span className="text-muted">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.total_thb)}</td>
-                    <td className="px-4 py-3 text-xs">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.fstatus ?? ""] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                        {legacyForwarderStatusThai(r.fstatus ?? "") || r.fstatus || "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+          <>
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">วันที่สร้าง</th>
+                    <th className="px-4 py-3">ออเดอร์</th>
+                    <th className="px-4 py-3">ลูกค้า</th>
+                    <th className="px-4 py-3">รายละเอียด</th>
+                    <th className="px-4 py-3">เลขพัสดุ</th>
+                    <th className="px-4 py-3 text-right">ยอดรวม</th>
+                    <th className="px-4 py-3">สถานะ</th>
+                    <th className="px-4 py-3">อัปเดต</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {r.fdate ? new Date(r.fdate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        <Link href={`/admin/forwarders/${r.id}`} className="text-primary-600 hover:underline">
+                          #{r.id}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {r.userid ? (
+                          <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
+                            {r.customer.name || "—"}
+                          </Link>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                        <div className="font-mono text-[10px] text-muted">{r.userid ?? ""}</div>
+                        {r.customer.phone && <div className="text-[10px] text-muted">☎ {r.customer.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.fdetail ?? ""}>
+                        {r.fdetail ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono">
+                        {r.ftrackingth  && <div>TH: {r.ftrackingth}</div>}
+                        {r.ftrackingchn && <div className="text-muted">CN: {r.ftrackingchn}</div>}
+                        {!r.ftrackingth && !r.ftrackingchn && <span className="text-muted">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.total_thb)}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${STATUS_CLS[r.fstatus ?? ""] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {legacyForwarderStatusThai(r.fstatus ?? "") || r.fstatus || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Wave 23 P1 #137 — Prev/Next footer (only when there's >1 page). */}
+            {(hasPrev || hasNext) && (
+              <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
+                <span>
+                  หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
+                  <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
+                  {" · "}
+                  แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
+                  –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
+                  <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
+                </span>
+                <div className="flex gap-2">
+                  {hasPrev ? (
+                    <Link
+                      href={buildPageHref(prevOffset)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                    >
+                      ← ก่อนหน้า
+                    </Link>
+                  ) : (
+                    <span
+                      aria-disabled="true"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                    >
+                      ← ก่อนหน้า
+                    </span>
+                  )}
+                  {hasNext ? (
+                    <Link
+                      href={buildPageHref(nextOffset)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                    >
+                      ถัดไป →
+                    </Link>
+                  ) : (
+                    <span
+                      aria-disabled="true"
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                    >
+                      ถัดไป →
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 1,000 รายการต่อหน้า · ใช้ตัวกรองช่วงวันที่เพื่อจำกัดผลลัพธ์
+        หน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ · ใช้ตัวกรองช่วงวันที่/สถานะเพื่อจำกัดผลลัพธ์ ·
+        CSV ดาวน์โหลดเฉพาะหน้าที่แสดง (หากต้องการครบทุกหน้า ให้ไล่กดถัดไปแล้วโหลดทีละหน้า)
       </p>
     </main>
   );
