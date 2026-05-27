@@ -189,7 +189,13 @@ export async function fetchAddressesByUserid(
 const PCS_PICKUP_ADDRESS = {
   addressname:        "รับที่โกดัง PCS กทม",
   addresslastname:    "",
-  addresstel:         "02-444-7046",
+  // tb_forwarder.faddresstel is varchar(10) — digits-only (no dashes/spaces)
+  // matches legacy pcsc_main data shape. "02-444-7046" with dashes = 11
+  // chars and triggers Postgres "value too long for type character
+  // varying(10)" on INSERT. Strip to 9 chars = OK. (Wave 23 bug-fix
+  // 2026-05-27 — ภูม flag · forwarders/new "เปิดออเดอร์" failed when
+  // shipBy=PCS.)
+  addresstel:         "024447046",
   addresstel2:        "",
   addressno:          "12 ซอย เพชรเกษม 77 แยก 3-6",
   addresssubdistrict: "หนองค้างพลู",
@@ -349,8 +355,14 @@ export async function adminCreateForwarder(
           faddressprovince:      addr.addressprovince,
           faddresszipcode:       addr.addresszipcode,
           faddressnote:          addr.addressnote,
-          faddresstel:           addr.addresstel,
-          faddresstel2:          addr.addresstel2,
+          // Defensive sanitize: tb_forwarder.faddresstel{,2} are varchar(10) and
+          // legacy data is digits-only. New customer signups may store dashes
+          // ("081-234-5678") which would crash INSERT with "value too long for
+          // type character varying(10)". Strip non-digits + slice(0, 10) here
+          // so a bad phone in tb_address doesn't blow up the whole flow.
+          // (Wave 23 bug-fix 2026-05-27 — sibling-defense to PCS_PICKUP_ADDRESS fix.)
+          faddresstel:           addr.addresstel.replace(/\D/g, "").slice(0, 10),
+          faddresstel2:          addr.addresstel2.replace(/\D/g, "").slice(0, 10),
           fshippingservice:      String(fShippingService),
 
           // ─── safe defaults for the rest of the NOT NULL columns ───
