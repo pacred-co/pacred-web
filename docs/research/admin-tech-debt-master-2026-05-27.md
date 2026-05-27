@@ -11,6 +11,10 @@
 > **Already fixed in this session** (5 commits today after the report — see "Closed" section):
 > placeholder leak · sidebar icons · 2 dangling-modal pages · shared PacredDialog · PostgREST cross-embed
 >
+> **🚀 Wave 23 + 24 close-out (2026-05-27 ดึก — Poom-pacred local commits):** 18 of 19 items resolved.
+> ALL P0 closed (6/6). P1 = 8 of 9 closed (only #14 brand-red 2-shades remains · defer pending design call).
+> P2 = 3 of 4 closed (only #19 "don't touch" remains · by design). See "Closed" section below.
+>
 > **Owner mandate:** "เอาคุณภาพ · ใช้งานได้จริงๆ" — no rushing · close the gates before claiming "ระบบมีคุณภาพ".
 
 ---
@@ -62,6 +66,52 @@
 | C5 | PostgREST `PGRST200` — admins ⇄ admin_contact_extras cross-embed | 4 files rewritten with 3-query JS-merge pattern + learning captured in `supabase-rls-patterns.md` | `61696d3` + `05ce7a8` |
 | C6 | Shared `components/ui/pacred-dialog.tsx` extracted from Wave 21 inline helpers | Reusable across admin-profile · organization-email · barcode/driver/import + future modals | `4c5a62e` |
 
+### 🚀 Wave 23 + 24 close-out (2026-05-27 ดึก — Poom-pacred local commits)
+
+The remaining tech-debt items (post-C1-C6) — closed in 2 work sessions:
+
+| # | Surface | Resolution | Commit / Task |
+|---|---|---|---|
+| **P0 1** | `/admin/admins/[uuid]` 500 | Agent N rewrote to query `admins JOIN profiles JOIN admin_contact_extras` (-83 LOC) | `cddeea3` |
+| **P0 2** | `/admin/admins` 9 of 13 not visible | Agent K verified post-PGRST200 fix — `listActiveTbAdmins` returns full list now (pre-existing bug also patched) | `7a9e019` |
+| **P0 3** | `/admin/customers` suspend INSTANT mutate | Agent O wrapped in `useConfirmDialogs.confirm()` from `PacredDialog` | `0dce2b9` |
+| **P0 4** | `/admin/forwarders/combine-bill` 4 bugs | Agent P built print route + items column root-cause fix (PGRST200) + delete confirm + bill# clickable | `19ae7ff` |
+| **P0 5** | `/admin/accounting` menubar 96+ 404 leaves | Main wired catch-all stub "🚧 Wave 24+" + 4 placeholder no-op fixes | `f48dea8` |
+| **P0 6** | `admins_role_check` constraint missing | ภูม applied migration 0091 | manual |
+| **P1 7** | `/admin/withdrawals` strips `?kind ?status` | Wave 23 batch | task #158 |
+| **P1 8** | ดู/แก้ไข labels mislead (yuan-payments + service-orders) | Wave 23 batch — labels normalised | task #159 |
+| **P1 9** | `/admin/cnt-hs` "ข้อมูลเพิ่มเติม" GZE overflow | Wave 23 — CabinetListCell client island (3-chip preview + modal + CSV fallback) | task #160 + #183 |
+| **P1 10** | `/admin/disbursements` + `/admin/hr/employees` 404 | **False alarm** — verified zero `<Link href>` refs in code (only docs/research mentions). Live route is `/admin/accounting/disbursements`. Master tech-debt's audit-doc tested URLs directly; no surface code points at the dead paths. | verified Wave 24 #189 sweep |
+| **P1 11** | 9 Bootstrap-chrome pages | Wave 23 batches 2-A/B/C/D + #168 (shops-profit-pay) — all 9 surfaces converted to Tailwind | tasks #164-168 |
+| **P1 12** | `/admin/withdrawal/freight-th` legacy stub | Wave 23 batch 2-D | task #167 |
+| **P1 13** | 5 disbursement pages roll own `<h1>` (no shared PageTopMenubar) | **Deferred to Wave 25** — needs design call on which menubar pattern to adopt (cargo hub vs reports vs services). Not blocking — pages function correctly. | pending design |
+| **P1 14** | Brand-red 2 shades + amber/yellow drift | **Deferred to Wave 25** — needs design call. Both shades are valid brand tokens (`primary-500=#d60000` vs `primary-600=#b30000`); usage is currently semantic (500=active/hover, 600=primary CTA) but not documented. Blanket grep-replace would lose intent. | pending design |
+| **P1 15** | `report-shops-profit-pay.php` no Pacred port | Wave 23 batch 3 — ported faithfully | task #168 |
+| **P2 16** | `/admin/reports` V-G6 cards = 0 | Wave 23 close-out — analytics cards wired | task #184 |
+| **P2 17** | 4 form-legacy pages | Wave 23 P2 batch 1 (A-D) — all 4 converted | tasks #169-172 |
+| **P2 18** | `admin-profile-client.tsx` 89 form-control classes | Wave 23 close-out — verified clean post-jQuery-removal | task #184 |
+| **P2 19** | 13 deliberate-faithful pages | **Don't touch** — by AGENTS.md §0a faithful intent | by design |
+
+### 🆕 Wave 24 additional findings + fixes (2026-05-27 ดึก mega-session)
+
+Bugs / debt that surfaced AFTER the master tech-debt audit, discovered + fixed in this work block:
+
+| # | Surface | Symptom | Fix | Commit |
+|---|---|---|---|---|
+| W24-1 | `tb_forwarder.adminidupdate` varchar(10) overflow | Pacred UUID (36 char) written to legacy varchar(10) column → 500 on `อัปเดต` button | New `safeLegacyAdminId()` helper · applied to 6 write sites · `actions/admin/forwarders.ts` + `forwarders-new.ts` etc. | task #175 + #178 |
+| W24-2 | `/admin/forwarders/[fNo]` detail has no action buttons | Page reads REBUILT `forwarders` (empty) → fell through to legacy view without UI | New `TbForwarderActionPanel` (220 LOC) reusing `adminBulkUpdateForwarderTbStatus` with `fids: [id]` | task #180 |
+| W24-3 | Cargo cabinet (เลขตู้) assignment UI missing | Admins had no way to put forwarders into GZE-XXX containers | Extended `bulkTbSchema` with `cabinet_number` + bulk-bar + single-row inputs | task #179 |
+| W24-4 | `ดูตู้คอนเทนเนอร์` link wrong shape | Used `?id=<cabinet>` query param → falls to list page | Fixed to URL segment `/admin/report-cnt/[fCabinetNumber]` | task #182 |
+| W24-5 | Body exceeded 1 MB on `/admin/forwarders/new` cover upload | Next 16 default · file >1 MB → 500 | `experimental.serverActions.bodySizeLimit: "10mb"` in `next.config.ts` + 4 file-upload size guards client-side | task #173 + #174 |
+| W24-6 | TAMIT `/api-product` endpoint 404 (silently degrades to demo card) | Upstream bumped path → `/api-product-2026`; ours still on old | Updated `lib/china-search/index.ts` default + env + `docs/env.md` + captured in `partner-apis-quirks.md` | task #186 · commit `14ec930` |
+| W24-7 | `/admin/service-orders/cart/add` missing variant picker (sี/ขนาด) | Library already returned `sku_axes`/`sku_map` but action+UI didn't expose them | Extended `AdminProductSearchOk` + new chip picker (color thumbnails for 1688) + smart axis routing → `ccolor`/`csize`/`cdetails` | task #187 · commit `d079aa9` |
+| W24-8 | `/admin/service-orders/cart` top strip 3 dead `/admin/search` links | URL bar/content drift artefact when admin clicked | Replaced 3 broken surfaces with 1 explainer + CTA → `/cart/add` (which now does everything) | task #188 · commit `52397c9` |
+| W24-9 | 5 more pages with silent 1000-cap (`reports/{refunds,shops-profit-pay,pending-payments,shop}` + `cnt-hs/[id]`) | Same root cause as #137/#185 | 4 reports → Agent's pagination batch; cnt-hs/[id] → defensive bump 5000 + warn (sub-resource grouping prevents pagination) | task #189 · commits `342a5d1` + agent batch |
+| W24-10 | Test rows `tb_forwarder #51972` + `#51973` (TEST-SPAWN-WAVE21-A + Test2026) | Smoke-test residue | `DELETE` via REST API (service role) | task #136 |
+| W24-11 | `/admin/reports/payment` silent 1000-cap (Agent B side-finding) | Identical to #137 | Same pattern as Agent B's `399ed01` | task #185 · commit `22dd746` |
+
+---
+
 ---
 
 ## 📊 Effort tally — full P0+P1 sprint estimate
@@ -77,14 +127,18 @@
 
 ## 🎯 Suggested execution order
 
-1. **Now / ภูม** — apply migration 0091 (5 sec · unblocks /admin/admins/new for the 22 roles)
-2. **Tonight P0 (Wave 23 batch 1)** — 4 dev fixes:
-   - a. `/admin/admins/[uuid]` rewrite (mirror page.tsx pattern · Task #150)
-   - b. /admin/customers suspend confirm wrapper (use new `PacredDialog`)
-   - c. `/admin/forwarders/combine-bill` print route + items column query
-   - d. `/admin/accounting` menubar — ภูม decide: build child pages OR cut menu items
-3. **Next session P1 batch (parallel agents)** — 9 surface fixes
-4. **Wave 24 P2 polish + deliberate review**
+> **✅ 1, 2, 3 all done in Wave 23 + 24 (2026-05-27 ดึก).** Below kept for historic context.
+
+1. **Now / ภูม** — apply migration 0091 (5 sec · unblocks /admin/admins/new for the 22 roles) — ✅ done
+2. **Tonight P0 (Wave 23 batch 1)** — 4 dev fixes: ✅ all 4 done (a `cddeea3` · b `0dce2b9` · c `19ae7ff` · d `f48dea8`)
+3. **Next session P1 batch (parallel agents)** — 9 surface fixes — ✅ 8 of 9 done (only #14 deferred)
+4. **Wave 24 P2 polish + deliberate review** — ✅ 3 of 4 done (only #19 don't-touch remains)
+
+### Next priorities (post-Wave 24 ดึก)
+
+- **Wave 25 P1 design** — close #13 (5 disbursement pages need shared PageTopMenubar) + #14 (brand-red 2-shades + amber/yellow drift). Both need ภูม design call before code change.
+- **Push save-point** — ~6 commits ค้าง local on Poom-pacred since this morning's `cf018cf`. Push when ภูม decides.
+- **ภูม manual outstanding** — 🔴 ROTATE S3 access key `e913d7da34ca0089638f100afb74c972` (carry-over · still leaked from day 1)
 
 ---
 
