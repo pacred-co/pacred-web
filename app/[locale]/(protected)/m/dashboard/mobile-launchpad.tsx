@@ -33,21 +33,6 @@ type Props = {
 // the customer chrome instead of looking like generic Lucide outlines.
 const ICON_BASE = "/images/home/iconfloating";
 
-// Glassy red-tint chiclet — Pacred-red gradient + backdrop-blur frosted look.
-// Shadows are kept TIGHT (small outer drop + heavy inset bevel) so the glow
-// stays INSIDE the card frame instead of bleeding into the gutter between
-// cells (per ปอน 2026-05-26 — "ฟุ้งออกกรอบมากไป").
-const LAUNCHPAD_BTN_3D = [
-  "relative overflow-hidden flex flex-col items-center justify-start gap-1.5 rounded-2xl",
-  "bg-gradient-to-br from-white via-rose-50/60 to-rose-100/40 backdrop-blur-sm",
-  "border border-rose-100/90",
-  "shadow-[0_1px_2px_rgba(179,0,0,0.08),0_2px_4px_rgba(179,0,0,0.05),inset_0_1.5px_0_rgba(255,255,255,1),inset_0_-2px_0_rgba(179,0,0,0.12),inset_0_0_0_1px_rgba(255,255,255,0.5),inset_0_8px_16px_-8px_rgba(255,255,255,0.7),inset_0_-8px_16px_-8px_rgba(179,0,0,0.06)]",
-  "transition-[transform,box-shadow] duration-300 ease-out will-change-transform",
-  "hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(179,0,0,0.10),0_4px_8px_rgba(179,0,0,0.08),inset_0_2px_0_rgba(255,255,255,1),inset_0_-2px_0_rgba(179,0,0,0.14),inset_0_0_0_1px_rgba(255,255,255,0.55),inset_0_8px_16px_-8px_rgba(255,255,255,0.8),inset_0_-8px_16px_-8px_rgba(179,0,0,0.10)]",
-  "active:translate-y-0 active:shadow-[0_1px_2px_rgba(179,0,0,0.10),inset_0_2px_4px_rgba(179,0,0,0.14)]",
-  "px-1 py-3 min-h-[88px]",
-].join(" ");
-
 // 4 bottom-banner promo cards — scroll horizontally in an infinite marquee
 // at the bottom of the launchpad. Sources are the same customer-theme PNGs
 // the desktop dashboard carousel draws from.
@@ -58,15 +43,37 @@ const BOTTOM_BANNERS = [
   { src: "/images/customertheme/line.png",  alt: "เชื่อมต่อ Line Notify",            href: "/notifications"          },
 ] as const;
 
-const LAUNCHPAD = [
-  { icon: "/images/hero-section/icon/cart.png", label: "บริการฝากสั่ง",             href: "/service-order"                          },
-  { icon: `${ICON_BASE}/pcs-forwarder.png`,    label: "บริการนำเข้า",              href: "/service-import"                         },
-  { icon: "/images/hero-section/icon/billingpacred.png", label: "ประวัติใบเสร็จรายการนำเข้า", href: "/service-import/pending"            },
-  { icon: `${ICON_BASE}/pcs-payment.png`,      label: "บริการฝากโอน / ชำระ",       href: "/service-payment"                        },
-  { icon: `${ICON_BASE}/pcs-wallet.png`,       label: "กระเป๋าเงิน",               href: "/wallet"                                 },
-  { icon: `${ICON_BASE}/pcs-wallet-add.png`,   label: "เติมเงิน",                  href: "/wallet/deposit"                         },
-  { icon: `${ICON_BASE}/pcs-address.png`,      label: "ที่อยู่จัดส่งสินค้า",       href: "/service-import/warehouse-addresses"     },
-] as const;
+// Launchpad item type — `comingSoon: true` flips the tile to disabled
+// grayscale + "COMING SOON" caption (no Link navigation).
+type LaunchpadItem = {
+  icon: string;
+  label: string;
+  href: string;
+  comingSoon?: boolean;
+};
+
+// ROW 1 — shipping / import / export services. Grouped as the "ส่งของ"
+// workflow with นำเข้า ↔ ส่งออก paired side-by-side (เดฟ 2026-05-27 — ปอน:
+// "เอาส่งออกไปคู่กับนำเข้าให้หน่อย"). ส่งออก carries `comingSoon: true`
+// because the export module isn't built yet — `export.png` is its dedicated
+// icon (already in the iconfloating set), grayscale + "COMING SOON" badge
+// applied in the render branch.
+const PRIMARY_SERVICES: readonly LaunchpadItem[] = [
+  { icon: "/images/hero-section/icon/cart.png", label: "ฝากสั่งซื้อ", href: "/service-order"   },
+  { icon: `${ICON_BASE}/pcs-payment.png`,      label: "ฝากโอนชำระ", href: "/service-payment" },
+  { icon: `${ICON_BASE}/pcs-forwarder.png`,    label: "นำเข้า",     href: "/service-import"  },
+  { icon: `${ICON_BASE}/export.png`,           label: "ส่งออก",     href: "#", comingSoon: true },
+];
+
+// ROW 2 — utility / account actions: address, wallet, topup, history.
+// ออกจากระบบ moves to row 3 as a single end-of-session cell (rendered as a
+// <button> after this list because logout is a Server Action, not a link).
+const SECONDARY_ACTIONS: readonly LaunchpadItem[] = [
+  { icon: `${ICON_BASE}/pcs-address.png`,                label: "ที่อยู่จัดส่ง", href: "/service-import/warehouse-addresses" },
+  { icon: `${ICON_BASE}/pcs-wallet.png`,                 label: "กระเป๋าพักเงิน", href: "/wallet"                 },
+  { icon: `${ICON_BASE}/pcs-wallet-add.png`,             label: "เติมเงิน",        href: "/wallet/deposit"         },
+  { icon: "/images/hero-section/icon/billingpacred.png", label: "ประวัติใบเสร็จ",  href: "/service-import/pending" },
+];
 
 export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, salesRep }: Props) {
   // Customer initial — first character of the display name, uppercased.
@@ -97,15 +104,18 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
   });
 
   return (
-    <div className="md:hidden w-full px-3 pt-0 pb-24 space-y-3">
+    <div className="md:hidden w-full px-3 pt-0 pb-24 space-y-2.5">
 
-      {/* ── 1. Profile hero (BookingHero pattern: full-bleed image + white text
-              w/ dark-red stroke + text-shadow — NO color overlay so the photo
-              stays visible. Negative margin-top pulls the hero up so the
-              SearchBar bottom slightly overlaps the top of the banner —
-              the same "search bar bites into the hero" trick BookingCalculator
-              uses with `-mt-10`. Per ปอน 2026-05-26.) ── */}
-      <section className="relative overflow-hidden rounded-3xl text-white px-4 pt-6 pb-4 shadow-[0_10px_30px_rgba(179,0,0,0.25)] min-h-[110px] -mt-4">
+      {/* ── 1. Profile hero — FULL-BLEED edge-to-edge banner (เดฟ 2026-05-27 —
+              ปอน: "ทำให้เต็มแล้วโค้งมนๆเลยตรงมุม"). `-mx-3` undoes the
+              parent wrapper's `px-3` so the banner extends to the viewport
+              edges; `rounded-b-3xl` rounds ONLY the bottom corners — the top
+              edge sits flat under the SearchBar so it reads as one continuous
+              chrome surface ("drawer pulling down from under header"). The
+              `-mt-8` keeps the legacy-PCS "bite into the search bar" overlap.
+              Min-height 180px reveals the full truck illustration in
+              `bannermobilemain.png` (`cover` scales with container height). */}
+      <section className="relative overflow-hidden rounded-b-3xl text-white px-4 pt-14 pb-5 shadow-[0_10px_30px_rgba(179,0,0,0.25)] min-h-[190px] -mt-8 -mx-3">
         <div
           aria-hidden
           className="absolute inset-0"
@@ -119,7 +129,7 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         <Link
           href="/account-settings"
           aria-label="ตั้งค่าบัญชีผู้ใช้งาน"
-          className="absolute top-7 right-2 z-10 w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 backdrop-blur-sm flex items-center justify-center text-white shadow-md ring-1 ring-white/30 active:scale-95 transition-all"
+          className="absolute top-14 right-2 z-10 w-7 h-7 rounded-full bg-white/25 hover:bg-white/40 backdrop-blur-sm flex items-center justify-center text-white shadow-md ring-1 ring-white/30 active:scale-95 transition-all"
         >
           <Settings className="w-3.5 h-3.5" strokeWidth={2.2} />
         </Link>
@@ -156,55 +166,14 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         </div>
       </section>
 
-      {/* ── 2. Wallet balance card — emerald theme (money / growth cue) ── */}
-      <Link
-        href="/wallet"
-        className="relative block overflow-hidden rounded-2xl bg-gradient-to-br from-white via-emerald-50/40 to-emerald-100/60 border border-emerald-100 shadow-[0_6px_20px_rgba(5,150,105,0.08)] px-4 py-3 active:scale-[0.99] transition-transform"
-      >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -top-8 -right-6 w-24 h-24 rounded-full bg-emerald-500/10 blur-md"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -bottom-10 right-12 w-16 h-16 rounded-full bg-emerald-400/10 blur-md"
-        />
-        <span
-          aria-hidden
-          className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-emerald-500 to-emerald-700"
-        />
-
-        <div className="relative flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] text-muted font-semibold uppercase tracking-wider">
-              กระเป๋าเครดิต
-            </p>
-            <p className="mt-0.5 flex items-baseline gap-1 leading-none">
-              <span className="text-[22px] font-black tracking-tight text-emerald-600">
-                {walletText}
-              </span>
-              <span className="text-[11px] font-bold text-emerald-500/80">บาท</span>
-            </p>
-            <p className="mt-1 text-[10.5px] text-muted">
-              วงเงินคงเหลือ <span className="font-semibold text-foreground">{walletText}</span> บาท
-            </p>
-          </div>
-          <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-emerald-600/25">
-            เติม +
-          </span>
-        </div>
-      </Link>
-
-      {/* ── 3. Sales rep card — sky/blue theme (trust + contact cue) ── */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-white via-sky-50/40 to-sky-100/60 border border-sky-100 shadow-[0_6px_20px_rgba(2,132,199,0.08)] px-3 py-2.5 flex items-center gap-3">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -top-10 -right-8 w-28 h-28 rounded-full bg-sky-500/10 blur-md"
-        />
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -bottom-12 left-16 w-20 h-20 rounded-full bg-sky-400/10 blur-md"
-        />
+      {/* ── 2. Sales rep card — PROMOTED to primary (เดฟ 2026-05-27 — ปอน:
+              "สลับเซลล์ขึ้นไปแทน"). The sales rep is the most-used contact
+              point for the customer, so it gets the prominent "overlapping
+              the hero" slot. `-mt-16 z-10` lifts the card ~54px up onto the
+              red banner's lower half; the sky-tinted lift shadow tells the
+              eye it floats above the red. Card stays compact + clean per
+              earlier "ขาวๆ ไม่ต้องโปร่ง" rule. */}
+      <section className="relative z-10 -mt-12 overflow-hidden rounded-2xl bg-white border border-border shadow-[0_8px_24px_rgba(2,132,199,0.18)] px-3 py-2.5 flex items-center gap-3">
         <span
           aria-hidden
           className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-sky-500 to-sky-700"
@@ -245,8 +214,6 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
           </p>
         </div>
 
-        {/* "ติดต่อเซลล์" pill — same style family as wallet's "เติม +" so the
-            two info cards have matching CTA chips on the right side. */}
         <a
           href={`tel:${salesRep.tel.replace(/[^+0-9]/g, "")}`}
           aria-label={`โทรหา เซลล์ ${salesRep.nickname}`}
@@ -257,6 +224,60 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         </a>
       </section>
 
+      {/* ── 3. Wallet balance card — DEMOTED to secondary (เดฟ 2026-05-27 —
+              ปอน: "ทำให้กระเป๋าเล็กลงนิดนึงให้เป็นรองเซลล์"). Slimmer padding,
+              smaller balance digit, and no "วงเงินคงเหลือ" subtitle so the
+              card reads as a compact one-liner under the prominent sales
+              card above. Label also renamed from "กระเป๋าเครดิต" → "กระเป๋าเงิน"
+              per ปอน. */}
+      <Link
+        href="/wallet"
+        className="relative overflow-hidden rounded-2xl bg-white border border-border shadow-[0_8px_24px_rgba(5,150,105,0.18)] px-3 py-2.5 flex items-center gap-3 active:scale-[0.99] transition-transform"
+      >
+        <span
+          aria-hidden
+          className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-emerald-500 to-emerald-700"
+        />
+
+        {/* Left badge — mirrors the sales-rep avatar dimensions (56×56) so
+            the two cards line up. Emerald bg + wallet icon = visual identity
+            for the "money" card. */}
+        <div className="relative shrink-0">
+          <div className="relative w-14 h-14 overflow-hidden rounded-full border-2 border-emerald-500/40 bg-emerald-50 flex items-center justify-center">
+            <Image
+              src={`${ICON_BASE}/pcs-wallet.png`}
+              alt=""
+              width={32}
+              height={32}
+              className="object-contain"
+            />
+          </div>
+        </div>
+
+        {/* Middle — 3-line text block matching sales structure
+            (eyebrow / main figure / subtitle). */}
+        <div className="relative min-w-0 flex-1">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider text-emerald-700">
+            กระเป๋าพักเงิน
+          </p>
+          <p className="flex items-baseline gap-1 leading-tight">
+            <span className="text-[20px] font-black tracking-tight text-emerald-600">
+              {walletText}
+            </span>
+            <span className="text-[11px] font-bold text-emerald-500/80">บาท</span>
+          </p>
+          <p className="mt-0.5 text-[11.5px] text-muted font-mono">
+            วงเงินคงเหลือ <span className="text-foreground">{walletText}</span> บาท
+          </p>
+        </div>
+
+        {/* Right button — same pill style as "ติดต่อเซลล์" so both cards have
+            matching CTAs. */}
+        <span className="relative shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold px-3 py-1.5 shadow-md shadow-emerald-600/25">
+          เติม +
+        </span>
+      </Link>
+
       {/* ── 4. Section header — matches homepage OurServices style:
               red dot + uppercase-tracked label, centered on mobile. */}
       <div className="flex items-center justify-center gap-1.5 pt-2 text-red-600 text-[10.5px] font-black tracking-[0.08em] uppercase">
@@ -264,37 +285,70 @@ export function MobileLaunchpad({ memberCode, fullName, avatarUrl, walletTotal, 
         บริการของเรา
       </div>
 
-      {/* ── 5. 4-col × 2-row launchpad grid (8 cells; 8th = ออกจากระบบ).
-              3D button effect copied from the homepage OurServices cards
-              (multi-layer drop-shadows + inset highlight/shadow for a
-              "pushed plastic chiclet" look + hover lift). */}
-      <section className="grid grid-cols-4 gap-2.5 pt-1 pb-2">
-        {LAUNCHPAD.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={LAUNCHPAD_BTN_3D}
-          >
-            <span className="relative w-11 h-11 shrink-0">
-              <Image
-                src={item.icon}
-                alt={item.label}
-                fill
-                sizes="44px"
-                className="object-contain"
-              />
-            </span>
-            <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
-              {item.label}
-            </span>
-          </Link>
-        ))}
+      {/* ── 5. 9-tile launchpad — 4-col × 3-row (8 active links + 1 disabled
+              coming-soon tile + 1 logout button = 9 cells; row 3 ends with
+              just ออกจากระบบ + 3 empty cells). Layout intent (ปอน 2026-05-27):
+                Row 1 (services + roadmap): ฝากสั่งซื้อ · ฝากโอนชำระ · นำเข้า · ส่งออก[COMING SOON]
+                Row 2 (utility actions):    ที่อยู่จัดส่ง · กระเป๋าพักเงิน · เติมเงิน · ประวัติใบเสร็จ
+                Row 3 (end-of-session):     ออกจากระบบ · — · — · —
+              ส่งออก sits next to นำเข้า — natural import↔export pair — but
+              wears the disabled grayscale + COMING SOON badge because the
+              export module isn't built yet. Active state on links = subtle
+              rose tint so the tap has tactile feedback. */}
+      <section className="grid grid-cols-4 gap-2 pt-1 pb-2">
+        {[...PRIMARY_SERVICES, ...SECONDARY_ACTIONS].map((item) => {
+          if (item.comingSoon) {
+            return (
+              <div
+                key={item.label}
+                aria-disabled
+                className="flex flex-col items-center justify-start gap-1 px-1 py-2.5 rounded-xl cursor-not-allowed select-none"
+              >
+                <span className="relative w-11 h-11 shrink-0">
+                  <Image
+                    src={item.icon}
+                    alt={item.label}
+                    fill
+                    sizes="44px"
+                    className="object-contain grayscale opacity-50"
+                  />
+                </span>
+                <span className="text-[10.5px] leading-[1.2] text-center font-medium text-gray-400 line-clamp-1">
+                  {item.label}
+                </span>
+                <span className="text-[8px] leading-none font-bold text-gray-400 uppercase tracking-wider">
+                  Coming Soon
+                </span>
+              </div>
+            );
+          }
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex flex-col items-center justify-start gap-1.5 px-1 py-2.5 rounded-xl active:bg-rose-50/60 transition-colors"
+            >
+              <span className="relative w-11 h-11 shrink-0">
+                <Image
+                  src={item.icon}
+                  alt={item.label}
+                  fill
+                  sizes="44px"
+                  className="object-contain"
+                />
+              </span>
+              <span className="text-[10.5px] leading-[1.2] text-center font-medium text-foreground line-clamp-2">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
 
         <button
           type="button"
           disabled={signOutPending}
           onClick={() => startSignOut(() => { void signOutAction(); })}
-          className={`${LAUNCHPAD_BTN_3D} disabled:opacity-60`}
+          className="flex flex-col items-center justify-start gap-1.5 px-1 py-2.5 rounded-xl active:bg-rose-50/60 transition-colors disabled:opacity-60"
         >
           <span className="relative w-11 h-11 shrink-0">
             <Image

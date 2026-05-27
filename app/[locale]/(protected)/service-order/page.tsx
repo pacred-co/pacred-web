@@ -201,7 +201,7 @@ export default async function ServiceOrderPage({
     <>
       <title>รายการฝากสั่งซื้อสินค้า | Pacred</title>
 
-      <div className="w-full px-3 md:px-6 md:pl-[280px] md:pr-[90px] pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1280px] mx-auto">
 
         {/* ── Breadcrumb (above header row) ── */}
         <div className="flex items-center gap-2 text-[11px] text-muted mb-2">

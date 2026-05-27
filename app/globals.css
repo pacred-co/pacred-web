@@ -130,3 +130,33 @@ body {
 @media (max-width: 1023px) {
   .protected-content { padding-left: 0; }
 }
+
+/* Google Translate browser-extension widget suppression. We ship our own
+   i18n (next-intl th/en) and set `translate="no"` + meta notranslate on
+   <html>, but if a user manually picks "Translate" in Chrome anyway, the
+   widget injects elements that float over our UI:
+     · `VIpgJd-yAWNEb-*` family — tooltip / "ข้อความต้นฉบับ", thumbs up-down
+     · `VIpgJd-ZVi9od-*` family — loading spinner (SVG circle), progress
+     · `goog-gt-*` IDs / `goog-te-*` / `.skiptranslate` — banner + balloon
+   Every Google Translate class starts with `VIpgJd-` (their CSS-modules
+   build prefix), so a single `[class*="VIpgJd-"]` attribute selector
+   catches the entire widget — including future variants Google adds — in
+   one rule. Safe: no Pacred code uses that prefix. */
+#goog-gt-tt,
+#goog-gt-vt,
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+.skiptranslate,
+[class*="VIpgJd-"],
+[class*="VIpgJd_"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Some Chrome translate flows shift the body down by inserting top padding
+   to make room for the banner — counteract it. */
+body {
+  top: 0 !important;
+}

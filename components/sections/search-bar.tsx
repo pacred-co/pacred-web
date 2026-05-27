@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 
@@ -20,6 +21,15 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
   // Non-embedded: collapses when NavBar dispatches "toggle-search-bar"
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Hide the quick-keyword category strip on the mobile launchpad (/m/dashboard)
+  // — it's noise on a screen the user opens to navigate the portal, not to
+  // start a 1688/Taobao search. Other pages keep the chips intact. Per ปอน
+  // 2026-05-27: "ในมือถือหน้าเมนู ผมไม่อยากให้มี … แต่หน้าอื่นเหลือไว้เหมือนเดิม".
+  // Pattern matches `/m/dashboard` AND `/<locale>/m/dashboard` so the rule
+  // survives the next-intl locale prefix.
+  const pathname = usePathname();
+  const isMobileLaunchpad =
+    !!pathname && /^(?:\/[a-z]{2})?\/m\/dashboard(?:\/|$)/.test(pathname);
 
   useEffect(() => {
     if (embedded) return;
@@ -152,21 +162,25 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
 
         </div>
 
-        {/* Quick keywords — scrollable on mobile */}
-        <div className="flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {quickKeys.map((kw, i) => (
-            <Link
-              key={kw}
-              href={`/service-order/add?q=${encodeURIComponent(kw)}`}
-              className="relative shrink-0 px-[10px] text-[11.5px] font-medium text-gray-500 hover:text-red-600 transition-colors duration-200 whitespace-nowrap leading-none first:pl-0"
-            >
-              {i > 0 && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-[10px] bg-gray-300 dark:bg-border" />
-              )}
-              {kw}
-            </Link>
-          ))}
-        </div>
+        {/* Quick keywords — scrollable on mobile. Suppressed on the mobile
+            launchpad (/m/dashboard) per ปอน 2026-05-27 (see `isMobileLaunchpad`
+            above); shown on every other route. */}
+        {!isMobileLaunchpad && (
+          <div className="flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {quickKeys.map((kw, i) => (
+              <Link
+                key={kw}
+                href={`/service-order/add?q=${encodeURIComponent(kw)}`}
+                className="relative shrink-0 px-[10px] text-[11.5px] font-medium text-gray-500 hover:text-red-600 transition-colors duration-200 whitespace-nowrap leading-none first:pl-0"
+              >
+                {i > 0 && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-[10px] bg-gray-300 dark:bg-border" />
+                )}
+                {kw}
+              </Link>
+            ))}
+          </div>
+        )}
 
       </div>
     </div>
