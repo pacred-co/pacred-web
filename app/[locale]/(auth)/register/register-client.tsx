@@ -39,6 +39,14 @@ export type RegisterResumeState = {
 };
 type ServiceId = "import" | "export" | "customs" | "order" | "payment";
 type SourceId = "line" | "fb" | "google" | "youtube" | "tiktok" | "ig" | "friend" | "ad";
+/**
+ * Legacy `register.php` `<select name="shopUser">` values — the
+ * "ซื้อไปใช้เอง" / "ซื้อไปขาย" question. Stored verbatim as the legacy
+ * varchar(1) `"1"` / `"2"`; the server action maps "1"→shop_user=false
+ * (use-self), "2"→shop_user=true (resell). Per the legacy column
+ * comment in 0081_pcs_legacy_schema.sql: `'1=ซื้อไปใข้เอง'`.
+ */
+type ShopUserId = "1" | "2";
 
 /* ─────────────────────────── CONSTANTS ─────────────────────────── */
 const ERR: Record<string, string> = {
@@ -171,26 +179,56 @@ const INPUT_BASE =
 export function RegisterClient({
   initialTab = "personal",
   juristicResume = null,
+  initialRecom = null,
 }: {
   initialTab?: TabId;
   juristicResume?: RegisterResumeState | null;
+  /** Affiliate / co-brand code captured from `?recom=` on the landing URL —
+   *  forwarded into both Personal + Juristic submissions. The server wrapper
+   *  in `page.tsx` already sanitized + validated it; we just render the
+   *  attribution badge + ship it. Legacy parity for `regis-tam.php`. */
+  initialRecom?: string | null;
 }) {
   const [tab, setTab] = useState<TabId>(initialTab);
+
+  // Lock body scroll on mobile while register is mounted. The NavBar's
+  // mobile-menu drawer is `position:fixed` with `translate-y-full` (closed),
+  // which the browser still counts toward `documentElement.scrollHeight` —
+  // causing a ~64px scrollable tail under the otherwise-pinned viewport-height
+  // form. Lock body+html overflow on mobile to make scroll truly impossible;
+  // restore on unmount so other pages keep their normal scroll behavior.
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    const apply = (lock: boolean) => {
+      document.documentElement.style.overflow = lock ? "hidden" : "";
+      document.body.style.overflow = lock ? "hidden" : "";
+    };
+    apply(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => apply(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => {
+      mql.removeEventListener("change", onChange);
+      apply(false);
+    };
+  }, []);
 
   return (
     <>
       <NavBar />
-      <main className="flex items-start justify-center bg-background px-4 py-3">
-        <div className="w-full max-w-[540px] rounded-[24px] border border-white/80 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7">
+      <main className="flex items-start justify-center bg-background px-4 pt-0 pb-0 md:py-3 overflow-hidden md:overflow-visible">
+        <div className="w-full max-w-[540px] h-[calc(100dvh-56px)] flex flex-col rounded-none border-0 bg-white p-3 shadow-[0_20px_50px_rgba(0,0,0,0.04)] dark:border-border dark:bg-surface sm:p-7 md:h-auto md:block md:rounded-[24px] md:border md:border-white/80">
 
-          {/* Logo */}
-          <div className="-mb-1 flex h-[40px] items-end justify-center">
+          {/* Logo — wordmark (140×140 source w/ ~25% whitespace top+bottom); render at
+              110px square + tight negative margins so title hugs the wordmark baseline.
+              HIDDEN on mobile — navbar already shows the Pacred wordmark + saves
+              ~88px vertical so the whole form fits in one phone viewport. */}
+          <div className="hidden md:-mt-2 md:-mb-7 md:flex h-[88px] items-end justify-center overflow-visible">
             <Image
               src="/images/pacred-logo-red.png"
               alt="Pacred"
               width={140}
               height={140}
-              className="h-[52px] w-[52px]"
+              className="h-[110px] w-[110px] object-contain"
               priority
             />
           </div>
@@ -231,7 +269,16 @@ export function RegisterClient({
             })}
           </div>
 
-          {tab === "personal" ? <PersonalForm /> : <JuristicForm resume={juristicResume} />}
+          {initialRecom && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12.5px] text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+              คุณกำลังสมัครภายใต้กลุ่ม{" "}
+              <span className="font-semibold notranslate">{initialRecom}</span>
+            </div>
+          )}
+
+          {tab === "personal"
+            ? <PersonalForm recom={initialRecom} />
+            : <JuristicForm resume={juristicResume} recom={initialRecom} />}
         </div>
       </main>
     </>
@@ -239,7 +286,7 @@ export function RegisterClient({
 }
 
 /* ─────────────────────────── PERSONAL FORM ─────────────────────────── */
-function PersonalForm() {
+function PersonalForm({ recom }: { recom: string | null }) {
   const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   const [firstName, setFirstName] = useState("");
@@ -249,6 +296,9 @@ function PersonalForm() {
   const [showPwd, setShowPwd]     = useState(false);
   const [services, setServices]   = useState<ServiceId[]>([]);
   const [source, setSource]       = useState<SourceId | null>(null);
+  // Legacy register.php <select name="shopUser"> — "ซื้อไปใช้เอง" / "ซื้อไปขาย".
+  // Required field per legacy; null means the customer has not picked yet.
+  const [shopUser, setShopUser]   = useState<ShopUserId | null>(null);
   const [email, setEmail]         = useState("");
   const [agreed, setAgreed]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -280,6 +330,8 @@ function PersonalForm() {
       firstName, lastName, phone, password,
       services,
       howKnow: source ?? null,
+      recom,
+      shopUser,
       email: email || "",
       otp,
       agreed,
@@ -290,8 +342,11 @@ function PersonalForm() {
       // Return to a pending `?next=` (booking-calculator CTA) if present.
       // The protected layout still re-routes to /complete-profile when the
       // new profile needs it — so an order quote only survives for a
-      // ready-to-order account, which is the intended behaviour.
-      router.replace(nextUrl ?? "/");
+      // ready-to-order account, which is the intended behaviour. Default
+      // landing is `/dashboard` (customer portal launchpad), not `/`
+      // (public marketing) — per d1-fidelity-customer.md §2 + 2026-05-26
+      // brief fix A2: non-admin signups expect to see the signed-in shell.
+      router.replace(nextUrl ?? "/dashboard");
       router.refresh();
     } else {
       setError(ERR[res.error] ?? res.error);
@@ -301,6 +356,7 @@ function PersonalForm() {
 
   function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
+    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     if (!agreed) { setError(ERR.must_agree); return; }
     setError(null);
     startTransition(async () => {
@@ -362,7 +418,7 @@ function PersonalForm() {
   }
 
   return (
-    <form onSubmit={handleRequestOtp} className="space-y-2.5">
+    <form onSubmit={handleRequestOtp} className="space-y-2.5 flex flex-1 flex-col min-h-0 md:block">
       {/* Name row */}
       <div className="flex gap-3">
         <FieldWrap label="ชื่อจริง">
@@ -401,6 +457,13 @@ function PersonalForm() {
         </FieldWrap>
       </div>
 
+      {/* Shop-user — legacy <select name="shopUser"> on register.php
+          "ซื้อไปใช้เอง / ซื้อไปขาย". Required field per legacy. Feeds
+          sales segmentation (profiles.shop_user boolean). */}
+      <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
+        <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+      </FieldWrap>
+
       {/* Email (optional) */}
       <FieldWrap
         label={<>อีเมล <span className="ml-1 rounded bg-surface px-1.5 py-0.5 text-[11px] font-normal text-muted">ไม่จำเป็น</span></>}
@@ -411,21 +474,33 @@ function PersonalForm() {
         </IconInput>
       </FieldWrap>
 
-      <AgreeRow checked={agreed} onChange={setAgreed} />
-      {error && <ErrorBox msg={error} />}
-      <HCaptchaInvisible ref={captchaRef} />
-      <p className="text-center text-[12px] leading-[1.5] text-muted">
-        กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วสมัครเสร็จในขั้นถัดไป
-      </p>
-      <SubmitBtn pending={pending}>
-        <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
-      </SubmitBtn>
+      {/* Action area — mt-auto pushes the submit button group to the BOTTOM
+          of the form on mobile (form is flex-1 inside full-viewport card),
+          so "ขอรหัส OTP" hugs the bottom edge with no empty space below.
+          Desktop reverts to normal stacked flow (md:block on form). */}
+      <div className="mt-auto space-y-2.5 pt-2">
+        <AgreeRow checked={agreed} onChange={setAgreed} />
+        {error && <ErrorBox msg={error} />}
+        <HCaptchaInvisible ref={captchaRef} />
+        <p className="text-center text-[12px] leading-[1.5] text-muted">
+          กดเพื่อรับรหัส OTP 6 หลักทาง SMS — ยืนยันเบอร์แล้วสมัครเสร็จในขั้นถัดไป
+        </p>
+        <SubmitBtn pending={pending}>
+          <MessageSquare className="h-4 w-4" /> ขอรหัส OTP
+        </SubmitBtn>
+      </div>
     </form>
   );
 }
 
 /* ─────────────────────────── JURISTIC FORM ─────────────────────────── */
-function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
+function JuristicForm({
+  resume,
+  recom,
+}: {
+  resume: RegisterResumeState | null;
+  recom: string | null;
+}) {
   const router = useRouter();
   const nextUrl = safeNext(useSearchParams().get("next"));
   // When resuming a juristic signup mid-flow (P0 fix 2026-05-25), skip Step 1
@@ -439,6 +514,9 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
   const [showPwd, setShowPwd]   = useState(false);
   const [services, setServices] = useState<ServiceId[]>([]);
   const [source, setSource]     = useState<SourceId | null>(null);
+  // Legacy register.php <select name="shopUser"> — same as PersonalForm.
+  // Required for the new account; null means the customer has not picked yet.
+  const [shopUser, setShopUser] = useState<ShopUserId | null>(null);
 
   /* step 1 OTP phase (B1 — Sunday-night blocker) */
   const [step1Phase, setStep1Phase] = useState<"form" | "otp">("form");
@@ -547,6 +625,8 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
       phone, password,
       services,
       howKnow: source ?? null,
+      recom,
+      shopUser,
       otp,
       captchaToken,
     });
@@ -561,6 +641,7 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
   }
 
   function nextStep1() {
+    if (!shopUser) { setError("กรุณาเลือกประเภทการซื้อสินค้า"); return; }
     setError(null);
     startTransition(async () => {
       const req = await requestOtp(phone, "register");
@@ -641,7 +722,9 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
       if (done.ok) {
         trackSignUp("juristic");
         // Return to a pending `?next=` (booking-calculator CTA) if present.
-        router.replace(nextUrl ?? "/");
+        // Default to `/dashboard` (customer portal launchpad), NOT `/` —
+        // per d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
+        router.replace(nextUrl ?? "/dashboard");
         router.refresh();
       } else setError(ERR[done.error] ?? done.error);
     });
@@ -676,6 +759,12 @@ function JuristicForm({ resume }: { resume: RegisterResumeState | null }) {
               <SourceChips selected={source} onSelect={setSource} />
             </FieldWrap>
           </div>
+
+          {/* Shop-user — legacy register.php <select name="shopUser">.
+              Required per legacy; feeds sales segmentation. */}
+          <FieldWrap label={<>ซื้อสินค้า <Req /></>}>
+            <ShopUserSelect selected={shopUser} onSelect={setShopUser} />
+          </FieldWrap>
 
           {error && <ErrorBox msg={error} />}
           <HCaptchaInvisible ref={captchaRef} />
@@ -960,6 +1049,35 @@ function SourceChips({ selected, onSelect }: { selected: SourceId | null; onSele
             {s.label}
           </option>
         ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+    </div>
+  );
+}
+
+/**
+ * ShopUserSelect — legacy `register.php` `<select name="shopUser">`.
+ *
+ *   Legacy options:
+ *     value="1" — ซื้อไปใช้เอง  (use-self · default sales segment)
+ *     value="2" — ซื้อไปขาย     (resell · reseller segment)
+ *
+ * Values stored in `tb_users.shopuser` / `tb_register.shopuser` as a
+ * varchar(1) (column comment: `'1=ซื้อไปใข้เอง'`). The server action
+ * maps `"1"`→`profiles.shop_user=false`, `"2"`→`true`. Per
+ * d1-fidelity-customer.md §3.2.
+ */
+function ShopUserSelect({ selected, onSelect }: { selected: ShopUserId | null; onSelect: (id: ShopUserId) => void }) {
+  return (
+    <div className="relative">
+      <select
+        value={selected ?? ""}
+        onChange={(e) => onSelect(e.target.value as ShopUserId)}
+        className={`${INPUT_BASE} appearance-none pr-9 cursor-pointer ${selected ? "text-foreground" : "text-muted"}`}
+      >
+        <option value="" disabled>เลือกประเภทการซื้อสินค้า</option>
+        <option value="1" className="text-foreground">ซื้อไปใช้เอง</option>
+        <option value="2" className="text-foreground">ซื้อไปขาย</option>
       </select>
       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
     </div>

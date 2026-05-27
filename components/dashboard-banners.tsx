@@ -29,7 +29,7 @@ export async function DashboardBanners() {
   const DEFAULT_BANNERS: Banner[] = [
     { id: "default-search-china", slug: "search-china", title: "ค้นหาสินค้าจากเว็บ 1688 / Taobao / Tmall", subtitle: "วางลิ้งสินค้าหรือพิมพ์คำค้น แปลภาษาไทยทันที", image_path: null, link_href: "/service-order/add", cta_label: "เริ่มค้นหา" },
     { id: "default-billing",      slug: "billing",      title: "ออกบิลใบเสร็จ / ใบแจ้งหนี้",                 subtitle: "ฝากสั่งซื้อด้วยตัวคุณเอง — Pacred ออกบิลให้อัตโนมัติ", image_path: null, link_href: "/service-order/cart", cta_label: "ดูตัวอย่าง" },
-    { id: "default-line-notify",  slug: "line-notify",  title: "ไม่พลาดทุกการแจ้งเตือน",                     subtitle: "เชื่อมต่อ LINE OA Pacred ได้แล้ววันนี้",              image_path: null, link_href: "/profile",            cta_label: "เชื่อม LINE" },
+    { id: "default-line-oa",      slug: "line-oa",      title: "ไม่พลาดทุกการแจ้งเตือน",                     subtitle: "เพิ่ม Pacred LINE OA เป็นเพื่อน รับข่าวสาร + โปรโมชั่น",  image_path: null, link_href: "/line",               cta_label: "เพิ่มเพื่อน LINE" },
   ];
   const banners = ((data ?? []) as Banner[]).length > 0 ? (data as Banner[]) : DEFAULT_BANNERS;
 
@@ -37,13 +37,13 @@ export async function DashboardBanners() {
   const themes: Record<string, string> = {
     "search-china":  "from-orange-500 via-red-500 to-red-700",
     "billing":       "from-blue-500 via-indigo-500 to-indigo-700",
-    "line-notify":   "from-green-500 via-emerald-500 to-emerald-700",
+    "line-oa":       "from-green-500 via-emerald-500 to-emerald-700",
   };
 
   const icons: Record<string, string> = {
     "search-china": "🔍",
     "billing":      "🧾",
-    "line-notify":  "💬",
+    "line-oa":      "💬",
   };
 
   return (

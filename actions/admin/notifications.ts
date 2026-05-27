@@ -17,8 +17,10 @@
  *   - last_delivery_error       → null   (clear stale error)
  *   - delivery_status           → "pending"
  *
- * The LINE-Notify cron (/api/cron/dispatch-line-notify) runs every 2
- * minutes per vercel.json — so a retried row pushes within ~2 min.
+ * ⚠️ 2026-05-26 — /api/cron/dispatch-line-notify was REMOVED with the
+ * dead LINE Notify stack. Retry currently just resets the row; the
+ * Messaging-API dispatcher (via lib/notifications/index.ts) lands
+ * with task L.
  *
  * RBAC: super + ops.
  * Audit: each retry writes admin_audit_log (action=notification.retry).
@@ -76,9 +78,11 @@ export async function retryNotificationDispatch(
       return { ok: false, error: "already_delivered" };
     }
 
-    // Reset to a state the cron will pick up. The LINE-Notify cron scans
-    // rows WHERE delivered_line_notify_at IS NULL AND delivery_attempts
-    // < MAX_FAILED_ATTEMPTS — clearing both puts the row back in scope.
+    // Reset to a state a future dispatcher will pick up. (The LINE-Notify
+    // cron scanning `delivered_line_notify_at IS NULL AND
+    // delivery_attempts < MAX` was removed 2026-05-26 — task L brings
+    // a Messaging-API dispatcher back into the same loop without
+    // changing the schema.)
     const { error: updErr } = await admin
       .from("notifications")
       .update({

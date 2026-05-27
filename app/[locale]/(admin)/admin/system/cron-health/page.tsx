@@ -13,9 +13,9 @@ import { redirect } from "next/navigation";
  * land on the working dashboard. If sidebar entries point at /crons,
  * those still work too. One implementation, two URLs.
  *
- * Coverage of all 9 vercel.json crons is provided by lib/cron/registry.ts
- * (Sprint-11 P2.3.C added dispatch-line-notify + cargothai-sync to round
- * out the registry).
+ * Coverage of all vercel.json crons is provided by lib/cron/registry.ts.
+ * (dispatch-line-notify entry removed 2026-05-26 with the dead LINE
+ * Notify stack — see docs/learnings/partner-apis-quirks.md.)
  */
 export default function CronHealthAliasPage() {
   redirect("/admin/system/crons");

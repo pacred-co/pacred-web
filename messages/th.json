@@ -373,11 +373,12 @@
   },
   "login": {
     "title": "เข้าสู่ระบบ",
-    "emailLabel": "อีเมล หรือ รหัสสมาชิก หรือ เบอร์โทรศัพท์",
-    "emailPlaceholder": "example@email.com หรือ PR001",
+    "emailLabel": "เบอร์โทรศัพท์หรือรหัสสมาชิก",
+    "emailPlaceholder": "0812345678 หรือ PR001",
     "passwordLabel": "รหัสผ่าน",
     "passwordPlaceholder": "••••••••",
     "forgotPassword": "ลืมรหัสผ่าน?",
+    "rememberMe": "จำฉันไว้ในระบบ",
     "submit": "เข้าสู่ระบบ",
     "orContinueWith": "หรือเข้าสู่ระบบด้วย",
     "noAccount": "ยังไม่มีบัญชี?",
@@ -619,6 +620,29 @@
     "errInvalidUserId": "ข้อมูล LINE userId ไม่ถูกต้อง",
     "errNotSignedIn": "กรุณาเข้าสู่ระบบ Pacred ก่อนเชื่อม LINE"
   },
+  "lineSettings": {
+    "kicker": "การแจ้งเตือน",
+    "title": "เชื่อมต่อ LINE",
+    "subtitle": "เชื่อมต่อบัญชี Pacred ของคุณกับ LINE เพื่อรับการแจ้งเตือนสถานะออเดอร์ / การนำเข้า / กระเป๋าเงิน ผ่าน Pacred LINE OA",
+    "statusConnectedTitle": "✓ เชื่อมต่อ LINE แล้ว",
+    "statusConnectedAt": "เชื่อมต่อเมื่อ {date}",
+    "connectedBody": "คุณจะได้รับการแจ้งเตือนจาก Pacred LINE OA โดยอัตโนมัติ หากต้องการหยุดรับการแจ้งเตือน กด \"ยกเลิกการเชื่อมต่อ\" ด้านล่าง",
+    "statusNotConnectedTitle": "ยังไม่ได้เชื่อมต่อ LINE",
+    "statusNotConnectedBody": "เชื่อมต่อบัญชี LINE ของคุณเพื่อรับการแจ้งเตือนสถานะออเดอร์ผ่าน Pacred LINE OA",
+    "stepFriend": "เพิ่มเพื่อน <a>Pacred LINE OA</a> ก่อน (ถ้ายังไม่ได้เพิ่ม)",
+    "stepClickConnect": "กดปุ่ม \"เชื่อมต่อ LINE\" ด้านล่าง — ระบบจะพาไป LINE Login",
+    "stepApproveOnLine": "ยืนยันการเชื่อมต่อในแอป LINE — ระบบจะพากลับมาที่นี่อัตโนมัติ",
+    "connectButton": "เชื่อมต่อ LINE",
+    "disconnectButton": "ยกเลิกการเชื่อมต่อ",
+    "disconnecting": "กำลังยกเลิก...",
+    "disconnectConfirm": "ต้องการยกเลิกการเชื่อมต่อ LINE หรือไม่? คุณจะไม่ได้รับการแจ้งเตือนผ่าน LINE OA อีกต่อไป (แต่ยังเป็นเพื่อนกับ OA อยู่ — สามารถเชื่อมต่อใหม่ได้ตลอดเวลา)",
+    "flashDisconnected": "ยกเลิกการเชื่อมต่อ LINE เรียบร้อย",
+    "errRateLimit": "ทำรายการบ่อยเกินไป — กรุณารอสักครู่แล้วลองใหม่",
+    "errNotSignedIn": "กรุณาเข้าสู่ระบบก่อน",
+    "errImpersonation": "ไม่สามารถแก้ไขข้อมูลในโหมดเข้าระบบแทนลูกค้าได้",
+    "eolNote": "หมายเหตุ: การเชื่อมต่อนี้แทน LINE Notify เดิม (บริการปิดให้บริการ 31 มี.ค. 2025). Pacred ส่งแจ้งเตือนผ่าน Pacred LINE OA ที่คุณเพิ่มเป็นเพื่อน",
+    "backToDashboard": "← กลับหน้าหลัก"
+  },
   "change_phone": {
     "kicker": "ความปลอดภัย",
     "title": "เปลี่ยนเบอร์โทรศัพท์",
@@ -837,7 +861,18 @@
     "freeShipping": "ส่งฟรี (พื้นที่ Pacred)",
     "cancelOrder": "ยกเลิกออเดอร์",
     "cancelling": "กำลังยกเลิก...",
-    "cancelConfirm": "ยกเลิกออเดอร์ {hNo}? — ไม่สามารถกู้คืนได้"
+    "cancelConfirm": "ยกเลิกออเดอร์ {hNo}? — ไม่สามารถกู้คืนได้",
+    "backToList": "← กลับหน้ารายการ",
+    "payMethodOrigin": "เก็บต้นทาง (ที่จีน)",
+    "payMethodDestination": "เก็บปลายทาง (ที่ไทย)",
+    "transport": {
+      "1": "ทางรถ",
+      "2": "ทางเรือ",
+      "3": "ทางอากาศ",
+      "truck": "ทางรถ",
+      "ship": "ทางเรือ",
+      "air": "ทางอากาศ"
+    }
   },
   "forwarder": {
     "kicker": "ฝากนำเข้า",

@@ -167,6 +167,7 @@ export function Footer() {
                   src="/images/contact/L_gainfriends_2dbarcodes_BW.png"
                   alt={t("qrAlt")}
                   fill
+                  sizes="100px"
                   className="object-contain p-1"
                 />
               </div>
@@ -226,13 +227,15 @@ export function Footer() {
                   rel="noopener noreferrer"
                   className="flex items-center justify-center h-10 md:h-12 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 hover:scale-110 transition-all duration-300"
                 >
-                  <Image
-                    src={`/images/partners/${p.file}`}
-                    alt=""
-                    width={80}
-                    height={36}
-                    className="max-h-full max-w-full object-contain"
-                  />
+                  <div className="relative w-full h-full">
+                    <Image
+                      src={`/images/partners/${p.file}`}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className="object-contain"
+                    />
+                  </div>
                 </a>
               ))}
             </div>

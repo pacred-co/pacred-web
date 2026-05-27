@@ -37,6 +37,34 @@ const SERVICE_IDS = [
 ] as const;
 export const serviceIdSchema = z.enum(SERVICE_IDS);
 
+/**
+ * Legacy `register.php` `<select name="shopUser">` — the "ซื้อไปใช้เอง /
+ * ซื้อไปขาย" question. Values are the legacy varchar(1) literals "1" /
+ * "2" stored in `tb_users.shopuser` and `tb_register.shopuser`
+ * (column comment: `'1=ซื้อไปใข้เอง'`). The server actions map "1" →
+ * `profiles.shop_user = false` (use-self) and "2" → `true` (resell).
+ * Optional because the field was a defaulted-off prompt in legacy and
+ * we don't want to retro-break older /register clients while the new
+ * UI is rolling out. Per d1-fidelity-customer.md §3.2.
+ */
+const SHOP_USER_VALUES = ["1", "2"] as const;
+export const shopUserSchema = z.enum(SHOP_USER_VALUES);
+
+/**
+ * Affiliate / co-brand attribution code captured from a `?recom=<code>` URL
+ * param on the /register landing — legacy parity for `regis-tam.php` which
+ * accepted `?recom=THADA|SIN|OOAEOM|SWAN` and persisted to `tb_users.coID`.
+ * Pacred maps this to `profiles.customer_group` (default 'PR'). Pattern
+ * intentionally permissive so we can mint new partner codes without a
+ * schema migration; rejects only obvious script/SQL-injection vectors.
+ */
+const recomCodeField = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._-]{1,30}$/, "รหัสกลุ่มไม่ถูกต้อง")
+  .optional()
+  .nullable();
+
 export const registerPersonalSchema = z.object({
   // 2026-05-22 — relaxed signup validation per sales-urgent ask:
   // name + surname ≥ 2 chars · phone ≥ 9 chars. OTP is bypassed in
@@ -49,6 +77,10 @@ export const registerPersonalSchema = z.object({
   password: passwordSchema,
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),
+  recom: recomCodeField,
+  // Legacy `register.php` <select name="shopUser"> — "ซื้อไปใช้เอง" / "ซื้อไปขาย".
+  // Optional/nullable so older callers (and the resume flow) don't fail.
+  shopUser: shopUserSchema.optional().nullable(),
   email: z.email("อีเมลไม่ถูกต้อง").optional().or(z.literal("")),
   otp: z.string().min(1, "กรอก OTP"),
   agreed: z
@@ -63,6 +95,10 @@ export const registerJuristicStep1Schema = z.object({
   password: passwordSchema,
   services: z.array(serviceIdSchema).default([]),
   howKnow: z.string().optional().nullable(),
+  recom: recomCodeField,
+  // Legacy `register.php` <select name="shopUser"> — "ซื้อไปใช้เอง" / "ซื้อไปขาย".
+  // Same legacy field exposed in both account-type forms.
+  shopUser: shopUserSchema.optional().nullable(),
   otp: z.string().min(1, "กรอก OTP"),
   captchaToken: captchaTokenField,
 });

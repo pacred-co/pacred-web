@@ -767,3 +767,48 @@ Legacy `style.css` line 1015 forces `.tab-sm-center { width: 50% }` at `<578px` 
 - Commit `fd1ffd9` — Sprint-26
 - Files: `public/legacy/pcs/legacy-overrides.css` §11 + `public/legacy/pcs/shops.css` mobile media query + `app/[locale]/(protected)/service-order/page.tsx` (wrapper className gains `pcs-shops-page`)
 - Same pattern applies to `/service-payment` (cols 2/3/4/5 = none), `/service-import/pending` (cols 2/4/5/6 = none), `/wallet/history` — when those get the responsive treatment, add `.pcs-payment-page` / `.pcs-forwarder-page` / `.pcs-wallet-page` modifiers + per-page `td:nth-child` rules in legacy-overrides.css §11 (already comment-stubbed there).
+
+---
+
+## [2026-05-26] `export { x } from "./other"` inside a `"use server"` file BREAKS Next 16's Server-Action AST walker — module reports "no exports" at build
+
+**Context:** Task L (LIFF + Messaging API replacement). Refactored two LINE-related server actions from `actions/profile.ts` into a new dedicated `actions/line-settings.ts`. Tried the obvious clean re-export pattern in `actions/profile.ts`:
+
+```ts
+"use server";
+// ...
+export { linkLineAccount, disconnectLineAccount } from "./line-settings";
+```
+
+**Symptom:** `pnpm build` fails. The error is misleading: Next 16's Server-Action validator reports the *entire* `actions/profile.ts` module as having "no exports at all", which transitively breaks every other action exported from that file (`completeProfile`, `updateProfileField`, etc.) — the dormant `profile-form.tsx` (which imports half a dozen of them) explodes with "Module has no exported member" errors for actions that *are* defined inline in the same file.
+
+**Root cause:** Next 16's Server-Action handler walks the module's export *AST* (not the resolved JS exports) to register each `"use server"` function with the action-ID encryption table. Re-exports from another file aren't in the AST as function declarations; they're a `ExportNamedDeclaration` pointing at another module. The walker treats this as "this file has no inline server-action exports" and zeroes the registry for the file, which cascades into a confusing "missing exports" error elsewhere.
+
+**Fix — wrap, don't re-export:**
+```ts
+"use server";
+import {
+  linkLineAccount     as linkLineAccountImpl,
+  disconnectLineAccount as disconnectLineAccountImpl,
+} from "./line-settings";
+
+export async function linkLineAccount(lineUserId: string, displayName: string) {
+  return linkLineAccountImpl(lineUserId, displayName);
+}
+export async function disconnectLineAccount() {
+  return disconnectLineAccountImpl();
+}
+```
+
+The local `async function` declarations land as inline AST nodes, the walker sees them, the action-IDs register, and the body just delegates. ~4 extra lines per action.
+
+**Why this matters next time:**
+- Re-exports are the natural refactor move for splitting a fat action file. Next 16 makes them a bear trap.
+- The error message points at the *consumer* file ("missing export") not the *defining* file ("re-export rejected"). Looking at the consumer is a 30-minute dead end.
+- Same pitfall applies to `export * from "./other"` and `export { x as y } from "./other"` — anything where the AST node is a re-export.
+- Allowed: `import { x } from "./other"; export { x }` — that registers `x` as a local binding first; the walker treats it as an inline export. (Verified — `tsc` AND `next build` both accept this form.) But the wrapper pattern is clearer + lets you add cross-cutting concerns (logging, rate-limit, etc.) at the wrapper level.
+
+**Cross-links:**
+- Commit `af4bebe9` — task L, `actions/profile.ts` lines updated with the wrapper pattern
+- Adjacent files: `actions/line-settings.ts` (canonical home for the two LINE actions)
+- This is a documented Next.js issue: search GitHub for "use server re-export AST" — multiple maintainer comments confirm the wrapper is the intended pattern.

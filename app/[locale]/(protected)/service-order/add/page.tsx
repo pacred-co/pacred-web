@@ -11,6 +11,13 @@ import {
   RowCancelButton,
   RowCheckbox,
 } from "./service-order-bulk-actions";
+// D1 fidelity §4 — the link-paste product search panel. Closes the
+// "shops.php had a paste-a-link search box; Pacred only had manual
+// entry" gap called out in docs/research/d1-fidelity-customer.md §4.
+// Rendered above the order list so the customer's first instinct on
+// arriving at /service-order/add is the legacy "paste a 1688/taobao
+// link" workflow, not the order-history table.
+import { LinkPasteSearch } from "./link-paste-search";
 
 /**
  * รายการฝากสั่งซื้อสินค้า — `/service-order/add` route.
@@ -235,7 +242,11 @@ export default async function ServiceOrderAddPage({
     if (status) qb = qb.eq("hstatus", status);
     return qb;
   };
-  const [cAll, cF1, cF2, cF3, cF4, cF5, cF6] = await Promise.all([
+  // tb_settings.rsdefault — the live yuan exchange rate. Fed into the
+  // LinkPasteSearch panel so the ฿ conversion next to the fetched
+  // product price matches what the rest of the page chrome shows.
+  // Wrapped into the same Promise.all so it's free latency-wise.
+  const [cAll, cF1, cF2, cF3, cF4, cF5, cF6, settingsRes] = await Promise.all([
     countQuery(),
     countQuery("1"),
     countQuery("2"),
@@ -243,6 +254,11 @@ export default async function ServiceOrderAddPage({
     countQuery("4"),
     countQuery("5"),
     countQuery("6"),
+    admin
+      .from("tb_settings")
+      .select("rsdefault")
+      .eq("id", 1)
+      .maybeSingle<{ rsdefault: number | string | null }>(),
   ]);
   const countStatusAll = cAll.count ?? 0;
   const countStatusF1 = cF1.count ?? 0;
@@ -251,6 +267,11 @@ export default async function ServiceOrderAddPage({
   const countStatusF4 = cF4.count ?? 0;
   const countStatusF5 = cF5.count ?? 0;
   const countStatusF6 = cF6.count ?? 0;
+  // 5.0 fallback matches the legacy `$rsDefault=5.0` default
+  // (calculateCart.php L86 + several other call sites) when the
+  // tb_settings row is missing / corrupt — keeps the converter
+  // still rendering a sensible ฿ estimate instead of 0.00.
+  const rsDefault = Number(settingsRes.data?.rsdefault ?? 5.0);
 
   // header.php L102 — $countShops2 = orders with hStatus=2 (รอชำระเงิน).
   // Drives the b-pay bottom bar visibility.
@@ -349,6 +370,19 @@ export default async function ServiceOrderAddPage({
               </div>
             ) : (
               <section>
+                {/* D1 fidelity §4 — link-paste product search.
+                    Placed ABOVE the order list because the legacy
+                    `shops.php` led with this exact box and the iconic
+                    PCS workflow is "paste link → see product → add to
+                    cart". The order-list (below) is what the customer
+                    sees AFTER they've placed orders.  See
+                    docs/research/d1-fidelity-customer.md §4 +
+                    actions/product-search.ts header. */}
+                <div className="row">
+                  <div className="col-md-12 col-sm-12">
+                    <LinkPasteSearch rsDefault={rsDefault} />
+                  </div>
+                </div>
                 <div className="row">
                   <div className="col-md-12 col-sm-12">
                     <div className="card border-black">
@@ -577,8 +611,9 @@ export default async function ServiceOrderAddPage({
                                                     href={`/service-order/${row.hno}`}
                                                     className="text-info"
                                                   >
-                                                    {row.hno} <ProBadge promoId={promoId} />
-                                                  </Link>
+                                                    {row.hno}
+                                                  </Link>{" "}
+                                                  <ProBadge promoId={promoId} />
                                                 </td>
                                                 {/* col 4 — ข้อมูลสินค้า */}
                                                 <td>
@@ -591,8 +626,9 @@ export default async function ServiceOrderAddPage({
                                                       href={`/service-order/${row.hno}`}
                                                       className="text-info"
                                                     >
-                                                      {row.hno} <ProBadge promoId={promoId} />
-                                                    </Link>
+                                                      {row.hno}
+                                                    </Link>{" "}
+                                                    <ProBadge promoId={promoId} />
                                                     <br />
                                                     สถานะ : <StatusBadgeAllM hStatus={row.hstatus} />
                                                     <br />
@@ -897,7 +933,7 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
   const linked = LINKED[promoId];
   if (linked) {
     return (
-      <a href={linked.href} target="_blank">
+      <a href={linked.href} target="_blank" rel="noopener noreferrer">
         <span className="badge badge-vip badge-pill" title={linked.title}>
           {linked.label}
         </span>

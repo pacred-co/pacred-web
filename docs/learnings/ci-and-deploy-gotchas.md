@@ -372,3 +372,162 @@ The "bug" was a phantom: an artifact of reading a stale checkout. Hand-editing t
 - `AGENTS.md` §11 — the `next start` smoke rule this entry bounds.
 
 ---
+
+## [2026-05-26] Vercel can return TWO consecutive `dpl_id`s for ONE git push — the first may not have your code
+
+**Context:** Pushed commit `42f92434` (affiliate signup) to `main`. Polled `https://pacred.co.th/register?recom=THADA.VIP` for the `dpl_id` to flip. It did: `dpl_A77HcE7G…` → `dpl_8WTuGXY…`. Spot-checked the page for the new badge — **not there**. Spent 10 minutes investigating cache, build, tree-shaking — all dead ends. Re-checked moments later and a THIRD `dpl_id` had appeared: `dpl_5FYMBUZS…`. The badge was rendered. Problem was: the first dpl-flip was for an intermediate build that did NOT contain my commit.
+
+**Symptom:** "I pushed, waited for the dpl_id to change, verified — and my change isn't on prod even though the deploy ID is new + `x-vercel-cache: MISS`."
+
+**Root cause:** Vercel queues per-branch builds. When `dave-pacred` + `main` both get pushed near-simultaneously, Vercel sometimes builds + promotes BOTH in quick succession — promoting one first, then re-promoting with the newer one ~30-60s later. The first dpl-flip is real; it just isn't your latest. The "fresh from origin, no cache" signal proves nothing about WHICH commit was built — only that the build was rendered fresh.
+
+**Fix — verify the COMMIT, not just the deploy ID:**
+* `curl https://pacred.co.th/status | grep -oE '[a-f0-9]{40}'` — `/status` page renders `VERCEL_GIT_COMMIT_SHA`, the real commit Vercel built from. Match the short SHA against `git log origin/main -1 --oneline`.
+* Or wait ~60s after the first dpl-flip and re-check — if a SECOND dpl-flip appears, that's the one that has your code.
+* For changes that can be probed via a unique string (a new CSS class, new copy), grep that string in the prod HTML — its presence is ground-truth.
+
+**Why this matters next time:**
+- The "I waited for dpl_id to change" heuristic is necessary but not sufficient.
+- Wasted-debugging signature: "dpl_id changed, x-vercel-cache:MISS, cf-cache:DYNAMIC, my code STILL isn't there" → don't chase build/tree-shake/runtime — re-poll dpl_id 60s later.
+- Add `/status` (or `/api/version`) to any debugging runbook for "did MY commit deploy?"
+
+**Cross-links:**
+- Commit `42f92434` — the affiliate signup feature that surfaced this
+- Vercel deploy `dpl_5FYMBUZSj56jxKnvtvcNrJN6DrFu` — the actual deploy with my code (the earlier `dpl_8WTuGXY` was an intermediate)
+- `app/[locale]/status/page.tsx` — renders `VERCEL_GIT_COMMIT_SHA`
+
+---
+
+## [2026-05-26] Audit doc described `regis-tam.php` as "Thai-ID verification" — actual file is affiliate signup
+
+**Context:** d1-deep-audit-2026-05-24.md gap #5: "TAMIT (Thai ID) identity verification — `member/regis-tam.php` — Real-time Thai ID validation during signup/KYC". Owner-priority gap. I started porting based on the audit description (Thai-ID validation flow). Then I read all 444 lines of the actual `regis-tam.php` and it does NOT verify Thai IDs at all — it's a registration page that accepts `?recom=THADA|SIN|OOAEOM|SWAN` URL params and persists `tb_users.coID = <THADA.VIP|SIN.VIP|OOAEOM.VIP|SWAN>`. Pure **affiliate-attribution signup**.
+
+**Symptom:** You start implementing the audit-described feature, then realize the legacy file doesn't actually have that behaviour. Scope ambiguity: do you port the audit's INTENT (build a new feature from scratch) or the file's ACTUAL CONTENT (a different feature)?
+
+**Root cause:** The audit was assembled by walking the legacy directory + summarizing filenames. `regis-tam.php` got summarized as "TAM(IT) = Thai" verification — semantic guess from the filename, not from reading the file. The TAM in the filename actually refers to one of the co-brand affiliates ("tam" = ไอแต้ม, per the brand-split context in CLAUDE.md).
+
+**Fix — ALWAYS read the legacy source in full before trusting the audit description.** The audit is a starting index; the source is the spec. When a gap card says "Port file X", spend 5 minutes reading X first to confirm WHAT it actually does, then update the gap card with corrected scope BEFORE writing port code. If the file doesn't match the audit description, raise the discrepancy explicitly (`AskUserQuestion` with the 3-4 plausible interpretations) rather than silently picking one.
+
+**Why this matters next time:**
+- The deep-audit doc has 10 critical gaps. Each one is owner-priority. The cost of building the wrong thing is high.
+- File names can be misleading especially across brand-splits (PCS/TTP/ไอแต้ม → Pacred) — `regis-tam.php` was the ไอแต้ม-co-branded register, not Thai-related.
+- Time-investment: 5 min reading the legacy beats 1 hour of "why doesn't this look like the audit said it would?"
+
+**What we shipped instead:** ported the file's ACTUAL behaviour — `?recom=<code>` URL param → `profiles.customer_group` (default 'PR' otherwise), with an attribution badge in the form. Owner can request the original Thai-ID verification stub as a separate task (it would be a NEW feature, not a port).
+
+**Cross-links:**
+- Commit `42f92434` — the affiliate signup port (actual file behaviour)
+- `docs/research/d1-deep-audit-2026-05-24.md` §5 — the original (mis-described) gap
+- `C:/xampp/htdocs/pcscargo/member/regis-tam.php` — the legacy source (444 lines, read in full)
+
+---
+
+## [2026-05-26] Deletion sweep missed two consumers (lint + test:unit) — pre-push gate must run `pnpm verify`, not just tsc + build
+
+**Context:** Did a "dead-LINE-Notify stack purge" today (commit `67fc018e`) that deleted ~10 files including `lib/notifications/line-notify.ts`, `lib/notifications/line-notify.test.ts`, the cron route, the OAuth callback route, and 4 docs/admin references. Pre-push gate ran `tsc --noEmit && next build` — both passed. Pushed. CI failed TWICE in succession on the same commit chain:
+
+1. **Lint failure** (commit `d2a0fd15`) — `react/no-unescaped-entities`: I'd written `EOL'd` and `"push now"` inside JSX in the admin dispatch banner. Fixed in `ef8868b4`.
+2. **Test failure** (this fix, commit `0020b82f`) — `pnpm test:unit` chained `tsx --tsconfig tsconfig.test.json lib/notifications/line-notify.test.ts` but the file was DELETED in `67fc018e`. Test runner ran through 47 test files (~1500 assertions passed) then crashed with `ERR_MODULE_NOT_FOUND` on the missing file.
+
+**Symptom:** TWO separate CI failures landed in production CI logs in the span of an hour. Both were preventable with one pre-push command.
+
+**Root cause:** My pre-push gate was `tsc --noEmit && next build`. Neither catches:
+- `react/no-unescaped-entities` lint errors (only `eslint` does — `next build` doesn't run lint by default in Next 16)
+- Test files chained in `package.json` `test:unit` that reference deleted modules (only `pnpm test:unit` does — `tsc` doesn't care because `tsx` runs the chain at runtime, not at typecheck time)
+
+**Fix — pre-push gate is `pnpm verify` (or its 4 parts).** The `verify` script in `package.json` is *literally* `pnpm lint && tsc --noEmit && pnpm test:unit && pnpm audit:all` — the canonical CI mirror. Running it locally before push catches what CI catches. The `tsc + build` shortcut I'd been using is **necessary but not sufficient**.
+
+**The deletion-sweep checklist** that would have caught both:
+1. After deleting any file `X`, grep for `X` across **everything**, not just imports:
+   ```bash
+   grep -rn "lib/notifications/line-notify" .  # catches package.json AND .ts imports
+   grep -rn "line-notify\|line.notify" docs/ .github/ vercel.json package.json
+   ```
+2. Run `pnpm verify` (the full 4-part gate), not `tsc + build`.
+3. If you touch JSX, `pnpm lint` is non-negotiable (`react/no-unescaped-entities` is the most common silent break).
+
+**Why this matters next time:**
+- `next build` in Next 16 does NOT run eslint as part of the build (changed from earlier Next versions where build implied lint). You must run `pnpm lint` separately.
+- `package.json` script chains (`test`, `test:unit`) reference files by string path — `tsx` resolves them at runtime, so file deletion silently breaks the chain until CI runs it. **Always grep `package.json` for any path you delete.**
+- A "small docs cleanup" commit (`d2a0fd15`) introduced the lint error — even non-feature commits need the full gate.
+
+**Cross-links:**
+- Commit `67fc018e` — the original purge
+- Commit `ef8868b4` — lint fix
+- Commit `0020b82f` — test:unit fix (this one)
+- `package.json` `verify` script — the canonical pre-push gate
+- AGENTS.md §11 — production deploy gate (route smoke) is also necessary but separate from this
+- `docs/learnings/nextjs-16-quirks.md` 2026-05-16 entry — `react/no-unescaped-entities` (this is the SAME learning I'd captured a week earlier and STILL skipped the lint step — process gap, not knowledge gap)
+- `docs/pacred-info.md` "Brand-split context" — the PCS/TTP/ไอแต้ม split that explains the `-tam` suffix
+
+---
+
+## [2026-05-26] CSP must list every legacy external CSS/font/script origin or the console floods on every protected page
+
+**Context:** เดฟ opened `/cart/add` and pasted a console waterfall — six CSP `style-src` violations + one `script-src` violation, repeated on every page nav. The page rendered (Tailwind worked) but the console was unusable.
+
+**Symptom:**
+```
+Loading the stylesheet 'https://fonts.googleapis.com/css?family=Prompt&display=swap' violates "style-src 'self' 'unsafe-inline'"
+Loading the stylesheet 'https://cdnjs.cloudflare.com/.../intlTelInput.css' violates "style-src 'self' 'unsafe-inline'"
+Loading the stylesheet 'https://cdnjs.cloudflare.com/.../font-awesome/.../all.min.css' violates "style-src 'self' 'unsafe-inline'"
+Loading the script 'https://translate.google.com/translate_a/element.js?...' violates "script-src ..."
+```
+
+Each error was the FALLBACK CSP rule firing — the browser's note "`style-src-elem` was not explicitly set, so `style-src` is used as a fallback" hints the right fix is allow-listing the origin (NOT writing a separate `style-src-elem` rule).
+
+**Root cause:** The protected-portal layout (`app/[locale]/(protected)/layout.tsx`) still `<link>`s legacy header CSS from `fonts.googleapis.com` (Prompt font) + `cdnjs.cloudflare.com` (intl-tel-input + font-awesome icons). Legacy `tam-it.js` (preserved in `public/legacy/pcs/assets/js/`) auto-injects `<script src="https://translate.google.com/translate_a/element.js?...">` on body for the Google Translate widget. None of these origins were in the CSP — ปอน's CSS-bundle SLASH from 2026-05-24 kept the inline `<link>` tags but the corresponding CSP entries were never added.
+
+**Fix:** `next.config.ts` Content-Security-Policy header — extend three directives:
+- `style-src`: add `https://fonts.googleapis.com https://cdnjs.cloudflare.com`
+- `font-src`:  add `https://fonts.gstatic.com https://cdnjs.cloudflare.com`
+- `script-src`: add `https://translate.google.com https://translate.googleapis.com`
+
+**Why two domains for Google Fonts:**
+- `fonts.googleapis.com` serves the CSS file (which contains `@font-face` rules) — needs `style-src`
+- `fonts.gstatic.com` serves the actual woff/woff2 font files — needs `font-src`
+A common mistake is to allow only `googleapis.com` → the CSS loads but the fonts 404 silently and the page falls back to system fonts.
+
+**Why this matters next time:**
+- The protected layout has a legacy chrome bundle (~20 CSS + 10 JS files). Every external origin in that bundle must be in CSP — `inline plugin CSS` and `Google Fonts` are the most-forgotten because they're not "ours". When CSS-bundle changes are pushed, grep `next.config.ts` Content-Security-Policy for any new `https://` host the bundle references.
+- The `style-src-elem` fallback message tricked me once into thinking the directive name was the fix — the FALLBACK firing means the right directive (`style-src`) just doesn't have the host. Don't add a `style-src-elem` rule; fix `style-src`.
+- A legacy script (`tam-it.js`) injecting `<script src="https://...">` at runtime needs `script-src`, not `script-src-elem`. Same fallback logic.
+
+**Cross-links:**
+- Commit `5bc98ec4` — the CSP fix + dead /line-notify link repoint (this entry's PR)
+- `next.config.ts` lines 40-58 — the canonical CSP header config
+- `app/[locale]/(protected)/layout.tsx` L85-95 + L156 — the legacy external <link>s + tam-it.js
+- 2026-05-15 entry "P0 #4 — Server Action bodySizeLimit + CSP allow-list" — the previous CSP miss (img-src for Supabase Storage), same pattern
+
+---
+
+## [2026-05-26] Deleting a route doesn't remove its `<Link href="…">` — Next prefetch surfaces it as `/deleted-route?_rsc=… 404`
+
+**Context:** Same /cart/add console waterfall above included `/line-notify?_rsc=OlrF_NZuVjaChs3k:1  Failed to load resource: the server responded with a status of 404`. We deleted `/line-notify` with the dead-LINE-Notify stack purge (commit `67fc018e`) but dashboard still had `<Link href="/line-notify">` for the right-rail LINE CTA. Next.js auto-prefetches all `<Link>` hrefs in the viewport — and an RSC prefetch to a deleted route fails 404 visibly in console.
+
+**Symptom:** After deleting `/X/page.tsx` + route folder, every `<Link href="/X">` still in the codebase causes `/X?_rsc=<hash> 404` in the console. The visible UI still works (clicking the link 404s gracefully), but Next's prefetcher hits the dead route on every render that includes the Link.
+
+**Root cause:** `<Link>` from `next/link` (or `@/i18n/navigation`) auto-prefetches by default — both on render (above-the-fold links) and on hover (others). Prefetch fires an RSC request (`?_rsc=<hash>`) which 404s if the route is gone. The dev server hides this; production CDN logs it.
+
+**Fix:** After deleting any route `/X`, grep for surviving Links:
+
+```bash
+# any <Link href="/X" …>
+grep -rn '<Link[^>]*href="/X"' app/ components/ --include="*.tsx"
+# or any string-template href that could match
+grep -rn 'href={`/X' app/ components/ --include="*.tsx"
+# also check messages/*.json for translated link targets
+grep -rn '"/X"' messages/
+```
+
+Either repoint (if there's a replacement route) or remove the Link.
+
+**Why this matters next time:**
+- The `<Link>` href is NOT a TypeScript-checked string — `tsc` happily accepts `<Link href="/anything">` for a route that doesn't exist. **Only runtime CDN logs catch it.** No build error. No lint error.
+- A deletion-sweep is incomplete without grepping `href="/<deleted-route>"`. Add it to the deletion checklist alongside `package.json`/`vercel.json`/test-file path grep.
+- For the dashboard repoint specifically: the right-rail "LINE" CTA image + ปอน's styling stays intact — only the href changed. Preserves the branding directive ("ยึดตามของน้องปอนทั้งหมด เรื่อง brandding") because the link wrapper is functionally invisible.
+
+**Cross-links:**
+- Commit `5bc98ec4` — repointed `/line-notify` → `/line-settings`
+- `app/[locale]/(protected)/dashboard/page.tsx` L135-142 — the offending Link
+- 2026-05-26 entry "Deletion sweep missed two consumers" — same pattern for `package.json` test-chain references

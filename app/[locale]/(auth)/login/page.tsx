@@ -46,6 +46,13 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  // Legacy parity for `login.php` `<input id="rememberMe" checked>` —
+  // checked by default like the legacy. Supabase session length is
+  // server-controlled, so toggling this is purely UI parity today
+  // (kept for the legacy expectation and future use). Per
+  // d1-fidelity-customer.md §2.2: "Re-add a 'จำฉันไว้ในระบบ' checkbox,
+  // checked by default."
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -63,8 +70,12 @@ export default function LoginPage() {
         trackLogin(method);
         // Admins always land in the back-office. A regular user with a
         // pending `?next=` (e.g. routed here from the booking calculator's
-        // "เปิดออเดอร์ราคานี้" CTA) returns to that destination.
-        const dest = res.data?.isAdmin ? "/admin" : (nextUrl ?? "/");
+        // "เปิดออเดอร์ราคานี้" CTA) returns to that destination. Otherwise
+        // land on the customer portal `/dashboard` (the 9-icon launchpad) —
+        // sending them to `/` (public marketing home) made the login look
+        // like it failed because the page looked anonymous. Per
+        // d1-fidelity-customer.md §2 + 2026-05-26 brief fix A2.
+        const dest = res.data?.isAdmin ? "/admin" : (nextUrl ?? "/dashboard");
         router.replace(dest);
         router.refresh();
       } else {
@@ -177,6 +188,22 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {/* Remember-me — legacy login.php "จำฉันไว้ในระบบ" checkbox,
+                checked by default. Supabase session length is set
+                server-side so the value is currently UI-only; legacy
+                parity per d1-fidelity-customer.md §2. */}
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 cursor-pointer accent-primary-600"
+              />
+              <span className="text-[13px] text-foreground">
+                {t("rememberMe")}
+              </span>
+            </label>
 
             {/* Error */}
             {error && (
