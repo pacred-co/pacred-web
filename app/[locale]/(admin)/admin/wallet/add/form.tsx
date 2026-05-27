@@ -140,59 +140,62 @@ export function AdminWalletAddForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="form-horizontal" style={{ marginTop: 16 }}>
+    <form onSubmit={onSubmit} className="mt-4 space-y-4">
       {/* Customer selection */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">สมาชิก <span style={{ color: "red" }}>*</span></label>
-          {preset && (
-            <div className="alert alert-info" role="alert" style={{ marginBottom: 8 }}>
-              ✓ Preselected: <strong>{labelCustomer(preset)}</strong>
-            </div>
+      <div>
+        <label htmlFor="userid" className="block text-xs text-muted mb-1">
+          สมาชิก <span className="text-red-700">*</span>
+        </label>
+        {preset && (
+          <div className="mb-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900" role="alert">
+            ✓ Preselected: <strong>{labelCustomer(preset)}</strong>
+          </div>
+        )}
+        <select
+          id="userid"
+          value={userid}
+          onChange={(e) => setUserid(e.target.value)}
+          disabled={pending}
+          required
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
+        >
+          <option value="">— เลือกจากสมาชิกล่าสุด —</option>
+          {recent.map((c) => (
+            <option key={c.userid} value={c.userid}>{labelCustomer(c)}</option>
+          ))}
+          {preset && !recent.find((c) => c.userid === preset.userid) && (
+            <option value={preset.userid}>{labelCustomer(preset)}</option>
           )}
-          <select
-            className="form-control"
-            value={userid}
-            onChange={(e) => setUserid(e.target.value)}
-            disabled={pending}
-            required
-          >
-            <option value="">— เลือกจากสมาชิกล่าสุด —</option>
-            {recent.map((c) => (
-              <option key={c.userid} value={c.userid}>{labelCustomer(c)}</option>
-            ))}
-            {preset && !recent.find((c) => c.userid === preset.userid) && (
-              <option value={preset.userid}>{labelCustomer(preset)}</option>
-            )}
-          </select>
-          <small className="form-text text-muted">
-            ถ้าไม่เห็นสมาชิก ใช้ <code>/admin/wallet/add?q=PR1234</code> เพื่อระบุตรง
-          </small>
-        </div>
+        </select>
+        <p className="mt-1 text-xs text-muted">
+          ถ้าไม่เห็นสมาชิก ใช้ <code className="rounded bg-surface-alt px-1 text-xs">/admin/wallet/add?q=PR1234</code> เพื่อระบุตรง
+        </p>
       </div>
 
       {/* Kind + TypeService */}
-      <div className="row mb-1">
-        <div className="col-md-6">
-          <label className="form-control-label">ประเภทรายการ</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="kind" className="block text-xs text-muted mb-1">ประเภทรายการ</label>
           <select
-            className="form-control"
+            id="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value as Kind)}
             disabled={pending}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           >
             {KIND_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
-        <div className="col-md-6">
-          <label className="form-control-label">บริการ (typeservice)</label>
+        <div>
+          <label htmlFor="typeService" className="block text-xs text-muted mb-1">บริการ (typeservice)</label>
           <select
-            className="form-control"
+            id="typeService"
             value={typeService}
             onChange={(e) => setTypeService(e.target.value as TypeService)}
             disabled={pending}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           >
             {TYPESERVICE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -201,210 +204,194 @@ export function AdminWalletAddForm({
         </div>
       </div>
 
-      {/* Amount */}
-      <div className="row mb-1">
-        <div className="col-md-6">
-          <label className="form-control-label">จำนวน (บาท) <span style={{ color: "red" }}>*</span></label>
+      {/* Amount + slip date */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="amount" className="block text-xs text-muted mb-1">
+            จำนวน (บาท) <span className="text-red-700">*</span>
+          </label>
           <input
+            id="amount"
             type="text"
             inputMode="decimal"
-            className="form-control"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder={kind === "adjustment" ? "เช่น -250 หรือ 500" : "เช่น 1000.00"}
             disabled={pending}
             required
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           />
-          <small className="form-text text-muted">
+          <p className="mt-1 text-xs text-muted">
             {kind === "deposit"
               ? "ใส่เป็นเลขบวก (เช่น 1500.00) · ระบบจะบวกยอดให้"
               : kind === "withdraw"
                 ? "ใส่เป็นเลขบวก · ระบบจะหักยอดให้อัตโนมัติ"
                 : "ใส่ตัวเลขบวก/ลบเองได้ตามต้องการ (เช่น -250)"}
-          </small>
+          </p>
         </div>
-        <div className="col-md-6">
-          <label className="form-control-label">วันที่สลิป</label>
+        <div>
+          <label htmlFor="slipDate" className="block text-xs text-muted mb-1">วันที่สลิป</label>
           <input
+            id="slipDate"
             type="date"
-            className="form-control"
             value={slipDate}
             onChange={(e) => setSlipDate(e.target.value)}
             disabled={pending}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           />
-          <small className="form-text text-muted">(optional) ถ้ามีหลักฐานการโอน</small>
+          <p className="mt-1 text-xs text-muted">(optional) ถ้ามีหลักฐานการโอน</p>
         </div>
       </div>
 
       {/* Bank info */}
-      <div className="row mb-1">
-        <div className="col-md-4">
-          <label className="form-control-label">ธนาคารปลายทาง</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label htmlFor="bankName" className="block text-xs text-muted mb-1">ธนาคารปลายทาง</label>
           <input
+            id="bankName"
             type="text"
-            className="form-control"
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="เช่น KBANK / SCB"
             disabled={pending}
             maxLength={100}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           />
         </div>
-        <div className="col-md-4">
-          <label className="form-control-label">ชื่อบัญชี</label>
+        <div>
+          <label htmlFor="acctName" className="block text-xs text-muted mb-1">ชื่อบัญชี</label>
           <input
+            id="acctName"
             type="text"
-            className="form-control"
             value={acctName}
             onChange={(e) => setAcctName(e.target.value)}
             disabled={pending}
             maxLength={200}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           />
         </div>
-        <div className="col-md-4">
-          <label className="form-control-label">เลขที่บัญชี</label>
+        <div>
+          <label htmlFor="acctNumber" className="block text-xs text-muted mb-1">เลขที่บัญชี</label>
           <input
+            id="acctNumber"
             type="text"
-            className="form-control"
             value={acctNumber}
             onChange={(e) => setAcctNumber(e.target.value)}
             disabled={pending}
             maxLength={200}
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
           />
         </div>
       </div>
 
       {/* Wave 12-A — slip upload (optional) */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">หลักฐานการโอน (สลิป) <small className="text-muted">— optional</small></label>
-          <label
-            style={{
-              display:      "block",
-              border:       slipFile ? "2px dashed #5cb85c" : "2px dashed #d1d5db",
-              borderRadius: 12,
-              padding:      14,
-              background:   slipFile ? "rgba(92,184,92,0.05)" : "rgba(241,243,247,0.4)",
-              cursor:       pending ? "not-allowed" : "pointer",
-              transition:   "all 0.15s",
-            }}
-          >
-            <input
-              ref={slipInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-              style={{ display: "none" }}
-              disabled={pending}
-              onChange={(e) => selectSlip(e.currentTarget.files?.[0] ?? null)}
-            />
-            {slipFile ? (
-              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                {slipPreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={slipPreview}
-                    alt="พรีวิวสลิป"
-                    style={{
-                      maxHeight: 120,
-                      maxWidth: 160,
-                      borderRadius: 6,
-                      border: "1px solid #e2e6ee",
-                      background: "#fff",
-                      objectFit: "contain",
-                    }}
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 500, wordBreak: "break-all" }}>{slipFile.name}</p>
-                  <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#6b7280" }}>
-                    {(slipFile.size / 1024).toFixed(1)} KB · {slipFile.type || "unknown"}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      selectSlip(null);
-                      if (slipInputRef.current) slipInputRef.current.value = "";
-                    }}
-                    style={{
-                      marginTop: 6,
-                      background: "transparent",
-                      border:     "none",
-                      color:      "#dc2626",
-                      fontSize:   12,
-                      cursor:     "pointer",
-                      padding:    0,
-                    }}
-                  >
-                    ลบไฟล์
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: "8px 0" }}>
-                <div style={{ fontSize: 22 }}>📄</div>
-                <p style={{ margin: "4px 0 0 0", fontWeight: 500 }}>คลิกเพื่อเลือกไฟล์สลิป</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: 11, color: "#6b7280" }}>
-                  JPG / PNG / PDF · ≤ 5 MB
+      <div>
+        <span className="block text-xs text-muted mb-1">
+          หลักฐานการโอน (สลิป) <span className="text-muted">— optional</span>
+        </span>
+        <label
+          className={[
+            "block rounded-xl border-2 border-dashed p-3.5 transition-colors",
+            slipFile
+              ? "border-emerald-400 bg-emerald-50/60"
+              : "border-border bg-surface-alt/40 hover:bg-surface-alt/70",
+            pending ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+          ].join(" ")}
+        >
+          <input
+            ref={slipInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            className="hidden"
+            disabled={pending}
+            onChange={(e) => selectSlip(e.currentTarget.files?.[0] ?? null)}
+          />
+          {slipFile ? (
+            <div className="flex items-start gap-3.5">
+              {slipPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={slipPreview}
+                  alt="พรีวิวสลิป"
+                  className="max-h-[120px] max-w-[160px] rounded-md border border-border bg-white object-contain"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="m-0 font-medium break-all">{slipFile.name}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {(slipFile.size / 1024).toFixed(1)} KB · {slipFile.type || "unknown"}
                 </p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    selectSlip(null);
+                    if (slipInputRef.current) slipInputRef.current.value = "";
+                  }}
+                  className="mt-1.5 bg-transparent p-0 text-xs text-red-700 hover:text-red-800 disabled:opacity-60"
+                >
+                  ลบไฟล์
+                </button>
               </div>
-            )}
-          </label>
-        </div>
+            </div>
+          ) : (
+            <div className="py-2 text-center">
+              <div className="text-2xl">📄</div>
+              <p className="mt-1 font-medium">คลิกเพื่อเลือกไฟล์สลิป</p>
+              <p className="mt-0.5 text-[11px] text-muted">
+                JPG / PNG / PDF · ≤ 5 MB
+              </p>
+            </div>
+          )}
+        </label>
       </div>
 
       {/* VIP credit flag */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <div className="form-check">
-            <label className="form-check-label">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={paydeposit}
-                onChange={(e) => setPaydeposit(e.target.checked)}
-                disabled={pending}
-              />{" "}
-              เป็นเครดิต VIP (paydeposit=1) — ใช้กับลูกค้าเครดิต
-            </label>
-          </div>
-        </div>
+      <div>
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={paydeposit}
+            onChange={(e) => setPaydeposit(e.target.checked)}
+            disabled={pending}
+            className="h-4 w-4 rounded border-border text-primary-500 focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
+          />
+          <span>เป็นเครดิต VIP (paydeposit=1) — ใช้กับลูกค้าเครดิต</span>
+        </label>
       </div>
 
       {/* Note */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">หมายเหตุ</label>
-          <textarea
-            className="form-control"
-            rows={3}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="เหตุผลที่บันทึกรายการนี้ (เช่น 'สลิปลูกค้า PR1234 ระบบไม่จับ — เพิ่มเข้าด้วยตนเอง')"
-            disabled={pending}
-            maxLength={1000}
-          />
-        </div>
+      <div>
+        <label htmlFor="note" className="block text-xs text-muted mb-1">หมายเหตุ</label>
+        <textarea
+          id="note"
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="เหตุผลที่บันทึกรายการนี้ (เช่น 'สลิปลูกค้า PR1234 ระบบไม่จับ — เพิ่มเข้าด้วยตนเอง')"
+          disabled={pending}
+          maxLength={1000}
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60"
+        />
       </div>
 
       {/* Feedback */}
       {error && (
-        <div className="alert alert-danger" role="alert" style={{ marginTop: 12 }}>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
           ⚠ {error}
         </div>
       )}
       {success && (
-        <div className="alert alert-success" role="alert" style={{ marginTop: 12 }}>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="alert">
           ✓ {success}
         </div>
       )}
 
       {/* Actions */}
-      <div className="modal-footer" style={{ marginTop: 16, borderTop: "1px solid #eee", paddingTop: 12 }}>
+      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
         <button
           type="button"
-          className="btn btn-outline-secondary round"
           onClick={() => {
             setAmount(""); setNote(""); setBankName(""); setAcctName("");
             setAcctNumber(""); setSlipDate(""); setError(null); setSuccess(null);
@@ -412,13 +399,14 @@ export function AdminWalletAddForm({
             if (slipInputRef.current) slipInputRef.current.value = "";
           }}
           disabled={pending}
+          className="rounded-lg border border-border bg-white text-foreground px-4 py-2 text-sm hover:bg-surface-alt disabled:opacity-60"
         >
           ล้างฟอร์ม
         </button>
         <button
           type="submit"
-          className="btn btn-color-main round"
           disabled={pending || !userid || !amount}
+          className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {pending ? "กำลังบันทึก..." : "บันทึกรายการ"}
         </button>

@@ -138,43 +138,41 @@ export function AdminYuanPaymentNewForm({
   };
 
   return (
-    <form onSubmit={onSubmit} className="form-horizontal" style={{ marginTop: 16 }}>
+    <form onSubmit={onSubmit} className="mt-4 space-y-3">
       {/* Customer */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">สมาชิก <span style={{ color: "red" }}>*</span></label>
-          {preset && (
-            <div className="alert alert-info" role="alert" style={{ marginBottom: 8 }}>
-              ✓ Preselected: <strong>{labelCustomer(preset)}</strong>
-            </div>
+      <div>
+        <label className="block text-xs text-muted mb-1">สมาชิก <span className="text-red-700">*</span></label>
+        {preset && (
+          <div className="mb-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-primary-700">
+            ✓ Preselected: <strong>{labelCustomer(preset)}</strong>
+          </div>
+        )}
+        <select
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+          value={userid}
+          onChange={(e) => setUserid(e.target.value)}
+          disabled={pending}
+          required
+        >
+          <option value="">— เลือกจากสมาชิกล่าสุด —</option>
+          {recent.map((c) => (
+            <option key={c.userid} value={c.userid}>{labelCustomer(c)}</option>
+          ))}
+          {preset && !recent.find((c) => c.userid === preset.userid) && (
+            <option value={preset.userid}>{labelCustomer(preset)}</option>
           )}
-          <select
-            className="form-control"
-            value={userid}
-            onChange={(e) => setUserid(e.target.value)}
-            disabled={pending}
-            required
-          >
-            <option value="">— เลือกจากสมาชิกล่าสุด —</option>
-            {recent.map((c) => (
-              <option key={c.userid} value={c.userid}>{labelCustomer(c)}</option>
-            ))}
-            {preset && !recent.find((c) => c.userid === preset.userid) && (
-              <option value={preset.userid}>{labelCustomer(preset)}</option>
-            )}
-          </select>
-          <small className="form-text text-muted">
-            ถ้าไม่เห็นสมาชิก ใช้ <code>/admin/yuan-payments/new?q=PR1234</code> เพื่อระบุตรง
-          </small>
-        </div>
+        </select>
+        <small className="mt-1 block text-xs text-muted">
+          ถ้าไม่เห็นสมาชิก ใช้ <code className="rounded bg-surface-alt px-1 py-0.5 text-[11px]">/admin/yuan-payments/new?q=PR1234</code> เพื่อระบุตรง
+        </small>
       </div>
 
       {/* Channel + Detail */}
-      <div className="row mb-1">
-        <div className="col-md-4">
-          <label className="form-control-label">ช่องทาง</label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs text-muted mb-1">ช่องทาง</label>
           <select
-            className="form-control"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={paytype}
             onChange={(e) => setPaytype(e.target.value as PayType)}
             disabled={pending}
@@ -184,11 +182,11 @@ export function AdminYuanPaymentNewForm({
             ))}
           </select>
         </div>
-        <div className="col-md-8">
-          <label className="form-control-label">ผู้รับ (ชื่อ / บัญชี / wallet ID) <span style={{ color: "red" }}>*</span></label>
+        <div className="sm:col-span-2">
+          <label className="block text-xs text-muted mb-1">ผู้รับ (ชื่อ / บัญชี / wallet ID) <span className="text-red-700">*</span></label>
           <input
             type="text"
-            className="form-control"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={paydetail}
             onChange={(e) => setPaydetail(e.target.value)}
             placeholder="เช่น 张三 · alipay 123@xx.com"
@@ -200,13 +198,13 @@ export function AdminYuanPaymentNewForm({
       </div>
 
       {/* Amount + Rate */}
-      <div className="row mb-1">
-        <div className="col-md-4">
-          <label className="form-control-label">จำนวน CNY <span style={{ color: "red" }}>*</span></label>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs text-muted mb-1">จำนวน CNY <span className="text-red-700">*</span></label>
           <input
             type="text"
             inputMode="decimal"
-            className="form-control"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={payyuan}
             onChange={(e) => setPayyuan(e.target.value)}
             placeholder="¥100.00"
@@ -214,172 +212,145 @@ export function AdminYuanPaymentNewForm({
             required
           />
         </div>
-        <div className="col-md-4">
-          <label className="form-control-label">เรท (THB/CNY) <span style={{ color: "red" }}>*</span></label>
+        <div>
+          <label className="block text-xs text-muted mb-1">เรท (THB/CNY) <span className="text-red-700">*</span></label>
           <input
             type="text"
             inputMode="decimal"
-            className="form-control"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={payrate}
             onChange={(e) => setPayrate(e.target.value)}
             placeholder="5.00"
             disabled={pending}
             required
           />
-          <small className="form-text text-muted">default = tb_settings.rsdefault</small>
+          <small className="mt-1 block text-xs text-muted">default = tb_settings.rsdefault</small>
         </div>
-        <div className="col-md-4">
-          <label className="form-control-label">cost rate (admin)</label>
+        <div>
+          <label className="block text-xs text-muted mb-1">cost rate (admin)</label>
           <input
             type="text"
             inputMode="decimal"
-            className="form-control"
+            className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
             value={paycost}
             onChange={(e) => setPaycost(e.target.value)}
             placeholder="เช่น 4.95"
             disabled={pending}
           />
-          <small className="form-text text-muted">(optional) ใช้คำนวน margin</small>
+          <small className="mt-1 block text-xs text-muted">(optional) ใช้คำนวน margin</small>
         </div>
       </div>
 
       {/* Preview */}
       {previewThb != null && (
-        <div className="alert alert-success" role="alert" style={{ marginTop: 8 }}>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
           พรีวิว THB total = <strong>฿{previewThb.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
         </div>
       )}
 
       {/* Wave 12-A — slip upload (optional · admin-attached proof) */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">
-            หลักฐานการโอน (สลิป) <small className="text-muted">— optional · เก็บใน imagesslipadmin</small>
-          </label>
-          <label
-            style={{
-              display:      "block",
-              border:       slipFile ? "2px dashed #5cb85c" : "2px dashed #d1d5db",
-              borderRadius: 12,
-              padding:      14,
-              background:   slipFile ? "rgba(92,184,92,0.05)" : "rgba(241,243,247,0.4)",
-              cursor:       pending ? "not-allowed" : "pointer",
-              transition:   "all 0.15s",
-            }}
-          >
-            <input
-              ref={slipInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
-              style={{ display: "none" }}
-              disabled={pending}
-              onChange={(e) => selectSlip(e.currentTarget.files?.[0] ?? null)}
-            />
-            {slipFile ? (
-              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                {slipPreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={slipPreview}
-                    alt="พรีวิวสลิป"
-                    style={{
-                      maxHeight: 120,
-                      maxWidth: 160,
-                      borderRadius: 6,
-                      border: "1px solid #e2e6ee",
-                      background: "#fff",
-                      objectFit: "contain",
-                    }}
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 500, wordBreak: "break-all" }}>{slipFile.name}</p>
-                  <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#6b7280" }}>
-                    {(slipFile.size / 1024).toFixed(1)} KB · {slipFile.type || "unknown"}
-                  </p>
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      selectSlip(null);
-                      if (slipInputRef.current) slipInputRef.current.value = "";
-                    }}
-                    style={{
-                      marginTop: 6,
-                      background: "transparent",
-                      border:     "none",
-                      color:      "#dc2626",
-                      fontSize:   12,
-                      cursor:     "pointer",
-                      padding:    0,
-                    }}
-                  >
-                    ลบไฟล์
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: "8px 0" }}>
-                <div style={{ fontSize: 22 }}>📄</div>
-                <p style={{ margin: "4px 0 0 0", fontWeight: 500 }}>คลิกเพื่อเลือกไฟล์สลิป</p>
-                <p style={{ margin: "2px 0 0 0", fontSize: 11, color: "#6b7280" }}>
-                  JPG / PNG / PDF · ≤ 5 MB
+      <div>
+        <label className="block text-xs text-muted mb-1">
+          หลักฐานการโอน (สลิป) <span className="text-muted">— optional · เก็บใน imagesslipadmin</span>
+        </label>
+        <label
+          className={`block cursor-pointer rounded-xl border-2 border-dashed p-3.5 transition ${
+            slipFile
+              ? "border-emerald-400 bg-emerald-50/40"
+              : "border-border bg-surface-alt/40 hover:border-primary-300 hover:bg-primary-50/30"
+          } ${pending ? "cursor-not-allowed opacity-60" : ""}`}
+        >
+          <input
+            ref={slipInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            className="hidden"
+            disabled={pending}
+            onChange={(e) => selectSlip(e.currentTarget.files?.[0] ?? null)}
+          />
+          {slipFile ? (
+            <div className="flex items-start gap-3.5">
+              {slipPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={slipPreview}
+                  alt="พรีวิวสลิป"
+                  className="max-h-[120px] max-w-[160px] rounded border border-border bg-white object-contain"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="m-0 break-all font-medium text-sm">{slipFile.name}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {(slipFile.size / 1024).toFixed(1)} KB · {slipFile.type || "unknown"}
                 </p>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    selectSlip(null);
+                    if (slipInputRef.current) slipInputRef.current.value = "";
+                  }}
+                  className="mt-1.5 bg-transparent p-0 text-xs text-red-600 hover:text-red-700"
+                >
+                  ลบไฟล์
+                </button>
               </div>
-            )}
-          </label>
-        </div>
+            </div>
+          ) : (
+            <div className="py-2 text-center">
+              <div className="text-2xl">📄</div>
+              <p className="mt-1 font-medium text-sm">คลิกเพื่อเลือกไฟล์สลิป</p>
+              <p className="mt-0.5 text-[11px] text-muted">
+                JPG / PNG / PDF · ≤ 5 MB
+              </p>
+            </div>
+          )}
+        </label>
       </div>
 
       {/* Paid via wallet */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <div className="form-check">
-            <label className="form-check-label">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={paydeposit}
-                onChange={(e) => setPaydeposit(e.target.checked)}
-                disabled={pending}
-              />{" "}
-              ลูกค้าจ่ายจาก wallet (paydeposit=1)
-            </label>
-          </div>
-        </div>
+      <div>
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border text-primary-500 focus:ring-primary-500/30"
+            checked={paydeposit}
+            onChange={(e) => setPaydeposit(e.target.checked)}
+            disabled={pending}
+          />
+          <span>ลูกค้าจ่ายจาก wallet (paydeposit=1)</span>
+        </label>
       </div>
 
       {/* Note */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <label className="form-control-label">หมายเหตุ</label>
-          <textarea
-            className="form-control"
-            rows={3}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            disabled={pending}
-            maxLength={1000}
-          />
-        </div>
+      <div>
+        <label className="block text-xs text-muted mb-1">หมายเหตุ</label>
+        <textarea
+          className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={pending}
+          maxLength={1000}
+        />
       </div>
 
       {error && (
-        <div className="alert alert-danger" role="alert" style={{ marginTop: 12 }}>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           ⚠ {error}
         </div>
       )}
       {success && (
-        <div className="alert alert-success" role="alert" style={{ marginTop: 12 }}>
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
           ✓ {success}
         </div>
       )}
 
-      <div className="modal-footer" style={{ marginTop: 16, borderTop: "1px solid #eee", paddingTop: 12 }}>
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         <button
           type="button"
-          className="btn btn-outline-secondary round"
+          className="rounded-lg border border-border bg-white text-foreground px-4 py-2 text-sm hover:bg-surface-alt"
           onClick={() => {
             setPayyuan(""); setPaydetail(""); setNote(""); setPaycost("");
             setError(null); setSuccess(null);
@@ -392,7 +363,7 @@ export function AdminYuanPaymentNewForm({
         </button>
         <button
           type="submit"
-          className="btn btn-color-main round"
+          className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600 disabled:opacity-60 disabled:cursor-not-allowed"
           disabled={pending || !userid || !payyuan || !paydetail}
         >
           {pending ? "กำลังบันทึก..." : "บันทึกรายการ"}

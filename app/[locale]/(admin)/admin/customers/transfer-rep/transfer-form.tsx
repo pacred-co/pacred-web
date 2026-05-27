@@ -10,6 +10,12 @@
  *
  * Preview: shows "X customers will move from {Y or 'unassigned'} to Z"
  * before submit.
+ *
+ * Wave 23 P2 batch 1 (2026-05-27 ค่ำ): swapped legacy Bootstrap
+ * `form-control` / `form-group` / `row col-md-*` / `btn btn-color-main` /
+ * `alert alert-*` classes for Tailwind utilities to match the Wave 20 P1-d
+ * page chrome. Logic + validation + server-action wiring preserved per
+ * AGENTS §0a (steal logic, polish UI).
  */
 
 import { useMemo, useState, useTransition } from "react";
@@ -32,6 +38,14 @@ export type TbAdminLite = {
   department:    string | null;
   section:       string | null;
 };
+
+const INPUT_CLS =
+  "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30";
+const LABEL_CLS = "block text-xs text-muted mb-1";
+const BTN_PRIMARY =
+  "rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed";
+const BTN_SECONDARY =
+  "rounded-lg border border-border bg-white text-foreground px-4 py-2 text-sm hover:bg-surface-alt disabled:opacity-50 disabled:cursor-not-allowed";
 
 function customerLabel(c: CustomerLite): string {
   const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
@@ -138,25 +152,27 @@ export function TransferRepForm({
   };
 
   return (
-    <div style={{ marginTop: 16 }}>
+    <div className="mt-4 space-y-4">
       {/* Filter row */}
-      <form onSubmit={onApplyFilter} className="form-horizontal" style={{ marginBottom: 16 }}>
-        <div className="row mb-1">
-          <div className="col-md-5">
-            <label className="form-control-label">ค้นหา (ชื่อ / PR####)</label>
+      <form onSubmit={onApplyFilter} className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div className="sm:col-span-5">
+            <label htmlFor="filter-q" className={LABEL_CLS}>ค้นหา (ชื่อ / PR####)</label>
             <input
+              id="filter-q"
               type="text"
-              className="form-control"
+              className={INPUT_CLS}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="เช่น John หรือ PR1234"
               disabled={pending}
             />
           </div>
-          <div className="col-md-5">
-            <label className="form-control-label">เซลล์ปัจจุบัน (currentRep)</label>
+          <div className="sm:col-span-5">
+            <label htmlFor="filter-currentRep" className={LABEL_CLS}>เซลล์ปัจจุบัน (currentRep)</label>
             <select
-              className="form-control"
+              id="filter-currentRep"
+              className={INPUT_CLS}
               value={currentRep}
               onChange={(e) => setCurrentRep(e.target.value)}
               disabled={pending}
@@ -167,8 +183,8 @@ export function TransferRepForm({
               ))}
             </select>
           </div>
-          <div className="col-md-2" style={{ display: "flex", alignItems: "flex-end" }}>
-            <button type="submit" className="btn btn-color-main round" style={{ width: "100%" }} disabled={pending}>
+          <div className="sm:col-span-2 flex items-end">
+            <button type="submit" className={`${BTN_PRIMARY} w-full`} disabled={pending}>
               กรอง
             </button>
           </div>
@@ -176,120 +192,113 @@ export function TransferRepForm({
       </form>
 
       {/* Selection summary */}
-      <div className="row mb-1">
-        <div className="col-md-12">
-          <div className="alert alert-info" role="alert">
-            <strong>เลือกแล้ว {selected.size} ราย</strong> จากรายชื่อทั้งหมด {customers.length} ราย
-            {selected.size > 0 && (
-              <>
-                {" "}— ปัจจุบันอยู่ที่:{" "}
-                {fromBreakdown.map(([from, n]) => (
-                  <span
-                    key={from}
-                    style={{
-                      display: "inline-block",
-                      marginRight: 8,
-                      padding: "2px 8px",
-                      background: "#fff",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {from === "(unassigned)" ? "(ยังไม่มี)" : from} × {n}
-                  </span>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <strong>เลือกแล้ว {selected.size} ราย</strong> จากรายชื่อทั้งหมด {customers.length} ราย
+        {selected.size > 0 && (
+          <>
+            {" "}— ปัจจุบันอยู่ที่:{" "}
+            {fromBreakdown.map(([from, n]) => (
+              <span
+                key={from}
+                className="inline-block mr-2 px-2 py-0.5 bg-white rounded text-xs"
+              >
+                {from === "(unassigned)" ? "(ยังไม่มี)" : from} × {n}
+              </span>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Customer table */}
-      <div className="table-responsive p-05" style={{ maxHeight: 480, overflowY: "auto" }}>
-        <table className="table table-bordered table-striped">
-          <thead>
-            <tr className="text-center">
-              <th style={{ width: 40 }}>
-                <input
-                  type="checkbox"
-                  checked={customers.length > 0 && selected.size === customers.length}
-                  onChange={toggleAll}
-                  aria-label="เลือกทั้งหมด"
-                />
-              </th>
-              <th>รหัสสมาชิก</th>
-              <th>ชื่อ-นามสกุล</th>
-              <th>เบอร์โทร</th>
-              <th>เซลล์ปัจจุบัน</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.length === 0 ? (
+      <div className="rounded-lg border border-border bg-white dark:bg-surface overflow-hidden">
+        <div className="max-h-[480px] overflow-y-auto overflow-x-auto scrollbar-x-visible">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
-                <td colSpan={5} className="text-center" style={{ padding: "32px 0" }}>
-                  <em>ยังไม่มีรายชื่อ — กรอกตัวกรองด้านบนแล้วกด &quot;กรอง&quot;</em>
-                </td>
+                <th className="px-3 py-2 text-center w-10">
+                  <input
+                    type="checkbox"
+                    checked={customers.length > 0 && selected.size === customers.length}
+                    onChange={toggleAll}
+                    aria-label="เลือกทั้งหมด"
+                  />
+                </th>
+                <th className="px-3 py-2">รหัสสมาชิก</th>
+                <th className="px-3 py-2">ชื่อ-นามสกุล</th>
+                <th className="px-3 py-2">เบอร์โทร</th>
+                <th className="px-3 py-2">เซลล์ปัจจุบัน</th>
               </tr>
-            ) : (
-              customers.map((c) => (
-                <tr key={c.userid}>
-                  <td className="text-center">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(c.userid)}
-                      onChange={() => toggleOne(c.userid)}
-                      aria-label={`เลือก ${c.userid}`}
-                    />
-                  </td>
-                  <td>{c.userid}</td>
-                  <td>{customerLabel(c)}</td>
-                  <td>{c.usertel ?? "-"}</td>
-                  <td>
-                    {c.adminidsale ? (
-                      <span>{c.adminidsale}{adminLookup.get(c.adminidsale)?.adminnickname ? ` · ${adminLookup.get(c.adminidsale)?.adminnickname}` : ""}</span>
-                    ) : (
-                      <span className="text-muted">(ยังไม่มี)</span>
-                    )}
+            </thead>
+            <tbody className="divide-y divide-border">
+              {customers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-muted">
+                    <em>ยังไม่มีรายชื่อ — กรอกตัวกรองด้านบนแล้วกด &quot;กรอง&quot;</em>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                customers.map((c) => (
+                  <tr key={c.userid} className="hover:bg-surface-alt/30">
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.userid)}
+                        onChange={() => toggleOne(c.userid)}
+                        aria-label={`เลือก ${c.userid}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{c.userid}</td>
+                    <td className="px-3 py-2">{customerLabel(c)}</td>
+                    <td className="px-3 py-2">{c.usertel ?? "-"}</td>
+                    <td className="px-3 py-2">
+                      {c.adminidsale ? (
+                        <span>{c.adminidsale}{adminLookup.get(c.adminidsale)?.adminnickname ? ` · ${adminLookup.get(c.adminidsale)?.adminnickname}` : ""}</span>
+                      ) : (
+                        <span className="text-muted">(ยังไม่มี)</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Target admin + submit */}
-      <form onSubmit={onSubmit} className="form-horizontal" style={{ marginTop: 16, borderTop: "1px solid #eee", paddingTop: 12 }}>
-        <div className="row mb-1">
-          <div className="col-md-12">
-            <label className="form-control-label">admin ปลายทาง (target) <span style={{ color: "red" }}>*</span></label>
-            <select
-              className="form-control"
-              value={targetAdmin}
-              onChange={(e) => { setTargetAdmin(e.target.value); setConfirmStep(false); }}
-              disabled={pending}
-              required
-            >
-              <option value="">— เลือก admin —</option>
-              {admins.map((a) => (
-                <option key={a.adminid} value={a.adminid}>{adminLabel(a)}</option>
-              ))}
-            </select>
-          </div>
+      <form onSubmit={onSubmit} className="border-t border-border pt-4 space-y-3">
+        <div>
+          <label htmlFor="target-admin" className={LABEL_CLS}>
+            admin ปลายทาง (target) <span className="text-red-700">*</span>
+          </label>
+          <select
+            id="target-admin"
+            className={INPUT_CLS}
+            value={targetAdmin}
+            onChange={(e) => { setTargetAdmin(e.target.value); setConfirmStep(false); }}
+            disabled={pending}
+            required
+          >
+            <option value="">— เลือก admin —</option>
+            {admins.map((a) => (
+              <option key={a.adminid} value={a.adminid}>{adminLabel(a)}</option>
+            ))}
+          </select>
         </div>
 
         {error && (
-          <div className="alert alert-danger" role="alert" style={{ marginTop: 12 }}>
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             ⚠ {error}
           </div>
         )}
         {success && (
-          <div className="alert alert-success" role="alert" style={{ marginTop: 12 }}>
+          <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
             ✓ {success}
           </div>
         )}
 
         {confirmStep && targetAdmin && selected.size > 0 && (
-          <div className="alert alert-warning" role="alert" style={{ marginTop: 12 }}>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <strong>ยืนยันการย้าย?</strong> ลูกค้า {selected.size} ราย จะย้ายไปยัง <strong>{targetAdmin}</strong> ({adminLookup.get(targetAdmin)?.adminnickname ?? "-"})
             {fromBreakdown.length > 0 && (
               <>
@@ -300,10 +309,10 @@ export function TransferRepForm({
           </div>
         )}
 
-        <div className="modal-footer" style={{ marginTop: 16, borderTop: "1px solid #eee", paddingTop: 12 }}>
+        <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
           <button
             type="button"
-            className="btn btn-outline-secondary round"
+            className={BTN_SECONDARY}
             onClick={() => {
               setSelected(new Set()); setTargetAdmin(""); setError(null); setSuccess(null); setConfirmStep(false);
             }}
@@ -313,7 +322,7 @@ export function TransferRepForm({
           </button>
           <button
             type="submit"
-            className="btn btn-color-main round"
+            className={BTN_PRIMARY}
             disabled={pending || selected.size === 0 || !targetAdmin}
           >
             {pending
