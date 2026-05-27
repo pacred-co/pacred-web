@@ -683,12 +683,15 @@ export function CartInteractivity({
                   onChange={(e) => togglePro2(e.target.checked)}
                   className="sr-only"
                 />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-07-768x477.jpg"
-                  alt="โปรโมชัน 3.3"
-                  className="block w-full h-auto"
-                />
+                {/* TODO(brand): legacy WordPress promo asset was
+                    https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-07-768x477.jpg
+                    — needs a Pacred-hosted replacement from ปอน before
+                    this March-3.3 window re-activates. The checkbox below
+                    still works (functional toggle); only the visual is
+                    stubbed to avoid a brand-leaking URL in customer source. */}
+                <div className="block w-full aspect-[768/477] bg-surface-alt flex items-center justify-center text-muted text-xs">
+                  โปรโมชัน 3.3 (รอ asset ใหม่)
+                </div>
                 <div className="px-2.5 py-1.5 bg-white text-center">
                   <Link
                     href="/services/import-china"

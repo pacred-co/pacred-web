@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportAddForm } from "../add/service-import-add-form";
 
 /**
@@ -195,9 +196,15 @@ function numberFormat(n: number, decimals: number): string {
 // L1028-1033 does inline: a http(s) URL is used as-is; '' → the default
 // shops image; a bare filename → images/shops/<file>.
 function resolveCover(fCover: string | null): string {
-  if (fCover && /https|http/.test(fCover)) return fCover;
+  if (fCover && /https|http/.test(fCover)) {
+    // Old data may store full legacy URLs — re-resolve through the
+    // Supabase mirror so customer-visible URLs never leak the legacy host.
+    const legacyMatch = fCover.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
+    return fCover;
+  }
   if (!fCover || fCover === "") return "/legacy/pcs/shops/default.png";
-  return `https://pcscargo.co.th/member/images/shops/${fCover}`;
+  return legacyMemberUrl(`images/shops/${fCover}`);
 }
 
 type ForwarderRow = {

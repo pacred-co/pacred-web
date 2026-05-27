@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ADDRESSES } from "@/components/seo/site";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import {
   getShipByOptionsForAddress,
   isMaomaoEligibleForAddress,
@@ -143,12 +144,16 @@ function convertIMGCHN(url: string | null, size: string): string {
     .split("_250x250.jpg")
     .join("");
   if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) {
-      return u;
-    }
+    // Old data may store full legacy `pcscargo.co.th/member/...` URLs —
+    // re-resolve through the Supabase mirror so customer-visible URLs
+    // never leak the legacy host name.
+    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
     return u + size;
   }
-  return "/legacy/pcs/images/shops/" + u;
+  // a bare filename — legacy stored under images/shops/. Resolved via
+  // the Supabase mirror (ภูม upload 2026-05-24, see lib/legacy-image.ts).
+  return legacyMemberUrl(`images/shops/${u}`);
 }
 
 export default async function CartPage() {

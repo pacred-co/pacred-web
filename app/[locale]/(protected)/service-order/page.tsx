@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import {
   ShoppingBag,
   Plus,
@@ -339,7 +340,7 @@ function OrderCard({
       .replace("_250x250.jpg", "");
     hCover = cleaned + "_150x150.jpg";
   } else if (cover !== "") {
-    hCover = "https://pcscargo.co.th/member/images/shops/" + cover;
+    hCover = legacyMemberUrl(`images/shops/${cover}`);
   } else {
     hCover = "/legacy/pcs/shops/default.png";
   }
@@ -508,8 +509,11 @@ function PaymentBar({ count }: { count: number }) {
 
 /* ─────────────────────────── PROMO BADGE ───────────────────────────
  * Transcribes legacy `chProhNo()` (function.php L1095-1183). Cases 1-6 are
- * PLAIN badges (no link), cases 7-77 are LINKED badges. Branding `PCS` →
- * `PR` is interim — legacy promo URLs resolve at https://pcscargo.co.th/.
+ * PLAIN badges (no link), cases 7-77 are LINKED badges. The original
+ * `B = "https://pcscargo.co.th/"` is REWRITTEN to the internal Pacred
+ * landing — customer stays inside Pacred per pcs-scrub-plan. The legacy
+ * promo slug is preserved as a `?ref=` query string for analytics +
+ * future Pacred-hosted promo page resolution.
  */
 function ProBadge({ promoId }: { promoId: number | undefined }) {
   if (promoId == null) return null;
@@ -517,7 +521,10 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
     1: "Pro 3.15", 2: "Pro 4.4", 3: "Pro 4.25", 4: "Pro 5.5",
     5: "Pro 5.15", 6: "Pro 6.6",
   };
-  const B = "https://pcscargo.co.th/";
+  // All legacy LINKED hrefs were `${pcscargo.co.th/}<slug>`. Rewriting `B`
+  // to the Pacred landing + a `?ref=` slug param keeps the analytics
+  // trail while moving every customer click off the legacy host.
+  const B = "/services/import-china?ref=";
   const LINKED: Record<number, { label: string; title: string; href: string }> = {
     7:  { label: "Pro 6.25",  title: "เรท 5.39 และ ขนส่ง 5%",  href: `${B}โปรโมชัน-6-25` },
     8:  { label: "Pro 7.7",   title: "เรท 5.42",               href: `${B}โปรโมชัน-7-7` },

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import { resolveSalesAgent } from "./team-map";
 
 /**
@@ -344,11 +345,11 @@ export default async function SalesTeamMembersPage() {
                                       <td>
                                         <a
                                           className="image-popup-vertical-fit el-link"
-                                          href={`https://pcscargo.co.th/member/images/users/${row.userPicture ?? ""}`}
+                                          href={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
                                         >
                                           {/* eslint-disable-next-line @next/next/no-img-element */}
                                           <img
-                                            src={`https://pcscargo.co.th/member/images/users/${row.userPicture ?? ""}`}
+                                            src={legacyMemberUrl(`images/users/${row.userPicture ?? ""}`)}
                                             alt="user"
                                             className="rounded-circle"
                                             width={35}

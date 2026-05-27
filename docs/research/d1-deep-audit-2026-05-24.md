@@ -17,7 +17,7 @@
 |---|---|---|---|---|---|
 | 1 | **Google Sheets sync** (CTT/MX/MK/Sang shipping data) — legacy syncs daily | 🔴 HIGH | M | **เดฟ + ก๊อต + ภูม** (joint) | ❌ NONE |
 | 2 | **JMF / TTP / CN forwarder partner APIs** | 🔴 HIGH | L | **ก๊อต** | 🔴 only MOMO JMF stubbed |
-| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ❌ admin-side LINE Messaging only |
+| 3 | **LINE Notify per-user OAuth + cron push** (customer notifications) | 🟡 MED | M | **เดฟ** | ✅ **CLOSED via replacement** — LINE Notify service EOL'd 2025-03-31; replaced by LIFF + LINE Messaging API per-user (`af4bebe9` task L). `/line-settings` page + `actions/line-settings.ts` + `lib/notifications/sendNotification` push. |
 | 4 | **CargoThai (api.newcargothai.net) PO sync** | 🟡 MED | M | **เดฟ** | ❌ NONE |
 | 5 | **TAMIT (Thai ID) identity verification** | 🟡 MED | S | **เดฟ** | ❌ NONE (DBD/RD stubbed but not equivalent) |
 | 6 | **MOMO LCL sack tracking lookup** (newly discovered) | 🟡 MED | S | **ภูม** | ❌ NONE — port from backoffice.pcscargo.co.th |
@@ -38,7 +38,7 @@ S = ≤1 day · M = 2–5 days · L = ≥1 week
 **External integrations missing (most critical):**
 - **Google Sheets sync** — `member/pcs-admin/api-sheets-{ctt,mx,mk,sang-2023}.php` + cron at `run-time/cttupdate/index.php`. Pulls shipping data from 4 different Google Sheets, dedupes against `tb_notify_sheet_*`, posts LINE Notify on new rows. Used daily by ops team.
 - **JMF / TTP / CN forwarder APIs** — `api-forwarder-{jmf,ttp,cn}.php`. Pulls partner forwarder quotes/availability/status. Pacred has only MOMO JMF wrapper (stubbed, API surface mismatch).
-- **LINE Notify (per-user OAuth)** — `member/line-notify.php` + `member/api/linenotify/callback/` + cron in `run-time/line/index.php`. Customer connects their personal LINE → receives notifications about their orders. Different from admin-side LINE Messaging API push (which we have).
+- ~~**LINE Notify (per-user OAuth)**~~ ✅ **CLOSED via replacement** — Legacy `member/line-notify.php` + `member/api/linenotify/callback/` + `run-time/line/index.php` cron. Original port attempted; LINE Notify service EOL'd 2025-03-31 → reverted. Replaced 2026-05-26 by **LIFF + LINE Messaging API per-user model** in commit `af4bebe9` (task L) — `/line-settings` page + `actions/line-settings.ts` + push via `lib/notifications/sendNotification`. Customer flow: add Pacred LINE OA friend → /line-settings → LIFF auth → `profiles.line_user_id` set → Messaging API push.
 - **CargoThai (api.newcargothai.net) PO sync** — `test-api/api-new.php` + `test-api/update-data-cargothai/index.php`. Two-way sync of Pacred POs with CargoThai partner system.
 - **TAMIT (Thai ID) verification** — `member/regis-tam.php`. Real-time Thai ID validation during signup/KYC.
 - **PHPMailer SMTP** — covered (we use Resend). No port needed.
@@ -154,7 +154,7 @@ These are flows that work but degraded (rebuilt-era differs from legacy):
 
 ### Sprint 2 (next week)
 5. **Gap #1 — Google Sheets sync cron** — Vercel cron + Sheets API client + dedupe logic + LINE Notify dispatcher
-6. **Gap #3 — LINE Notify per-user OAuth** — Next.js OAuth Route Handler + customer-portal connect button + dispatcher cron
+6. ~~**Gap #3 — LINE Notify per-user OAuth**~~ ✅ DONE via LIFF + Messaging API replacement (`af4bebe9`, 2026-05-26)
 7. **Gap #2 (start) — JMF partner API** — fully wire the MOMO JMF client (currently stubbed)
 
 ### Sprint 3+ (ongoing)

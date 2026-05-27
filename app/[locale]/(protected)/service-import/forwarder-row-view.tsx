@@ -1,5 +1,7 @@
 "use client";
 
+import { legacyMemberUrl, legacyMemberBase } from "@/lib/legacy-image";
+
 /**
  * One forwarder list row — a 1:1 transcription of the markup
  * forwarder.php L678-815 emits per `tb_forwarder` row, including the
@@ -36,8 +38,10 @@ export function StatusForwarderAll2({
   fStatus: string | null;
   fStatusDriver: number;
 }) {
-  const ICON_BASE =
-    "https://pcscargo.co.th/member/assets/images/icon/forwarder/";
+  // Forwarder status icons — legacy stored under `member/assets/images/icon/
+  // forwarder/`; resolved via the Supabase mirror (ภูม upload 2026-05-24, see
+  // lib/legacy-image.ts). NEVER hardcode pcscargo.co.th here — customer-visible.
+  const ICON_BASE = `${legacyMemberBase()}/assets/images/icon/forwarder/`;
   const iconStyle = { maxHeight: "40px", padding: "4px" } as const;
   switch (fStatus) {
     case "1":
@@ -238,12 +242,16 @@ export function convertIMGCHN(url: string | null, size: string): string {
     .replace("?x-oss-process=style/tbsy", "")
     .replace("_250x250.jpg", "");
   if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) return u;
+    // Old data may store full legacy `pcscargo.co.th/member/...` URLs —
+    // strip the host and re-resolve through the Supabase mirror so no
+    // customer-visible URL leaks the legacy host name.
+    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
     return u + size;
   }
-  // a bare filename — legacy stores forwarder covers under images/shops/
-  u = `https://pcscargo.co.th/member/images/shops/${u}`;
-  return u;
+  // a bare filename — legacy stores forwarder covers under images/shops/.
+  // Resolved via the Supabase mirror (ภูม upload 2026-05-24).
+  return legacyMemberUrl(`images/shops/${u}`);
 }
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.

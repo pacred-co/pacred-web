@@ -1062,10 +1062,15 @@ ul.list-laws>li {
 
 #qrcode::after{
     position: relative;
-    background-image: url(https://pcscargo.co.th/member/assets/images/theme/logo.png);
+    /* TODO(brand): legacy logo overlay was at
+       https://pcscargo.co.th/member/assets/images/theme/logo.png.
+       Replace with the Pacred PR logo when ปอน provides a local copy
+       under /legacy/pcs/images/theme/. For now no overlay — the QR
+       still scans (the overlay was decorative). */
+    background-image: none;
     background-size: 40px 40px;
     display: inline-block;
-    width: 40px; 
+    width: 40px;
     height: 40px;
     content:"";
     top: 43%;

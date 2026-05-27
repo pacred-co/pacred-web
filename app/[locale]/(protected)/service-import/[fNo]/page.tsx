@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
@@ -265,11 +266,14 @@ function convertIMGCHN(url: string | null): string {
     .replace("?x-oss-process=style/tbsy", "")
     .replace("_250x250.jpg", "");
   if (u.includes("/")) {
-    if (/pcscargo\.co\.th/.test(u)) return u;
+    // Old data may store full legacy URLs — re-resolve through the
+    // Supabase mirror so customer-visible URLs never leak the legacy host.
+    const legacyMatch = u.match(/pcscargo\.co\.th\/member\/(.+)$/);
+    if (legacyMatch) return legacyMemberUrl(legacyMatch[1]);
     return u;
   }
   // a bare filename — legacy stores forwarder covers under images/shops/
-  return `https://pcscargo.co.th/member/images/shops/${u}`;
+  return legacyMemberUrl(`images/shops/${u}`);
 }
 
 // Legacy `calPriceForwarderSumCompany(...)` — function.php L1384-1392.
@@ -836,7 +840,18 @@ export default async function ServiceImportDetailPage({
                                   <img
                                     className="barcode-forwader"
                                     alt=""
-                                    src={`https://pcscargo.co.th/member/include/barcode.php?text=${row.ftrackingchn}&size=20&sizefactor=1.5`}
+                                    // TODO(barcode): legacy used the live PHP
+                                    // generator `member/include/barcode.php?text=...`
+                                    // on pcscargo.co.th — that's a live legacy
+                                    // server call (brand leak + dependency).
+                                    // Replace with a local barcode lib (e.g.
+                                    // bwip-js or jsbarcode) routed through a
+                                    // Pacred /api/barcode endpoint. Until then,
+                                    // hide the image — the tracking number text
+                                    // is rendered alongside so this is purely a
+                                    // visual aid.
+                                    src=""
+                                    style={{ display: "none" }}
                                   />
                                 </h3>
                               )}
@@ -1052,11 +1067,11 @@ export default async function ServiceImportDetailPage({
                                   </h5>
                                   <a
                                     className="image-popup-vertical-fit el-link"
-                                    href={`https://pcscargo.co.th/member/images/shops/${row.fphotoend}`}
+                                    href={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
                                   >
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
-                                      src={`https://pcscargo.co.th/member/images/shops/${row.fphotoend}`}
+                                      src={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
                                       width="200"
                                       alt=""
                                     />

@@ -100,11 +100,14 @@ export default async function DashboardPage() {
             {showMarchPromo && (
               <div>
                 <a href="#">
-                  <img
-                    className="w-full h-auto rounded-2xl shadow-md hover:shadow-xl hover:brightness-105 transition-all duration-300 cursor-pointer"
-                    src="https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg"
-                    alt="โปรโมชัน"
-                  />
+                  {/* TODO(brand): legacy WordPress promo asset was
+                      https://pcscargo.co.th/wp-content/uploads/2026/03/3.3-06-2048x598.jpg
+                      — needs a Pacred-hosted replacement from ปอน before
+                      this March-3.3 window re-activates. Placeholder
+                      below avoids a brand-leaking URL in customer source. */}
+                  <div className="w-full aspect-[2048/598] rounded-2xl bg-surface-alt shadow-md flex items-center justify-center text-muted text-sm">
+                    โปรโมชัน 3.3 (รอ asset ใหม่จากทีม brand)
+                  </div>
                 </a>
               </div>
             )}

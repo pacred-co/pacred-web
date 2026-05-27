@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { Link } from "@/i18n/navigation";
+import { legacyMemberUrl } from "@/lib/legacy-image";
 import {
   BulkActionsProvider,
   BulkCancelButton,
@@ -100,17 +101,18 @@ function numberLimit(limit: number): string {
 
 // ── Legacy helper: statusOrderBadgeAll() — function.php L493-503.
 // The order-status badge + status icon (used in the "สถานะ" column).
-// The shop-N.png icons are referenced by the legacy absolute
-// https://pcscargo.co.th/... URL exactly as the legacy does.
+// The shop-N.png icons were legacy `pcscargo.co.th/member/assets/images/
+// icon/shop/`; now resolved via the Supabase mirror (ภูม upload 2026-05-24,
+// see lib/legacy-image.ts). Customer-visible — NEVER hardcode pcscargo.co.th.
 const SHOP_STATUS_BADGE: Record<
   string,
   { label: string; cls: string; icon?: string }
 > = {
-  "1": { label: "รอดำเนินการ", cls: "badge-warning", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-1.png" },
-  "2": { label: "รอชำระเงิน", cls: "badge-danger", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-2.png" },
-  "3": { label: "สั่งสินค้า", cls: "badge-info", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-3.png" },
-  "4": { label: "รอร้านจีนจัดส่ง", cls: "badge-primary", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-4.png" },
-  "5": { label: "สำเร็จ", cls: "badge-success", icon: "https://pcscargo.co.th/member/assets/images/icon/shop/shop-5.png" },
+  "1": { label: "รอดำเนินการ", cls: "badge-warning", icon: legacyMemberUrl("assets/images/icon/shop/shop-1.png") },
+  "2": { label: "รอชำระเงิน", cls: "badge-danger", icon: legacyMemberUrl("assets/images/icon/shop/shop-2.png") },
+  "3": { label: "สั่งสินค้า", cls: "badge-info", icon: legacyMemberUrl("assets/images/icon/shop/shop-3.png") },
+  "4": { label: "รอร้านจีนจัดส่ง", cls: "badge-primary", icon: legacyMemberUrl("assets/images/icon/shop/shop-4.png") },
+  "5": { label: "สำเร็จ", cls: "badge-success", icon: legacyMemberUrl("assets/images/icon/shop/shop-5.png") },
   "6": { label: "ยกเลิกออเดอร์", cls: "badge-danger" },
 };
 
@@ -571,7 +573,7 @@ export default async function ServiceOrderAddPage({
                                                 .replace("_250x250.jpg", "");
                                               hCover = cleaned + "_150x150.jpg";
                                             } else if (cover !== "") {
-                                              hCover = "https://pcscargo.co.th/member/images/shops/" + cover;
+                                              hCover = legacyMemberUrl(`images/shops/${cover}`);
                                             } else {
                                               hCover = "/legacy/pcs/shops/default.png";
                                             }
@@ -834,10 +836,12 @@ export default async function ServiceOrderAddPage({
  * `tb_promotion.promoid` for that order. The legacy `switch` has cases
  * 1-77 (no case 53) + a `default:` of empty — reproduced 1:1.
  *
- * Branding `PCS` → `PR` kept: the legacy promo links resolve from
- * `basePath.'../'` = `https://pcscargo.co.th/` — absolute marketing-site
- * URLs, kept verbatim (interim brand split — runbook §3 gates the
- * rename; not scrubbed here).
+ * Branding `PCS` → `PR`: the legacy promo links resolved from
+ * `basePath.'../'` = `https://pcscargo.co.th/<slug>` — REWRITTEN to the
+ * Pacred `/services/import-china?ref=<slug>` landing per pcs-scrub-plan
+ * so the customer stays inside Pacred. Original slug is preserved as
+ * the `?ref=` query string for analytics + future Pacred-hosted promo
+ * page resolution.
  */
 function ProBadge({ promoId }: { promoId: number | undefined }) {
   if (promoId == null) return null;
@@ -851,8 +855,12 @@ function ProBadge({ promoId }: { promoId: number | undefined }) {
     6: "Pro 6.6",
   };
   // function.php L1108-1177 — cases 7-77 (no 53) are LINKED badges.
-  // basePath.'../' resolves to https://pcscargo.co.th/.
-  const B = "https://pcscargo.co.th/";
+  // Legacy `basePath.'../'` resolved to `https://pcscargo.co.th/` —
+  // REWRITTEN to the Pacred /services/import-china landing per
+  // pcs-scrub-plan so the customer stays inside Pacred. The original
+  // promo slug is preserved as a `?ref=` query string for analytics +
+  // future Pacred-hosted promo page resolution.
+  const B = "/services/import-china?ref=";
   const LINKED: Record<number, { label: string; title: string; href: string }> = {
     7: { label: "Pro 6.25", title: "เรท 5.39 และ ขนส่ง 5%", href: `${B}โปรโมชัน-6-25` },
     8: { label: "Pro 7.7", title: "เรท 5.42", href: `${B}โปรโมชัน-7-7` },
