@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import AdminAddCartForm from "./add-form";
+import { AdminLinkPasteSearch } from "./link-paste-search";
 
 /**
  * Admin > เพิ่มสินค้าในรถเข็น — CS staff manual add-to-cart form.
@@ -44,6 +45,20 @@ export default async function AdminCartAddPage({
     myAdminId = data?.adminid ?? "";
   }
 
+  // Live yuan exchange rate (tb_settings.rsdefault) — feeds the link-paste
+  // panel's ฿ preview. Defaults to 5.0 if unset (legacy posture).
+  const { data: settings, error: settingsErr } = await admin
+    .from("tb_settings")
+    .select("rsdefault")
+    .limit(1)
+    .maybeSingle<{ rsdefault: number | string | null }>();
+  if (settingsErr) {
+    // Soft-fail: a missing rsdefault just means the ฿ preview shows the
+    // fallback rate — doesn't block cart-add itself, so don't throw.
+    console.error(`[tb_settings lookup] failed`, { code: settingsErr.code, message: settingsErr.message });
+  }
+  const rsDefault = Number(settings?.rsdefault ?? 0) || 5.0;
+
   const initialUserId = (sp.userid ?? sp.userID ?? "").trim();
 
   return (
@@ -84,17 +99,41 @@ export default async function AdminCartAddPage({
 
       {/* How-to */}
       <section className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        <p className="font-medium mb-1.5">วิธีใช้</p>
+        <p className="font-medium mb-1.5">วิธีใช้ — มี 2 ทาง</p>
         <ol className="list-decimal list-inside space-y-1 text-xs">
-          <li>กรอกรหัสสมาชิก (เจ้าของรถเข็น) — เว้นว่าง = รถเข็นแอดมินตัวคุณเอง</li>
-          <li>กรอกลิงก์/ชื่อสินค้า + รายละเอียดให้ครบ</li>
-          <li>ระบุราคา (¥) + จำนวนชิ้น แล้วกด &quot;เพิ่มในรถเข็น&quot;</li>
-          <li>ระบบจะ redirect กลับหน้ารถเข็นพร้อม preselect ลูกค้าที่กรอก</li>
+          <li>
+            <strong>(แนะนำ)</strong> วางลิงก์ 1688/Taobao/Tmall ในกล่องด้านบน → ระบบดึงรูป/ชื่อ/ราคามาให้
+            → ปรับจำนวน → กด <em>+ เพิ่มในรถเข็น</em>
+          </li>
+          <li>
+            <strong>กรอกเอง</strong> (ใช้เมื่อ URL ดึงไม่ขึ้น หรือเป็นสินค้า custom) — กรอกฟิลด์ทีละช่องในฟอร์มด้านล่าง
+          </li>
         </ol>
       </section>
 
-      {/* Form card — wraps the existing wired client island */}
+      {/* 1️⃣ LINK-PASTE PANEL — recommended path · auto-fetch from marketplace */}
+      <section className="rounded-2xl border border-primary-200 bg-white dark:bg-surface p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-primary-100 text-primary-700 px-2.5 py-0.5 text-[11px] font-semibold">
+            แนะนำ
+          </span>
+          <h2 className="text-sm font-semibold tracking-wide">🔍 วางลิงก์สินค้า (1688 / Taobao / Tmall)</h2>
+        </div>
+        <AdminLinkPasteSearch
+          initialUserId={initialUserId}
+          myAdminId={myAdminId}
+          rsDefault={rsDefault}
+        />
+      </section>
+
+      {/* 2️⃣ MANUAL FORM — fallback when scrape fails / custom product */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-surface-alt text-muted px-2.5 py-0.5 text-[11px] font-medium">
+            สำรอง
+          </span>
+          <h2 className="text-sm font-semibold tracking-wide">✏️ กรอกฟิลด์เองทีละชิ้น</h2>
+        </div>
         <AdminAddCartForm initialUserId={initialUserId} myAdminId={myAdminId} />
       </section>
     </main>
