@@ -41,6 +41,20 @@
  * tb_wallet_hs) hard-throw; the tb_users decoration query soft-fails so
  * a stale customer name doesn't 500 the report.
  *
+ * **Wave 24 #189 (2026-05-27 ค่ำ):** drop the silent `.limit(1000)` PostgREST
+ * cap → swap for `?offset=`-based pagination (200 rows per page) + a separate
+ * `count: "exact", head: true` query for the grand total. Footer renders
+ * Prev/Next + "หน้า X จาก Y · แสดง M-N จาก T". Same pattern Agent B used on
+ * `/admin/reports/forwarder` (commit `399ed01`) and `/admin/reports/payment`
+ * (#185 · `22dd746`). **NOTE:** the "ทั้งหมด" count reflects the
+ * `tb_header_order` DB-side filtered set (date + hStatus + sStatus on
+ * hshoppay) — it does NOT subtract orders that fail the post-query
+ * `tb_wallet_hs.status='2'` confirmation filter (PostgREST can't perform
+ * that join in a head count). So the rendered page may show fewer rows
+ * than `totalRows` would suggest; this is an honest upper-bound, matching
+ * legacy behaviour (legacy used SQL JOINs at the DB layer for the exact
+ * count, which Supabase REST can't replicate cleanly for a text-FK join).
+ *
  * Pattern source: `reports/payment/page.tsx` (Wave 20 P1 batch 2-b).
  * Legacy source: D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-shops-profit-pay.php
  */
@@ -52,6 +66,9 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 
 export const dynamic = "force-dynamic";
+
+// ── Pagination constants (Wave 24 #189) ──────────────────────────────────
+const PAGE_SIZE = 200;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -156,6 +173,7 @@ type SP = {
   sStatus?:    string;
   date_from?:  string;
   date_to?:    string;
+  offset?:     string;
 };
 
 export default async function AdminReportShopsProfitPayPage({
@@ -173,8 +191,16 @@ export default async function AdminReportShopsProfitPayPage({
   const dateTo    = sp.date_to   ?? lastDayOfThisMonth();
   const sStatus   = sp.sStatus   ?? "all";
 
+  // Wave 24 #189 — parse + clamp ?offset= (default 0, never negative).
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
   // 1) Fetch tb_header_order in date range + non-cancelled + past payment stage.
   //    Mirrors legacy: hStatus>2 AND hStatus<>6 + date filter.
+  //    Wave 24 #189: dropped the silent `.limit(1000)` cap → `.range()` +
+  //    a separate `count: "exact", head: true` query for the grand total.
+  //    (Note: count is the DB-side filtered count — see JSDoc at top for the
+  //    post-query wallet-confirmation caveat.)
   let q = admin
     .from("tb_header_order")
     .select(
@@ -186,16 +212,37 @@ export default async function AdminReportShopsProfitPayPage({
     .gt("hstatus", "2")
     .neq("hstatus", "6")
     .order("hdate", { ascending: false, nullsFirst: false })
-    .limit(1000);
+    .range(offset, offset + PAGE_SIZE - 1);
   if (sStatus === "paid")   q = q.eq("hshoppay", "1");
   if (sStatus === "unpaid") q = q.is("hshoppay", null);
 
-  const { data: orderData, error: orderErr } = await q;
+  // 2) Exact-count head query (mirrors the same DB-side filter set).
+  let totalQ = admin
+    .from("tb_header_order")
+    .select("id", { count: "exact", head: true })
+    .gte("hdate", `${dateFrom} 00:00:00`)
+    .lte("hdate", `${dateTo} 23:59:59`)
+    .gt("hstatus", "2")
+    .neq("hstatus", "6");
+  if (sStatus === "paid")   totalQ = totalQ.eq("hshoppay", "1");
+  if (sStatus === "unpaid") totalQ = totalQ.is("hshoppay", null);
+
+  const [
+    { data: orderData, error: orderErr },
+    { count: grandTotal, error: countErr },
+  ] = await Promise.all([q, totalQ]);
+
   if (orderErr) {
     console.error(`[tb_header_order list] failed`, {
       code: orderErr.code, message: orderErr.message, details: orderErr.details,
     });
     throw new Error(`Failed to load tb_header_order (${orderErr.code ?? "unknown"}): ${orderErr.message}`);
+  }
+  if (countErr) {
+    // Count is a UX nicety, not load-bearing — log + fall through.
+    console.error(`[tb_header_order count] failed`, {
+      code: countErr.code, message: countErr.message,
+    });
   }
   const ordersAll = (orderData ?? []) as unknown as RawHeaderOrder[];
 
@@ -283,6 +330,39 @@ export default async function AdminReportShopsProfitPayPage({
   const unpaidCount = rows.filter((r) => !r.hshoppay).length;
   const paidCount   = rows.filter((r) => r.hshoppay === "1").length;
 
+  // Wave 24 #189 — pagination boundary + Prev/Next href builder. Mirrors
+  // /admin/reports/payment commit 22dd746 (which mirrors /reports/forwarder
+  // 399ed01 · which mirrors cnt-hs/page.tsx).
+  //
+  // NOTE: `totalRows` is the DB-side filtered count from PostgREST head query —
+  // it does NOT subtract orders that fail the post-query tb_wallet_hs
+  // confirmation filter. So `rows.length` (visible after wallet-confirm filter)
+  // is generally <= the page slice from `totalRows`. The "ทั้งหมด" card +
+  // footer total reflect the DB-side filtered upper bound (honest because
+  // legacy used SQL JOIN at the DB layer; Supabase REST can't replicate that
+  // cleanly for the text-FK reforder join).
+  const totalRows = grandTotal ?? ordersAll.length;
+  const hasPrev = offset > 0;
+  // ordersAll.length is the unfiltered DB slice — if the page got a full
+  // PAGE_SIZE we likely have more to fetch (some may filter out post-join).
+  const hasNext = offset + ordersAll.length < totalRows;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const rangeFrom = totalRows === 0 ? 0 : offset + 1;
+  const rangeTo = Math.min(offset + ordersAll.length, totalRows);
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.report_shopsTable) params.set("report_shopsTable", sp.report_shopsTable);
+    if (sp.sStatus)           params.set("sStatus", sp.sStatus);
+    if (sp.date_from)         params.set("date_from", sp.date_from);
+    if (sp.date_to)           params.set("date_to", sp.date_to);
+    if (newOffset > 0)        params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/reports/shops-profit-pay?${qs}` : "/admin/reports/shops-profit-pay";
+  };
+
   // 5) CSV.
   const csvRows = rows.map((r) => ({
     id:        r.id,
@@ -347,6 +427,17 @@ export default async function AdminReportShopsProfitPayPage({
           /admin/shop-payouts
         </Link>{" "}
         (queue เบิกเงินจากกระเป๋าร้าน — Wave 21 ปิดแล้ว).
+      </div>
+
+      {/* Wave 24 #189 — pagination notice (replaces the silent 1000-cap). */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✓</span>
+        <div className="flex-1">
+          <span className="font-semibold">ลบเพดาน 1,000 แถวต่อหน้าแล้ว</span> ·
+          แบ่งหน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ ·
+          ใช้ปุ่ม &ldquo;ก่อนหน้า / ถัดไป&rdquo; ใต้ตารางเพื่อดูทั้งหมด.
+          <span className="text-emerald-700/80">{" "}(Wave 24 #189)</span>
+        </div>
       </div>
 
       {/* Filter banner (when submitted) */}
@@ -428,12 +519,16 @@ export default async function AdminReportShopsProfitPayPage({
         </div>
       </form>
 
-      {/* Stat cards — 4-up footer aggregates */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label="ราคาทุนรวม"  value={thb(pricePCSAll)} />
-        <Card label="ราคาขายรวม" value={thb(priceUserAll)} />
-        <Card label="ค่าบริการ/กำไรรวม" value={thb(profitAll)} highlight />
-        <Card label="VAT 7% รวม" value={thb(vatAll)} highlight />
+      {/* Stat cards — Wave 24 #189 prepended "ทั้งหมด (ทุกหน้า)" so the
+          grand total isn't misread as the page subtotal; the 4 aggregate
+          cards stay page-scoped (their values are derived from rendered
+          rows only). */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
+        <Card label="ราคาทุนรวม (หน้านี้)"  value={thb(pricePCSAll)} />
+        <Card label="ราคาขายรวม (หน้านี้)" value={thb(priceUserAll)} />
+        <Card label="ค่าบริการ/กำไรรวม (หน้านี้)" value={thb(profitAll)} highlight />
+        <Card label="VAT 7% รวม (หน้านี้)" value={thb(vatAll)} highlight />
       </div>
 
       {/* Sub-stats */}
@@ -450,6 +545,7 @@ export default async function AdminReportShopsProfitPayPage({
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีออเดอร์ในช่วงเวลานี้ที่ตรงเงื่อนไข</p>
         ) : (
+          <>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
@@ -536,11 +632,59 @@ export default async function AdminReportShopsProfitPayPage({
               </tbody>
             </table>
           </div>
+
+          {/* Wave 24 #189 — Prev/Next footer (only when there's >1 page). */}
+          {(hasPrev || hasNext) && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
+              <span>
+                หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
+                <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
+                {" · "}
+                แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
+                –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
+                <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
+              </span>
+              <div className="flex gap-2">
+                {hasPrev ? (
+                  <Link
+                    href={buildPageHref(prevOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ← ก่อนหน้า
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ← ก่อนหน้า
+                  </span>
+                )}
+                {hasNext ? (
+                  <Link
+                    href={buildPageHref(nextOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ถัดไป →
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ถัดไป →
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 1,000 ออเดอร์ต่อหน้า · ใช้ตัวกรองช่วงวันที่เพื่อจำกัดผลลัพธ์ ·
+        หน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ · ใช้ตัวกรองช่วงวันที่/สถานะเพื่อจำกัดผลลัพธ์ ·
+        CSV ดาวน์โหลดเฉพาะหน้าที่แสดง (หากต้องการครบทุกหน้า ให้ไล่กดถัดไปแล้วโหลดทีละหน้า) ·
         กำไร = ราคาขาย − ราคาต้นทุน (เฉพาะออเดอร์ที่บันทึก hCostAll แล้ว)
       </p>
     </main>

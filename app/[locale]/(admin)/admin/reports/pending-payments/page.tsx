@@ -18,6 +18,13 @@
  * **Customer join:** 2-pass `tb_users.in("userid", [...])` — same pattern
  * as `/admin/wallet/transactions-view.tsx` Wave 7.2.
  *
+ * **Wave 24 #189 (2026-05-27 ค่ำ):** drop the silent `.limit(1000)` PostgREST
+ * cap → swap for `?offset=`-based pagination (200 rows per page) + a separate
+ * `count: "exact", head: true` query for the grand total. Footer renders
+ * Prev/Next + "หน้า X จาก Y · แสดง M-N จาก T". Same pattern Agent B used on
+ * `/admin/reports/forwarder` (commit `399ed01`) and `/admin/reports/payment`
+ * (#185 · `22dd746`).
+ *
  * §0c compliance: every Supabase query destructures { data, error }, logs
  * + throws on the load-bearing reads so a transient PgBouncer timeout
  * surfaces a real error instead of silently rendering "ไม่มีรายการ".
@@ -31,6 +38,9 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 
 export const dynamic = "force-dynamic";
+
+// ── Pagination constants (Wave 24 #189) ──────────────────────────────────
+const PAGE_SIZE = 200;
 
 // SLA labels — sidebar may route in with ?sla= for "เกิน X วัน" buckets.
 // Underlying query stays the same; surfaces as chip + banner.
@@ -88,7 +98,7 @@ function daysAgo(iso: string | null): number {
 export default async function PendingPaymentsReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; sla?: string; offset?: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting"]);
   const sp = await searchParams;
@@ -96,7 +106,13 @@ export default async function PendingPaymentsReport({
   const slaLabel = slaKey ? SLA_CFG[slaKey] : undefined;
   const admin = createAdminClient();
 
+  // Wave 24 #189 — parse + clamp ?offset= (default 0, never negative).
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
   // 1) Pending topup queue: tb_wallet_hs WHERE type IN ('1','2') AND status='1'
+  //    Wave 24 #189: dropped the silent `.limit(1000)` cap → `.range()` +
+  //    a separate `count: "exact", head: true` query for the grand total.
   let q = admin
     .from("tb_wallet_hs")
     .select(
@@ -105,17 +121,39 @@ export default async function PendingPaymentsReport({
     .in("type", ["1", "2"])
     .eq("status", "1")
     .order("date", { ascending: true, nullsFirst: false })   // oldest first = most overdue at top
-    .limit(1000);
+    .range(offset, offset + PAGE_SIZE - 1);
   if (sp.date_from) q = q.gte("date", sp.date_from);
   if (sp.date_to)   q = q.lte("date", sp.date_to + "T23:59:59");
-  const { data: rowsRaw, error } = await q;
+
+  // 2) Exact-count head query (mirrors the same filter set so the footer
+  //    total reflects the same window the table renders).
+  let totalQ = admin
+    .from("tb_wallet_hs")
+    .select("id", { count: "exact", head: true })
+    .in("type", ["1", "2"])
+    .eq("status", "1");
+  if (sp.date_from) totalQ = totalQ.gte("date", sp.date_from);
+  if (sp.date_to)   totalQ = totalQ.lte("date", sp.date_to + "T23:59:59");
+
+  const [
+    { data: rowsRaw, error },
+    { count: grandTotal, error: countErr },
+  ] = await Promise.all([q, totalQ]);
+
   if (error) {
     console.error(`[tb_wallet_hs pending list] failed`, {
       code: error.code, message: error.message, details: error.details,
     });
     throw new Error(`Failed to load tb_wallet_hs (${error.code ?? "unknown"}): ${error.message}`);
   }
+  if (countErr) {
+    // Count is a UX nicety, not load-bearing — log + fall through.
+    console.error(`[tb_wallet_hs pending count] failed`, {
+      code: countErr.code, message: countErr.message,
+    });
+  }
   const raw = (rowsRaw ?? []) as unknown as RawWalletHs[];
+  const totalRows = grandTotal ?? raw.length;
 
   // 2) Slip-image URL resolver (parallel · same as wallet transactions view).
   const slipUrlMap = await resolveLegacyUrlMap(
@@ -155,6 +193,27 @@ export default async function PendingPaymentsReport({
   const total = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const overdue1 = rows.filter((r) => daysAgo(r.date) >= 1).length;
   const overdue7 = rows.filter((r) => daysAgo(r.date) >= 7).length;
+
+  // Wave 24 #189 — pagination boundary + Prev/Next href builder. Mirrors
+  // /admin/reports/payment commit 22dd746 (which mirrors /reports/forwarder
+  // 399ed01 · which mirrors cnt-hs/page.tsx).
+  const hasPrev = offset > 0;
+  const hasNext = offset + rows.length < totalRows;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const rangeFrom = totalRows === 0 ? 0 : offset + 1;
+  const rangeTo = Math.min(offset + rows.length, totalRows);
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.date_from) params.set("date_from", sp.date_from);
+    if (sp.date_to)   params.set("date_to", sp.date_to);
+    if (sp.sla)       params.set("sla", sp.sla);
+    if (newOffset > 0) params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/reports/pending-payments?${qs}` : "/admin/reports/pending-payments";
+  };
 
   const csvRows = rows.map((r) => ({
     id:              r.id,
@@ -221,22 +280,38 @@ export default async function PendingPaymentsReport({
         </>
       )}
 
+      {/* Wave 24 #189 — pagination notice (replaces the silent 1000-cap). */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✓</span>
+        <div className="flex-1">
+          <span className="font-semibold">ลบเพดาน 1,000 แถวต่อหน้าแล้ว</span> ·
+          แบ่งหน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ ·
+          ใช้ปุ่ม &ldquo;ก่อนหน้า / ถัดไป&rdquo; ใต้ตารางเพื่อดูทั้งหมด.
+          <span className="text-emerald-700/80">{" "}(Wave 24 #189)</span>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <AdminDateFilter dateFrom={sp.date_from} dateTo={sp.date_to} />
         <CsvButton rows={csvRows} cols={csvCols} filename={`pending-topups-${new Date().toISOString().slice(0,10)}.csv`} />
       </div>
 
-      <div className="grid sm:grid-cols-4 gap-3">
-        <Card label="รายการรอตรวจ" value={String(rows.length)} />
-        <Card label="ยอดรวมรอตรวจ" value={thb(total)} highlight={total > 0} />
-        <Card label="ค้าง ≥ 1 วัน" value={String(overdue1)} highlight={overdue1 > 0} />
-        <Card label="ค้าง ≥ 7 วัน" value={String(overdue7)} highlight={overdue7 > 0} />
+      {/* Stat cards (Wave 24 #189 — prepended "ทั้งหมด (ทุกหน้า)" so the grand
+          total isn't misread as the page subtotal; other cards relabeled to
+          make their page-scoping explicit). */}
+      <div className="grid sm:grid-cols-4 lg:grid-cols-5 gap-3">
+        <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
+        <Card label={`หน้านี้ (${rangeFrom.toLocaleString("th-TH")}–${rangeTo.toLocaleString("th-TH")})`} value={String(rows.length)} />
+        <Card label="ยอดรวม (หน้านี้)" value={thb(total)} highlight={total > 0} />
+        <Card label="ค้าง ≥ 1 วัน (หน้านี้)" value={String(overdue1)} highlight={overdue1 > 0} />
+        <Card label="ค้าง ≥ 7 วัน (หน้านี้)" value={String(overdue7)} highlight={overdue7 > 0} />
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีรายการรอตรวจสลิปในช่วงเวลานี้</p>
         ) : (
+          <>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
@@ -344,11 +419,59 @@ export default async function PendingPaymentsReport({
               </tbody>
             </table>
           </div>
+
+          {/* Wave 24 #189 — Prev/Next footer (only when there's >1 page). */}
+          {(hasPrev || hasNext) && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
+              <span>
+                หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
+                <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
+                {" · "}
+                แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
+                –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
+                <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
+              </span>
+              <div className="flex gap-2">
+                {hasPrev ? (
+                  <Link
+                    href={buildPageHref(prevOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ← ก่อนหน้า
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ← ก่อนหน้า
+                  </span>
+                )}
+                {hasNext ? (
+                  <Link
+                    href={buildPageHref(nextOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ถัดไป →
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ถัดไป →
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
       <p className="text-[11px] text-muted">
-        แสดงไม่เกิน 1,000 แถวต่อหน้า · ใช้ตัวกรองช่วงวันเพื่อจำกัดผลลัพธ์
+        หน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ · ใช้ตัวกรองช่วงวันที่/สถานะเพื่อจำกัดผลลัพธ์ ·
+        CSV ดาวน์โหลดเฉพาะหน้าที่แสดง (หากต้องการครบทุกหน้า ให้ไล่กดถัดไปแล้วโหลดทีละหน้า)
       </p>
     </main>
   );

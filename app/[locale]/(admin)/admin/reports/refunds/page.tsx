@@ -7,6 +7,13 @@
  * live (type='5' = ปรับยอดโดยแอดมิน / refund). Mirrors the Wave 20
  * P0-2 accounting hub rewrite at commit `1a1b8d7`.
  *
+ * **Wave 24 #189 (2026-05-27 ค่ำ):** drop the silent `.limit(1000)` PostgREST
+ * cap → swap for `?offset=`-based pagination (200 rows per page) + a separate
+ * `count: "exact", head: true` query for the grand total. Footer renders
+ * Prev/Next + "หน้า X จาก Y · แสดง M-N จาก T". Same pattern Agent B used on
+ * `/admin/reports/forwarder` (commit `399ed01`) and `/admin/reports/payment`
+ * (#185 · `22dd746`).
+ *
  * Field map (rebuilt → legacy):
  *   wallet_transactions.kind='refund'      → tb_wallet_hs.type='5'
  *   wallet_transactions.amount             → tb_wallet_hs.amount
@@ -34,6 +41,9 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 
 export const dynamic = "force-dynamic";
+
+// ── Pagination constants (Wave 24 #189) ──────────────────────────────────
+const PAGE_SIZE = 200;
 
 type LegacyUser = {
   userid: string;
@@ -97,7 +107,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function RefundsReport({
   searchParams,
 }: {
-  searchParams: Promise<{ date_from?: string; date_to?: string }>;
+  searchParams: Promise<{ date_from?: string; date_to?: string; offset?: string }>;
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
@@ -107,17 +117,38 @@ export default async function RefundsReport({
   const dateFrom = sp.date_from ?? nDaysAgoIsoDate(30);
   const dateTo   = sp.date_to;
 
+  // Wave 24 #189 — parse + clamp ?offset= (default 0, never negative).
+  const offsetRaw = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
   // ── 1) Main refund rows (tb_wallet_hs type='5' = refund / admin manual adjust). ──
+  //    Wave 24 #189: dropped the silent `.limit(1000)` cap → `.range()` +
+  //    a separate `count: "exact", head: true` query for the grand total.
   let q = admin
     .from("tb_wallet_hs")
     .select("id, userid, amount, status, note, date, dateslip, reforder, adminidupdate")
     .eq("type", "5")
     .eq("status", "2")
     .order("date", { ascending: false })
-    .limit(1000);
+    .range(offset, offset + PAGE_SIZE - 1);
   q = q.gte("date", dateFrom);
   if (dateTo) q = q.lte("date", dateTo + "T23:59:59");
-  const { data: rawRows, error: refundErr } = await q;
+
+  // 2) Exact-count head query (mirrors the same filter set so the footer
+  //    total reflects the same window the table renders).
+  let totalQ = admin
+    .from("tb_wallet_hs")
+    .select("id", { count: "exact", head: true })
+    .eq("type", "5")
+    .eq("status", "2")
+    .gte("date", dateFrom);
+  if (dateTo) totalQ = totalQ.lte("date", dateTo + "T23:59:59");
+
+  const [
+    { data: rawRows, error: refundErr },
+    { count: grandTotal, error: countErr },
+  ] = await Promise.all([q, totalQ]);
+
   if (refundErr) {
     console.error(`[tb_wallet_hs refund list] failed`, {
       code: refundErr.code,
@@ -128,7 +159,14 @@ export default async function RefundsReport({
       `Failed to load tb_wallet_hs refunds (${refundErr.code ?? "unknown"}): ${refundErr.message}`,
     );
   }
+  if (countErr) {
+    // Count is a UX nicety, not load-bearing — log + fall through.
+    console.error(`[tb_wallet_hs refund count] failed`, {
+      code: countErr.code, message: countErr.message,
+    });
+  }
   const raw = (rawRows ?? []) as RawWalletHs[];
+  const totalRows = grandTotal ?? raw.length;
 
   // ── 2) Batch-load tb_users for the userid set on screen (2-pass lookup). ──
   const userIds = Array.from(new Set(raw.map((r) => r.userid).filter(Boolean)));
@@ -191,6 +229,26 @@ export default async function RefundsReport({
 
   const total = rows.reduce((s, r) => s + Math.abs(r.amount), 0);
 
+  // Wave 24 #189 — pagination boundary + Prev/Next href builder. Mirrors
+  // /admin/reports/payment commit 22dd746 (which mirrors /reports/forwarder
+  // 399ed01 · which mirrors cnt-hs/page.tsx).
+  const hasPrev = offset > 0;
+  const hasNext = offset + rows.length < totalRows;
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const pageNumber = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const rangeFrom = totalRows === 0 ? 0 : offset + 1;
+  const rangeTo = Math.min(offset + rows.length, totalRows);
+  const buildPageHref = (newOffset: number): string => {
+    const params = new URLSearchParams();
+    if (sp.date_from) params.set("date_from", sp.date_from);
+    if (sp.date_to)   params.set("date_to", sp.date_to);
+    if (newOffset > 0) params.set("offset", String(newOffset));
+    const qs = params.toString();
+    return qs ? `/admin/reports/refunds?${qs}` : "/admin/reports/refunds";
+  };
+
   // ── 5) CSV data. ──
   const csvRows = rows.map((r) => ({
     id:           r.id,
@@ -232,21 +290,37 @@ export default async function RefundsReport({
         <Link href="/admin/reports" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← กลับรีพอร์ตหลัก</Link>
       </div>
 
+      {/* Wave 24 #189 — pagination notice (replaces the silent 1000-cap). */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs text-emerald-800 flex items-start gap-2">
+        <span aria-hidden>✓</span>
+        <div className="flex-1">
+          <span className="font-semibold">ลบเพดาน 1,000 แถวต่อหน้าแล้ว</span> ·
+          แบ่งหน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ ·
+          ใช้ปุ่ม &ldquo;ก่อนหน้า / ถัดไป&rdquo; ใต้ตารางเพื่อดูทั้งหมด.
+          <span className="text-emerald-700/80">{" "}(Wave 24 #189)</span>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 justify-between">
         <AdminDateFilter dateFrom={sp.date_from} dateTo={sp.date_to} />
         <CsvButton rows={csvRows} cols={csvCols} filename={`refunds-${new Date().toISOString().slice(0,10)}.csv`} />
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <Card label="จำนวนรายการ" value={String(rows.length)} />
-        <Card label="ยอดคืนรวม" value={thb(total)} />
-        <Card label="เชื่อม forwarder" value={String(rows.filter((r) => r.forwarder).length)} />
+      {/* Stat cards — Wave 24 #189 added "ทั้งหมด (ทุกหน้า)" so the grand
+          total isn't misread as the page subtotal; other cards relabeled to
+          page-scoped framing. */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card label="ทั้งหมด (ทุกหน้า)" value={totalRows.toLocaleString("th-TH")} />
+        <Card label={`หน้านี้ (${rangeFrom.toLocaleString("th-TH")}–${rangeTo.toLocaleString("th-TH")})`} value={String(rows.length)} />
+        <Card label="ยอดคืนรวม (หน้านี้)" value={thb(total)} />
+        <Card label="เชื่อม forwarder (หน้านี้)" value={String(rows.filter((r) => r.forwarder).length)} />
       </div>
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
           <p className="p-12 text-center text-sm text-muted">ไม่มีการคืนเงินในช่วงเวลานี้</p>
         ) : (
+          <>
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-sm">
               <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
@@ -310,8 +384,60 @@ export default async function RefundsReport({
               </tbody>
             </table>
           </div>
+
+          {/* Wave 24 #189 — Prev/Next footer (only when there's >1 page). */}
+          {(hasPrev || hasNext) && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted flex-wrap">
+              <span>
+                หน้า <span className="font-semibold text-foreground">{pageNumber.toLocaleString("th-TH")}</span> จาก{" "}
+                <span className="font-semibold text-foreground">{totalPages.toLocaleString("th-TH")}</span>
+                {" · "}
+                แสดง <span className="font-semibold text-foreground">{rangeFrom.toLocaleString("th-TH")}</span>
+                –<span className="font-semibold text-foreground">{rangeTo.toLocaleString("th-TH")}</span> จากทั้งหมด{" "}
+                <span className="font-semibold text-foreground">{totalRows.toLocaleString("th-TH")}</span>
+              </span>
+              <div className="flex gap-2">
+                {hasPrev ? (
+                  <Link
+                    href={buildPageHref(prevOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ← ก่อนหน้า
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ← ก่อนหน้า
+                  </span>
+                )}
+                {hasNext ? (
+                  <Link
+                    href={buildPageHref(nextOffset)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
+                  >
+                    ถัดไป →
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium opacity-40 pointer-events-none"
+                  >
+                    ถัดไป →
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
+
+      <p className="text-[11px] text-muted">
+        หน้าละ {PAGE_SIZE.toLocaleString("th-TH")} รายการ · ใช้ตัวกรองช่วงวันที่/สถานะเพื่อจำกัดผลลัพธ์ ·
+        CSV ดาวน์โหลดเฉพาะหน้าที่แสดง (หากต้องการครบทุกหน้า ให้ไล่กดถัดไปแล้วโหลดทีละหน้า)
+      </p>
     </main>
   );
 }
