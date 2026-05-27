@@ -43,6 +43,34 @@ const searchProductByUrlSchema = z.object({
     .max(2000, { message: "URL ยาวเกินไป" }),
 });
 
+export type AdminSkuAxisValue = {
+  /** Display label (with axis-name prefix stripped — e.g. "豆沙粉" not "颜色分类:豆沙粉"). */
+  label:    string;
+  /** Thumbnail URL when the axis is image-based (1688 color swatches). */
+  image?:   string;
+  /** TAMIT `axisIdx:valueIdx` (e.g. "0:1") — passed back to skuMap.propPath. */
+  data?:    string;
+  /** True when the axis lets each value carry a thumbnail (1688 colors). */
+  isImage?: boolean;
+};
+
+export type AdminSkuAxis = {
+  /** Axis display name — `颜色`, `颜色分类`, `尺码`, `规格`, `Color`, `Size`, etc. */
+  name:   string;
+  values: AdminSkuAxisValue[];
+};
+
+export type AdminSkuMapEntry = {
+  /** TAMIT skuId (may be empty if upstream didn't populate). */
+  skuId:    string;
+  /** Map of `axisName → valueLabel` for this concrete SKU row. */
+  propPath: Record<string, string>;
+  priceCny: number;
+  stock:    number;
+  /** Override image for this specific SKU (rare — usually use axis-value image). */
+  image?:   string;
+};
+
 export type AdminProductSearchOk = {
   /** Provider key — "1688" | "taobao" | "tmall". */
   provider: "1688" | "taobao" | "tmall";
@@ -52,6 +80,8 @@ export type AdminProductSearchOk = {
   title: string;
   /** Best image URL (mainImage > listImage[0] > undefined). */
   imageUrl?: string;
+  /** Gallery — listImage[] from TAMIT, fixAliCdn'd. UI shows thumbs to swap main. */
+  images: string[];
   /** Shop / vendor name. */
   shopName?: string;
   /** Base price in CNY (¥). */
@@ -60,6 +90,12 @@ export type AdminProductSearchOk = {
   promoPriceCny?: number;
   /** Source URL (the URL the admin pasted, normalised). */
   sourceUrl: string;
+  /** Variant axes (color / size / spec / etc.) for chip-picker UI. */
+  skuAxes?: AdminSkuAxis[];
+  /** Concrete SKU rows — price/stock per axis combination. */
+  skuMap?: AdminSkuMapEntry[];
+  /** Total stock across all SKUs. */
+  stockTotal?: number;
 };
 
 export type AdminProductSearchErr =
@@ -156,6 +192,29 @@ export async function searchProductByUrlAdmin(
       };
     }
 
+    // Map ChinaProductDetail sku/skuMap → admin client shape (camelCase + cny price).
+    const skuAxes: AdminSkuAxis[] | undefined = d.sku_axes && d.sku_axes.length > 0
+      ? d.sku_axes.map((ax) => ({
+          name: ax.name,
+          values: ax.values.map((v) => ({
+            label:   v.label,
+            image:   v.image,
+            data:    v.data,
+            isImage: v.is_image,
+          })),
+        }))
+      : undefined;
+
+    const skuMap: AdminSkuMapEntry[] | undefined = d.sku_map && d.sku_map.length > 0
+      ? d.sku_map.map((s) => ({
+          skuId:    s.sku_id,
+          propPath: s.prop_path,
+          priceCny: s.price_cny,
+          stock:    s.stock,
+          image:    s.image,
+        }))
+      : undefined;
+
     return {
       ok: true,
       data: {
@@ -163,10 +222,14 @@ export async function searchProductByUrlAdmin(
         productId: d.product_id,
         title: d.title || `สินค้าจาก ${d.provider.toUpperCase()}`,
         imageUrl: d.main_image ?? d.images?.[0],
+        images: d.images ?? (d.main_image ? [d.main_image] : []),
         shopName: d.shop_name,
         priceCny: d.base_price_cny ?? 0,
         promoPriceCny: d.promo_price_cny,
         sourceUrl: d.url,
+        skuAxes,
+        skuMap,
+        stockTotal: d.stock_total,
       },
     };
   });

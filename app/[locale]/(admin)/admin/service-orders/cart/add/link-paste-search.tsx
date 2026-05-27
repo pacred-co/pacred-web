@@ -4,20 +4,23 @@
  * Admin link-paste product search panel — top of /admin/service-orders/cart/add.
  *
  * Wave 23 P2 #16 (2026-05-27 ภูม flag) — cherry-pick of dave-pacred
- * commit `356edcb` (เดฟ customer-side link-paste) adapted for admin:
- *   - calls `searchProductByUrlAdmin` (withAdmin auth) instead of
- *     customer `searchProductByUrl` (member_code-required)
- *   - calls `adminAddItemToCart` instead of customer `addCartItem`
- *   - accepts `userid` (cart-owner PR<n>) + `myAdminId` (fallback)
- *     props from the parent server component
+ * commit `356edcb` (เดฟ customer-side link-paste) adapted for admin.
+ * Wave 24 #187 (2026-05-27 ภูม flag) — SKU variant picker added (1688
+ * color swatches + Taobao 颜色分类/规格 chips) so admin sees the same
+ * "เรียงตามสี · ข้อกำหนด" pickers that Taobao shows shoppers, instead of
+ * a free-text "หมายเหตุ" box.
  *
  * Flow:
  *   1. Admin pastes 1688/Taobao/Tmall URL → click ค้นหา
- *   2. Server action fetches via TAMIT → returns product card
- *      (image · title · ¥ price · shop name)
- *   3. Admin adjusts qty + note → click "+ เพิ่มในรถเข็น"
- *   4. `adminAddItemToCart` inserts into tb_cart for the chosen userid
- *   5. On TAMIT failure → red notice + admin uses the manual form below
+ *   2. Server action fetches via TAMIT → returns product card + variant axes
+ *   3. Admin clicks chips per axis (one value each) — selected combo looks
+ *      up `skuMap` to derive the effective price + image + stock
+ *   4. Admin adjusts qty → click "+ เพิ่มในรถเข็น"
+ *   5. Selected axis-values flow into tb_cart.ccolor + csize + cdetails:
+ *        - Axis whose name matches /颜色|color|สี/i  → ccolor
+ *        - Axis whose name matches /尺码|尺寸|规格|size|ขนาด/i → csize
+ *        - Other axes → joined into cdetails ("axisName: valueLabel · ...")
+ *   6. On TAMIT failure → red notice + admin uses the manual form below
  *
  * Provider mapping (TAMIT → tb_cart.cprovider enum):
  *   - "1688"  → "1"
@@ -28,10 +31,11 @@
  * single-column on <md · primary CTA thumb-reachable.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import {
   searchProductByUrlAdmin,
   type AdminProductSearchOk,
+  type AdminSkuAxis,
 } from "@/actions/admin/product-search";
 import { adminAddItemToCart } from "@/actions/admin/cart";
 import { ADMIN_CART_PROVIDERS } from "@/lib/validators/admin-cart";
@@ -58,6 +62,83 @@ function mapProvider(p: AdminProductSearchOk["provider"]): (typeof ADMIN_CART_PR
 const INPUT_CLS =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30 disabled:opacity-60";
 
+// Heuristics for mapping axis name → tb_cart.ccolor vs csize column.
+// Covers Chinese (1688/Taobao native), English, and Thai axis names.
+const COLOR_AXIS_RE = /颜色|颜色分类|color|colour|สี/i;
+const SIZE_AXIS_RE  = /尺码|尺寸|规格|size|ขนาด|spec/i;
+
+// ────────────────────────────────────────────────────────────
+// SKU helpers — pure functions, kept top-level for clarity
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Look up the concrete SKU row matching the admin's selected axis-values.
+ * Returns undefined if no exact match (partial selection, or skuMap absent).
+ */
+function findSkuFor(
+  axes: AdminSkuAxis[] | undefined,
+  skuMap: AdminProductSearchOk["skuMap"],
+  selected: Record<string, string>,
+) {
+  if (!axes || axes.length === 0 || !skuMap || skuMap.length === 0) return undefined;
+  // All axes must be selected for a unique SKU match.
+  if (axes.some((ax) => !selected[ax.name])) return undefined;
+  return skuMap.find((row) =>
+    axes.every((ax) => row.propPath[ax.name] === selected[ax.name]),
+  );
+}
+
+/** Pull the selected value's thumbnail (image-based axes only). */
+function findAxisValueImage(
+  axes: AdminSkuAxis[] | undefined,
+  selected: Record<string, string>,
+): string | undefined {
+  if (!axes) return undefined;
+  for (const ax of axes) {
+    const valLabel = selected[ax.name];
+    if (!valLabel) continue;
+    const val = ax.values.find((v) => v.label === valLabel);
+    if (val?.image) return val.image;
+  }
+  return undefined;
+}
+
+/** Compose ccolor / csize / cdetails from selected variants. */
+function composeVariantStrings(
+  axes: AdminSkuAxis[] | undefined,
+  selected: Record<string, string>,
+  fallbackTitle: string,
+  noteOverride: string,
+): { ccolor: string; csize: string; cdetails: string } {
+  if (!axes || axes.length === 0) {
+    return {
+      ccolor: "",
+      csize: "",
+      cdetails: noteOverride.trim() || fallbackTitle,
+    };
+  }
+  let ccolor = "";
+  let csize  = "";
+  const otherAxes: string[] = [];
+  for (const ax of axes) {
+    const val = selected[ax.name];
+    if (!val) continue;
+    if (!ccolor && COLOR_AXIS_RE.test(ax.name))      ccolor = val;
+    else if (!csize  && SIZE_AXIS_RE.test(ax.name))  csize  = val;
+    else                                              otherAxes.push(`${ax.name}: ${val}`);
+  }
+  // cdetails composition:
+  //   - admin's own note (if any)       — always first
+  //   - axes not mapped to color/size   — joined with ·
+  //   - fallback to title if nothing    — keeps tb_cart.cdetails NOT NULL safe
+  const parts = [
+    noteOverride.trim(),
+    ...otherAxes,
+  ].filter(Boolean);
+  const cdetails = parts.length > 0 ? parts.join(" · ") : (fallbackTitle || "-");
+  return { ccolor, csize, cdetails };
+}
+
 export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Props) {
   // Form state
   const [userid, setUserid]   = useState(initialUserId);
@@ -65,6 +146,11 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
   const [product, setProduct] = useState<AdminProductSearchOk | null>(null);
   const [qty, setQty]         = useState(1);
   const [note, setNote]       = useState("");
+
+  // SKU picker state — keyed by axis.name, value is the selected axis-value label.
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // Gallery state — which image index is currently displayed as the main hero.
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
 
   // Async state
   const [searching, startSearch] = useTransition();
@@ -76,6 +162,40 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
     | null
   >(null);
 
+  // ── Derived state from selected variants ─────────────────────────────
+  // matchedSku is the concrete SKU row when ALL axes are selected; partial
+  // selection leaves it undefined. effectivePrice/Image/Stock fall back to
+  // the product-level values if no SKU match yet.
+  const matchedSku = useMemo(
+    () => (product ? findSkuFor(product.skuAxes, product.skuMap, selectedVariants) : undefined),
+    [product, selectedVariants],
+  );
+  const variantImage = useMemo(
+    () => (product ? findAxisValueImage(product.skuAxes, selectedVariants) : undefined),
+    [product, selectedVariants],
+  );
+  const effectivePrice = matchedSku?.priceCny
+    ?? product?.promoPriceCny
+    ?? product?.priceCny
+    ?? 0;
+  const effectiveStock = matchedSku?.stock
+    ?? product?.stockTotal
+    ?? undefined;
+  const heroImage =
+    matchedSku?.image
+    || variantImage
+    || product?.images?.[activeImageIdx]
+    || product?.imageUrl
+    || undefined;
+
+  // True when product has axes AND not all of them are selected yet.
+  const axesIncomplete =
+    !!product?.skuAxes
+    && product.skuAxes.length > 0
+    && product.skuAxes.some((ax) => !selectedVariants[ax.name]);
+
+  const previewThb = product ? (effectivePrice * rsDefault).toFixed(2) : "—";
+
   function onSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const u = url.trim();
@@ -85,16 +205,25 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
     setProduct(null);
     setQty(1);
     setNote("");
+    setSelectedVariants({});
+    setActiveImageIdx(0);
     startSearch(async () => {
       const r = await searchProductByUrlAdmin(u);
-      // Discriminated union narrowing — check `ok` first so TS narrows the rest.
       if (r.ok) {
-        if (r.data) setProduct(r.data);
-        else setSearchErr("ค้นหาสำเร็จแต่ไม่มีข้อมูลสินค้า");
+        if (r.data) {
+          setProduct(r.data);
+          // Auto-select an axis if it has only ONE value (e.g. the 1688 hat
+          // with size=58CM only). Saves a redundant click — admin can still
+          // change later if more values appear.
+          const auto: Record<string, string> = {};
+          for (const ax of r.data.skuAxes ?? []) {
+            if (ax.values.length === 1 && ax.values[0]) auto[ax.name] = ax.values[0].label;
+          }
+          setSelectedVariants(auto);
+        } else {
+          setSearchErr("ค้นหาสำเร็จแต่ไม่มีข้อมูลสินค้า");
+        }
       } else {
-        // `message` field on admin action carries Thai-ready text (set by the
-        // unsupported_host / invalid_url branches above the withAdmin wrap);
-        // fallback to `error` string from the withAdmin error path.
         const msg = (r.message && r.message.trim()) || r.error || "ค้นหาไม่สำเร็จ";
         setSearchErr(msg);
       }
@@ -108,21 +237,35 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
       setFlash({ kind: "add_failed", message: "กรอกรหัสสมาชิก (เจ้าของรถเข็น) ก่อน" });
       return;
     }
+    if (axesIncomplete) {
+      const missing = product.skuAxes!
+        .filter((ax) => !selectedVariants[ax.name])
+        .map((ax) => ax.name)
+        .join(" · ");
+      setFlash({ kind: "add_failed", message: `กรุณาเลือก: ${missing}` });
+      return;
+    }
     setFlash(null);
+    const { ccolor, csize, cdetails } = composeVariantStrings(
+      product.skuAxes,
+      selectedVariants,
+      product.title,
+      note,
+    );
     startAdd(async () => {
       const r = await adminAddItemToCart({
         userid: owner,
         item: {
           curl:      product.sourceUrl,
-          cdetails:  note.trim() || product.title,
+          cdetails,
           ctitle:    product.title,
           cnameshop: product.shopName || "pcs",
           cprovider: mapProvider(product.provider),
-          cimages:   product.imageUrl || "",
-          cprice:    product.promoPriceCny ?? product.priceCny,
+          cimages:   heroImage || product.imageUrl || "",
+          cprice:    effectivePrice,
           camount:   qty,
-          ccolor:    "",
-          csize:     "",
+          ccolor,
+          csize,
         },
       });
       if (r.ok) {
@@ -131,14 +274,13 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
         // can paste another product for the same customer.
         setQty(1);
         setNote("");
+        setSelectedVariants({});
+        setActiveImageIdx(0);
       } else {
         setFlash({ kind: "add_failed", message: r.error || "เพิ่มสินค้าไม่สำเร็จ" });
       }
     });
   }
-
-  const displayPrice = product?.promoPriceCny ?? product?.priceCny ?? 0;
-  const previewThb = product ? (displayPrice * rsDefault).toFixed(2) : "—";
 
   return (
     <div className="space-y-4">
@@ -185,7 +327,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
           </button>
         </div>
         <p className="text-[11px] text-muted">
-          ระบบจะดึงรูป · ชื่อสินค้า · ราคา ¥ จาก marketplace มาให้อัตโนมัติ
+          ระบบจะดึงรูป · ชื่อสินค้า · ราคา ¥ · <strong>ตัวเลือกสี/ขนาด</strong> จาก marketplace มาให้อัตโนมัติ
         </p>
       </form>
 
@@ -202,21 +344,45 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
 
       {/* Product card */}
       {product && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-4">
+          {/* ── Hero: image + title + meta + price ─────────────────────── */}
           <div className="flex items-start gap-4 flex-wrap">
-            {/* Image */}
-            {product.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={product.imageUrl}
-                alt={product.title}
-                className="h-32 w-32 rounded-lg object-contain bg-white border border-border flex-shrink-0"
-              />
-            ) : (
-              <div className="h-32 w-32 rounded-lg bg-surface-alt border border-border flex items-center justify-center text-4xl text-muted flex-shrink-0">
-                📦
-              </div>
-            )}
+            {/* Main image + thumb strip */}
+            <div className="flex-shrink-0 space-y-2">
+              {heroImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={heroImage}
+                  alt={product.title}
+                  className="h-40 w-40 rounded-lg object-contain bg-white border border-border"
+                />
+              ) : (
+                <div className="h-40 w-40 rounded-lg bg-surface-alt border border-border flex items-center justify-center text-5xl text-muted">
+                  📦
+                </div>
+              )}
+              {/* Thumb strip — first 5 images, click to swap hero (only when no SKU image override) */}
+              {product.images && product.images.length > 1 && (
+                <div className="flex gap-1.5 flex-wrap max-w-[10rem]">
+                  {product.images.slice(0, 5).map((src, i) => (
+                    <button
+                      key={`${src}-${i}`}
+                      type="button"
+                      onClick={() => setActiveImageIdx(i)}
+                      aria-label={`รูป ${i + 1}`}
+                      className={`h-9 w-9 rounded border bg-white overflow-hidden ${
+                        i === activeImageIdx
+                          ? "border-primary-500 ring-2 ring-primary-500/30"
+                          : "border-border hover:border-primary-300"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="" className="h-full w-full object-contain" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Title + meta + price */}
             <div className="flex-1 min-w-[200px] space-y-1.5">
@@ -240,8 +406,8 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                 )}
               </div>
               <div className="text-lg font-mono font-semibold text-red-700">
-                ¥{displayPrice.toFixed(2)}
-                {product.promoPriceCny != null && product.promoPriceCny < product.priceCny && (
+                ¥{effectivePrice.toFixed(2)}
+                {matchedSku == null && product.promoPriceCny != null && product.promoPriceCny < product.priceCny && (
                   <span className="ml-2 text-xs text-muted line-through font-normal">
                     ¥{product.priceCny.toFixed(2)}
                   </span>
@@ -250,11 +416,81 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                   ≈ ฿{previewThb} <span className="text-[10px]">(เรท {rsDefault.toFixed(2)})</span>
                 </span>
               </div>
+              {effectiveStock != null && (
+                <div className="text-[11px] text-muted">
+                  คงเหลือ: <span className="font-mono">{effectiveStock.toLocaleString()}</span> ชิ้น
+                  {matchedSku && <span className="ml-1.5 text-emerald-700">· ตรง SKU ที่เลือก</span>}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Qty + note */}
-          <div className="grid sm:grid-cols-3 gap-3 pt-1">
+          {/* ── Variant pickers ───────────────────────────────────────── */}
+          {product.skuAxes && product.skuAxes.length > 0 && (
+            <div className="space-y-3 border-t border-emerald-200 pt-3">
+              <p className="text-xs font-medium text-muted">
+                เลือกตัวเลือกสินค้า {axesIncomplete && <span className="text-red-600">(จำเป็น)</span>}
+              </p>
+              {product.skuAxes.map((axis) => {
+                const selectedLabel = selectedVariants[axis.name];
+                return (
+                  <div key={axis.name}>
+                    <p className="text-xs text-muted mb-1.5">
+                      <strong className="text-foreground">{axis.name}</strong>
+                      {selectedLabel && (
+                        <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
+                      )}
+                      <span className="ml-1.5 text-[10px]">({axis.values.length} ตัวเลือก)</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {axis.values.map((v) => {
+                        const isSelected = selectedLabel === v.label;
+                        const showThumb = v.isImage && v.image;
+                        return (
+                          <button
+                            key={v.label}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVariants((prev) => {
+                                // Toggle: clicking the selected chip deselects it.
+                                if (prev[axis.name] === v.label) {
+                                  const next = { ...prev };
+                                  delete next[axis.name];
+                                  return next;
+                                }
+                                return { ...prev, [axis.name]: v.label };
+                              });
+                              setFlash(null);
+                            }}
+                            disabled={adding}
+                            title={v.label}
+                            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                              isSelected
+                                ? "border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/20 font-medium"
+                                : "border-border bg-white hover:border-primary-300 text-foreground"
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {showThumb && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={v.image}
+                                alt=""
+                                className="h-7 w-7 rounded object-contain bg-white border border-border/50"
+                              />
+                            )}
+                            <span className="max-w-[14rem] truncate">{v.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Qty + free-text note + Add button ─────────────────────── */}
+          <div className="grid sm:grid-cols-3 gap-3 pt-1 border-t border-emerald-200">
             <div>
               <label htmlFor="lps_qty" className="block text-xs font-medium text-muted mb-1.5">
                 จำนวน
@@ -290,7 +526,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
             </div>
             <div className="sm:col-span-2">
               <label htmlFor="lps_note" className="block text-xs font-medium text-muted mb-1.5">
-                หมายเหตุ (สี · ขนาด · ตัวเลือก SKU · etc.)
+                หมายเหตุเพิ่มเติม (ถ้ามี)
               </label>
               <input
                 id="lps_note"
@@ -300,7 +536,11 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                 disabled={adding}
                 maxLength={500}
                 className={INPUT_CLS}
-                placeholder="สีดำ ไซส์ M (เว้นว่างได้ — จะใช้ชื่อสินค้าแทน)"
+                placeholder={
+                  product.skuAxes && product.skuAxes.length > 0
+                    ? "เช่น สเป็คเพิ่ม / หมายเหตุพิเศษ (สี/ขนาดเลือกข้างบนแล้ว)"
+                    : "เช่น สีดำ ไซส์ M (เว้นว่างได้)"
+                }
               />
             </div>
           </div>
