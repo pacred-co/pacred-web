@@ -132,8 +132,11 @@ export default async function DashboardPage() {
               alt=""
             />
           </Link>
-          {/* Legacy linked to pcscargo.co.th/line-notify/ — rewritten internal. */}
-          <Link href="/line-notify" className="block group">
+          {/* Legacy linked to pcscargo.co.th/line-notify/ — Pacred replaced
+              that page with /line-settings (LIFF flow, task L 2026-05-26).
+              LINE Notify EOL'd 2025-03-31; the new page links via Messaging
+              API push. */}
+          <Link href="/line-settings" className="block group">
             <img
               className="w-full rounded-2xl shadow-md group-hover:shadow-xl group-hover:brightness-105 transition-all duration-300"
               src="/images/customertheme/line.png"

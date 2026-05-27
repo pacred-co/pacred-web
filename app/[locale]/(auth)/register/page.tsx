@@ -24,12 +24,29 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; recom?: string }>;
 };
+
+/**
+ * Parse + sanitize the `?recom=<code>` URL param — affiliate / co-brand
+ * attribution captured at signup. Legacy `regis-tam.php` accepted
+ * THADA / SIN / OOAEOM / SWAN here and persisted the resolved value to
+ * `tb_users.coID` (e.g. `?recom=THADA` → `coID='THADA.VIP'`). Pacred-era
+ * codes are open-ended and stored verbatim into `profiles.customer_group`
+ * (default 'PR' if no recom). Pattern restricted to safe filename chars
+ * so an attacker can't smuggle script / SQL via the URL.
+ */
+function sanitizeRecom(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!/^[A-Za-z0-9._-]{1,30}$/.test(trimmed)) return null;
+  return trimmed;
+}
 
 export default async function RegisterPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const tabParam = params.tab === "juristic" ? "juristic" : "personal";
+  const initialRecom = sanitizeRecom(params.recom);
 
   const data = await getCurrentUserWithProfile();
 
@@ -66,6 +83,10 @@ export default async function RegisterPage({ searchParams }: PageProps) {
   }
 
   return (
-    <RegisterClient initialTab={initialTab} juristicResume={juristicResume} />
+    <RegisterClient
+      initialTab={initialTab}
+      juristicResume={juristicResume}
+      initialRecom={initialRecom}
+    />
   );
 }

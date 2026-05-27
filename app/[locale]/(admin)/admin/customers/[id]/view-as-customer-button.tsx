@@ -31,9 +31,14 @@ export function ViewAsCustomerButton({ targetProfileId, targetDisplayName }: Pro
         setErr(res.error);
         return;
       }
-      // Land on the customer portal home. The banner will mount there
-      // (it lives in (protected)/layout.tsx) and confirm impersonation.
-      router.push("/");
+      // Land on the customer portal launchpad — `/` is the PUBLIC marketing
+      // home, which doesn't even render the `(protected)/layout.tsx` shell,
+      // so the impersonation banner that lives in that layout would never
+      // appear. `/dashboard` is the (protected) entry. Aligned with the
+      // post-login redirect fix 2026-05-26 (login + register personal +
+      // juristic + OAuth callback all default to /dashboard per
+      // d1-fidelity-customer.md §2).
+      router.push("/dashboard");
       router.refresh();
     });
   }

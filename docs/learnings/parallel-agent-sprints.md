@@ -158,3 +158,47 @@ Run weekly. Catches dropped-from-prod tables before the next agent's code crashe
 These 4 patterns matter for any future operator running 3+ parallel agents in a sprint. If the team adopts a different orchestration style (one big agent · sequential agents · MCP-driven agents) the patterns may not all apply — but the cost asymmetries (agent time vs pre-audit time; doc-stale cost compounding; rename-on-merge cheap, coordinate-up-front expensive; prompt-block prevents class of bug) do generalize.
 
 Last entry: 2026-05-25 (4 patterns captured from Sprint-9..15 retrospective)
+
+---
+
+## [2026-05-26] Cherry-pick over merge when the source branch is BEHIND on critical work — `git merge origin/podeng` would have reverted 7 production files
+
+**Context:** ปอน (frontend) pushed 2 new commits to `origin/podeng` (cart Tailwind rebuild + mobile polish, total 6 files). เดฟ asked "ไปเอาของน้องมาให้ครบเลย" (bring all of ปอน's stuff). The intuitive move was `git merge origin/podeng` into `dave-pacred`.
+
+**Symptom — what a blind merge would have done:** `git diff --stat HEAD..origin/podeng` showed **43 files changed** even though ปอน only made 2 commits. The reason: `origin/podeng` was behind `dave-pacred` on three independent backend workstreams that landed today:
+
+| Workstream | Files podeng would REVERT |
+|---|---|
+| Dead-LINE-Notify purge (commit `67fc018e`) | `actions/line-notify.ts` · `lib/notifications/line-notify.{ts,test.ts}` · `app/api/cron/dispatch-line-notify/route.ts` · `app/api/linenotify/callback/route.ts` · `vercel.json` (cron entry) — would COME BACK from the dead |
+| Task L LIFF replacement (commit `af4bebe9`) | `actions/line-settings.ts` · `app/[locale]/(protected)/line-settings/{page.tsx,line-settings-actions.tsx}` — would be DELETED |
+| Track 2 product-search (commit `356edcb2`) | `actions/product-search.{ts,test.ts}` · `app/[locale]/(protected)/service-order/add/link-paste-search.tsx` · `lib/china-search/url-allow-list.ts` — would be DELETED |
+
+A `git merge origin/podeng -X theirs` (or even just default merge with `podeng` "ahead" of the merge-base on those files) would have wiped ~1,800 lines of shipped backend work in one commit and re-introduced 1,099 lines of dead code that we'd just purged.
+
+**Root cause:** When the team works on parallel branches and one branch (ปอน's `podeng`) hasn't pulled the others' recent commits, the merge from that stale branch carries DELETIONS of files the source branch never knew about. Git merge is symmetric: it doesn't know that `dave-pacred` having `line-settings.ts` is "newer than" `podeng` not having it — it just sees "podeng deletes this file relative to merge-base, dave-pacred has it" and resolves by deleting.
+
+**Fix — `git log <merge-base>..origin/<source-branch>` first; cherry-pick the N actual new commits**:
+
+```bash
+# 1. Find what's ACTUALLY new on the source branch since divergence
+git fetch origin
+git merge-base HEAD origin/podeng                 # → a08e7290 (last common)
+git log a08e7290..origin/podeng --oneline         # → 2 commits (the work)
+git diff --stat HEAD..origin/podeng | wc -l       # → 43 files (the LIE)
+
+# 2. Cherry-pick those N commits — clean, no reverts
+git cherry-pick <commit1> <commit2>
+```
+
+The cherry-picks may conflict if `dave-pacred` also touched those files — resolve in favour of preserving both sets of changes (in our case ปอน's only conflict was `service-order/page.tsx` which she'd modified once; merged cleanly because `dave-pacred`'s changes were elsewhere in that file).
+
+**Why this matters next time:**
+- **Always check `git log <merge-base>..` before a merge from a teammate's branch** — the diff stat is misleading when the source branch is behind. The TRUE delta is the commit list since merge-base, not the file count.
+- A teammate's branch being "behind on backend work" is the norm in this team (ปอน focuses on frontend, ภูม on V3, เดฟ on integration). Default integration strategy is cherry-pick (or rebase the teammate's branch onto current `dave-pacred` first), never blind merge.
+- The DESTRUCTIVENESS of a blind merge scales with team velocity. With 4 active branches (`podeng`/`dave-pacred`/`Poom-pacred`/`main`) and dozens of commits per day, the "behind" cost compounds — a merge that's safe on Monday morning has 30 file-reverts in it by Monday evening.
+- **The `branch-integrate-loop` skill** ([`.claude/skills/branch-integrate-loop/SKILL.md`](../../.claude/skills/branch-integrate-loop/SKILL.md)) is the canonical playbook for this — "integrate → verify → distribute" with cherry-pick as default and merge only when source IS up-to-date with target. Today's session followed it; this entry documents the diagnostic step that justified the choice.
+
+**Cross-links:**
+- Commits `c8e06e92` + `fb7939f1` — the cherry-picks (ปอน's cart Tailwind rebuild)
+- `.claude/skills/branch-integrate-loop/SKILL.md` — the skill that codified this
+- AGENTS.md §13 — "Worktree base is stale" (related: same root cause, different surface)

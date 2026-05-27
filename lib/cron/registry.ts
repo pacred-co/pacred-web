@@ -78,17 +78,11 @@ export const CRON_REGISTRY: readonly CronEntry[] = [
     description:   "ส่ง broadcasts ที่ scheduled_for <= now() แบบ idempotent",
     scheduleLabel: "ทุก 5 นาที",
   },
-  // Sprint-11 P2.3.C — register the LINE Notify dispatcher + CargoThai
-  // sync crons so all 9 entries in vercel.json appear on the cron-health
-  // page (they were previously surfaced as "orphans" with logs but no
-  // registry row).
-  {
-    path:          "/api/cron/dispatch-line-notify",
-    schedule:      "*/2 * * * *",
-    label:         "ส่ง notification → LINE Notify",
-    description:   "ดึง notifications ที่ยังไม่ push แล้วส่งให้ LINE Notify ของลูกค้า (per-user OAuth, transition EOL)",
-    scheduleLabel: "ทุก 2 นาที",
-  },
+  // Sprint-11 P2.3.C — register the CargoThai sync cron so it appears on
+  // the cron-health page (was previously surfaced as "orphan" with logs
+  // but no registry row). The LINE Notify dispatcher entry was REMOVED
+  // 2026-05-26 along with the cron route — notify-bot.line.me EOL'd
+  // 2025-03-31, replacement via Messaging API in lib/notifications/.
   {
     path:          "/api/cron/cargothai-sync",
     schedule:      "30 19 * * *",

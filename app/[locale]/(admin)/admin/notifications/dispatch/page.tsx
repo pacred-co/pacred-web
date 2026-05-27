@@ -12,10 +12,16 @@ import { RetryDispatchButton } from "./retry-button";
  * (which lists every notification ever sent).
  *
  * Purpose: an operator on call sees "last N failures" + retries them
- * one click. The retry doesn't re-push synchronously — it resets the
- * row so the dispatch-line-notify cron picks it up on the next 2-min
- * tick (matches the existing failure-recovery pattern in
- * /api/cron/dispatch-line-notify).
+ * one click. The retry resets the delivery_* columns so a future
+ * dispatcher will re-pick the row.
+ *
+ * ⚠️ 2026-05-26 — the `/api/cron/dispatch-line-notify` cron was
+ * REMOVED with the dead LINE Notify stack (notify-bot.line.me EOL'd
+ * 2025-03-31). Retry currently resets the row but NO cron is reading
+ * it back — task L (build LIFF + Messaging API dispatcher) restores
+ * the loop. Until then, admins can use the per-notification "push
+ * now" buttons (which call `sendNotification` synchronously) for an
+ * immediate redeliver.
  *
  * Filters:
  *   - status   — pending | sent | failed | all (default: failed first)
@@ -224,7 +230,7 @@ export default async function AdminNotificationsDispatchPage({
           <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · notifications · dispatch</p>
           <h1 className="mt-1 text-2xl font-bold">Dispatch supervisor</h1>
           <p className="mt-1 text-sm text-muted">
-            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อให้ cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">/api/cron/dispatch-line-notify</code> ลองส่งใหม่ในรอบถัดไป (~2 นาที).
+            ตรวจ notifications ที่ส่งล้มเหลว · กด retry เพื่อรีเซ็ตแถวให้ dispatcher ลองส่งใหม่. ⚠️ 2026-05-26 — cron <code className="rounded bg-surface-alt px-1 py-0.5 text-[10px]">/api/cron/dispatch-line-notify</code> ถูกลบ (LINE Notify EOL 2025-03-31); งานนี้รอ task L (LIFF + Messaging API dispatcher) เพื่อกลับมาวิ่งอัตโนมัติ. ระหว่างนี้ใช้ปุ่ม push-now บนรายละเอียดของ notification เพื่อ redeliver ทันที.
           </p>
         </div>
         <div className="flex gap-2">
