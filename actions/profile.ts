@@ -380,9 +380,9 @@ export async function checkEmailAvailability(
   //    by email value rather than by id — equivalent to the legacy semantics.
   let legacyQuery = admin
     .from("tb_users")
-    .select("userid")
-    .ilike("useremail", needle)
-    .neq("userstatus", "0")
+    .select("userID")
+    .ilike("userEmail", needle)
+    .neq("userStatus", "0")
     .limit(1);
   if (ownerId) {
     // Look up the caller's own email to exclude their legacy row (if any).
@@ -393,10 +393,10 @@ export async function checkEmailAvailability(
       .eq("id", ownerId)
       .maybeSingle<{ email: string | null }>();
     if (ownProfile?.email) {
-      legacyQuery = legacyQuery.neq("useremail", ownProfile.email);
+      legacyQuery = legacyQuery.neq("userEmail", ownProfile.email);
     }
   }
-  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userID: string }>();
   if (legacyErr && legacyErr.code !== "PGRST116") {
     console.error("[profile/checkEmailAvailability] tb_users lookup failed:", legacyErr);
   }
@@ -449,12 +449,12 @@ export async function checkPhoneAvailability(
   }
   if (profileHit) return { available: false, reason: "taken" };
 
-  // 2. Legacy tb_users (Thai-local form, userstatus<>'0' = not deleted).
+  // 2. Legacy tb_users (Thai-local form, userStatus<>'0' = not deleted).
   let legacyQuery = admin
     .from("tb_users")
-    .select("userid")
-    .eq("usertel", local)
-    .neq("userstatus", "0")
+    .select("userID")
+    .eq("userTel", local)
+    .neq("userStatus", "0")
     .limit(1);
   if (ownerId) {
     const { data: ownProfile } = await admin
@@ -466,10 +466,10 @@ export async function checkPhoneAvailability(
       const ownLocal = ownProfile.phone.startsWith("+66")
         ? "0" + ownProfile.phone.slice(3)
         : ownProfile.phone;
-      legacyQuery = legacyQuery.neq("usertel", ownLocal);
+      legacyQuery = legacyQuery.neq("userTel", ownLocal);
     }
   }
-  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userid: string }>();
+  const { data: legacyHit, error: legacyErr } = await legacyQuery.maybeSingle<{ userID: string }>();
   if (legacyErr && legacyErr.code !== "PGRST116") {
     console.error("[profile/checkPhoneAvailability] tb_users lookup failed:", legacyErr);
   }

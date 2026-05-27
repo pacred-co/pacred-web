@@ -44,20 +44,20 @@ const DEFAULT_LIMIT = 10;
 
 /** Legacy `tb_users` row shape — the subset this search reads. */
 interface LegacyUserRow {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usercompany: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  useractive: string | null;
-  userstatus: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userCompany: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userActive: string | null;
+  userStatus: string | null;
 }
 
 /** Derive the rebuilt-era status string from the legacy flags. */
 function deriveStatus(u: LegacyUserRow): string {
-  if (u.userstatus === "0") return "suspended";
-  if (u.useractive === "0") return "incomplete";
+  if (u.userStatus === "0") return "suspended";
+  if (u.userActive === "0") return "incomplete";
   return "active";
 }
 
@@ -94,16 +94,16 @@ export async function adminSearchCustomers(
   const { data, error } = await admin
     .from("tb_users")
     .select(
-      "userid, username, userlastname, usercompany, usertel, useremail, useractive, userstatus",
+      "userID, userName, userLastName, userCompany, userTel, userEmail, userActive, userStatus",
     )
-    // Search the legacy member code (userid), name, and phone columns.
+    // Search the legacy member code (userID), name, and phone columns.
     .or(
-      `userid.ilike.${pat},usertel.ilike.${pat},useremail.ilike.${pat},username.ilike.${pat},userlastname.ilike.${pat}`,
+      `userID.ilike.${pat},userTel.ilike.${pat},userEmail.ilike.${pat},userName.ilike.${pat},userLastName.ilike.${pat}`,
     )
     // Newest registrations first (the just-registered case is the most
     // common picker use). tb_users has no equivalent of profiles.status
     // ordering, so a single sort key on the registration timestamp.
-    .order("userregistered", { ascending: false })
+    .order("userRegistered", { ascending: false })
     .limit(limit);
 
   if (error) {
@@ -111,18 +111,18 @@ export async function adminSearchCustomers(
   }
 
   const rows: CustomerPickerRow[] = ((data ?? []) as LegacyUserRow[]).map((u) => ({
-    id:           u.userid,
-    member_code:  u.userid,
-    account_type: u.usercompany === "1" ? "juristic" : "personal",
+    id:           u.userID,
+    member_code:  u.userID,
+    account_type: u.userCompany === "1" ? "juristic" : "personal",
     status:       deriveStatus(u),
-    first_name:   u.username,
-    last_name:    u.userlastname,
+    first_name:   u.userName,
+    last_name:    u.userLastName,
     // Legacy tb_users has no company-name column on the user row — the
     // juristic name lives in a separate corporate table not in scope
     // here; the picker falls back to first/last name when this is null.
     company_name: null,
-    phone:        u.usertel,
-    email:        u.useremail,
+    phone:        u.userTel,
+    email:        u.userEmail,
   }));
 
   return {

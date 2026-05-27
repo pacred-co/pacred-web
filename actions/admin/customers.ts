@@ -115,22 +115,22 @@ export async function approveCustomer(id: string): Promise<AdminActionResult> {
     const admin = createAdminClient();
     const { data: before } = await admin
       .from("tb_users")
-      .select("userid, useractive, userstatus")
-      .eq("userid", id)
-      .maybeSingle<{ userid: string; useractive: string | null; userstatus: string | null }>();
+      .select("userID, userActive, userStatus")
+      .eq("userID", id)
+      .maybeSingle<{ userID: string; userActive: string | null; userStatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    // No-op when already active (useractive='1' and not deleted).
-    if (before.useractive === "1" && before.userstatus !== "0") return { ok: true };
+    // No-op when already active (userActive='1' and not deleted).
+    if (before.userActive === "1" && before.userStatus !== "0") return { ok: true };
 
     const { error } = await admin
       .from("tb_users")
-      .update({ useractive: "1", userstatus: "1" })
-      .eq("userid", id);
+      .update({ userActive: "1", userStatus: "1" })
+      .eq("userID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.approve", "tb_users", id, {
-      before: { useractive: before.useractive, userstatus: before.userstatus },
-      after:  { useractive: "1", userstatus: "1" },
+      before: { userActive: before.userActive, userStatus: before.userStatus },
+      after:  { userActive: "1", userStatus: "1" },
     });
 
     // Note: customer notification deferred — migrated tb_users customers
@@ -265,21 +265,21 @@ export async function suspendCustomer(id: string): Promise<AdminActionResult> {
     const admin = createAdminClient();
     const { data: before } = await admin
       .from("tb_users")
-      .select("userid, userstatus")
-      .eq("userid", id)
-      .maybeSingle<{ userid: string; userstatus: string | null }>();
+      .select("userID, userStatus")
+      .eq("userID", id)
+      .maybeSingle<{ userID: string; userStatus: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
-    if (before.userstatus === "0") return { ok: true };  // no-op — already disabled
+    if (before.userStatus === "0") return { ok: true };  // no-op — already disabled
 
     const { error } = await admin
       .from("tb_users")
-      .update({ userstatus: "0" })
-      .eq("userid", id);
+      .update({ userStatus: "0" })
+      .eq("userID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.suspend", "tb_users", id, {
-      before: { userstatus: before.userstatus },
-      after:  { userstatus: "0" },
+      before: { userStatus: before.userStatus },
+      after:  { userStatus: "0" },
     });
 
     // Note: customer notification deferred — see approveCustomer comment.

@@ -36,14 +36,14 @@ const SCOPE = "pcs-bridge";
 
 /** The `tb_users` columns the bridge reads — legacy names, all lowercase. */
 type LegacyUser = {
-  userid: string;
-  usertel: string | null;
-  useremail: string | null;
-  username: string | null;
-  userlastname: string | null;
-  userpass: string;
-  userstatus: string;
-  usercompany: string | null;
+  userID: string;
+  userTel: string | null;
+  userEmail: string | null;
+  userName: string | null;
+  userLastName: string | null;
+  userPass: string;
+  userStatus: string;
+  userCompany: string | null;
 };
 
 /** A usable Thai E.164 number — `+66` then an 8- or 9-digit national number. */
@@ -68,37 +68,37 @@ async function findLegacyUser(identifier: string): Promise<LegacyUser | null> {
   // admin (service-role) client is mandatory for this read.
   let query = admin
     .from("tb_users")
-    .select("userid, usertel, useremail, username, userlastname, userpass, userstatus, usercompany");
+    .select("userID, userTel, userEmail, userName, userLastName, userPass, userStatus, userCompany");
 
   const kind = detectIdentifier(id);
   if (kind === "email") {
     // Legacy MySQL collation was case-insensitive — match case-insensitively.
-    query = query.ilike("useremail", escapeLikePattern(id));
+    query = query.ilike("userEmail", escapeLikePattern(id));
   } else if (kind === "memberCode") {
-    // userid values are uppercase post-rebrand (pcs-data-migration.md §4).
+    // userID values are uppercase post-rebrand (pcs-data-migration.md §4).
     // Padding-aware match: migration 0103 padded every legacy PR<n> to
     // min-3-digit form (PR1/PR01 → PR001). The customer might still
     // remember the unpadded variant, so accept either the raw input or
     // its 3-digit-padded equivalent. Same row matches both forms — the
-    // userid column itself only stores the padded form post-0103.
+    // userID column itself only stores the padded form post-0103.
     const raw   = id.toUpperCase();
     const match = /^PR(\d+)$/.exec(raw);
     const padded = match ? "PR" + match[1].padStart(3, "0") : raw;
     query = padded === raw
-      ? query.eq("userid", raw)
-      : query.in("userid", [raw, padded]);
+      ? query.eq("userID", raw)
+      : query.in("userID", [raw, padded]);
   } else {
     const candidates = legacyPhoneCandidates(id);
     query = candidates.length > 0
-      ? query.in("usertel", candidates)
-      : query.eq("userid", id.toUpperCase()); // letter-only handle (PW / JET / FCL / AIGA)
+      ? query.in("userTel", candidates)
+      : query.eq("userID", id.toUpperCase()); // letter-only handle (PW / JET / FCL / AIGA)
   }
 
   try {
     // Prefer an active row ('1' sorts after '0') if a phone is shared with a
     // since-deleted account.
     const { data, error } = await query
-      .order("userstatus", { ascending: false })
+      .order("userStatus", { ascending: false })
       .limit(1);
     if (error) {
       // Expected before Phase A loads tb_users — degrade to "no legacy user".
@@ -127,12 +127,12 @@ export async function bridgeLegacyLogin(
   if (!row) return { ok: false };
 
   // userstatus: '1' = active, '0' = deleted account (legacy column comment).
-  if (row.userstatus !== "1") {
-    logger.warn(SCOPE, "legacy login refused — inactive account", { userid: row.userid });
+  if (row.userStatus !== "1") {
+    logger.warn(SCOPE, "legacy login refused — inactive account", { userID: row.userID });
     return { ok: false };
   }
 
-  if (!verifyLegacyPassword(password, row.userpass)) {
+  if (!verifyLegacyPassword(password, row.userPass)) {
     return { ok: false };
   }
 
@@ -155,15 +155,15 @@ export async function bridgeLegacyLogin(
   //      is by phone.
   // The real phone stays on `profiles.phone` for SMS notifications and
   // contact lookups — it's not load-bearing for auth.
-  const credential = { email: legacySyntheticEmail(row.userid) };
+  const credential = { email: legacySyntheticEmail(row.userID) };
 
   // We keep the phone normalized + diagnostic-logged when usable; the
-  // profile-row insert later reads `row.usertel` directly anyway.
-  const e164 = normalizePhone(row.usertel ?? "");
+  // profile-row insert later reads `row.userTel` directly anyway.
+  const e164 = normalizePhone(row.userTel ?? "");
   if (!isUsablePhone(e164)) {
     logger.debug(SCOPE, "legacy row has no usable phone — phone field on the profile stays empty", {
-      userid:  row.userid,
-      usertel: redactPhone(row.usertel),
+      userID:  row.userID,
+      userTel: redactPhone(row.userTel),
     });
   }
 
@@ -173,9 +173,9 @@ export async function bridgeLegacyLogin(
     password,
     email_confirm: true,
     user_metadata: {
-      legacy_user_id:     row.userid,
-      first_name:         row.username,
-      last_name:          row.userlastname,
+      legacy_user_id:     row.userID,
+      first_name:         row.userName,
+      last_name:          row.userLastName,
       legacy_provisioned: true,
     },
   });
@@ -195,7 +195,7 @@ export async function bridgeLegacyLogin(
   // `!createData?.user` (the user object), not `!createData` itself.
   if (createErr && !createData?.user) {
     logger.debug(SCOPE, "createUser failed — existing legacy user, syncing password", {
-      userid: row.userid,
+      userID: row.userID,
       reason: createErr.message,
     });
     // Find the existing auth.users.id by joining through profiles.member_code:
@@ -207,12 +207,12 @@ export async function bridgeLegacyLogin(
     const { data: existingProfile, error: profileLookupErr } = await admin
       .from("profiles")
       .select("id")
-      .eq("member_code", row.userid)
+      .eq("member_code", row.userID)
       .maybeSingle<{ id: string }>();
 
     if (profileLookupErr) {
       logger.warn(SCOPE, "profile lookup for password sync failed", {
-        userid: row.userid,
+        userID: row.userID,
         reason: profileLookupErr.message,
       });
       return { ok: false };
@@ -224,28 +224,28 @@ export async function bridgeLegacyLogin(
       // IS an auth user without a matching profile. That's an inconsistent
       // state that the bridge can't safely auto-recover from.
       logger.warn(SCOPE, "createUser said email exists but no profile maps to this member_code", {
-        userid: row.userid,
+        userID: row.userID,
       });
       return { ok: false };
     }
     const { error: updErr } = await admin.auth.admin.updateUserById(existingProfile.id, {
       password,
       user_metadata: {
-        legacy_user_id:     row.userid,
-        first_name:         row.username,
-        last_name:          row.userlastname,
+        legacy_user_id:     row.userID,
+        first_name:         row.userName,
+        last_name:          row.userLastName,
         legacy_provisioned: true,
       },
     });
     if (updErr) {
       logger.warn(SCOPE, "password sync to existing legacy auth user failed", {
-        userid: row.userid,
+        userID: row.userID,
         reason: updErr.message,
       });
       return { ok: false };
     }
     logger.info(SCOPE, "password synced to existing legacy auth user", {
-      userid: row.userid,
+      userID: row.userID,
     });
   }
 
@@ -256,7 +256,7 @@ export async function bridgeLegacyLogin(
   });
   if (signInErr || !signInData.user) {
     logger.warn(SCOPE, "legacy bridge sign-in failed after provisioning", {
-      userid:     row.userid,
+      userID:     row.userID,
       credential: credential.email,
       errCode:    signInErr?.code,
       errStatus:  signInErr?.status,
@@ -274,7 +274,7 @@ export async function bridgeLegacyLogin(
   // The ghost-customer fix per docs/research/wave-1-fidelity/_SYNTHESIS.md §8.
   await ensureLegacyProfile(signInData.user.id, row);
 
-  logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userid: row.userid });
+  logger.info(SCOPE, "legacy customer signed in via PCS bridge", { userID: row.userID });
   return { ok: true };
 }
 
@@ -290,7 +290,7 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
   const { data: existing } = await admin
     .from("profiles")
     .select("id")
-    .eq("member_code", row.userid)
+    .eq("member_code", row.userID)
     .maybeSingle();
 
   if (existing) {
@@ -298,27 +298,27 @@ async function ensureLegacyProfile(authUserId: string, row: LegacyUser): Promise
     // member_code (~6 customers, _SYNTHESIS §8.3) — leave it, log for เดฟ.
     if (existing.id !== authUserId) {
       logger.warn(SCOPE, "member_code already bound to a different profile — manual reconcile", {
-        userid: row.userid,
+        userID: row.userID,
       });
     }
     return;
   }
 
-  const e164 = normalizePhone(row.usertel ?? "");
+  const e164 = normalizePhone(row.userTel ?? "");
   const { error } = await admin.from("profiles").insert({
     id: authUserId,
-    member_code: row.userid,
-    first_name: row.username,
-    last_name: row.userlastname,
-    phone: isUsablePhone(e164) ? e164 : row.usertel,
-    email: row.useremail,
-    account_type: row.usercompany === "1" ? "juristic" : "personal",
+    member_code: row.userID,
+    first_name: row.userName,
+    last_name: row.userLastName,
+    phone: isUsablePhone(e164) ? e164 : row.userTel,
+    email: row.userEmail,
+    account_type: row.userCompany === "1" ? "juristic" : "personal",
     status: "active",
   });
   if (error) {
     // Non-fatal — the customer is authenticated; never block login on this.
     logger.warn(SCOPE, "legacy profile provisioning failed", {
-      userid: row.userid,
+      userID: row.userID,
       reason: error.message,
     });
   }
