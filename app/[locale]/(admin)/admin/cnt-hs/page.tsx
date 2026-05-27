@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CabinetListCell } from "./cabinet-list-cell";
 
 /**
  * Admin > "รายการเบิกเงินค่าตู้" — container-payment (ตู้-ค่าจ่าย) ledger.
@@ -72,7 +73,7 @@ type SP = { q?: string; search?: string; offset?: string };
 const PAGE_SIZE = 200;
 
 // Wave 23 P1 #9 — cap visible GZE codes at 3, rest in <details>.
-const CABINET_VISIBLE = 3;
+// CABINET_VISIBLE moved into CabinetListCell client island (Wave 23 P1 #E).
 
 export default async function CntHsPage({
   searchParams,
@@ -267,9 +268,9 @@ export default async function CntHsPage({
                   <tbody>
                     {rows.map((row) => {
                       const cabinets = arrItem.get(row.id) ?? [];
-                      // Wave 23 P1 #9 — cap visible cabinets at 3, fold rest into <details>.
-                      const visibleCabinets = cabinets.slice(0, CABINET_VISIBLE);
-                      const hiddenCabinets = cabinets.slice(CABINET_VISIBLE);
+                      // Cabinet preview + click-to-expand modal logic lives in
+                      // CabinetListCell client island (3 chips visible + the
+                      // rest behind a PacredDialog · Wave 23 P1 #E fix).
                       const isPaid = row.cntstatus === "2";
                       return (
                         <tr key={row.id} className="border-t border-border hover:bg-surface-alt/30">
@@ -286,41 +287,13 @@ export default async function CntHsPage({
                           <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                             {formatDate(row.date)}
                           </td>
-                          {/* 3 — หมายเลขตู้ (cntname is summary; cabinets are fan-out chips) */}
-                          <td className="px-4 py-3 text-xs max-w-[320px]">
-                            <div className="font-medium text-foreground mb-1">{row.cntname || "—"}</div>
-                            {cabinets.length > 0 && (
-                              <div className="flex flex-wrap gap-1 items-center">
-                                {visibleCabinets.map((c, i) => (
-                                  <span
-                                    key={`${row.id}-cab-${i}`}
-                                    className="inline-block rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[10px] font-mono text-primary-700"
-                                  >
-                                    {c}
-                                  </span>
-                                ))}
-                                {hiddenCabinets.length > 0 && (
-                                  <details className="inline-block">
-                                    <summary
-                                      className="inline-block cursor-pointer rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-muted hover:bg-surface-alt/70 list-none"
-                                      title={`คลิกเพื่อดูเพิ่มอีก ${hiddenCabinets.length} ตู้`}
-                                    >
-                                      +{hiddenCabinets.length} more
-                                    </summary>
-                                    <div className="mt-1.5 flex flex-wrap gap-1">
-                                      {hiddenCabinets.map((c, i) => (
-                                        <span
-                                          key={`${row.id}-hcab-${i}`}
-                                          className="inline-block rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[10px] font-mono text-primary-700"
-                                        >
-                                          {c}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </details>
-                                )}
-                              </div>
-                            )}
+                          {/* 3 — หมายเลขตู้ — Wave 23 P1 #E ภูม flag: drop the
+                              raw cntname CSV (which was bleeding into next row
+                              when a batch had 40+ cabinets) and use the
+                              CabinetListCell client island (3 chip preview +
+                              click-to-expand PacredDialog with copy-all). */}
+                          <td className="px-4 py-3 text-xs max-w-[280px] align-top">
+                            <CabinetListCell cntId={row.id} cabinets={cabinets} />
                           </td>
                           {/* 4 — จำนวนเงิน */}
                           <td className="px-4 py-3 text-right font-mono text-xs">
