@@ -509,6 +509,19 @@ type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
 const bulkTbSchema = z.object({
   fids:    z.array(z.number().int().positive()).min(1).max(100),
   fstatus: z.enum(TB_FORWARDER_STATUSES),
+  // Wave 23 (2026-05-27 ภูม flag · live walkthrough): bulk + detail share
+  // this action — optional fields below let single-row callers (the detail
+  // page action panel) set tracking/cabinet/note in one go, AND let the
+  // bulk-bar assign a common cabinet to a batch (e.g. "GZE-2026-001" for
+  // all rows in one container). Each field is OPTIONAL — when absent the
+  // column is NOT touched (legacy behaviour preserved · no accidental nulls).
+  //
+  // Why width 300 on cabinet_number? Matches the legacy
+  // tb_forwarder.fcabinetnumber varchar(300) constraint (per migration 0081).
+  // Why width 50 on tracking_th? Matches the legacy ftrackingth varchar(50).
+  cabinet_number: z.string().trim().max(300).optional(),
+  tracking_th:    z.string().trim().max(50).optional(),
+  fnote:          z.string().trim().max(2000).optional(),
 });
 
 // `fdatestatusN` map — only stamp a column for statuses that have one
@@ -531,7 +544,7 @@ export async function adminBulkUpdateForwarderTbStatus(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { fids, fstatus } = parsed.data;
+  const { fids, fstatus, cabinet_number, tracking_th, fnote } = parsed.data;
 
   return withAdmin<{ updated: number }>(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
@@ -563,6 +576,12 @@ export async function adminBulkUpdateForwarderTbStatus(
       fdateadminstatus: nowIso,
       adminidupdate:    adminIdSafe,
       ...(dateCol ? { [dateCol]: nowIso } : {}),
+      // Optional fields — only included when caller explicitly passed them.
+      // Empty-string from the form means "explicitly clear" (legacy NOT NULL
+      // varchar columns default to "" / "-"); undefined means "don't touch".
+      ...(cabinet_number !== undefined ? { fcabinetnumber: cabinet_number } : {}),
+      ...(tracking_th    !== undefined ? { ftrackingth: tracking_th || "-" } : {}),
+      ...(fnote          !== undefined ? { fnote: fnote || null }            : {}),
     };
 
     const { error: updErr } = await admin

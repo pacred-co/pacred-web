@@ -283,6 +283,11 @@ export function ForwardersTable({
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<BulkStatusValue>("2");
+  // Wave 23 (2026-05-27 ภูม flag): cabinet input in bulk-bar so admin can
+  // assign a container (เลขตู้ "GZE-2026-001" etc) to a batch of orders in
+  // one shot. Optional — left blank = don't touch fcabinetnumber on the
+  // selected rows (matches legacy semantics).
+  const [bulkCabinet, setBulkCabinet] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -303,6 +308,7 @@ export function ForwardersTable({
 
   const clearSelection = () => {
     setSelected(new Set());
+    setBulkCabinet("");
     setError(null);
     setSuccess(null);
   };
@@ -312,17 +318,27 @@ export function ForwardersTable({
     setSuccess(null);
     if (selected.size === 0) return;
     const statusLabelTxt = BULK_STATUS_OPTIONS.find((o) => o.v === bulkStatus)?.l ?? bulkStatus;
-    if (!window.confirm(`อัพเดต ${selected.size} รายการ เป็นสถานะ "${statusLabelTxt}" ?`)) return;
+    const cab = bulkCabinet.trim();
+    const cabinetTxt = cab ? `\nเลขตู้ (GZE/GZS): "${cab}"` : "";
+    if (!window.confirm(`อัพเดต ${selected.size} รายการ เป็นสถานะ "${statusLabelTxt}"${cabinetTxt} ?`)) return;
 
     const fids = Array.from(selected);
     startTransition(async () => {
-      const result = await adminBulkUpdateForwarderTbStatus({ fids, fstatus: bulkStatus });
+      const result = await adminBulkUpdateForwarderTbStatus({
+        fids,
+        fstatus: bulkStatus,
+        // Only pass cabinet_number when admin actually typed something —
+        // leaving the input blank should NOT clobber existing cabinet
+        // numbers on the selected rows.
+        ...(cab ? { cabinet_number: cab } : {}),
+      });
       if (!result.ok) {
         setError(result.error ?? "อัพเดตไม่สำเร็จ");
         return;
       }
       setSuccess(`อัพเดตสำเร็จ ${result.data?.updated ?? fids.length} รายการ`);
       setSelected(new Set());
+      setBulkCabinet("");
       router.refresh();
     });
   };
@@ -771,6 +787,20 @@ export function ForwardersTable({
                   <option key={o.v} value={o.v}>{o.l}</option>
                 ))}
               </select>
+            </label>
+            {/* Cabinet input — Wave 23 ภูม flag: assign เลขตู้ (GZE/GZS) to
+                the selected batch in one shot. Blank = don't touch. */}
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-muted whitespace-nowrap">เลขตู้</span>
+              <input
+                type="text"
+                value={bulkCabinet}
+                onChange={(e) => setBulkCabinet(e.target.value)}
+                disabled={pending}
+                maxLength={300}
+                placeholder="GZE-2026-001 (เว้นว่าง = ไม่เปลี่ยน)"
+                className="rounded-md border border-border bg-white px-2 py-1.5 text-sm font-mono w-56"
+              />
             </label>
             <div className="ml-auto flex items-center gap-2">
               <button

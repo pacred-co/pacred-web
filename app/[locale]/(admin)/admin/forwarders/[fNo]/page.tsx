@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { AdminForwarderUpdateForm } from "./update-form";
+import { TbForwarderActionPanel } from "./tb-action-panel";
 import { DriverAssignForm } from "./driver-assign-form";
 import { CostAdjustmentsPanel, type CostAdjustmentRow } from "./cost-adjustments-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -686,7 +687,20 @@ async function renderLegacyForwarderView(
             </dl>
           </section>
 
-          {/* Action buttons */}
+          {/* Action panel — Wave 23 P0 (2026-05-27 ภูม flag · close
+              workflow gap): status + cabinet + tracking-TH + note + save
+              in one place so admin doesn't have to leave detail → list
+              → bulk-bar for single-row work. */}
+          <TbForwarderActionPanel
+            fId={r.id}
+            fNo={String(r.id)}
+            currentStatus={(r.fstatus as "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99") || "1"}
+            currentCabinet={r.fcabinetnumber ?? ""}
+            currentTrackingTh={r.ftrackingth ?? ""}
+            currentNote={r.fnote ?? ""}
+          />
+
+          {/* Secondary action buttons */}
           <div className="space-y-2">
             <Link
               href={`/admin/forwarders/${encodeURIComponent(fNo)}/edit`}
@@ -712,8 +726,6 @@ async function renderLegacyForwarderView(
 
           <p className="text-[10px] text-muted text-center">
             ข้อมูลจาก legacy <code className="rounded bg-surface-alt px-1">tb_forwarder</code>
-            <br />
-            ฟอร์มอัปเดตสถานะ + บันทึกหมายเหตุ = Wave 20 P1.1
           </p>
         </div>
       </div>
