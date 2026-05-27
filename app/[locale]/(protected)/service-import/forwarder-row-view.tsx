@@ -237,7 +237,7 @@ export function convertIMGCHN(url: string | null, size: string): string {
     // legacy: basePath.'images/shops/default.png'
     return "/legacy/pcs/shops/default.png";
   }
-  let u = url
+  const u = url
     .replace("?x-oss-process=style/alsy", "")
     .replace("?x-oss-process=style/tbsy", "")
     .replace("_250x250.jpg", "");
