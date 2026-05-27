@@ -1,27 +1,55 @@
 "use client";
 
 /**
- * Client buttons + forms for the admin-profile page.
+ * ⚠️ DEAD CODE AT RUNTIME — 2026-05-27 Wave 23 audit (Agent D · Task #18) ⚠️
  *
- * Wave 21 (Task #128) — converted from jQuery + Bootstrap-4 modals
- * (`data-toggle="modal" / data-target="#…"`) to NATIVE `<dialog>`
- * elements opened via `dialogRef.current?.showModal()` and closed via
- * `dialogRef.current?.close()`. Confirm/alert popups (legacy SweetAlert
- * replaced earlier by `confirm()`/`alert()`) are now native `<dialog>`
- * confirm modals matching the Pacred admin idiom (see
+ * This file exports 7 modal/button widgets (SetCommCog · SetFurloughCog ·
+ * EditProfileButton · AddBankAccountButton · DeleteBankButton ·
+ * AddEducationButton · DeleteEducationButton) — NONE of which are imported
+ * by the parent `app/[locale]/(admin)/admin/admins/[id]/page.tsx`. The
+ * parent page is the Wave 23 P0 rewrite (commit `cddeea3`) that reads the
+ * new Pacred shape (admins JOIN profiles JOIN admin_contact_extras) — it
+ * deliberately does NOT import any of these because the server actions in
+ * `actions/admin/admin-profile.ts` still target legacy `tb_admin` and
+ * would 500.
+ *
+ * Therefore the 87 `form-control` / `form-control-label` / `form-group`
+ * legacy Bootstrap class instances inside the 5 dialogs (HR data · bank
+ * account · education · interpreter commission · furlough) DO NOT render
+ * to any user today. The Agent L ui-design-audit (2026-05-27) flagged
+ * them as "visual unknown"; Agent D verified them as "user-invisible
+ * (parent page does not import this bundle)".
+ *
+ * 🚧 DO NOT spot-fix the 87 form-control classes — it would be busywork
+ *    on dead code. The proper fix is the Wave 23 follow-up tracked in
+ *    `docs/research/admin-tech-debt-master-2026-05-27.md` (the 5 sidecar
+ *    sections — personal docs · bank accounts · education · org channels
+ *    · interpreter commission cog — need migrations into Pacred-shape
+ *    sidecar tables before the modals can be re-imported with new
+ *    UUID-keyed server actions). At THAT point this entire file is
+ *    rewritten with Tailwind form inputs from scratch — the 87
+ *    form-control classes will go away as a byproduct.
+ *
+ * ── Original Wave 21 (Task #128) context (preserved for archaeology) ──
+ *
+ * Converted from jQuery + Bootstrap-4 modals (`data-toggle="modal" /
+ * data-target="#…"`) to NATIVE `<dialog>` elements opened via
+ * `dialogRef.current?.showModal()`. Confirm/alert popups now native
+ * `<dialog>` confirm modals matching the Pacred admin idiom (see
  * `forwarders/warehouse-history/warehouse-history-relink-modal.tsx`).
  *
- * Per AGENTS.md §0a — we keep the SAME logic + the SAME form fields,
- * but the modal chrome is Tailwind (rounded · backdrop · spacing) and
- * brand-aligned (primary-600 submit · gray cancel · red destructive).
- * Form internals still use the `.form-control-lg` / `.form-control-label`
- * classes because the dialog is rendered inside the `.pcs-legacy`
- * scope on the parent page — keeping them avoids visually breaking the
- * form fields out of the surrounding legacy CSS context. Only the
- * Bootstrap modal CHROME (open mechanism · header · footer · sizing) is
- * Tailwind-ified.
+ * Per AGENTS.md §0a — we kept SAME logic + SAME form fields, but the
+ * modal CHROME is Tailwind (rounded · backdrop · spacing) and brand-
+ * aligned (primary-600 submit · gray cancel · red destructive). Form
+ * internals kept `.form-control-lg` / `.form-control-label` because at
+ * the time we expected the dialog to render inside the `.pcs-legacy`
+ * scope on the parent page — when the Wave 23 P0 rewrite cut the import,
+ * the legacy CSS context went with it. Now the form-control classes
+ * have no styling source AND no consumer.
  *
- * Server-action imports + business logic are unchanged.
+ * Server-action imports + business logic are unchanged (still 500 if
+ * called against current tb_admin schema — kept as reference for the
+ * Wave 24+ rewrite).
  */
 
 import { useRef, useState, useTransition } from "react";
