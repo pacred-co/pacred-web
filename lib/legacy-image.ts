@@ -67,12 +67,16 @@ export function legacyMemberBase(): string {
   }
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabase || supabase.length === 0) {
-    // Fail loud in dev; on prod NEXT_PUBLIC_SUPABASE_URL is always set so
-    // this branch is effectively unreachable. Throwing avoids silently
-    // rendering broken/leaky URLs.
-    throw new Error(
-      "legacyMemberBase: neither NEXT_PUBLIC_LEGACY_MEMBER_BASE nor NEXT_PUBLIC_SUPABASE_URL is set",
-    );
+    // Env not set — fall back to the local `/legacy/pcs/` static mount
+    // so the build does NOT crash (Next 16's "Collect page data" phase
+    // evaluates module-scope code, which would otherwise hard-fail a
+    // bare worktree without `.env.local`). In any real environment
+    // (dev / staging / prod) `NEXT_PUBLIC_SUPABASE_URL` is always set
+    // and this branch is unreachable. The fallback URLs will 404 for
+    // most paths (only `images/shops/default.png` + `images/users/
+    // user.jpg` exist locally) — visibly broken images, but no crash
+    // and no brand leak to pcscargo.co.th.
+    return "/legacy/pcs";
   }
   return `${supabase.replace(/\/+$/, "")}/storage/v1/object/public/pcsracgo/public/member`;
 }
