@@ -178,7 +178,40 @@ Two entries appended to `docs/learnings/nextjs-16-quirks.md`:
 ```
 dave-pacred → 99e206a docs(learnings): Sprint-25 chrome leak + Sprint-26 mobile collapse patterns
 main         → 99e206a (same — pushed straight through)
-podeng       → d89176b (last ปอน push; merge base — no new work to pull)
+podeng       → d89176b (last ปอน push; merge base — no new work to pull at the time)
 ```
 
-`dave-pacred ⇆ main` = 0/0 (in sync).
+`dave-pacred ⇆ main` = 0/0 (in sync at the time).
+
+---
+
+## Addendum — 2026-05-26 night integrate-loop (post-Sprint-26 merge)
+
+30 commits landed on `origin/dave-pacred` between my Sprint-26 push and my next push attempt — ปอน + ก๊อต's parallel `podeng → dave-pacred` integration session. The relevant overlaps with this sprint block:
+
+- **`a08e7290 feat(service-order): Tailwind rebuild — Pacred theme, responsive card-stack`** — REPLACED `app/[locale]/(protected)/service-order/page.tsx` entirely with a clean Tailwind rewrite. The legacy 1:1 Bootstrap-4 markup + the `pcs-shops-page` wrapper className I added in Sprint-26 are GONE; the page is now responsive by design (Tailwind utility classes for the card layout, no `<table id="myTable">` to collapse).
+- **`fb7939f1 fix(service-order + cart): mobile polish — FloatingTabs clearance, single-line header, 2-row tab strip`** — ปอน's mobile-polish iteration on top of the Tailwind rebuild.
+- **`577adb72 fix(chrome): mobile register polish + restore FloatingTabs on protected`** — REVISED Sprint-25's `<FloatingTabs />` gate. Removing the floating widget from `(protected)` left the customer back-office with no mobile bottom-nav (since `legacy-overrides.css §0` hides the legacy `.nav-footer-pcs`). Restored at `(protected)/layout.tsx` — `<FloatingTabs />` has its own `isHidden` check that auto-hides on `/admin`, `/login`, `/register`, `/forgot-password`, so it now shows on public + protected but stays off admin + auth, which is the right end-state.
+
+**What survives from Sprint-25 unchanged:**
+- The 17 hard-coded `<Footer />` imports are still stripped (marketing footer doesn't show on protected/auth/transactional pages).
+- `<FloatingTabs />` removed from `app/[locale]/layout.tsx` (no longer mounted on every locale route).
+- New `app/[locale]/(public)/layout.tsx` still mounts `<FloatingTabs />` for public marketing.
+- Net add: `<FloatingTabs />` now also mounted at `(protected)/layout.tsx` per ปอน (with the page-level `isHidden` gating it on auth/admin).
+
+**What survives from Sprint-26 unchanged:**
+- `legacy-overrides.css §11` — the `.tr1::after { content: none }` kill rule + the `th.none` collapse rule + the per-page-modifier pattern. ALL STILL IN PLACE.
+- `public/legacy/pcs/shops.css` mobile media query rewrite — kept (it scopes via `.pcs-shops-page` so it's orphaned on `/service-order` now but no harm; covers the case a future page reuses the modifier).
+
+**Net state after the integrate-loop:**
+- `/service-order` is now Tailwind-responsive natively (ปอน's rebuild). My CSS overrides are orphaned on this specific page.
+- `legacy-overrides.css §11` still serves the OTHER legacy customer tables that have NOT been rebuilt yet — `/service-payment`, `/service-import/pending`, `/wallet/history`, etc. The pattern + comment stubs remain in place for when those pages get the same treatment.
+- The two learnings entries in `nextjs-16-quirks.md` still describe a generally-useful pattern (route-group chrome gating + pure-CSS emulation of DataTables-Responsive). The `legacy-fidelity-check` skill consumers will still find them when porting more legacy tables.
+
+**Final branch state after the integrate-loop:**
+```
+dave-pacred = main = origin/dave-pacred (merged in 30 commits + verified)
+podeng       at d89176b (merge base — no new ปอน push)
+```
+
+Verification gates passed post-merge: `pnpm tsc --noEmit` (exit 0, `.next/` filtered) · `pnpm lint` (exit 0, 45 warnings 0 errors) · `pnpm build` (exit 0, all routes generated).
