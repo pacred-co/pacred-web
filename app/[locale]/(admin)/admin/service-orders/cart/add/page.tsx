@@ -88,7 +88,7 @@ export default async function AdminCartAddPage({
         <ol className="list-decimal list-inside space-y-1 text-xs">
           <li>กรอกรหัสสมาชิก (เจ้าของรถเข็น) — เว้นว่าง = รถเข็นแอดมินตัวคุณเอง</li>
           <li>กรอกลิงก์/ชื่อสินค้า + รายละเอียดให้ครบ</li>
-          <li>ระบุราคา (¥) + จำนวนชิ้น แล้วกด "เพิ่มในรถเข็น"</li>
+          <li>ระบุราคา (¥) + จำนวนชิ้น แล้วกด &quot;เพิ่มในรถเข็น&quot;</li>
           <li>ระบบจะ redirect กลับหน้ารถเข็นพร้อม preselect ลูกค้าที่กรอก</li>
         </ol>
       </section>

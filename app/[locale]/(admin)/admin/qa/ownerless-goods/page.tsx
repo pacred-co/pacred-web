@@ -15,6 +15,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { nowMs } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +105,7 @@ export default async function OwnerlessGoodsPage() {
     })
     .slice(0, 200);
 
-  const now = Date.now();
+  const now = nowMs();
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

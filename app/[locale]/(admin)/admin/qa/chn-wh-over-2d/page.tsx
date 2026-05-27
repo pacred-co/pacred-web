@@ -17,6 +17,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function ChnWhOver2dPage() {
   // SLA cutoff — 2 days ago (rows created earlier than this AND still in
   // fstatus='1' have breached the "expected to enter China warehouse
   // within 2 days" SLA).
-  const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = cutoffIsoDaysAgo(2);
 
   // Exact total count (head:true is cheap · accurate even when > 200 breaches)
   // Wave 10 bug-fix 2026-05-23 — was using rows.length (capped at 200).
@@ -99,7 +100,7 @@ export default async function ChnWhOver2dPage() {
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 
-  const now = Date.now();
+  const now = nowMs();
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

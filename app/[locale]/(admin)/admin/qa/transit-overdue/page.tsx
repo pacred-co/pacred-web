@@ -18,6 +18,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,7 @@ export default async function TransitOverduePage() {
   // IS NULL AND fdate < cutoff)" cleanly in one query, so we fetch all
   // fstatus='3' rows and filter post-fetch — the breaching subset is
   // small in practice (active transit is ~weeks of inventory).
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = cutoffIsoDaysAgo(7);
 
   // Wave 10 bug-fix 2026-05-23: 2 separate exact counts (one per branch
   // of the (fdate3 OR fdate)-based fallback condition). Previous display
@@ -121,7 +122,7 @@ export default async function TransitOverduePage() {
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 
-  const now = Date.now();
+  const now = nowMs();
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

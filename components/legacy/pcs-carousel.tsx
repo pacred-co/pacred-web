@@ -18,14 +18,18 @@ export function PcsCarousel({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // react-hooks/exhaustive-deps: snapshot ref.current at mount so the
+    // cleanup function uses the same node it initialised against — by
+    // unmount, ref.current may have moved or be null.
+    const node = ref.current;
     let cancelled = false;
     const SLICK_JS = "/legacy/pcs/assets/plugins/slick/slick.js";
 
     function initSlick() {
       const w = window as any;
       const jq = w.jQuery;
-      if (cancelled || !jq || !ref.current) return;
-      const $el = jq(ref.current);
+      if (cancelled || !jq || !node) return;
+      const $el = jq(node);
       if ($el.slick && !$el.hasClass("slick-initialized")) {
         $el.slick({
           dots: true,
@@ -73,8 +77,8 @@ export function PcsCarousel({ children }: { children: React.ReactNode }) {
       window.clearInterval(timer);
       try {
         const w = window as any;
-        if (w.jQuery && ref.current) {
-          const $el = w.jQuery(ref.current);
+        if (w.jQuery && node) {
+          const $el = w.jQuery(node);
           if ($el.slick && $el.hasClass("slick-initialized")) {
             $el.slick("unslick");
           }

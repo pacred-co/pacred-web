@@ -16,28 +16,30 @@ import { Link } from "@/i18n/navigation";
 
 type Side = "cargo" | "freight";
 
-export function AccountingSegmentPills({ active }: { active: Side }) {
-  const Pill = ({ side, label }: { side: Side; label: string }) => {
-    const isActive = active === side;
-    const href = side === "cargo" ? "/admin/accounting/cargo" : "/admin/accounting/freight";
-    return (
-      <Link
-        href={href}
-        className={`rounded-full px-4 py-1.5 text-xs font-medium whitespace-nowrap transition ${
-          isActive
-            ? "bg-primary-500 text-white shadow"
-            : "text-foreground hover:bg-surface-alt"
-        }`}
-      >
-        {label}
-      </Link>
-    );
-  };
+// react-hooks/static-components: declare Pill at module level (not inside the
+// parent component's render) — React 19 lint flags inline component decls.
+function Pill({ side, label, active }: { side: Side; label: string; active: Side }) {
+  const isActive = active === side;
+  const href = side === "cargo" ? "/admin/accounting/cargo" : "/admin/accounting/freight";
+  return (
+    <Link
+      href={href}
+      className={`rounded-full px-4 py-1.5 text-xs font-medium whitespace-nowrap transition ${
+        isActive
+          ? "bg-primary-500 text-white shadow"
+          : "text-foreground hover:bg-surface-alt"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
 
+export function AccountingSegmentPills({ active }: { active: Side }) {
   return (
     <div className="inline-flex rounded-full border border-border bg-white p-0.5 shadow-sm">
-      <Pill side="cargo" label="Cargo" />
-      <Pill side="freight" label="Freight" />
+      <Pill side="cargo" label="Cargo" active={active} />
+      <Pill side="freight" label="Freight" active={active} />
     </div>
   );
 }

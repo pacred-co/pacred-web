@@ -492,7 +492,17 @@ The named helper hides the impurity behind a function call boundary — the rule
 - Affects mostly SLA-breach queue pages (where we compute the cutoff in render) + dashboard cards showing "X days ago" deltas. Less common in mutation flows where timestamps come from form input / DB columns.
 - Pattern source: existing fix in `app/[locale]/(admin)/admin/reports/credit-pending/page.tsx` + `customers/recently-active/page.tsx` (Wave 7.2). Mirror those when in doubt.
 
+**2026-05-27 update — shared helper module created.** After 5 QA SLA pages (`chn-wh-over-2d` · `transit-overdue` · `prepare-overdue` · `ownerless-goods` · `new-client-no-contact`) needed the same `Date.now()` / `new Date()` wrappers, the helpers moved out of per-file copies into [`lib/datetime-helpers.ts`](../../lib/datetime-helpers.ts) — the canonical home now. Import + use:
+```ts
+import { nowMs, cutoffIsoDaysAgo, nowDate } from "@/lib/datetime-helpers";
+const cutoff = cutoffIsoDaysAgo(7);   // ISO 7d-ago snapshot
+const now    = nowMs();                // ms snapshot for delta math
+const dt     = nowDate();              // Date instance when needed
+```
+Any new page that needs a "now / N-days-ago / N-minutes-ago" snapshot in render → import from there. Don't re-inline the wrapper; the lib lets us extend (e.g. `cutoffIsoMinutesAgo`, `daysSince`, `formatBkkDate`) in one place.
+
 **Cross-links:**
 - Commit `776ebc8` — Agent A's lint-fix pass on Wave 10 Group A
 - Commits `a285c90` + `3595d41` — sister Wave 10 work that didn't need the fix because they only read DB-supplied timestamps (no inline `Date.now()`)
+- 2026-05-27 Wave 23 cleanup — 5 QA pages refactored to import from shared `lib/datetime-helpers.ts` (closed 10 `react-hooks/purity` errors)
 - [React 19 `react-hooks/purity` rule docs](https://react.dev/reference/rules) (impure calls)

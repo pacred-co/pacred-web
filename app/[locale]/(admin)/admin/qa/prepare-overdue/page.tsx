@@ -15,6 +15,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export default async function PrepareOverduePage() {
   // still haven't moved to '6' (เตรียมส่ง) or '7' (ส่งแล้ว) — since this
   // query already filters fstatus='4', "still pending prep" = the natural
   // result set.
-  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = cutoffIsoDaysAgo(3);
 
   // Exact total — Wave 10 bug-fix 2026-05-23 (was using rows.length).
   const { count: breachCount } = await admin
@@ -98,7 +99,7 @@ export default async function PrepareOverduePage() {
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
   }
 
-  const now = Date.now();
+  const now = nowMs();
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

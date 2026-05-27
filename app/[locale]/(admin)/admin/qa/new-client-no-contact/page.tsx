@@ -16,6 +16,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,8 @@ export default async function NewClientNoContactPage() {
   // userregistered filter — fetch all 30-day-window active users, then
   // filter the "no recent login" subset post-fetch. Cheap because the
   // monthly intake fits comfortably in 500-row chunks for now.
-  const registerCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const loginCutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const registerCutoff = cutoffIsoDaysAgo(30);
+  const loginCutoff = cutoffIsoDaysAgo(2);
 
   const { data: rowsRaw, error } = await admin
     .from("tb_users")
@@ -75,7 +76,7 @@ export default async function NewClientNoContactPage() {
   // filter redundant; keep the slice(0, 200) cap for the display window.
   const rows = ((rowsRaw ?? []) as unknown as URow[]).slice(0, 200);
 
-  const now = Date.now();
+  const now = nowMs();
 
   return (
     <main className="p-6 lg:p-8 space-y-5">

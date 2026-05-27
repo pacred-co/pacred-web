@@ -133,6 +133,28 @@ export function AdminForwarderNewForm({
   const [coverFile, setCoverFile]     = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
+  // Track current blob URL outside React state for unmount cleanup —
+  // the useEffect that watches coverPreview can't safely reach it from cleanup.
+  const coverPreviewUrlRef = useRef<string | null>(null);
+
+  // ─── cover preview blob-URL lifecycle (event-handler managed) ───
+  // Set + revoke URLs in the same call so we never leak. setCoverFile
+  // wraps this so every cover-change site stays consistent.
+  function updateCoverPreview(nextFile: File | null) {
+    // Revoke the previous URL (regardless of whether new one is null)
+    if (coverPreviewUrlRef.current) {
+      URL.revokeObjectURL(coverPreviewUrlRef.current);
+      coverPreviewUrlRef.current = null;
+    }
+    if (nextFile) {
+      const url = URL.createObjectURL(nextFile);
+      coverPreviewUrlRef.current = url;
+      setCoverPreview(url);
+    } else {
+      setCoverPreview(null);
+    }
+    setCoverFile(nextFile);
+  }
 
   // ─── shipBy + address cascade ───────────────────────────────────
   const [shipBy, setShipBy]                   = useState<string>("");
@@ -161,16 +183,18 @@ export function AdminForwarderNewForm({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  // ─── cover image preview lifecycle ──────────────────────────────
+  // ─── cover image preview unmount cleanup ────────────────────────
+  // URL.createObjectURL/.revokeObjectURL is driven by updateCoverPreview()
+  // in event handlers (above); this effect only revokes the URL on unmount
+  // so we don't leak a blob if the form is dismissed while a file is staged.
   useEffect(() => {
-    if (!coverFile) {
-      setCoverPreview(null);
-      return;
-    }
-    const url = URL.createObjectURL(coverFile);
-    setCoverPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [coverFile]);
+    return () => {
+      if (coverPreviewUrlRef.current) {
+        URL.revokeObjectURL(coverPreviewUrlRef.current);
+        coverPreviewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // ─── when coID changes → fetch users for that tier ─────────────
   async function onCoidChange(next: string) {
@@ -245,15 +269,15 @@ export function AdminForwarderNewForm({
     if (f && f.size > 5 * 1024 * 1024) {
       setError("ไฟล์รูปใหญ่เกิน 5 MB");
       e.target.value = "";
-      setCoverFile(null);
+      updateCoverPreview(null);
       return;
     }
     setError(null);
-    setCoverFile(f);
+    updateCoverPreview(f);
   }
 
   function removeCover() {
-    setCoverFile(null);
+    updateCoverPreview(null);
     if (coverInputRef.current) coverInputRef.current.value = "";
   }
 
@@ -265,7 +289,7 @@ export function AdminForwarderNewForm({
     setTrackingChn("");
     setDetail("");
     setAmount("1");
-    setCoverFile(null);
+    updateCoverPreview(null);
     setShipBy("");
     setAddresses([]);
     setAddressId(null);
