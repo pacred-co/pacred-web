@@ -161,6 +161,18 @@ export default async function CntHsDetailPage({
   const cabinetNumbers = Array.from(new Set(items.map((i) => i.fcabinetnumber).filter(Boolean)));
 
   // 3. Read forwarders for these cabinets (so admin sees the goods)
+  //
+  // Wave 24 #189 follow-up: this is a sub-resource query (forwarders WITHIN
+  // a specific cnt-hs container) NOT a top-level paginated list — adding
+  // ?offset= here would break the per-cabinet grouping (`fwByCabinet`)
+  // below, leaving some cabinets half-rendered. The cabinetNumbers count
+  // per cnt-hs is bounded by physical container size (typically 50-200
+  // forwarders, occasionally up to ~500 for mega-cnt-hs). Bumped from
+  // .limit(1000) → .limit(5000) defensively + added a Sentry-friendly
+  // warn so we can spot when a future cnt-hs grows past that. A real
+  // fix would partition the table per-cabinet or paginate per-cabinet,
+  // both of which require UX changes — out of scope for the silent-cap
+  // sweep.
   let forwarders: FwRow[] = [];
   if (cabinetNumbers.length > 0) {
     const { data: fwRaw, error: fwRawErr } = await admin
@@ -168,7 +180,13 @@ export default async function CntHsDetailPage({
       .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fweight,fvolume,userid")
       .in("fcabinetnumber", cabinetNumbers)
       .order("fdate", { ascending: false })
-      .limit(1000);
+      .limit(5000);
+    if (fwRaw && fwRaw.length >= 5000) {
+      console.warn(
+        `[cnt-hs/${id}] forwarder list hit 5000-row cap — per-cabinet ` +
+        `pagination needed (Wave 24 #189 deferred). Cabinets: ${cabinetNumbers.length}.`,
+      );
+    }
     if (fwRawErr) {
       console.error(`[tb_forwarder list] failed`, { code: fwRawErr.code, message: fwRawErr.message });
     }
