@@ -4,6 +4,161 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-05-27] Supabase prod pg connection — direct URL works, pooler URL fails with "tenant not found"
+
+**Symptom.** Running a one-off migration via Node + `pg` against prod
+Supabase with the documented pooler URL pattern returned:
+
+```
+error: (ENOTFOUND) tenant/user postgres.yzljakczhwrpbxflnmco not found
+```
+
+URL used:
+`postgresql://postgres.${REF}:${PWD}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres`
+
+**Root cause.** The pooler tenant/user routing wants a different
+format than the URL Supabase docs surface. The DIRECT connection URL
+worked first try:
+
+```
+postgresql://postgres:${PWD}@db.${REF}.supabase.co:5432/postgres
+```
+
+**What to do.** For one-off migrations (DDL — RENAME COLUMN, CREATE
+TABLE, etc.) from a Node script, always use the direct connection
+URL. The pooler is for high-frequency application reads, not for
+admin DDL.
+
+Also: use `ssl: { rejectUnauthorized: false }` in the Client options
+— Supabase prod requires TLS but the default cert validation rejects
+the connection.
+
+**Working snippet** (see `scripts/apply-pilot-migration.mjs`):
+
+```js
+import pg from "pg";
+const conn = `postgresql://postgres:${encodeURIComponent(PWD)}@db.${REF}.supabase.co:5432/postgres`;
+const client = new pg.Client({ connectionString: conn, ssl: { rejectUnauthorized: false } });
+await client.connect();
+await client.query(sql);
+```
+
+---
+
+## [2026-05-27] DBD CKAN behind Incapsula WAF returns HTML body on 200 — `res.json()` throws, route 502s
+
+**Symptom.** Vercel runtime log on `/api/dbd/4444444444444 → 502`
+even though the external `opendata.dbd.go.th/api/3/action/
+datastore_search → 200` (342ms). Route was returning 502
+`fetch_failed` from a `try { ... res.json() ... } catch` block.
+
+**Root cause.** Incapsula WAF in front of CKAN sometimes returns 200
+status with an HTML body instead of JSON (challenge page / generic
+"OK" wrapper). `res.json()` throws on the first byte that isn't
+JSON; the outer catch then returns 502 because the route can't tell
+"WAF" from "network failure".
+
+**What to do.** Split the JSON parse into its OWN try/catch outside
+the fetch try. On parse failure, return 404 `not_found` (fail-soft —
+same client UX as a genuine no-record case), reserve 502 for actual
+network/timeout/DNS errors:
+
+```ts
+let res: Response;
+try {
+  res = await fetch(url, { ... });
+} catch (err) {
+  return NextResponse.json({ error: "fetch_failed", ... }, { status: 502 });
+}
+if (!res.ok) {
+  return NextResponse.json({ error: "api_error", ... }, { status: 502 });
+}
+let json;
+try {
+  json = await res.json();
+} catch {
+  // WAF intercepted with HTML — degrade gracefully.
+  return NextResponse.json({ error: "not_found" }, { status: 404 });
+}
+```
+
+Also `await res.clone().text()` (in the JSON-parse catch) snapshots
+the first 200 chars of the body to the structured log — lets a
+future debugger tell HTML-from-WAF from another shape without
+dumping the whole body.
+
+**Anti-pattern.** Letting the JSON parse share the network try
+block. Vercel monitoring then alerts on the route as broken when
+it's actually a WAF intercept the user can't fix.
+
+---
+
+## [2026-05-27] camelCase column-rename migration on a live Pacred-style DB needs lockstep deploy
+
+**Symptom.** ก๊อต's pacred-admin-next docs/database/ spec uses
+camelCase (`userID`, `userPass`, `fStatus`, `cntID`) — the original
+MySQL identifiers. Pacred's Phase A pgloader port lowercased
+everything to PostgreSQL convention. The cross-app schema mismatch
+breaks ก๊อต's admin app because Supabase JS quotes identifiers in
+generated SQL (`SELECT "userid"` !== column `"userID"`).
+
+Aligning Pacred prod to ก๊อต's spec requires renaming 996 columns
+across 108 tables. The Pacred codebase has ~2.8K Supabase-client
+column refs (lowercase strings in `.select("userid")` /
+`.eq("userid", ...)` etc.).
+
+**Root cause.** PostgreSQL identifiers are case-insensitive UNQUOTED
+but case-sensitive QUOTED. Supabase JS always quotes. So:
+- Migration: rename `userid` → `"userID"`
+- Pacred query: `.select("userid")` → SQL `SELECT "userid"` → column
+  no longer exists → query fails
+- Need codebase rewrite + migration in lockstep
+
+**What to do — phased pilot pattern (proven 2026-05-27):**
+
+1. **Audit first** (`scripts/schema-diff-vs-admin-spec.py`) — diff
+   Pacred 0081 vs spec docs. Confirm scope: zero missing tables,
+   zero missing cols, only casing. 996 renames across 108 tables.
+2. **Phased pilot** — pick 3 small foundation tables (tb_users,
+   tb_admin, tb_co = 80 renames) before doing the rest.
+3. **Generate migration** (`scripts/gen-camelcase-pilot.py`) —
+   idempotent `DO $$ ... IF EXISTS old AND NOT EXISTS new THEN
+   EXECUTE 'ALTER TABLE ... RENAME COLUMN ...' END IF; END $$;`
+4. **Manual codebase rewrite** (NOT regex codemod — see below).
+5. **Apply migration to prod** via Node + pg direct-URL connection.
+6. **Push code in same window** — ~2-3 min outage window while
+   Vercel rebuilds. Affected pages 5xx until deploy completes.
+
+**Anti-pattern: regex codemod overshoots.** A regex codemod that
+renames `\buserid\b` everywhere will hit:
+- Zod schema fields (`z.object({ userid: ... })`)
+- Local variables (`const { id } = ...`)
+- TypeScript generic types unrelated to the table
+
+The first try crashed the build (`Property 'id' does not exist on
+type '{ ID: string, ... }'`). Reverted. **Manual file-by-file
+rewrite** with the rename map is slower but produces clean diffs.
+
+For tooling: `scripts/codemod-camelcase-pilot.py` exists as a
+dry-run STARTING POINT — its output shows which files + columns
+need touching, but the human must apply the actual edits. The
+codemod's auto-mode (`--apply`) requires AST-aware parsing
+(ts-morph) to be safe; regex alone is too broad.
+
+**Lockstep timing.** Apply migration FIRST, push code SECOND. The
+gap is ~2-3 min (Vercel rebuild). During the gap, Pacred queries
+against the renamed tables 5xx. The reverse order (push first, then
+apply) has the same gap but with old code expecting old schema —
+also broken.
+
+**See:** `scripts/{schema-diff-vs-admin-spec,gen-camelcase-pilot,
+codemod-camelcase-pilot,apply-pilot-migration}.{py,mjs}` +
+`supabase/migrations/0113_align_pilot_users_admin_co.sql` +
+`scripts/_camelcase-map.json` (the source-of-truth rename map for
+ALL 108 tables).
+
+---
+
 ## [2026-05-27] `googleapis` package OOMs the Next 16 / tsc build — use `google-auth-library` + raw fetch instead
 
 **Symptom.** `pnpm build` on Next 16.2.6 (Turbopack) compiled the app in 30s but then crashed during the TypeScript phase with:

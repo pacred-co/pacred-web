@@ -6,6 +6,35 @@ Audience: any operator running multi-agent batches via `Agent({ isolation: "work
 
 ---
 
+## L-PAS-06 · ปอน refreshes brand-asset image FILES in-place (same filename, new content) — never auto-rewrite her image src paths without checking her latest podeng commit first
+
+**Trigger.** 2026-05-27 brand-leak scrub: an agent saw `<img src="https://pcscargo.co.th/wp-content/uploads/.../shop-2-300x300.png">` and `<img src="/legacy/pcs/shop-2-300x300.png">` rendering on customer pages — looked like a PCS-branded leak that needed cleanup. The agent swapped 10 image refs across 6 files: `/legacy/pcs/shop-2-300x300.png` → `/images/customertheme/pacredmonkey2.png` (the obvious Pacred-branded mascot in ปอน's customertheme folder) and `/legacy/pcs/theme/free50-3.png` → `/images/customertheme/free50-3.png`. Shipped + pushed to prod.
+
+The next day ปอน merged her own brand-asset refresh (`e21fd2e1 chore(assets): brand asset updates + cleanup`):
+
+```
+M  public/legacy/pcs/shop-2-300x300.png       Bin 69278 -> 218856 bytes
+M  public/legacy/pcs/theme/free50-3.png       Bin 193056 -> 446819 bytes
+M  public/images/bannermobile/bannermobilemain.png Bin 192784 -> 1218707 bytes
+D  public/images/customertheme/free50-3.png   (consolidated to theme/)
+```
+
+She HAD refreshed the legacy/pcs files in place with Pacred-branded content — the legacy paths were never a leak in her plan, just unrefreshed images. The agent's swap was well-intentioned but unaware — and broke ปอน's intent. Worse, the file she deleted (`customertheme/free50-3.png`) is the exact path the agent had just swapped TO — so the merge produced 6 image-src refs pointing at a now-404 file. The fix was reverting the agent's path swaps + accepting ปอน's refreshed files.
+
+**Rule — before swapping any image src that ปอน has touched in `public/`:**
+
+1. `git fetch origin && git log origin/podeng -10 --stat | head -50` — read the last 10 commits on `podeng` for any binary changes under `public/` (especially `public/legacy/pcs/` and `public/images/`).
+2. If ปอน has touched the file in the last week, the rule is: **she owns it. Take her version. Don't move the path, don't change the filename, don't relocate it to a different folder.** Even when the surrounding code (server-side comment, lint rule, brand-cleanup intent) says the path should change.
+3. The corollary: when ปอน's diff shows a binary file `M`-marked, the `git diff` shows nothing useful — `Bin 69KB -> 218KB` is the whole signal. The file content is materially different even though the diff is silent. Trust the byte-count change as the signal that she updated the asset.
+
+**Why this happens.** ปอน's workflow is image-edit-in-place: she refreshes the binary, commits, doesn't rename. Pacred's docs say "ปอน owns brand assets" but don't say "and she refreshes filenames in place" — so an agent that's scrubbing brand leaks reasonably assumes the legacy path is a leak. It isn't — it's just an asset slot ปอน hasn't refreshed yet.
+
+**Anti-pattern.** Treating `/legacy/pcs/*.png` as automatically PCS-branded. The folder name is a transcription artifact (assets live under that path because the legacy markup hard-codes them); the FILE CONTENT inside can be — and increasingly is — Pacred-themed.
+
+**What the docs/runbook should say** (TODO: thread into `briefs/podeng.md` + `runbook/faithful-port-plan.md`): "ปอน refreshes brand-asset image files in place under `public/` (any folder). Other lanes MUST NOT move, rename, or swap any image filename ปอน has touched in the last week. Brand-leak scrubs are CODE-level only (rewriting `https://pcscargo.co.th/...` URLs in JSX) — never relocate a `public/` file ปอน owns."
+
+---
+
 ## L-PAS-01 · Pre-audit BEFORE spawning agents (or pay for 3 "already-done" reports)
 
 **Trigger.** Sprint-13 spawned 3 agents to ship V-E3 / V-E4 / V-E7 / V-E9 / V-E10 / V-E11. All 3 came back with the same finding: "already shipped on dave-pacred, no work needed." The 3 agent-runs (~600s + ~250s + ~600s = ~25 min of agent time, plus my tokens for reviewing each report) produced exactly **one** real fix (V-E10 QA-gate wire, ~15 minutes if I'd done it myself).
