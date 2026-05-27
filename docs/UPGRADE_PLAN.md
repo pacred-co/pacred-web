@@ -49,11 +49,14 @@
 the original to 100% sameness FIRST, then improve.
 
 **STATE:**
-- **Phase A — data migration** — the legacy `pcsc_main` (117 tables ·
-  ~8,898 customers) **business data is LOADED to dev + prod Supabase**.
-  Migrations `0081`-`0083` + `0087` on `dave`. Remaining = 3 oversized log
-  tables (779 MB) + customer image files — backfill **after** the Supabase Pro
-  upgrade (imminent — แต้ม's image data received).
+- **Phase A — data migration — ✅ DONE.** The legacy `pcsc_main` (117 tables ·
+  ~8,898 customers) is **fully loaded on dev + prod Supabase**. Migrations
+  `0081`-`0083` + `0087` applied; Supabase **Pro upgrade done** (ก๊อต) →
+  **all 117 tables loaded** including the 3 log tables (`tb_web_hs` ·
+  `tb_history_key` · `tb_history`) backfilled post-Pro; **customer image +
+  storage files uploaded to Supabase S3 production** (`pcsracgo/public/member`)
+  by ภูม 2026-05-24. Stage `A-final` complete — Phase B is the live forward
+  work.
 - **Phase B — workflow fidelity** — **WAVE 1 done + integrated** on `dave`:
   customer 9-icon launchpad · customer order flow · admin per-role RBAC
   sidebar + badges · admin container `tb_cnt` payment ledger · the legacy-auth
@@ -64,12 +67,16 @@ the original to 100% sameness FIRST, then improve.
 **STAGES** — `A-final` → `B-0` → `B-waves` → `C`. Detail in §2–§4 below.
 
 **WORK LANES** (priority order: เดฟ + ก๊อต first, then ปอน + ภูม):
-- **เดฟ** — integrator + Phase-A driver + Phase-B integration + the
-  `dave→main` deploy gate.
-- **ก๊อต** — production gate + the Supabase Pro purchase + the แต้ม
-  handover + the JMF API (Phase C) + production watch.
-- **ปอน** — Phase-B **frontend** — the customer screens.
-- **ภูม** — Phase-B **backend** — admin + customer-portal backend onto `tb_*`.
+- **เดฟ** — integrator + 1:1 customer-backend lane (`dave-pacred`) +
+  Phase-B integration + the `dave-pacred → main` deploy gate.
+- **ก๊อต** — production gate + 1:1 admin back-office lane (NEW 2026-05-24,
+  was ภูม pre-reset) + the JMF API (Phase C) + production watch. *Supabase Pro
+  + แต้ม handover ✅ done.*
+- **ปอน** — Phase-B **frontend** — the customer screens (`podeng` → merged
+  into `dave-pacred`).
+- **ภูม** — V3 backend continuation (UNLOCKED 2026-05-24, `Poom-pacred`) —
+  DPX ERP enhancements + customer-image upload ✅ done; merges in after 1:1
+  ships to main.
 
 Full who-owns-what in §5.
 
@@ -118,31 +125,39 @@ with their **existing password — no reset**.
 **Done** — the pipeline (MySQL → pgloader → PostgreSQL → `PCS`→`PR` rebrand →
 migrations) is built and validated; the schema is committed (`0081` 117 tables
 + RLS · `0082` indexes · `0083` `next_pr_member_code()`); the auth bridge
-(`lib/auth/pcs-legacy-password.ts`) is verified against real hashes; and on
-**2026-05-19 the business data was loaded to BOTH the dev and prod Supabase
-projects** — **114 of 117 tables reconcile MySQL ↔ Supabase exactly**
-(~8,898 customers · orders · wallets · ตู้ · forwarders · receipts · the
-79-char `tb_users.userpass` login hashes), prod DB 252 MB. Migrations
-`0081`-`0083` + `0087` are on `dave`.
+(`lib/auth/pcs-legacy-password.ts`) is verified against real hashes; the
+business data was loaded to BOTH the dev and prod Supabase projects;
+**ก๊อต completed the Supabase Pro upgrade**, after which the **3 oversized log
+tables (`tb_web_hs` · `tb_history_key` · `tb_history`, 779 MB) were backfilled**
+— prod now carries **all 117 tables loaded** with row counts reconciling
+MySQL ↔ Supabase. **ภูม uploaded the customer image + storage files** into
+Supabase S3 production (`pcsracgo/public/member`) on 2026-05-24. Migrations
+`0081`-`0083` + `0087` are on `main`. Member-code numbering was further refined
+post-launch via `0095`-`0103` (sequence drift / numeric-pad collisions —
+lowest-vacant + min-3-digit pad + legacy-anchor restore).
 
-**Stage `A-final` — the one remaining stage:**
+**Stage `A-final` — ✅ COMPLETE.**
 
-| Item | What | Status | Owner |
-|---|---|---|---|
-| **Supabase Pro upgrade** | Free tier caps a DB at 500 MB; the full legacy data is 1.02 GB. Upgrade to Pro to fit it. | 🟡 imminent — the purchase | ก๊อต |
-| **3 log tables backfill** | `tb_web_hs` (657 MB) · `tb_history_key` (62 MB) · `tb_history` (59 MB), 779 MB — currently created **empty**. Backfill to full fidelity post-Pro. | 🟡 pending the Pro upgrade | เดฟ |
-| **Customer image/file backfill** | The legacy upload folders (`images/users`, `images/shops`, `storage/file`, `storage/slip`) → Supabase Storage. แต้ม's image data is **received**; load it post-Pro. | 🟡 pending the Pro upgrade | เดฟ + ก๊อต |
-| **Reconcile 117/117** | After the backfill, prod row counts ↔ source MySQL must match **all 117 tables** — declare Phase A done. | 🔴 after the above | เดฟ · gate ก๊อต |
+| Item | What | Status |
+|---|---|---|
+| **Supabase Pro upgrade** | Free tier capped DB at 500 MB; legacy data was 1.02 GB → upgrade to Pro. | ✅ done (ก๊อต) |
+| **3 log tables backfill** | `tb_web_hs` (657 MB) · `tb_history_key` (62 MB) · `tb_history` (59 MB), 779 MB. | ✅ backfilled post-Pro |
+| **Customer image/file backfill** | Legacy `images/users` · `images/shops` · `storage/file` · `storage/slip` → Supabase Storage. | ✅ uploaded to S3 prod (`pcsracgo/public/member`) by ภูม 2026-05-24 |
+| **Reconcile 117/117** | Prod row counts ↔ source MySQL match all 117 tables. | ✅ |
 
 **Phase-A open decisions — ✅ all DECIDED** (runbook §7): the 8 special
 userIDs (`PCS<letters>` rewritten to `PR<letters>`; `PW`/`JET`/`FCL`/`AIGA`
 verbatim) and new-customer numbering (lowest-vacant — first signups land
-`PR1`-`PR5`).
+`PR1`-`PR5`, refined to min-3-digit pad post-launch).
 
-**Phase-A exit criteria:** the Pro upgrade done · the 3 log tables + customer
-images backfilled · prod row counts reconcile **all 117 tables** · migrated
-customers can sign in with their legacy password · the `tb_*` schema coexists
-cleanly with Pacred's existing tables (nothing dropped).
+**Phase-A exit criteria — ALL MET:** Pro upgrade done ✅ · 3 log tables +
+customer images backfilled ✅ · prod row counts reconcile all 117 tables ✅ ·
+migrated customers sign in with their legacy password ✅ · `tb_*` schema
+coexists with Pacred's existing tables (nothing dropped) ✅.
+
+⚠️ **Remaining cleanup (internal — NOT a legacy gap):** the prod Supabase
+project (`yzljakczhwrpbxflnmco`) has internal table-naming conflicts between
+rebuilt-era and legacy `tb_*` schemas — our cleanup, owners เดฟ + ภูม.
 
 > The pre-D1 PCS-customer-migration scaffolding — migration
 > `0067_pcs_customer_migration.sql`, the `u2-1-pcs-customer-migration.md`
@@ -370,9 +385,10 @@ the faithful port.
 ---
 
 **End — `UPGRADE_PLAN.md`.** The D1 master phase plan: Phase A 🗄 data migration
-(stage `A-final` — Pro upgrade → 3 log tables + images backfill → reconcile
-117/117) → Phase B 🎯 workflow fidelity (the bulk of forward work — `B-0`
-wave-1 integrated, `B-waves` customer + admin tracks in parallel) → Phase C
-🔭 Pacred enhancements (Tier 0/1/2/3 + the six systems — deferred, §7).
-Mobile-first + the quality gate ( + `legacy-fidelity-check` for Phase B) apply
-across all of them.
+(stage `A-final` ✅ COMPLETE — Pro upgrade done · 3 log tables backfilled ·
+customer images on S3 prod · 117/117 reconciled) → Phase B 🎯 workflow fidelity
+(the bulk of forward work — `B-0` wave-1 integrated, customer 1:1 lane on
+`dave-pacred` + admin 1:1 lane on ก๊อต + V3 continuation on `Poom-pacred` in
+parallel) → Phase C 🔭 Pacred enhancements (Tier 0/1/2/3 + the six systems —
+deferred, §7). Mobile-first + the quality gate ( + `legacy-fidelity-check` for
+Phase B) apply across all of them.

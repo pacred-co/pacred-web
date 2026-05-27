@@ -1,8 +1,13 @@
 # PCS Cargo → Pacred — Data Migration Runbook
 
-> **Status (2026-05-19):** pipeline validated · **business data loaded to
-> dev + prod Supabase** (Option B — 114 of 117 tables; the 3 oversized log
-> tables wait for the Supabase Pro upgrade — see §4).
+> **Status (2026-05-27):** ✅ **Phase A COMPLETE.** Pipeline validated · all
+> 117 tables loaded on dev + prod Supabase · Supabase **Pro upgrade done** (ก๊อต)
+> · 3 log tables (`tb_web_hs`/`tb_history_key`/`tb_history`) backfilled post-Pro
+> · **customer image + storage files uploaded to Supabase S3 production**
+> (`pcsracgo/public/member`) by ภูม 2026-05-24 · auth bridge live. The runbook
+> below is preserved as the historical record of the migration approach + the
+> post-cutover refresh procedure (re-run §6 against a fresh `pcsc_main` dump
+> if needed).
 >
 > Decision basis: **D1** (เดฟ, 2026-05-18) — Pacred *becomes* the legacy PCS
 > Cargo system, faithfully rebranded `PCS` → `PR`.
@@ -72,14 +77,15 @@ committed to `dave`:
   (`pprrlabgebrnocthwdmg`) and prod (`yzljakczhwrpbxflnmco`) projects.
   **114 of 117 tables reconcile MySQL ↔ Supabase exactly**; 8,898 `tb_users`
   rows with intact 79-char login hashes; prod DB 252 MB.
-- ⏳ **3 log tables pending the Pro upgrade** — Supabase **free tier caps a
-  database at 500 MB**; the full legacy data is **1.02 GB**. The 3 oversized
-  history/log tables — `tb_web_hs` (657 MB) · `tb_history_key` (62 MB) ·
-  `tb_history` (59 MB), 779 MB total — are created **empty**. The 230 MB of
-  business data (114 tables — customers, orders, wallets, ตู้, forwarders,
-  receipts) fits the free tier and is loaded. After the Supabase **Pro**
-  upgrade the 3 log tables + the customer image/file storage (§7) backfill
-  to full fidelity (per เดฟ — "production จริง ต้องอัพครบทั้งหมด").
+- ✅ **3 log tables BACKFILLED** — Supabase free tier capped a database at
+  500 MB; the full legacy data is 1.02 GB. The 3 oversized history/log tables
+  (`tb_web_hs` · `tb_history_key` · `tb_history`, 779 MB) were created empty
+  on the initial load. **ก๊อต completed the Supabase Pro upgrade** and the
+  3 log tables were backfilled post-Pro to full fidelity (per เดฟ —
+  "production จริง ต้องอัพครบทั้งหมด"). **Prod now carries all 117 tables.**
+- ✅ **Customer image + storage files** — ภูม uploaded the legacy
+  `pcsracgo/public/member` image + storage files into **Supabase S3 production**
+  on 2026-05-24 — no further legacy migration needed for storage parity.
 
 **Judgement calls in this run** (flag if any need revisiting):
 (1) **RLS enabled** on all 117 tables, no policies — Supabase exposes
@@ -116,10 +122,12 @@ itself is now **in the repo** — `supabase/migrations/0081`-`0083` (no PII).
 
 ## 6. Production-load runbook
 
-> **Done 2026-05-19 (Option B):** steps 3-7 ran against dev + prod with the
-> 2026-05-18 dump — business data only (114 tables, the 3 log tables empty),
-> see §4. The steps below are the FULL procedure for the post-Pro-upgrade
-> load (a fresh cutover dump · the 3 log tables · the customer images).
+> **✅ COMPLETE.** The initial load (steps 3-7) ran 2026-05-19 against dev +
+> prod with the 2026-05-18 dump — business data only (114 tables, the 3 log
+> tables empty); the 3 log tables were backfilled post-Pro-upgrade by ก๊อต
+> (see §4). Customer image + storage files uploaded to Supabase S3 production
+> by ภูม 2026-05-24. The steps below are the **historical procedure** —
+> re-run against a fresh cutover dump if a future refresh is needed.
 
 1. **Fresh dump** — get a final `pcsc_main` export from แต้ม at cutover (the
    2026-05-18 dump will be stale by then). Load into local MySQL.
@@ -141,19 +149,20 @@ itself is now **in the repo** — `supabase/migrations/0081`-`0083` (no PII).
 8. **Files** — migrate the customer upload folders into Supabase Storage
    (§7 — pending แต้ม).
 
-## 7. Open / pending — needs เดฟ or แต้ม
+## 7. Open / pending — ✅ all resolved (2026-05-24)
 
-> **แต้ม hand-over (reduced 2026-05-18).** ก๊อต confirmed the **JMF API spec
-> is no longer needed from แต้ม** — ก๊อต reverse-engineers / builds the JMF
-> API himself. The remaining แต้ม dependency is **two items**: (1) the
-> customer image/file storage below, and (2) the final `pcsc_main` cutover
-> dump (§6.1).
+> **แต้ม hand-over — CLOSED.** ก๊อต confirmed the **JMF API spec is no longer
+> needed from แต้ม** — ก๊อต reverse-engineers / builds the JMF API himself
+> (Phase C). The customer image/file storage dependency was resolved when
+> **ภูม uploaded the legacy `pcsracgo/public/member` files directly to
+> Supabase S3 production** on 2026-05-24. No further แต้ม dependency for
+> Phase A. (A fresh `pcsc_main` cutover dump remains optional — only needed
+> if a future refresh is wanted; the current loaded data plus live writes is
+> the active state.)
 
-- 🔴 **Customer upload files** — `images/users`, `images/shops`,
-  `storage/file`, `storage/slip` live on the legacy production server (held
-  by แต้ม). ก๊อต fetches these from แต้ม → dumped into Pacred so migrated
-  customers keep continuity (their order history + their documents). Needed
-  for §6.8.
+- ✅ **Customer upload files** — ภูม uploaded the legacy `pcsracgo/public/member`
+  image + storage files into Supabase S3 production 2026-05-24. Migrated
+  customers have their order history + their documents in place.
 - ✅ **8 special userIDs** — `PCSTT` / `PCSCARGO` / `PCSARNON` / `PCSFAM`
   (PCS + letters) and `PW` / `JET` / `FCL` / `AIGA` (no PCS prefix).
   **DECIDED (เดฟ 2026-05-18 · Q3):** rewrite the `PCS<letters>` group to
@@ -161,7 +170,9 @@ itself is now **in the repo** — `supabase/migrations/0081`-`0083` (no PII).
 - ✅ **New-customer numbering** — **DECIDED (เดฟ 2026-05-18 · Q4):**
   lowest-vacant — a new signup fills the smallest unused `PR<n>` from `PR1`
   up (`next_pr_member_code()`); the first post-migration signups land at
-  `PR1`-`PR5`.
+  `PR1`-`PR5`. **Refined post-launch via migrations `0095`-`0103`** after
+  live use revealed sequence drift + numeric-pad collisions (lowest-vacant +
+  min-3-digit pad + legacy-anchor restore).
 
 ## 8. Supersedes
 
@@ -197,18 +208,23 @@ applied until Phase B ships, per Q5 in
 (§8) — the feature it backs is dead. Owner was: ภูม. DB-1 being done
 unblocks any `dave→main` deploy.
 
-**DB-2 — This legacy port** (§1-§8). 🟢 **Business data LOADED to dev + prod
-(2026-05-19).** Migrations `0081`-`0083` + `0087` applied + the 230 MB of
-business data (114 of 117 tables · 8,898 customers) loaded to both Supabase
-projects; 114/114 business tables reconcile exactly. 🟡 **Remaining:** the 3
-oversized log tables (779 MB) + the customer images — they need the Supabase
-**Pro** upgrade (free tier caps at 500 MB; full data is 1.02 GB). Gated on
-the Pro-upgrade decision (เดฟ + ก๊อต + the owner) + แต้ม's image storage.
-The `tb_*` namespace does NOT collide with the rebuilt schema, so DB-1 and
-DB-2 are independent.
+**DB-2 — This legacy port** (§1-§8). 🟢 **✅ COMPLETE.** Migrations
+`0081`-`0083` + `0087` applied + the business data (114 tables · 8,898
+customers) loaded to both Supabase projects 2026-05-19; **ก๊อต completed the
+Supabase Pro upgrade** and the **3 oversized log tables (779 MB) were
+backfilled post-Pro** — prod now carries **all 117 tables**. **ภูม uploaded
+the customer image + storage files** to Supabase S3 production
+(`pcsracgo/public/member`) 2026-05-24. The `tb_*` namespace does NOT collide
+with the rebuilt schema, so DB-1 and DB-2 are independent — though an
+internal table-naming cleanup between rebuilt-era and `tb_*` schemas remains
+as a separate task (เดฟ + ภูม).
 
-**Numbering.** Migration files `0001`-`0087` exist (`0065` is an intentional
+**Numbering.** Migration files `0001`-`0111` exist (`0065` is an intentional
 gap). `0081`-`0083` = this legacy port (schema · indexes · member-seq);
-`0084`-`0086` = ภูม's booking/credit-note/chat batch (commit `a248696`);
-`0087` = the `v_pcs_migration_status` security-invoker fix. The next free
-number for new Phase-B work is **`0088`**.
+`0084`-`0086` = ภูม's booking/credit-note/chat batch; `0087` = the
+`v_pcs_migration_status` security-invoker fix; `0089`-`0090` + `0095`-`0103`
+= member-code refinements (sequence drift / numeric-pad collisions);
+`0101` = LINE Notify per-user (Gap #3); `0104`-`0106` = shop-wallet + LINE
+Notify dispatch; `0108` = PCS legacy hot indexes (perf); `0109`-`0111` =
+payment slip / reconciliation / invoice adjustments. The next free number
+for new Phase-B work is **`0112`**.

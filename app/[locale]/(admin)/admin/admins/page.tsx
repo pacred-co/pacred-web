@@ -587,11 +587,13 @@ export default async function AdminTablePage({
                                       // home.php L320-321 — adminPicture lives under
                                       // basePath/images/admin/<file>. The migrated
                                       // tb_admin.adminpicture is a bare filename
-                                      // (default 'user.jpg'). The customer-images
-                                      // backfill (Phase A pending the Supabase Pro
-                                      // upgrade) will populate the per-admin photos;
-                                      // until then every row resolves to the
-                                      // user.jpg default. Path mirrors the legacy.
+                                      // (default 'user.jpg'). Customer image backfill
+                                      // ✅ done (ภูม → S3 prod 2026-05-24,
+                                      // pcsracgo/public/member); verify that the
+                                      // images/admin/* admin photos were included
+                                      // in the same upload — until verified, every
+                                      // row resolves to the user.jpg default.
+                                      // Path mirrors the legacy.
                                       const pic = row.adminpicture && row.adminpicture.trim() !== ""
                                         ? row.adminpicture : "user.jpg";
                                       const picUrl = `/legacy/pcs/admin/images/${pic}`;

@@ -29,12 +29,15 @@ customers already know and use daily.
 **Pacred becomes the legacy PCS Cargo system, faithfully — rebranded
 `PCS` → `PR`.** Not a reinterpretation; a faithful port. Three phases:
 
-- **Phase A — Data migration.** Port the legacy `pcsc_main` (117 tables, all
-  data) into Pacred's PostgreSQL / Supabase. `PCS<n>` → `PR<n>`, keeping the
-  exact running number. Custom auth so customers sign in with their existing
-  password — no reset.
-  *Status: pipeline built · dry-run validated (117/117 tables reconciled) ·
-  pending the production load.* Runbook:
+- **Phase A — Data migration. ✅ DONE.** Ported the legacy `pcsc_main`
+  (117 tables, all data) into Pacred's PostgreSQL / Supabase. `PCS<n>` →
+  `PR<n>`, keeping the exact running number. Custom auth so customers sign in
+  with their existing password — no reset.
+  *Status: Supabase **Pro upgrade done** (ก๊อต) · **all 117 tables loaded** on
+  dev + prod (incl. the 3 log tables `tb_web_hs`/`tb_history_key`/`tb_history`
+  backfilled post-Pro) · **customer image + storage files uploaded to Supabase
+  S3 production** (`pcsracgo/public/member`) by ภูม 2026-05-24 · migrations
+  `0081`-`0083` + `0087` on `main`.* Runbook:
   [`../runbook/pcs-data-migration.md`](../runbook/pcs-data-migration.md).
 - **Phase B — Workflow fidelity.** Rework the Pacred app — customer portal
   and admin back-office — so its menus, job statuses, container (ตู้) flow,
@@ -69,7 +72,7 @@ customers already know and use daily.
 | **เดฟ** | Phase A — drive the data migration to production · integrate · coordinate Phase B |
 | **ภูม** | Phase B backend — rework admin + customer-portal backend onto the ported `tb_*` schema + legacy workflow |
 | **ปอน** | Phase B frontend — rework the customer-facing UI to match the legacy PCS look + flow |
-| **ก๊อต** | ✅ ADR ratified · build the JMF API himself (reverse-engineered) · fetch the customer image/file storage from แต้ม · production-load gate |
+| **ก๊อต** | ✅ ADR ratified · ✅ Supabase Pro upgrade done · 1:1 admin back-office lane (NEW 2026-05-24) · build the JMF API himself (reverse-engineered, Phase C) · production-load gate. *Customer image/file storage handover handled by ภูม uploading directly to S3 prod 2026-05-24.* |
 
 ## References
 

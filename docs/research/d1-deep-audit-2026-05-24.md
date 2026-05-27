@@ -58,8 +58,8 @@ S = ≤1 day · M = 2–5 days · L = ≥1 week
 - Pacred has 7 Vercel crons (auto-cancel-orders, sales-daily-digest, refresh-active-customers, expire-probation, expire-driver-assignments, sms-balance-check, send-scheduled-broadcasts).
 - **Missing:** Google Sheets sync cron, LINE Notify dispatcher cron.
 
-**Customer image storage:**
-- The 37GB `REALSHITDATAPCS.rar` likely contains all customer-uploaded images (avatars, payment slips, document scans, forwarder photos). Not extracted yet (disk constraint — need ~50–80GB after extract).
+**Customer image storage: ✅ DONE.**
+- ภูม uploaded the legacy `pcsracgo/public/member` image + storage files directly into **Supabase S3 production** 2026-05-24. REALSHITDATAPCS.rar was also extracted (~25GB code-only at `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/`) — powers this deep audit. Phase A storage parity closed; no further legacy image migration needed.
 
 ### What pacred-web has that legacy doesn't (kept-or-expanded)
 
@@ -159,7 +159,7 @@ These are flows that work but degraded (rebuilt-era differs from legacy):
 
 ### Sprint 3+ (ongoing)
 8. Sprint 1 of `Poom-pacred` V3 merges — ภูม picks which V3 features land first on main after 1:1 stable
-9. **Customer image migration** — ก๊อต provisions disk space, extracts `pcsc/img/` from REALSHITDATAPCS.rar, uploads to Supabase Storage
+9. ~~**Customer image migration**~~ ✅ DONE — ภูม uploaded `pcsracgo/public/member` to Supabase S3 production 2026-05-24
 10. **Gap #4 — CargoThai PO sync** — when partner relationship confirmed (lower priority — verify if still used)
 
 ---

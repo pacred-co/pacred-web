@@ -347,9 +347,10 @@ plan; the Pacred project is on Pro).
 - Supabase Storage pricing scales linearly with size + egress. A bucket we
   forgot we had can quietly accumulate cost.
 - D1 Phase A imports **customer images + slips from the legacy PCS
-  system** (per ก๊อต's task in ADR-0017: "fetch the customer image/file
-  storage from แต้ม"). This will roughly double total Storage size
-  overnight when the import runs.
+  system** — ✅ DONE 2026-05-24: ภูม uploaded the legacy `pcsracgo/public/member`
+  files directly into Supabase S3 production. Total Storage size has already
+  jumped post-load — lifecycle policy + cost cron are now needed *after the
+  fact* rather than *before the fetch* (still in scope, urgency unchanged).
 - Compliance — PII (slips contain bank account numbers, IDs) sitting in a
   bucket forever is a GDPR/PDPA risk even if Pacred is TH-only.
 
