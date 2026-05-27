@@ -553,10 +553,15 @@ export async function adminBulkUpdateForwarderTbStatus(
 
     const nowIso = new Date().toISOString();
     const dateCol = TB_STATUS_DATE_COL[fstatus];
+    // tb_forwarder.adminidupdate is varchar(10) — same legacy pcsc_main
+    // constraint that bit /admin/forwarders/new (Wave 23 P0 fix 5254f8d).
+    // Sister bug-fix 2026-05-27 — ภูม bulk-update of #51973 hit the same
+    // ceiling because adminId ("admin_pasit_pap" etc) was inserted raw.
+    const adminIdSafe = String(adminId).slice(0, 10);
     const update: Record<string, unknown> = {
       fstatus,
       fdateadminstatus: nowIso,
-      adminidupdate:    adminId,
+      adminidupdate:    adminIdSafe,
       ...(dateCol ? { [dateCol]: nowIso } : {}),
     };
 
