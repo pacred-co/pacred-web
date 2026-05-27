@@ -50,6 +50,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import {
   createCombineBillSchema,
   deleteCombineBillSchema,
@@ -168,7 +169,7 @@ export async function adminCreateCombineBill(
 
       // ── (c) INSERT tb_bill — forwarder-bill.php L24 ──
       //   INSERT INTO tb_bill(date, printStatus, adminID) VALUES (NOW(), '', ?)
-      const legacyAdminId = await resolveLegacyAdminId();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 30);
       const nowIso = new Date().toISOString();
       const { data: billRow, error: billErr } = await admin
         .from("tb_bill")

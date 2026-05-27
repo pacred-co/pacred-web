@@ -53,6 +53,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { sendSms } from "@/lib/sms/gateway";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { logger, redactPhone } from "@/lib/logger";
@@ -284,7 +285,7 @@ export async function adminCallPriceUser(
         const updatePayload: Record<string, unknown> = {
           fstatus:          "5",
           fdatestatus5:     nowIso,
-          adminidupdate:    adminId,
+          adminidupdate:    safeLegacyAdminId(adminId, 10),
           fdateadminstatus: nowIso,
         };
         if (discount !== undefined) {

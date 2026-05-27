@@ -36,6 +36,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { logger } from "@/lib/logger";
 
 // ────────────────────────────────────────────────────────────
@@ -372,7 +373,7 @@ export async function adminBarcodeImportScan(
     ["super", "ops", "warehouse"],
     async ({ adminId }) => {
       const admin = createAdminClient();
-      const legacyAdminId = await resolveLegacyAdminId();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
       const nowIso = new Date().toISOString();
 
       // ── 1. LOOKUP — primary then fallback chain

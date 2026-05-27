@@ -22,6 +22,7 @@
  */
 
 import { withAdmin } from "@/actions/admin/common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { revalidatePath } from "next/cache";
@@ -55,7 +56,7 @@ async function setCntStatus(cntId: number, newStatus: "2" | "3"): Promise<Result
       .from("tb_cnt")
       .update({
         cntstatus: newStatus,
-        adminidupdate: adminId,
+        adminidupdate: safeLegacyAdminId(adminId, 30),
         dateupdate: new Date().toISOString(),
       })
       .eq("id", cntId);
@@ -127,7 +128,7 @@ export async function adminUploadCntSlip(
         .update({
           cntimagesslip: up.filename,
           cntstatus:     "2",
-          adminidupdate: adminId,
+          adminidupdate: safeLegacyAdminId(adminId, 30),
           dateupdate:    new Date().toISOString(),
         })
         .eq("id", cntId);

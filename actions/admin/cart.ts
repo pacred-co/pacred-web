@@ -46,6 +46,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -444,10 +445,10 @@ export async function adminSubmitCartAsOrder(
           hshipby:             d.hshipby,
           hfreeshipping:       "0",
           ...address,
-          adminidip:           adminIdForHeader,
-          adminidcreate:       adminIdForHeader,
-          adminid:             adminIdForHeader,
-          adminidupdate:       adminIdForHeader,
+          adminidip:           safeLegacyAdminId(adminIdForHeader, 30),
+          adminidcreate:       safeLegacyAdminId(adminIdForHeader, 10),
+          adminid:             safeLegacyAdminId(adminIdForHeader, 10),
+          adminidupdate:       safeLegacyAdminId(adminIdForHeader, 10),
           // Placeholders patched in step e below
           htitle:              "",
           hcover:              "",

@@ -29,6 +29,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 
 // ────────────────────────────────────────────────────────────
 // addAccAdmin — admin-profile.php L13-27
@@ -236,14 +237,14 @@ export async function adminUpdateInterpreterCommission(
       const ins = await admin.from("tb_set_comm_interpreter").insert({
         percom:        d.per_com,
         dateupdate:    now,
-        adminidupdate: adminId,
+        adminidupdate: safeLegacyAdminId(adminId, 20),
         adminid:       d.admin_id,
       });
       error = ins.error;
     } else {
       const upd = await admin
         .from("tb_set_comm_interpreter")
-        .update({ percom: d.per_com, dateupdate: now, adminidupdate: adminId })
+        .update({ percom: d.per_com, dateupdate: now, adminidupdate: safeLegacyAdminId(adminId, 20) })
         .eq("adminid", d.admin_id);
       error = upd.error;
     }
