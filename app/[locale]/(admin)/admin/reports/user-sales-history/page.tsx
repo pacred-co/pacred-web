@@ -1,28 +1,37 @@
 /**
- * V-G6 #4 — Customer cohort / lifetime tool (Wave 8 backlog item #8 · D1 port).
+ * /admin/reports/user-sales-history — ประวัติการขายต่อลูกค้า
+ * (Wave 23 P1 batch 2-B Tailwind rewrite · 2026-05-27 ค่ำ).
  *
- * Replaces the Wave 7.2 redirect that punted to `/admin/customers/...`.
- * Faithful port of `pcs-admin/report-user-sales-history.php` (~1500 LOC):
- *   - List view (this file)   — per-customer registration → first/last
- *                                 order → total spend → churn risk badge
- *   - Detail view ([customer_id]/page.tsx) — per-customer UNION timeline
- *                                 across tb_forwarder + tb_header_order +
- *                                 tb_payment + tb_wallet_hs (newest 100).
+ * **Wave 23 P1 batch 2-B (2026-05-27 ค่ำ):** UI rewrite only — the
+ * underlying tb_users + tb_forwarder + tb_header_order + tb_payment
+ * cohort aggregate stays intact. Replaces the .pcs-legacy / Bootstrap-4 /
+ * admin-base.css chrome (~470 LOC) with the Pacred Tailwind v4 reports
+ * template (mirrors `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
  *
- * URL filters:
- *   ?cohort=YYYY-MM   → registration cohort filter (default = all)
- *   ?q=<text>         → search by userid / username / phone
- *   ?limit=<N>        → page size (default 100, max 500)
+ * **Workflow preserved (per AGENTS §0a):** same logic, same filters
+ * (cohort YYYY-MM · q text search · limit), same data shape, same
+ * counted-status gates (fstatus 6,7 / hstatus 5,6 / paystatus 3),
+ * same role gate (super + ops + accounting + sales_admin), same churn
+ * heuristic (> 60 days inactive). Only the chrome moves Bootstrap → Tailwind.
  *
- * Gate: super + accounting + sales_admin — same as sister reports.
+ * **Legacy PHP reference:**
+ *   `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-user-sales-history.php`
+ *   — note: that legacy file actually serves a sales-rep commission
+ *   payout flow (`tb_user_sales_admin_pay`). This Pacred slot is the
+ *   V-G6 #4 customer-cohort drill-down (Wave 8 backlog #8) that
+ *   replaces the Wave 7.2 redirect to `/admin/customers/...`. The URL
+ *   is reused; the legacy commission flow lives elsewhere.
  *
- * Churn risk flag = "last activity > 60 days ago" per the legacy heuristic
- * (`report-user-sales-history.php` L260-275 — the "ลูกค้าไม่ใช้งาน" badge).
+ * **§0c compliance:** every Supabase query destructures { data, error },
+ * logs + throws on load-bearing reads; uses datetime-helpers `nowMs`
+ * (no raw `Date.now()` in render per Next 16 react-hooks/purity).
  */
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CsvButton } from "@/components/admin/csv-button";
+import { nowMs } from "@/lib/datetime-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -48,15 +57,15 @@ function thb(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function daysAgo(iso: string | null): number | null {
+function daysAgo(iso: string | null, now: number): number | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.floor((now - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function fmtDateOnly(iso: string | null): string {
-  return iso ? String(iso).slice(0, 10) : "-";
+  return iso ? String(iso).slice(0, 10) : "—";
 }
 
 // ── Row shapes ──────────────────────────────────────────────────────
@@ -101,6 +110,10 @@ type SP = { cohort?: string; q?: string; limit?: string };
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
+const LIMIT_OPTIONS = [50, 100, 200, 500] as const;
+
+// ── Page ────────────────────────────────────────────────────────────
+
 export default async function UserSalesHistoryEntry({
   searchParams,
 }: {
@@ -115,6 +128,9 @@ export default async function UserSalesHistoryEntry({
   const limit = Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(parsedLimit) ? parsedLimit : DEFAULT_LIMIT));
 
   const admin = createAdminClient();
+
+  // Render-time "now" (wrapped per Next 16 react-hooks/purity)
+  const now = nowMs();
 
   // ── 1) Customer list ────────────────────────────────────────────
   let usersQ = admin
@@ -141,6 +157,12 @@ export default async function UserSalesHistoryEntry({
   }
 
   const { data: usersData, error: usersErr } = await usersQ;
+  if (usersErr) {
+    console.error(`[tb_users cohort list] failed`, {
+      code: usersErr.code, message: usersErr.message, details: usersErr.details, hint: usersErr.hint,
+    });
+    throw new Error(`Failed to load tb_users (${usersErr.code ?? "unknown"}): ${usersErr.message}`);
+  }
   const users = (usersData ?? []) as unknown as URow[];
 
   const userids = users.map((u) => u.userid);
@@ -150,37 +172,41 @@ export default async function UserSalesHistoryEntry({
   // for ONLY these users, then bucket in TS. Counted statuses match the
   // sales-by-rep view (migration 0094): fstatus IN ('6','7') / hstatus IN
   // ('5','6') / paystatus = '3'.
-  const [
-    { data: fRowsData },
-    { data: hRowsData },
-    { data: pRowsData },
-  ] = userids.length === 0
-    ? [
-        { data: [] as FRow[] },
-        { data: [] as HRow[] },
-        { data: [] as PRow[] },
-      ]
-    : await Promise.all([
-        admin
-          .from("tb_forwarder")
-          .select("userid, fdate, ftotalprice")
-          .in("userid", userids)
-          .in("fstatus", ["6", "7"]),
-        admin
-          .from("tb_header_order")
-          .select("userid, hdate, htotalpriceuser")
-          .in("userid", userids)
-          .in("hstatus", ["5", "6"]),
-        admin
-          .from("tb_payment")
-          .select("userid, paydate, paythb")
-          .in("userid", userids)
-          .eq("paystatus", "3"),
-      ]);
+  let fRows: FRow[] = [];
+  let hRows: HRow[] = [];
+  let pRows: PRow[] = [];
 
-  const fRows = (fRowsData ?? []) as unknown as FRow[];
-  const hRows = (hRowsData ?? []) as unknown as HRow[];
-  const pRows = (pRowsData ?? []) as unknown as PRow[];
+  if (userids.length > 0) {
+    const [
+      { data: fRowsData, error: fErr },
+      { data: hRowsData, error: hErr },
+      { data: pRowsData, error: pErr },
+    ] = await Promise.all([
+      admin
+        .from("tb_forwarder")
+        .select("userid, fdate, ftotalprice")
+        .in("userid", userids)
+        .in("fstatus", ["6", "7"]),
+      admin
+        .from("tb_header_order")
+        .select("userid, hdate, htotalpriceuser")
+        .in("userid", userids)
+        .in("hstatus", ["5", "6"]),
+      admin
+        .from("tb_payment")
+        .select("userid, paydate, paythb")
+        .in("userid", userids)
+        .eq("paystatus", "3"),
+    ]);
+
+    if (fErr) console.error(`[tb_forwarder cohort agg] failed`, { code: fErr.code, message: fErr.message });
+    if (hErr) console.error(`[tb_header_order cohort agg] failed`, { code: hErr.code, message: hErr.message });
+    if (pErr) console.error(`[tb_payment cohort agg] failed`, { code: pErr.code, message: pErr.message });
+
+    fRows = (fRowsData ?? []) as unknown as FRow[];
+    hRows = (hRowsData ?? []) as unknown as HRow[];
+    pRows = (pRowsData ?? []) as unknown as PRow[];
+  }
 
   // Bucket per userid
   const aggMap = new Map<string, CustomerAggregate>();
@@ -236,235 +262,305 @@ export default async function UserSalesHistoryEntry({
   }
 
   for (const a of aggMap.values()) {
-    a.days_since_last = daysAgo(a.last_order_at);
+    a.days_since_last = daysAgo(a.last_order_at, now);
   }
 
   const aggregates = Array.from(aggMap.values());
 
+  // Stat summary
+  const totalRevenue = aggregates.reduce((s, a) => s + a.total_revenue_thb, 0);
+  const activeCount = aggregates.filter(
+    (a) => a.total_revenue_thb > 0 && (a.days_since_last === null || a.days_since_last <= 60),
+  ).length;
+  const churnRiskCount = aggregates.filter(
+    (a) => a.total_revenue_thb > 0 && a.days_since_last !== null && a.days_since_last > 60,
+  ).length;
+
+  // CSV
+  const csvRows = aggregates.map((a) => ({
+    userid: a.userid,
+    fullname: a.fullname,
+    phone: a.phone,
+    email: a.email,
+    registered_at: fmtDateOnly(a.registered_at),
+    first_order_at: fmtDateOnly(a.first_order_at),
+    last_order_at: fmtDateOnly(a.last_order_at),
+    days_since_last: a.days_since_last ?? "",
+    forwarder_count: a.forwarder_count,
+    shop_count: a.shop_count,
+    payment_count: a.payment_count,
+    total_revenue_thb: Number(a.total_revenue_thb.toFixed(2)),
+    adminidsale: a.adminidsale ?? "",
+    is_juristic: a.is_juristic ? "นิติบุคคล" : "",
+  }));
+  const csvCols = [
+    { key: "userid",            label: "รหัสลูกค้า" },
+    { key: "fullname",          label: "ชื่อ" },
+    { key: "phone",             label: "เบอร์" },
+    { key: "email",             label: "อีเมล" },
+    { key: "registered_at",     label: "สมัคร" },
+    { key: "first_order_at",    label: "ออเดอร์แรก" },
+    { key: "last_order_at",     label: "ล่าสุด" },
+    { key: "days_since_last",   label: "วันที่ผ่านมา" },
+    { key: "forwarder_count",   label: "ฝากนำเข้า (ครั้ง)" },
+    { key: "shop_count",        label: "ฝากสั่ง (ครั้ง)" },
+    { key: "payment_count",     label: "ฝากโอน (ครั้ง)" },
+    { key: "total_revenue_thb", label: "รวมรายได้ (บาท)" },
+    { key: "adminidsale",       label: "เซลล์" },
+    { key: "is_juristic",       label: "นิติบุคคล" },
+  ];
+
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · รายงาน</p>
+          <h1 className="mt-1 text-2xl font-bold">ประวัติการขายต่อลูกค้า</h1>
+          <p className="mt-1 text-sm text-muted">
+            สรุปยอดต่อลูกค้า · สถานะที่นับ: ฝากนำเข้า{" "}
+            <span className="font-mono">fstatus 6,7</span> · ฝากสั่ง{" "}
+            <span className="font-mono">hstatus 5,6</span> · ฝากโอน{" "}
+            <span className="font-mono">paystatus 3</span> · ป้าย &ldquo;เสี่ยงเลิกใช้&rdquo; = ขาดกิจกรรม &gt; 60 วัน
+          </p>
+        </div>
+        <Link
+          href="/admin/reports"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
+        >
+          ← กลับรีพอร์ตหลัก
+        </Link>
+      </div>
 
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/reports">รายงาน</Link>
-                    </li>
-                    <li className="breadcrumb-item active">ประวัติการขายต่อลูกค้า</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      {/* Filter banner (when filter applied) */}
+      {(cohort || search) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          ผลลัพธ์การค้นหา
+          {cohort && (
+            <>
+              {" · "}สมัครเดือน: <span className="font-semibold">{cohort}</span>
+            </>
+          )}
+          {search && (
+            <>
+              {" · "}คำค้น: <span className="font-semibold">&ldquo;{search}&rdquo;</span>
+            </>
+          )}
+          {" · "}จำนวนสูงสุด: <span className="font-semibold">{limit}</span>
+        </div>
+      )}
+
+      {/* Filter form (GET) */}
+      <form
+        method="GET"
+        action="/admin/reports/user-sales-history"
+        className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm space-y-3"
+      >
+        <div className="grid sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div>
+            <label htmlFor="cohort" className="block text-xs text-muted mb-1">
+              เดือนที่สมัคร (cohort)
+            </label>
+            <input
+              id="cohort"
+              type="month"
+              name="cohort"
+              defaultValue={cohort ?? ""}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
           </div>
-
-          <div className="content-body">
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <h3 className="text-center text-md-left">
-                          <span className="ft-box font-30" style={{ fontSize: "2.2rem" }}></span>{" "}
-                          ประวัติการขายต่อลูกค้า
-                        </h3>
-                        <p className="font-12 text-muted">
-                          รวมยอดต่อลูกค้า · สถานะที่นับ: ฝากนำเข้า fstatus 6,7 · ฝากสั่ง hstatus 5,6 · ฝากโอน paystatus 3
-                          · ป้าย &ldquo;เสี่ยงเลิกใช้&rdquo; = ขาดกิจกรรม &gt; 60 วัน
-                        </p>
-
-                        {/* Filter form */}
-                        <form
-                          method="GET"
-                          action="/admin/reports/user-sales-history"
-                          className="mb-2"
-                        >
-                          <div className="row">
-                            <div className="col-md-3 col-6">
-                              <label className="form-control-label" htmlFor="cohort">
-                                เดือนที่สมัคร (cohort)
-                              </label>
-                              <input
-                                type="month"
-                                className="form-control"
-                                name="cohort"
-                                defaultValue={cohort ?? ""}
-                              />
-                            </div>
-                            <div className="col-md-4 col-12">
-                              <label className="form-control-label" htmlFor="q">
-                                ค้นหา (รหัสลูกค้า · ชื่อ · เบอร์)
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                name="q"
-                                defaultValue={search}
-                                placeholder="PR0001 · ภูม · 0812345678"
-                              />
-                            </div>
-                            <div className="col-md-2 col-6">
-                              <label className="form-control-label" htmlFor="limit">
-                                จำนวนสูงสุด
-                              </label>
-                              <select className="form-control" name="limit" defaultValue={String(limit)}>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                                <option value="200">200</option>
-                                <option value="500">500</option>
-                              </select>
-                            </div>
-                            <div className="col-md-3 col-12 d-flex align-items-end">
-                              <button type="submit" className="btn btn-block btn-rounded btn-info">
-                                <i className="fas fa-search"></i> ค้นหา
-                              </button>
-                            </div>
-                          </div>
-                        </form>
-
-                        <h4 className="text-center text-md-left d-inline-block">
-                          <span className="font-14 text-danger">
-                            ผลลัพธ์: {aggregates.length} ลูกค้า
-                            {cohort ? ` · สมัครเดือน ${cohort}` : ""}
-                            {search ? ` · ค้นหา "${search}"` : ""}
-                          </span>
-                        </h4>
-
-                        {usersErr && (
-                          <div className="alert alert-danger mt-2 font-12">
-                            อ่านข้อมูลไม่สำเร็จ: {usersErr.message}
-                          </div>
-                        )}
-
-                        <div className="table-responsive mt-1">
-                          <table
-                            id="myTable"
-                            className="table report-table display table-bordered table-striped dataTable no-footer dtr-inline"
-                          >
-                            <thead>
-                              <tr className="text-center">
-                                <th>รหัส</th>
-                                <th>ชื่อ</th>
-                                <th>เบอร์</th>
-                                <th>สมัคร</th>
-                                <th>ออเดอร์แรก</th>
-                                <th>ล่าสุด</th>
-                                <th className="text-right">รวมรายได้ (บาท)</th>
-                                <th className="text-right">น/ส/อ</th>
-                                <th>เซลล์</th>
-                                <th>สถานะ</th>
-                                <th></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {aggregates.length === 0 && (
-                                <tr>
-                                  <td colSpan={11} className="text-center font-12">
-                                    ไม่พบข้อมูล
-                                  </td>
-                                </tr>
-                              )}
-                              {aggregates.map((a) => {
-                                const churnRisk =
-                                  a.days_since_last !== null && a.days_since_last > 60;
-                                const noOrders = a.total_revenue_thb === 0;
-                                return (
-                                  <tr key={a.userid}>
-                                    <td className="text-center font-12">
-                                      <Link
-                                        className="text-info"
-                                        href={`/admin/reports/user-sales-history/${encodeURIComponent(a.userid)}`}
-                                      >
-                                        {a.userid}
-                                      </Link>
-                                    </td>
-                                    <td className="font-12">
-                                      {a.fullname}
-                                      {a.is_juristic && (
-                                        <span className="ml-1 badge badge-info badge-pill font-10">นิติบุคคล</span>
-                                      )}
-                                    </td>
-                                    <td className="font-12">{a.phone || "-"}</td>
-                                    <td className="text-center font-12">
-                                      {fmtDateOnly(a.registered_at)}
-                                    </td>
-                                    <td className="text-center font-12">
-                                      {fmtDateOnly(a.first_order_at)}
-                                    </td>
-                                    <td className="text-center font-12">
-                                      {fmtDateOnly(a.last_order_at)}
-                                      {a.days_since_last !== null && (
-                                        <small className="d-block text-muted">
-                                          {a.days_since_last} วันก่อน
-                                        </small>
-                                      )}
-                                    </td>
-                                    <td className="text-right font-12 font-weight-bold">
-                                      {thb(a.total_revenue_thb)}
-                                    </td>
-                                    <td className="text-right font-12">
-                                      {a.forwarder_count}/{a.shop_count}/{a.payment_count}
-                                    </td>
-                                    <td className="text-center font-12">
-                                      {a.adminidsale ? (
-                                        <Link
-                                          className="text-info"
-                                          href={`/admin/admins/${encodeURIComponent(a.adminidsale)}`}
-                                        >
-                                          {a.adminidsale}
-                                        </Link>
-                                      ) : (
-                                        "-"
-                                      )}
-                                    </td>
-                                    <td className="text-center font-12">
-                                      {noOrders ? (
-                                        <span className="badge badge-secondary badge-pill font-10">
-                                          ยังไม่มีออเดอร์
-                                        </span>
-                                      ) : churnRisk ? (
-                                        <span className="badge badge-danger badge-pill font-10">
-                                          เสี่ยงเลิกใช้
-                                        </span>
-                                      ) : (
-                                        <span className="badge badge-success badge-pill font-10">
-                                          ใช้งานอยู่
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="text-center">
-                                      <Link
-                                        className="btn btn-sm btn-outline-info"
-                                        href={`/admin/reports/user-sales-history/${encodeURIComponent(a.userid)}`}
-                                      >
-                                        ดู
-                                      </Link>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+          <div className="sm:col-span-2">
+            <label htmlFor="q" className="block text-xs text-muted mb-1">
+              ค้นหา (รหัส · ชื่อ · เบอร์)
+            </label>
+            <input
+              id="q"
+              type="text"
+              name="q"
+              defaultValue={search}
+              placeholder="PR0001 · ภูม · 0812345678"
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            />
+          </div>
+          <div>
+            <label htmlFor="limit" className="block text-xs text-muted mb-1">
+              จำนวนสูงสุด
+            </label>
+            <select
+              id="limit"
+              name="limit"
+              defaultValue={String(limit)}
+              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            >
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <button
+            type="submit"
+            className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600"
+          >
+            ค้นหาข้อมูล
+          </button>
+          <CsvButton
+            rows={csvRows}
+            cols={csvCols}
+            filename={`user-sales-history-${cohort ?? "all"}.csv`}
+          />
+        </div>
+      </form>
+
+      {/* Stat cards */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card label="จำนวนลูกค้า" value={String(aggregates.length)} />
+        <Card label="รวมรายได้ตลอดอายุ" value={`฿${thb(totalRevenue)}`} />
+        <Card label="ใช้งานอยู่" value={String(activeCount)} highlight="green" />
+        <Card label="เสี่ยงเลิกใช้ (&gt; 60 วัน)" value={String(churnRiskCount)} highlight="red" />
       </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {aggregates.length === 0 ? (
+          <p className="p-12 text-center text-sm text-muted">
+            ไม่พบข้อมูล — ลองเปลี่ยน cohort หรือล้างคำค้น
+          </p>
+        ) : (
+          <div className="overflow-x-auto scrollbar-x-visible">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-4 py-3">รหัส</th>
+                  <th className="px-4 py-3">ชื่อ</th>
+                  <th className="px-4 py-3">เบอร์</th>
+                  <th className="px-4 py-3">สมัคร</th>
+                  <th className="px-4 py-3">ออเดอร์แรก</th>
+                  <th className="px-4 py-3">ล่าสุด</th>
+                  <th className="px-4 py-3 text-right">รวมรายได้ (บาท)</th>
+                  <th
+                    className="px-4 py-3 text-right whitespace-nowrap"
+                    title="ฝากนำเข้า / ฝากสั่ง / ฝากโอน (จำนวนครั้ง)"
+                  >
+                    น/ส/อ
+                  </th>
+                  <th className="px-4 py-3">เซลล์</th>
+                  <th className="px-4 py-3">สถานะ</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {aggregates.map((a) => {
+                  const churnRisk = a.days_since_last !== null && a.days_since_last > 60;
+                  const noOrders = a.total_revenue_thb === 0;
+                  return (
+                    <tr key={a.userid} className="border-t border-border hover:bg-surface-alt/30 align-top">
+                      <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                        <Link
+                          href={`/admin/reports/user-sales-history/${encodeURIComponent(a.userid)}`}
+                          className="text-primary-600 hover:underline"
+                        >
+                          {a.userid}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {a.fullname}
+                        {a.is_juristic && (
+                          <span className="ml-1 rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">
+                            นิติบุคคล
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">{a.phone || "—"}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {fmtDateOnly(a.registered_at)}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {fmtDateOnly(a.first_order_at)}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span className="text-muted">{fmtDateOnly(a.last_order_at)}</span>
+                        {a.days_since_last !== null && (
+                          <span className="block text-[10px] text-muted">{a.days_since_last} วันก่อน</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap">
+                        {thb(a.total_revenue_thb)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-xs whitespace-nowrap text-muted">
+                        {a.forwarder_count}/{a.shop_count}/{a.payment_count}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {a.adminidsale ? (
+                          <Link
+                            href={`/admin/admins/${encodeURIComponent(a.adminidsale)}`}
+                            className="text-primary-600 hover:underline"
+                          >
+                            {a.adminidsale}
+                          </Link>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {noOrders ? (
+                          <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] text-gray-600">
+                            ยังไม่มีออเดอร์
+                          </span>
+                        ) : churnRisk ? (
+                          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] text-red-700">
+                            เสี่ยงเลิกใช้
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] text-green-700">
+                            ใช้งานอยู่
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-right">
+                        <Link
+                          href={`/admin/reports/user-sales-history/${encodeURIComponent(a.userid)}`}
+                          className="rounded-md border border-border px-2 py-1 hover:bg-surface-alt"
+                        >
+                          ดู →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted">
+        แสดงไม่เกิน {limit} ลูกค้า · ใช้ตัวกรอง cohort หรือคำค้นเพื่อจำกัดผลลัพธ์
+      </p>
+    </main>
+  );
+}
+
+function Card({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: "green" | "red";
+}) {
+  const borderCls =
+    highlight === "green" ? "border-green-200" : highlight === "red" ? "border-red-200" : "border-border";
+  const valueCls =
+    highlight === "green" ? "text-green-700" : highlight === "red" ? "text-red-700" : "";
+  return (
+    <div className={`rounded-2xl border bg-white dark:bg-surface p-4 shadow-sm ${borderCls}`}>
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-bold font-mono ${valueCls}`}>{value}</p>
     </div>
   );
 }

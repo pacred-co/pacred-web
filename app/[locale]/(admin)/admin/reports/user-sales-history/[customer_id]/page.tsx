@@ -1,17 +1,33 @@
 /**
- * V-G6 #4 drill-in — /admin/reports/user-sales-history/[customer_id].
+ * /admin/reports/user-sales-history/[customer_id] — drill-in
+ * (Wave 23 P1 batch 2-B Tailwind rewrite · 2026-05-27 ค่ำ).
  *
- * Per-customer lifetime timeline — UNION (tb_forwarder + tb_header_order
- * + tb_payment + tb_wallet_hs) ordered date DESC, top 100 events.
+ * **Wave 23 P1 batch 2-B (2026-05-27 ค่ำ):** UI rewrite only — the
+ * underlying tb_users + 4-way UNION (tb_forwarder + tb_header_order +
+ * tb_payment + tb_wallet_hs) timeline + tb_wallet balance reads stay
+ * intact. Replaces the .pcs-legacy / Bootstrap-4 / admin-base.css chrome
+ * (~476 LOC) with the Pacred Tailwind v4 reports template (mirrors
+ * `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
  *
- * Replaces the Wave 7.2 redirect that punted to /admin/customers/[id].
- * That target page also exists (legacy-view.tsx) and shows the same
- * tables truncated to 10 rows each — this page is the FULL timeline +
- * wallet activity, which the customer-detail view did NOT include
- * (it's the V-G6 #4 cohort drill-in scope per
- * `pcs-admin/report-user-sales-history.php` L600-1100).
+ * **Workflow preserved (per AGENTS §0a):** same logic, same data shape,
+ * same status labels, same role gate (super + ops + accounting +
+ * sales_admin), same lifetime aggregate gates (fstatus 6,7 / hstatus 5,6
+ * / paystatus 3), same MAX_EVENTS = 100 cap. Only chrome moves
+ * Bootstrap → Tailwind.
  *
- * Gate: super + accounting + sales_admin — same as the list page.
+ * **Legacy PHP reference:**
+ *   `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-user-sales-history.php`
+ *   — that legacy file serves a sales-rep commission payout flow
+ *   (`tb_user_sales_admin_pay`). This Pacred slot is the V-G6 #4
+ *   customer-cohort drill-in (replaces Wave 7.2 redirect to
+ *   /admin/customers/[id], which only showed 10 rows per table without
+ *   wallet activity). The URL is reused; the legacy commission flow
+ *   lives elsewhere.
+ *
+ * **§0c compliance:** every Supabase query destructures { data, error },
+ * logs + throws on load-bearing reads (tb_users lookup); soft-fails on
+ * the 5 parallel timeline reads (one stale timeline tab preferable to
+ * a 500 on the whole drill-in).
  */
 
 import { Link } from "@/i18n/navigation";
@@ -91,7 +107,7 @@ function thb(n: number | null | undefined): string {
 }
 
 function fmtDateTime(iso: string | null): string {
-  if (!iso) return "-";
+  if (!iso) return "—";
   return `${String(iso).slice(0, 10)} ${String(iso).slice(11, 19)}`;
 }
 
@@ -136,6 +152,21 @@ const W_STATUS_LABEL: Record<string, string> = {
   "3": "ไม่สำเร็จ",
 };
 
+// Kind chip colour (matches Pacred status-chip pattern from payment/page.tsx)
+const KIND_CLS: Record<EventKind, string> = {
+  forwarder: "bg-blue-50 text-blue-700 border-blue-200",
+  shop:      "bg-amber-50 text-amber-700 border-amber-200",
+  yuan:      "bg-green-50 text-green-700 border-green-200",
+  wallet:    "bg-gray-50 text-gray-700 border-gray-200",
+};
+
+const KIND_LABEL: Record<EventKind, string> = {
+  forwarder: "ฝากนำเข้า",
+  shop:      "ฝากสั่ง",
+  yuan:      "ฝากโอน",
+  wallet:    "Wallet",
+};
+
 export default async function UserSalesHistoryDrillIn({
   params,
 }: {
@@ -156,19 +187,22 @@ export default async function UserSalesHistoryDrillIn({
     .maybeSingle();
 
   if (userRawErr) {
-    console.error(`[tb_users lookup] failed`, { code: userRawErr.code, message: userRawErr.message, details: userRawErr.details, hint: userRawErr.hint });
+    console.error(`[tb_users lookup] failed`, {
+      code: userRawErr.code, message: userRawErr.message, details: userRawErr.details, hint: userRawErr.hint,
+    });
     throw new Error(`Failed to load tb_users (${userRawErr.code ?? "unknown"}): ${userRawErr.message}`);
   }
   if (!userRaw) notFound();
   const u = userRaw as unknown as URow;
 
-  // Parallel fetch — newest first, plenty for the top-100 merge
+  // Parallel fetch — newest first, plenty for the top-100 merge.
+  // Soft-fail per query (timeline is best-effort drill-in, not a load-bearing dashboard).
   const [
-    { data: fData },
-    { data: hData },
-    { data: pData },
-    { data: wData },
-    { data: walletBalRaw },
+    { data: fData, error: fErr },
+    { data: hData, error: hErr },
+    { data: pData, error: pErr },
+    { data: wData, error: wErr },
+    { data: walletBalRaw, error: walletBalErr },
   ] = await Promise.all([
     admin
       .from("tb_forwarder")
@@ -200,6 +234,12 @@ export default async function UserSalesHistoryDrillIn({
       .eq("userid", u.userid)
       .maybeSingle(),
   ]);
+
+  if (fErr) console.error(`[tb_forwarder timeline] failed`, { code: fErr.code, message: fErr.message });
+  if (hErr) console.error(`[tb_header_order timeline] failed`, { code: hErr.code, message: hErr.message });
+  if (pErr) console.error(`[tb_payment timeline] failed`, { code: pErr.code, message: pErr.message });
+  if (wErr) console.error(`[tb_wallet_hs timeline] failed`, { code: wErr.code, message: wErr.message });
+  if (walletBalErr) console.error(`[tb_wallet balance] failed`, { code: walletBalErr.code, message: walletBalErr.message });
 
   const fws = (fData ?? []) as unknown as FRow[];
   const hos = (hData ?? []) as unknown as HRow[];
@@ -278,199 +318,155 @@ export default async function UserSalesHistoryDrillIn({
   const lifetimeTotal = lifetimeForwarderRevenue + lifetimeShopRevenue + lifetimePaymentRevenue;
 
   return (
-    <div className="pcs-legacy">
-      <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
+            ADMIN · รายงาน · ประวัติการขายต่อลูกค้า
+          </p>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
+            <span className="font-mono">{u.userid}</span>
+            {isJuristic && (
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                นิติบุคคล
+              </span>
+            )}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            ไทม์ไลน์ลูกค้าตลอดอายุ · UNION{" "}
+            <span className="font-mono">tb_forwarder + tb_header_order + tb_payment + tb_wallet_hs</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/reports/user-sales-history"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
+          >
+            ← กลับรายชื่อลูกค้า
+          </Link>
+          <Link
+            href={`/admin/customers/${encodeURIComponent(u.userid)}`}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
+          >
+            ดูโปรไฟล์ลูกค้า →
+          </Link>
+        </div>
+      </div>
 
-      <div className="app-content content">
-        <div className="content-overlay"></div>
-        <div className="content-wrapper">
-          {/* Breadcrumb */}
-          <div className="content-header row">
-            <div className="content-header-left col-12 mb-2">
-              <div className="row breadcrumbs-top">
-                <div className="breadcrumb-wrapper col-12">
-                  <ol className="breadcrumb">
-                    <li className="breadcrumb-item">
-                      <Link href="/admin">หน้าแรก</Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/reports">รายงาน</Link>
-                    </li>
-                    <li className="breadcrumb-item">
-                      <Link href="/admin/reports/user-sales-history">ประวัติการขายต่อลูกค้า</Link>
-                    </li>
-                    <li className="breadcrumb-item active">{u.userid}</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
+      {/* Customer summary card */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-base">{fullname}</p>
+            <p className="text-xs text-muted">
+              โทร:{" "}
+              <span className="font-mono text-foreground">{u.usertel ?? "—"}</span>
+              {" · "}อีเมล:{" "}
+              <span className="font-mono text-foreground">{u.useremail ?? "—"}</span>
+            </p>
+            <p className="text-xs text-muted">
+              สมัคร: <span className="text-foreground">{fmtDateTime(u.userregistered)}</span>
+              {" · "}ล่าสุดล็อกอิน:{" "}
+              <span className="text-foreground">{fmtDateTime(u.userlastlogin)}</span>
+            </p>
+            {u.adminidsale && (
+              <p className="text-xs text-muted">
+                เซลล์ผู้ดูแล:{" "}
+                <Link
+                  href={`/admin/admins/${encodeURIComponent(u.adminidsale)}`}
+                  className="text-primary-600 hover:underline"
+                >
+                  {u.adminidsale}
+                </Link>
+              </p>
+            )}
           </div>
-
-          <div className="content-body">
-            {/* Header card — customer summary */}
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <div className="row">
-                          <div className="col-md-6">
-                            <h3 className="text-md-left">
-                              <span className="font-mono">{u.userid}</span>
-                              {isJuristic && (
-                                <span className="ml-2 badge badge-info badge-pill font-12">
-                                  นิติบุคคล
-                                </span>
-                              )}
-                            </h3>
-                            <p className="font-12 mb-0">
-                              <strong>{fullname}</strong>
-                            </p>
-                            <p className="font-12 mb-0">
-                              โทร: {u.usertel ?? "-"} · อีเมล: {u.useremail ?? "-"}
-                            </p>
-                            <p className="font-12 mb-0">
-                              สมัคร: {fmtDateTime(u.userregistered)} · ล่าสุดล็อกอิน: {fmtDateTime(u.userlastlogin)}
-                            </p>
-                            {u.adminidsale && (
-                              <p className="font-12 mb-0">
-                                เซลล์ผู้ดูแล:{" "}
-                                <Link
-                                  className="text-info"
-                                  href={`/admin/admins/${encodeURIComponent(u.adminidsale)}`}
-                                >
-                                  {u.adminidsale}
-                                </Link>
-                              </p>
-                            )}
-                          </div>
-                          <div className="col-md-6">
-                            <div className="row">
-                              <div className="col-6">
-                                <div className="text-center">
-                                  <small className="text-muted">ยอดกระเป๋า (THB)</small>
-                                  <h4 className="font-mono">
-                                    ฿{thb(walletBal?.wallettotal ?? 0)}
-                                  </h4>
-                                </div>
-                              </div>
-                              <div className="col-6">
-                                <div className="text-center">
-                                  <small className="text-muted">รวมรายได้ตลอดอายุ (บาท)</small>
-                                  <h4 className="font-mono text-success">{thb(lifetimeTotal)}</h4>
-                                  <small className="d-block font-10 text-muted">
-                                    นำเข้า {thb(lifetimeForwarderRevenue)} · สั่ง {thb(lifetimeShopRevenue)} · โอน{" "}
-                                    {thb(lifetimePaymentRevenue)}
-                                  </small>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* Timeline */}
-            <section>
-              <div className="row">
-                <div className="col-md-12 col-sm-12">
-                  <div className="card">
-                    <div className="card-content">
-                      <div className="card-body">
-                        <h3 className="text-center text-md-left">
-                          <span className="ft-box font-30" style={{ fontSize: "2.2rem" }}></span>{" "}
-                          ไทม์ไลน์กิจกรรมล่าสุด ({timeline.length} / {MAX_EVENTS})
-                        </h3>
-                        <p className="font-12 text-muted">
-                          UNION ของ tb_forwarder + tb_header_order + tb_payment + tb_wallet_hs
-                          เรียงตามวันที่ใหม่สุดก่อน · จำกัด {MAX_EVENTS} รายการล่าสุด
-                        </p>
-
-                        <div className="table-responsive">
-                          <table className="table report-table display table-bordered table-striped dataTable no-footer dtr-inline">
-                            <thead>
-                              <tr className="text-center">
-                                <th>วันที่</th>
-                                <th>ประเภท</th>
-                                <th>รายการ</th>
-                                <th>รายละเอียด</th>
-                                <th>สถานะ</th>
-                                <th className="text-right">จำนวน (บาท)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {timeline.length === 0 && (
-                                <tr>
-                                  <td colSpan={6} className="text-center font-12">
-                                    ไม่พบกิจกรรมของลูกค้ารายนี้
-                                  </td>
-                                </tr>
-                              )}
-                              {timeline.map((ev, idx) => (
-                                <tr key={`${ev.kind}-${idx}`}>
-                                  <td className="text-center font-12">{fmtDateTime(ev.date)}</td>
-                                  <td className="text-center font-12">
-                                    <KindBadge kind={ev.kind} />
-                                  </td>
-                                  <td className="font-12">
-                                    {ev.href ? (
-                                      <Link className="text-info" href={ev.href}>
-                                        {ev.label}
-                                      </Link>
-                                    ) : (
-                                      ev.label
-                                    )}
-                                  </td>
-                                  <td className="font-12">
-                                    <span className="d-inline-block text-truncate" style={{ maxWidth: 320 }} title={ev.detail}>
-                                      {ev.detail}
-                                    </span>
-                                  </td>
-                                  <td className="text-center font-12">{ev.status}</td>
-                                  <td className="text-right font-12 font-weight-bold">
-                                    {ev.amount_thb !== null ? thb(ev.amount_thb) : "—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div className="mt-2">
-                          <Link
-                            href={`/admin/customers/${encodeURIComponent(u.userid)}`}
-                            className="btn btn-sm btn-outline-info"
-                          >
-                            ดูข้อมูลลูกค้าเพิ่ม →
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-surface-alt/30 p-3 text-center">
+              <p className="text-[11px] text-muted">ยอดกระเป๋า (THB)</p>
+              <p className="mt-1 text-xl font-bold font-mono">฿{thb(walletBal?.wallettotal ?? 0)}</p>
+            </div>
+            <div className="rounded-xl border border-green-200 bg-green-50/50 p-3 text-center">
+              <p className="text-[11px] text-muted">รวมรายได้ตลอดอายุ (บาท)</p>
+              <p className="mt-1 text-xl font-bold font-mono text-green-700">{thb(lifetimeTotal)}</p>
+              <p className="mt-1 text-[10px] text-muted">
+                นำเข้า {thb(lifetimeForwarderRevenue)} · สั่ง {thb(lifetimeShopRevenue)} · โอน{" "}
+                {thb(lifetimePaymentRevenue)}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function KindBadge({ kind }: { kind: EventKind }) {
-  switch (kind) {
-    case "forwarder":
-      return <span className="font-10 badge badge-info badge-pill">ฝากนำเข้า</span>;
-    case "shop":
-      return <span className="font-10 badge badge-warning badge-pill">ฝากสั่ง</span>;
-    case "yuan":
-      return <span className="font-10 badge badge-success badge-pill">ฝากโอน</span>;
-    case "wallet":
-      return <span className="font-10 badge badge-secondary badge-pill">Wallet</span>;
-  }
+      {/* Timeline */}
+      <div>
+        <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-base font-semibold">
+            ไทม์ไลน์กิจกรรมล่าสุด{" "}
+            <span className="ml-1 text-xs text-muted">
+              ({timeline.length} / {MAX_EVENTS})
+            </span>
+          </h2>
+          <p className="text-xs text-muted">เรียงตามวันที่ใหม่สุดก่อน · จำกัด {MAX_EVENTS} รายการล่าสุด</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+          {timeline.length === 0 ? (
+            <p className="p-12 text-center text-sm text-muted">ไม่พบกิจกรรมของลูกค้ารายนี้</p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">วันที่</th>
+                    <th className="px-4 py-3">ประเภท</th>
+                    <th className="px-4 py-3">รายการ</th>
+                    <th className="px-4 py-3">รายละเอียด</th>
+                    <th className="px-4 py-3">สถานะ</th>
+                    <th className="px-4 py-3 text-right">จำนวน (บาท)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeline.map((ev, idx) => (
+                    <tr
+                      key={`${ev.kind}-${idx}`}
+                      className="border-t border-border hover:bg-surface-alt/30 align-top"
+                    >
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {fmtDateTime(ev.date)}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${KIND_CLS[ev.kind]}`}
+                        >
+                          {KIND_LABEL[ev.kind]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {ev.href ? (
+                          <Link href={ev.href} className="text-primary-600 hover:underline">
+                            {ev.label}
+                          </Link>
+                        ) : (
+                          ev.label
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={ev.detail}>
+                        {ev.detail}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">{ev.status}</td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap">
+                        {ev.amount_thb !== null ? thb(ev.amount_thb) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
 }
