@@ -562,44 +562,61 @@ function JuristicForm({
   }
 
   async function fetchCompany(id: string) {
-    const endpoints = [
-      `https://opendata.dbd.go.th/api/v1/nameAndAddress?JuristicID=${id}`,
-      `https://opendata.dbd.go.th/api/v1/juristicNameAll?JuristicID=${id}`,
-    ];
-    // Track whether *any* endpoint failed to complete a real lookup. If every
-    // call errored (network / WAF block / 4xx / 5xx), the API is unreachable —
-    // don't gaslight the user with "ไม่พบข้อมูล" when their tax ID may be
-    // perfectly valid. "notfound" is reserved for a genuine 200-with-no-record.
-    //
-    // NOTE 2026-05-17: DBD retired the `api/v1/*` endpoints (now 404 for every
-    // request) + the CKAN `api/3/*` API sits behind an Incapsula WAF that
-    // rejects programmatic calls. So in practice every lookup currently lands
-    // in the `unavailable` branch → customer fills the form manually. Verified
-    // via T-D1 smoke gate. Treat ANY non-OK status as an API error (incl. 404)
-    // so the honest "ระบบค้นหาไม่พร้อม กรอกด้วยตนเอง" notice shows.
-    let sawApiError = false;
-    for (const url of endpoints) {
-      try {
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) { sawApiError = true; continue; }
-        const json = await res.json();
-        const d = json?.data?.[0] || json?.result?.[0] || json?.[0] || null;
-        if (!d) continue;
-        const name = d.juristic_name_th || d.JuristicNameTH || d.name_th || d.CompanyName || "";
-        if (!name) continue;
-        setCompanyName(name);
-        setAddressLine(d.address || d.Address || d.address_th || "");
-        setSubdistrict(d.sub_district || d.SubDistrict || d.tambon || "");
-        setDistrict(d.district || d.District || d.amphoe || "");
-        setProvince(d.province || d.Province || d.changwat || "");
-        setPostcode(d.postcode || d.PostCode || d.zipcode || "");
-        setTaxStatus("found");
+    // Gap #5 fix (2026-05-27): switched from the dead
+    // `opendata.dbd.go.th/api/v1/*` endpoints (retired 2026-05-17, every
+    // request 404'd → every lookup fell into "unavailable" → customer
+    // always filled manually) to Pacred's own `/api/dbd/[taxId]` route
+    // handler, which calls the CURRENT CKAN 2.10 datastore_search endpoint
+    // (`api/3/action/datastore_search`) with the WAF-bypass User-Agent +
+    // proper Thai-field-name encoding. The route normalises the response
+    // shape so this client-side path no longer juggles 4 alternate field
+    // names per attribute (juristic_name_th vs JuristicNameTH vs name_th
+    // vs CompanyName, etc.). Response shape:
+    //   200 { name, address, subdistrict, district, province, postcode }
+    //   400 { error: "invalid_id" }        — not 13-digit
+    //   404 { error: "not_found" }         — genuine no-record
+    //   502 { error: "api_error"|"fetch_failed", ... } — DBD/WAF down
+    try {
+      const res = await fetch(`/api/dbd/${encodeURIComponent(id)}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (res.status === 404) {
+        setTaxStatus("notfound");
         return;
-      } catch {
-        sawApiError = true;
       }
+      if (!res.ok) {
+        // 400 (shouldn't happen — we client-gate on 13 digits) or 502 (DBD
+        // upstream / WAF down) → honest "fill manually" notice. Reserves
+        // "notfound" for a genuine 200-with-no-record case.
+        setTaxStatus("unavailable");
+        return;
+      }
+      const d = (await res.json()) as {
+        name?: string;
+        address?: string;
+        subdistrict?: string;
+        district?: string;
+        province?: string;
+        postcode?: string;
+      };
+      if (!d.name) {
+        // Defensive — the route handler should already 404 on no-record,
+        // but if it returns a body with no name (edge case) treat as
+        // not found rather than write an empty company name.
+        setTaxStatus("notfound");
+        return;
+      }
+      setCompanyName(d.name);
+      setAddressLine(d.address ?? "");
+      setSubdistrict(d.subdistrict ?? "");
+      setDistrict(d.district ?? "");
+      setProvince(d.province ?? "");
+      setPostcode(d.postcode ?? "");
+      setTaxStatus("found");
+    } catch {
+      // Client-side timeout / network failure.
+      setTaxStatus("unavailable");
     }
-    setTaxStatus(sawApiError ? "unavailable" : "notfound");
   }
 
   function retryTaxLookup() {

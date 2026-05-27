@@ -6,6 +6,26 @@ Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBul
 
 ---
 
+## 2026-05-27 · DBD lookup — Pacred has a working route handler; the client was bypassing it
+
+**Symptom.** Every juristic signup landed in the "ระบบค้นหาไม่พร้อม — กรอกด้วยตนเอง" branch — customers always typed company info manually. d1-deep-audit-2026-05-24 listed this as Gap #5 "TAMIT (Thai ID) identity verification — none, DBD/RD stubbed but not equivalent."
+
+**Root cause** — two-layer confusion:
+
+1. **`regis-tam.php` is NOT about Thai ID verification.** Despite the name's resemblance to Pacred's TAMIT product-search vendor (`tamit-cloud.com`), the legacy `member/regis-tam.php` is the **Thai juristic-person (นิติบุคคล) 3-step signup**. Per `docs/sprints/archive-a-to-n.md:190`: "regis-tam.php | นิติบุคคลไทย — 3-step | tb_corporate | ✅ ครบ". Already shipped in Pacred as `/register` juristic tab + `actions/auth.ts registerJuristicStep1/saveJuristicStep2/uploadJuristicDoc/completeJuristicRegistration`.
+
+2. **The client-side DBD lookup was hitting the retired endpoints.** `register-client.tsx fetchCompany()` called `opendata.dbd.go.th/api/v1/nameAndAddress` + `api/v1/juristicNameAll` directly from the browser. Per the 2026-05-17 entry below, those `api/v1/*` paths were retired (404 on every request) — but Pacred ALREADY had a working internal `app/api/dbd/[taxId]/route.ts` that hits the CURRENT CKAN 2.10 `datastore_search` endpoint with the WAF-bypass User-Agent + proper Thai-field-name encoding. The client just wasn't using it.
+
+**What to do.** Always check `app/api/*` first before adding a new external-API call from the client. The internal route may already do the right thing — and a server-side fetch is the only place you can set the User-Agent / proxy headers a WAF needs.
+
+**Code.** `app/[locale]/(auth)/register/register-client.tsx fetchCompany()` now calls `/api/dbd/${encodeURIComponent(id)}` — single endpoint, normalised response shape (`{ name, address, subdistrict, district, province, postcode }`), explicit status-code handling (404 = not_found, 502 = upstream down → unavailable). No more 4-way field-name juggling (`juristic_name_th` vs `JuristicNameTH` vs `name_th` vs `CompanyName`).
+
+**Pattern rule.** When a partner API needs a User-Agent header, custom timeouts, or WAF-evasion tricks, do it server-side via a route handler. A `fetch()` from `"use client"` cannot set most WAF-relevant headers (the browser overrides them) and can never spoof a User-Agent — the WAF will always see the real browser UA.
+
+**Anti-pattern caught.** d1-deep-audit-2026-05-24 Gap #5 was mislabelled "TAMIT (Thai ID) verification" because the legacy filename contains "tam". Future agents should NOT assume a partner-API integration is missing without first grepping `app/api/` for an existing internal route. Updated `dave.md` pickup #2 + `d1-deep-audit-2026-05-24.md` Gap #5 row + §1 + §2 + §4 Sprint 1 #4 to reflect ✅ DONE.
+
+---
+
 ## 2026-05-26 · LINE Notify dead since 2025-03-31 — `notify-bot.line.me` is end-of-life
 
 **Symptom:** Spawned a parallel agent to "port LINE Notify per-user OAuth" per the d1-deep-audit Gap #3. Agent built the UI page + callback route + actions. All gates green. **Then a screenshot from `notify-bot.line.me` showed "End of service for LINE Notify"** — the service ended March 31, 2025. The whole feature was built on top of a dead API. Reverted as commit `2e099721`.
