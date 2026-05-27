@@ -61,8 +61,29 @@ export default async function middleware(request: NextRequest) {
     },
   );
 
-  // Triggers token refresh if needed; failures are silent (placeholder env vars in dev)
-  const { data: { user } } = await supabase.auth.getUser();
+  // Triggers token refresh if needed.
+  //
+  // 🚨 Wave 24 bounce-loop fix (2026-05-27 ดึก · ภูม "เด้งๆ มาหน้าหลัก" repro):
+  // Previously we silently destructured `error` away — a Supabase
+  // ConnectTimeoutError (10 s · prod region throttle) made `user` null even for
+  // signed-in admins. proxy.ts then redirected /admin → /login. The /login
+  // page's (auth) layout calls requireGuest() which does a FRESH auth check —
+  // this one usually succeeds (cookies are warm now) → sees signed-in user
+  // → redirect("/"). Net: admin click on /admin bounces to homepage. Worse
+  // still: every retry from the now-homepage hits the same race.
+  //
+  // Capture `error` explicitly. A confirmed-null user (no error) IS unauth →
+  // safe to redirect. A failed RPC (network/timeout) is AMBIGUOUS — let the
+  // layout's requireAdmin() decide with its own retry (cache-shared with the
+  // page) rather than slamming the user to /login from the edge.
+  const { data: { user }, error: authErr } = await supabase.auth.getUser();
+  if (authErr) {
+    // Log so we can see when transient timeouts fire. Don't redirect.
+    console.warn("[proxy.ts] auth.getUser() failed — passing through to layout", {
+      message: authErr.message,
+      pathname: request.nextUrl.pathname,
+    });
+  }
 
   // S-4 — edge backstop for the admin surface. An unauthenticated request to
   // any /admin route is redirected to /login here, regardless of whether the
@@ -73,7 +94,11 @@ export default async function middleware(request: NextRequest) {
   // the layout would see — no new false-logout path, just one layer earlier.
   // The (protected) routes keep their layout requireAuth() — they share no
   // URL prefix, so an edge denylist would be fragile.
-  if (!user && isAdminPath(request.nextUrl.pathname)) {
+  //
+  // GUARD: only redirect when getUser() returned a CONFIRMED null (no error).
+  // On a failed RPC we pass through; the layout retries (different cache
+  // window) and renders properly when the auth check succeeds.
+  if (!user && !authErr && isAdminPath(request.nextUrl.pathname)) {
     const redirect = NextResponse.redirect(new URL("/login", request.url));
     // carry over cookies the middleware set (visitor id, refreshed session)
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));

@@ -4,6 +4,69 @@ Topics: GitHub Actions, Vercel build/deploy, pnpm action-setup, Next 16 build ou
 
 ---
 
+## [2026-05-27] `/admin` bounces to homepage — Supabase 10 s `ConnectTimeoutError` + asymmetric auth checks
+
+**Context:** Wave 24 close-out. ภูม flag end-of-night: *"เข้าหน้า admin ไม่ได้ละ เดี๋ยวๆก็เด้งๆมาหน้าหลักเลย"*. Admin authed daily — suddenly /admin redirects to / (customer homepage), refresh sometimes lets it through.
+
+**Symptom (the bounce loop):**
+1. Browser hits `/admin/<anything>`
+2. proxy.ts middleware runs `await supabase.auth.getUser()`
+3. **Supabase prod takes 10 s to respond** (sporadic — see Wave 24 audit log)
+4. Node fetch hits its 10 s timeout → throws `ConnectTimeoutError`
+5. proxy.ts L65 silently destructured `data: { user }` → `user = null` (error ignored)
+6. proxy.ts L76 `!user && isAdminPath()` → redirect to `/login`
+7. `/login` → `(auth)/layout.tsx` → `requireGuest()`
+8. `requireGuest()` runs a FRESH `getCurrentUser()` — this one finishes (cookies warm now) → returns the real signed-in user
+9. `requireGuest` sees user → `redirect("/")`
+10. Browser shows homepage. Admin confused.
+
+**Root cause:** Two compounding problems.
+
+  (a) **Node 18+ DNS verbatim ordering** — Node 18+ defaults to RFC 6724 `verbatim` order (tries AAAA/IPv6 before A/IPv4). On Windows + many Thai ISPs the IPv6 path SYN-sends but stalls (no path to Supabase region's IPv6) → Node falls back to IPv4 only after the 10 s timeout. This causes the random 10 s waits.
+
+  (b) **proxy.ts silently treated "RPC failed" as "user is null"** — the destructure `const { data: { user } } = ...` discarded the `error` field. A network-failed auth call looked identical to an explicit unauthed call → kicked the user out incorrectly.
+
+**Fix (both layers):**
+
+```ts
+// instrumentation.ts — register hook runs at server boot
+if (process.env.NEXT_RUNTIME === "nodejs") {
+  const dns = await import("node:dns");
+  dns.setDefaultResultOrder("ipv4first");   // ← root-cause fix
+  await import("./sentry.server.config");
+}
+```
+
+```ts
+// proxy.ts — capture error explicitly
+const { data: { user }, error: authErr } = await supabase.auth.getUser();
+if (authErr) {
+  console.warn("[proxy.ts] auth.getUser() failed — passing through to layout", {
+    message: authErr.message, pathname: request.nextUrl.pathname,
+  });
+}
+// Only redirect on CONFIRMED null (no error). On RPC failure, let the
+// layout's requireAdmin() retry with its own React-cache window.
+if (!user && !authErr && isAdminPath(request.nextUrl.pathname)) {
+  return NextResponse.redirect(new URL("/login", request.url));
+}
+```
+
+**Why this matters next time:**
+- Any time you see "user is bounced to /" intermittently → suspect timeout-driven false-logout, NOT real session expiry. Cookies are usually still valid.
+- Dev server logs show `TypeError: fetch failed [cause]: Error [ConnectTimeoutError]: Connect Timeout Error (attempted address: <supabase>:443, timeout: 10000ms)` when this fires. Grep dev log.
+- The `dns.setDefaultResultOrder("ipv4first")` fix also helps OTHER outbound fetches (TAMIT, MOMO, ThaiBulkSMS) — same root cause for any external API that resolves both AAAA + A records.
+- The asymmetric auth pattern (middleware + layout both do their own auth check) is fragile by design. When middleware fails one way and layout passes another, you get bounce loops. Rule of thumb: middleware only does coarse checks; layouts do the authoritative gates. **NEVER let middleware do a redirect that would CONTRADICT what the layout would do** for the same session.
+
+**Cross-links:**
+- [`proxy.ts`](../../proxy.ts) — L65-90 with the fix
+- [`instrumentation.ts`](../../instrumentation.ts) — DNS hint at boot
+- [`lib/auth/require-auth.ts`](../../lib/auth/require-auth.ts) — `requireGuest()` redirect-to-/ logic
+- Wave 24 audit doc — [`docs/research/admin-click-through-audit-2026-05-27-wave24.md`](../research/admin-click-through-audit-2026-05-27-wave24.md) §"Issue A" first identified the timeout
+- Sentry events tag: `auth.getUser() failed` warning lets you spot rate of recurrence
+
+---
+
 ## [2026-05-15] CI fails with `ERR_PNPM_BAD_PM_VERSION`
 
 **Context:** Pushed commit `f06c394` to `main`; GitHub Actions CI run #23 failed immediately at the "Install pnpm" step.
