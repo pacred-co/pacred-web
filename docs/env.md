@@ -175,7 +175,7 @@ Off by default because legacy PCS had password-only login — the D1 faithful po
 
 | Var | Value | Powers | Auth |
 |---|---|---|---|
-| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}` | None |
+| `PACRED_TAMIT_DETAIL_URL` | `https://tamit-cloud.com/api-product-2026` | Product detail (1688/Taobao/Tmall — pasted URL → SKU axes + price ranges + images). Endpoint shape: `{base}/get/{1688\|taobao}/?id={productID}`. **2026-05-27 — upstream bumped `/api-product` → `/api-product-2026`; old path returns 404. Update your local `.env.local` to the new value if it was set before this date. See [`docs/learnings/partner-apis-quirks.md`](learnings/partner-apis-quirks.md) for the diagnostic.** | None |
 | `PACRED_TAMIT_CACHE_URL` | `https://tam-i-t.com/api/convert-link-china` | Short-URL cache (1688 `qr.1688.com/s/{tk}` + Taobao `m.tb.cn/{tk}` → productID). Endpoint shape: `{base}/get[/taobao]/?tk={tk}` + `/save/?tk=...&provider={1\|2}&productID=...` | None |
 | `PACRED_AKUCARGO_API_URL` | `https://akucargo.com/api3/api-2022` | Keyword search (1688 + Taobao). Endpoint shape: `{base}/search/v1[/taobao]/?q={words}&page={N}&page_size=15&lang=zh-CN` | None (UA spoof to desktop Firefox) |
 | `PACRED_LAONET_API_URL` | `https://laonet.online` | Image search (reverse-image) + product detail fallback. Endpoint shape: `{base}/index.php?route=api_tester/call&api_name={item_search_img\|item_get\|upload_img}&...&key={key}` | Email-as-key (`PACRED_LAONET_KEY`) |

@@ -6,6 +6,51 @@ Topics: MOMO JMF (TH warehouse partner) · TAM (china-search interim) · ThaiBul
 
 ---
 
+## 2026-05-27 · TAMIT-cloud product-detail endpoint bumped `/api-product` → `/api-product-2026`
+
+**Symptom:** `/admin/service-orders/cart/add` link-paste search (and the customer `/service-order/add` URL tab) silently degraded to `buildDemoDetail()` — no product card with image/title/price ever appeared, the user saw a generic "สินค้าจาก TAOBAO (รหัส ...)" placeholder. The `PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product` env var (and the matching default in `lib/china-search/index.ts`) was returning **404** from every `GET .../get/{1688|taobao}/?id=<id>`.
+
+**Root cause:** Upstream rotated the API path to `/api-product-2026` (with the `-2026` suffix). The old `/api-product` namespace was retired. Our env value + library default were both still on the dead path because the rename happened upstream sometime in 2026 after we last verified.
+
+**Confirmation against legacy PHP:** The authoritative file is `pcs-admin/include/functions.php` — lines 100 / 174 / 191 all use `https://tamit-cloud.com/api-product-2026/get/{1688|taobao}/?id=...`. The older `pcs-admin/search.php` still references the dead `/api-product` path because it predates the upstream rename. **Rule:** when a TAMIT call returns 404, always check `include/functions.php` first — it's the file the team keeps current.
+
+**Fix:**
+```env
+# .env.local
+PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product-2026   # was /api-product
+```
+And in `lib/china-search/index.ts`:
+```ts
+const DEFAULT_TAMIT_DETAIL_URL = "https://tamit-cloud.com/api-product-2026";
+```
+
+**Verified working responses** (after the bump):
+- `GET /api-product-2026/get/1688/?id=808456582517` → `200 · {status:200, data:{id, title, mainImage, sku[], skuMap[], priceRanges, ...}}`
+- `GET /api-product-2026/get/taobao/?id=<id>` → may return `{status:204, ...}` for items not yet in cache. Our `convertProductUrlDetail` already handles status≠200 by falling through to `buildDemoDetail()` — no further change needed; the customer can fill price + qty manually as the legacy posture intended.
+
+**The OTHER TAMIT host is fine:** `https://tam-i-t.com/api/convert-link-china/...` (the short-URL cache for `m.tb.cn` / `qr.1688.com`) was NOT bumped — `PACRED_TAMIT_CACHE_URL` value is still correct. Only the product-detail host (`tamit-cloud.com`) had the path change.
+
+**Why this matters next time:** The TAMIT vendor (พี่แต้ม IT) bumps endpoints between versions without giving us a deprecation notice. If a TAMIT-backed flow degrades to demo mode and you can't reproduce a 200, **probe both legacy paths** (`api-product` vs `api-product-2026`) before assuming the host is dead. The host `tamit-cloud.com` is live — only the path moved.
+
+**Diagnostic one-liner to re-check next time:**
+```bash
+# Expect HTTP 200 + a `status:200` JSON payload
+curl -sI 'https://tamit-cloud.com/api-product-2026/get/1688/?id=808456582517' | head -1
+curl -s   'https://tamit-cloud.com/api-product-2026/get/1688/?id=808456582517' | head -c 200
+# If 404 → vendor bumped the path again. Grep `pcs-admin/include/functions.php` for the new one.
+```
+
+**Why this matters for the immortal scholar:** I spent ~45 min trying alternate URL variants (`tam-i-t.com/api-product`, scraping Taobao directly, hunting through dave-pacred for a different integration) before grepping the legacy PHP for "tam-i-t\|tamit" and discovering the `-2026` suffix in `include/functions.php`. **Next agent that hits this:** grep legacy PHP FIRST, before any probing.
+
+**Cross-links:**
+- `.env.local` line 59 — `PACRED_TAMIT_DETAIL_URL=https://tamit-cloud.com/api-product-2026`
+- [`lib/china-search/index.ts`](../../lib/china-search/index.ts) — `DEFAULT_TAMIT_DETAIL_URL` + the `convertProductUrlDetail` flow
+- Legacy authoritative file: `D:/REALSHITDATAPCS/pcsc/public_html/member/pcs-admin/include/functions.php` lines 100 / 174 / 191
+- [`docs/audit/php-pcscargo-integrations.md`](../audit/php-pcscargo-integrations.md) §3a — the audit that originally wired this
+- ภูม's quote that pointed me at the right answer (2026-05-27): *"แกมีไฟล์ทั้งหมดแล้วนะเว้ย ... ลองไปอ่านดูก่อน"* — the working files were already in our repo + on the Poom branch; the env var was the only thing stale
+
+---
+
 ## 2026-05-17 · DBD juristic-person lookup — both API paths dead/blocked
 
 **Symptom:** Juristic registration's "auto-fill company name + address from tax ID" doesn't populate. T-D1 smoke gate found `/api/dbd/[taxId]` returns 502.
