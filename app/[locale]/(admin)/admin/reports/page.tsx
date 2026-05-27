@@ -625,9 +625,26 @@ export default async function AdminReportsPage({
   //                         type=5 (ADMIN-MANUAL) is the closest match —
   //                         refunds in legacy are admin-manual wallet credits.
   //   monthlyOrdersCnt    = tb_forwarder.fdate >= monthStart
+  //
+  // V-G6 analytical card counts (Wave 23 P2 #16 — 2026-05-27 ค่ำ):
+  // Headline numbers for the 4 analytical drill-down cards so the hub
+  // feels alive (was hardcoded count={0} → staff thought reports were empty).
+  // All soft-fail: any query error → card shows 0 + page still renders.
+  //   vg6ForwarderVolumeCnt = tb_forwarder count · fdate ≥ 30d ·
+  //                           fstatus IN ('5','6','7') (shipped/billing rows ·
+  //                           proxy for "import volume" in the last 30d)
+  //   vg6SalesByRepCnt      = distinct tb_users.adminidsale (= active sales-rep
+  //                           userids assigned to at least one customer)
+  //   vg6HsCodeRevenueCnt   = distinct container_hs_lines.hs_code in last 90d
+  //                           (mirrors the report's default ?days=90 window)
+  //   vg6UserSalesHistoryCnt = distinct tb_forwarder.userid with at least one
+  //                            row fstatus IN ('6','7') in last 30d (active
+  //                            buyers · mirrors counted-status gates used by
+  //                            /admin/reports/user-sales-history)
   const [
     pendingPaymentsCnt, creditPendingCnt, containersAwaitingThCnt, debtorsCnt,
     refundsLast30Cnt,   monthlyOrdersCnt,
+    vg6ForwarderVolumeCnt, vg6SalesByRepRaw, vg6HsCodeRevenueRaw, vg6UserSalesHistoryRaw,
   ] = await Promise.all([
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5"),
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fcredit", "1"),
@@ -641,6 +658,32 @@ export default async function AdminReportsPage({
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true })
       .eq("type", "5").eq("status", "2").gte("date", nDaysAgoIso(30)),
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).gte("fdate", monthStartIso()),
+    // V-G6 #1 forwarder-volume — count shipped/billing rows in last 30d
+    admin.from("tb_forwarder")
+      .select("id", { count: "exact", head: true })
+      .gte("fdate", nDaysAgoIso(30))
+      .in("fstatus", ["5", "6", "7"]),
+    // V-G6 #2 sales-by-rep — distinct adminidsale from tb_users. PostgREST
+    // can't COUNT DISTINCT, so pull the column + Set-dedupe in JS (cap
+    // 50,000 rows — there are ~8,898 prod users so a single page suffices).
+    admin.from("tb_users")
+      .select("adminidsale")
+      .not("adminidsale", "is", null).neq("adminidsale", "")
+      .limit(50_000),
+    // V-G6 #3 hs-code-revenue — distinct HS codes used in last 90d. Same
+    // Set-dedupe pattern (cap 20,000 lines mirrors the underlying report).
+    admin.from("container_hs_lines")
+      .select("hs_code")
+      .not("hs_code", "is", null).neq("hs_code", "")
+      .gte("created_at", nDaysAgoIso(90))
+      .limit(20_000),
+    // V-G6 #4 user-sales-history — distinct userid with fstatus IN ('6','7')
+    // in last 30d (active buyers · mirrors gates in the underlying report).
+    admin.from("tb_forwarder")
+      .select("userid")
+      .in("fstatus", ["6", "7"])
+      .gte("fdate", nDaysAgoIso(30))
+      .limit(50_000),
   ]);
   if (pendingPaymentsCnt.error)        console.error(`[reports pendingPaymentsCnt] failed`, { code: pendingPaymentsCnt.error.code, message: pendingPaymentsCnt.error.message });
   if (creditPendingCnt.error)          console.error(`[reports creditPendingCnt] failed`, { code: creditPendingCnt.error.code, message: creditPendingCnt.error.message });
@@ -648,6 +691,22 @@ export default async function AdminReportsPage({
   if (debtorsCnt.error)                console.error(`[reports debtorsCnt] failed`, { code: debtorsCnt.error.code, message: debtorsCnt.error.message });
   if (refundsLast30Cnt.error)          console.error(`[reports refundsLast30Cnt] failed`, { code: refundsLast30Cnt.error.code, message: refundsLast30Cnt.error.message });
   if (monthlyOrdersCnt.error)          console.error(`[reports monthlyOrdersCnt] failed`, { code: monthlyOrdersCnt.error.code, message: monthlyOrdersCnt.error.message });
+  if (vg6ForwarderVolumeCnt.error)     console.error(`[reports vg6ForwarderVolumeCnt] failed`, { code: vg6ForwarderVolumeCnt.error.code, message: vg6ForwarderVolumeCnt.error.message });
+  if (vg6SalesByRepRaw.error)          console.error(`[reports vg6SalesByRep] failed`, { code: vg6SalesByRepRaw.error.code, message: vg6SalesByRepRaw.error.message });
+  if (vg6HsCodeRevenueRaw.error)       console.error(`[reports vg6HsCodeRevenue] failed`, { code: vg6HsCodeRevenueRaw.error.code, message: vg6HsCodeRevenueRaw.error.message });
+  if (vg6UserSalesHistoryRaw.error)    console.error(`[reports vg6UserSalesHistory] failed`, { code: vg6UserSalesHistoryRaw.error.code, message: vg6UserSalesHistoryRaw.error.message });
+
+  // V-G6 dedup pass — Set on the raw selects (only 3 of the 4 V-G6 cards
+  // need it; #1 forwarder-volume has its count direct from count:exact).
+  const vg6SalesByRepCnt = new Set(
+    (vg6SalesByRepRaw.data ?? []).map((r) => (r as { adminidsale: string }).adminidsale),
+  ).size;
+  const vg6HsCodeRevenueCnt = new Set(
+    (vg6HsCodeRevenueRaw.data ?? []).map((r) => (r as { hs_code: string }).hs_code),
+  ).size;
+  const vg6UserSalesHistoryCnt = new Set(
+    (vg6UserSalesHistoryRaw.data ?? []).map((r) => (r as { userid: string }).userid),
+  ).size;
 
   // ── render ──────────────────────────────────────────────────────────────────
 
@@ -678,10 +737,10 @@ export default async function AdminReportsPage({
           <span className="text-[10px] text-muted">aggregations + drill-down</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <QuickCard href="/admin/reports/forwarder-volume"        label="ปริมาณฝากนำเข้า"     count={0} note="ต้นทาง × ขนส่ง" />
-          <QuickCard href="/admin/reports/sales-by-rep"            label="ยอดต่อ sales rep"     count={0} note="30 วัน default" />
-          <QuickCard href="/admin/reports/hs-code-revenue"         label="HS-code revenue"      count={0} note="90 วัน default" />
-          <QuickCard href="/admin/reports/user-sales-history"      label="ประวัติยอด/ลูกค้า"   count={0} note="drill-down" />
+          <QuickCard href="/admin/reports/forwarder-volume"        label="ปริมาณฝากนำเข้า"     count={vg6ForwarderVolumeCnt.count ?? 0} note="30 วัน · ส่งแล้ว+" />
+          <QuickCard href="/admin/reports/sales-by-rep"            label="ยอดต่อ sales rep"     count={vg6SalesByRepCnt}                 note="เซลล์ที่มีลูกค้า" />
+          <QuickCard href="/admin/reports/hs-code-revenue"         label="HS-code revenue"      count={vg6HsCodeRevenueCnt}              note="HS codes · 90 วัน" />
+          <QuickCard href="/admin/reports/user-sales-history"      label="ประวัติยอด/ลูกค้า"   count={vg6UserSalesHistoryCnt}           note="ลูกค้าซื้อใน 30 วัน" />
         </div>
       </section>
 
