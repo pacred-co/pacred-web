@@ -2,6 +2,45 @@
 
 ---
 
+# 🌌 2026-05-28 ดึก-3 — SESSION WRAP · 2-REPO LOCAL VERIFIED · SETUP SCRIPTS LANDED
+
+ปิด session ดึกนี้: 2-repo architecture **เชื่อม local + ทดสอบ pass แล้ว** (pacred-web :3000 + pacred-admin-next :3001 · shared Supabase prod). Setup scripts สำหรับ **เดฟ + ปอน + ภูม** push ขึ้น main + dave-pacred แล้ว · พร้อม resume ที่บ้านได้.
+
+**📦 ส่ง main วันนี้ (cluster ดึก-2 → ดึก-3):**
+
+| Commit | งาน |
+|---|---|
+| `f3147052` | docs(CLAUDE.md): 2026-05-28 ดึก-2 — 2-REPO ARCHITECTURE + LAUNCH PLAN |
+| `a9482d71` | docs(team): setup scripts + 2-repo workflow for ปอน + ภูม |
+| `<this commit>` | docs(audit): B-4 click-through cluster a/b/c/d + cross-branch inventory + setup-dave.sh |
+
+**🗺 ความพร้อม resume:**
+
+| คน | Repo | Branch | Setup command (เครื่องใหม่ครั้งแรก) | Daily sync |
+|---|---|---|---|---|
+| **เดฟ** | pacred-web | dave-pacred | `bash scripts/setup-dave.sh` | `git fetch origin && git pull origin main --no-edit` |
+| **ปอน** | pacred-web | InwPond007 | `bash scripts/setup-podeng.sh` | `git pull origin dave-pacred --no-edit` |
+| **ภูม** | pacred-admin-next ⚠️ NEW | admin | `bash setup-poom-admin.sh` (อยู่ใน repo ใหม่) | `git pull origin admin --no-edit` |
+
+**🟢 Local verified working (post ดึก-3):**
+- pacred-web :3000 (Ready in 786ms) — `/`, `/en`, `/login`, `/register` = 200 · `/service-import/truck` + `/admin` + `/dashboard` = 307 (auth-gate ปกติ)
+- pacred-admin-next :3001 (Ready in 491ms · DEV_BYPASS=true) — `/dashboard`, `/admins`, `/accounting`, `/api-forwarder-momo`, `/api-forwarder-jmf`, `/barcode`, `/acc-payment`, `/acc-shop` = 200
+
+**🎯 Pickup options for next session (เลือกเอง):**
+- **A — Soft-launch sprint** (8-11 วัน · ปลาย 5-8 มิย.): 3 BIG P0 cluster D + 4 LOAD-BEARING fidelity gaps + ก๊อต coord (S3 rotate + CRON_SECRET + API switchover)
+- **B — ภูม coordination:** Pull cross-repo migrations + Pacred infra alignment review
+- **C — P1 backlog (33 items)** from B-4 audit: `docs/audit/b4-click-through-cluster-{a,b,c,d}-2026-05-28.md`
+- **D — camelCase batch 2b** (tb_forwarder family ~177 renames · page-by-page approach)
+
+**Resume command (next session at home/work):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/hopeful-almeida-359e44
+bash scripts/setup-dave.sh                              # auto-sync + status + pickup list
+head -120 CLAUDE.md                                      # this section + ดึก-2 2-repo plan
+```
+
+---
+
 # 🚀 2026-05-28 ดึก-2 — 2-REPO ARCHITECTURE + LAUNCH PLAN · read FIRST (supersedes earlier today)
 
 ก๊อต directive 2026-05-28: ตัด admin ออกเป็น **repo แยก** เพื่อให้ ภูม ทำ 1:1 port จากก๊อต baseline. Production = pacred-web/main + pacred-admin-next/admin (deployed คู่กัน).
