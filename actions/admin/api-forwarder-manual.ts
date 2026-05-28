@@ -76,11 +76,11 @@ async function resolveLegacyAdminId(): Promise<string> {
 // ────────────────────────────────────────────────────────────
 
 export type ManualCustomerOption = {
-  userid:       string;
-  username:     string | null;
-  userlastname: string | null;
-  usertel:      string | null;
-  coid:         string | null;
+  userID:       string;
+  userName:     string | null;
+  userLastName: string | null;
+  userTel:      string | null;
+  coID:         string | null;
 };
 
 export async function fetchUsersByQuery(
@@ -95,17 +95,17 @@ export async function fetchUsersByQuery(
       }
       const admin = createAdminClient();
       const upper = trimmed.toUpperCase();
-      // Use OR-filter: userid ilike OR username ilike OR usertel ilike.
+      // Use OR-filter: userID ilike OR userName ilike OR userTel ilike.
       // Quote individual values to dodge PostgREST or-syntax conflicts.
       const pattern = `%${upper}%`;
       const { data, error } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname, usertel, coid")
+        .select("userID, userName, userLastName, userTel, coID")
         .or(
-          `userid.ilike.${pattern},username.ilike.${pattern},userlastname.ilike.${pattern},usertel.ilike.${pattern}`,
+          `userID.ilike.${pattern},userName.ilike.${pattern},userLastName.ilike.${pattern},userTel.ilike.${pattern}`,
         )
-        .eq("userstatus", "1")
-        .order("userid", { ascending: true })
+        .eq("userStatus", "1")
+        .order("userID", { ascending: true })
         .limit(30);
 
       if (error) return { ok: false, error: error.message };
@@ -293,9 +293,9 @@ export async function adminApiForwarderManualInsert(
       const userID = d.userID.toUpperCase();
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, coid, usercompany")
-        .eq("userid", userID)
-        .maybeSingle<{ userid: string; coid: string | null; usercompany: string | null }>();
+        .select("userID, coID, userCompany")
+        .eq("userID", userID)
+        .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
@@ -315,7 +315,7 @@ export async function adminApiForwarderManualInsert(
             "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
           )
           .eq("addressid", d.addressID)
-          .eq("userid", customer.userid)
+          .eq("userid", customer.userID)
           .eq("addressstatus", "1")
           .maybeSingle<{
             addressname:        string;
@@ -353,7 +353,7 @@ export async function adminApiForwarderManualInsert(
         const { data: main, error: mainErr } = await admin
           .from("tb_address_main")
           .select("addressid")
-          .eq("userid", customer.userid)
+          .eq("userid", customer.userID)
           .maybeSingle<{ addressid: number }>();
         if (mainErr) {
           console.error(`[tb_address_main list] failed`, { code: mainErr.code, message: mainErr.message });
@@ -365,7 +365,7 @@ export async function adminApiForwarderManualInsert(
               "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
             )
             .eq("addressid", main.addressid)
-            .eq("userid", customer.userid)
+            .eq("userid", customer.userID)
             .eq("addressstatus", "1")
             .maybeSingle<{
               addressname:        string;
@@ -421,7 +421,7 @@ export async function adminApiForwarderManualInsert(
       // ── fUserCompany (legacy lines 242-244) ──────────────────
       // If userCompany=1, set fUserCompany=NULL (legacy). NULL not allowed
       // here (zero-fill convention) — use "0" / leave as default.
-      const fUserCompany = customer.usercompany === "1" ? null : "0";
+      const fUserCompany = customer.userCompany === "1" ? null : "0";
 
       const nowIso = new Date().toISOString();
 
@@ -433,7 +433,7 @@ export async function adminApiForwarderManualInsert(
           ftrackingchn:          d.productTracking,
           famount:               d.productQTY,
           fdate:                 nowIso,
-          userid:                customer.userid,
+          userid:                customer.userID,
           fshipby:               d.fShipBy,
           ftransporttype:        fTransportType,
           adminidcreator:        legacyAdminId,
@@ -543,7 +543,7 @@ export async function adminApiForwarderManualInsert(
         {
           carrier,
           carrier_label:    carrierCfg.label,
-          userid:           customer.userid,
+          userid:           customer.userID,
           productID:        d.productID,
           sm_code:          d.sm_code,
           tracking_chn:     d.productTracking,

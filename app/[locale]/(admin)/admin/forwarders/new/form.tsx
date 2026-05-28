@@ -90,8 +90,8 @@ type TransportType = (typeof TRANSPORT_OPTIONS)[number]["value"];
 
 function customerLabel(c: CustomerOption | null | undefined): string {
   if (!c) return "—";
-  const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
-  return `${c.userid} · ${name || c.usertel || "(ไม่มีชื่อ)"}`;
+  const name = `${c.userName ?? ""} ${c.userLastName ?? ""}`.trim();
+  return `${c.userID} · ${name || c.userTel || "(ไม่มีชื่อ)"}`;
 }
 
 function addressFullLine(a: AddressOption): string {
@@ -121,7 +121,7 @@ export function AdminForwarderNewForm({
     presetUser ? [presetUser] : [],
   );
   const [usersLoading, setUsersLoading] = useState(false);
-  const [userid, setUserid]           = useState<string>(presetUser?.userid ?? "");
+  const [userid, setUserid]           = useState<string>(presetUser?.userID ?? "");
   const [userFilter, setUserFilter]   = useState<string>("");
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const userPickerRef = useRef<HTMLDivElement | null>(null);
@@ -222,13 +222,13 @@ export function AdminForwarderNewForm({
 
   // ─── when user picked → fetch their addresses ─────────────────
   async function onUserPick(picked: CustomerOption) {
-    setUserid(picked.userid);
+    setUserid(picked.userID);
     setUserFilter("");
     setUserPickerOpen(false);
     setFieldErrors((p) => { const n = new Set(p); n.delete("userid"); return n; });
 
     setAddressesLoading(true);
-    const res = await fetchAddressesByUserid(picked.userid);
+    const res = await fetchAddressesByUserid(picked.userID);
     setAddressesLoading(false);
     if (res.ok) {
       const list = res.data?.addresses ?? [];
@@ -246,13 +246,13 @@ export function AdminForwarderNewForm({
     const q = userFilter.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) => {
-      const hay = `${u.userid} ${u.username ?? ""} ${u.userlastname ?? ""} ${u.usertel ?? ""}`.toLowerCase();
+      const hay = `${u.userID} ${u.userName ?? ""} ${u.userLastName ?? ""} ${u.userTel ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [userFilter, users]);
 
   const selectedUser = useMemo(
-    () => users.find((u) => u.userid === userid) ?? (presetUser?.userid === userid ? presetUser : null),
+    () => users.find((u) => u.userID === userid) ?? (presetUser?.userID === userid ? presetUser : null),
     [userid, users, presetUser],
   );
 
@@ -415,8 +415,8 @@ export function AdminForwarderNewForm({
                   <div className="text-sm font-medium text-green-900 truncate">
                     ✓ {customerLabel(selectedUser)}
                   </div>
-                  {selectedUser.usertel && (
-                    <div className="text-xs text-green-700 mt-0.5">เบอร์ {selectedUser.usertel}</div>
+                  {selectedUser.userTel && (
+                    <div className="text-xs text-green-700 mt-0.5">เบอร์ {selectedUser.userTel}</div>
                   )}
                 </div>
                 <button
@@ -453,15 +453,15 @@ export function AdminForwarderNewForm({
                     ) : (
                       filteredUsers.map((u) => (
                         <button
-                          key={u.userid}
+                          key={u.userID}
                           type="button"
                           onClick={() => onUserPick(u)}
                           className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-alt"
                         >
-                          <span className="font-mono text-primary-600">{u.userid}</span>
+                          <span className="font-mono text-primary-600">{u.userID}</span>
                           <span className="mx-1.5 text-muted">·</span>
-                          <span>{`${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
-                          {u.usertel && <span className="ml-2 text-xs text-muted">{u.usertel}</span>}
+                          <span>{`${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "(ไม่มีชื่อ)"}</span>
+                          {u.userTel && <span className="ml-2 text-xs text-muted">{u.userTel}</span>}
                         </button>
                       ))
                     )}

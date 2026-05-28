@@ -82,10 +82,10 @@ async function resolveLegacyAdminId(): Promise<string> {
 // ────────────────────────────────────────────────────────────
 
 export type CustomerOption = {
-  userid:       string;
-  username:     string | null;
-  userlastname: string | null;
-  usertel:      string | null;
+  userID:       string;
+  userName:     string | null;
+  userLastName: string | null;
+  userTel:      string | null;
 };
 
 export async function fetchUsersByCoid(
@@ -102,10 +102,10 @@ export async function fetchUsersByCoid(
 
       const { data, error } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname, usertel")
-        .eq("coid", safeCoid)
-        .eq("userstatus", "1")
-        .order("userid", { ascending: true })
+        .select("userID, userName, userLastName, userTel")
+        .eq("coID", safeCoid)
+        .eq("userStatus", "1")
+        .order("userID", { ascending: true })
         .limit(2000);
 
       if (error) return { ok: false, error: error.message };
@@ -257,9 +257,9 @@ export async function adminCreateForwarder(
       const customerCode = d.customerUserid.toUpperCase();
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, coid")
-        .eq("userid", customerCode)
-        .maybeSingle<{ userid: string; coid: string | null }>();
+        .select("userID, coID")
+        .eq("userID", customerCode)
+        .maybeSingle<{ userID: string; coID: string | null }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
@@ -296,7 +296,7 @@ export async function adminCreateForwarder(
             "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
           )
           .eq("addressid", d.addressId)
-          .eq("userid", customer.userid)
+          .eq("userid", customer.userID)
           .eq("addressstatus", "1")
           .maybeSingle<{
             addressname:        string;
@@ -343,7 +343,7 @@ export async function adminCreateForwarder(
           fdetail:               d.detail,
           famount:               d.amount,
           fdate:                 nowIso,
-          userid:                customer.userid,
+          userid:                customer.userID,
           fshipby:               d.shipBy,
           ftransporttype:        d.transportType,
           adminidcreator:        legacyAdminId,
@@ -447,7 +447,7 @@ export async function adminCreateForwarder(
         const upload = await uploadToBucket(
           coverFile,
           "forwarder-covers",
-          `admin/${customer.userid}`,
+          `admin/${customer.userID}`,
         );
         if (!upload.ok) {
           // Don't roll back the INSERT — legacy doesn't either; the row is
@@ -484,7 +484,7 @@ export async function adminCreateForwarder(
         "tb_forwarder",
         String(row.id),
         {
-          userid:           customer.userid,
+          userid:           customer.userID,
           coid:             d.coid,
           tracking_chn:     d.trackingChn,
           ship_by:          d.shipBy,

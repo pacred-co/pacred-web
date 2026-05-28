@@ -150,9 +150,9 @@ export async function adminCarrierManualInsert(
       const customerCode = d.customerUserid.toUpperCase();
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, coid, usercompany")
-        .eq("userid", customerCode)
-        .maybeSingle<{ userid: string; coid: string | null; usercompany: string | null }>();
+        .select("userID, coID, userCompany")
+        .eq("userID", customerCode)
+        .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
@@ -160,7 +160,7 @@ export async function adminCarrierManualInsert(
       if (!customer) {
         return { ok: false, error: "ไม่พบสมาชิก (userid ไม่ตรงกับ tb_users)" };
       }
-      const userCompany = customer.usercompany === "1" ? "1" : "0";
+      const userCompany = customer.userCompany === "1" ? "1" : "0";
 
       // ─── Resolve address ───────────────────────────────────────────
       // Note: explicit `string`-typed shape — NOT `typeof PCS_PICKUP_ADDRESS`.
@@ -194,7 +194,7 @@ export async function adminCarrierManualInsert(
             "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
           )
           .eq("addressid", d.addressId)
-          .eq("userid", customer.userid)
+          .eq("userid", customer.userID)
           .eq("addressstatus", "1")
           .maybeSingle<{
             addressname:        string;
@@ -248,7 +248,7 @@ export async function adminCarrierManualInsert(
           fdetail:               d.detail,
           famount:               d.amount,
           fdate:                 nowIso,
-          userid:                customer.userid,
+          userid:                customer.userID,
           fshipby:               d.shipBy,
           ftransporttype:        d.transportType,
           adminidcreator:        legacyAdminId,
@@ -351,7 +351,7 @@ export async function adminCarrierManualInsert(
         {
           carrier:         carrier.key,
           warehouse_code:  carrier.warehouseCode,
-          userid:          customer.userid,
+          userid:          customer.userID,
           coid:            d.coid,
           tracking_chn:    d.trackingChn,
           ship_by:         d.shipBy,

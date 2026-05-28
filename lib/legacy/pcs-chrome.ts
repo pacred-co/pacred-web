@@ -124,9 +124,9 @@ async function resolveSalesRep(
 
   const { data: adminRow, error: adminRowErr } = await admin
     .from("tb_admin")
-    .select("adminnickname, adminpicture")
-    .eq("adminid", adminIdSale)
-    .maybeSingle<{ adminnickname: string | null; adminpicture: string | null }>();
+    .select("adminNickname, adminPicture")
+    .eq("adminID", adminIdSale)
+    .maybeSingle<{ adminNickname: string | null; adminPicture: string | null }>();
   if (adminRowErr) {
     console.error(`[tb_admin list] failed`, { code: adminRowErr.code, message: adminRowErr.message });
   }
@@ -157,15 +157,15 @@ async function resolveSalesRep(
 
   // left-menu.php L28: $adminPicture = basePath."images/admin/".picture.
   const picture =
-    adminRow.adminpicture &&
-    adminRow.adminpicture !== "user.jpg" &&
-    /^(https?:|\/)/.test(adminRow.adminpicture)
-      ? adminRow.adminpicture
+    adminRow.adminPicture &&
+    adminRow.adminPicture !== "user.jpg" &&
+    /^(https?:|\/)/.test(adminRow.adminPicture)
+      ? adminRow.adminPicture
       : SALES_FALLBACK.picture;
 
   return {
     nickname:
-      (adminRow.adminnickname && adminRow.adminnickname.trim()) ||
+      (adminRow.adminNickname && adminRow.adminNickname.trim()) ||
       SALES_FALLBACK.nickname,
     picture,
     tel: tel ?? SALES_FALLBACK.tel,
@@ -209,15 +209,15 @@ async function loadPcsChromeDataUncached(
     ] = await Promise.all([
       admin
         .from("tb_users")
-        .select("username, userlastname, useremail, userpicture, coid, adminidsale")
-        .eq("userid", uid)
+        .select("userName, userLastName, userEmail, userPicture, coID, adminIDSale")
+        .eq("userID", uid)
         .maybeSingle<{
-          username: string | null;
-          userlastname: string | null;
-          useremail: string | null;
-          userpicture: string | null;
-          coid: string | null;
-          adminidsale: string | null;
+          userName: string | null;
+          userLastName: string | null;
+          userEmail: string | null;
+          userPicture: string | null;
+          coID: string | null;
+          adminIDSale: string | null;
         }>(),
       admin
         .from("tb_wallet")
@@ -273,16 +273,16 @@ async function loadPcsChromeDataUncached(
       admin.from("tb_corporate").select("*", { count: "exact", head: true }).eq("userid", uid),
     ]);
 
-    const sales = await resolveSalesRep(admin, userRow.data?.adminidsale ?? null);
+    const sales = await resolveSalesRep(admin, userRow.data?.adminIDSale ?? null);
     const keywordRows = (keywordRes.data ?? []) as { keyword: string | null }[];
 
     return {
       userID: uid,
-      userName: userRow.data?.username ?? "",
-      userLastName: userRow.data?.userlastname ?? "",
-      userEmail: (userRow.data?.useremail ?? "").toLowerCase(),
+      userName: userRow.data?.userName ?? "",
+      userLastName: userRow.data?.userLastName ?? "",
+      userEmail: (userRow.data?.userEmail ?? "").toLowerCase(),
       userPicture: PCS_DEFAULT_AVATAR,
-      coID: userRow.data?.coid ?? "",
+      coID: userRow.data?.coID ?? "",
       walletTotal: Number(walletRow.data?.wallettotal ?? 0),
       cbTotal: Number(cashbackRow.data?.cbtotal ?? 0),
       creditValue: Number(creditRow.data?.creditvalue ?? 0),

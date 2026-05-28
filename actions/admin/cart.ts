@@ -195,9 +195,9 @@ export async function adminAddCartUser(
 
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname")
-        .eq("userid", userid)
-        .maybeSingle<{ userid: string; username: string; userlastname: string }>();
+        .select("userID, userName, userLastName")
+        .eq("userID", userid)
+        .maybeSingle<{ userID: string; userName: string; userLastName: string }>();
       if (customerErr) {
         console.error(`[tb_users list] failed`, { code: customerErr.code, message: customerErr.message });
       }
@@ -206,7 +206,7 @@ export async function adminAddCartUser(
         return { ok: true, data: { exists: false, displayName: null } };
       }
 
-      const displayName = `${customer.username} ${customer.userlastname}`.trim();
+      const displayName = `${customer.userName} ${customer.userLastName}`.trim();
 
       // Light-touch audit — record the lookup so we can see which staff
       // viewed which customer cart (matches legacy session-context).

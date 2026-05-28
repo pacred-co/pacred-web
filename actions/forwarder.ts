@@ -84,13 +84,13 @@ export async function calculateForwarderTotal(
   // userName/userLastName are read but unused by the calc.
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("usercompany")
-    .eq("userid", userID)
-    .maybeSingle<{ usercompany: string | number | null }>();
+    .select("userCompany")
+    .eq("userID", userID)
+    .maybeSingle<{ userCompany: string | number | null }>();
   if (userRowErr) {
     console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
   }
-  const userCompany = String(userRow?.usercompany ?? "");
+  const userCompany = String(userRow?.userCompany ?? "");
 
   // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
   //   fTransportType, fDiscount, ID, fTrackingCHN, fRefRate, fTotalPrice,

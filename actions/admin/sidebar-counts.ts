@@ -125,11 +125,11 @@ export async function getSidebarCounts(): Promise<BadgeCounts> {
       // D1 Wave-2 (_SYNTHESIS §7.4): re-pointed to legacy tb_users.
       // สมาชิกนิติบุคคล รอตรวจ — usercompany='1' (นิติบุคคล) +
       // useractive='0' (รอ approve) — legacy countComp.
-      admin.from("tb_users").select("id", { count: "exact", head: true })
-        .eq("usercompany", "1").eq("useractive", "0"),
-      // ลูกค้ารอ approve — useractive='0' = accounts not yet activated.
-      admin.from("tb_users").select("id", { count: "exact", head: true })
-        .eq("useractive", "0"),
+      admin.from("tb_users").select("ID", { count: "exact", head: true })
+        .eq("userCompany", "1").eq("userActive", "0"),
+      // ลูกค้ารอ approve — userActive='0' = accounts not yet activated.
+      admin.from("tb_users").select("ID", { count: "exact", head: true })
+        .eq("userActive", "0"),
       // ── ข้อความติดต่อ (lead funnel) ─────────────────────────────
       admin.from("contact_messages").select("id", { count: "exact", head: true })
         .eq("status", "new"),

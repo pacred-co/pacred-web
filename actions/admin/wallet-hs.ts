@@ -136,9 +136,9 @@ export async function adminCreateWalletHsManual(
       // Verify the target customer exists in tb_users.
       const { data: customer, error: customerErr } = await admin
         .from("tb_users")
-        .select("userid, username, userlastname")
-        .eq("userid", d.userid.toUpperCase())
-        .maybeSingle<{ userid: string; username: string | null; userlastname: string | null }>();
+        .select("userID, userName, userLastName")
+        .eq("userID", d.userid.toUpperCase())
+        .maybeSingle<{ userID: string; userName: string | null; userLastName: string | null }>();
       if (customerErr) {
         console.error(`[tb_users mutation lookup] failed`, { code: customerErr.code, message: customerErr.message });
         return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
@@ -161,7 +161,7 @@ export async function adminCreateWalletHsManual(
       // tb_wallet_hs INSERT. On upload failure abort (no half-state).
       let slipFilename = "";
       if (slipFile) {
-        const up = await uploadToBucket(slipFile, "slips", `admin/wallet-hs/${customer.userid}`);
+        const up = await uploadToBucket(slipFile, "slips", `admin/wallet-hs/${customer.userID}`);
         if (!up.ok) return { ok: false, error: `อัปโหลดสลิปไม่สำเร็จ: ${up.error}` };
         slipFilename = up.filename;
       }
@@ -192,7 +192,7 @@ export async function adminCreateWalletHsManual(
           reforder:        "",
           whno:            "",                               // NOT NULL — admin-manual has no warehouse #
           wusercredit:     "0",                              // 0 = not a VIP-credit topup by default
-          userid:          customer.userid,                  // canonical-case from tb_users
+          userid:          customer.userID,                  // canonical-case from tb_users
           adminidcrate:    legacyAdminId,                    // creator (NOT NULL)
         })
         .select("id")
@@ -205,7 +205,7 @@ export async function adminCreateWalletHsManual(
         const { data: wRow, error: wRowErr } = await admin
           .from("tb_wallet")
           .select("userid, wallettotal")
-          .eq("userid", customer.userid)
+          .eq("userid", customer.userID)
           .maybeSingle<{ userid: string; wallettotal: number }>();
         if (wRowErr) {
           console.error(`[tb_wallet list] failed`, { code: wRowErr.code, message: wRowErr.message });
@@ -213,7 +213,7 @@ export async function adminCreateWalletHsManual(
         if (!wRow) {
           const { error: walletInsErr } = await admin
             .from("tb_wallet")
-            .insert({ userid: customer.userid, wallettotal: delta });
+            .insert({ userid: customer.userID, wallettotal: delta });
           if (walletInsErr) {
             // tb_wallet_hs already wrote; surface so accounting reconciles.
             return {
@@ -226,7 +226,7 @@ export async function adminCreateWalletHsManual(
           const { error: walletUpdErr } = await admin
             .from("tb_wallet")
             .update({ wallettotal: newTotal })
-            .eq("userid", customer.userid);
+            .eq("userid", customer.userID);
           if (walletUpdErr) {
             return {
               ok: false,
@@ -237,7 +237,7 @@ export async function adminCreateWalletHsManual(
       }
 
       await logAdminAction(adminId, "tb_wallet_hs.manual_create", "tb_wallet_hs", String(row.id), {
-        userid: customer.userid,
+        userid: customer.userID,
         kind: d.kind,
         amount: signedAmount,
         delta,
