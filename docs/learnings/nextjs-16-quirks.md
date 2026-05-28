@@ -868,3 +868,68 @@ The `data-legacy-src` dedup guard handles client-side nav re-mounting the layout
 - `app/[locale]/(protected)/layout.tsx` — the loader implementation + the long explainer comment
 - `public/legacy/pcs/assets/js/vendors/js/vendors.min.js` — the 537 KB file that loses the race
 - 2026-05-28 fix commit (this entry)
+
+---
+
+## [2026-05-28] `<Link>` to a protected route from a non-protected page leaks the protected layout's CSS bundle as `<link rel="preload">` on the current page
+
+**Context:** Browser console flooded with ~126 warnings of the form `The resource https://pacred.co.th/legacy/pcs/menu.css was preloaded using link preload but not used within a few seconds from the window's load event.` on `/register` (and likely every auth/public route when an authenticated user — e.g. mid-signup juristic — is present). The list also included every other CSS in the protected `CSS_BUNDLE` plus the protected fonts.googleapis Prompt URL — none of which the auth page uses.
+
+**Symptom triad:**
+1. `/register` / `/login` / `/complete-profile` console floods with "preloaded but not used" warnings for every URL in `app/[locale]/(protected)/layout.tsx` `CSS_BUNDLE` (~25 stylesheets + Google Fonts).
+2. The warnings include resources the current page never references — `/legacy/pcs/menu.css`, `/legacy/pcs/cart.css`, `/images/customertheme/*.png`, etc. — they only live in the protected layout's render tree.
+3. Adding `prefetch={false}` to the offending Links eliminates the warnings without breaking any nav.
+
+**Root cause — Next.js `<Link>` viewport-prefetch × React 19 stylesheet hoisting:**
+1. Next.js App Router's `<Link>` defaults to `prefetch="auto"` (a.k.a. partial PPR prefetch in viewport). When `<Link href="/dashboard">` enters the viewport on a NON-protected page, Next.js fetches the RSC payload for `/dashboard`.
+2. The RSC payload renders `app/[locale]/(protected)/layout.tsx` server-side. That layout returns `<link rel="stylesheet" href="…">` × 25-plus tags (the legacy-PCS CSS bundle) plus a Google-Fonts stylesheet `<link>`.
+3. React 19 sees those `<link rel="stylesheet">` declarations in the RSC payload and **auto-hoists each as a `<link rel="preload" as="style">`** into the CURRENT page's `<head>` — even though that page (the auth/public page) never renders the protected layout.
+4. The browser preloads the 25+ stylesheets, none of them apply to the current page, and after a few seconds the spec emits the "preloaded but not used" warning per resource.
+
+**Where the protected Links live (on an authed user on a non-protected page):**
+- `components/sections/navbar.tsx` — `UserMenu` (`/profile`, `/dashboard`) + `MobileUserMenu` (`/dashboard`)
+- `components/cart-badge.tsx` — `<Link href="/service-order/cart">`
+- `components/notification-bell.tsx` — `<Link href="/notifications">`
+
+All four only render when `authReady && user` is truthy in NavBar — which happens on `/register` for the **mid-signup juristic-incomplete** edge case `requireGuest()` allows through, AND on the entire `(public)` route group whenever the customer happens to already be signed in.
+
+**Fix — `usePathname()`-driven prefetch gate inside NavBar:**
+```ts
+// components/sections/navbar.tsx
+function useProtectedLinkPrefetch(): false | undefined {
+  const pathname = usePathname();
+  if (!pathname) return false;
+  return /^(?:\/[a-z]{2})?\/(?:dashboard|profile|service-order|service-import|service-payment|wallet|wallet-credit|wallet-shop|cart|notifications|shipments|sales|refunds|pay|search|map|addresses|china-address|freight|account-settings|line-settings|m\/dashboard)(?:\/|$)/.test(pathname)
+    ? undefined   // inside (protected) — keep prefetch ON so back-office nav stays snappy
+    : false;      // outside (protected) — disable prefetch so the CSS bundle doesn't leak
+}
+
+// In NavBar JSX:
+const protectedPrefetch = useProtectedLinkPrefetch();
+// ...
+<CartBadge prefetch={protectedPrefetch} />
+<NotificationBell prefetch={protectedPrefetch} />
+<UserMenu prefetch={protectedPrefetch} ... />
+<MobileUserMenu prefetch={protectedPrefetch} ... />
+
+// And in those four files, the protected-target <Link> takes a prefetch prop:
+<Link href="/dashboard" prefetch={prefetch} ...>
+<Link href="/profile" prefetch={prefetch} ...>
+<Link href="/service-order/cart" prefetch={prefetch} ...>
+<Link href="/notifications" prefetch={prefetch} ...>
+```
+
+Navigation still works — clicking the Link just triggers a regular request instead of a viewport-warm prefetch. The trade-off is a tiny one-time wait when an authed user navigates from `/` to `/dashboard`, in exchange for eliminating ~126 console warnings (and ~25 useless stylesheet HTTP requests per page load) on every auth / public visit.
+
+**Why this matters next time:**
+- **The rule:** any `<Link>` from outside `(protected)` to a route inside `(protected)` should pass `prefetch={false}` — OR be conditionally rendered behind a `usePathname()` gate.
+- **Detection grep:** if `view-source:` of a non-protected URL shows `<link rel="preload" href="/legacy/pcs/*.css">` or `<link rel="preload" href="https://fonts.googleapis.com/css?family=Prompt">`, a Link in your chrome is warming the protected layout.
+- **The CSS bundle isn't the problem.** It's correctly scoped to `(protected)/layout.tsx`. The leak vector is the prefetch — fix at the Link, not by trimming the bundle.
+- **Same applies to admin chrome** — if `(admin)/layout.tsx` ever grows a similar bundle, the rule extends: any `<Link href="/admin/...">` from non-admin pages should be `prefetch={false}`.
+- **Why the warning is silent on protected pages:** when NavBar renders on `/dashboard`, the CSS bundle IS already loaded by the layout the user is sitting on; the prefetch of other protected routes just deduplicates against the in-use stylesheets, no preload warning.
+
+**Cross-links:**
+- 2026-05-28 fix commit (this entry) — files: `components/sections/navbar.tsx`, `components/cart-badge.tsx`, `components/notification-bell.tsx`
+- [`app/[locale]/(protected)/layout.tsx`](../../app/[locale]/(protected)/layout.tsx) — the `CSS_BUNDLE` array that gets hoisted
+- [Next.js docs — Link prefetch](https://nextjs.org/docs/app/api-reference/components/link#prefetch)
+- [React 19 RFC — Stylesheet hoisting](https://react.dev/reference/react-dom/components/link) — the auto-preload behavior
