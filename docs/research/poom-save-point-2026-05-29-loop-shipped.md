@@ -41,6 +41,7 @@ Wave 27 row-color-restore (พี่ป๊อป-flag bug) + Wave 28 E2E loop cl
 | `18329992` | **#5** Customer `/service-import/[fNo]/invoice` — render + print + pay-from-wallet + sales-rep fallback + composeBillSms URL | F4 · 3 files · NEW `lib/admin/sales-rep-contact.ts` | +803 -7 |
 | `21409321` | **menu-promote + barcode-pill + revalidate**: "🆕 รออนุมัติ" top-tab · `phase:2` removed · barcode result pill (`fstatusBadge`) · revalidate `/admin/report-cnt` after scan | 6 files · 5 fixes | +49 -10 |
 | `db473a5e` | **menubar wire**: invoice→ฝากนำเข้า leaf hrefs route to `/admin/accounting/forwarder-invoice` (was Wave 23 catch-all stub) + sidebar `blockAccounting` lands on `/admin/accounting` hub (not `/cargo`) | 2 files | +32 -21 |
+| `33c92928` | **entry-paths fix** (post ภูม browser-test): NEW sidebar "🆕 ใช้งานหลัก" section · parent-href on invoiceStatuses · F4 legal name upgrade | 3 files | +41 -3 |
 
 **Wave 28 total: +3826 / -683 LOC** ปิด 5 critical E2E gaps + ภูม-flagged 3 entry-path issues.
 
@@ -51,6 +52,22 @@ Wave 27 row-color-restore (พี่ป๊อป-flag bug) + Wave 28 E2E loop cl
 - `id=46430` `GZE251230-1` → `2025-12-30`
 
 **Note for ก๊อต/ภูม follow-up:** the same 5 rows also have corrupt `fdatestatus3` + `fdatetothai` (still 2037/2027). LIST page doesn't show them but DETAIL page does. Pattern unclear (not BE→CE +543). Recommend ภูม + ก๊อต SQL cleanup pass.
+
+---
+
+## 🆕 Wave 28 entry-paths fix (last commit `33c92928`)
+
+หลังจาก ภูม browser-test ครั้งแรก flag 3 issues:
+1. `/admin/accounting/forwarder-invoice` → menubar 4-level dropdown buggy → เพิ่ม sidebar shortcut + parent-href
+2. F4 customer invoice header แสดงแค่ "Pacred" → upgrade เป็น "Pacred (Thailand) Co., Ltd."
+3. `/admin/barcode/driver/import` ไม่มีปุ่ม entry → เพิ่ม sidebar shortcut
+
+**NEW sidebar section "🆕 ใช้งานหลัก"** (1-click access · ขวา Dashboard):
+- 🆕 ลูกค้ารออนุมัติ
+- 🆕 ใบแจ้งหนี้ฝากนำเข้า
+- บันทึกสินค้าเข้าโกดัง
+
+ภูม ที่ทำงาน refresh sidebar → 3 shortcuts ปรากฏที่ top.
 
 ---
 
