@@ -24,9 +24,16 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { adminReportCntAddCheck } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
+import {
+  fstatusBadge,
+  detailRowTint,
+  DETAIL_LEGEND,
+  CNTSTATUS_CFG,
+} from "@/lib/admin/forwarder-status";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape
@@ -107,14 +114,80 @@ export type ContainerDetailClientProps = {
   cabinetIsPaid: boolean;
 };
 
+// Sortable column keys — keep type-safe + map to DetailRow numeric/string fields.
+type SortKey =
+  | "id"
+  | "fidorco"
+  | "ftrackingchn"
+  | "userid"
+  | "famount"
+  | "fvolume"
+  | "fweight"
+  | "fproductstype"
+  | "rate"
+  | "ftotalprice"
+  | "fpriceupdate"
+  | "pricecrate"
+  | "ftransportpricechnthb"
+  | "priceother"
+  | "ftransportprice"
+  | "fdiscount"
+  | "priceGetUser"
+  | "fcosttotalprice"
+  | "profitItem"
+  | "fstatus"
+  | null;
+
+type SortDir = "asc" | "desc";
+
 export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIsPaid }: ContainerDetailClientProps) {
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, start] = useTransition();
   const [bulkMsg, setBulkMsg] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const router = useRouter();
 
-  const filtered = useMemo(() => filterRows(rows, filter), [rows, filter]);
+  const filtered = useMemo(() => {
+    const f = filterRows(rows, filter);
+    if (!sortKey) return f;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...f].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv), "th") * dir;
+    });
+  }, [rows, filter, sortKey, sortDir]);
+
+  function toggleSort(k: NonNullable<SortKey>) {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  }
+
+  // Summary totals for the orange-red gradient band (legacy report-cnt.php L1653-1684 + L1888 totals).
+  const summary = useMemo(() => {
+    return filtered.reduce(
+      (acc, r) => ({
+        count:     acc.count + 1,
+        volume:    acc.volume + (r.fvolume ?? 0),
+        weight:    acc.weight + (r.fweight ?? 0),
+        cost:      acc.cost + r.fcosttotalprice,
+        price:     acc.price + r.ftotalprice,
+        discount:  acc.discount + r.fdiscount,
+        priceUser: acc.priceUser + r.priceGetUser,
+        profit:    acc.profit + r.profitItem,
+      }),
+      { count: 0, volume: 0, weight: 0, cost: 0, price: 0, discount: 0, priceUser: 0, profit: 0 },
+    );
+  }, [filtered]);
 
   // counts per filter (for the button badges) — match legacy
   const counts = useMemo(() => {
@@ -211,8 +284,22 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
         })}
       </div>
 
+      {/* Legend chips — top of detail table (legacy report-cnt.php L1601-1615 ·
+          canonical DETAIL_LEGEND has 8 chips). Logic-encoded color key for staff. */}
+      <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-border bg-white dark:bg-surface px-3 py-2 text-[11px] shadow-sm">
+        <span className="text-muted mr-1">สีแถว/สถานะ:</span>
+        {DETAIL_LEGEND.map((l) => (
+          <span
+            key={l.key}
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-medium ${l.cls}`}
+          >
+            {l.label}
+          </span>
+        ))}
+      </div>
+
       {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm scrollbar-x-visible">
         <table className="w-full text-xs">
           <thead className="bg-surface-alt/50 text-[10px] uppercase tracking-wide text-muted">
             <tr>
@@ -226,37 +313,97 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                   />
                 </th>
               )}
-              <th className="px-2 py-2 text-left">ID</th>
-              <th className="px-2 py-2 text-left">ID/CO</th>
-              <th className="px-2 py-2 text-left">เลขแทรคกิ้ง</th>
-              <th className="px-2 py-2 text-left">รหัส</th>
+              <Th k="id"            onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ID</Th>
+              <Th k="fidorco"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ID/CO</Th>
+              <Th k="ftrackingchn"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">เลขแทรคกิ้ง</Th>
+              <Th k="userid"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">รหัส</Th>
               <th className="px-2 py-2 text-left">รายละเอียดสินค้า</th>
-              <th className="px-2 py-2 text-right">ลัง</th>
-              <th className="px-2 py-2 text-right">ปริมาตร<br />(CBM)</th>
-              <th className="px-2 py-2 text-right">หนัก<br />(Kg)</th>
-              <th className="px-2 py-2 text-left">ประเภท</th>
-              {showMoney && <th className="px-2 py-2 text-right">เรทต้นทุน</th>}
-              <th className="px-2 py-2 text-right">ค่านำเข้า</th>
-              <th className="px-2 py-2 text-right">ค่าอัปเดต</th>
-              <th className="px-2 py-2 text-right">ค่าตีลัง</th>
-              <th className="px-2 py-2 text-right">ค่าขนส่งจีน+</th>
-              <th className="px-2 py-2 text-right">ค่าอื่นๆ</th>
+              <Th k="famount"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ลัง</Th>
+              <Th k="fvolume"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ปริมาตร (CBM)</Th>
+              <Th k="fweight"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">หนัก (Kg)</Th>
+              <Th k="fproductstype" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ประเภท</Th>
+              {showMoney && <Th k="rate" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">เรทต้นทุน</Th>}
+              <Th k="ftotalprice"            onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่านำเข้า</Th>
+              <Th k="fpriceupdate"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าอัปเดต</Th>
+              <Th k="pricecrate"             onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าตีลัง</Th>
+              <Th k="ftransportpricechnthb"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขนส่งจีน+</Th>
+              <Th k="priceother"             onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าอื่นๆ</Th>
               <th className="px-2 py-2 text-left">การขนส่ง</th>
-              <th className="px-2 py-2 text-right">ค่าขนส่งไทย</th>
-              <th className="px-2 py-2 text-right">ส่วนลด</th>
-              <th className="px-2 py-2 text-right">รวมขาย</th>
+              <Th k="ftransportprice"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขนส่งไทย</Th>
+              <Th k="fdiscount"              onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ส่วนลด</Th>
+              <Th k="priceGetUser"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">รวมขาย</Th>
               <th className="px-2 py-2 text-right">1%</th>
-              {showMoney && <th className="px-2 py-2 text-right">ต้นทุน</th>}
-              {showMoney && <th className="px-2 py-2 text-right">กำไร</th>}
-              <th className="px-2 py-2 text-center">สถานะสินค้า</th>
+              {showMoney && <Th k="fcosttotalprice" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ต้นทุน</Th>}
+              {showMoney && <Th k="profitItem"      onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">กำไร</Th>}
+              <Th k="fstatus" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="center">สถานะสินค้า</Th>
               <th className="px-2 py-2 text-center">สถานะตู้</th>
               <th className="px-2 py-2 text-left">หมายเหตุ</th>
+            </tr>
+            {/* Summary band — orange→red gradient totals row (legacy L1653-1684 `.bg-color`).
+                One <td> per header column, in order. */}
+            <tr className="bg-gradient-to-r from-orange-400 to-red-500 text-white font-semibold text-[11px]">
+              {canBulkCheck && !cabinetIsPaid && <td className="px-2 py-1.5"></td>}
+              {/* ID / IDORCO / Tracking / รหัส — merged label */}
+              <td className="px-2 py-1.5" colSpan={4}>รวม {summary.count.toLocaleString()} รายการ</td>
+              {/* รายละเอียด */}
+              <td className="px-2 py-1.5 text-right">รวม</td>
+              {/* ลัง */}
+              <td className="px-2 py-1.5"></td>
+              {/* ปริมาตร (CBM) */}
+              <td className="px-2 py-1.5 text-right">{fmt(summary.volume, 2)}</td>
+              {/* หนัก (Kg) */}
+              <td className="px-2 py-1.5 text-right">{fmt(summary.weight, 2)}</td>
+              {/* ประเภท */}
+              <td className="px-2 py-1.5"></td>
+              {/* เรทต้นทุน — showMoney only */}
+              {showMoney && <td className="px-2 py-1.5"></td>}
+              {/* ค่านำเข้า */}
+              <td className="px-2 py-1.5 text-right">{fmt(summary.price, 2)}</td>
+              {/* ค่าอัปเดต */}
+              <td className="px-2 py-1.5"></td>
+              {/* ค่าตีลัง */}
+              <td className="px-2 py-1.5"></td>
+              {/* ค่าขนส่งจีน+ */}
+              <td className="px-2 py-1.5"></td>
+              {/* ค่าอื่นๆ */}
+              <td className="px-2 py-1.5"></td>
+              {/* การขนส่ง */}
+              <td className="px-2 py-1.5"></td>
+              {/* ค่าขนส่งไทย */}
+              <td className="px-2 py-1.5"></td>
+              {/* ส่วนลด */}
+              <td className="px-2 py-1.5 text-right">{fmt(summary.discount, 2)}</td>
+              {/* รวมขาย */}
+              <td className="px-2 py-1.5 text-right">{fmt(summary.priceUser, 2)}</td>
+              {/* 1% */}
+              <td className="px-2 py-1.5"></td>
+              {/* ต้นทุน — showMoney only */}
+              {showMoney && <td className="px-2 py-1.5 text-right">{fmt(summary.cost, 2)}</td>}
+              {/* กำไร — showMoney only */}
+              {showMoney && (
+                <td className="px-2 py-1.5 text-right">
+                  {summary.profit >= 0 ? "+" : ""}{fmt(summary.profit, 2)}
+                </td>
+              )}
+              {/* สถานะสินค้า */}
+              <td className="px-2 py-1.5"></td>
+              {/* สถานะตู้ */}
+              <td className="px-2 py-1.5"></td>
+              {/* หมายเหตุ */}
+              <td className="px-2 py-1.5"></td>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={26} className="px-4 py-12 text-center text-sm text-muted">
+                <td
+                  colSpan={
+                    22 +
+                    (canBulkCheck && !cabinetIsPaid ? 1 : 0) +
+                    (showMoney ? 3 : 0)
+                  }
+                  className="px-4 py-12 text-center text-sm text-muted"
+                >
                   ไม่มีรายการที่ตรงกับ filter
                 </td>
               </tr>
@@ -264,15 +411,12 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
               filtered.map((r) => (
                 <tr
                   key={r.id}
-                  className={`border-t border-border ${
-                    r.inCheckQueue
-                      ? "bg-slate-50 dark:bg-slate-900/30"
-                      : r.notYetWarehouse
-                      ? "bg-red-50/50 dark:bg-red-900/10"
-                      : r.trackingDup
-                      ? "bg-amber-50/50 dark:bg-amber-900/10"
-                      : ""
-                  }`}
+                  className={`border-t border-border ${detailRowTint({
+                    inCheckQueue: r.inCheckQueue,
+                    notYetWarehouse: r.notYetWarehouse,
+                    trackingDup: r.trackingDup,
+                    selected: selected.has(r.id),
+                  })}`}
                 >
                   {canBulkCheck && !cabinetIsPaid && (
                     <td className="px-2 py-2 text-center">
@@ -400,22 +544,31 @@ export function ContainerDetailClient({ rows, showMoney, canBulkCheck, cabinetIs
                     </td>
                   )}
                   <td className="px-2 py-2 text-center">
-                    <StatusBadge fstatus={r.fstatus} />
+                    {(() => {
+                      const b = fstatusBadge(r.fstatus);
+                      return (
+                        <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${b.chip}`}>
+                          {b.label}
+                        </span>
+                      );
+                    })()}
                     {r.fcredit && r.fcredit !== "" && (
                       <div className="mt-1">
-                        <Link href={`/admin/forwarder/update/${r.id}`} className="inline-block rounded-full bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5">เครดิตได้</Link>
+                        <Link href={`/admin/forwarder/update/${r.id}`} className="inline-block rounded-full bg-emerald-500 text-emerald-50 border border-emerald-700 text-[9px] px-1.5 py-0.5">เครดิตได้</Link>
                       </div>
                     )}
                   </td>
                   <td className="px-2 py-2 text-center">
-                    {r.cntPaid ? (
-                      <span className="inline-block rounded-full bg-green-100 text-green-700 text-[10px] px-2 py-0.5">จ่ายแล้ว</span>
-                    ) : (
-                      <span className="inline-block rounded-full bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5">ยังไม่จ่าย</span>
-                    )}
+                    <span
+                      className={`inline-block rounded-full text-[10px] px-2 py-0.5 font-medium ${
+                        r.cntPaid ? CNTSTATUS_CFG.paid.chip : CNTSTATUS_CFG.unpaid.chip
+                      }`}
+                    >
+                      {r.cntPaid ? CNTSTATUS_CFG.paid.label : CNTSTATUS_CFG.unpaid.label}
+                    </span>
                     {r.trackingDup && (
                       <div className="mt-1">
-                        <span className="inline-block rounded-full bg-sky-100 text-sky-700 text-[9px] px-1.5 py-0.5">
+                        <span className="inline-block rounded-full bg-orange-400 text-orange-950 border border-orange-600 text-[9px] px-1.5 py-0.5">
                           {r.cntPaid ? "จ่ายซ้ำแล้ว" : "กำลังจะจ่ายซ้ำ"}
                         </span>
                       </div>
@@ -503,16 +656,38 @@ function shipByLabel(s: string | null): string {
   }
 }
 
-function StatusBadge({ fstatus }: { fstatus: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    "1": { label: "รอเข้าโกดังจีน",  cls: "bg-yellow-100 text-yellow-700" },
-    "2": { label: "ถึงโกดังจีน",     cls: "bg-blue-100 text-blue-700" },
-    "3": { label: "กำลังส่งมาไทย",   cls: "bg-pink-100 text-pink-700" },
-    "4": { label: "ถึงไทย",          cls: "bg-purple-100 text-purple-700" },
-    "5": { label: "รอชำระเงิน",      cls: "bg-amber-100 text-amber-700" },
-    "6": { label: "เตรียมส่ง",       cls: "bg-emerald-100 text-emerald-700" },
-    "7": { label: "ส่งแล้ว",         cls: "bg-green-100 text-green-700" },
-  };
-  const m = map[fstatus] ?? { label: fstatus, cls: "bg-gray-100 text-gray-700" };
-  return <span className={`inline-block rounded-full text-[10px] px-2 py-0.5 ${m.cls}`}>{m.label}</span>;
+// Sortable column header — clickable with up/down arrow indicator.
+function Th({
+  k,
+  onSort,
+  sortKey,
+  sortDir,
+  align,
+  children,
+}: {
+  k: NonNullable<SortKey>;
+  onSort: (k: NonNullable<SortKey>) => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  align: "left" | "right" | "center";
+  children: React.ReactNode;
+}) {
+  const active = sortKey === k;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const alignCls =
+    align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+  const justifyCls =
+    align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+  return (
+    <th className={`px-2 py-2 ${alignCls}`}>
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`group inline-flex w-full items-center gap-1 ${justifyCls} hover:text-foreground ${active ? "text-foreground" : ""}`}
+      >
+        <span>{children}</span>
+        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40 group-hover:opacity-70"}`} />
+      </button>
+    </th>
+  );
 }
