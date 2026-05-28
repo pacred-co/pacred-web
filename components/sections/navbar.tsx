@@ -104,11 +104,29 @@ export function NavBar() {
       setProfile(data ?? null);
     }
 
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      setAuthReady(true);
-      if (data.user) loadProfile(data.user);
-    });
+    // Use getSession() (local-only read) instead of getUser() to avoid
+    // the SDK's auto-refresh path firing an "Invalid Refresh Token: Refresh
+    // Token Not Found" AuthApiError into the dev console when the cookie
+    // jar gets stale (common after a logout from another tab, a Pro-upgrade
+    // key rotation, or sleeping the laptop past the token TTL). Authoritative
+    // auth still happens server-side via middleware + requireAuth() — this
+    // client read is only for navbar chrome (logged-in pill / logout link).
+    // The onAuthStateChange listener below picks up any real session changes
+    // (sign-in / refresh / sign-out) live, so we don't miss those either.
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const u = data.session?.user ?? null;
+        setUser(u);
+        setAuthReady(true);
+        if (u) loadProfile(u);
+      })
+      .catch(() => {
+        // Corrupted cookie or transient SDK error — treat as signed out
+        // for chrome purposes. Server-side guards remain authoritative.
+        setUser(null);
+        setAuthReady(true);
+      });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user ?? null;

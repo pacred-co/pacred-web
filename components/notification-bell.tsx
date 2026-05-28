@@ -22,15 +22,28 @@ export function NotificationBell({ prefetch }: { prefetch?: false }) {
     const supabase = createClient();
     let mounted = true;
 
+    // Local-session read helper — uses getSession() (no refresh attempt) so
+    // a stale cookie jar doesn't fire the SDK's "Invalid Refresh Token"
+    // AuthApiError into the dev console. Authoritative auth still happens
+    // server-side; this client lookup is only for the visible badge count.
+    async function currentUserId(): Promise<string | null> {
+      try {
+        const { data } = await supabase.auth.getSession();
+        return data.session?.user?.id ?? null;
+      } catch {
+        return null;
+      }
+    }
+
     async function refresh() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const userId = await currentUserId();
+      if (!userId) {
         if (mounted) setCount(0);
         return;
       }
       const [totalRes, readRes] = await Promise.all([
-        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("profile_id", user.id),
-        supabase.from("notification_reads").select("notification_id", { count: "exact", head: true }).eq("profile_id", user.id),
+        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("profile_id", userId),
+        supabase.from("notification_reads").select("notification_id", { count: "exact", head: true }).eq("profile_id", userId),
       ]);
       if (!mounted) return;
       setCount(Math.max(0, (totalRes.count ?? 0) - (readRes.count ?? 0)));
@@ -40,18 +53,18 @@ export function NotificationBell({ prefetch }: { prefetch?: false }) {
 
     // Realtime listener for new notifications addressed to this user
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user || !mounted) return;
+    currentUserId().then((userId) => {
+      if (!userId || !mounted) return;
       channel = supabase
-        .channel(`notif-bell-${user.id}`)
+        .channel(`notif-bell-${userId}`)
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notifications", filter: `profile_id=eq.${user.id}` },
+          { event: "INSERT", schema: "public", table: "notifications", filter: `profile_id=eq.${userId}` },
           () => refresh(),
         )
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notification_reads", filter: `profile_id=eq.${user.id}` },
+          { event: "INSERT", schema: "public", table: "notification_reads", filter: `profile_id=eq.${userId}` },
           () => refresh(),
         )
         .subscribe();
