@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
-import { PcsLeftMenuAccordion, PcsLeftMenuSubAccordion } from "./pcs-left-menu-accordion";
+import { PcsLeftMenuAccordion } from "./pcs-left-menu-accordion";
 
 /** Central Pacred line is shown pre-formatted (skips formatPhoneNumber which
  *  expects mobile format). Matches the SALES_FALLBACK tel in pcs-chrome.ts. */
@@ -33,20 +33,6 @@ function SubLink({ href, children }: { href: string; children: React.ReactNode }
       className="flex items-center gap-2 pl-12 pr-4 py-2 text-[13px] text-muted hover:text-foreground hover:bg-gray-50"
     >
       <ChevronRight className="h-3.5 w-3.5 opacity-60" />
-      <span className="flex-1">{children}</span>
-    </Link>
-  );
-}
-
-/** 3rd-level leaf row — nests under `PcsLeftMenuSubAccordion`. Deeper indent
- *  (pl-20) + a hair smaller / lighter than `SubLink`. */
-function SubSubLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-2 pl-20 pr-4 py-1.5 text-[12px] text-muted hover:text-foreground hover:bg-gray-50"
-    >
-      <ChevronRight className="h-3 w-3 opacity-50" />
       <span className="flex-1">{children}</span>
     </Link>
   );
@@ -171,28 +157,28 @@ export function PcsLeftMenu({ data }: { data: PcsChromeData }) {
           <SubLink href="/cart/add">เพิ่มสินค้าในรถเข็น</SubLink>
         </PcsLeftMenuAccordion>
 
-        {/* บริการฝากนำเข้า — restructured per ปอน 2026-05-28:
-            LCL/FCL × รถ/เรือ/แอร์ as 2-level nested accordions, plus a flat
-            history + add row. 6 mode leaves point at /service-import as a
-            UI placeholder until backend wires the type/mode filter. */}
+        {/* บริการฝากนำเข้า */}
         <PcsLeftMenuAccordion
           icon="/images/home/iconfloating/pcs-forwarder.png"
           label="บริการฝากนำเข้า"
           badge={<MenuBadge n={data.countForwarder5 + data.countFCredit} />}
         >
-          <PcsLeftMenuSubAccordion label="LCL แชร์ตู้/รวมตู้" defaultOpen>
-            <SubSubLink href="/service-import/truck">รถ</SubSubLink>
-            <SubSubLink href="/service-import/sea">เรือ</SubSubLink>
-            <SubSubLink href="/service-import/air">แอร์</SubSubLink>
-          </PcsLeftMenuSubAccordion>
-          {/* FCL section parked per ปอน 2026-05-28 — restore when re-enabling.
-          <PcsLeftMenuSubAccordion label="FCL เหมาตู้/ปิดตู้" defaultOpen>
-            <SubSubLink href="/service-import">รถ</SubSubLink>
-            <SubSubLink href="/service-import">เรือ</SubSubLink>
-            <SubSubLink href="/service-import">แอร์</SubSubLink>
-          </PcsLeftMenuSubAccordion>
-          */}
-          <SubLink href="/service-import">ประวัติการทำรายการ</SubLink>
+          <SubLink href="/service-import">รายการนำเข้าทั้งหมด</SubLink>
+          <SubLink href="/service-import?q=5">
+            <span className="inline-flex w-full items-center">
+              <span>รอชำระเงิน</span>
+              <MenuBadge n={data.countForwarder5} />
+            </span>
+          </SubLink>
+          {data.creditUser && (
+            <SubLink href="/service-import?q=c">
+              <span className="inline-flex w-full items-center">
+                <span>รายการเครดิต</span>
+                <MenuBadge n={data.countFCredit} />
+              </span>
+            </SubLink>
+          )}
+          <SubLink href="/service-import/receipts">ประวัติใบเสร็จ</SubLink>
           <SubLink href="/service-import/add">เพิ่มรายการนำเข้า</SubLink>
         </PcsLeftMenuAccordion>
 

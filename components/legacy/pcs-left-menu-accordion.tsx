@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 /**
  * Legacy PCS Cargo customer-portal — a single accordion section in the left
@@ -48,46 +48,6 @@ export function PcsLeftMenuAccordion({
         />
       </button>
       {open ? <div className="py-1">{children}</div> : null}
-    </div>
-  );
-}
-
-/**
- * 2nd-level accordion — nests inside a `PcsLeftMenuAccordion` sub-list.
- * Matches the visual weight of `SubLink` (pl-12, text-[13px], muted) but is
- * a clickable toggle that reveals deeper `SubSubLink` children. The
- * chevron-right rotates 90° to point down when open.
- *
- * Per ปอน 2026-05-28 — used for "บริการฝากนำเข้า → LCL / FCL → รถ/เรือ/แอร์".
- */
-export function PcsLeftMenuSubAccordion({
-  label,
-  defaultOpen = false,
-  children,
-}: {
-  label: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 pl-12 pr-4 py-2 text-left text-[13px] text-muted hover:text-foreground hover:bg-gray-50"
-      >
-        <ChevronRight
-          className={`h-3.5 w-3.5 opacity-60 transition-transform ${
-            open ? "rotate-90" : ""
-          }`}
-          aria-hidden
-        />
-        <span className="flex-1">{label}</span>
-      </button>
-      {open ? <div>{children}</div> : null}
     </div>
   );
 }

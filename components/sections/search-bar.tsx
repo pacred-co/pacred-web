@@ -162,12 +162,11 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
 
         </div>
 
-        {/* Quick keywords — desktop only. Hidden on mobile entirely per ปอน
-            2026-05-28 ("ในมือถือเอาไอ้คีย์เวิร์ดพวกนี้ออกให้หมดเลย"). Still
-            suppressed on the mobile launchpad (/m/dashboard) at every width
-            via `isMobileLaunchpad` above. */}
+        {/* Quick keywords — scrollable on mobile. Suppressed on the mobile
+            launchpad (/m/dashboard) per ปอน 2026-05-27 (see `isMobileLaunchpad`
+            above); shown on every other route. */}
         {!isMobileLaunchpad && (
-          <div className="hidden md:flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center md:justify-center overflow-x-auto md:flex-wrap gap-0 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {quickKeys.map((kw, i) => (
               <Link
                 key={kw}
