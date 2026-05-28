@@ -8,7 +8,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 
 const editCustomerSchema = z.object({
-  id:              z.string().uuid(),
+  ID:              z.string().uuid(),
   first_name:      z.string().trim().max(100).optional(),
   last_name:       z.string().trim().max(100).optional(),
   email:           z.string().trim().email().max(255).optional().or(z.literal("")),
@@ -29,6 +29,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
   return withAdmin(["ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const { data: before, error: beforeErr } = await admin.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (beforeErr) return { ok: false, error: beforeErr.message };
     if (!before) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = {};
@@ -42,7 +43,7 @@ export async function editCustomer(input: EditCustomerInput): Promise<AdminActio
     if (fields.line_id        !== undefined) update.line_id        = fields.line_id;
     if (fields.recommended_by !== undefined) update.recommended_by = fields.recommended_by;
 
-    const { error } = await admin.from("profiles").update(update).eq("id", id);
+    const { error } = await admin.from("profiles").update(update).eq("ID", id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "customer.edit", "profile", id, { before, after: update });
@@ -70,7 +71,7 @@ export async function verifyJuristic(input: z.infer<typeof verifyJuristicSchema>
       .eq("profile_id", parsed.data.profile_id);
     if (error) return { ok: false, error: error.message };
 
-    await admin.from("profiles").update({ status: "active" }).eq("id", parsed.data.profile_id);
+    await admin.from("profiles").update({ status: "active" }).eq("ID", parsed.data.profile_id);
     await logAdminAction(adminId, "juristic.verify", "corporate", parsed.data.profile_id, {});
     revalidatePath("/admin/juristic-check");
     revalidatePath(`/admin/customers/${parsed.data.profile_id}`);
@@ -101,14 +102,14 @@ export async function rejectJuristic(input: z.infer<typeof rejectJuristicSchema>
  * Approve a customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4): re-pointed
  * from the rebuilt-era `profiles` table to the legacy `tb_users` table.
  *
- * `id` is the legacy member code (`tb_users.userid`, e.g. `PR2791`) —
+ * `id` is the legacy member code (`tb_users.userID`, e.g. `PR2791`) —
  * the identifier the re-pointed customer list (page.tsx) passes via
  * `<CustomerRowActions>`. Approving lifts a pending account by setting
  * the legacy `useractive` flag to `'1'` (1=ใช้งานแล้ว). A suspended
  * (deleted) account — `userstatus='0'` — is restored by setting it back
  * to `'1'`. Both flags are cleared so the derived status becomes active.
  */
-export async function approveCustomer(id: string): Promise<AdminActionResult> {
+export async function approveCustomer(ID: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {
@@ -182,8 +183,8 @@ export async function adminConvertToJuristic(
     const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
-      .eq("id", d.profile_id)
-      .maybeSingle<{ id: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
+      .eq("ID", d.profile_id)
+      .maybeSingle<{ ID: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
     if (!before) return { ok: false, error: "not_found" };
     if (before.account_type === "juristic") return { ok: false, error: "already_juristic" };
 
@@ -201,7 +202,7 @@ export async function adminConvertToJuristic(
     const { error: profErr } = await admin
       .from("profiles")
       .update({ account_type: "juristic" })
-      .eq("id", d.profile_id);
+      .eq("ID", d.profile_id);
     if (profErr) return { ok: false, error: profErr.message };
 
     // Step 2 — upsert the corporate row
@@ -225,7 +226,7 @@ export async function adminConvertToJuristic(
       await admin
         .from("profiles")
         .update({ account_type: before.account_type })
-        .eq("id", d.profile_id);
+        .eq("ID", d.profile_id);
       return { ok: false, error: corpErr.message };
     }
 
@@ -254,11 +255,11 @@ export async function adminConvertToJuristic(
 /**
  * Suspend an active customer — D1 Wave-2 (_SYNTHESIS §7.1 / §7.4):
  * re-pointed from `profiles` to the legacy `tb_users` table. `id` is the
- * legacy member code (`tb_users.userid`). Legacy PCS has no distinct
+ * legacy member code (`tb_users.userID`). Legacy PCS has no distinct
  * "suspended" state — a disabled account is `userstatus='0'`
  * (0=ลบบัญชี), which the re-pointed customer list renders as "ระงับ".
  */
-export async function suspendCustomer(id: string): Promise<AdminActionResult> {
+export async function suspendCustomer(ID: string): Promise<AdminActionResult> {
   if (!id || typeof id !== "string") return { ok: false, error: "invalid_input" };
 
   return withAdmin(["ops", "super"], async ({ adminId }) => {

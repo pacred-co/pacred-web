@@ -68,7 +68,7 @@ export async function updateProfileBasic(
       shop_user:      d.shop_user ?? false,
       note:           d.note ?? null,
     })
-    .eq("id", user.id);
+    .eq("ID", user.ID);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -102,7 +102,7 @@ export async function upsertCorporate(
   const { data: profile, error: profileErr } = await supabase
     .from("profiles")
     .select("account_type")
-    .eq("id", user.id)
+    .eq("ID", user.ID)
     .maybeSingle<{ account_type: "personal" | "juristic" }>();
 
   if (profileErr) return { ok: false, error: profileErr.message };
@@ -114,7 +114,7 @@ export async function upsertCorporate(
     .from("corporate")
     .upsert(
       {
-        profile_id:      user.id,
+        profile_id:      user.ID,
         tax_id:          d.tax_id,
         company_name:    d.company_name,
         company_address: d.company_address,
@@ -129,7 +129,7 @@ export async function upsertCorporate(
   await supabase
     .from("profiles")
     .update({ tax_id: d.tax_id, company_name: d.company_name })
-    .eq("id", user.id);
+    .eq("ID", user.ID);
 
   revalidatePath("/profile");
   return { ok: true };
@@ -158,7 +158,7 @@ export async function updateNotifyChannels(
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ notify_channels: parsed.data })
-    .eq("id", user.id);
+    .eq("ID", user.ID);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -185,7 +185,7 @@ export async function updateAvatar(publicUrl: string): Promise<ActionResult> {
   const { error: updateErr } = await supabase
     .from("profiles")
     .update({ avatar_url: publicUrl })
-    .eq("id", user.id);
+    .eq("ID", user.ID);
 
   if (updateErr) return { ok: false, error: updateErr.message };
 
@@ -220,7 +220,7 @@ export async function completeProfile(
   const { data: existing, error: existingErr } = await supabase
     .from("profiles")
     .select("status, account_type")
-    .eq("id", user.id)
+    .eq("ID", user.ID)
     .maybeSingle<{ status: "incomplete" | "active" | "suspended"; account_type: "personal" | "juristic" }>();
 
   if (existingErr) return { ok: false, error: existingErr.message };
@@ -247,7 +247,7 @@ export async function completeProfile(
       tos_accepted_at:      new Date().toISOString(),
       status:               "active",
     })
-    .eq("id", user.id);
+    .eq("ID", user.ID);
 
   if (updateErr) {
     if (updateErr.message?.includes("schema cache") || updateErr.message?.includes("tos_accepted")) {
@@ -367,11 +367,11 @@ export async function checkEmailAvailability(
   // 1. Rebuilt-era profiles — exclude the caller's own row when editing.
   let profilesQuery = admin
     .from("profiles")
-    .select("id")
+    .select("ID")
     .ilike("email", needle)
     .limit(1);
-  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
-  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
+  if (ownerId) profilesQuery = profilesQuery.neq("ID", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ ID: string }>();
   if (profileErr && profileErr.code !== "PGRST116") {
     // PGRST116 = "no rows" when using .single(); .maybeSingle suppresses it
     // but be defensive. Any other error = treat as available (don't block
@@ -383,7 +383,7 @@ export async function checkEmailAvailability(
   // 2. Legacy tb_users — userstatus<>'0' replicates the legacy guard.
   //    Exclude the caller's own legacy row by useremail when in edit mode
   //    (legacy used $_SESSION['userEmail'] for the same purpose). We don't
-  //    have a userid <-> profile.id mapping at this layer, so we exclude
+  //    have a userid <-> profile.ID mapping at this layer, so we exclude
   //    by email value rather than by id — equivalent to the legacy semantics.
   let legacyQuery = admin
     .from("tb_users")
@@ -397,7 +397,7 @@ export async function checkEmailAvailability(
     const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("email")
-      .eq("id", ownerId)
+      .eq("ID", ownerId)
       .maybeSingle<{ email: string | null }>();
     if (ownProfile?.email) {
       legacyQuery = legacyQuery.neq("userEmail", ownProfile.email);
@@ -424,7 +424,7 @@ export async function checkPhoneAvailability(
   const { phone: rawPhone, currentUserId: ownerId } = parsed.data;
 
   // Both formats — rebuilt-era profiles.phone stores E.164 (+66...),
-  // legacy tb_users.usertel stores Thai-local (0...). normalizePhone gives
+  // legacy tb_users.userTel stores Thai-local (0...). normalizePhone gives
   // us E.164; we derive the Thai-local form for the legacy query by
   // stripping `+66` and prefixing `0`.
   const e164  = normalizePhone(rawPhone);
@@ -446,11 +446,11 @@ export async function checkPhoneAvailability(
   // 1. Rebuilt-era profiles (E.164 form).
   let profilesQuery = admin
     .from("profiles")
-    .select("id")
+    .select("ID")
     .eq("phone", e164)
     .limit(1);
-  if (ownerId) profilesQuery = profilesQuery.neq("id", ownerId);
-  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ id: string }>();
+  if (ownerId) profilesQuery = profilesQuery.neq("ID", ownerId);
+  const { data: profileHit, error: profileErr } = await profilesQuery.maybeSingle<{ ID: string }>();
   if (profileErr && profileErr.code !== "PGRST116") {
     console.error("[profile/checkPhoneAvailability] profiles lookup failed:", profileErr);
   }
@@ -467,7 +467,7 @@ export async function checkPhoneAvailability(
     const { data: ownProfile, error: ownProfileErr } = await admin
       .from("profiles")
       .select("phone")
-      .eq("id", ownerId)
+      .eq("ID", ownerId)
       .maybeSingle<{ phone: string | null }>();
     if (ownProfile?.phone) {
       const ownLocal = ownProfile.phone.startsWith("+66")

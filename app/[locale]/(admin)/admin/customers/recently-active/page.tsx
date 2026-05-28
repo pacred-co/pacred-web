@@ -3,7 +3,7 @@
  *
  * Wave 7.2 (2026-05-21 night): rewritten from rebuilt schema (profiles
  * + service_orders + forwarders + yuan_payments — all empty on prod)
- * → `tb_users.userlastlogin` (simpler heuristic).
+ * → `tb_users.userLastLogin` (simpler heuristic).
  *
  * Wave 7.2 = simple version: list tb_users sorted by userlastlogin desc.
  * Per-channel activity aggregation (lifetime stats across tb_header_order
@@ -24,15 +24,15 @@ export const dynamic = "force-dynamic";
 type ActType = "all" | "personal" | "juristic";
 
 type Row = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  usercompany: string | null;
-  userlastlogin: string | null;
-  userregistered: string | null;
-  adminidsale: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userCompany: string | null;
+  userLastLogin: string | null;
+  userRegistered: string | null;
+  adminIDSale: string | null;
 };
 
 function dateOnly(iso: string | null): string {
@@ -63,11 +63,11 @@ export default async function RecentlyActiveCustomersPage({
     .select(
       "userid,username,userlastname,usertel,useremail,usercompany,userlastlogin,userregistered,adminidsale",
     )
-    .order("userlastlogin", { ascending: false, nullsFirst: false })
+    .order("userLastLogin", { ascending: false, nullsFirst: false })
     .limit(500);
 
-  if (type === "personal") q = q.neq("usercompany", "1");
-  if (type === "juristic") q = q.eq("usercompany", "1");
+  if (type === "personal") q = q.neq("userCompany", "1");
+  if (type === "juristic") q = q.eq("userCompany", "1");
 
   const { data: rowsRaw, error: rowsRawErr } = await q;
   if (rowsRawErr) {
@@ -75,13 +75,13 @@ export default async function RecentlyActiveCustomersPage({
   }
   const rows = (rowsRaw ?? []) as Row[];
 
-  const activeCount = rows.filter((r) => r.userlastlogin).length;
+  const activeCount = rows.filter((r) => r.userLastLogin).length;
   const dormant30d = rows.filter((r) => {
-    const d = daysSince(r.userlastlogin);
+    const d = daysSince(r.userLastLogin);
     return d !== null && d > 30;
   }).length;
   const dormant90d = rows.filter((r) => {
-    const d = daysSince(r.userlastlogin);
+    const d = daysSince(r.userLastLogin);
     return d !== null && d > 90;
   }).length;
 
@@ -154,29 +154,29 @@ export default async function RecentlyActiveCustomersPage({
               </tr>
             ) : (
               rows.map((r) => {
-                const isJuristic = r.usercompany === "1";
-                const name = `${r.username ?? ""} ${r.userlastname ?? ""}`.trim() || "—";
-                const days = daysSince(r.userlastlogin);
+                const isJuristic = r.userCompany === "1";
+                const name = `${r.userName ?? ""} ${r.userLastName ?? ""}`.trim() || "—";
+                const days = daysSince(r.userLastLogin);
                 return (
-                  <tr key={r.userid} className="border-t border-border hover:bg-surface-alt/30">
+                  <tr key={r.userID} className="border-t border-border hover:bg-surface-alt/30">
                     <td className="px-3 py-2 max-w-[240px]">
                       <Link
-                        href={`/admin/customers/${r.userid}`}
+                        href={`/admin/customers/${r.userID}`}
                         className="font-medium text-primary-600 hover:underline"
                       >
                         {name}
                       </Link>
                       <div className="text-[10px] text-muted font-mono">
-                        {r.userid} · {isJuristic ? "นิติบุคคล" : "บุคคล"}
+                        {r.userID} · {isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-muted">{r.usertel ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-muted">{r.adminidsale ?? "—"}</td>
-                    <td className="px-3 py-2 text-muted">{dateOnly(r.userregistered)}</td>
+                    <td className="px-3 py-2 text-muted">{r.userTel ?? "—"}</td>
+                    <td className="px-3 py-2 font-mono text-muted">{r.adminIDSale ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted">{dateOnly(r.userRegistered)}</td>
                     <td className="px-3 py-2">
-                      {r.userlastlogin ? (
+                      {r.userLastLogin ? (
                         <span className="rounded-full bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 text-[10px]">
-                          {dateOnly(r.userlastlogin)}
+                          {dateOnly(r.userLastLogin)}
                         </span>
                       ) : (
                         <span className="text-muted text-[10px]">— ยังไม่เคย login —</span>
