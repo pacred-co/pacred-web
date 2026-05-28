@@ -140,7 +140,7 @@ export default async function TrackingPage({
   const memberCode = profile.member_code ?? "";
 
   // userCompany flag — needed by calPriceForwarderSumCompany (1% WHT)
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("usercompany")
     .eq("userid", memberCode)
@@ -152,7 +152,7 @@ export default async function TrackingPage({
   // unreliable on legacy data (e.g. 2022 GZA101 records have ftransporttype=2,
   // shipped as sea), so we use `ftransporttype` — set per-order by admin or
   // forwarder workflow — as the authoritative mode classifier.
-  const { data: listRows } = await admin
+  const { data: listRows, error: listRowsErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator",
