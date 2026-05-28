@@ -21,7 +21,7 @@ const { Client } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-const MIGRATION_PATH = resolve(REPO_ROOT, "supabase/migrations/0115_align_container_payment_tables.sql");
+const MIGRATION_PATH = resolve(REPO_ROOT, "supabase/migrations/0116_momo_isolated_tables.sql");
 
 // Prod connection — Supabase direct DB (NOT pooler) so DDL works cleanly.
 const PROJECT_REF = "yzljakczhwrpbxflnmco";
