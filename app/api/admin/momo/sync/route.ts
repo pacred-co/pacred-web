@@ -98,6 +98,15 @@ export async function POST(request: Request) {
           momo_tracking_no:  r.trackingNo,
           momo_sack_no:      r.sackNo,
           momo_container_no: r.containerNo,
+          // ── 0118 mirror columns ──
+          momo_user_code:    r.momoUserCode,
+          momo_user_group:   r.momoUserGroup,
+          momo_cg_no:        r.momoCgNo,
+          ship_by:           r.shipBy,
+          weight_kg:         r.weightKg,
+          cbm:               r.cbm,
+          quantity:          r.quantity,
+          // ── status + range ──
           date_from:         start,
           date_to:           end,
           phase:             r.phase,
@@ -144,6 +153,12 @@ export async function POST(request: Request) {
         .map((r) => ({
           momo_container_no: r.containerNo,
           momo_sack_no:      r.sackNo,
+          // ── 0118 mirror columns ──
+          ship_by:           r.shipBy,
+          total_kg:          r.totalKg,
+          total_cbm:         r.totalCbm,
+          total_parcel:      r.totalParcel,
+          // ── status + range ──
           date_from:         start,
           date_to:           end,
           closed_at:         r.momoUpdatedAt,
@@ -193,6 +208,12 @@ export async function POST(request: Request) {
         momo_sack_no:      r.sackNo || sackNo, // fallback to requested key
         momo_tracking_no:  r.trackingNo,
         momo_container_no: r.containerNo,
+        // ── 0118 mirror columns ──
+        ship_by:           r.shipBy,
+        weight_kg:         r.weightKg,
+        cbm:               r.cbm,
+        total_parcel:      r.totalParcel,
+        // ── status ──
         phase:             r.phase,
         shipment_status:   r.shipmentStatus,
         billing_status:    r.billingStatus,

@@ -92,8 +92,27 @@ function asTs(v: unknown): string | null {
   return Number.isNaN(t.getTime()) ? null : t.toISOString();
 }
 
-/** Map MOMO ship_by → just record for now (display only). */
-function _shipBy(v: unknown): "car" | "ship" | "air" | null {
+/** Coerce to finite number — accepts number, numeric string ("0.5"), null/empty. */
+function asNum(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** Coerce to integer — rounds finite numerics, drops non-finite/empty. */
+function asInt(v: unknown): number | null {
+  const n = asNum(v);
+  return n == null ? null : Math.trunc(n);
+}
+
+/** Map MOMO ship_by → typed enum (or null if unrecognised). */
+function shipBy(v: unknown): "car" | "ship" | "air" | null {
   const s = asStr(v)?.toLowerCase();
   if (s === "car" || s === "ship" || s === "air") return s;
   return null;
@@ -182,6 +201,18 @@ export function mapImportTrackRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0118 mirror fields — populate from raw subset ──
+    momoUserCode:  asStr(r.user_code),
+    momoUserGroup: asStr(r.user_group),
+    momoCgNo:      asStr(r.CG_NO),
+    shipBy:        shipBy(r.ship_by),
+    weightKg:      asNum(r.kg),
+    cbm:           asNum(r.cbm),
+    quantity:      asInt(r.quantity),
+    totalKg:       null,    // container-level only
+    totalCbm:      null,
+    totalParcel:   null,
+    // ── status ──
     phase,
     shipmentStatus,
     billingStatus,
@@ -234,6 +265,18 @@ export function mapContainerClosedRecord(raw: unknown): MomoInternalAdminRecord 
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0118 mirror fields — container-level (no per-tracking weights) ──
+    momoUserCode:  null,    // container is aggregate of many users
+    momoUserGroup: null,
+    momoCgNo:      null,
+    shipBy:        shipBy(r.ship_by),
+    weightKg:      null,    // see totalKg below
+    cbm:           null,
+    quantity:      null,
+    totalKg:       asNum(r.total_kg),
+    totalCbm:      asNum(r.total_cbm),
+    totalParcel:   asInt(r.total_parcel),
+    // ── status ──
     phase,
     shipmentStatus,
     billingStatus: null,
@@ -286,6 +329,18 @@ export function mapSackInfoRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0118 mirror fields — sack-level ──
+    momoUserCode:  null,    // sack is aggregate; user_code is per-tracking
+    momoUserGroup: null,
+    momoCgNo:      null,
+    shipBy:        shipBy(r.ship_by),
+    weightKg:      asNum(r.weight),  // sack endpoint uses "weight" not "kg"
+    cbm:           asNum(r.cbm),
+    quantity:      null,
+    totalKg:       null,
+    totalCbm:      null,
+    totalParcel:   asInt(r.total_parcel),
+    // ── status ──
     phase,
     shipmentStatus,
     billingStatus: null,
@@ -312,6 +367,16 @@ function fallback(raw: unknown): MomoInternalAdminRecord {
     trackingNo:       null,
     sackNo:           null,
     containerNo:      null,
+    momoUserCode:     null,
+    momoUserGroup:    null,
+    momoCgNo:         null,
+    shipBy:           null,
+    weightKg:         null,
+    cbm:              null,
+    quantity:         null,
+    totalKg:          null,
+    totalCbm:         null,
+    totalParcel:      null,
     phase:            null,
     shipmentStatus:   null,
     billingStatus:    null,

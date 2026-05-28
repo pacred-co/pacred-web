@@ -112,6 +112,20 @@ export type MomoInternalAdminRecord = {
   trackingNo:      string | null;
   sackNo:          string | null;
   containerNo:     string | null;
+  // ── Mirror fields extracted from raw (migration 0118 — 2026-05-28) ──
+  // Each mapper populates the subset that exists in its source endpoint;
+  // the others stay null (e.g. user_code only exists in import_track).
+  momoUserCode:    string | null;       // import_track: raw.user_code  (e.g. "032")
+  momoUserGroup:   string | null;       // import_track: raw.user_group (e.g. "PR")
+  momoCgNo:        string | null;       // import_track: raw.CG_NO       (e.g. "CG79442972576")
+  shipBy:          "car" | "ship" | "air" | null;  // all 3 endpoints: raw.ship_by
+  weightKg:        number | null;       // import_track: raw.kg | sack: raw.weight
+  cbm:             number | null;       // import_track: raw.cbm | sack: raw.cbm
+  quantity:        number | null;       // import_track: raw.quantity
+  totalKg:         number | null;       // container: raw.total_kg
+  totalCbm:        number | null;       // container: raw.total_cbm
+  totalParcel:     number | null;       // container/sack: raw.total_parcel
+  // ── Status + timing ──
   phase:           MomoPhase | null;
   shipmentStatus:  MomoShipmentStatus | null;
   billingStatus:   MomoBillingStatus | null;
