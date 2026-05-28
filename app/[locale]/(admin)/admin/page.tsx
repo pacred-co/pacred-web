@@ -121,8 +121,17 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
     // stale cache here would diverge from staff "always fresh" expectation.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
-    // Customer counts — userActive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
-    admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "0"),
+    // Customer counts — userActive '1' = ใช้งานแล้ว · ANY-NOT-'1' = ยังไม่ใช้งาน.
+    // 2026-05-28 fix (เดฟ): the schema comment says "1=ใช้งานแล้ว" but the
+    // legacy PHP relied on truthy/falsy of userActive. On prod the column
+    // is varchar(1) NOT NULL with distribution { "1": 1961 rows, "": 6937
+    // rows } — there's NO "0" value at all. The previous `.eq("userActive",
+    // "0")` query matched 0 rows, so /admin dashboard rendered "0 ลูกค้าที่
+    // ยังไม่ใช้งาน" while the percentage band still said 78% (the % is from
+    // totalUsers - activeUsers). Switched to `.neq("userActive", "1")`
+    // which catches BOTH empty-string AND the documented "0" if any rows
+    // ever carry it.
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).neq("userActive", "1"),
     admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "1"),
     admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
@@ -605,12 +614,15 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       });
     }
 
-    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users userActive='0') ───────────────────
+    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users userActive ≠ '1') ───────────────
+    // 2026-05-28 fix: see the count query at line ~125 — the prod data is
+    // { "1": active, "": inactive }, no "0" at all. Use neq("userActive",
+    // "1") to match the count query's definition + return the inactive set.
     case "inactiveCustomers": {
       const { data, error } = await admin
         .from("tb_users")
         .select("ID,userID,userName,userLastName,userTel,userEmail,userRegistered,userCompany")
-        .eq("userActive", "0")
+        .neq("userActive", "1")
         .order("userRegistered", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {

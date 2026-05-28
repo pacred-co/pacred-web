@@ -46,7 +46,7 @@ export default async function AdminWalletAddPage({
     const candidate = qRaw.toUpperCase();
     const { data, error } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel, useremail")
+      .select("userID, userName, userLastName, userTel, userEmail")
       .eq("userID", candidate)
       .maybeSingle<CustomerLite>();
     if (error) {
