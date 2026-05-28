@@ -57,7 +57,7 @@ export async function adminUpdateSettings(input: AdminUpdateSettingsInput): Prom
     const admin = createAdminClient();
 
     // V-A4: fetch previous values to compare against new for suspicious-change detection
-    const { data: prev } = await admin
+    const { data: prev, error: prevErr } = await admin
       .from("settings")
       .select("yuan_rate, service_fee, qc_fee_per_item, crate_fee_base, juristic_discount_pct")
       .eq("id", 1)
@@ -68,6 +68,9 @@ export async function adminUpdateSettings(input: AdminUpdateSettingsInput): Prom
         crate_fee_base: number;
         juristic_discount_pct: number;
       }>();
+    if (prevErr) {
+      console.error(`[settings list] failed`, { code: prevErr.code, message: prevErr.message });
+    }
 
     if (prev && !d.confirm_unusual_rate) {
       const suspicious: string[] = [];

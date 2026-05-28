@@ -93,6 +93,44 @@ it's actually a WAF intercept the user can't fix.
 
 ---
 
+## [2026-05-27] PG RENAME COLUMN does NOT reach PL/pgSQL function bodies — re-declare every function that references the renamed columns in the SAME migration
+
+**Symptom (the second time it bit us, hours after shipping the camelCase pilot 0113).** /register both tabs (personal + juristic) returned `"บันทึกโปรไฟล์ไม่สำเร็จ"` even with `OTP_BYPASS=true`. The Pacred client showed the opaque `profile_failed` error code. Vercel function logs would have shown `column "userid" does not exist`.
+
+**Root cause.** `generate_member_code()` (a BEFORE INSERT trigger on `profiles`, fires on every signup) — defined across migrations 0083 → 0090 → 0095 → 0096 → 0097 → 0098 → 0099 → 0100 → 0103 (each `CREATE OR REPLACE FUNCTION` superseding) — referenced `tb_users.userid` (lowercase) to find the next vacant member code. The camelCase pilot (0113) renamed that column to `tb_users."userID"`. PostgreSQL RENAME COLUMN updates dependent indexes/FKs/views automatically BUT NOT PL/pgSQL function bodies — those are stored as text and not re-parsed on rename. Next signup → trigger runs → SQL inside `EXECUTE` looks for `userid` → column doesn't exist → trigger errors → profile INSERT fails → action returns `profile_failed` → client shows the opaque message.
+
+**What to do.** For any camelCase batch (or any RENAME COLUMN sweep), THE MIGRATION must also re-declare every function whose body references the renamed columns. Audit pattern:
+
+```
+# Find every function definition in the migration history
+grep -l "create or replace function" supabase/migrations/*.sql
+
+# Find functions that reference the table being renamed
+grep -l "tb_users" supabase/migrations/*.sql  # then narrow to function definitions
+
+# Read each function's body for lowercase identifiers that match the rename map
+```
+
+Then write the fix as part of the same migration (or a follow-up `0114_fix_<fn>_after_camelcase.sql`):
+
+```sql
+create or replace function public.<fn>() ...
+as $$
+  -- ... same logic, lowercase identifiers replaced with quoted "camelCase"
+$$;
+```
+
+**Anti-pattern.** Trusting PG to fix up dependent objects on RENAME COLUMN. It handles a lot (indexes, FKs, dependent generated columns, views referencing the column by name in the SELECT clause), but PL/pgSQL function bodies are out of scope — they're opaque text to the catalog. Same applies to:
+- RLS policy `USING (...)` / `WITH CHECK (...)` expressions stored as text
+- Materialized view definitions (re-run `REFRESH` after rename — actually breaks if the column was projected)
+- Stored procedure / CTE definitions
+
+For the camelCase pilot the surface to audit is small (most legacy `tb_*` tables have no triggers). For batches that touch tables with hot triggers (profile signup, audit log, etc.), AUDIT BEFORE you ship. See `memory/camelcase_pilot_in_progress.md` "How to apply" step 5.
+
+**Specific fix shipped (this case):** `supabase/migrations/0114_fix_member_code_function_after_camelcase.sql` — `CREATE OR REPLACE FUNCTION public.generate_member_code()` + `public.next_pr_member_code()` with `"userID"` (quoted, case-sensitive). Verified via `pg_get_functiondef('public.generate_member_code()'::regprocedure)`.
+
+---
+
 ## [2026-05-27] camelCase column-rename migration on a live Pacred-style DB needs lockstep deploy
 
 **Symptom.** ก๊อต's pacred-admin-next docs/database/ spec uses

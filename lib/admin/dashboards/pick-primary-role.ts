@@ -23,7 +23,12 @@ import type { AdminRole } from "@/lib/auth/require-admin";
  * sidebar.
  */
 
-const PRIORITY: AdminRole[] = [
+// Narrowed to DashboardVariant (hand-curated subset of AdminRole) — without
+// this, TS2322 fires because migration 0091 extended AdminRole with sales /
+// qa / 13 freight_* values that don't have dedicated dashboards. Each PRIORITY
+// entry MUST also be a DashboardVariant; the type narrowing here is the
+// compile-time gate that keeps the two unions in lockstep.
+const PRIORITY: DashboardVariant[] = [
   "super",
   "accounting",
   "warehouse",
@@ -44,7 +49,9 @@ export type DashboardVariant =
 
 export function pickPrimaryRole(roles: AdminRole[]): DashboardVariant {
   for (const r of PRIORITY) {
-    if (roles.includes(r)) return r;
+    // r: DashboardVariant; the includes() narrows on AdminRole because
+    // every DashboardVariant IS an AdminRole (one-way subset relation).
+    if (roles.includes(r as AdminRole)) return r;
   }
   // No recognised role → caller already 404'd via requireAdmin([]); guard
   // anyway so the dispatch table never has a missing branch.

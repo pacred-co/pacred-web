@@ -32,6 +32,7 @@ import {
   type SignInInput,
 } from "@/lib/validators/auth";
 import { requestOtp, verifyOtp } from "./otp";
+import { logger } from "@/lib/logger";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -71,7 +72,7 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
     // not the legacy customer) and sign in as the wrong identity.
     const admin = createAdminClient();
     const code = identifier.toUpperCase();
-    const { data: profile } = await admin
+    const { data: profile, error: profileErr } = await admin
       .from("profiles")
       .select("phone, email, migrated_from_pcs")
       .eq("member_code", code)
@@ -80,6 +81,9 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
         email: string | null;
         migrated_from_pcs: boolean;
       }>();
+    if (profileErr) {
+      console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+    }
 
     if (profile?.migrated_from_pcs) {
       // Migrated PCS customer — auth.users was provisioned with the synthetic
@@ -129,12 +133,15 @@ export async function signIn(input: SignInInput): Promise<ActionResult<{ isAdmin
   const { data: { user: signedInUser } } = await supabase2.auth.getUser();
   let isAdmin = false;
   if (signedInUser) {
-    const { data: adminRows } = await supabase2
+    const { data: adminRows, error: adminRowsErr } = await supabase2
       .from("admins")
       .select("role")
       .eq("profile_id", signedInUser.id)
       .eq("is_active", true)
       .limit(1);
+    if (adminRowsErr) {
+      console.error(`[admins list] failed`, { code: adminRowsErr.code, message: adminRowsErr.message });
+    }
     isAdmin = (adminRows?.length ?? 0) > 0;
   }
 
@@ -339,9 +346,10 @@ export async function saveJuristicStep2(
   const data = parsed.data;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Company details are canonical in `corporate` (read by /profile, both
@@ -413,9 +421,10 @@ export async function uploadJuristicDoc(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const ext = file.name.split(".").pop() ?? "bin";
@@ -428,7 +437,20 @@ export async function uploadJuristicDoc(
       contentType: file.type,
       upsert: true,
     });
-  if (uploadErr) return { ok: false, error: "upload_failed" };
+  if (uploadErr) {
+    // 2026-05-28 — surface the storage error in Vercel logs so we can tell
+    // bucket-policy vs not-signed-in vs RLS-deny apart when a juristic
+    // step-3 user reports "won't proceed". Without this the client only
+    // sees ERR.upload_failed = "อัปโหลดไฟล์ไม่สำเร็จ", which is too generic
+    // to diagnose remotely.
+    logger.error("auth", "juristic-upload storage failed", uploadErr, {
+      userId: user.id,
+      docType,
+      mime: file.type,
+      size: file.size,
+    });
+    return { ok: false, error: "upload_failed" };
+  }
 
   const { error: insertErr } = await supabase.from("documents").insert({
     profile_id: user.id,
@@ -437,23 +459,37 @@ export async function uploadJuristicDoc(
     mime_type: file.type,
     size_bytes: file.size,
   });
-  if (insertErr) return { ok: false, error: "doc_record_failed" };
+  if (insertErr) {
+    logger.error("auth", "juristic-upload doc-record insert failed", insertErr, {
+      userId: user.id,
+      docType,
+      code: insertErr.code,
+    });
+    return { ok: false, error: "doc_record_failed" };
+  }
 
   return { ok: true, data: { storage_path: path } };
 }
 
 export async function completeJuristicRegistration(): Promise<ActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase
     .from("profiles")
     .update({ status: "active" })
     .eq("id", user.id);
-  if (error) return { ok: false, error: "update_failed" };
+  if (error) {
+    logger.error("auth", "juristic-complete profiles status=active failed", error, {
+      userId: user.id,
+      code: error.code,
+    });
+    return { ok: false, error: "update_failed" };
+  }
 
   return { ok: true };
 }
@@ -486,11 +522,14 @@ export async function requestPasswordResetByPhone(
   const phone = normalizePhone(parsed.data.phone);
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("id")
     .eq("phone", phone)
     .maybeSingle<{ id: string }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   // Silent ok for unknown phone — don't leak existence
   if (!profile) return { ok: true };
@@ -529,12 +568,16 @@ export async function confirmPasswordResetByPhone(
   if (!otpOk) return { ok: false, error: "invalid_otp" };
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("id")
     .eq("phone", phone)
     .maybeSingle<{ id: string }>();
 
+  if (profileErr) {
+    console.error(`[profiles mutation lookup] failed`, { code: profileErr.code, message: profileErr.message });
+    return { ok: false, error: `db_error:${profileErr.code ?? "unknown"}` };
+  }
   if (!profile) return { ok: false, error: "user_not_found" };
 
   const { error: updErr } = await admin.auth.admin.updateUserById(profile.id, {
@@ -599,7 +642,10 @@ export async function updatePasswordAfterRecovery(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });

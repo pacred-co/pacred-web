@@ -112,7 +112,7 @@ export default function ForgotPasswordPage() {
       <main className="flex min-h-[calc(100vh-200px)] items-center justify-center bg-background px-4 py-12">
         <div className="w-full max-w-[480px] rounded-[18px] bg-white dark:bg-surface p-6 sm:p-8 shadow-[0_8px_40px_rgba(0,0,0,0.10)]">
           <div className="mb-6 text-center">
-            <p className="text-xs font-semibold tracking-widest text-primary-500">
+            <p className="text-xs font-semibold tracking-widest text-primary-600">
               {t("kicker")}
             </p>
             <h1 className="mt-1 text-2xl font-bold text-foreground">{t("title")}</h1>

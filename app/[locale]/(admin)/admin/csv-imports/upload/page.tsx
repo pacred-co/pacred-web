@@ -18,7 +18,7 @@ export default async function CsvImportUploadPage() {
       </Link>
 
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">อัปโหลด CSV ใหม่</h1>
         <p className="mt-1 text-sm text-muted">
           อัปโหลดไฟล์ → ระบบจะพรีวิว 5 แถวแรกให้ตรวจ → กดยืนยันเพื่อนำเข้าจริง

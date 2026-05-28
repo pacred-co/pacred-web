@@ -1,231 +1,222 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
-
 /**
- * /admin/warehouse/qa-inspections — V-E10 list view.
+ * /admin/warehouse/qa-inspections — QA & QC inspection queue.
  *
- * Shows all recorded QA inspections + a "pending" queue (arrived cargo
- * shipments that have NO inspection yet — those are blocked from billing
- * once V-E7 lands).
+ * P0 #2 rebuild on `tb_forwarder` spine (replaces the Wave 3D tombstone
+ * that FK'd the retired cargo_shipments spine).
  *
- * Roles: super, accounting, warehouse (per ADR-0005 K-7).
- *
- * Per port-spec docs/port-specs/freight-qa-qc-inspection.md.
+ * Faithful to PCS_Cargo_Guidebook_TH.md L441-454:
+ *   - List inspection rows with verdict chip (pass/fail/hold/fake_product)
+ *   - Free-text search by f_no / cabinet / member_code / china tracking
+ *   - "บันทึก QA ใหม่" CTA → /new
+ *   - "Blacklist" badge on fake_product rows
+ *   - Click row → /[id] detail
  */
+
+import { Link } from "@/i18n/navigation";
+import { getTranslations } from "next-intl/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  adminListQaInspections,
+  type QaVerdict,
+} from "@/actions/admin/qa-inspections";
 
 export const dynamic = "force-dynamic";
 
-const OUTCOME_BADGE: Record<string, string> = {
-  pass:        "bg-green-50 text-green-700 border-green-200",
-  fail_minor:  "bg-yellow-50 text-yellow-700 border-yellow-200",
-  fail_major:  "bg-red-50 text-red-700 border-red-200",
-  waived:      "bg-gray-50 text-gray-600 border-gray-200",
-};
-const OUTCOME_LABEL: Record<string, string> = {
-  pass:       "✅ ผ่าน",
-  fail_minor: "⚠️ ผิดเล็กน้อย",
-  fail_major: "🚨 ผิดสำคัญ",
-  waived:     "ℹ️ ยกเว้น",
-};
-const DAMAGE_LABEL: Record<string, string> = {
-  none:      "ไม่มี",
-  cosmetic:  "เล็กน้อย (cosmetic)",
-  partial:   "บางส่วน (partial)",
-  total:     "เสียทั้งหมด (total)",
+type SP = {
+  verdict?: string; // 'all' | QaVerdict
+  q?:       string;
 };
 
-type Inspection = {
-  id:                 string;
-  inspection_no:      string;
-  cargo_shipment_id:  string | null;
-  outcome:            "pass" | "fail_minor" | "fail_major" | "waived";
-  damage_level:       string | null;
-  missing_items:      number;
-  inspected_at:       string;
-  customer_notified_at: string | null;
-  cargo_shipment: {
-    shipment_code: string;
-    status:        string;
-    profile: {
-      member_code: string | null;
-      first_name:  string | null;
-      last_name:   string | null;
-    } | null;
-  } | null;
-};
+const VERDICT_FILTERS: Array<{ key: "all" | QaVerdict; bg: string }> = [
+  { key: "all",          bg: "bg-gray-100 text-gray-700"     },
+  { key: "pass",         bg: "bg-green-100 text-green-700"   },
+  { key: "fail",         bg: "bg-amber-100 text-amber-700"   },
+  { key: "hold",         bg: "bg-blue-100 text-blue-700"     },
+  { key: "fake_product", bg: "bg-red-100 text-red-700"       },
+];
 
-type PendingShipment = {
-  id:             string;
-  shipment_code:  string;
-  status:         string;
-  created_at:     string;
-  profile: {
-    member_code: string | null;
-    first_name:  string | null;
-    last_name:   string | null;
-  } | null;
-};
+function verdictBadge(v: QaVerdict, label: string): React.ReactNode {
+  const cls =
+    v === "pass"         ? "bg-green-100 text-green-700"
+    : v === "fail"       ? "bg-amber-100 text-amber-700"
+    : v === "hold"       ? "bg-blue-100 text-blue-700"
+    : /* fake_product */   "bg-red-100 text-red-700";
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>
+      {label}
+    </span>
+  );
+}
 
-export default async function AdminQaInspectionsListPage() {
-  await requireAdmin(["super", "accounting", "warehouse"]);
-  const admin = createAdminClient();
+export default async function QaInspectionsListPage({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}) {
+  await requireAdmin(["super", "ops", "warehouse", "qa"]);
+  const sp = await searchParams;
+  const t = await getTranslations("qaInspection");
 
-  // Recent inspections (most recent 100).
-  const { data: inspectionsRaw } = await admin
-    .from("freight_qa_inspections")
-    .select(`
-      id, inspection_no, cargo_shipment_id, outcome, damage_level, missing_items,
-      inspected_at, customer_notified_at,
-      cargo_shipment:cargo_shipments!cargo_shipment_id (
-        shipment_code, status,
-        profile:profiles!profile_id ( member_code, first_name, last_name )
-      )
-    `)
-    .order("inspected_at", { ascending: false })
-    .limit(100);
+  const verdictParam = (sp.verdict ?? "all") as "all" | QaVerdict;
+  const validVerdict =
+    verdictParam === "all" || ["pass", "fail", "hold", "fake_product"].includes(verdictParam)
+      ? verdictParam
+      : "all";
 
-  // Normalise array vs object for FK joins. Supabase typing inconsistently
-  // returns arrays even for FK→one relationships; cast via unknown for safety.
-  type Raw = Omit<Inspection, "cargo_shipment"> & {
-    cargo_shipment:
-      | (NonNullable<Inspection["cargo_shipment"]> | (NonNullable<Inspection["cargo_shipment"]>[]))
-      | null;
-  };
-  const inspections: Inspection[] = ((inspectionsRaw ?? []) as unknown as Raw[]).map((r) => {
-    const cs = Array.isArray(r.cargo_shipment) ? r.cargo_shipment[0] ?? null : r.cargo_shipment;
-    const profile = cs && Array.isArray(cs.profile) ? cs.profile[0] ?? null : cs?.profile ?? null;
-    return {
-      ...r,
-      cargo_shipment: cs ? { ...cs, profile } : null,
-    } as Inspection;
+  const res = await adminListQaInspections({
+    verdict: validVerdict,
+    q:       sp.q,
+    limit:   500,
   });
 
-  // Pending queue — arrived_th shipments WITHOUT any inspection.
-  const inspectedShipmentIds = inspections
-    .map((i) => i.cargo_shipment_id)
-    .filter((x): x is string => !!x);
+  const rows = res.ok ? (res.data ?? []) : [];
+  const error = res.ok ? null : res.error;
 
-  let pendingQuery = admin
-    .from("cargo_shipments")
-    .select(`
-      id, shipment_code, status, created_at,
-      profile:profiles!profile_id ( member_code, first_name, last_name )
-    `)
-    .eq("status", "arrived_th")
-    .order("created_at", { ascending: false })
-    .limit(50);
-
-  // Only filter when there ARE inspected IDs (Supabase rejects empty arrays
-  // in `.not('id','in','(...)')` syntax).
-  if (inspectedShipmentIds.length > 0) {
-    pendingQuery = pendingQuery.not("id", "in", `(${inspectedShipmentIds.join(",")})`);
-  }
-  const { data: pendingRaw } = await pendingQuery;
-
-  type RawPending = Omit<PendingShipment, "profile"> & {
-    profile: PendingShipment["profile"] | PendingShipment["profile"][];
+  // Count per-verdict tiles (for the filter strip).
+  const counts: Record<"all" | QaVerdict, number> = {
+    all:           rows.length,
+    pass:          0,
+    fail:          0,
+    hold:          0,
+    fake_product:  0,
   };
-  const pending: PendingShipment[] = ((pendingRaw ?? []) as unknown as RawPending[]).map((r) => ({
-    ...r,
-    profile: Array.isArray(r.profile) ? r.profile[0] ?? null : r.profile,
-  }));
+  // When a filter is active rows is already filtered — we still surface
+  // the per-verdict counts of the loaded set for hover feedback.
+  for (const r of rows) counts[r.verdict] = (counts[r.verdict] ?? 0) + 1;
 
   return (
-    <main className="p-6 lg:p-8 space-y-6 max-w-6xl">
-      <header>
-        <h1 className="text-2xl font-bold">การตรวจคุณภาพ (QA/QC) คลัง</h1>
-        <p className="text-xs text-muted mt-1">
-          บันทึกการตรวจคลังก่อนส่งมอบ — gate การออกใบกำกับภาษีค่าขนส่ง (V-E7)
-        </p>
-      </header>
-
-      {/* Pending queue */}
-      <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-bold text-sm">
-            🕓 คิวรอตรวจ ({pending.length})
-            <span className="text-[10px] text-muted font-normal ml-2">
-              — cargo shipments ที่ถึงไทยแล้ว แต่ยังไม่มี inspection
-            </span>
-          </h2>
+    <main className="p-4 lg:p-6 space-y-5 max-w-6xl">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA</p>
+          <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>
+          <p className="text-sm text-muted">{t("subtitle")}</p>
         </div>
-        {pending.length === 0 ? (
-          <p className="text-xs text-muted">ไม่มีคิวรอตรวจ</p>
-        ) : (
-          <ul className="divide-y divide-amber-200">
-            {pending.map((s) => (
-              <li key={s.id} className="py-2 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-mono text-sm">{s.shipment_code}</p>
-                  <p className="text-xs text-muted">
-                    {s.profile?.member_code} · {s.profile?.first_name} {s.profile?.last_name} ·{" "}
-                    {new Date(s.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                  </p>
-                </div>
-                <Link
-                  href={`/admin/warehouse/qa-inspections/new?shipment=${s.id}`}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
-                >
-                  ➕ บันทึกการตรวจ
-                </Link>
-              </li>
-            ))}
-          </ul>
+        <Link
+          href="/admin/warehouse/qa-inspections/new"
+          className="rounded-lg bg-primary-600 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-primary-700"
+        >
+          + {t("newCta")}
+        </Link>
+      </div>
+
+      {/* Verdict filter strip */}
+      <div className="flex flex-wrap gap-2">
+        {VERDICT_FILTERS.map((f) => {
+          const isActive = validVerdict === f.key;
+          const c = counts[f.key];
+          return (
+            <Link
+              key={f.key}
+              href={buildHref({ verdict: f.key === "all" ? undefined : f.key, q: sp.q })}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border ${
+                isActive
+                  ? "border-primary-500 bg-primary-50 text-primary-700"
+                  : "border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt"
+              }`}
+            >
+              <span>{t(`verdict.${f.key}`)}</span>
+              {c > 0 && (
+                <span className={`inline-flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 py-0.5 ${f.bg}`}>
+                  {c}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Search */}
+      <form method="GET" action="/admin/warehouse/qa-inspections" className="flex flex-wrap gap-2 items-center">
+        {validVerdict !== "all" && <input type="hidden" name="verdict" value={validVerdict} />}
+        <input
+          type="text"
+          name="q"
+          defaultValue={sp.q ?? ""}
+          placeholder={t("searchPlaceholder")}
+          className="rounded-md border border-border bg-white dark:bg-surface px-3 py-1.5 text-sm w-72"
+        />
+        <button
+          type="submit"
+          className="rounded-md border border-primary-500 bg-primary-500 text-white px-3 py-1.5 text-sm font-medium hover:bg-primary-600"
+        >
+          {t("searchSubmit")}
+        </button>
+        {sp.q && (
+          <Link
+            href={buildHref({ verdict: validVerdict === "all" ? undefined : validVerdict })}
+            className="text-xs text-muted hover:text-foreground underline"
+          >
+            {t("clearSearch")}
+          </Link>
         )}
-      </section>
+      </form>
 
-      {/* Recent inspections */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
-        <div className="px-5 py-3 border-b border-border">
-          <h2 className="font-bold text-sm">ประวัติการตรวจล่าสุด (100 รายการ)</h2>
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {t("loadError")}: {error}
         </div>
-        {inspections.length === 0 ? (
-          <p className="p-5 text-xs text-muted">ยังไม่มีการบันทึกการตรวจ</p>
-        ) : (
+      )}
+
+      {rows.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface p-12 text-center text-sm text-muted">
+          {t("emptyState")}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-surface-alt/50 text-xs uppercase tracking-wide text-muted">
-              <tr className="text-left">
-                <th className="px-4 py-2">เลขที่</th>
-                <th className="px-4 py-2">Shipment</th>
-                <th className="px-4 py-2">ลูกค้า</th>
-                <th className="px-4 py-2">ผลตรวจ</th>
-                <th className="px-4 py-2">ความเสียหาย</th>
-                <th className="px-4 py-2 text-right">ขาด</th>
-                <th className="px-4 py-2">เวลา</th>
-                <th className="px-4 py-2"></th>
+              <tr>
+                <th className="px-3 py-2 text-left">{t("col.inspectedAt")}</th>
+                <th className="px-3 py-2 text-left">{t("col.fNo")}</th>
+                <th className="px-3 py-2 text-left">{t("col.cabinet")}</th>
+                <th className="px-3 py-2 text-left">{t("col.member")}</th>
+                <th className="px-3 py-2 text-left">{t("col.tracking")}</th>
+                <th className="px-3 py-2 text-center">{t("col.verdict")}</th>
+                <th className="px-3 py-2 text-center">{t("col.blacklist")}</th>
+                <th className="px-3 py-2 text-right">{t("col.photos")}</th>
               </tr>
             </thead>
             <tbody>
-              {inspections.map((it) => (
-                <tr key={it.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-mono text-xs">{it.inspection_no}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{it.cargo_shipment?.shipment_code ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs">
-                    {it.cargo_shipment?.profile?.member_code} · {it.cargo_shipment?.profile?.first_name} {it.cargo_shipment?.profile?.last_name}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] ${OUTCOME_BADGE[it.outcome]}`}>
-                      {OUTCOME_LABEL[it.outcome]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">{it.damage_level ? DAMAGE_LABEL[it.damage_level] : "—"}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs">{it.missing_items > 0 ? it.missing_items : "—"}</td>
-                  <td className="px-4 py-3 text-xs text-muted">
-                    {new Date(it.inspected_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                    {it.customer_notified_at && <span className="ml-1 text-[10px]">📤</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link href={`/admin/warehouse/qa-inspections/${it.id}`} className="text-xs text-primary-500 hover:underline">
-                      เปิด →
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                  <td className="px-3 py-2 text-xs">
+                    <Link href={`/admin/warehouse/qa-inspections/${r.id}`} className="text-primary-600 hover:underline">
+                      {r.inspected_at.slice(0, 16).replace("T", " ")}
                     </Link>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs">{r.forwarder_id}</td>
+                  <td className="px-3 py-2 text-xs">{r.fwd_fcabinetnumber ?? "-"}</td>
+                  <td className="px-3 py-2 text-xs">{r.fwd_userid ?? "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{r.fwd_ftrackingchn ?? "-"}</td>
+                  <td className="px-3 py-2 text-center">
+                    {verdictBadge(r.verdict, t(`verdict.${r.verdict}`))}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {r.blacklist_shop ? (
+                      <span className="inline-block rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-bold">
+                        {t("blacklistTag")}
+                      </span>
+                    ) : (
+                      <span className="text-muted text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs">
+                    {r.photo_urls.length > 0 ? r.photo_urls.length : "-"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </section>
+        </div>
+      )}
     </main>
   );
+}
+
+function buildHref(opts: { verdict?: string; q?: string }): string {
+  const p = new URLSearchParams();
+  if (opts.verdict) p.set("verdict", opts.verdict);
+  if (opts.q)       p.set("q",       opts.q);
+  return `/admin/warehouse/qa-inspections${p.toString() ? `?${p.toString()}` : ""}`;
 }

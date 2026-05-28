@@ -248,9 +248,11 @@ console.log("  (g) workEntityHref");
     }));
   assert("forwarder href embeds the ref",
     workEntityHref("forwarder", "F260518-1") === "/admin/forwarders/F260518-1");
-  assert("container href embeds the ref",
+  // Wave 3 cleanup (2026-05-20 ค่ำ): spine retired; cargo_container legacy
+  // work_item rows now route to the faithful /admin/report-cnt landing.
+  assert("retired cargo_container href routes to /admin/report-cnt",
     workEntityHref("cargo_container", "GZE260518-1")
-      === "/admin/warehouse/containers/GZE260518-1");
+      === "/admin/report-cnt");
 }
 
 // ────────────────────────────────────────────────────────────

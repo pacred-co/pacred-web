@@ -1,194 +1,338 @@
 "use client";
 
+/**
+ * Client form for /admin/customers/transfer-rep — bulk transfer-rep
+ * against the legacy `tb_users.adminidsale` column.
+ *
+ * Talks to `adminBulkTransferSalesRepTb` in actions/admin/admins.ts.
+ * Filters happen server-side via URL params (?q=... and ?currentRep=...),
+ * because the customer list can be large; selection state lives client-side.
+ *
+ * Preview: shows "X customers will move from {Y or 'unassigned'} to Z"
+ * before submit.
+ *
+ * Wave 23 P2 batch 1 (2026-05-27 ค่ำ): swapped legacy Bootstrap
+ * `form-control` / `form-group` / `row col-md-*` / `btn btn-color-main` /
+ * `alert alert-*` classes for Tailwind utilities to match the Wave 20 P1-d
+ * page chrome. Logic + validation + server-action wiring preserved per
+ * AGENTS §0a (steal logic, polish UI).
+ */
+
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminBulkTransferSalesRep } from "@/actions/admin/admins";
-import type { RepOption } from "./page";
+import { adminBulkTransferSalesRepTb } from "@/actions/admin/admins";
 
-type Customer = {
-  id:             string;
-  member_code:    string | null;
-  name:           string;
-  phone:          string | null;
-  customer_group: string;
-  current_rep:    RepOption | null;
-  sales_admin_id: string | null;
-  account_type:   "personal" | "juristic";
-  created_at:     string;
+export type CustomerLite = {
+  userid:       string;
+  username:     string | null;
+  userlastname: string | null;
+  usertel:      string | null;
+  adminidsale:  string | null;
 };
 
-export function TransferRepForm({ customers, reps }: { customers: Customer[]; reps: RepOption[] }) {
+export type TbAdminLite = {
+  adminid:       string;
+  adminnickname: string | null;
+  adminname:     string | null;
+  adminlastname: string | null;
+  department:    string | null;
+  section:       string | null;
+};
+
+const INPUT_CLS =
+  "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30";
+const LABEL_CLS = "block text-xs text-muted mb-1";
+const BTN_PRIMARY =
+  "rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed";
+const BTN_SECONDARY =
+  "rounded-lg border border-border bg-white text-foreground px-4 py-2 text-sm hover:bg-surface-alt disabled:opacity-50 disabled:cursor-not-allowed";
+
+function customerLabel(c: CustomerLite): string {
+  const name = `${c.username ?? ""} ${c.userlastname ?? ""}`.trim();
+  return `${c.userid} · ${name || c.usertel || "(ไม่มีชื่อ)"}`;
+}
+
+function adminLabel(a: TbAdminLite): string {
+  const fallback = `${a.adminname ?? ""} ${a.adminlastname ?? ""}`.trim();
+  const nick = a.adminnickname?.trim();
+  return `${a.adminid} · ${nick || fallback || "(ไม่มีชื่อเล่น)"}`;
+}
+
+export function TransferRepForm({
+  customers,
+  admins,
+  initialQuery,
+  initialCurrentRep,
+}: {
+  customers:         CustomerLite[];
+  admins:            TbAdminLite[];
+  initialQuery:      string;
+  initialCurrentRep: string;
+}) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [targetRep, setTargetRep] = useState<string>("");      // "" = unassign, uuid = rep
-  const [unassignChecked, setUnassignChecked] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [done,  setDone]  = useState<{ updated: number; targetName: string } | null>(null);
 
-  const allSelectableIds = useMemo(() => customers.map((c) => c.id), [customers]);
+  const [q, setQ]                     = useState<string>(initialQuery);
+  const [currentRep, setCurrentRep]   = useState<string>(initialCurrentRep);
+  const [selected, setSelected]       = useState<Set<string>>(new Set());
+  const [targetAdmin, setTargetAdmin] = useState<string>("");
+  const [error, setError]             = useState<string | null>(null);
+  const [success, setSuccess]         = useState<string | null>(null);
+  const [confirmStep, setConfirmStep] = useState<boolean>(false);
 
-  function toggle(id: string) {
+  const adminLookup = useMemo(() => {
+    const m = new Map<string, TbAdminLite>();
+    for (const a of admins) m.set(a.adminid, a);
+    return m;
+  }, [admins]);
+
+  const onApplyFilter = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (q.trim())          params.set("q", q.trim());
+    if (currentRep.trim()) params.set("currentRep", currentRep.trim().toUpperCase());
+    const url = params.toString()
+      ? `/admin/customers/transfer-rep?${params.toString()}`
+      : "/admin/customers/transfer-rep";
+    router.push(url);
+  };
+
+  const toggleOne = (userid: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(userid)) next.delete(userid);
+      else next.add(userid);
       return next;
     });
-  }
-  function toggleAll() {
-    setSelected((prev) => prev.size === allSelectableIds.length ? new Set() : new Set(allSelectableIds));
-  }
+  };
 
-  function onSubmit(e: React.FormEvent) {
+  const toggleAll = () => {
+    setSelected((prev) => {
+      if (prev.size === customers.length) return new Set();
+      return new Set(customers.map((c) => c.userid));
+    });
+  };
+
+  const selectedRows = customers.filter((c) => selected.has(c.userid));
+  const fromBreakdown = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of selectedRows) {
+      const key = r.adminidsale ?? "(unassigned)";
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [selectedRows]);
+
+  const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (selected.size === 0) { setError("เลือกอย่างน้อย 1 ลูกค้า"); return; }
-    if (!unassignChecked && !targetRep) { setError("เลือกพนักงานขายปลายทาง หรือทำเครื่องหมาย 'ย้ายออกจากเซลล์'"); return; }
+    setSuccess(null);
 
-    const newRepId  = unassignChecked ? null : targetRep;
-    const newRep    = newRepId ? reps.find((r) => r.profile_id === newRepId) : null;
-    const targetName = newRep ? newRep.display_name : "(ยกเลิกการผูกเซลล์)";
+    if (selected.size === 0) { setError("เลือกลูกค้าอย่างน้อย 1 ราย"); return; }
+    if (!targetAdmin)        { setError("เลือก admin ปลายทาง"); return; }
 
-    if (!confirm(`ยืนยันย้ายลูกค้า ${selected.size} ราย ไปยัง "${targetName}"?\nการดำเนินการนี้บันทึก audit log แล้ว rollback ต้องทำด้วยมือ`)) return;
+    if (!confirmStep) { setConfirmStep(true); return; }
 
+    const userIds = Array.from(selected);
     startTransition(async () => {
-      const res = await adminBulkTransferSalesRep({
-        customer_ids:       Array.from(selected),
-        new_sales_admin_id: newRepId,
+      const result = await adminBulkTransferSalesRepTb({
+        user_ids:         userIds,
+        new_admin_userid: targetAdmin,
       });
-      if (res.ok && res.data) {
-        setDone({ updated: res.data.updated, targetName });
-        setSelected(new Set());
-        router.refresh();
-      } else if (!res.ok) {
-        setError(res.error);
+      if (!result.ok) {
+        setError(result.error);
+        setConfirmStep(false);
+        return;
       }
+      setSuccess(`ย้ายสำเร็จ ${result.data?.updated ?? 0} ราย → ${targetAdmin}`);
+      setSelected(new Set());
+      setConfirmStep(false);
+      router.refresh();
     });
-  }
-
-  if (done) {
-    return (
-      <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center space-y-3">
-        <h2 className="text-xl font-bold text-green-800">ย้ายเซลล์เรียบร้อย</h2>
-        <p className="text-sm text-green-700">ย้ายลูกค้า {done.updated} ราย → {done.targetName}</p>
-        <button
-          type="button"
-          onClick={() => { setDone(null); router.refresh(); }}
-          className="rounded-lg bg-primary-500 text-white px-4 py-2 text-sm font-medium"
-        >
-          ย้ายชุดถัดไป
-        </button>
-      </div>
-    );
-  }
-
-  if (customers.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border p-12 text-center text-sm text-muted">
-        ไม่พบลูกค้าตามตัวกรอง — ลองเลือกพนักงานขายปัจจุบันอื่น
-      </div>
-    );
-  }
+  };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      )}
+    <div className="mt-4 space-y-4">
+      {/* Filter row */}
+      <form onSubmit={onApplyFilter} className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div className="sm:col-span-5">
+            <label htmlFor="filter-q" className={LABEL_CLS}>ค้นหา (ชื่อ / PR####)</label>
+            <input
+              id="filter-q"
+              type="text"
+              className={INPUT_CLS}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="เช่น John หรือ PR1234"
+              disabled={pending}
+            />
+          </div>
+          <div className="sm:col-span-5">
+            <label htmlFor="filter-currentRep" className={LABEL_CLS}>เซลล์ปัจจุบัน (currentRep)</label>
+            <select
+              id="filter-currentRep"
+              className={INPUT_CLS}
+              value={currentRep}
+              onChange={(e) => setCurrentRep(e.target.value)}
+              disabled={pending}
+            >
+              <option value="">— ทั้งหมด —</option>
+              {admins.map((a) => (
+                <option key={a.adminid} value={a.adminid}>{adminLabel(a)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2 flex items-end">
+            <button type="submit" className={`${BTN_PRIMARY} w-full`} disabled={pending}>
+              กรอง
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* Selection summary */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <strong>เลือกแล้ว {selected.size} ราย</strong> จากรายชื่อทั้งหมด {customers.length} ราย
+        {selected.size > 0 && (
+          <>
+            {" "}— ปัจจุบันอยู่ที่:{" "}
+            {fromBreakdown.map(([from, n]) => (
+              <span
+                key={from}
+                className="inline-block mr-2 px-2 py-0.5 bg-white rounded text-xs"
+              >
+                {from === "(unassigned)" ? "(ยังไม่มี)" : from} × {n}
+              </span>
+            ))}
+          </>
+        )}
+      </div>
 
       {/* Customer table */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        <div className="px-5 py-3 flex items-center justify-between border-b border-border bg-surface-alt/40">
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input type="checkbox" checked={selected.size === customers.length && customers.length > 0} onChange={toggleAll} />
-            <span>เลือกทั้งหมด ({selected.size}/{customers.length})</span>
-          </label>
-        </div>
-        <div className="overflow-x-auto">
+      <div className="rounded-lg border border-border bg-white dark:bg-surface overflow-hidden">
+        <div className="max-h-[480px] overflow-y-auto overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-sm">
-            <thead className="bg-surface-alt/30 text-left text-xs uppercase tracking-wide text-muted">
+            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
               <tr>
-                <th className="px-3 py-3 w-10"></th>
-                <th className="px-3 py-3">รหัส</th>
-                <th className="px-3 py-3">ชื่อ</th>
-                <th className="px-3 py-3">เบอร์</th>
-                <th className="px-3 py-3">กลุ่ม</th>
-                <th className="px-3 py-3">เซลล์ปัจจุบัน</th>
-                <th className="px-3 py-3">สมัครเมื่อ</th>
+                <th className="px-3 py-2 text-center w-10">
+                  <input
+                    type="checkbox"
+                    checked={customers.length > 0 && selected.size === customers.length}
+                    onChange={toggleAll}
+                    aria-label="เลือกทั้งหมด"
+                  />
+                </th>
+                <th className="px-3 py-2">รหัสสมาชิก</th>
+                <th className="px-3 py-2">ชื่อ-นามสกุล</th>
+                <th className="px-3 py-2">เบอร์โทร</th>
+                <th className="px-3 py-2">เซลล์ปัจจุบัน</th>
               </tr>
             </thead>
-            <tbody>
-              {customers.map((c) => {
-                const isSel = selected.has(c.id);
-                return (
-                  <tr key={c.id} className={`border-t border-border ${isSel ? "bg-primary-50/40" : ""}`}>
+            <tbody className="divide-y divide-border">
+              {customers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-muted">
+                    <em>ยังไม่มีรายชื่อ — กรอกตัวกรองด้านบนแล้วกด &quot;กรอง&quot;</em>
+                  </td>
+                </tr>
+              ) : (
+                customers.map((c) => (
+                  <tr key={c.userid} className="hover:bg-surface-alt/30">
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.userid)}
+                        onChange={() => toggleOne(c.userid)}
+                        aria-label={`เลือก ${c.userid}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs">{c.userid}</td>
+                    <td className="px-3 py-2">{customerLabel(c)}</td>
+                    <td className="px-3 py-2">{c.usertel ?? "-"}</td>
                     <td className="px-3 py-2">
-                      <input type="checkbox" checked={isSel} onChange={() => toggle(c.id)} />
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">{c.member_code ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs">
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-muted text-[10px]">{c.account_type === "juristic" ? "นิติบุคคล" : "บุคคล"}</div>
-                    </td>
-                    <td className="px-3 py-2 text-xs">{c.phone ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs">
-                      <span className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 border border-primary-200 text-[10px]">{c.customer_group}</span>
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      {c.current_rep ? (
-                        <div>
-                          <div className="font-medium">{c.current_rep.display_name}</div>
-                          {c.current_rep.member_code && <div className="font-mono text-muted text-[10px]">{c.current_rep.member_code}</div>}
-                        </div>
+                      {c.adminidsale ? (
+                        <span>{c.adminidsale}{adminLookup.get(c.adminidsale)?.adminnickname ? ` · ${adminLookup.get(c.adminidsale)?.adminnickname}` : ""}</span>
                       ) : (
-                        <span className="text-muted italic">ไม่มี</span>
+                        <span className="text-muted">(ยังไม่มี)</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted">{new Date(c.created_at).toLocaleDateString("th-TH")}</td>
                   </tr>
-                );
-              })}
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Bottom action bar */}
-      <div className="sticky bottom-0 z-10 rounded-2xl border-2 border-primary-500/40 bg-white dark:bg-surface shadow-lg p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[260px] space-y-1">
-            <label className="text-xs font-medium text-muted">ย้ายไปให้พนักงานขาย</label>
-            <select
-              value={targetRep}
-              onChange={(e) => setTargetRep(e.target.value)}
-              disabled={unassignChecked}
-              className="w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm disabled:bg-surface-alt disabled:text-muted"
-            >
-              <option value="">— เลือกพนักงานขาย —</option>
-              {reps.map((r) => (
-                <option key={r.profile_id} value={r.profile_id}>
-                  {r.display_name}{r.member_code ? ` (${r.member_code})` : ""}{r.role === "super" ? " · ผู้ดูแลระบบ" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="text-sm inline-flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={unassignChecked}
-              onChange={(e) => { setUnassignChecked(e.target.checked); if (e.target.checked) setTargetRep(""); }}
-            />
-            <span>ย้ายออกจากเซลล์ (ลูกค้าไม่มีผู้ดูแล)</span>
+      {/* Target admin + submit */}
+      <form onSubmit={onSubmit} className="border-t border-border pt-4 space-y-3">
+        <div>
+          <label htmlFor="target-admin" className={LABEL_CLS}>
+            admin ปลายทาง (target) <span className="text-red-700">*</span>
           </label>
+          <select
+            id="target-admin"
+            className={INPUT_CLS}
+            value={targetAdmin}
+            onChange={(e) => { setTargetAdmin(e.target.value); setConfirmStep(false); }}
+            disabled={pending}
+            required
+          >
+            <option value="">— เลือก admin —</option>
+            {admins.map((a) => (
+              <option key={a.adminid} value={a.adminid}>{adminLabel(a)}</option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            ⚠ {error}
+          </div>
+        )}
+        {success && (
+          <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+            ✓ {success}
+          </div>
+        )}
+
+        {confirmStep && targetAdmin && selected.size > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <strong>ยืนยันการย้าย?</strong> ลูกค้า {selected.size} ราย จะย้ายไปยัง <strong>{targetAdmin}</strong> ({adminLookup.get(targetAdmin)?.adminnickname ?? "-"})
+            {fromBreakdown.length > 0 && (
+              <>
+                <br />
+                จาก: {fromBreakdown.map(([from, n]) => `${from === "(unassigned)" ? "ยังไม่มี" : from} × ${n}`).join(" · ")}
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+          <button
+            type="button"
+            className={BTN_SECONDARY}
+            onClick={() => {
+              setSelected(new Set()); setTargetAdmin(""); setError(null); setSuccess(null); setConfirmStep(false);
+            }}
+            disabled={pending}
+          >
+            ล้าง
+          </button>
           <button
             type="submit"
-            disabled={pending || selected.size === 0 || (!unassignChecked && !targetRep)}
-            className="rounded-lg bg-primary-500 text-white px-5 py-2 text-sm font-bold hover:bg-primary-600 disabled:bg-surface-alt disabled:text-muted"
+            className={BTN_PRIMARY}
+            disabled={pending || selected.size === 0 || !targetAdmin}
           >
-            {pending ? "กำลังย้าย..." : `ย้ายลูกค้า ${selected.size} ราย`}
+            {pending
+              ? "กำลังย้าย..."
+              : confirmStep
+                ? `ยืนยันย้าย ${selected.size} ราย`
+                : `ตรวจสอบและย้าย (${selected.size} ราย)`}
           </button>
         </div>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }

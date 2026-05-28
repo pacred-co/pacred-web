@@ -74,7 +74,10 @@ export async function saveSearchQuery(
     const d = parsed.data;
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     if (!user) {
       // Anonymous — silently no-op. The DB RLS would reject anyway
       // (insert policy requires user_id = auth.uid()).
@@ -123,7 +126,10 @@ export async function getMyRecentSearches(
   const clamped = Math.min(Math.max(1, limit | 0), 100);
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Over-fetch to absorb dedup loss. 3x is empirical — a user typing
@@ -160,7 +166,10 @@ export async function getMyRecentSearches(
  */
 export async function clearMySearchHistory(): Promise<ActionResult<{ deleted: number }>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { error, count } = await supabase

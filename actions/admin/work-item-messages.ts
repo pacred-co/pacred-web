@@ -113,13 +113,16 @@ async function loadWorkItem(
   admin: ReturnType<typeof createAdminClient>,
   workItemId: string,
 ): Promise<WorkItemRow | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("work_items")
     .select(
       "id, title, assigned_role, assigned_to, blocked_on_role, blocked_on_admin, waiting_reason",
     )
     .eq("id", workItemId)
     .maybeSingle<WorkItemRow>();
+  if (error) {
+    console.error(`[work_items list] failed`, { code: error.code, message: error.message });
+  }
   return data ?? null;
 }
 
@@ -131,11 +134,14 @@ async function loadProfiles(
   const out = new Map<string, ProfileLite>();
   if (profileIds.length === 0) return out;
   const unique = Array.from(new Set(profileIds));
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("id, display_name, first_name")
     .in("id", unique)
     .returns<ProfileLite[]>();
+  if (error) {
+    console.error(`[profiles list] failed`, { code: error.code, message: error.message });
+  }
   for (const row of data ?? []) out.set(row.id, row);
   return out;
 }
@@ -145,12 +151,15 @@ async function loadActiveAdminsInRole(
   admin: ReturnType<typeof createAdminClient>,
   role: string,
 ): Promise<string[]> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("admins")
     .select("profile_id")
     .eq("role", role)
     .eq("is_active", true)
     .returns<Array<{ profile_id: string }>>();
+  if (error) {
+    console.error(`[admins list] failed`, { code: error.code, message: error.message });
+  }
   return (data ?? []).map((r) => r.profile_id).filter((s): s is string => !!s);
 }
 
@@ -159,12 +168,15 @@ async function loadAdminRoles(
   admin: ReturnType<typeof createAdminClient>,
   adminId: string,
 ): Promise<string[]> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("admins")
     .select("role")
     .eq("profile_id", adminId)
     .eq("is_active", true)
     .returns<Array<{ role: string }>>();
+  if (error) {
+    console.error(`[admins list] failed`, { code: error.code, message: error.message });
+  }
   return (data ?? []).map((r) => r.role);
 }
 
@@ -204,12 +216,15 @@ async function resolveMentions(
     if (explicitIds.length === 0) return [];
     const unique = Array.from(new Set(explicitIds.filter((id) => id !== authorId)));
     if (unique.length === 0) return [];
-    const { data } = await admin
+    const { data, error } = await admin
       .from("admins")
       .select("profile_id")
       .in("profile_id", unique)
       .eq("is_active", true)
       .returns<Array<{ profile_id: string }>>();
+    if (error) {
+      console.error(`[admins list] failed`, { code: error.code, message: error.message });
+    }
     return (data ?? []).map((r) => r.profile_id);
   }
 
@@ -230,11 +245,14 @@ async function resolveMentions(
   }
   if (orClauses.length === 0) return [];
 
-  const { data: matched } = await admin
+  const { data: matched, error: matchedErr } = await admin
     .from("profiles")
     .select("id")
     .or(orClauses.join(","))
     .returns<Array<{ id: string }>>();
+  if (matchedErr) {
+    console.error(`[profiles list] failed`, { code: matchedErr.code, message: matchedErr.message });
+  }
 
   const profileIds = Array.from(
     new Set((matched ?? []).map((r) => r.id).filter((id) => id !== authorId)),
@@ -242,12 +260,15 @@ async function resolveMentions(
   if (profileIds.length === 0) return [];
 
   // Filter to active admins.
-  const { data: admins } = await admin
+  const { data: admins, error: adminsErr } = await admin
     .from("admins")
     .select("profile_id")
     .in("profile_id", profileIds)
     .eq("is_active", true)
     .returns<Array<{ profile_id: string }>>();
+  if (adminsErr) {
+    console.error(`[admins list] failed`, { code: adminsErr.code, message: adminsErr.message });
+  }
   return (admins ?? []).map((r) => r.profile_id);
 }
 
@@ -736,7 +757,7 @@ export async function softDeleteMessage(
   return withAdmin([], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("work_item_messages")
       .select("id, author_admin_id, work_item_id, deleted_at")
       .eq("id", id)
@@ -746,6 +767,10 @@ export async function softDeleteMessage(
         work_item_id:    string;
         deleted_at:      string | null;
       }>();
+    if (rowErr) {
+      console.error(`[work_item_messages mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "message_not_found" };
     if (row.deleted_at) return { ok: true };           // idempotent no-op
 
@@ -869,11 +894,14 @@ export async function getWorkItemThread(
     const messageIds = msgs.map((m) => m.id);
     const mentionsByMsg = new Map<string, string[]>();
     if (messageIds.length > 0) {
-      const { data: mentionRows } = await admin
+      const { data: mentionRows, error: mentionRowsErr } = await admin
         .from("work_item_message_mentions")
         .select("message_id, mentioned_admin_id")
         .in("message_id", messageIds)
         .returns<Array<{ message_id: string; mentioned_admin_id: string }>>();
+      if (mentionRowsErr) {
+        console.error(`[work_item_message_mentions list] failed`, { code: mentionRowsErr.code, message: mentionRowsErr.message });
+      }
       for (const row of mentionRows ?? []) {
         const list = mentionsByMsg.get(row.message_id) ?? [];
         list.push(row.mentioned_admin_id);

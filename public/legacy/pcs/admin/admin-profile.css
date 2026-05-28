@@ -1,0 +1,102 @@
+/* =============================================================
+ * admin-profile.css — legacy PCS Cargo `pcs-admin/admin-profile.php`
+ *                     detail-view (?page=detail&id=X) page-specific styles
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin sub-pilot
+ * (page = app/[locale]/(admin)/admin/admins/[id]/page.tsx).
+ *
+ * THE PATTERN (mirrors admin-table.css):
+ *   This file holds ONLY what `admin-profile.php` itself adds on top
+ *   of the admin chrome — its inline <style> block from
+ *   pcs-admin/admin-profile.php L302-344 (the bg-main / bg-main2
+ *   gradients, the open-form button, the tab font / margin tweaks,
+ *   the textarea min-width, the pb-05 spacer). The admin chrome lives
+ *   in admin-base.css (loaded alongside).
+ *
+ *   Every selector is scoped under `.pcs-legacy`. The static-asset +
+ *   <link rel="stylesheet"> loading rule (no `import`) applies as in
+ *   every other admin-pilot transcription — Tailwind v4 / PostCSS
+ *   rejects verbatim legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- admin-profile.php L302-344 inline <style> block (verbatim) ---- */
+.pcs-legacy .bg-main {
+  background-color: transparent;
+  background-image: linear-gradient(170deg, #CC3333 0%, #F15A24 100%);
+}
+.pcs-legacy .bg-main2 {
+  background-color: transparent;
+  background-image: linear-gradient(170deg, #e54747 0%, #f5b417 100%);
+}
+.pcs-legacy .nav-tabs a {
+  font-size: 1.25rem;
+  color: #fff;
+}
+/* The two below duplicate admin-table.css L55-56 (legacy did the same — it
+ * declared the rule twice in two screens). Re-stating keeps the cascade
+ * specificity identical when both files are loaded together. */
+.pcs-legacy .table td,
+.pcs-legacy .table th {
+  padding: 0.25rem 0.5rem;
+}
+.pcs-legacy .bg-w-- {
+  background-color: #ffcac6 !important;
+}
+.pcs-legacy .bg-w-add {
+  background-color: #d3ffc7 !important;
+}
+.pcs-legacy .btn-open-form {
+  background-color: #008cff; /* สีพื้นหลัง */
+  color: white !important;   /* สีตัวอักษร */
+  border: none;
+  border-radius: 1rem;
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 0.7rem;
+  transition: background-color 0.3s; /* ส่วน transition เมื่อ hover */
+  margin: 0.5rem 0.25rem;
+}
+.pcs-legacy .btn-open-form:hover {
+  background-color: #0051bb; /* สีพื้นหลังเมื่อ hover */
+}
+.pcs-legacy textarea {
+  min-width: 350px;
+}
+.pcs-legacy .pb-05 {
+  padding-bottom: 5.25rem;
+}
+
+/* ---- Profile-header chrome (admin-profile.php L757-844) ----
+ * The cover-image area, the round profile picture frame, and the
+ * "name + role badge" stack. These styles aren't in the inline block
+ * (they came from style.css / style-2024.css in the legacy bundle);
+ * inlining them here keeps the visual identical at rest while
+ * admin-base.css stays scope-clean. */
+.pcs-legacy .text-h-profile {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #333;
+}
+.pcs-legacy .text-profile-group {
+  font-size: 0.9rem;
+}
+.pcs-legacy .text-profile-group .row {
+  margin-bottom: 0.25rem;
+}
+.pcs-legacy .hs-group {
+  padding: 0.25rem 0;
+}
+.pcs-legacy .profile-badge {
+  margin-top: 0.5rem;
+}
+.pcs-legacy .edit-img-profile {
+  position: relative;
+  top: -25px;
+  z-index: 2;
+}
+.pcs-legacy .mb--20 {
+  margin-bottom: -20px;
+}

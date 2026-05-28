@@ -55,7 +55,10 @@ export async function requestTaxInvoice(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // ── 1. Resolve source order + verify ownership + status eligibility ──
@@ -71,7 +74,7 @@ export async function requestTaxInvoice(
   let yuan_payment_id: string | null = null;
 
   if (d.order_type === "service_order") {
-    const { data: order } = await supabase
+    const { data: order, error: orderErr } = await supabase
       .from("service_orders")
       .select("h_no, profile_id, status, total_thb, title, item_count")
       .eq("h_no", d.order_id)
@@ -83,6 +86,10 @@ export async function requestTaxInvoice(
         title: string | null;
         item_count: number;
       }>();
+    if (orderErr) {
+      console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
+      return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
+    }
     if (!order)                          return { ok: false, error: "order_not_found" };
     if (order.profile_id !== user.id)    return { ok: false, error: "not_your_order" };
     if (order.status === "cancelled")    return { ok: false, error: "order_cancelled" };
@@ -97,7 +104,7 @@ export async function requestTaxInvoice(
     order_h_no           = order.h_no;
   } else if (d.order_type === "forwarder") {
     // forwarder
-    const { data: f } = await supabase
+    const { data: f, error: fErr } = await supabase
       .from("forwarders")
       .select("f_no, profile_id, status, total_price, source_warehouse, transport_type, product_type, box_count")
       .eq("f_no", d.order_id)
@@ -111,6 +118,10 @@ export async function requestTaxInvoice(
         product_type: string;
         box_count: number;
       }>();
+    if (fErr) {
+      console.error(`[forwarders mutation lookup] failed`, { code: fErr.code, message: fErr.message });
+      return { ok: false, error: `db_error:${fErr.code ?? "unknown"}` };
+    }
     if (!f)                          return { ok: false, error: "order_not_found" };
     if (f.profile_id !== user.id)    return { ok: false, error: "not_your_order" };
     if (f.status === "cancelled")    return { ok: false, error: "order_cancelled" };
@@ -123,7 +134,7 @@ export async function requestTaxInvoice(
     forwarder_f_no       = f.f_no;
   } else {
     // U4-3b — yuan_payment (ฝากโอน). order_id is the yuan_payments.id uuid.
-    const { data: yp } = await supabase
+    const { data: yp, error: ypErr } = await supabase
       .from("yuan_payments")
       .select("id, profile_id, status, thb_amount, yuan_amount, channel, paid_via_wallet")
       .eq("id", d.order_id)
@@ -136,6 +147,10 @@ export async function requestTaxInvoice(
         channel: "alipay" | "wechat" | "bank";
         paid_via_wallet: boolean;
       }>();
+    if (ypErr) {
+      console.error(`[yuan_payments mutation lookup] failed`, { code: ypErr.code, message: ypErr.message });
+      return { ok: false, error: `db_error:${ypErr.code ?? "unknown"}` };
+    }
     if (!yp)                            return { ok: false, error: "order_not_found" };
     if (yp.profile_id !== user.id)      return { ok: false, error: "not_your_order" };
     if (yp.status === "refunded" || yp.status === "failed") {
@@ -295,7 +310,10 @@ export async function getMyTaxInvoiceForOrder(
   orderId:   string,
 ): Promise<ActionResult<CustomerTaxInvoiceSummary | null>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // RLS scopes to profile_id = auth.uid() automatically — but be explicit

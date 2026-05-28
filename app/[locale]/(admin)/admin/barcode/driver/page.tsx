@@ -2,6 +2,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { ScanForm } from "../scan-form";
 
+/**
+ * Wave 16 P0-5 (2026-05-25) — schema-split reconciliation. Originally
+ * counted from REBUILT `forwarders` (English enum), now reads
+ * `tb_forwarder` with legacy numeric `fstatus`. See sibling barcode/page.tsx.
+ */
 export default async function AdminBarcodeDriverPage() {
   const admin = createAdminClient();
   const today = new Date();
@@ -9,12 +14,12 @@ export default async function AdminBarcodeDriverPage() {
   const todayIso = today.toISOString();
 
   const [outRes, deliveredRes, totalOutRes] = await Promise.all([
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "out_for_delivery"),
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "delivered").gte("date_delivered", todayIso),
-    admin.from("forwarders").select("id", { count: "exact", head: true })
-      .eq("status", "out_for_delivery"),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .in("fstatus", ["5", "6", "6.1"]),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .eq("fstatus", "7").gte("fdatestatus7", todayIso),
+    admin.from("tb_forwarder").select("id", { count: "exact", head: true })
+      .in("fstatus", ["5", "6", "6.1"]),
   ]);
 
   const outForDelivery = outRes.count       ?? 0;
@@ -26,7 +31,7 @@ export default async function AdminBarcodeDriverPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · DRIVER</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · DRIVER</p>
           <h1 className="mt-1 text-2xl font-bold">สแกนปล่อยคนขับ</h1>
           <p className="text-sm text-muted mt-0.5">
             สแกนก่อนส่งของให้ลูกค้า — สแกนซ้ำเมื่อส่งสำเร็จ
@@ -69,7 +74,7 @@ export default async function AdminBarcodeDriverPage() {
       {/* Pending list link */}
       <div className="text-center">
         <Link
-          href="/admin/forwarders?status=out_for_delivery"
+          href="/admin/forwarders?status=6"
           className="text-sm text-primary-500 hover:underline"
         >
           ดูรายการรอส่งทั้งหมด ({outForDelivery}) →

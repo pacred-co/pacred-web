@@ -87,7 +87,7 @@ export default async function WalletShopPage() {
     <main className="p-4 sm:p-6 lg:p-8 space-y-5 max-w-5xl">
       {/* Header */}
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
           {t("kicker")}
         </p>
         <h1 className="mt-1 text-2xl font-bold">{t("title")}</h1>

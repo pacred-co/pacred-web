@@ -102,23 +102,29 @@ export async function addAddressAction(formData: FormData): Promise<void> {
 
   // address.php L63-66 — SELECT the just-inserted addressID
   // (ORDER BY addressID DESC LIMIT 1).
-  const { data: lastRow } = await admin
+  const { data: lastRow, error: lastRowErr } = await admin
     .from("tb_address")
     .select("addressid")
     .eq("userid", userID)
     .order("addressid", { ascending: false })
     .limit(1)
     .maybeSingle<{ addressid: number }>();
+  if (lastRowErr) {
+    console.error(`[tb_address list] failed`, { code: lastRowErr.code, message: lastRowErr.message });
+  }
 
   // address.php L67-73 — if the customer has no main address, set this
   // new row as the main address.
   if (lastRow?.addressid != null) {
-    const { data: mainRow } = await admin
+    const { data: mainRow, error: mainRowErr } = await admin
       .from("tb_address_main")
       .select("id")
       .eq("userid", userID)
       .limit(1)
       .maybeSingle<{ id: number }>();
+    if (mainRowErr) {
+      console.error(`[tb_address_main list] failed`, { code: mainRowErr.code, message: mainRowErr.message });
+    }
 
     if (!mainRow) {
       await admin

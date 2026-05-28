@@ -77,7 +77,7 @@ export function Service() {
 
         {/* Container 1 — Section heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("sectionBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">
@@ -177,7 +177,7 @@ export function Service() {
 
         {/* Container 4 — Import/Export heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("importBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">
@@ -210,7 +210,7 @@ export function Service() {
 
         {/* Container 6 — LCL heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("lclBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">
@@ -237,7 +237,7 @@ export function Service() {
 
         {/* Container 10 — FF LCL heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("ffLclBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">
@@ -315,7 +315,7 @@ export function Service() {
 
         {/* Container 15 — Why Pacred heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("whyPacredBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">
@@ -359,7 +359,7 @@ export function Service() {
 
         {/* Container 17 — Reviews heading */}
         <div className="mx-auto w-full max-w-[1120px]">
-          <p className="text-sm font-semibold tracking-widest text-primary-500">
+          <p className="text-sm font-semibold tracking-widest text-primary-600">
             {t("reviewsBadge")}
           </p>
           <h2 className="mt-1 text-2xl font-bold">

@@ -110,10 +110,13 @@ export default async function SalesReportAddPage() {
 
   // ── The unpaid-items query, transcribed 1:1 (L61-66) ──────────
   // 1. The team's member ids — tb_users WHERE coID = $userIDMain.
-  const { data: teamUsersRaw } = await admin
+  const { data: teamUsersRaw, error: teamUsersRawErr } = await admin
     .from("tb_users")
     .select("userid")
     .eq("coid", userIDMain);
+  if (teamUsersRawErr) {
+    console.error(`[tb_users list] failed`, { code: teamUsersRawErr.code, message: teamUsersRawErr.message });
+  }
   const teamUserIds = (
     (teamUsersRaw ?? []) as unknown as { userid: string }[]
   ).map((u) => u.userid);
@@ -122,11 +125,14 @@ export default async function SalesReportAddPage() {
   if (teamUserIds.length > 0) {
     // 2. tb_user_sales WHERE usStatus=1 — only the unclaimed rows.
     //    ORDER BY date DESC (L66).
-    const { data: usRaw } = await admin
+    const { data: usRaw, error: usRawErr } = await admin
       .from("tb_user_sales")
       .select("id, usstatus, date, idf")
       .eq("usstatus", "1")
       .order("date", { ascending: false });
+    if (usRawErr) {
+      console.error(`[tb_user_sales list] failed`, { code: usRawErr.code, message: usRawErr.message });
+    }
     const usRows = (usRaw ?? []) as unknown as {
       id: number;
       usstatus: string | null;
@@ -149,10 +155,13 @@ export default async function SalesReportAddPage() {
       }
     >();
     if (forwarderIds.length > 0) {
-      const { data: fwdRaw } = await admin
+      const { data: fwdRaw, error: fwdRawErr } = await admin
         .from("tb_forwarder")
         .select("id, userid, ftrackingchn, fvolume, fweight, ftotalprice, fstatus")
         .in("id", forwarderIds);
+      if (fwdRawErr) {
+        console.error(`[tb_forwarder list] failed`, { code: fwdRawErr.code, message: fwdRawErr.message });
+      }
       for (const f of (fwdRaw ?? []) as unknown as {
         id: number;
         userid: string | null;

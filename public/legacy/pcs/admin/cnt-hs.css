@@ -1,0 +1,113 @@
+/* =============================================================
+ * cnt-hs.css — legacy PCS Cargo `pcs-admin/cnt-hs.php` (default
+ *              view) page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "ตู้-ค่าจ่าย" (container payment) ledger.
+ * Paired with the chrome bundle: public/legacy/pcs/admin/admin-base.css.
+ *
+ * Source — verbatim from cnt-hs.php L110-181 inline <style> block.
+ * Every selector is scoped under `.pcs-legacy` so the legacy
+ * Bootstrap-4 cannot leak into — or collide with — the rest of
+ * the Tailwind app, exactly as the admin-table pilot did.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- cnt-hs.php L111-113 — active tab heading colour ---- */
+.pcs-legacy .nav-link.active h4 { color: #cc3333 !important; }
+.pcs-legacy .nav-link h4        { font-size: 1.1rem !important; }
+
+/* ---- cnt-hs.php L117-120 — badge spacing override ---- */
+.pcs-legacy .pcs-sm-badge {
+  margin-left: 0px;
+  margin-right: 0px;
+}
+
+/* ---- cnt-hs.php L121-124 — tighter tab padding for cnt-hs ---- */
+.pcs-legacy .nav.nav-tabs.nav-underline .nav-item a.nav-link {
+  padding: 0.35rem 0.35rem;
+  font-size: 13.5px;
+}
+
+/* ---- cnt-hs.php L125-127 — data-dense table padding ---- */
+.pcs-legacy .table td,
+.pcs-legacy .table th {
+  padding: 0.25rem 0.5rem;
+}
+
+/* ---- cnt-hs.php L128-137 — selected-row gradient
+ * Used by the orange/red "unpaid" highlight row (.bg-color) and
+ * the variants inside table cells. */
+.pcs-legacy .bg-color {
+  background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+  color: #fff;
+}
+.pcs-legacy .bg-color a              { color: #fff !important; }
+.pcs-legacy .bg-color .text-success  { color: #fff !important; }
+
+/* ---- cnt-hs.php L138-144 — alert-danger gradient variant ---- */
+.pcs-legacy .alert-danger.bg-color {
+  background: linear-gradient(to right, #ce35a1 0%, #ee7411 100%);
+  color: #fff;
+}
+.pcs-legacy .alert-danger.bg-color td { color: #fff !important; }
+
+/* ---- cnt-hs.php L145-147 — hidden text helper (used for
+ * column 1 checkbox content). */
+.pcs-legacy .font-0 { font-size: 0px; }
+
+/* ---- cnt-hs.php L148-151 — bigger DataTables select-all checkbox ---- */
+.pcs-legacy .dt-checkboxes-select-all input {
+  height: 20px;
+  width: 20px;
+}
+
+/* ---- cnt-hs.php L152-160 — green/blue gradient for selected rows
+ * (when the user checks a row in the table). */
+.pcs-legacy .bg-color-select {
+  background: #35b842;
+  background: -webkit-linear-gradient(to right, #27b836, #1f81b3);
+  background: linear-gradient(to right, #27b836, #1f81b3);
+  color: #fff;
+}
+.pcs-legacy .bg-color-select a,
+.pcs-legacy .bg-color-select .text-success,
+.pcs-legacy .bg-color-select .text-danger {
+  color: #fff !important;
+}
+
+/* ---- cnt-hs.php L161-167 — already-paid rows opt out of the select
+ * highlight (they cannot be re-paid). */
+.pcs-legacy .paid.bg-color-select a,
+.pcs-legacy .bg-color-select .text-success,
+.pcs-legacy .bg-color-select .text-danger {
+  color: unset !important;
+}
+.pcs-legacy .paid.bg-color-select {
+  background: unset;
+  color: unset;
+}
+
+/* ---- cnt-hs.php L168-170 — clamp the cntName "details" cell to
+ * 220px max so the comma-joined เลขตู้ list doesn't blow up the
+ * table width. */
+.pcs-legacy .max-text { max-width: 220px; }
+
+/* ---- cnt-hs.php L171-174 — the bigger tab heading style ---- */
+.pcs-legacy .pcs-text-menu {
+  font-size: 1.2rem !important;
+  font-weight: 600;
+}
+
+/* ---- cnt-hs.php L175-177 — tiny 12px font helper for status badges
+ * and details lists. */
+.pcs-legacy .font-12 { font-size: 12px !important; }
+
+/* ---- cnt-hs.php L178-180 — tighter badge padding ---- */
+.pcs-legacy .pcs-badge { padding: 0rem 0.6rem; }

@@ -1,0 +1,108 @@
+/* =============================================================
+ * combine-bill.css — legacy PCS Cargo `pcs-admin/forwarder-bill.php`
+ *                    (default view + ?page=add view)
+ *                    page-specific stylesheet
+ * -------------------------------------------------------------
+ * D1 / ADR-0017 faithful-port transcription — admin port of the
+ * "ประวัติรายการรวมบิล" (combine-bill history) ledger + the
+ * minimal "?page=add" entry form.
+ *
+ * Paired with the chrome bundle:
+ *   public/legacy/pcs/admin/admin-base.css
+ *
+ * Source — verbatim from forwarder-bill.php inline <style>
+ * blocks at L400-445 (page=add) + L667-703 (page=detail; carried
+ * here for completeness because the legacy uses these utility
+ * classes across the file). The default LIST view (L1-391)
+ * itself has no inline <style> block — its visual identity comes
+ * entirely from the shared admin chrome — but a small handful of
+ * utility classes (`.f-s-0` / `.text-dis` / `.font-14`) are
+ * referenced by the table cells so we ship them here.
+ *
+ * Every selector is scoped under `.pcs-legacy` so the legacy
+ * Bootstrap-4 cannot leak into — or collide with — the rest of
+ * the Tailwind app, exactly as the admin-table + cnt-hs pilots
+ * established.
+ *
+ * The static-asset + <link rel="stylesheet"> loading rule (no
+ * `import`) applies — Tailwind v4 / PostCSS rejects verbatim
+ * legacy CSS (da4cd79).
+ *
+ * Rebrand: PCS -> PR is branding text + member codes only; class
+ * names + colours are copied unchanged so the look is identical.
+ * ============================================================= */
+
+/* ---- forwarder-bill.php L401-403 (page=add) + L668-670 (page=detail) ----
+ * Helper used to hide a checkbox/ID payload inside a <td>
+ * (DataTables checkboxes plug-in reads the cell text). */
+.pcs-legacy .f-s-0 { font-size: 0px; }
+
+/* ---- forwarder-bill.php L404-409 — tighter table padding for
+ * the nested "table-sub" tables on the detail view. Carried here
+ * because some list-view rows that render a sub-table reuse the
+ * same class. */
+.pcs-legacy .table-sub th { padding: 0.40rem 0.5rem; }
+.pcs-legacy .table-sub td { padding: 0.40rem 0.5rem; }
+
+/* ---- forwarder-bill.php L410-415 — disable hover/zebra
+ * stripes on the nested sub-table. */
+.pcs-legacy .table-hover tbody tr:hover,
+.pcs-legacy .table-striped.table-sub tbody tr:nth-of-type(odd) {
+  background-color: transparent !important;
+}
+.pcs-legacy .table-hover thead tr:hover,
+.pcs-legacy .table-striped.table-sub thead tr:nth-of-type(odd) {
+  background-color: transparent !important;
+}
+
+/* ---- forwarder-bill.php L416-418 — explicit 14px size for
+ * dense table info text (used by the add-form helper hint). */
+.pcs-legacy .font-14 { font-size: 14px; }
+
+/* ---- forwarder-bill.php L419-423 — orange "delivery-district"
+ * highlight badge applied inside the address cell. */
+.pcs-legacy .text-dis {
+  font-size: 0.9rem;
+  background: #f15a24;
+  color: #fff;
+  padding: 0.2rem;
+}
+
+/* ---- forwarder-bill.php L686-690 — red province highlight
+ * (used by detail view; carried for completeness). */
+.pcs-legacy .text-province {
+  background-color: #E9091F;
+  color: #fff;
+  padding: 0.2rem;
+}
+
+/* ---- forwarder-bill.php L697-702 — blue "PCS Forwarder"
+ * shipper tag (detail view; carried for completeness). */
+.pcs-legacy .ship-F {
+  font-size: 0.9rem;
+  background: #1e9ff2;
+  color: #fff;
+  padding: 0.2rem;
+}
+
+/* ---- forwarder-bill.php L425-444 (page=add) — sidebar / map
+ * shell used by the legacy Google-Maps routing widget on the
+ * detail view. Kept verbatim so the static markup carries the
+ * same shape; the JS map is NOT ported. */
+.pcs-legacy #sidebar {
+  flex-basis: 15rem;
+  flex-grow: 1;
+  padding: 1rem;
+  max-width: 30rem;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+.pcs-legacy #map {
+  flex-basis: 0;
+  flex-grow: 4;
+  height: 100%;
+}
+.pcs-legacy #directions-panel {
+  margin-top: 10px;
+}

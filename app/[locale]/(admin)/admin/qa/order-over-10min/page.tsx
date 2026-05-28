@@ -1,0 +1,243 @@
+/**
+ * /admin/qa/order-over-10min — สั่งซื้อรอเกิน 10 นาที (Wave 10 · Group A · SLA-breach queue)
+ *
+ * Surfaces brand-new ฝากสั่ง orders parked on hstatus='1' (รอดำเนินการ —
+ * customer submitted, admin hasn't acted) for more than 10 minutes.
+ * Tightest SLA in the QA hub — measures "how fast does the team respond
+ * to a fresh order". Each breach = a customer watching the dashboard
+ * waiting for the order to move into ราคาสรุป + payment-due state.
+ *
+ * SLA rule:  hstatus = '1' (รอดำเนินการ) AND hdate < NOW() - 10 minutes
+ * Data:      tb_header_order list + tb_users merge.
+ * Order:     hdate ASC — oldest-overdue first.
+ * Limit:     200 rows.
+ * Drill-in:  ดู / แก้ไข → /admin/service-orders/<hno>
+ *
+ * NB: The "10 minutes" rule is deliberately tight — it makes the breach
+ * obvious even on a Sunday and lets the team gate working hours by
+ * silencing/sorting this queue. (The legacy QA hub doc lists the same
+ * threshold — see /admin/qa/page.tsx QA_QUEUES.)
+ *
+ * Auth: requireAdmin(["ops","accounting"]). Super implicit.
+ */
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+
+export const dynamic = "force-dynamic";
+
+type HRow = {
+  id: number;
+  hno: string | null;
+  hdate: string | null;
+  htitle: string | null;
+  hcount: number | null;
+  hstatus: string | null;
+  htotalpricechn: number | null;
+  hnote: string | null;
+  hnoteuser: string | null;
+  htransporttype: string | null;
+  userid: string | null;
+};
+
+type URow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+};
+
+/** Helpers — wrap Date.now() so Next 16 / React 19 `react-hooks/purity`
+ *  doesn't flag the call inside the Server Component render body. */
+function nowMs(): number {
+  return Date.now();
+}
+function minutesSince(iso: string | null): number {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+}
+
+export default async function AdminQaOrderOver10MinPage() {
+  await requireAdmin(["ops", "accounting"]);
+
+  const admin = createAdminClient();
+
+  const cutoff = new Date(nowMs() - 10 * 60 * 1000).toISOString();
+
+  const { data: rowsRaw, error } = await admin
+    .from("tb_header_order")
+    .select(
+      "id,hno,hdate,htitle,hcount,hstatus,htotalpricechn,hnote,hnoteuser,htransporttype,userid",
+    )
+    .eq("hstatus", "1")
+    .lt("hdate", cutoff)
+    .order("hdate", { ascending: true })
+    .limit(200);
+
+  const rows = (rowsRaw ?? []) as unknown as HRow[];
+
+  const userIds = Array.from(new Set(rows.map((r) => r.userid).filter(Boolean))) as string[];
+  let userMap = new Map<string, URow>();
+  if (userIds.length > 0) {
+    const { data: usersRaw, error: usersRawErr } = await admin
+      .from("tb_users")
+      .select("userid,username,userlastname,usertel")
+      .in("userid", userIds);
+    if (usersRawErr) {
+      console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+    }
+    userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userid, u]));
+  }
+
+  const { count: breachCount } = await admin
+    .from("tb_header_order")
+    .select("id", { count: "exact", head: true })
+    .eq("hstatus", "1")
+    .lt("hdate", cutoff);
+
+  return (
+    <main className="p-6 lg:p-8 space-y-5">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA · SLA-BREACH</p>
+        <div className="mt-1 flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold">สั่งซื้อรอเกิน 10 นาที</h1>
+          {breachCount ? (
+            <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+              {breachCount} รายการรอตอบ
+            </span>
+          ) : (
+            <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+              ทุกออเดอร์ตอบทันเวลา
+            </span>
+          )}
+          <Link href="/admin/qa" className="text-xs text-primary-600 hover:underline">
+            ← กลับหน้า QA
+          </Link>
+        </div>
+        <p className="text-xs text-muted mt-1">
+          tb_header_order · hstatus = &apos;1&apos; (รอดำเนินการ) AND hdate &lt; NOW() − 10 นาที · เรียงเก่าสุดก่อน
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          โหลดข้อมูลไม่สำเร็จ: {error.message}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <div className="text-4xl" aria-hidden>✅</div>
+            <p className="text-sm font-medium text-foreground">ไม่มีรายการ — ทุกอย่างทันเวลา!</p>
+            <p className="text-xs text-muted">ทีมตอบออเดอร์ใหม่ทุกอันภายใน 10 นาที</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-3 py-3">เลขที่ออเดอร์</th>
+                  <th className="px-3 py-3">ลูกค้า</th>
+                  <th className="px-3 py-3">วันที่สร้าง</th>
+                  <th className="px-3 py-3 text-right">รอ</th>
+                  <th className="px-3 py-3">สินค้า</th>
+                  <th className="px-3 py-3">โหมดขนส่ง</th>
+                  <th className="px-3 py-3 text-right">ราคารวม (¥)</th>
+                  <th className="px-3 py-3">หมายเหตุลูกค้า</th>
+                  <th className="px-3 py-3">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const u = r.userid ? userMap.get(r.userid) : undefined;
+                  const customerName = u
+                    ? `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || r.userid
+                    : r.userid ?? "—";
+                  const ageMin = minutesSince(r.hdate);
+                  const ageLabel =
+                    ageMin >= 60 * 24
+                      ? `${Math.floor(ageMin / (60 * 24))} วัน`
+                      : ageMin >= 60
+                        ? `${Math.floor(ageMin / 60)} ชม.`
+                        : `${ageMin} นาที`;
+                  return (
+                    <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
+                      <td className="px-3 py-3 font-mono text-xs">
+                        {r.hno ? (
+                          <Link
+                            href={`/admin/service-orders/${encodeURIComponent(r.hno)}`}
+                            className="text-primary-600 hover:underline"
+                          >
+                            {r.hno}
+                          </Link>
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        <div className="font-mono">{r.userid ?? "—"}</div>
+                        <div>{customerName}</div>
+                        {u?.usertel ? <div className="text-muted">{u.usertel}</div> : null}
+                      </td>
+                      <td className="px-3 py-3 text-xs whitespace-nowrap">
+                        {r.hdate
+                          ? new Date(r.hdate).toLocaleString("th-TH", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                            ageMin >= 60 * 24
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : ageMin >= 60
+                                ? "bg-orange-100 text-orange-700 border-orange-200"
+                                : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                          }`}
+                        >
+                          {ageLabel}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-xs max-w-[260px] truncate" title={r.htitle ?? ""}>
+                        {r.htitle ?? "—"}
+                        {r.hcount ? <span className="text-muted"> ({r.hcount})</span> : null}
+                      </td>
+                      <td className="px-3 py-3 text-xs">{r.htransporttype ?? "—"}</td>
+                      <td className="px-3 py-3 text-right font-mono text-xs">
+                        ¥{Number(r.htotalpricechn ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td
+                        className="px-3 py-3 text-xs max-w-[240px] truncate"
+                        title={r.hnoteuser ?? ""}
+                      >
+                        {r.hnoteuser ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-xs">
+                        {r.hno ? (
+                          <Link
+                            href={`/admin/service-orders/${encodeURIComponent(r.hno)}`}
+                            className="text-primary-600 hover:underline"
+                          >
+                            ดู / แก้ไข
+                          </Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted">
+        แสดงไม่เกิน 200 แถว · เรียง <code>hdate</code> ASC (รอมานานสุดขึ้นก่อน) · ตอบลูกค้าให้เร็ว → สรุปราคา → เลื่อนสถานะเป็น 2
+      </p>
+    </main>
+  );
+}

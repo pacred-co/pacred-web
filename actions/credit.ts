@@ -49,7 +49,10 @@ export type CustomerCreditState = {
 // can render a "ยังไม่มีวงเงินเครดิต" panel cleanly.
 export async function getMyCredit(): Promise<ActionResult<CustomerCreditState>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -110,7 +113,10 @@ export async function customerPayCreditFromWallet(
   const requestedAmount = parsed.data.amount_thb ?? null;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // 1) Read current credit state (RLS-gated to own row via view).
@@ -221,7 +227,7 @@ export async function customerPayCreditFromWallet(
       // credit; return the existing pair canonically.
       await admin.from("wallet_transactions").delete().eq("id", pairId);
 
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("wallet_transactions")
         .select("reference_id")
         .eq("reference_type", "credit_settlement")
@@ -231,6 +237,9 @@ export async function customerPayCreditFromWallet(
         .order("created_at",  { ascending: false })
         .limit(1)
         .maybeSingle<{ reference_id: string | null }>();
+      if (existingErr) {
+        console.error(`[wallet_transactions list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       const existingPairId = existing?.reference_id ?? pairId;
       return {

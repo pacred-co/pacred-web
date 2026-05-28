@@ -71,11 +71,15 @@ export async function adminUpdateYuanPayment(input: AdminUpdateYuanPaymentInput)
 
   return withAdmin(["accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("yuan_payments")
       .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet")
       .eq("id", d.id)
       .maybeSingle<{ id: string; profile_id: string; status: string; yuan_amount: number; thb_amount: number; paid_via_wallet: boolean }>();
+    if (existingErr) {
+      console.error(`[yuan_payments mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
@@ -296,7 +300,7 @@ export async function adminMarkYuanPaymentRefunded(
 
   return withAdmin<{ refunded_at: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("yuan_payments")
       .select("id, profile_id, status, yuan_amount, thb_amount, paid_via_wallet, refund_slip_path")
       .eq("id", d.id)
@@ -305,6 +309,10 @@ export async function adminMarkYuanPaymentRefunded(
         yuan_amount: number; thb_amount: number;
         paid_via_wallet: boolean; refund_slip_path: string | null;
       }>();
+    if (existingErr) {
+      console.error(`[yuan_payments mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     if (!isYuanTransitionAllowed(existing.status, "refunded")) {
@@ -399,11 +407,15 @@ export async function uploadYuanRefundSlip(
   return withAdmin<{ storage_path: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("yuan_payments")
       .select("id, status")
       .eq("id", yuanPaymentId)
       .maybeSingle<{ id: string; status: string }>();
+    if (rowErr) {
+      console.error(`[yuan_payments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     // Slip is meaningful for non-final states (we may upload before the
     // actual refund-status flip in the same admin click). Accept any
@@ -471,11 +483,15 @@ export async function adminGetYuanPaymentSlipSignedUrl(
     ["super", "accounting"],
     async () => {
       const admin = createAdminClient();
-      const { data: row } = await admin
+      const { data: row, error: rowErr } = await admin
         .from("yuan_payments")
         .select("id, slip_url, id_doc_url, refund_slip_path")
         .eq("id", parsed.data.id)
         .maybeSingle<{ id: string; slip_url: string | null; id_doc_url: string | null; refund_slip_path: string | null }>();
+      if (rowErr) {
+        console.error(`[yuan_payments mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+        return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+      }
       if (!row) return { ok: false, error: "not_found" };
 
       const path =

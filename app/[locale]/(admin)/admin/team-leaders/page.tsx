@@ -33,7 +33,7 @@ export default async function AdminTeamLeadersPage() {
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">ทีมขาย — Team Leaders</h1>
           <p className="mt-1 text-sm text-muted">หัวหน้าทีมที่ได้รับค่าคอมจากออเดอร์ของลูกค้าในกลุ่ม customer_group ตน</p>
         </div>

@@ -1,9 +1,25 @@
 "use client";
 
+/**
+ * Per-row actions on `/admin/customers` — ดูรายละเอียด · Approve · ระงับ.
+ *
+ * Wave 23 P0 #3 (Task #156 · 2026-05-27 night): the red ⊘ "ระงับ" button
+ * used to mutate `tb_users.userstatus → '0'` on a single bare click — Agent K
+ * accidentally suspended PR10899 during yesterday's audit by misclicking.
+ * We now gate BOTH Approve + ระงับ behind a PacredDialog confirm step:
+ *   - Suspend → destructive (locks out an active customer immediately)
+ *   - Approve → destructive in the other direction (a misclick re-activates
+ *     a customer whose suspension was intentional)
+ * The "ดูรายละเอียด" eye button stays bare — it's a pure navigation, no
+ * server mutation. Server-action errors are surfaced via the shared `alert()`
+ * from the same hook (per AGENTS.md §0c — never silent-swallow).
+ */
+
 import { useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { Eye, CheckCircle, Ban, Loader2 } from "lucide-react";
 import { approveCustomer, suspendCustomer } from "@/actions/admin/customers";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 type Props = {
   id: string;
@@ -13,16 +29,27 @@ type Props = {
 export function CustomerRowActions({ id, status }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const { confirm, alert, dialogs } = useConfirmDialogs();
 
-  function handleApprove() {
+  async function handleApprove() {
+    const ok = await confirm(
+      `ต้องการ Approve ลูกค้า ${id} จริงๆ?\n\nลูกค้าจะกลับมาใช้งานระบบได้ทันที — ถ้าก่อนหน้านี้ถูกระงับโดยตั้งใจ การกดยืนยันจะยกเลิกการระงับนั้น.`,
+    );
+    if (!ok) return;
     start(async () => {
-      await approveCustomer(id);
+      const res = await approveCustomer(id);
+      if (!res.ok) await alert(`Approve ไม่สำเร็จ: ${res.error}`);
     });
   }
 
-  function handleSuspend() {
+  async function handleSuspend() {
+    const ok = await confirm(
+      `ต้องการระงับลูกค้า ${id} จริงๆ?\n\nลูกค้าจะไม่สามารถ login เข้าระบบได้จนกว่าจะถูก Approve ใหม่.`,
+    );
+    if (!ok) return;
     start(async () => {
-      await suspendCustomer(id);
+      const res = await suspendCustomer(id);
+      if (!res.ok) await alert(`ระงับไม่สำเร็จ: ${res.error}`);
     });
   }
 
@@ -62,6 +89,8 @@ export function CustomerRowActions({ id, status }: Props) {
           ระงับ
         </button>
       )}
+
+      {dialogs}
     </div>
   );
 }

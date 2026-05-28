@@ -1,173 +1,236 @@
+/**
+ * /admin/rates/custom-user — Rate ต่อกลุ่ม VIP (Wave 9 · 2026-05-23)
+ *
+ * 🎯 Wave 7.2 บอกว่า "Phase A migration pending — tb_priceuser_member ไม่อยู่บน prod"
+ *    → จริงๆ คือ ผมตั้งชื่อตาราง legacy ผิด ตอน banner. ตารางจริงคือ
+ *    `tb_rate_vip_kg` + `tb_rate_vip_cbm` ทั้งคู่มีอยู่บน prod แล้ว (192/192 rows)
+ *    — เลย rewrite เป็นหน้าจริงเลย ไม่ต้อง migration.
+ *
+ * Legacy source: pcs-admin/rate-vip.php (300+ LOC, 4 cascading select forms).
+ *
+ * Data model:
+ *   tb_users.coid (text · เช่น "VIP1", "OOAEOM.VIP", "THADA.VIP")
+ *     ⇣ links to
+ *   tb_rate_vip_kg(coid, sourcewarehouse '1|2', rtransporttype '1|2|3',
+ *                  rproductstype '1|2|3|4', rkg)
+ *   tb_rate_vip_cbm(coid, ..., rcbm)
+ *
+ *   13 coid groups × 2 wh × 3 transport × 4 product = 312 possible cells
+ *   (ปัจจุบันมี 192 รวม — บางคู่ไม่ตั้ง = ใช้ default จาก tb_settings)
+ *
+ * Wave 9 (initial commit): read-only view — ดูทุก VIP tier + matrix ของแต่ละ
+ * Wave 12-D (2026-05-23): inline-edit matrix · sticky save bar · before→after
+ *   diff preview · UPSERT-pair tb_rate_vip_kg + tb_rate_vip_cbm via
+ *   adminUpdateVipRateCells. Composite cell key = (coid, sourcewarehouse,
+ *   rtransporttype, rproductstype); no schema unique on the tuple so the
+ *   action does read-then-update-or-insert.
+ * Wave 13 backlog: create-tier flow (เพิ่ม coid ใหม่ + ตั้ง matrix แรกในรอบเดียว)
+ */
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { CustomUserRateRow, NewCustomUserRateRow } from "./row-form";
+import { VipRateEditForm, type VipCellInitial } from "./edit-form";
 
-// LP-1c1: admin edit for rate_custom_user — flat per-customer override.
-// Wins over rate_vip and rate_general in calc-price.ts waterfall.
-//
-// Page shows two views:
-//   - default: all current overrides grouped by customer (member_code)
-//   - ?member=PR0XXXX: focused on one customer + add-rate form pre-keyed
+export const dynamic = "force-dynamic";
 
-type Row = {
-  id:                 string;
-  profile_id:         string;
-  source_warehouse:   string;
-  transport_type:     string;
-  product_type:       string;
-  basis:              string;
-  rate:               number;
-  admin_id_update:    string | null;
-  updated_at:         string;
-  profile?:           { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;
+// Cell labels live with the client edit-form (edit-form.tsx) — single
+// source of truth so a label tweak there flows into the matrix.
+
+type KgRow = {
+  id: number;
+  coid: string;
+  sourcewarehouse: string;
+  rtransporttype: string;
+  rproductstype: string;
+  rkg: number | null;
+  adminidupdate: string | null;
+};
+type CbmRow = {
+  id: number;
+  coid: string;
+  sourcewarehouse: string;
+  rtransporttype: string;
+  rproductstype: string;
+  rcbm: number | null;
+  adminidupdate: string | null;
 };
 
-export type FlatRow = Omit<Row, "profile"> & {
-  member_code: string | null;
-  first_name:  string | null;
-  last_name:   string | null;
-};
+type SP = { coid?: string };
 
-const WAREHOUSE_LABEL: Record<string, string> = { guangzhou: "กวางโจว", yiwu: "อี้อู" };
-const TRANSPORT_LABEL: Record<string, string> = { truck: "🚚 รถ", ship: "🚢 เรือ", air: "✈️ เครื่องบิน" };
-const PRODUCT_LABEL:   Record<string, string> = { general: "ทั่วไป", tisi: "มอก.", fda: "อย.", special: "พิเศษ" };
-const BASIS_LABEL:     Record<string, string> = { kg: "กก.", cbm: "CBM" };
-
-type SP = { member?: string };
-
-function profileToFields(p: Row["profile"]): { member_code: string | null; first_name: string | null; last_name: string | null } {
-  const norm = Array.isArray(p) ? (p[0] ?? null) : p ?? null;
-  return {
-    member_code: norm?.member_code ?? null,
-    first_name:  norm?.first_name  ?? null,
-    last_name:   norm?.last_name   ?? null,
-  };
+function cellKey(r: { sourcewarehouse: string; rtransporttype: string; rproductstype: string }) {
+  return `${r.sourcewarehouse}|${r.rtransporttype}|${r.rproductstype}`;
 }
 
-export default async function AdminRatesCustomUserPage({
+/**
+ * Fuse the per-coid KG + CBM lookups into the `VipCellInitial[]` the
+ * client form consumes. We emit one entry per cell that has EITHER a KG
+ * or CBM value (or both). Empty cells aren't passed — the form will seed
+ * them locally and let the operator type values to create them.
+ */
+function buildCellMatrix(kgRows: KgRow[], cbmRows: CbmRow[]): VipCellInitial[] {
+  const out = new Map<string, VipCellInitial>();
+  for (const r of kgRows) {
+    const k = cellKey(r);
+    out.set(k, {
+      sourcewarehouse: r.sourcewarehouse as "1" | "2",
+      rtransporttype: r.rtransporttype as "1" | "2" | "3",
+      rproductstype: r.rproductstype as "1" | "2" | "3" | "4",
+      rkg: r.rkg,
+      rcbm: null,
+      rkg_admin: r.adminidupdate,
+      rcbm_admin: null,
+    });
+  }
+  for (const r of cbmRows) {
+    const k = cellKey(r);
+    const existing = out.get(k);
+    if (existing) {
+      existing.rcbm = r.rcbm;
+      existing.rcbm_admin = r.adminidupdate;
+    } else {
+      out.set(k, {
+        sourcewarehouse: r.sourcewarehouse as "1" | "2",
+        rtransporttype: r.rtransporttype as "1" | "2" | "3",
+        rproductstype: r.rproductstype as "1" | "2" | "3" | "4",
+        rkg: null,
+        rcbm: r.rcbm,
+        rkg_admin: null,
+        rcbm_admin: r.adminidupdate,
+      });
+    }
+  }
+  return Array.from(out.values());
+}
+
+export default async function CustomUserRatesPage({
   searchParams,
 }: {
   searchParams: Promise<SP>;
 }) {
   await requireAdmin(["super", "accounting"]);
   const sp = await searchParams;
+
   const admin = createAdminClient();
+  const [{ data: kgRaw }, { data: cbmRaw }] = await Promise.all([
+    admin.from("tb_rate_vip_kg").select("id,coid,sourcewarehouse,rtransporttype,rproductstype,rkg,adminidupdate").order("coid").limit(2000),
+    admin.from("tb_rate_vip_cbm").select("id,coid,sourcewarehouse,rtransporttype,rproductstype,rcbm,adminidupdate").order("coid").limit(2000),
+  ]);
+  const kgRows = ((kgRaw ?? []) as unknown as KgRow[]).filter((r) => r.coid);
+  const cbmRows = ((cbmRaw ?? []) as unknown as CbmRow[]).filter((r) => r.coid);
 
-  // Pull all custom_user rates with their owner profile in one query
-  let q = admin
-    .from("rate_custom_user")
-    .select(`*, profile:profiles!profile_id(member_code, first_name, last_name)`)
-    .order("profile_id")
-    .order("source_warehouse")
-    .order("transport_type")
-    .order("product_type")
-    .order("basis");
+  // List of unique coid groups
+  const coidList = Array.from(new Set([...kgRows.map((r) => r.coid), ...cbmRows.map((r) => r.coid)])).sort();
 
-  // Optional filter by member_code
-  if (sp.member) {
-    const ref = sp.member.trim().toUpperCase();
-    // Resolve to profile_id first so the inline filter is exact
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("member_code", ref)
-      .maybeSingle<{ id: string }>();
-    if (profile) q = q.eq("profile_id", profile.id);
+  // Customer count per coid (so admin sees "VIP1 has 47 customers")
+  const { data: usersRaw, error: usersRawErr } = await admin
+    .from("tb_users")
+    .select("coid")
+    .in("coid", coidList)
+    .limit(20000);
+  if (usersRawErr) {
+    console.error(`[tb_users list] failed`, { code: usersRawErr.code, message: usersRawErr.message });
+  }
+  const userCountByCoid = new Map<string, number>();
+  for (const u of (usersRaw ?? []) as { coid: string | null }[]) {
+    if (!u.coid) continue;
+    userCountByCoid.set(u.coid, (userCountByCoid.get(u.coid) ?? 0) + 1);
   }
 
-  const { data } = await q;
-  const rows: FlatRow[] = ((data ?? []) as Row[]).map((r) => {
-    const p = profileToFields(r.profile);
-    return { ...r, ...p, profile: undefined as never };
-  });
-
-  // Group by member_code for display
-  type Group = { profile_id: string; member_code: string | null; name: string; rows: FlatRow[] };
-  const groups: Group[] = [];
-  for (const r of rows) {
-    const last = groups[groups.length - 1];
-    const name = [r.first_name, r.last_name].filter(Boolean).join(" ") || "—";
-    if (last && last.profile_id === r.profile_id) {
-      last.rows.push(r);
-    } else {
-      groups.push({ profile_id: r.profile_id, member_code: r.member_code, name, rows: [r] });
-    }
-  }
+  // If coid selected — drill into the matrix for that tier
+  const selectedCoid = sp.coid && coidList.includes(sp.coid) ? sp.coid : null;
+  const selectedKg = selectedCoid ? kgRows.filter((r) => r.coid === selectedCoid) : [];
+  const selectedCbm = selectedCoid ? cbmRows.filter((r) => r.coid === selectedCoid) : [];
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · อัตราขนส่ง (per-customer)</p>
-          <h1 className="mt-1 text-2xl font-bold">ตารางเรท Custom (รายลูกค้า) — แก้ไขได้</h1>
-          <p className="mt-1 text-sm text-muted">
-            เรท flat ที่ผูกกับลูกค้าคนเดียว — แทนที่ VIP/general เมื่อลูกค้านี้ใช้เส้นทาง+ประเภทตามคีย์
-          </p>
-        </div>
-        <Link href="/admin/rates" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          ← กลับสรุปอัตรา
-        </Link>
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">
+          ADMIN · RATES · ตามกลุ่ม VIP
+        </p>
+        <h1 className="mt-1 text-2xl font-bold">Rate Override ตามกลุ่ม VIP</h1>
+        <p className="mt-1 text-sm text-muted">
+          Wave 12-D inline edit · อ่าน-เขียน tb_rate_vip_kg + tb_rate_vip_cbm ·
+          เพิ่มกลุ่มใหม่ → Wave 13
+        </p>
       </div>
 
-      {/* Filter chip */}
-      {sp.member && (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-primary-700">
-            กรอง: <span className="font-mono">{sp.member}</span>
-          </span>
-          <Link href="/admin/rates/custom-user" className="text-muted hover:underline">ล้างตัวกรอง</Link>
-        </div>
+      <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {coidList.map((c) => {
+          const userCount = userCountByCoid.get(c) ?? 0;
+          const kgCount = kgRows.filter((r) => r.coid === c).length;
+          const cbmCount = cbmRows.filter((r) => r.coid === c).length;
+          const isActive = c === selectedCoid;
+          return (
+            <Link
+              key={c}
+              href={`/admin/rates/custom-user?coid=${encodeURIComponent(c)}`}
+              className={`rounded-2xl border p-4 transition-all ${
+                isActive
+                  ? "border-primary-500 bg-primary-50 shadow-md"
+                  : "border-border bg-white dark:bg-surface shadow-sm hover:shadow-md hover:border-primary-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold font-mono">{c}</h3>
+                <span className="text-xs rounded-full bg-surface-alt px-2 py-0.5 text-muted">
+                  {userCount} คน
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {kgCount} KG rates · {cbmCount} CBM rates
+              </p>
+            </Link>
+          );
+        })}
+      </section>
+
+      {selectedCoid && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="text-lg font-bold">
+                Matrix สำหรับ <span className="font-mono text-primary-600">{selectedCoid}</span>
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                {userCountByCoid.get(selectedCoid) ?? 0} ลูกค้าใน tier นี้ · แก้ไขแล้วกด &ldquo;บันทึก&rdquo; ที่แถบล่าง
+              </p>
+            </div>
+            <Link
+              href="/admin/rates/custom-user"
+              className="text-xs text-muted hover:text-foreground"
+            >
+              ล้างการเลือก
+            </Link>
+          </div>
+
+          <VipRateEditForm
+            coid={selectedCoid}
+            cells={buildCellMatrix(selectedKg, selectedCbm)}
+          />
+        </section>
       )}
 
-      {/* Existing rates grouped by customer */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="font-bold text-sm">
-            ลูกค้า {groups.length} ราย · {rows.length} แถวรวม
-          </h2>
-          <span className="text-[10px] text-muted">จัดเรียงตามลูกค้า → คีย์</span>
-        </div>
-        {groups.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">
-            {sp.member ? `ลูกค้า "${sp.member}" ยังไม่มี custom rate` : "ยังไม่มี custom rate ใครเลย — เพิ่มด้านล่าง"}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-4 py-3">ลูกค้า</th>
-                  <th className="px-4 py-3">โกดัง</th>
-                  <th className="px-4 py-3">ขนส่ง</th>
-                  <th className="px-4 py-3">ประเภท</th>
-                  <th className="px-4 py-3">หน่วย</th>
-                  <th className="px-4 py-3 text-right">rate</th>
-                  <th className="px-4 py-3">อัพเดท</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((g) =>
-                  g.rows.map((r, i) => (
-                    <CustomUserRateRow
-                      key={r.id}
-                      row={r}
-                      memberCell={i === 0 ? { code: g.member_code, name: g.name } : null}
-                      warehouseLabel={WAREHOUSE_LABEL[r.source_warehouse] ?? r.source_warehouse}
-                      transportLabel={TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}
-                      productLabel={PRODUCT_LABEL[r.product_type] ?? r.product_type}
-                      basisLabel={BASIS_LABEL[r.basis] ?? r.basis}
-                    />
-                  )),
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {!selectedCoid && (
+        <p className="text-sm text-muted italic">
+          เลือกกลุ่ม VIP ด้านบนเพื่อดู matrix ของแต่ละกลุ่ม
+        </p>
+      )}
 
-      <NewCustomUserRateRow defaultMember={sp.member ?? ""} />
+      <div className="flex gap-2 flex-wrap pt-2">
+        <Link
+          href="/admin/rates/general"
+          className="rounded-md border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
+        >
+          ← Rate default
+        </Link>
+        <Link
+          href="/admin/rates/custom-hs"
+          className="rounded-md border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
+        >
+          Rate override ตาม HS code →
+        </Link>
+      </div>
     </main>
   );
 }

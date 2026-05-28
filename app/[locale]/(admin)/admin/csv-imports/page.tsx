@@ -4,7 +4,7 @@ import { sweepStaleImportingRows } from "@/lib/admin/csv-import-sweep";
 import { CsvImportRowActions } from "./row-actions";
 
 const STATUS_BADGE: Record<string, string> = {
-  uploaded:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  uploaded:  "bg-amber-50 text-amber-700 border-amber-200",
   previewed: "bg-blue-50 text-blue-700 border-blue-200",
   importing: "bg-amber-50 text-amber-700 border-amber-200",
   imported:  "bg-green-50 text-green-700 border-green-200",
@@ -33,7 +33,7 @@ export default async function AdminCsvImportsPage() {
   // zombie 'importing' row left behind by a crashed import process.
   await sweepStaleImportingRows(admin);
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("csv_imports")
     .select(`
       id, filename, target_table, status,
@@ -43,6 +43,9 @@ export default async function AdminCsvImportsPage() {
     `)
     .order("created_at", { ascending: false })
     .limit(100);
+  if (error) {
+    console.error(`[csv_imports list] failed`, { code: error.code, message: error.message });
+  }
 
   type RawRow = {
     id: string; filename: string; target_table: string; status: string;
@@ -59,7 +62,7 @@ export default async function AdminCsvImportsPage() {
     <main className="p-6 lg:p-8 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
           <h1 className="mt-1 text-2xl font-bold">นำเข้าข้อมูล CSV</h1>
           <p className="mt-1 text-sm text-muted">
             อัปโหลดไฟล์ CSV → พรีวิว 5 แถวแรก → ยืนยันนำเข้าตารางเป้าหมาย.

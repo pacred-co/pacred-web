@@ -50,7 +50,10 @@ export async function submitContactMessage(
 
   // Attach profile_id if signed in (so the user can see their submissions)
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
 
   // Insert via admin client so RLS doesn't block anon submits
   const admin = createAdminClient();
@@ -76,11 +79,14 @@ export async function submitContactMessage(
   // Fan-out notifications to ops + super admins (best-effort — don't
   // fail the user submit if notify breaks)
   try {
-    const { data: targetAdmins } = await admin
+    const { data: targetAdmins, error: targetAdminsErr } = await admin
       .from("admins")
       .select("profile_id")
       .in("role", ["ops", "super"])
       .eq("is_active", true);
+    if (targetAdminsErr) {
+      console.error(`[admins list] failed`, { code: targetAdminsErr.code, message: targetAdminsErr.message });
+    }
 
     const seen = new Set<string>();
     for (const row of targetAdmins ?? []) {

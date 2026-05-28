@@ -1,12 +1,19 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { DriverActionButtons } from "./action-buttons";
 
 // CT-7 — Driver "งานของฉัน" landing.
 // Driver lands here, sees own forwarder_driver assignments (status IN 1/2)
-// + completed-today (status 4). Per row: forwarder details + linked
-// cargo_shipment + container code (cargo spine) + accept / complete buttons.
+// + completed-today (status 4). Per row: forwarder details + accept / complete buttons.
+//
+// Wave 3 cleanup (2026-05-20 ค่ำ): the cargo_shipments + container_code
+// lookup was removed when the spine was retired (D1 Option A). The
+// container number for each forwarder lives directly on `forwarders.cabinet_number`
+// / `forwarders.tracking_th` and is rendered inline. The scan flow now
+// targets the legacy barcode routes (`/admin/barcode/driver`).
 //
 // Self-row only — server action driverUpdateOwnAssignmentStatus enforces it.
 // Sidebar entry shows for driver role (super/ops also see for oversight).
@@ -25,6 +32,7 @@ type AssignmentRow = {
     transport_type:     string;
     status:             string;
     tracking_th:        string | null;
+    cabinet_number:     string | null;
     ship_first_name:    string | null;
     ship_last_name:     string | null;
     ship_phone:         string | null;
@@ -43,7 +51,7 @@ const STATUS_LABEL: Record<number, string> = {
   4: "ส่งงานเสร็จ",
 };
 const STATUS_BADGE: Record<number, string> = {
-  1: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  1: "bg-amber-50 text-amber-700 border-amber-200",
   2: "bg-blue-50 text-blue-700 border-blue-200",
   3: "bg-gray-50 text-gray-600 border-gray-200",
   4: "bg-green-50 text-green-700 border-green-200",
@@ -63,12 +71,12 @@ export default async function DriverRunsPage() {
   const admin = createAdminClient();
 
   // Active assignments (1 = waiting accept, 2 = accepted in progress)
-  const { data: activeRaw } = await admin
+  const { data: activeRaw, error: activeRawErr } = await admin
     .from("forwarder_driver")
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
       forwarder:forwarders!forwarder_id (
-        f_no, total_price, transport_type, status, tracking_th,
+        f_no, total_price, transport_type, status, tracking_th, cabinet_number,
         ship_first_name, ship_last_name, ship_phone, ship_address_line,
         ship_sub_district, ship_district, ship_province, ship_postal_code
       )
@@ -76,17 +84,20 @@ export default async function DriverRunsPage() {
     .eq("profile_id", user.id)
     .in("status", [1, 2])
     .order("fd_date", { ascending: true });
+  if (activeRawErr) {
+    console.error(`[forwarder_driver list] failed`, { code: activeRawErr.code, message: activeRawErr.message });
+  }
   const activeRows = ((activeRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
   // Completed today (status 4 + completed_at today, BKK)
   const todayBkk = new Date();
   todayBkk.setHours(0, 0, 0, 0);
-  const { data: doneRaw } = await admin
+  const { data: doneRaw, error: doneRawErr } = await admin
     .from("forwarder_driver")
     .select(`
       id, forwarder_id, status, fd_date, accepted_at, completed_at, note,
       forwarder:forwarders!forwarder_id (
-        f_no, total_price, transport_type, status, tracking_th,
+        f_no, total_price, transport_type, status, tracking_th, cabinet_number,
         ship_first_name, ship_last_name, ship_phone, ship_address_line,
         ship_sub_district, ship_district, ship_province, ship_postal_code
       )
@@ -95,37 +106,23 @@ export default async function DriverRunsPage() {
     .eq("status", 4)
     .gte("completed_at", todayBkk.toISOString())
     .order("completed_at", { ascending: false });
+  if (doneRawErr) {
+    console.error(`[forwarder_driver list] failed`, { code: doneRawErr.code, message: doneRawErr.message });
+  }
   const doneRows = ((doneRaw ?? []) as AssignmentRow[]).map((r) => ({ ...r, forwarder: normForwarder(r.forwarder) }));
 
-  // Pull cargo_shipments + container for active forwarders (single IN-query)
-  const activeForwarderIds = activeRows.map((r) => r.forwarder_id);
-  const cargoByForwarderId = new Map<string, { shipment_code: string; container_code: string | null }>();
-  if (activeForwarderIds.length > 0) {
-    const { data: shipments } = await admin
-      .from("cargo_shipments")
-      .select("shipment_code, forwarder_f_no, container:cargo_containers!cargo_container_id(code)")
-      .in("forwarder_f_no", activeRows.map((r) => r.forwarder?.f_no).filter((s): s is string => !!s));
-    type Embed = { code: string | null };
-    type Row = { shipment_code: string; forwarder_f_no: string; container: Embed | Embed[] | null };
-    // Build a Map keyed on f_no first (since shipments link by f_no not forwarder_id)
-    const byFno = new Map<string, { shipment_code: string; container_code: string | null }>();
-    for (const s of (shipments ?? []) as Row[]) {
-      if (byFno.has(s.forwarder_f_no)) continue;
-      const cont = Array.isArray(s.container) ? (s.container[0] ?? null) : s.container;
-      byFno.set(s.forwarder_f_no, { shipment_code: s.shipment_code, container_code: cont?.code ?? null });
-    }
-    // Map forwarder_id → cargo via f_no
-    for (const r of activeRows) {
-      const fno = r.forwarder?.f_no;
-      if (fno && byFno.has(fno)) cargoByForwarderId.set(r.forwarder_id, byFno.get(fno)!);
-    }
-  }
+  // Wave 3 cleanup: spine retired (cargo_shipments → tb_forwarder).
+  // The container number for each forwarder is already on
+  // `forwarders.cabinet_number`; we surface it inline below in lieu of
+  // the deleted spine join.
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/driver-runs" />
+      <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">DRIVER · งานของฉัน</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">DRIVER · งานของฉัน</p>
           <h1 className="mt-1 text-2xl font-bold">งานขนส่งที่ได้รับมอบหมาย</h1>
           <p className="mt-1 text-sm text-muted">รับงาน → ออกของจากโกดัง (สแกน) → ส่งถึงลูกค้า (สแกนซ้ำ) → กดเสร็จ</p>
         </div>
@@ -146,7 +143,6 @@ export default async function DriverRunsPage() {
           <ul className="divide-y divide-border">
             {activeRows.map((r) => {
               const fwd = r.forwarder;
-              const cargo = cargoByForwarderId.get(r.forwarder_id);
               const addr = fwd
                 ? [fwd.ship_address_line, fwd.ship_sub_district && `ต.${fwd.ship_sub_district}`, fwd.ship_district && `อ.${fwd.ship_district}`, fwd.ship_province && `จ.${fwd.ship_province}`, fwd.ship_postal_code]
                     .filter(Boolean).join(" ")
@@ -172,8 +168,8 @@ export default async function DriverRunsPage() {
                       )}
                       <p className="text-xs text-muted">{addr}</p>
                       {fwd?.tracking_th && <p className="text-[10px] text-muted font-mono">TH tracking: {fwd.tracking_th}</p>}
-                      {cargo?.container_code && (
-                        <p className="text-[10px] text-muted">📦 ตู้: <span className="font-mono">{cargo.container_code}</span></p>
+                      {fwd?.cabinet_number && (
+                        <p className="text-[10px] text-muted">📦 ตู้: <span className="font-mono">{fwd.cabinet_number}</span></p>
                       )}
                       {r.note && <p className="text-[10px] text-amber-700 italic">📝 {r.note}</p>}
                     </div>
@@ -182,7 +178,7 @@ export default async function DriverRunsPage() {
                       <p className="text-[10px] text-muted mt-1">มอบหมาย {new Date(r.fd_date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</p>
                     </div>
                   </div>
-                  <DriverActionButtons assignmentId={r.id} status={r.status} shipmentCode={cargo?.shipment_code ?? null} />
+                  <DriverActionButtons assignmentId={r.id} status={r.status} shipmentCode={null} />
                 </li>
               );
             })}
@@ -219,5 +215,6 @@ export default async function DriverRunsPage() {
         Tip: รับงานภายใน 17 ชม.ไม่งั้นระบบจะปล่อยให้ admin มอบหมายใหม่ (status → หมดเวลา)
       </p>
     </main>
+    </>
   );
 }

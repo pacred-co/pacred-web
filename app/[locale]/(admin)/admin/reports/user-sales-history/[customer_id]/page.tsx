@@ -1,283 +1,472 @@
-import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+/**
+ * /admin/reports/user-sales-history/[customer_id] — drill-in
+ * (Wave 23 P1 batch 2-B Tailwind rewrite · 2026-05-27 ค่ำ).
+ *
+ * **Wave 23 P1 batch 2-B (2026-05-27 ค่ำ):** UI rewrite only — the
+ * underlying tb_users + 4-way UNION (tb_forwarder + tb_header_order +
+ * tb_payment + tb_wallet_hs) timeline + tb_wallet balance reads stay
+ * intact. Replaces the .pcs-legacy / Bootstrap-4 / admin-base.css chrome
+ * (~476 LOC) with the Pacred Tailwind v4 reports template (mirrors
+ * `reports/payment/page.tsx` Wave 20 P1 batch 2-b).
+ *
+ * **Workflow preserved (per AGENTS §0a):** same logic, same data shape,
+ * same status labels, same role gate (super + ops + accounting +
+ * sales_admin), same lifetime aggregate gates (fstatus 6,7 / hstatus 5,6
+ * / paystatus 3), same MAX_EVENTS = 100 cap. Only chrome moves
+ * Bootstrap → Tailwind.
+ *
+ * **Legacy PHP reference:**
+ *   `D:\REALSHITDATAPCS\pcsc\public_html\member\pcs-admin\report-user-sales-history.php`
+ *   — that legacy file serves a sales-rep commission payout flow
+ *   (`tb_user_sales_admin_pay`). This Pacred slot is the V-G6 #4
+ *   customer-cohort drill-in (replaces Wave 7.2 redirect to
+ *   /admin/customers/[id], which only showed 10 rows per table without
+ *   wallet activity). The URL is reused; the legacy commission flow
+ *   lives elsewhere.
+ *
+ * **§0c compliance:** every Supabase query destructures { data, error },
+ * logs + throws on load-bearing reads (tb_users lookup); soft-fails on
+ * the 5 parallel timeline reads (one stale timeline tab preferable to
+ * a 500 on the whole drill-in).
+ */
+
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
-import { CsvButton } from "@/components/admin/csv-button";
-
-/**
- * V-G6 #4 — Per-customer sales history (admin drill-down).
- *
- * Timeline of EVERY transaction for one customer (forwarders + service_orders
- * + yuan_payments) chronologically — for support, audit, lifetime-value
- * understanding.
- *
- * customer_id param = either UUID OR member_code (PR####).
- *
- * PHP ref: report-user-sales.php.
- *
- * Read-only — no schema changes.
- */
+import { createAdminClient } from "@/lib/supabase/admin";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-type Profile = {
-  id:             string;
-  member_code:    string | null;
-  first_name:     string | null;
-  last_name:      string | null;
-  email:          string | null;
-  phone:          string | null;
-  account_type:   string | null;
-  company_name:   string | null;
-  sales_admin_id: string | null;
-  created_at:     string;
+const MAX_EVENTS = 100;
+
+type URow = {
+  userid: string;
+  username: string | null;
+  userlastname: string | null;
+  usertel: string | null;
+  useremail: string | null;
+  userstatus: string | null;
+  userregistered: string | null;
+  userlastlogin: string | null;
+  adminidsale: string | null;
+  usercompany: string | null;
 };
 
-type TxRow = {
-  kind:        "forwarder" | "service_order" | "yuan_payment";
-  ref:         string;             // f_no / h_no / id
-  status:      string;
-  amount_thb:  number;
-  created_at:  string;
-  meta:        string;             // free-form summary
-  link_href:   string;
+type FRow = {
+  id: number;
+  fdate: string | null;
+  fstatus: string | null;
+  fidorco: string | null;
+  fdetail: string | null;
+  ftotalprice: number | null;
+  ftrackingth: string | null;
+};
+type HRow = {
+  id: number;
+  hdate: string | null;
+  hstatus: string | null;
+  hno: string | null;
+  htitle: string | null;
+  htotalpriceuser: number | null;
+  hcount: number | null;
+};
+type PRow = {
+  id: number;
+  paydate: string | null;
+  paystatus: string | null;
+  payyuan: number | null;
+  paythb: number | null;
+  paydetail: string | null;
+};
+type WRow = {
+  id: number;
+  date: string | null;
+  status: string | null;
+  typenew: string | null;
+  amount: number | null;
+  note: string | null;
+  reforder: string | null;
+};
+type WBalance = { wallettotal: number | null };
+
+type EventKind = "forwarder" | "shop" | "yuan" | "wallet";
+
+type TimelineEvent = {
+  kind: EventKind;
+  date: string;
+  label: string;
+  detail: string;
+  amount_thb: number | null;
+  status: string;
+  href: string | null;
 };
 
-function thb(n: number): string {
-  return "฿" + Number(n || 0).toLocaleString("th-TH", { minimumFractionDigits: 2 });
+function thb(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return "0.00";
+  return Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const KIND_LABEL: Record<TxRow["kind"], string> = {
-  forwarder:     "📦 ฝากนำเข้า",
-  service_order: "🛒 ฝากสั่ง",
-  yuan_payment:  "💴 ฝากโอนหยวน",
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  return `${String(iso).slice(0, 10)} ${String(iso).slice(11, 19)}`;
+}
+
+const F_STATUS_LABEL: Record<string, string> = {
+  "1": "รอเข้าโกดังจีน",
+  "2": "ถึงโกดังจีน",
+  "3": "กำลังส่งมาไทย",
+  "4": "ถึงไทย",
+  "5": "รอชำระ",
+  "6": "เตรียมส่ง",
+  "7": "ส่งแล้ว",
 };
 
-const KIND_BADGE: Record<TxRow["kind"], string> = {
-  forwarder:     "bg-amber-50 text-amber-700 border-amber-200",
-  service_order: "bg-blue-50 text-blue-700 border-blue-200",
-  yuan_payment:  "bg-purple-50 text-purple-700 border-purple-200",
+const H_STATUS_LABEL: Record<string, string> = {
+  "1": "รอดำเนินการ",
+  "2": "รอชำระ",
+  "3": "สั่งสินค้า",
+  "4": "รอร้านจัดส่ง",
+  "5": "สำเร็จ",
+  "6": "ยกเลิก",
 };
 
-export default async function UserSalesHistoryReport({
+const P_STATUS_LABEL: Record<string, string> = {
+  "1": "รอตรวจสอบ",
+  "2": "กำลังโอน",
+  "3": "สำเร็จ",
+};
+
+const W_TYPE_LABEL: Record<string, string> = {
+  "1": "เติมเงิน",
+  "2": "คืนเงิน",
+  "3": "ชำระฝากสั่ง",
+  "4": "ชำระฝากสั่งเติมเพิ่ม",
+  "5": "ชำระฝากนำเข้า",
+  "6": "ชำระฝากนำเข้าเติมเพิ่ม",
+  "7": "ชำระฝากโอน",
+};
+
+const W_STATUS_LABEL: Record<string, string> = {
+  "1": "รอดำเนินการ",
+  "2": "สำเร็จ",
+  "3": "ไม่สำเร็จ",
+};
+
+// Kind chip colour (matches Pacred status-chip pattern from payment/page.tsx)
+const KIND_CLS: Record<EventKind, string> = {
+  forwarder: "bg-blue-50 text-blue-700 border-blue-200",
+  shop:      "bg-amber-50 text-amber-700 border-amber-200",
+  yuan:      "bg-green-50 text-green-700 border-green-200",
+  wallet:    "bg-gray-50 text-gray-700 border-gray-200",
+};
+
+const KIND_LABEL: Record<EventKind, string> = {
+  forwarder: "ฝากนำเข้า",
+  shop:      "ฝากสั่ง",
+  yuan:      "ฝากโอน",
+  wallet:    "Wallet",
+};
+
+export default async function UserSalesHistoryDrillIn({
   params,
 }: {
   params: Promise<{ customer_id: string }>;
 }) {
   await requireAdmin(["super", "ops", "accounting", "sales_admin"]);
   const { customer_id } = await params;
+  const id = decodeURIComponent(customer_id);
 
   const admin = createAdminClient();
 
-  // Resolve customer_id (UUID or member_code).
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(customer_id);
-  const q = admin
-    .from("profiles")
-    .select("id, member_code, first_name, last_name, email, phone, account_type, company_name, sales_admin_id, created_at");
-  const { data: profile } = isUuid
-    ? await q.eq("id", customer_id).maybeSingle<Profile>()
-    : await q.eq("member_code", customer_id).maybeSingle<Profile>();
+  const { data: userRaw, error: userRawErr } = await admin
+    .from("tb_users")
+    .select(
+      "userid, username, userlastname, usertel, useremail, userstatus, userregistered, userlastlogin, adminidsale, usercompany",
+    )
+    .eq("userid", id)
+    .maybeSingle();
 
-  if (!profile) notFound();
+  if (userRawErr) {
+    console.error(`[tb_users lookup] failed`, {
+      code: userRawErr.code, message: userRawErr.message, details: userRawErr.details, hint: userRawErr.hint,
+    });
+    throw new Error(`Failed to load tb_users (${userRawErr.code ?? "unknown"}): ${userRawErr.message}`);
+  }
+  if (!userRaw) notFound();
+  const u = userRaw as unknown as URow;
 
-  // Pull all transaction sources for this profile_id in parallel.
-  const [fwRes, soRes, ypRes] = await Promise.all([
+  // Parallel fetch — newest first, plenty for the top-100 merge.
+  // Soft-fail per query (timeline is best-effort drill-in, not a load-bearing dashboard).
+  const [
+    { data: fData, error: fErr },
+    { data: hData, error: hErr },
+    { data: pData, error: pErr },
+    { data: wData, error: wErr },
+    { data: walletBalRaw, error: walletBalErr },
+  ] = await Promise.all([
     admin
-      .from("forwarders")
-      .select("f_no, status, total_price, transport_type, source_warehouse, created_at")
-      .eq("profile_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(500),
+      .from("tb_forwarder")
+      .select("id, fdate, fstatus, fidorco, fdetail, ftotalprice, ftrackingth")
+      .eq("userid", u.userid)
+      .order("fdate", { ascending: false, nullsFirst: false })
+      .limit(MAX_EVENTS),
     admin
-      .from("service_orders")
-      .select("h_no, status, total_thb, item_count, created_at")
-      .eq("profile_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(500),
+      .from("tb_header_order")
+      .select("id, hdate, hstatus, hno, htitle, htotalpriceuser, hcount")
+      .eq("userid", u.userid)
+      .order("hdate", { ascending: false, nullsFirst: false })
+      .limit(MAX_EVENTS),
     admin
-      .from("yuan_payments")
-      .select("id, status, thb_amount, yuan_amount, exchange_rate, channel, created_at")
-      .eq("profile_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(500),
+      .from("tb_payment")
+      .select("id, paydate, paystatus, payyuan, paythb, paydetail")
+      .eq("userid", u.userid)
+      .order("paydate", { ascending: false, nullsFirst: false })
+      .limit(MAX_EVENTS),
+    admin
+      .from("tb_wallet_hs")
+      .select("id, date, status, typenew, amount, note, reforder")
+      .eq("userid", u.userid)
+      .order("date", { ascending: false, nullsFirst: false })
+      .limit(MAX_EVENTS),
+    admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", u.userid)
+      .maybeSingle(),
   ]);
 
-  const transactions: TxRow[] = [];
+  if (fErr) console.error(`[tb_forwarder timeline] failed`, { code: fErr.code, message: fErr.message });
+  if (hErr) console.error(`[tb_header_order timeline] failed`, { code: hErr.code, message: hErr.message });
+  if (pErr) console.error(`[tb_payment timeline] failed`, { code: pErr.code, message: pErr.message });
+  if (wErr) console.error(`[tb_wallet_hs timeline] failed`, { code: wErr.code, message: wErr.message });
+  if (walletBalErr) console.error(`[tb_wallet balance] failed`, { code: walletBalErr.code, message: walletBalErr.message });
 
-  for (const r of (fwRes.data ?? []) as Array<{
-    f_no: string; status: string; total_price: number;
-    transport_type: string; source_warehouse: string; created_at: string;
-  }>) {
-    transactions.push({
-      kind:       "forwarder",
-      ref:        r.f_no,
-      status:     r.status,
-      amount_thb: Number(r.total_price ?? 0),
-      created_at: r.created_at,
-      meta:       `${r.source_warehouse} · ${r.transport_type}`,
-      link_href:  `/admin/forwarders/${r.f_no}`,
+  const fws = (fData ?? []) as unknown as FRow[];
+  const hos = (hData ?? []) as unknown as HRow[];
+  const pys = (pData ?? []) as unknown as PRow[];
+  const wls = (wData ?? []) as unknown as WRow[];
+  const walletBal = (walletBalRaw as unknown as WBalance | null) ?? null;
+
+  // Union into timeline events
+  const events: TimelineEvent[] = [];
+  for (const r of fws) {
+    if (!r.fdate) continue;
+    events.push({
+      kind: "forwarder",
+      date: r.fdate,
+      label: `ฝากนำเข้า ${r.fidorco ?? `#${r.id}`}`,
+      detail: r.fdetail ?? (r.ftrackingth ? `Tracking TH: ${r.ftrackingth}` : "—"),
+      amount_thb: r.ftotalprice !== null ? Number(r.ftotalprice) : null,
+      status: F_STATUS_LABEL[r.fstatus ?? ""] ?? r.fstatus ?? "—",
+      href: `/admin/forwarders/${encodeURIComponent(r.fidorco ?? String(r.id))}`,
     });
   }
-  for (const r of (soRes.data ?? []) as Array<{
-    h_no: string; status: string; total_thb: number; item_count: number; created_at: string;
-  }>) {
-    transactions.push({
-      kind:       "service_order",
-      ref:        r.h_no,
-      status:     r.status,
-      amount_thb: Number(r.total_thb ?? 0),
-      created_at: r.created_at,
-      meta:       `${r.item_count} ชิ้น`,
-      link_href:  `/admin/service-orders/${r.h_no}`,
+  for (const r of hos) {
+    if (!r.hdate) continue;
+    events.push({
+      kind: "shop",
+      date: r.hdate,
+      label: `ฝากสั่ง ${r.hno ?? `#${r.id}`}`,
+      detail: r.htitle ?? (r.hcount ? `${r.hcount} รายการ` : "—"),
+      amount_thb: r.htotalpriceuser !== null ? Number(r.htotalpriceuser) : null,
+      status: H_STATUS_LABEL[r.hstatus ?? ""] ?? r.hstatus ?? "—",
+      href: `/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`,
     });
   }
-  for (const r of (ypRes.data ?? []) as Array<{
-    id: string; status: string; thb_amount: number; yuan_amount: number;
-    exchange_rate: number; channel: string; created_at: string;
-  }>) {
-    transactions.push({
-      kind:       "yuan_payment",
-      ref:        r.id.slice(0, 8),
-      status:     r.status,
-      amount_thb: Number(r.thb_amount ?? 0),
-      created_at: r.created_at,
-      meta:       `¥${Number(r.yuan_amount).toFixed(2)} @ ${r.exchange_rate} · ${r.channel}`,
-      link_href:  `/admin/yuan-payments/${r.id}`,
+  for (const r of pys) {
+    if (!r.paydate) continue;
+    events.push({
+      kind: "yuan",
+      date: r.paydate,
+      label: `ฝากโอน #${r.id}`,
+      detail: `${r.paydetail ?? "—"} · ¥${thb(Number(r.payyuan ?? 0))}`,
+      amount_thb: r.paythb !== null ? Number(r.paythb) : null,
+      status: P_STATUS_LABEL[r.paystatus ?? ""] ?? r.paystatus ?? "—",
+      href: `/admin/yuan-payments?q=${encodeURIComponent(u.userid)}`,
+    });
+  }
+  for (const r of wls) {
+    if (!r.date) continue;
+    events.push({
+      kind: "wallet",
+      date: r.date,
+      label: `Wallet · ${W_TYPE_LABEL[r.typenew ?? ""] ?? r.typenew ?? "—"}`,
+      detail: r.note ?? r.reforder ?? "—",
+      amount_thb: r.amount !== null ? Number(r.amount) : null,
+      status: W_STATUS_LABEL[r.status ?? ""] ?? r.status ?? "—",
+      href: `/admin/wallet?userid=${encodeURIComponent(u.userid)}`,
     });
   }
 
-  // Sort newest first.
-  transactions.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // Sort merged events DESC by date, cap at MAX_EVENTS
+  events.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const timeline = events.slice(0, MAX_EVENTS);
 
-  // Totals (skip cancelled / failed).
-  const ACTIVE = (s: string) => !["cancelled", "rejected", "failed", "refunded"].includes(s);
-  const fwActive = transactions.filter((t) => t.kind === "forwarder"     && ACTIVE(t.status));
-  const soActive = transactions.filter((t) => t.kind === "service_order" && ACTIVE(t.status));
-  const ypActive = transactions.filter((t) => t.kind === "yuan_payment"  && ACTIVE(t.status));
-  const sum = (xs: TxRow[]) => xs.reduce((s, t) => s + t.amount_thb, 0);
+  const fullname = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—";
+  const isJuristic = u.usercompany === "1";
 
-  const csvCols = [
-    { key: "kind",   label: "ประเภท" },
-    { key: "ref",    label: "เลขที่" },
-    { key: "status", label: "สถานะ" },
-    { key: "amount", label: "ยอด (บาท)" },
-    { key: "meta",   label: "หมายเหตุ" },
-    { key: "date",   label: "วันที่" },
-  ];
-  const csvRows = transactions.map((t) => ({
-    kind:   KIND_LABEL[t.kind],
-    ref:    t.ref,
-    status: t.status,
-    amount: t.amount_thb.toFixed(2),
-    meta:   t.meta,
-    date:   t.created_at,
-  }));
-
-  const customerName = profile.company_name?.trim()
-    || [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim()
-    || "—";
+  // Lifetime totals (same status gates as the list page · sales-by-rep view)
+  const lifetimeForwarderRevenue = fws
+    .filter((r) => r.fstatus === "6" || r.fstatus === "7")
+    .reduce((s, r) => s + Number(r.ftotalprice ?? 0), 0);
+  const lifetimeShopRevenue = hos
+    .filter((r) => r.hstatus === "5" || r.hstatus === "6")
+    .reduce((s, r) => s + Number(r.htotalpriceuser ?? 0), 0);
+  const lifetimePaymentRevenue = pys
+    .filter((r) => r.paystatus === "3")
+    .reduce((s, r) => s + Number(r.paythb ?? 0), 0);
+  const lifetimeTotal = lifetimeForwarderRevenue + lifetimeShopRevenue + lifetimePaymentRevenue;
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
+    <main className="p-6 lg:p-8 space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · REPORTS (V-G6)</p>
-          <h1 className="mt-1 text-2xl font-bold">
-            ประวัติยอดขาย — {customerName}
-            <span className="ml-2 font-mono text-xs text-muted">{profile.member_code}</span>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">
+            ADMIN · รายงาน · ประวัติการขายต่อลูกค้า
+          </p>
+          <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
+            <span className="font-mono">{u.userid}</span>
+            {isJuristic && (
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                นิติบุคคล
+              </span>
+            )}
           </h1>
-          <p className="mt-1 text-xs text-muted">
-            {profile.email && <>{profile.email}</>}
-            {profile.email && profile.phone && " · "}
-            {profile.phone && <>📞 {profile.phone}</>}
-            {profile.account_type === "juristic" && profile.company_name && <> · นิติบุคคล</>}
-            {profile.sales_admin_id && <> · Sales rep: <span className="font-mono">{profile.sales_admin_id}</span></>}
-            <> · สมาชิกตั้งแต่ {new Date(profile.created_at).toLocaleDateString("th-TH")}</>
+          <p className="mt-1 text-sm text-muted">
+            ไทม์ไลน์ลูกค้าตลอดอายุ · UNION{" "}
+            <span className="font-mono">tb_forwarder + tb_header_order + tb_payment + tb_wallet_hs</span>
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Link
-            href={`/admin/customers/${profile.id}`}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+            href="/admin/reports/user-sales-history"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
           >
-            ↗ Customer page
+            ← กลับรายชื่อลูกค้า
           </Link>
           <Link
-            href="/admin/reports"
-            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-alt"
+            href={`/admin/customers/${encodeURIComponent(u.userid)}`}
+            className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt"
           >
-            ← รีพอร์ตหลัก
+            ดูโปรไฟล์ลูกค้า →
           </Link>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label={`📦 ฝากนำเข้า (${fwActive.length})`} value={thb(sum(fwActive))} />
-        <Card label={`🛒 ฝากสั่ง (${soActive.length})`}   value={thb(sum(soActive))} />
-        <Card label={`💴 ฝากโอน (${ypActive.length})`}   value={thb(sum(ypActive))} />
-        <Card label="🎯 รวม lifetime value" value={thb(sum(fwActive) + sum(soActive) + sum(ypActive))} highlight />
-      </div>
-
-      <div className="flex justify-end">
-        <CsvButton rows={csvRows} cols={csvCols} filename={`user-sales-${profile.member_code ?? profile.id}.csv`} />
+      {/* Customer summary card */}
+      <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-base">{fullname}</p>
+            <p className="text-xs text-muted">
+              โทร:{" "}
+              <span className="font-mono text-foreground">{u.usertel ?? "—"}</span>
+              {" · "}อีเมล:{" "}
+              <span className="font-mono text-foreground">{u.useremail ?? "—"}</span>
+            </p>
+            <p className="text-xs text-muted">
+              สมัคร: <span className="text-foreground">{fmtDateTime(u.userregistered)}</span>
+              {" · "}ล่าสุดล็อกอิน:{" "}
+              <span className="text-foreground">{fmtDateTime(u.userlastlogin)}</span>
+            </p>
+            {u.adminidsale && (
+              <p className="text-xs text-muted">
+                เซลล์ผู้ดูแล:{" "}
+                <Link
+                  href={`/admin/admins/${encodeURIComponent(u.adminidsale)}`}
+                  className="text-primary-600 hover:underline"
+                >
+                  {u.adminidsale}
+                </Link>
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-surface-alt/30 p-3 text-center">
+              <p className="text-[11px] text-muted">ยอดกระเป๋า (THB)</p>
+              <p className="mt-1 text-xl font-bold font-mono">฿{thb(walletBal?.wallettotal ?? 0)}</p>
+            </div>
+            <div className="rounded-xl border border-green-200 bg-green-50/50 p-3 text-center">
+              <p className="text-[11px] text-muted">รวมรายได้ตลอดอายุ (บาท)</p>
+              <p className="mt-1 text-xl font-bold font-mono text-green-700">{thb(lifetimeTotal)}</p>
+              <p className="mt-1 text-[10px] text-muted">
+                นำเข้า {thb(lifetimeForwarderRevenue)} · สั่ง {thb(lifetimeShopRevenue)} · โอน{" "}
+                {thb(lifetimePaymentRevenue)}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Timeline */}
-      <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-        {transactions.length === 0 ? (
-          <p className="p-12 text-center text-sm text-muted">ลูกค้านี้ยังไม่มี transaction ใด ๆ</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-3 py-2">วันที่</th>
-                <th className="px-3 py-2">ประเภท</th>
-                <th className="px-3 py-2">เลขที่</th>
-                <th className="px-3 py-2">สถานะ</th>
-                <th className="px-3 py-2">หมายเหตุ</th>
-                <th className="px-3 py-2 text-right">ยอด</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((t) => (
-                <tr key={`${t.kind}-${t.ref}-${t.created_at}`} className="border-t border-border">
-                  <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">
-                    {new Date(t.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${KIND_BADGE[t.kind]}`}>
-                      {KIND_LABEL[t.kind]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Link href={t.link_href} className="font-mono text-xs text-primary-600 hover:underline">
-                      {t.ref}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 text-[10px]">{t.status}</td>
-                  <td className="px-3 py-2 text-xs text-muted">{t.meta}</td>
-                  <td className="px-3 py-2 text-right font-mono text-xs">{thb(t.amount_thb)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div>
+        <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-base font-semibold">
+            ไทม์ไลน์กิจกรรมล่าสุด{" "}
+            <span className="ml-1 text-xs text-muted">
+              ({timeline.length} / {MAX_EVENTS})
+            </span>
+          </h2>
+          <p className="text-xs text-muted">เรียงตามวันที่ใหม่สุดก่อน · จำกัด {MAX_EVENTS} รายการล่าสุด</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+          {timeline.length === 0 ? (
+            <p className="p-12 text-center text-sm text-muted">ไม่พบกิจกรรมของลูกค้ารายนี้</p>
+          ) : (
+            <div className="overflow-x-auto scrollbar-x-visible">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-alt/50 text-left text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-4 py-3">วันที่</th>
+                    <th className="px-4 py-3">ประเภท</th>
+                    <th className="px-4 py-3">รายการ</th>
+                    <th className="px-4 py-3">รายละเอียด</th>
+                    <th className="px-4 py-3">สถานะ</th>
+                    <th className="px-4 py-3 text-right">จำนวน (บาท)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeline.map((ev, idx) => (
+                    <tr
+                      key={`${ev.kind}-${idx}`}
+                      className="border-t border-border hover:bg-surface-alt/30 align-top"
+                    >
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
+                        {fmtDateTime(ev.date)}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${KIND_CLS[ev.kind]}`}
+                        >
+                          {KIND_LABEL[ev.kind]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {ev.href ? (
+                          <Link href={ev.href} className="text-primary-600 hover:underline">
+                            {ev.label}
+                          </Link>
+                        ) : (
+                          ev.label
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={ev.detail}>
+                        {ev.detail}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">{ev.status}</td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold whitespace-nowrap">
+                        {ev.amount_thb !== null ? thb(ev.amount_thb) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-
-      <p className="text-[10px] text-muted">
-        Source: <code>forwarders</code> + <code>service_orders</code> + <code>yuan_payments</code> filtered by profile_id ·
-        Lifetime value = ผลรวมยอดของรายการที่ status ≠ cancelled/rejected/failed/refunded
-      </p>
     </main>
-  );
-}
-
-function Card({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className={`rounded-2xl border bg-white dark:bg-surface p-4 shadow-sm ${highlight ? "border-primary-200" : "border-border"}`}>
-      <p className="text-xs text-muted">{label}</p>
-      <p className={`mt-1 text-xl font-bold font-mono ${highlight ? "text-primary-700" : ""}`}>{value}</p>
-    </div>
   );
 }

@@ -58,7 +58,7 @@ export default async function AccountSettingsPage() {
 
   // header.php L12-38 — the legacy SELECT that fills $_SESSION; the
   // account-settings screen consumes userName / userLastName / userPicture.
-  const { data: userRow } = await admin
+  const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select("userName, userLastName, userPicture")
     .eq("userID", memberCode)
@@ -67,6 +67,9 @@ export default async function AccountSettingsPage() {
       userLastName: string | null;
       userPicture: string | null;
     }>();
+  if (userRowErr) {
+    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+  }
 
   // $_SESSION['userName'] . ' ' . $_SESSION['userLastName']
   // (account-settings.php L72) — prefer the ported tb_users name,

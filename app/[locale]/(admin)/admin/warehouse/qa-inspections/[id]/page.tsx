@@ -1,205 +1,166 @@
-import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { requireAdmin } from "@/lib/auth/require-admin";
-import { Link } from "@/i18n/navigation";
-
 /**
- * /admin/warehouse/qa-inspections/[id] — V-E10 detail.
+ * /admin/warehouse/qa-inspections/[id] — QA inspection detail.
  *
- * Read-only header (outcome is immutable) + waived metadata + photo gallery.
- * Photos are private; we generate signed URLs (60s) for thumbs.
- *
- * (Update flow for notes-only mutation is exposed via updateQaInspectionNotes
- * server action but UI for it is deferred — V1 inspections are usually
- * complete at creation; corrections happen by recording a new inspection.)
+ * Server-rendered detail page. Photo gallery uses signed URLs (member-docs
+ * is private). Update form patches verdict / notes / blacklist via the
+ * `adminUpdateQaInspection` action.
  */
+
+import { notFound } from "next/navigation";
+import { Link } from "@/i18n/navigation";
+import { getTranslations } from "next-intl/server";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import {
+  adminGetQaInspection,
+  adminQaPhotoSignedUrls,
+  type QaVerdict,
+} from "@/actions/admin/qa-inspections";
+import { UpdateInspectionForm } from "./update-inspection-form";
 
 export const dynamic = "force-dynamic";
 
-const OUTCOME_BADGE: Record<string, string> = {
-  pass:       "bg-green-50 text-green-700 border-green-200",
-  fail_minor: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  fail_major: "bg-red-50 text-red-700 border-red-200",
-  waived:     "bg-gray-50 text-gray-600 border-gray-200",
-};
-const OUTCOME_LABEL: Record<string, string> = {
-  pass:       "✅ ผ่าน",
-  fail_minor: "⚠️ ผิดเล็กน้อย",
-  fail_major: "🚨 ผิดสำคัญ",
-  waived:     "ℹ️ ยกเว้น",
-};
-const DAMAGE_LABEL: Record<string, string> = {
-  none:      "ไม่มี",
-  cosmetic:  "เล็กน้อย (cosmetic)",
-  partial:   "บางส่วน (partial)",
-  total:     "เสียทั้งหมด (total)",
-};
+function verdictChipCls(v: QaVerdict): string {
+  return v === "pass"         ? "bg-green-100 text-green-700"
+       : v === "fail"         ? "bg-amber-100 text-amber-700"
+       : v === "hold"         ? "bg-blue-100 text-blue-700"
+       : /* fake_product */     "bg-red-100 text-red-700";
+}
 
-type Detail = {
-  id:                    string;
-  inspection_no:         string;
-  cargo_shipment_id:     string | null;
-  outcome:               "pass" | "fail_minor" | "fail_major" | "waived";
-  damage_level:          string | null;
-  missing_items:         number;
-  notes:                 string | null;
-  photo_paths:           string[];
-  waived_reason:         string | null;
-  waived_at:             string | null;
-  inspected_at:          string;
-  customer_notified_at:  string | null;
-  cargo_shipment: {
-    id:            string;
-    shipment_code: string;
-    status:        string;
-    profile: {
-      member_code: string | null;
-      first_name:  string | null;
-      last_name:   string | null;
-    } | null;
-  } | null;
-};
-
-export default async function AdminQaInspectionDetailPage({
+export default async function QaInspectionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["super", "accounting", "warehouse"]);
+  await requireAdmin(["super", "ops", "warehouse", "qa"]);
   const { id } = await params;
-  const admin = createAdminClient();
+  const t = await getTranslations("qaInspection");
 
-  const { data: raw } = await admin
-    .from("freight_qa_inspections")
-    .select(`
-      id, inspection_no, cargo_shipment_id, outcome, damage_level, missing_items,
-      notes, photo_paths, waived_reason, waived_at, inspected_at, customer_notified_at,
-      cargo_shipment:cargo_shipments!cargo_shipment_id (
-        id, shipment_code, status,
-        profile:profiles!profile_id ( member_code, first_name, last_name )
-      )
-    `)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!raw) notFound();
-
-  // Normalise FK joins. Cast through unknown — Supabase typing inconsistently
-  // returns arrays even for FK→one relationships.
-  type CS = NonNullable<Detail["cargo_shipment"]>;
-  const csRaw = raw.cargo_shipment as unknown as CS | CS[] | null;
-  const cs    = Array.isArray(csRaw) ? csRaw[0] ?? null : csRaw;
-  const prof  = cs && Array.isArray(cs.profile) ? cs.profile[0] ?? null : cs?.profile ?? null;
-  const it: Detail = {
-    ...raw,
-    photo_paths:    Array.isArray(raw.photo_paths) ? raw.photo_paths : [],
-    cargo_shipment: cs ? { ...cs, profile: prof } : null,
-  } as Detail;
-
-  // Signed URLs for private bucket — 60s TTL is plenty for a page render.
-  const signedUrls: Record<string, string> = {};
-  if (it.photo_paths.length > 0) {
-    const { data: urls } = await admin.storage
-      .from("qa-inspection-photos")
-      .createSignedUrls(it.photo_paths, 60);
-    (urls ?? []).forEach((u, idx) => {
-      const p = it.photo_paths[idx];
-      if (p && u.signedUrl) signedUrls[p] = u.signedUrl;
-    });
+  const detailRes = await adminGetQaInspection(id);
+  if (!detailRes.ok) {
+    return (
+      <main className="p-6 lg:p-8 max-w-3xl">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {t("loadError")}: {detailRes.error}
+        </div>
+      </main>
+    );
   }
+  const row = detailRes.data;
+  if (!row) notFound();
+
+  // Signed URLs for the photo gallery (member-docs is private).
+  const urlsRes = await adminQaPhotoSignedUrls(row.photo_urls, 600);
+  const urlMap = urlsRes.ok ? (urlsRes.data ?? {}) : {};
 
   return (
-    <main className="p-6 lg:p-8 space-y-5 max-w-4xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <main className="p-4 lg:p-6 space-y-5 max-w-4xl">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href="/admin/warehouse/qa-inspections" className="text-xs text-primary-500 hover:underline">
-            ← กลับหน้ารายการ
-          </Link>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · QA</p>
           <h1 className="mt-1 text-2xl font-bold">
-            ใบตรวจ <span className="font-mono">{it.inspection_no}</span>
+            {t("detailTitle")} <span className="font-mono text-base text-muted">{row.id.slice(0, 8)}</span>
           </h1>
-          <p className="text-xs text-muted">
-            ตรวจเมื่อ {new Date(it.inspected_at).toLocaleString("th-TH")}
-            {it.customer_notified_at && (
-              <> · 📤 แจ้งลูกค้าเมื่อ {new Date(it.customer_notified_at).toLocaleString("th-TH")}</>
-            )}
+          <p className="text-sm text-muted">
+            {t("col.inspectedAt")}: {row.inspected_at.slice(0, 16).replace("T", " ")}
           </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${OUTCOME_BADGE[it.outcome]}`}>
-          {OUTCOME_LABEL[it.outcome]}
-        </span>
+        <Link
+          href="/admin/warehouse/qa-inspections"
+          className="text-sm text-muted hover:text-foreground underline"
+        >
+          ← {t("backToList")}
+        </Link>
       </div>
 
-      {/* Shipment + customer */}
-      {it.cargo_shipment && (
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1">
-          <h2 className="font-bold text-sm mb-2">Shipment</h2>
-          <p className="text-sm">
-            <span className="font-mono">{it.cargo_shipment.shipment_code}</span>{" "}
-            <span className="text-xs text-muted">({it.cargo_shipment.status})</span>
-          </p>
-          <p className="text-xs text-muted">
-            ลูกค้า: <span className="font-mono">{it.cargo_shipment.profile?.member_code}</span>{" "}
-            · {it.cargo_shipment.profile?.first_name} {it.cargo_shipment.profile?.last_name}
-          </p>
-        </section>
-      )}
+      {/* Forwarder reference */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold mb-3">{t("forwarderSection")}</h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-xs text-muted">{t("col.fNo")}</dt>
+            <dd className="font-mono">
+              <Link
+                href={`/admin/forwarders/${row.forwarder_id}`}
+                className="text-primary-600 hover:underline"
+              >
+                {row.forwarder_id}
+              </Link>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">{t("col.cabinet")}</dt>
+            <dd>{row.fwd_fcabinetnumber ?? "-"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">{t("col.member")}</dt>
+            <dd>{row.fwd_userid ?? "-"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted">{t("col.tracking")}</dt>
+            <dd className="font-mono">{row.fwd_ftrackingchn ?? "-"}</dd>
+          </div>
+        </dl>
+      </section>
 
-      {/* Inspection details */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-2">
-        <h2 className="font-bold text-sm mb-2">รายละเอียดการตรวจ</h2>
-        <p className="text-sm">
-          ความเสียหาย: <strong>{it.damage_level ? DAMAGE_LABEL[it.damage_level] : "—"}</strong>
-        </p>
-        <p className="text-sm">
-          ของขาด: <strong>{it.missing_items}</strong> ชิ้น
-        </p>
-        {it.notes && (
-          <div className="mt-2 rounded-lg bg-surface-alt/40 p-3">
-            <p className="text-xs text-muted mb-1">บันทึก</p>
-            <p className="text-sm whitespace-pre-line">{it.notes}</p>
+      {/* Current state */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold mb-3">{t("currentState")}</h2>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${verdictChipCls(row.verdict)}`}>
+            {t(`verdict.${row.verdict}`)}
+          </span>
+          {row.blacklist_shop && (
+            <span className="inline-block rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-bold">
+              {t("blacklistTag")}
+            </span>
+          )}
+        </div>
+        {row.notes && (
+          <div className="mt-3 text-sm whitespace-pre-wrap">{row.notes}</div>
+        )}
+      </section>
+
+      {/* Photo gallery */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold mb-3">{t("photoGallery")} ({row.photo_urls.length})</h2>
+        {row.photo_urls.length === 0 ? (
+          <p className="text-sm text-muted">{t("noPhotos")}</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {row.photo_urls.map((p) => {
+              const url = urlMap[p];
+              return (
+                <a
+                  key={p}
+                  href={url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg overflow-hidden border border-border bg-surface-alt aspect-square hover:opacity-90"
+                >
+                  {url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={url} alt={t("photoAlt")} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[10px] text-muted">
+                      {t("photoUnavailable")}
+                    </div>
+                  )}
+                </a>
+              );
+            })}
           </div>
         )}
       </section>
 
-      {/* Waived metadata */}
-      {it.outcome === "waived" && it.waived_reason && (
-        <section className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-1">
-          <h2 className="font-bold text-sm mb-1 text-red-800">⚠️ ยกเว้น (waived)</h2>
-          <p className="text-sm">เหตุผล: {it.waived_reason}</p>
-          {it.waived_at && (
-            <p className="text-xs text-red-700">เมื่อ {new Date(it.waived_at).toLocaleString("th-TH")}</p>
-          )}
-        </section>
-      )}
-
-      {/* Photo gallery */}
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3">
-        <h2 className="font-bold text-sm">รูปประกอบ ({it.photo_paths.length})</h2>
-        {it.photo_paths.length === 0 ? (
-          <p className="text-xs text-muted">ไม่มีรูปประกอบ</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {it.photo_paths.map((p) => (
-              <a
-                key={p}
-                href={signedUrls[p] ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-lg overflow-hidden border border-border bg-surface-alt hover:opacity-90"
-              >
-                {signedUrls[p] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={signedUrls[p]} alt="QA photo" className="w-full h-32 object-cover" />
-                ) : (
-                  <div className="w-full h-32 flex items-center justify-center text-xs text-muted">
-                    (signed URL unavailable)
-                  </div>
-                )}
-              </a>
-            ))}
-          </div>
-        )}
+      {/* Update form */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold mb-3">{t("updateSection")}</h2>
+        <UpdateInspectionForm
+          id={row.id}
+          initialVerdict={row.verdict}
+          initialNotes={row.notes ?? ""}
+          initialBlacklist={row.blacklist_shop}
+        />
       </section>
     </main>
   );

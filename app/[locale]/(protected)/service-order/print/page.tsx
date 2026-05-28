@@ -310,7 +310,7 @@ export default async function ServiceOrderPrintPage({
     if (!headerRow) continue;
 
     // The legacy joins tb_users for the customer name / email.
-    const { data: userRow } = await admin
+    const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
       .select("username, userlastname, useremail, userpicture, usercompany")
       .eq("userid", headerRow.userid)
@@ -321,10 +321,13 @@ export default async function ServiceOrderPrintPage({
         userpicture: string | null;
         usercompany: string | null;
       }>();
+    if (userRowErr) {
+      console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
+    }
 
     // CONCAT('คุณ',hAddressName,...) — printShop.php L44 builds the
     // ship-to address string from the tb_header_order hAddress* cols.
-    const { data: addrRow } = await admin
+    const { data: addrRow, error: addrRowErr } = await admin
       .from("tb_header_order")
       .select(
         "haddressname, haddresslastname, haddressno, haddresssubdistrict, haddressdistrict, haddressprovince, haddresszipcode, haddresstel, haddresstel2",
@@ -341,6 +344,9 @@ export default async function ServiceOrderPrintPage({
         haddresstel: string;
         haddresstel2: string;
       }>();
+    if (addrRowErr) {
+      console.error(`[tb_header_order list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+    }
 
     const fullAddress = addrRow
       ? `คุณ${addrRow.haddressname} ${addrRow.haddresslastname} ${addrRow.haddressno}` +
@@ -371,7 +377,7 @@ export default async function ServiceOrderPrintPage({
     let corporateNumber = "";
     let fName = "คุณ";
     if (header.usercompany === "1") {
-      const { data: corp } = await admin
+      const { data: corp, error: corpErr } = await admin
         .from("tb_corporate")
         .select("corporatename, corporatenumber, corporateaddress")
         .eq("userid", header.userid)
@@ -380,6 +386,9 @@ export default async function ServiceOrderPrintPage({
           corporatenumber: string | null;
           corporateaddress: string | null;
         }>();
+      if (corpErr) {
+        console.error(`[tb_corporate list] failed`, { code: corpErr.code, message: corpErr.message });
+      }
       if (corp) {
         header.userfullname = corp.corporatename ?? "";
         corporateNumber = corp.corporatenumber ?? "";
@@ -414,12 +423,15 @@ export default async function ServiceOrderPrintPage({
 
     // ── tb_order — provider → shop → items (printShop.php L252-348) ──
     // 1. DISTINCT cProvider for this hNo.
-    const { data: orderRowsAll } = await admin
+    const { data: orderRowsAll, error: orderRowsAllErr } = await admin
       .from("tb_order")
       .select(
         "cprovider, cnameshop, cshippingnumber, ctrackingnumber, ctitle, ccolor, csize, cimages, cprice, cshippingchn, camount, crewallet",
       )
       .eq("hno", hNo);
+    if (orderRowsAllErr) {
+      console.error(`[tb_order list] failed`, { code: orderRowsAllErr.code, message: orderRowsAllErr.message });
+    }
 
     const allRows = (orderRowsAll ?? []) as OrderRow[];
 

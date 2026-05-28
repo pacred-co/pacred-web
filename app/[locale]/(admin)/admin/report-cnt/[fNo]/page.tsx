@@ -1,0 +1,590 @@
+/**
+ * /admin/report-cnt/[fNo] — per-container detail page (Wave 16 P0-1)
+ *
+ * Faithful port of `pcs-admin/report-cnt.php` L740-2502 (the `?id=<cnt>`
+ * detail mode + the `&action=cost-update` sub-mode).
+ *
+ * What this page does (per legacy):
+ *   1. Header card — โกดังจีน + container payment status + จำนวนรายการ +
+ *      [money tier] ราคาต้นทุนตู้ / ราคาขายตู้ / กำไรตู้.
+ *   2. "ตั้งค่าต้นทุนตู้" modal — 4 product-type rates + 2 submit buttons
+ *      (บันทึก = customRate, คืนค่า = resetCustomRate). Only visible to
+ *      money-tier roles, and ONLY when the container isn't paid yet.
+ *   3. 2 view tabs: "มุมมอง PCS Cargo" (default) and "ปรับต้นทุนตู้ใหม่"
+ *      (Pacred-native cost-update view — see "Cost-update view" below).
+ *   4. 6 quick-filter buttons + DataTable with 25 columns (1 extra
+ *      เรทต้นทุน column for money tier).
+ *   5. Per-row inline cost-edit actions (editCost / editCost2 /
+ *      editCostSheet) — placeholder buttons that call onEditCost(fid).
+ *      The actual modal is built by Wave 16 P0-3 in parallel.
+ *   6. Multi-select checkboxes + fixed-bottom "เพิ่มในรายการตรวจสอบแล้ว"
+ *      button → adminReportCntAddCheck() server action.
+ *
+ * Cost-update view (Pacred-native, Wave 16 follow-up B 2026-05-23):
+ *   The legacy `?action=cost-update` branch fetched a Google Sheet via
+ *   the Sheets API + service-account JSON. ภูม decision: drop the Sheets
+ *   dependency — admin enters new `fCostTotalPriceSheet` values inline or
+ *   uploads a CSV (`tracking_chn,cost_sheet`) exported from the carrier's
+ *   sheet, then bulk-saves via adminBulkUpdateForwarderCostSheet().
+ *   Implementation: <CostUpdateView> + actions/admin/report-cnt-cost-update.ts
+ *
+ * Auth — `requireAdmin(["super","ops","accounting","warehouse"])`.
+ * Warehouse sees the page but money columns + rate-edit modal hide.
+ */
+
+import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { Link } from "@/i18n/navigation";
+import { TopMenuReport } from "@/components/admin/top-menu-report";
+import { CostRateModal } from "./cost-rate-modal";
+import {
+  ContainerDetailClient,
+  type DetailRow,
+} from "./container-detail-client";
+import { CostUpdateView } from "./cost-update-view";
+
+export const dynamic = "force-dynamic";
+
+// ─────────────────────────────────────────────────────────────────────
+// Constants (mirrors page.tsx for the list page)
+// ─────────────────────────────────────────────────────────────────────
+
+const WAREHOUSE_LABEL: Record<string, string> = {
+  "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
+};
+
+const TRANSPORT_LABEL: Record<string, string> = {
+  "1": "ทางรถ", "2": "ทางเรือ", "3": "ทางอากาศ",
+};
+
+const WAREHOUSE_CHINA_LABEL: Record<string, string> = {
+  "1": "กวางโจว", "2": "อี้อู",
+};
+
+// Wave 16 Follow-up C: removed BULK_UPDATABLE_WAREHOUSES set. ALL carriers
+// now use the dual-mode (CBM/Weight) modal — admin picks the dimension
+// per container. MX (4) + Sang (1) default to "weight"; the rest default
+// to "cbm". The legacy L1478-1488 red disabled banner is gone.
+
+// Carriers whose historical default is "weight" (fRefPrice='1') — used
+// to pre-select the modal toggle when the container has no rows yet.
+const WEIGHT_DEFAULT_WAREHOUSES = new Set(["1", "4"]);
+
+// ─────────────────────────────────────────────────────────────────────
+// Settings-row column lookup — picks the right tb_settings column for
+// (warehouse × transport × product-type × city). Mirrors the long
+// switch-case in report-cnt.php L1306-L1456.
+// ─────────────────────────────────────────────────────────────────────
+
+function warehouseRateColumn(
+  fWarehouseName: string,
+  productTypeIdx: 1 | 2 | 3 | 4,
+  transport: "1" | "2",
+  fWarehouseChina: string,
+): string {
+  const prefix = transport === "1" ? "fcostcar" : "fcostship";
+  const citySuffix = fWarehouseChina === "2" ? "2" : "";
+  switch (fWarehouseName) {
+    case "1": return `${prefix}${productTypeIdx}defaultsang${citySuffix}`;
+    case "2": return `${prefix}${productTypeIdx}default${citySuffix}`;
+    case "3": return `${prefix}${productTypeIdx}defaultmkcargo${citySuffix}`;
+    case "4": return `${prefix}${productTypeIdx}defaultmkcargo${citySuffix}`;
+    case "5": return `${prefix}${productTypeIdx}defaultjmf${citySuffix}`;
+    case "6": return `${prefix}${productTypeIdx}defaultgogo${citySuffix}`;
+    case "7": return `${prefix}${productTypeIdx}defaultcargocenter${citySuffix}`;
+    case "8": return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`;
+    default:  return `${prefix}${productTypeIdx}default${citySuffix}`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Page
+// ─────────────────────────────────────────────────────────────────────
+
+type Params = { fNo: string; locale: string };
+type SP = { action?: string; filter?: string };
+
+export default async function AdminReportCntDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<Params>;
+  searchParams: Promise<SP>;
+}) {
+  const { roles } = await requireAdmin(["super", "ops", "accounting", "warehouse"]);
+  const { fNo } = await params;
+  const sp = await searchParams;
+
+  const fCabinetNumber = decodeURIComponent(fNo);
+  if (!fCabinetNumber) notFound();
+
+  const showMoney =
+    roles.includes("super") ||
+    roles.includes("ops") ||
+    roles.includes("accounting");
+
+  const isCostUpdate = sp.action === "cost-update";
+
+  const admin = createAdminClient();
+
+  // ── 1) Pull container summary ──
+  // tb_forwarder rows for this container — also drives "first row" lookup
+  // for warehouse/transport (every row in a container shares those).
+  const { data: cntRows, error: cntErr } = await admin
+    .from("tb_forwarder")
+    .select(
+      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice",
+    )
+    .eq("fcabinetnumber", fCabinetNumber)
+    .order("id", { ascending: true })
+    .limit(50_000);
+
+  if (cntErr) {
+    return (
+      <>
+        <TopMenuReport activeHref="/admin/report-cnt" />
+        <main className="p-4 lg:p-6">
+          <div className="rounded-md border border-red-200 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300">
+            โหลดข้อมูลตู้ไม่สำเร็จ: {cntErr.message}
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (!cntRows || cntRows.length === 0) {
+    return (
+      <>
+        <TopMenuReport activeHref="/admin/report-cnt" />
+        <main className="p-4 lg:p-6">
+          <Breadcrumb fCabinetNumber={fCabinetNumber} />
+          <div className="mt-4 rounded-2xl border border-border bg-white dark:bg-surface p-12 text-center text-sm text-muted">
+            ไม่พบรายการในตู้ <span className="font-mono">{fCabinetNumber}</span>
+            <div className="mt-3">
+              <Link href="/admin/report-cnt" className="text-primary-600 hover:underline text-xs">
+                ← กลับหน้ารายงานตู้
+              </Link>
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  type CntRow = (typeof cntRows)[number];
+  const firstRow = cntRows[0] as CntRow;
+  const fWarehouseName = String(firstRow.fwarehousename ?? "");
+  const fWarehouseChina = String(firstRow.fwarehousechina ?? "");
+  const fTransportType = String(firstRow.ftransporttype ?? "1");
+
+  // ── 2) Container payment status ── (tb_cnt_item row presence)
+  const { data: cntItemRow, error: cntItemRowErr } = await admin
+    .from("tb_cnt_item")
+    .select("ID, cntID")
+    .eq("fCabinetNumber", fCabinetNumber)
+    .maybeSingle<{ ID: number; cntID: number | null }>();
+  if (cntItemRowErr) {
+    console.error(`[tb_cnt_item list] failed`, { code: cntItemRowErr.code, message: cntItemRowErr.message });
+  }
+  const cabinetIsPaid = Boolean(cntItemRow);
+  const paidCntId = cntItemRow?.cntID ?? null;
+
+  // ── 3) tb_cost_container — per-container custom rate ──
+  const { data: customRate, error: customRateErr } = await admin
+    .from("tb_cost_container")
+    .select("fproductstype1, fproductstype2, fproductstype3, fproductstype4")
+    .eq("fcabinetnumber", fCabinetNumber)
+    .maybeSingle<{
+      fproductstype1: number;
+      fproductstype2: number;
+      fproductstype3: number;
+      fproductstype4: number;
+    }>();
+  if (customRateErr) {
+    console.error(`[tb_cost_container list] failed`, { code: customRateErr.code, message: customRateErr.message });
+  }
+
+  // ── 4) tb_settings — pick the 4 default rates if no custom row ──
+  let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+  if (customRate) {
+    p1 = Number(customRate.fproductstype1) || 0;
+    p2 = Number(customRate.fproductstype2) || 0;
+    p3 = Number(customRate.fproductstype3) || 0;
+    p4 = Number(customRate.fproductstype4) || 0;
+  } else if (fWarehouseName && fTransportType) {
+    const transport = (fTransportType === "2" ? "2" : "1") as "1" | "2";
+    const cols = [1, 2, 3, 4].map((i) =>
+      warehouseRateColumn(fWarehouseName, i as 1 | 2 | 3 | 4, transport, fWarehouseChina),
+    );
+    const sel = ["id", ...cols].join(",");
+    const { data: settingsRow, error: settingsRowErr } = await admin
+      .from("tb_settings")
+      .select(sel)
+      .eq("id", 1)
+      .maybeSingle<Record<string, number | string | null>>();
+    if (settingsRowErr) {
+      console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
+    }
+    if (settingsRow) {
+      p1 = Number(settingsRow[cols[0]] ?? 0);
+      p2 = Number(settingsRow[cols[1]] ?? 0);
+      p3 = Number(settingsRow[cols[2]] ?? 0);
+      p4 = Number(settingsRow[cols[3]] ?? 0);
+    }
+  }
+
+  // ── 5) tb_users for usernames + coid ──
+  const userIds = Array.from(new Set(cntRows.map((r) => r.userid).filter(Boolean) as string[]));
+  const userMap = new Map<string, { username: string | null; coid: string | null }>();
+  if (userIds.length > 0) {
+    const { data: users, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userid, username, coid")
+      .in("userid", userIds);
+    if (usersErr) {
+      console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
+    }
+    for (const u of (users ?? []) as Array<{ userid: string; username: string | null; coid: string | null }>) {
+      userMap.set(u.userid, { username: u.username, coid: u.coid });
+    }
+  }
+
+  // ── 6) tb_forwarder_import2 — flags "ยิงเข้าโกดังไทยแล้ว" rows ──
+  const fIds = cntRows.map((r) => r.id);
+  const shippedSet = new Set<number>();
+  if (fIds.length > 0) {
+    const { data: imp2, error: imp2Err } = await admin
+      .from("tb_forwarder_import2")
+      .select("fid")
+      .in("fid", fIds);
+    if (imp2Err) {
+      console.error(`[tb_forwarder_import2 list] failed`, { code: imp2Err.code, message: imp2Err.message });
+    }
+    for (const r of (imp2 ?? []) as Array<{ fid: number }>) {
+      shippedSet.add(Number(r.fid));
+    }
+  }
+
+  // ── 7) tb_cnt_pay_trackingchn — duplicate tracking detection ──
+  const trackingNos = cntRows.map((r) => r.ftrackingchn).filter((s): s is string => Boolean(s));
+  const trackingDupCount = new Map<string, number>();
+  if (trackingNos.length > 0) {
+    const { data: trackPay, error: trackPayErr } = await admin
+      .from("tb_cnt_pay_trackingchn")
+      .select("ftrackingchn")
+      .in("ftrackingchn", trackingNos);
+    if (trackPayErr) {
+      console.error(`[tb_cnt_pay_trackingchn list] failed`, { code: trackPayErr.code, message: trackPayErr.message });
+    }
+    for (const r of (trackPay ?? []) as Array<{ ftrackingchn: string }>) {
+      trackingDupCount.set(r.ftrackingchn, (trackingDupCount.get(r.ftrackingchn) ?? 0) + 1);
+    }
+  }
+
+  // ── 8) tb_cnt_pay_idorco — duplicate ID/CO detection ──
+  const idCoNos = cntRows.map((r) => r.fidorco).filter((s): s is string => Boolean(s));
+  const idCoDupCount = new Map<string, number>();
+  if (idCoNos.length > 0) {
+    const { data: idCoPay, error: idCoPayErr } = await admin
+      .from("tb_cnt_pay_idorco")
+      .select("fidorco")
+      .in("fidorco", idCoNos);
+    if (idCoPayErr) {
+      console.error(`[tb_cnt_pay_idorco list] failed`, { code: idCoPayErr.code, message: idCoPayErr.message });
+    }
+    for (const r of (idCoPay ?? []) as Array<{ fidorco: string }>) {
+      idCoDupCount.set(r.fidorco, (idCoDupCount.get(r.fidorco) ?? 0) + 1);
+    }
+  }
+
+  // ── 9) tb_check_forwarder — "already in check queue" markers ──
+  const checkMap = new Map<number, { adminID: string; date: string | null }>();
+  if (fIds.length > 0) {
+    const { data: checks, error: checksErr } = await admin
+      .from("tb_check_forwarder")
+      .select("fID, adminID, date")
+      .in("fID", fIds);
+    if (checksErr) {
+      console.error(`[tb_check_forwarder list] failed`, { code: checksErr.code, message: checksErr.message });
+    }
+    for (const r of (checks ?? []) as Array<{ fID: number; adminID: string; date: string | null }>) {
+      checkMap.set(Number(r.fID), { adminID: r.adminID, date: r.date });
+    }
+  }
+
+  // ── 10) Build the rows + totals ──
+  const detailRows: DetailRow[] = cntRows.map((r) => {
+    const u = userMap.get(String(r.userid));
+    const pType = String(r.fproductstype ?? "").trim();
+    const rate = pType === "1" ? p1 : pType === "2" ? p2 : pType === "3" ? p3 : pType === "4" ? p4 : 0;
+
+    // Derived totals — match legacy formulas in L1797 + L1803
+    const fTotalPrice           = Number(r.ftotalprice ?? 0);
+    const fTransportPrice       = Number(r.ftransportprice ?? 0);
+    const fPriceUpdate          = Number(r.fpriceupdate ?? 0);
+    const fShippingService      = Number(r.fshippingservice ?? 0);
+    const priceCrate            = Number(r.pricecrate ?? 0);
+    const fTransportPriceCHNTHB = Number(r.ftransportpricechnthb ?? 0);
+    const priceOther            = Number(r.priceother ?? 0);
+    const fDiscount             = Number(r.fdiscount ?? 0);
+    const fCostTotalPrice       = Number(r.fcosttotalprice ?? 0);
+
+    const priceGetUserItem =
+      fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
+      priceCrate + fTransportPriceCHNTHB + priceOther - fDiscount;
+
+    const isJuristic =
+      typeof r.fusercompany === "string" ? r.fusercompany.trim() === "1" : r.fusercompany === 1;
+    const fUserCompany1Per = isJuristic ? priceGetUserItem * 0.01 : 0;
+
+    // profitItem (legacy L1803):
+    //   (revenue) − (cost + shipping + crate + chnthb + transport + 1%)
+    const profitItem =
+      priceGetUserItem -
+      (fCostTotalPrice + fShippingService + priceCrate + fTransportPriceCHNTHB + fTransportPrice + fUserCompany1Per);
+
+    const check = checkMap.get(Number(r.id));
+    return {
+      id: Number(r.id),
+      fidorco: r.fidorco,
+      ftrackingchn: r.ftrackingchn,
+      userid: String(r.userid ?? ""),
+      username: u?.username ?? null,
+      usercompany: typeof r.fusercompany === "string" ? r.fusercompany : r.fusercompany == null ? null : String(r.fusercompany),
+      fdetail: r.fdetail,
+      fcover: r.fcover,
+      famount: Number(r.famount ?? 0) || null,
+      famountfi: null, // tb_forwarder_import2 amount not surfaced in this row — skipped for P0-1
+      fvolume: Number(r.fvolume ?? 0),
+      fweight: Number(r.fweight ?? 0),
+      fproductstype: pType || null,
+      fproductstype2:
+        // Wave 16 P0-3 modal target — raw secondary product-type for cost calc
+        (r as Record<string, unknown>).fproductstype2 == null
+          ? null
+          : String((r as Record<string, unknown>).fproductstype2),
+      rate,
+      ftotalprice: fTotalPrice,
+      frefprice: r.frefprice == null ? null : String(r.frefprice),
+      fpriceupdate: fPriceUpdate,
+      pricecrate: priceCrate,
+      ftransportpricechnthb: fTransportPriceCHNTHB,
+      priceother: priceOther,
+      fshipby: r.fshipby,
+      faddressdistrict: r.faddressdistrict,
+      faddressprovince: r.faddressprovince,
+      faddresszipcode: r.faddresszipcode,
+      paymethod: r.paymethod == null ? null : String(r.paymethod),
+      ftransportprice: fTransportPrice,
+      fdiscount: fDiscount,
+      priceGetUser: priceGetUserItem,
+      fusercompany1per: fUserCompany1Per,
+      fcosttotalprice: fCostTotalPrice,
+      fcosttotalpricesheet: Number(r.fcosttotalpricesheet ?? 0),
+      profitItem,
+      fstatus: String(r.fstatus ?? ""),
+      fcredit: r.fcredit == null ? null : String(r.fcredit),
+      fnote: r.fnote,
+      notYetWarehouse: !shippedSet.has(Number(r.id)),
+      cntPaid: cabinetIsPaid,
+      trackingDup: Boolean(r.ftrackingchn && (trackingDupCount.get(r.ftrackingchn) ?? 0) > 1),
+      idCoDup: Boolean(r.fidorco && (idCoDupCount.get(r.fidorco) ?? 0) > 1),
+      notCollectedFromCustomer: Number(r.fstatus ?? 0) < 5,
+      inCheckQueue: checkMap.has(Number(r.id)),
+      checkAdminId: check?.adminID ?? null,
+      checkDate: check?.date ?? null,
+    };
+  });
+
+  const totals = detailRows.reduce(
+    (acc, r) => ({
+      cost:     acc.cost     + r.fcosttotalprice,
+      price:    acc.price    + r.ftotalprice,
+      discount: acc.discount + r.fdiscount,
+    }),
+    { cost: 0, price: 0, discount: 0 },
+  );
+  const totalCost     = totals.cost;
+  const totalPrice    = totals.price;
+  const totalDiscount = totals.discount;
+  const totalProfit = totalPrice - totalDiscount - totalCost;
+  const warehouseLabel = WAREHOUSE_LABEL[fWarehouseName] ?? fWarehouseName;
+  const warehouseChinaLabel = WAREHOUSE_CHINA_LABEL[fWarehouseChina] ?? fWarehouseChina;
+  const transportLabel = TRANSPORT_LABEL[fTransportType] ?? fTransportType;
+
+  // Wave 16 Follow-up C — derive container-wide cost mode from row data.
+  // fRefPrice '1' = น้ำหนัก (weight); '' / '2' / null = ปริมาตร (cbm).
+  // "Current mode" = majority of rows. "Mixed" = rows disagree.
+  let weightRows = 0;
+  let cbmRows = 0;
+  for (const r of cntRows) {
+    if (String(r.frefprice ?? "") === "1") weightRows += 1;
+    else cbmRows += 1;
+  }
+  const mixedMode = weightRows > 0 && cbmRows > 0;
+  const derivedMode: "cbm" | "weight" =
+    weightRows === 0 && cbmRows === 0
+      ? (WEIGHT_DEFAULT_WAREHOUSES.has(fWarehouseName) ? "weight" : "cbm")
+      : weightRows > cbmRows
+        ? "weight"
+        : "cbm";
+
+  // Wave 16 Follow-up C — ALL carriers can open the modal now (mode-aware).
+  // The legacy MX/Sang disabled banner is gone.
+  const canEditCost = showMoney && !cabinetIsPaid;
+
+  return (
+    <>
+      <TopMenuReport activeHref="/admin/report-cnt" />
+      <main className="p-4 lg:p-6 space-y-4 pb-32">
+        <Breadcrumb fCabinetNumber={fCabinetNumber} />
+
+        {/* Header summary card */}
+        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 lg:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
+              <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
+                รายงานตู้สินค้า
+                <span className="font-mono text-primary-600">{fCabinetNumber}</span>
+                <span className="text-sm font-normal text-muted">· {transportLabel}</span>
+              </h1>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-y-1 text-sm">
+                <div>โกดังจีน: <span className="font-medium">{warehouseLabel}</span> ({warehouseChinaLabel})</div>
+                <div>
+                  สถานะตู้สินค้า:{" "}
+                  {cabinetIsPaid ? (
+                    <span className="inline-block rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs">จ่ายเงินแล้ว</span>
+                  ) : (
+                    <span className="inline-block rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs">ยังไม่จ่ายเงิน</span>
+                  )}
+                </div>
+                <div>
+                  จำนวนรายการทั้งหมด: <span className="font-medium">{detailRows.length.toLocaleString()}</span> รายการ
+                </div>
+                {showMoney && (
+                  <div>
+                    ราคาขายตู้: <span className="font-medium">{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> บาท
+                  </div>
+                )}
+                {showMoney && (
+                  <div>
+                    ราคาต้นทุนตู้: <span className="font-medium text-red-600">{totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> บาท
+                  </div>
+                )}
+                {showMoney && (
+                  <div>
+                    กำไรตู้:{" "}
+                    <span className={`font-bold text-lg ${totalProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {totalProfit >= 0 ? "+" : ""}
+                      {totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>{" "}
+                    บาท
+                  </div>
+                )}
+              </div>
+              {cabinetIsPaid && showMoney && (
+                <p className="mt-3 text-xs text-red-600">
+                  ไม่สามารถแก้ไขต้นทุนรายตู้ได้เนื่องจากรายการนี้จ่ายเงินค่าตู้แล้ว{" "}
+                  {paidCntId && (
+                    <Link
+                      href={`/admin/cnt-hs/detail/${paidCntId}?action=cost-update`}
+                      className="text-primary-600 hover:underline"
+                    >
+                      ไปยังรายการจ่ายเงินตู้เพื่อแก้ไขต้นทุนจากบิลจ่ายเงิน
+                    </Link>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {canEditCost && (
+              <CostRateModal
+                fCabinetNumber={fCabinetNumber}
+                warehouseLabel={warehouseLabel}
+                warehouseChinaLabel={warehouseChinaLabel}
+                transportLabel={transportLabel}
+                currentMode={derivedMode}
+                mixedMode={mixedMode}
+                defaults={{
+                  fProductsType1: p1,
+                  fProductsType2: p2,
+                  fProductsType3: p3,
+                  fProductsType4: p4,
+                }}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* View tabs */}
+        <div className="flex gap-1 border-b border-border">
+          <TabLink href={`/admin/report-cnt/${encodeURIComponent(fCabinetNumber)}`} active={!isCostUpdate}>
+            มุมมอง PCS Cargo
+          </TabLink>
+          <TabLink href={`/admin/report-cnt/${encodeURIComponent(fCabinetNumber)}?action=cost-update`} active={isCostUpdate}>
+            ปรับต้นทุนตู้ใหม่
+          </TabLink>
+        </div>
+
+        {isCostUpdate ? (
+          showMoney ? (
+            <CostUpdateView
+              fCabinetNumber={fCabinetNumber}
+              warehouseLabel={warehouseLabel}
+              rows={detailRows}
+            />
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
+              <p className="font-semibold">ไม่มีสิทธิ์เข้าถึง</p>
+              <p className="mt-2 text-xs">
+                การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ super / ops / accounting (บัญชี
+                warehouse ดูได้แต่แก้ต้นทุนไม่ได้).
+              </p>
+            </div>
+          )
+        ) : (
+          <ContainerDetailClient
+            rows={detailRows}
+            showMoney={showMoney}
+            canBulkCheck={showMoney}
+            cabinetIsPaid={cabinetIsPaid}
+          />
+        )}
+      </main>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Small server pieces
+// ─────────────────────────────────────────────────────────────────────
+
+function Breadcrumb({ fCabinetNumber }: { fCabinetNumber: string }) {
+  return (
+    <nav aria-label="breadcrumb" className="text-xs text-muted">
+      <ol className="flex items-center gap-1">
+        <li><Link href="/admin" className="hover:underline">หน้าแรก</Link></li>
+        <li>›</li>
+        <li><Link href="/admin/report-cnt" className="hover:underline">รายงานตู้สินค้า</Link></li>
+        <li>›</li>
+        <li className="font-mono text-foreground">{fCabinetNumber}</li>
+      </ol>
+    </nav>
+  );
+}
+
+function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`inline-flex items-center px-3 py-2 text-sm font-medium border-b-2 ${
+        active ? "border-primary-500 text-primary-700" : "border-transparent text-muted hover:text-foreground"
+      }`}
+    >
+      {children}
+    </Link>
+  );
+}

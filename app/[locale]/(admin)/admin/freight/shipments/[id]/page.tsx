@@ -110,7 +110,7 @@ export default async function AdminFreightShipmentDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: header } = await admin
+  const { data: header, error: headerErr } = await admin
     .from("freight_shipments")
     .select(`
       id, job_no, status, profile_id, transport_mode, container_code, carrier_container_no,
@@ -123,19 +123,31 @@ export default async function AdminFreightShipmentDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<Header>();
+  if (headerErr) {
+    console.error(`[freight/shipments/[id] header lookup] id=${id}`, {
+      code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint,
+    });
+    throw new Error(`Failed to load freight_shipments (${headerErr.code}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
   // Parties.
-  const { data: partiesRaw } = await admin
+  const { data: partiesRaw, error: partiesErr } = await admin
     .from("freight_parties")
     .select("id, role, name, address, tax_id, branch")
     .eq("freight_shipment_id", id);
+  if (partiesErr) {
+    console.error(`[freight/shipments/[id] parties lookup] id=${id}`, {
+      code: partiesErr.code, message: partiesErr.message, details: partiesErr.details, hint: partiesErr.hint,
+    });
+    throw new Error(`Failed to load freight_parties (${partiesErr.code}): ${partiesErr.message}`);
+  }
   const parties = (partiesRaw ?? []) as PartyData[];
 
   // Invoice (latest non-cancelled, or first if all cancelled).
   // payment_status + value-block figures (V-E7) come along so the payment
   // panel can show the receipt total without a second round-trip.
-  const { data: invoicesRaw } = await admin
+  const { data: invoicesRaw, error: invoicesErr } = await admin
     .from("freight_invoices")
     .select(`
       id, status, invoice_no, issued_at, cancelled_at, cancellation_reason, notes,
@@ -144,6 +156,12 @@ export default async function AdminFreightShipmentDetailPage({
     `)
     .eq("freight_shipment_id", id)
     .order("created_at", { ascending: false });
+  if (invoicesErr) {
+    console.error(`[freight/shipments/[id] invoices lookup] id=${id}`, {
+      code: invoicesErr.code, message: invoicesErr.message, details: invoicesErr.details, hint: invoicesErr.hint,
+    });
+    throw new Error(`Failed to load freight_invoices (${invoicesErr.code}): ${invoicesErr.message}`);
+  }
   type InvoiceRaw = InvoiceData & {
     commercial_value_thb: number | null;
     duty_thb:             number | null;
@@ -167,22 +185,34 @@ export default async function AdminFreightShipmentDetailPage({
   // Lines (for active invoice only).
   let lines: LineItemData[] = [];
   if (activeInvoice) {
-    const { data: linesRaw } = await admin
+    const { data: linesRaw, error: linesErr } = await admin
       .from("freight_invoice_lines")
       .select("id, position, marks, description, qty, unit, unit_price_usd, amount_usd, cartons, gross_weight_kg, hs_code")
       .eq("freight_invoice_id", activeInvoice.id)
       .order("position", { ascending: true });
+    if (linesErr) {
+      console.error(`[freight/shipments/[id] invoice lines lookup] invoiceId=${activeInvoice.id}`, {
+        code: linesErr.code, message: linesErr.message, details: linesErr.details, hint: linesErr.hint,
+      });
+      throw new Error(`Failed to load freight_invoice_lines (${linesErr.code}): ${linesErr.message}`);
+    }
     lines = (linesRaw ?? []) as LineItemData[];
   }
 
   // Payment ledger (V-E7) — only meaningful once the active invoice is issued.
   let paymentPanel: PaymentPanelData | null = null;
   if (activeRaw && activeRaw.status === "issued") {
-    const { data: paymentsRaw } = await admin
+    const { data: paymentsRaw, error: paymentsErr } = await admin
       .from("freight_invoice_payments")
       .select("id, method, amount_thb, paid_at, slip_storage_path, bank_ref, status, void_reason, recorded_by_admin_id, notes, created_at")
       .eq("freight_invoice_id", activeRaw.id)
       .order("paid_at", { ascending: false });
+    if (paymentsErr) {
+      console.error(`[freight/shipments/[id] payments lookup] invoiceId=${activeRaw.id}`, {
+        code: paymentsErr.code, message: paymentsErr.message, details: paymentsErr.details, hint: paymentsErr.hint,
+      });
+      throw new Error(`Failed to load freight_invoice_payments (${paymentsErr.code}): ${paymentsErr.message}`);
+    }
     const payments = ((paymentsRaw ?? []) as PaymentLedgerRow[]).map((p) => ({
       ...p,
       amount_thb: Number(p.amount_thb),
@@ -207,7 +237,7 @@ export default async function AdminFreightShipmentDetailPage({
   }
 
   // Customer.
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("member_code, first_name, last_name, email, phone, company_name, account_type, tax_id")
     .eq("id", header.profile_id)
@@ -216,6 +246,12 @@ export default async function AdminFreightShipmentDetailPage({
       email: string | null; phone: string | null; company_name: string | null;
       account_type: string | null; tax_id: string | null;
     }>();
+  if (profileErr) {
+    console.error(`[freight/shipments/[id] profile lookup] profileId=${header.profile_id}`, {
+      code: profileErr.code, message: profileErr.message, details: profileErr.details, hint: profileErr.hint,
+    });
+    throw new Error(`Failed to load profiles (${profileErr.code}): ${profileErr.message}`);
+  }
 
   // U2-3 — WHT entry for the active invoice (mirror tax_invoices side).
   type WhtRow = {
@@ -234,12 +270,18 @@ export default async function AdminFreightShipmentDetailPage({
   };
   let whtEntry: WhtRow | null = null;
   if (activeInvoice) {
-    const { data: wht } = await admin
+    const { data: wht, error: whtErr } = await admin
       .from("withholding_tax_entries")
       .select("id, cert_status, gross_invoice_thb, wht_base_thb, wht_rate_pct, wht_amount_thb, net_expected_thb, cert_number, cert_storage_path, cert_received_at, waived_reason, waived_at")
       .eq("freight_invoice_id", activeInvoice.id)
       .limit(1)
       .maybeSingle<WhtRow>();
+    if (whtErr) {
+      console.error(`[freight/shipments/[id] wht lookup] invoiceId=${activeInvoice.id}`, {
+        code: whtErr.code, message: whtErr.message, details: whtErr.details, hint: whtErr.hint,
+      });
+      throw new Error(`Failed to load withholding_tax_entries (${whtErr.code}): ${whtErr.message}`);
+    }
     whtEntry = wht ?? null;
   }
   const whtSuggestedGross = Number(
@@ -261,7 +303,7 @@ export default async function AdminFreightShipmentDetailPage({
     submitted_at:             string | null;
     created_at:               string;
   };
-  const { data: cdRowsRaw } = await admin
+  const { data: cdRowsRaw, error: cdRowsErr } = await admin
     .from("customs_declarations")
     .select(`
       id, declaration_no, status, declaration_type, customs_office, customs_control_no,
@@ -269,12 +311,18 @@ export default async function AdminFreightShipmentDetailPage({
     `)
     .eq("freight_shipment_id", id)
     .order("created_at", { ascending: false });
+  if (cdRowsErr) {
+    console.error(`[freight/shipments/[id] customs declarations lookup] id=${id}`, {
+      code: cdRowsErr.code, message: cdRowsErr.message, details: cdRowsErr.details, hint: cdRowsErr.hint,
+    });
+    throw new Error(`Failed to load customs_declarations (${cdRowsErr.code}): ${cdRowsErr.message}`);
+  }
   const cdRows = (cdRowsRaw ?? []) as CdRow[];
   const activeCd = cdRows.find((c) => c.status !== "cancelled") ?? null;
 
   // IC-1 — find the work_item that indexes this shipment so the thread
   // panel can render below.  May be null if no work_item exists yet.
-  const { data: workItem } = await admin
+  const { data: workItem, error: workItemErr } = await admin
     .from("work_items")
     .select("id")
     .eq("entity_type", "freight_shipment")
@@ -282,15 +330,27 @@ export default async function AdminFreightShipmentDetailPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
+  if (workItemErr) {
+    console.error(`[freight/shipments/[id] work_items lookup] id=${id}`, {
+      code: workItemErr.code, message: workItemErr.message, details: workItemErr.details, hint: workItemErr.hint,
+    });
+    throw new Error(`Failed to load work_items (${workItemErr.code}): ${workItemErr.message}`);
+  }
 
   // Audit.
-  const { data: auditRaw } = await admin
+  const { data: auditRaw, error: auditErr } = await admin
     .from("admin_audit_log")
     .select("id, action, created_at, payload, admin_id, admin:profiles!admin_id ( member_code, first_name, last_name )")
     .eq("target_type", "freight_shipment")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (auditErr) {
+    console.error(`[freight/shipments/[id] audit log lookup] id=${id}`, {
+      code: auditErr.code, message: auditErr.message, details: auditErr.details, hint: auditErr.hint,
+    });
+    throw new Error(`Failed to load admin_audit_log (${auditErr.code}): ${auditErr.message}`);
+  }
   type AuditRaw = {
     id: string; action: string; created_at: string;
     admin: { member_code: string | null; first_name: string | null } | { member_code: string | null; first_name: string | null }[] | null;

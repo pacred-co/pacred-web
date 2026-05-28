@@ -49,7 +49,10 @@ export type WalletTransaction = {
 // ────────────────────────────────────────────────────────────
 export async function getWallet(): Promise<ActionResult<WalletBalance>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -69,7 +72,10 @@ export async function listWalletTransactions(
   limit = 50,
 ): Promise<ActionResult<WalletTransaction[]>> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   const { data, error } = await supabase
@@ -115,7 +121,10 @@ export async function createDeposit(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Server-side slip validation — guard against spoofed MIME / oversized
@@ -176,7 +185,10 @@ export async function createWithdraw(
   const d = parsed.data;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // Check the PENDING-AWARE available balance, not the raw wallet.balance.
@@ -271,17 +283,24 @@ export async function customerCancelPendingWalletTx(
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) return { ok: false, error: "not_signed_in" };
 
   // RLS-scoped read = ownership verification. Returns null if not owned
   // (customer can't even see other users' rows).
-  const { data: existing } = await supabase
+  const { data: existing, error: existingErr } = await supabase
     .from("wallet_transactions")
     .select("id, kind, status, amount, profile_id")
     .eq("id", parsed.data.tx_id)
     .maybeSingle<{ id: string; kind: string; status: string; amount: number; profile_id: string }>();
 
+  if (existingErr) {
+    console.error(`[wallet_transactions mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+    return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+  }
   if (!existing)                             return { ok: false, error: "ไม่พบรายการ" };
   if (existing.profile_id !== user.id)       return { ok: false, error: "ไม่ใช่รายการของคุณ" };
   if (existing.status !== "pending")         return { ok: false, error: `ยกเลิกไม่ได้ — สถานะปัจจุบัน: ${existing.status}` };

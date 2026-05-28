@@ -85,7 +85,7 @@ export default async function CustomerFreightQuoteDetailPage({
   const { quote_no } = await params;
   const sb = await createClient();
 
-  const { data: header } = await sb
+  const { data: header, error: headerErr } = await sb
     .from("freight_quotes")
     .select(`
       id, quote_no, status, buyer_name_snapshot, buyer_tax_id_snapshot,
@@ -95,14 +95,21 @@ export default async function CustomerFreightQuoteDetailPage({
     `)
     .eq("quote_no", quote_no)
     .maybeSingle<QuoteHeader>();
+  if (headerErr) {
+    console.error(`[freight_quotes lookup] failed`, { code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint });
+    throw new Error(`Failed to load freight_quotes (${headerErr.code ?? "unknown"}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
-  const { data: itemsRaw } = await sb
+  const { data: itemsRaw, error: itemsRawErr } = await sb
     .from("freight_quote_items")
     .select("id, position, description, quantity, unit, unit_price_thb, line_total_thb, note")
     .eq("freight_quote_id", header.id)
     .order("position", { ascending: true })
     .returns<QuoteItem[]>();
+  if (itemsRawErr) {
+    console.error(`[freight_quote_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   const items = itemsRaw ?? [];
 
   const isExpired = header.status === "expired";

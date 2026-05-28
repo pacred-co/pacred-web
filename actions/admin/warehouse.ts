@@ -1,281 +1,78 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { logger } from "@/lib/logger";
-import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
-import {
-  createContainer as dbCreateContainer,
-  setContainerStatus as dbSetContainerStatus,
-  setContainerCloseAt as dbSetContainerCloseAt,
-  refreshContainerTotals,
-  attachShipmentToContainer as dbAttachShipment,
-  setShipmentStatus as dbSetShipmentStatus,
-  setShipmentReceivedQty as dbSetReceivedQty,
-  setShipmentCargoType as dbSetShipmentCargoType,
-  createShipment as dbCreateShipment,
-  appendTrackingEvent as dbAppendEvent,
-  CONTAINER_STATUS_VALUES_SPINE,
-  SHIPMENT_STATUS_VALUES,
-  toCanonicalCargoType,
-  type ContainerStatusSpine,
-  type ShipmentStatus,
-  type Container,
-  type Shipment,
-  type TrackingEvent,
-} from "@/lib/warehouse";
+import { withAdmin, type AdminActionResult } from "./common";
 
 /**
- * Admin warehouse actions (T-P2 / CT-4).
+ * Admin warehouse actions — STUB (Wave 3 cleanup, 2026-05-20 ค่ำ).
  *
- * Thin Zod-validated wrappers over `lib/warehouse/*` typed clients.
- * RBAC: `withAdmin(["super","ops","warehouse"])` per ADR-0005 K-7 +
- * 0033 spec — warehouse role added in that migration; ops + super
- * keep full access for ad-hoc admin work.
+ * The entire T-P2 / CT-4 spine — cargo_containers · cargo_shipments ·
+ * cargo_shipment_tracking · cargo_sacks · the cascade RPC — was retired
+ * under D1 Option A in Wave 2 in favour of the legacy `tb_forwarder`
+ * single-source-of-truth pattern (faithful port of `report-cnt.php`).
+ * Every admin UI that consumed these actions is now a tombstone
+ * (see `app/[locale]/(admin)/admin/warehouse/{containers,bulletin,qa-inspections}/page.tsx`).
  *
- * All mutations:
- *   - log audit (logAdminAction) for traceability
- *   - revalidatePath the affected admin pages
- *   - return AdminActionResult<T>
+ * This file used to wrap:
+ *   - adminCreateContainer            (CT-4)
+ *   - adminSetContainerStatus + cascade (P1-5 RPC)
+ *   - adminAttachShipmentToContainer  (CT-4 + V-C3 close gate)
+ *   - adminSetShipmentStatus          (cascade to forwarders / service_orders)
+ *   - adminCreateShipmentManual       (U1-4)
+ *   - adminSetShipmentReceivedQty     (U1-5)
+ *   - adminSetShipmentCargoType       (V-D2)
+ *   - adminSetContainerCloseAt        (V-C3)
+ *   - adminAddTrackingEvent           (scan event)
+ *
+ * Replaced by: the legacy `tb_forwarder` flow — admin updates the
+ * `fcabinetnumber` / `fstatus` columns directly on tb_forwarder rows
+ * (see `/admin/forwarder-action` for the faithful port). Container-level
+ * actions land in Phase C when the LINE bulletin + scan workflows are
+ * faithfully ported.
+ *
+ * Action exports below preserve their shapes (so any mid-flight client
+ * bundle compiles) and return a deprecation error so the issue surfaces.
  */
 
+const DEPRECATION_ERROR =
+  "Action นี้ถูกพักการใช้งานใน Wave 3 (spine retired) — ใช้ /admin/report-cnt + /admin/forwarder-action สำหรับการจัดการตู้/สถานะ shipment ในระบบ legacy แทน";
+
 // ────────────────────────────────────────────────────────────
-// U1-2 / U1-5 / P1-5 — Status propagation cascade (atomic via RPC)
+// Container status spine values — kept as a compile-time
+// re-export so consumers that import from this module still type-check
+// against a stable union. Mirrors the lib/warehouse/types.ts shape
+// before deletion.
 // ────────────────────────────────────────────────────────────
-//
-// When admin flips a container's status, we cascade down the spine:
-//   container.status  → cargo_shipments.status
-//   cargo_shipments.status → forwarders.status OR service_orders.status
-//
-// ── Atomicity (P1-5) ──
-// The original cascade was best-effort + non-atomic — a mid-cascade
-// failure left a container 'arrived' while child forwarders stayed
-// 'in_transit', and billing-gate.ts then read divergent state. The
-// fix moves the entire cascade into a single Postgres function
-// (`cascade_container_status` SECURITY DEFINER, migration 0078).
-// All writes (status updates + admin_audit_log rows) happen in one
-// TX: any hop raising rolls back the whole cascade. No partial state.
-//
-// The forward-only lifecycle, per-status date_* stamping, U1-5
-// auto-close-on-delivery audit event, and admin_id_update fingerprint
-// all live inside the SQL function — see migration 0078 header for
-// the full guarantee. The map constants are co-located there to keep
-// review + the cascade logic in one place.
-//
-// Parent-first / children-atomic shape is intentional: the container
-// status flip + history row land first via dbSetContainerStatus, then
-// this RPC atomically cascades to all children. A failed cascade
-// leaves the container updated (admin can retry); never leaves
-// children half-done.
 
-/** P1-5: call the atomic cascade RPC. Returns the row-count summary or
- *  null on failure. On failure, NO child rows were updated (TX rolled
- *  back). The caller still has its own parent-container update from
- *  before this call — that is not affected by RPC failure. */
-type CascadeSummary = {
-  shipments_total:              number;
-  shipments_updated:            number;
-  shipments_skipped_ahead:      number;
-  forwarders_updated:           number;
-  forwarders_skipped_ahead:     number;
-  service_orders_updated:       number;
-  service_orders_skipped_ahead: number;
-  auto_closed_orders:           number;
-  cascade_reason:               string;
-};
-
-async function cascadeContainerStatus(
-  admin: SupabaseClient,
-  containerId: string,
-  containerStatus: ContainerStatusSpine,
-  adminId: string,
-): Promise<CascadeSummary | null> {
-  const { data, error } = await admin.rpc("cascade_container_status", {
-    p_container_id:     containerId,
-    p_container_status: containerStatus,
-    p_admin_id:         adminId,
-  });
-  if (error) {
-    logger.error("warehouse", "cascade_container_status RPC failed", error, {
-      containerId, containerStatus,
-    });
-    return null;
-  }
-  return data as CascadeSummary;
-}
-
-// ── Single-shipment cascade (used by adminSetShipmentStatus only) ──
-//
-// When admin flips ONE shipment status directly (not via container),
-// the cascade scope is bounded: at most 1 forwarder OR 1 service_order
-// flip. This stays best-effort + non-atomic — far smaller divergence
-// surface than P1-5 (no multi-shipment fan-out). If a single-row
-// cascade ever becomes a problem, lift this into the same RPC.
-
-const SHIPMENT_TO_FORWARDER: Partial<Record<ShipmentStatus, string>> = {
-  sealed_in_container: "shipped_china",
-  in_transit:          "in_transit",
-  arrived_th:          "arrived_thailand",
-  out_for_delivery:    "out_for_delivery",
-  delivered:           "delivered",
-};
-
-const SHIPMENT_TO_SERVICE_ORDER: Partial<Record<ShipmentStatus, string>> = {
-  delivered: "completed",
-};
-
-const FORWARDER_STATUS_ORDER = [
-  "pending_payment", "shipped_china", "in_transit",
-  "arrived_thailand", "out_for_delivery", "delivered",
+const CONTAINER_STATUS_VALUES_SPINE_LOCAL = [
+  "packing", "sealed", "in_transit", "arrived", "unloading", "closed",
 ] as const;
 
-const SERVICE_ORDER_STATUS_ORDER = [
-  "pending", "awaiting_payment", "ordered",
-  "awaiting_chn_dispatch", "completed",
+const SHIPMENT_STATUS_VALUES_LOCAL = [
+  "received_cn", "packed_cn", "sealed_in_container", "in_transit",
+  "arrived_th", "unloaded", "out_for_delivery", "delivered",
 ] as const;
 
-const FORWARDER_DATE_COL: Record<string, string | null> = {
-  shipped_china:    "date_shipped_china",
-  in_transit:       "date_in_transit",
-  arrived_thailand: "date_arrived_thailand",
-  out_for_delivery: "date_out_for_delivery",
-  delivered:        "date_delivered",
-};
-
-const SERVICE_ORDER_DATE_COL: Record<string, string | null> = {
-  awaiting_payment:      "date_awaiting_payment",
-  ordered:               "date_ordered",
-  awaiting_chn_dispatch: "date_dispatched",
-  completed:             "date_completed",
-};
-
-function isAtOrPast<T extends string>(
-  order: readonly T[],
-  current: string,
-  target: T,
-): boolean {
-  const ci = order.indexOf(current as T);
-  const ti = order.indexOf(target);
-  if (ci === -1) return true;
-  if (ti === -1) return false;
-  return ci >= ti;
-}
-
-async function cascadeShipmentToOrders(
-  admin: SupabaseClient,
-  shipmentId: string,
-  shipmentStatus: ShipmentStatus,
-  forwarderFNo: string | null,
-  serviceOrderHNo: string | null,
-  adminId: string,
-): Promise<void> {
-  const fwdTarget = SHIPMENT_TO_FORWARDER[shipmentStatus];
-  if (fwdTarget && forwarderFNo) {
-    try {
-      const { data: fwd, error: fwdErr } = await admin
-        .from("forwarders")
-        .select("id, status")
-        .eq("f_no", forwarderFNo)
-        .maybeSingle<{ id: string; status: string }>();
-      if (fwdErr) {
-        logger.error("warehouse", "cascadeShipmentToOrders forwarder lookup failed", fwdErr, { shipmentId, forwarderFNo });
-      } else if (fwd && !isAtOrPast(FORWARDER_STATUS_ORDER, fwd.status, fwdTarget as typeof FORWARDER_STATUS_ORDER[number])) {
-        const update: Record<string, unknown> = {
-          status:          fwdTarget,
-          admin_id_update: adminId,
-        };
-        const dateCol = FORWARDER_DATE_COL[fwdTarget];
-        if (dateCol) update[dateCol] = new Date().toISOString();
-
-        const { error: updErr } = await admin
-          .from("forwarders")
-          .update(update)
-          .eq("id", fwd.id);
-        if (updErr) {
-          logger.error("warehouse", "cascadeShipmentToOrders forwarder flip failed", updErr, {
-            shipmentId, forwarderId: fwd.id, from: fwd.status, to: fwdTarget,
-          });
-        } else {
-          await logAdminAction(adminId, "shipment.cascade_forwarder_status", "forwarder", fwd.id, {
-            cargo_shipment_id: shipmentId,
-            shipment_status:   shipmentStatus,
-            from_status:       fwd.status,
-            to_status:         fwdTarget,
-          });
-        }
-      }
-    } catch (e) {
-      logger.error("warehouse", "cascadeShipmentToOrders forwarder hop threw", e, { shipmentId, forwarderFNo });
-    }
-  }
-
-  const soTarget = SHIPMENT_TO_SERVICE_ORDER[shipmentStatus];
-  if (soTarget && serviceOrderHNo) {
-    try {
-      const { data: so, error: soErr } = await admin
-        .from("service_orders")
-        .select("id, status")
-        .eq("h_no", serviceOrderHNo)
-        .maybeSingle<{ id: string; status: string }>();
-      if (soErr) {
-        logger.error("warehouse", "cascadeShipmentToOrders service_order lookup failed", soErr, { shipmentId, serviceOrderHNo });
-      } else if (so && !isAtOrPast(SERVICE_ORDER_STATUS_ORDER, so.status, soTarget as typeof SERVICE_ORDER_STATUS_ORDER[number])) {
-        const update: Record<string, unknown> = {
-          status:          soTarget,
-          admin_id_update: adminId,
-        };
-        const dateCol = SERVICE_ORDER_DATE_COL[soTarget];
-        if (dateCol) update[dateCol] = new Date().toISOString();
-
-        const { error: updErr } = await admin
-          .from("service_orders")
-          .update(update)
-          .eq("id", so.id);
-        if (updErr) {
-          logger.error("warehouse", "cascadeShipmentToOrders service_order flip failed", updErr, {
-            shipmentId, serviceOrderId: so.id, from: so.status, to: soTarget,
-          });
-        } else {
-          const action = (shipmentStatus === "delivered" && soTarget === "completed")
-            ? "service_order.auto_close_on_delivery"
-            : "shipment.cascade_service_order_status";
-          await logAdminAction(adminId, action, "service_order", so.id, {
-            cargo_shipment_id: shipmentId,
-            shipment_status:   shipmentStatus,
-            from_status:       so.status,
-            to_status:         soTarget,
-          });
-        }
-      }
-    } catch (e) {
-      logger.error("warehouse", "cascadeShipmentToOrders service_order hop threw", e, { shipmentId, serviceOrderHNo });
-    }
-  }
-}
-
 // ────────────────────────────────────────────────────────────
-// Schemas
+// Schemas — preserved so callers (mid-flight client forms) still validate
 // ────────────────────────────────────────────────────────────
 
 const createContainerSchema = z.object({
-  // Optional — server auto-generates if omitted (origin-prefix + date + seq)
   code:                 z.string().trim().min(1).max(50).optional(),
   transport_mode:       z.enum(["truck", "sea", "air"]),
   origin:               z.string().trim().min(1).max(100),
   destination:          z.string().trim().min(1).max(100),
   source:               z.enum(["pacred", "momo", "self"]).default("pacred"),
   eta:                  z.string().date().optional(),
-  status:               z.enum(CONTAINER_STATUS_VALUES_SPINE).default("packing"),
+  status:               z.enum(CONTAINER_STATUS_VALUES_SPINE_LOCAL).default("packing"),
   carrier_container_no: z.string().trim().min(1).max(50).optional(),
-  close_at:             z.string().datetime({ offset: true }).optional(),   // V-C3
+  close_at:             z.string().datetime({ offset: true }).optional(),
 });
 export type CreateContainerInput = z.infer<typeof createContainerSchema>;
 
 const setContainerStatusSchema = z.object({
   container_id: z.string().uuid(),
-  status:       z.enum(CONTAINER_STATUS_VALUES_SPINE),
+  status:       z.enum(CONTAINER_STATUS_VALUES_SPINE_LOCAL),
   note:         z.string().trim().max(500).optional(),
 });
 export type SetContainerStatusInput = z.infer<typeof setContainerStatusSchema>;
@@ -288,7 +85,7 @@ export type AttachShipmentInput = z.infer<typeof attachShipmentSchema>;
 
 const setShipmentStatusSchema = z.object({
   shipment_id: z.string().uuid(),
-  status:      z.enum(SHIPMENT_STATUS_VALUES),
+  status:      z.enum(SHIPMENT_STATUS_VALUES_LOCAL),
 });
 export type SetShipmentStatusInput = z.infer<typeof setShipmentStatusSchema>;
 
@@ -301,183 +98,8 @@ const addEventSchema = z.object({
 });
 export type AddTrackingEventInput = z.infer<typeof addEventSchema>;
 
-// ────────────────────────────────────────────────────────────
-// CREATE container
-// ────────────────────────────────────────────────────────────
-
-export async function adminCreateContainer(
-  input: CreateContainerInput,
-): Promise<AdminActionResult<Container>> {
-  const parsed = createContainerSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbCreateContainer(admin, {
-      code:                 d.code,
-      transport_mode:       d.transport_mode,
-      origin:               d.origin,
-      destination:          d.destination,
-      source:               d.source,
-      status:               d.status,
-      eta:                  d.eta ?? null,
-      carrier_container_no: d.carrier_container_no ?? null,
-      close_at:             d.close_at ?? null,
-    });
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "container.create", "container", res.data.id, {
-      code:                 res.data.code,
-      transport_mode:       res.data.transport_mode,
-      origin:               res.data.origin,
-      destination:          res.data.destination,
-      source:               res.data.source,
-      carrier_container_no: res.data.carrier_container_no,
-      close_at:             res.data.close_at,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    if (res.data.code) {
-      revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
-    }
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// UPDATE container status (logs to container_status_history)
-// ────────────────────────────────────────────────────────────
-
-export async function adminSetContainerStatus(
-  input: SetContainerStatusInput,
-): Promise<AdminActionResult<Container>> {
-  const parsed = setContainerStatusSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbSetContainerStatus(admin, d.container_id, d.status as ContainerStatusSpine, {
-      changedByAdmin: adminId,
-      note:           d.note,
-      source:         "pacred",
-    });
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "container.set_status", "container", d.container_id, {
-      to_status: d.status,
-      note:      d.note ?? null,
-    });
-
-    // P1-5: atomic cascade down the spine — container → shipments → forwarders / service_orders.
-    // All child writes happen inside a single TX (Postgres function `cascade_container_status`,
-    // migration 0078). A mid-cascade failure rolls back ALL child writes — never leaves
-    // children half-done. The container's own status update (above) is in its own TX and is
-    // unaffected by RPC failure, so an admin can retry the cascade if needed.
-    await cascadeContainerStatus(admin, d.container_id, d.status as ContainerStatusSpine, adminId);
-
-    revalidatePath("/admin/warehouse/containers");
-    if (res.data.code) {
-      revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
-    }
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// ATTACH shipment to container (then refresh container totals)
-// ────────────────────────────────────────────────────────────
-
-export async function adminAttachShipmentToContainer(
-  input: AttachShipmentInput,
-): Promise<AdminActionResult<Shipment>> {
-  const parsed = attachShipmentSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    // V-C3: reject attach when container already past its ตัดตู้ deadline
-    const { data: target } = await admin
-      .from("cargo_containers")
-      .select("close_at, code")
-      .eq("id", d.container_id)
-      .maybeSingle<{ close_at: string | null; code: string | null }>();
-    if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
-      return { ok: false, error: `ตู้ ${target.code ?? d.container_id.slice(0,8)} ปิดรับ shipment ใหม่แล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไป` };
-    }
-
-    const res = await dbAttachShipment(admin, d.shipment_id, d.container_id);
-    if (!res.ok) return { ok: false, error: res.error };
-
-    // Keep the container's denorm cache fresh so the list view shows
-    // accurate weight/box/cbm totals.
-    await refreshContainerTotals(admin, d.container_id);
-
-    await logAdminAction(adminId, "shipment.attach_container", "shipment", d.shipment_id, {
-      container_id: d.container_id,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// SHIPMENT status transition
-// ────────────────────────────────────────────────────────────
-
-export async function adminSetShipmentStatus(
-  input: SetShipmentStatusInput,
-): Promise<AdminActionResult<Shipment>> {
-  const parsed = setShipmentStatusSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbSetShipmentStatus(admin, d.shipment_id, d.status as ShipmentStatus);
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "shipment.set_status", "shipment", d.shipment_id, {
-      to_status: d.status,
-    });
-
-    // U1-2 hop 2 + U1-5: cascade shipment → linked forwarder OR service_order.
-    // Best-effort — failures here don't roll back the shipment flip.
-    await cascadeShipmentToOrders(
-      admin,
-      d.shipment_id,
-      d.status as ShipmentStatus,
-      res.data.forwarder_f_no,
-      res.data.service_order_h_no,
-      adminId,
-    );
-
-    revalidatePath("/admin/warehouse/containers");
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// U1-4: CREATE shipment manually (batch-ingest from supplier WeChat)
-// ────────────────────────────────────────────────────────────
-//
-// Per chat IT (~15 asks/week): staff has tracking numbers from supplier
-// WeChat batches and wants to register cargo_shipment rows BEFORE MOMO
-// sync gets there (or when MOMO never gets there). This action:
-//   1. Resolves customer by either profile_id (UUID) or member_code (PR####).
-//   2. Validates source order belongs to that customer (forwarder OR
-//      service_order; exactly one).
-//   3. Creates cargo_shipment with optional container attachment.
-//   4. Optional initial scan_receive event so the timeline shows a
-//      "registered" entry for transparency (default ON).
-
 const createShipmentManualSchema = z.object({
   shipment_code:        z.string().trim().min(2).max(80),
-  /** Customer lookup — accepts profile_id (UUID) OR member_code (PR####). */
   customer_ref:         z.string().trim().min(2).max(50),
   forwarder_f_no:       z.string().trim().max(50).optional(),
   service_order_h_no:   z.string().trim().max(50).optional(),
@@ -485,152 +107,11 @@ const createShipmentManualSchema = z.object({
   box_count:            z.number().int().min(1).max(100_000).default(1),
   weight_kg:            z.number().min(0).max(100_000).optional(),
   volume_cbm:           z.number().min(0).max(10_000).optional(),
-  /** V-D2: canonical category. Accepts a legacy A/M/X/O/Z or G/T/F too — server
-   *  normalises via `toCanonicalCargoType()`. Empty/unknown → null (staff
-   *  reviews later). */
   cargo_type:           z.string().trim().max(40).optional(),
   initial_scan:         z.boolean().default(true),
   initial_scan_location: z.string().trim().max(100).optional(),
 });
 export type CreateShipmentManualInput = z.infer<typeof createShipmentManualSchema>;
-
-type CreateShipmentManualResult = {
-  shipment_id:   string;
-  shipment_code: string;
-  customer_id:   string;
-  customer_member_code: string | null;
-};
-
-export async function adminCreateShipmentManual(
-  input: CreateShipmentManualInput,
-): Promise<AdminActionResult<CreateShipmentManualResult>> {
-  const parsed = createShipmentManualSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  // Cross-field: exactly one source order
-  const hasFwd  = !!d.forwarder_f_no;
-  const hasOrd  = !!d.service_order_h_no;
-  if (hasFwd === hasOrd) {
-    return { ok: false, error: "ต้องระบุ forwarder f_no หรือ service_order h_no อย่างใดอย่างหนึ่ง" };
-  }
-
-  return withAdmin<CreateShipmentManualResult>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-
-    // ── 1. Resolve customer ──
-    const refLooksLikeUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.customer_ref);
-    const profileQuery = admin
-      .from("profiles")
-      .select("id, member_code")
-      .limit(1);
-    const { data: profile } = refLooksLikeUuid
-      ? await profileQuery.eq("id", d.customer_ref).maybeSingle<{ id: string; member_code: string | null }>()
-      : await profileQuery.eq("member_code", d.customer_ref.toUpperCase()).maybeSingle<{ id: string; member_code: string | null }>();
-    if (!profile) return { ok: false, error: `ไม่พบลูกค้า "${d.customer_ref}"` };
-
-    // ── 2. Validate source order belongs to this customer ──
-    if (hasFwd) {
-      const { data: f } = await admin
-        .from("forwarders")
-        .select("id, profile_id")
-        .eq("f_no", d.forwarder_f_no!)
-        .maybeSingle<{ id: string; profile_id: string }>();
-      if (!f)                          return { ok: false, error: "ไม่พบ forwarder f_no นี้" };
-      if (f.profile_id !== profile.id) return { ok: false, error: "forwarder ไม่ใช่ของลูกค้านี้" };
-    } else {
-      const { data: o } = await admin
-        .from("service_orders")
-        .select("id, profile_id")
-        .eq("h_no", d.service_order_h_no!)
-        .maybeSingle<{ id: string; profile_id: string }>();
-      if (!o)                          return { ok: false, error: "ไม่พบ service_order h_no นี้" };
-      if (o.profile_id !== profile.id) return { ok: false, error: "service_order ไม่ใช่ของลูกค้านี้" };
-    }
-
-    // V-C3: reject when target container already past its ตัดตู้ deadline
-    if (d.cargo_container_id) {
-      const { data: target } = await admin
-        .from("cargo_containers")
-        .select("close_at, code")
-        .eq("id", d.cargo_container_id)
-        .maybeSingle<{ close_at: string | null; code: string | null }>();
-      if (target?.close_at && new Date(target.close_at).getTime() < Date.now()) {
-        return { ok: false, error: `ตู้ ${target.code ?? d.cargo_container_id.slice(0,8)} ปิดรับแล้ว (ตัดตู้ ${new Date(target.close_at).toLocaleString("th-TH")}) — ย้ายไปตู้ถัดไปก่อนค่อยสร้าง shipment` };
-      }
-    }
-
-    // ── 3. Create shipment ──
-    const cargoType = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
-    const created = await dbCreateShipment(admin, {
-      shipment_code:      d.shipment_code,
-      profile_id:         profile.id,
-      cargo_container_id: d.cargo_container_id ?? null,
-      forwarder_f_no:     d.forwarder_f_no ?? null,
-      service_order_h_no: d.service_order_h_no ?? null,
-      box_count:          d.box_count,
-      weight_kg:          d.weight_kg ?? null,
-      volume_cbm:         d.volume_cbm ?? null,
-      cargo_type:         cargoType,
-      status:             "received_cn",       // newly registered = "received in CN"
-    });
-    if (!created.ok) {
-      // Friendlier messages for common errors
-      if (created.error.includes("duplicate") || created.error.includes("23505")) {
-        return { ok: false, error: `shipment_code "${d.shipment_code}" มีอยู่แล้ว — ใช้รหัสอื่นหรือแก้ของเดิม` };
-      }
-      return { ok: false, error: created.error };
-    }
-
-    // ── 4. Initial scan event (default ON) ──
-    if (d.initial_scan) {
-      await dbAppendEvent(admin, {
-        cargo_shipment_id: created.data.id,
-        event:             "scan_receive",
-        location:          d.initial_scan_location ?? "manual_register",
-        scanned_by:        adminId,
-        source:            "pacred",
-        note:              "ลงทะเบียนด้วยมือ (admin manual entry — U1-4)",
-      });
-    }
-
-    // ── 5. Refresh container totals if attached ──
-    if (d.cargo_container_id) {
-      await refreshContainerTotals(admin, d.cargo_container_id);
-    }
-
-    await logAdminAction(adminId, "shipment.create_manual", "shipment", created.data.id, {
-      shipment_code:      d.shipment_code,
-      customer_member:    profile.member_code,
-      forwarder_f_no:     d.forwarder_f_no ?? null,
-      service_order_h_no: d.service_order_h_no ?? null,
-      cargo_container_id: d.cargo_container_id ?? null,
-      box_count:          d.box_count,
-      cargo_type:         cargoType,
-      cargo_type_raw:     d.cargo_type ?? null,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    if (d.cargo_container_id) {
-      // We don't have the container code here; revalidating the parent
-      // is enough — admin clicks back into the detail to see the new row.
-    }
-
-    return {
-      ok: true,
-      data: {
-        shipment_id:          created.data.id,
-        shipment_code:        created.data.shipment_code,
-        customer_id:          profile.id,
-        customer_member_code: profile.member_code,
-      },
-    };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// U1-5: SET shipment received_box_count (split-receipt aware)
-// ────────────────────────────────────────────────────────────
 
 const setReceivedQtySchema = z.object({
   shipment_id:        z.string().uuid(),
@@ -638,143 +119,90 @@ const setReceivedQtySchema = z.object({
 });
 export type SetShipmentReceivedQtyInput = z.infer<typeof setReceivedQtySchema>;
 
-export async function adminSetShipmentReceivedQty(
-  input: SetShipmentReceivedQtyInput,
-): Promise<AdminActionResult<Shipment>> {
-  const parsed = setReceivedQtySchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbSetReceivedQty(admin, d.shipment_id, d.received_box_count);
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "shipment.set_received_qty", "shipment", d.shipment_id, {
-      received_box_count: d.received_box_count,
-      box_count_expected: res.data.box_count,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// V-D2: SET shipment cargo_type (admin correction)
-// ────────────────────────────────────────────────────────────
-//
-// Accepts a canonical value OR a legacy A/M/X/O/Z / G/T/F code — both
-// normalise via `toCanonicalCargoType()` server-side. Empty string
-// clears (sets to null) so staff can flag a row for re-review.
-
 const setCargoTypeSchema = z.object({
   shipment_id: z.string().uuid(),
-  cargo_type:  z.string().trim().max(40),    // "" allowed → clears
+  cargo_type:  z.string().trim().max(40),
 });
 export type SetShipmentCargoTypeInput = z.infer<typeof setCargoTypeSchema>;
 
-export async function adminSetShipmentCargoType(
-  input: SetShipmentCargoTypeInput,
-): Promise<AdminActionResult<Shipment>> {
-  const parsed = setCargoTypeSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  const canonical = d.cargo_type ? toCanonicalCargoType(d.cargo_type) : null;
-  if (d.cargo_type && !canonical) {
-    return { ok: false, error: `cargo_type "${d.cargo_type}" ไม่อยู่ใน enum (general/electrical/food_drug/brand/controlled หรือ legacy A/M/X/O/Z/G/T/F)` };
-  }
-
-  return withAdmin<Shipment>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbSetShipmentCargoType(admin, d.shipment_id, canonical);
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "shipment.set_cargo_type", "shipment", d.shipment_id, {
-      cargo_type:     canonical,
-      cargo_type_raw: d.cargo_type || null,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    return { ok: true, data: res.data };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// V-C3: set / clear cargo_containers.close_at (ตัดตู้ deadline)
-// ────────────────────────────────────────────────────────────
-// Empty string clears (NULL in DB). Datetime is parsed as ISO8601;
-// the UI's <input type="datetime-local"> value gets stamped with the
-// browser's UTC offset before send (caller's job).
-
 const setContainerCloseAtSchema = z.object({
   container_id: z.string().uuid(),
-  close_at:     z.string().trim().max(40),    // "" → clear; else ISO datetime
+  close_at:     z.string().trim().max(40),
 });
 export type SetContainerCloseAtInput = z.infer<typeof setContainerCloseAtSchema>;
 
-export async function adminSetContainerCloseAt(
-  input: SetContainerCloseAtInput,
-): Promise<AdminActionResult<Container>> {
-  const parsed = setContainerCloseAtSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-  let next: string | null = null;
-  if (d.close_at.length > 0) {
-    const dt = new Date(d.close_at);
-    if (Number.isNaN(dt.getTime())) return { ok: false, error: "close_at รูปแบบไม่ถูกต้อง" };
-    next = dt.toISOString();
-  }
+// ────────────────────────────────────────────────────────────
+// Stubs — every entrypoint returns the deprecation error
+// ────────────────────────────────────────────────────────────
 
-  return withAdmin<Container>(["super", "ops", "warehouse"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbSetContainerCloseAt(admin, d.container_id, next);
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "container.set_close_at", "container", d.container_id, {
-      close_at: next,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    if (res.data.code) revalidatePath(`/admin/warehouse/containers/${res.data.code}`);
-    return { ok: true, data: res.data };
+export async function adminCreateContainer(
+  _input: CreateContainerInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// APPEND tracking event (scan)
-// ────────────────────────────────────────────────────────────
+export async function adminSetContainerStatus(
+  _input: SetContainerStatusInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminAttachShipmentToContainer(
+  _input: AttachShipmentInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminSetShipmentStatus(
+  _input: SetShipmentStatusInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminCreateShipmentManual(
+  _input: CreateShipmentManualInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminSetShipmentReceivedQty(
+  _input: SetShipmentReceivedQtyInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminSetShipmentCargoType(
+  _input: SetShipmentCargoTypeInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
+
+export async function adminSetContainerCloseAt(
+  _input: SetContainerCloseAtInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
+  });
+}
 
 export async function adminAddTrackingEvent(
-  input: AddTrackingEventInput,
-): Promise<AdminActionResult<TrackingEvent>> {
-  const parsed = addEventSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
-
-  // RLS for shipment_tracking allows ['super','ops','warehouse','driver']
-  // — drivers scan their own runs.  Match here.
-  return withAdmin<TrackingEvent>(["super", "ops", "warehouse", "driver"], async ({ adminId }) => {
-    const admin = createAdminClient();
-    const res = await dbAppendEvent(admin, {
-      cargo_shipment_id: d.shipment_id,
-      event:             d.event,
-      location:          d.location,
-      box_no:            d.box_no,
-      note:              d.note,
-      scanned_by:        adminId,
-      source:            "pacred",
-    });
-    if (!res.ok) return { ok: false, error: res.error };
-
-    await logAdminAction(adminId, "tracking.scan", "shipment", d.shipment_id, {
-      event:    d.event,
-      location: d.location ?? null,
-      box_no:   d.box_no ?? null,
-    });
-
-    revalidatePath("/admin/warehouse/containers");
-    return { ok: true, data: res.data };
+  _input: AddTrackingEventInput,
+): Promise<AdminActionResult> {
+  return withAdmin(["super", "ops", "warehouse", "driver"], async () => {
+    return { ok: false, error: DEPRECATION_ERROR };
   });
 }

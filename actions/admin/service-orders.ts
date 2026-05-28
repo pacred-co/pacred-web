@@ -51,11 +51,15 @@ export async function adminUpdateServiceOrder(input: AdminUpdateServiceOrderInpu
 
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("service_orders")
       .select("id, profile_id, status, total_thb")
       .eq("h_no", d.h_no)
       .maybeSingle<{ id: string; profile_id: string; status: string; total_thb: number }>();
+    if (existingErr) {
+      console.error(`[service_orders mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
@@ -161,11 +165,15 @@ export async function adminMarkServiceOrderPaid(
   return withAdmin<MarkPaidData>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: order } = await admin
+    const { data: order, error: orderErr } = await admin
       .from("service_orders")
       .select("id, profile_id, h_no, status, total_thb")
       .eq("h_no", d.h_no)
       .maybeSingle<{ id: string; profile_id: string; h_no: string; status: string; total_thb: number }>();
+    if (orderErr) {
+      console.error(`[service_orders mutation lookup] failed`, { code: orderErr.code, message: orderErr.message });
+      return { ok: false, error: `db_error:${orderErr.code ?? "unknown"}` };
+    }
     if (!order) return { ok: false, error: "not_found" };
 
     if (order.status === "cancelled") {
@@ -176,7 +184,7 @@ export async function adminMarkServiceOrderPaid(
     }
 
     // Idempotency: did this order already have a completed payment tx?
-    const { data: existingTx } = await admin
+    const { data: existingTx, error: existingTxErr } = await admin
       .from("wallet_transactions")
       .select("id")
       .eq("reference_type", "order_header")
@@ -184,6 +192,9 @@ export async function adminMarkServiceOrderPaid(
       .eq("kind", "order_payment")
       .eq("status", "completed")
       .maybeSingle<{ id: string }>();
+    if (existingTxErr) {
+      console.error(`[wallet_transactions list] failed`, { code: existingTxErr.code, message: existingTxErr.message });
+    }
     if (existingTx) {
       // Already paid — just nudge status forward if it isn't already
       if (order.status === "awaiting_payment" || order.status === "pending") {
@@ -243,7 +254,7 @@ export async function adminMarkServiceOrderPaid(
 
     if (txErr && (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message))) {
       // Concurrent peer beat us — re-SELECT canonical row.
-      const { data: peerTx } = await admin
+      const { data: peerTx, error: peerTxErr } = await admin
         .from("wallet_transactions")
         .select("id")
         .eq("reference_type", "order_header")
@@ -251,6 +262,9 @@ export async function adminMarkServiceOrderPaid(
         .eq("kind", "order_payment")
         .eq("status", "completed")
         .maybeSingle<{ id: string }>();
+      if (peerTxErr) {
+        console.error(`[wallet_transactions list] failed`, { code: peerTxErr.code, message: peerTxErr.message });
+      }
       if (!peerTx) {
         return { ok: false, error: `wallet insert race: 23505 but no peer tx found for ${order.h_no}` };
       }

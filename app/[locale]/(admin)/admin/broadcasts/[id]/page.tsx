@@ -52,7 +52,7 @@ export default async function AdminBroadcastDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: bc } = await admin
+  const { data: bc, error: bcErr } = await admin
     .from("broadcasts")
     .select(`
       id, title, body, link_href, audience, audience_ids, status,
@@ -61,6 +61,10 @@ export default async function AdminBroadcastDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<BroadcastRow>();
+  if (bcErr) {
+    console.error(`[broadcasts lookup] failed`, { code: bcErr.code, message: bcErr.message, details: bcErr.details, hint: bcErr.hint });
+    throw new Error(`Failed to load broadcasts (${bcErr.code ?? "unknown"}): ${bcErr.message}`);
+  }
   if (!bc) notFound();
 
   // Read stats: if sent, count how many of the resulting notifications were

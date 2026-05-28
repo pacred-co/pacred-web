@@ -119,11 +119,14 @@ export async function customerAcceptQuote(
   // Best-effort — failure must NOT roll back the accept.
   // Fan-out pattern mirrors actions/bookings.ts:submitBooking + actions/contact.ts.
   try {
-    const { data: targetAdmins } = await admin
+    const { data: targetAdmins, error: targetAdminsErr } = await admin
       .from("admins")
       .select("profile_id")
       .in("role", ["sales_admin", "ops", "super"])
       .eq("is_active", true);
+    if (targetAdminsErr) {
+      console.error(`[admins list] failed`, { code: targetAdminsErr.code, message: targetAdminsErr.message });
+    }
 
     const seen = new Set<string>();
     for (const row of targetAdmins ?? []) {

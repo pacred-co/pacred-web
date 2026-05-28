@@ -132,7 +132,7 @@ export default async function CustomerFreightShipmentDetailPage({
   const sb = await createClient();
 
   // Header.
-  const { data: header } = await sb
+  const { data: header, error: headerErr } = await sb
     .from("freight_shipments")
     .select(`
       id, job_no, status, transport_mode, container_code, carrier_container_no,
@@ -142,20 +142,27 @@ export default async function CustomerFreightShipmentDetailPage({
     `)
     .eq("id", id)
     .maybeSingle<ShipmentHeader>();
+  if (headerErr) {
+    console.error(`[freight_shipments lookup] failed`, { code: headerErr.code, message: headerErr.message, details: headerErr.details, hint: headerErr.hint });
+    throw new Error(`Failed to load freight_shipments (${headerErr.code ?? "unknown"}): ${headerErr.message}`);
+  }
   if (!header) notFound();
 
   // Parties.
-  const { data: partiesRaw } = await sb
+  const { data: partiesRaw, error: partiesRawErr } = await sb
     .from("freight_parties")
     .select("id, role, name, address, tax_id, branch")
     .eq("freight_shipment_id", id)
     .returns<PartyRow[]>();
+  if (partiesRawErr) {
+    console.error(`[freight_parties list] failed`, { code: partiesRawErr.code, message: partiesRawErr.message });
+  }
   const parties = partiesRaw ?? [];
   const shipper   = parties.find((p) => p.role === "shipper")   ?? null;
   const consignee = parties.find((p) => p.role === "consignee") ?? null;
 
   // Invoice (latest non-cancelled, else newest).
-  const { data: invoicesRaw } = await sb
+  const { data: invoicesRaw, error: invoicesRawErr } = await sb
     .from("freight_invoices")
     .select(`
       id, status, invoice_no, issued_at, payment_status, fully_paid_at,
@@ -164,6 +171,9 @@ export default async function CustomerFreightShipmentDetailPage({
     .eq("freight_shipment_id", id)
     .order("created_at", { ascending: false })
     .returns<InvoiceRow[]>();
+  if (invoicesRawErr) {
+    console.error(`[freight_invoices list] failed`, { code: invoicesRawErr.code, message: invoicesRawErr.message });
+  }
   const allInvoices = invoicesRaw ?? [];
   const activeInvoice = allInvoices.find((i) => i.status !== "cancelled") ?? allInvoices[0] ?? null;
 
@@ -173,11 +183,14 @@ export default async function CustomerFreightShipmentDetailPage({
   let outstandingThb = 0;
   let paymentStatus: FreightInvoicePaymentStatus = "unpaid";
   if (activeInvoice && activeInvoice.status === "issued") {
-    const { data: paymentsRaw } = await sb
+    const { data: paymentsRaw, error: paymentsRawErr } = await sb
       .from("freight_invoice_payments")
       .select("id, amount_thb, status")
       .eq("freight_invoice_id", activeInvoice.id)
       .returns<PaymentRow[]>();
+    if (paymentsRawErr) {
+      console.error(`[freight_invoice_payments list] failed`, { code: paymentsRawErr.code, message: paymentsRawErr.message });
+    }
     paidThb = roundThb(
       (paymentsRaw ?? [])
         .filter((p) => p.status === "recorded")
@@ -196,12 +209,15 @@ export default async function CustomerFreightShipmentDetailPage({
   // for the active invoice. RLS already scopes withholding_tax_entries.
   let whtEntry: WhtRow | null = null;
   if (activeInvoice) {
-    const { data: wht } = await sb
+    const { data: wht, error: whtErr } = await sb
       .from("withholding_tax_entries")
       .select("id, cert_status, wht_rate_pct, wht_amount_thb, net_expected_thb, gross_invoice_thb")
       .eq("freight_invoice_id", activeInvoice.id)
       .limit(1)
       .maybeSingle<WhtRow>();
+    if (whtErr) {
+      console.error(`[withholding_tax_entries list] failed`, { code: whtErr.code, message: whtErr.message });
+    }
     whtEntry = wht ?? null;
   }
 

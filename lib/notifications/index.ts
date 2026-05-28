@@ -63,7 +63,7 @@ export async function sendNotification(
   }
 
   // Step 2 — look up the user's channel prefs + LINE userId
-  const { data: profile } = await admin
+  const { data: profile, error: profileErr } = await admin
     .from("profiles")
     .select("email, line_user_id, notify_channels")
     .eq("id", profileId)
@@ -72,6 +72,9 @@ export async function sendNotification(
       line_user_id: string | null;
       notify_channels: { line?: boolean; email?: boolean } | null;
     }>();
+  if (profileErr) {
+    console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+  }
 
   let deliveredLine  = false;
   let deliveredEmail = false;

@@ -525,11 +525,12 @@ export default async function ForwarderTablePage({
       {/* Page content — Tailwind rebuild matching /service-import page.tsx.
           Wrapped in `.pcs-content-pad` so the (protected) layout's desktop
           padding (sidebar clearance + FloatingTabs clearance) kicks in. */}
-      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24 max-w-[1280px] mx-auto">
+      <div className="pcs-content-pad w-full px-3 md:px-6 pt-3 pb-[200px] md:py-6 md:pb-24">
         <section className="bg-white dark:bg-surface border border-border rounded-2xl shadow-sm overflow-hidden">
-          {/* ── Tab strip + add CTA ── */}
-          <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5">
-            {/* View tabs (เต็ม / ตาราง). Active = ตาราง = red underline. */}
+          {/* ── Tab strip — legacy layout per ปอน's mockup (2026-05-28):
+              tabs on their own row; the "เพิ่มรายการนำเข้า" CTA moved
+              down into the search row. */}
+          <div className="border-b border-border px-3 py-2.5 md:px-4 md:py-3">
             <div className="flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
               <Link
                 href="/service-import"
@@ -546,21 +547,10 @@ export default async function ForwarderTablePage({
                 รายการฝากนำเข้าสินค้าแบบตาราง
               </Link>
             </div>
-
-            {/* Add-forwarder CTA — legacy goes to /service-import/add.
-                Matches the emerald pill shape from page.tsx. */}
-            <Link
-              href="/service-import/add"
-              className="inline-flex items-center gap-2 self-stretch md:self-auto justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all"
-            >
-              <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
-                +
-              </span>
-              <span>เพิ่มรายการนำเข้า</span>
-            </Link>
           </div>
 
-          {/* ── Search form ── */}
+          {/* ── Search form (Tracking + Lot + search button + add CTA all
+              on the same row, matching the legacy image ปอน 2026-05-28). */}
           <div className="border-b border-border px-3 py-3 md:px-4 md:py-3 bg-surface-alt/30">
             <form
               className="flex flex-col md:flex-row md:items-end gap-2 md:gap-3"
@@ -607,6 +597,15 @@ export default async function ForwarderTablePage({
               >
                 ค้นหารายการ
               </button>
+              <Link
+                href="/service-import/add"
+                className="inline-flex items-center gap-2 justify-center md:justify-start rounded-full bg-emerald-600 text-white pl-1.5 pr-4 py-1.5 text-sm font-bold shadow-md shadow-emerald-600/25 hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
+              >
+                <span className="inline-flex w-7 h-7 items-center justify-center rounded-full bg-white text-emerald-600 font-black text-lg leading-none shadow-sm" aria-hidden>
+                  +
+                </span>
+                <span>เพิ่มรายการนำเข้า</span>
+              </Link>
             </form>
             {sp.fTrackingCHN !== undefined && (
               <div className="text-xs text-red-600 mt-2">
@@ -617,12 +616,14 @@ export default async function ForwarderTablePage({
             )}
           </div>
 
-          {/* ── Status filter chips + table content ── */}
+          {/* ── Status filter pills + table content ── 9 uniformly-distributed
+              red-outlined buttons matching ปอน's legacy image (2026-05-28):
+              full-row spread, all bordered red, active = filled red. */}
           <div className="px-3 py-3 md:px-4 md:py-4">
             <h4 className="text-sm md:text-base font-bold text-foreground mb-2.5">
               สถานะรายการ
             </h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
               {statusChips.map((chip) => {
                 const active = isQActive(
                   chip.href.split("?q=")[1] ?? "all",
@@ -631,16 +632,18 @@ export default async function ForwarderTablePage({
                   <Link
                     key={chip.href}
                     href={chip.href}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs md:text-sm font-medium border transition-colors ${
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-full px-2 py-2 text-xs md:text-sm font-medium border-2 border-dashed transition-colors text-center ${
                       active
-                        ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700"
-                        : "bg-surface-alt/60 hover:bg-surface-alt text-foreground border-border"
+                        ? "bg-red-600 text-white border-red-600 shadow-sm"
+                        : "bg-white text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500"
                     }`}
                   >
-                    <span>{chip.label}</span>
+                    <span className="truncate">{chip.label}</span>
                     {chip.count > 0 && (
                       <span
-                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 ${chip.chipColor}`}
+                        className={`inline-flex items-center justify-center min-w-[22px] h-5 rounded-full text-[10px] font-bold px-1.5 shrink-0 ${
+                          active ? "bg-white text-red-700" : chip.chipColor
+                        }`}
                       >
                         {chip.count}
                       </span>
@@ -669,30 +672,38 @@ export default async function ForwarderTablePage({
                   id="myTable"
                   className="dataTable w-full text-xs md:text-sm border-collapse"
                 >
-                  <thead className="bg-red-50 dark:bg-red-950/20">
+                  {/* Header cells — per-column block colors matching ปอน's
+                      legacy image (2026-05-28): purple/fuchsia → magenta →
+                      rose → red → orange across the 22 columns. Each th
+                      gets its own bg class so the gradient remains visible
+                      regardless of overflow-x-auto scrolling.
+                      ⚠ Inline `display: table-header-group` overrides
+                      `cart.css`'s `.pcs-legacy thead { display: none }`
+                      that leaks into every protected page. */}
+                  <thead style={{ display: "table-header-group" }}>
                     <tr className="text-center">
-                      <th className="all add-text-all px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ID</th>
-                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">วันที่สร้าง</th>
-                      <th className="all add-text-all px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">เลขแทรคกิ้งจีน</th>
-                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ออเดอร์สั่งซื้อ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ล๊อต/ลำดับ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-left text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">รายละเอียด</th>
-                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ลัง</th>
-                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">หนัก</th>
-                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">กว้าง</th>
-                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">สูง</th>
-                      <th className="all add-text-all hidden xl:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ยาว</th>
-                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">คิว</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ประเภท</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ค่าตีลัง</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ขนส่งจีน+</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ค่าอื่นๆ</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ขนส่งไทย</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">เข้าโกดังจีน</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ออกโกดังจีน</th>
-                      <th className="all add-text-all hidden sm:table-cell px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ถึงโกดังไทย</th>
-                      <th className="all add-text-all px-2 py-2 text-right text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">ราคา</th>
-                      <th className="all add-text-all px-2 py-2 text-center text-xs font-bold text-muted uppercase tracking-wide whitespace-nowrap border-b border-border">สถานะ</th>
+                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-fuchsia-700">ID</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-fuchsia-700">วันที่สร้าง</th>
+                      <th className="all add-text-all px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-fuchsia-600">เลขแทรคกิ้งจีน</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-pink-600">ออเดอร์สั่งซื้อ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-pink-600">ล๊อต/ลำดับ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-left text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-rose-600">รายละเอียด</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-rose-600">ลัง</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-red-600">หนัก</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-red-500">กว้าง</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-red-500">สูง</th>
+                      <th className="all add-text-all hidden xl:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-red-500">ยาว</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-600">คิว</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-600">ประเภท</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ค่าตีลัง</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ขนส่งจีน+</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ค่าอื่นๆ</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ขนส่งไทย</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">เข้าโกดังจีน</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ออกโกดังจีน</th>
+                      <th className="all add-text-all hidden sm:table-cell px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ถึงโกดังไทย</th>
+                      <th className="all add-text-all px-3 py-3 text-right text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap border-r border-white/30 bg-orange-500">ราคา</th>
+                      <th className="all add-text-all px-3 py-3 text-center text-xs md:text-sm font-bold text-white uppercase tracking-wide whitespace-nowrap bg-orange-500">สถานะ</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -904,7 +915,7 @@ export default async function ForwarderTablePage({
                the legacy DataTables JS reads/writes. */}
       {arrStatus[5] > 0 && (
         <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[40] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="max-w-[1280px] mx-auto flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
+          <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
               <input
                 type="checkbox"

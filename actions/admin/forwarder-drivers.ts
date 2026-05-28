@@ -147,11 +147,15 @@ export async function driverUpdateOwnAssignmentStatus(
 
   return withAdmin(["driver", "ops", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarder_driver")
       .select("id, status, profile_id, forwarder_id, accepted_at")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: Status; profile_id: string; forwarder_id: string; accepted_at: string | null }>();
+    if (existingErr) {
+      console.error(`[forwarder_driver mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     // Self-row check — driver can only update OWN assignments. ops/super bypass for admin overrides.
@@ -160,12 +164,16 @@ export async function driverUpdateOwnAssignmentStatus(
     if (!isSelf) {
       // Only ops/super may touch others' rows — verify by re-reading the wrapper's
       // role context indirectly via a second admin lookup.
-      const { data: caller } = await admin
+      const { data: caller, error: callerErr } = await admin
         .from("admins")
         .select("role")
         .eq("profile_id", adminId)
         .in("role", ["ops", "super"])
         .maybeSingle();
+      if (callerErr) {
+        console.error(`[admins mutation lookup] failed`, { code: callerErr.code, message: callerErr.message });
+        return { ok: false, error: `db_error:${callerErr.code ?? "unknown"}` };
+      }
       if (!caller) return { ok: false, error: "ไม่อนุญาต — งานนี้ไม่ใช่ของคุณ" };
     }
 
@@ -213,7 +221,7 @@ export async function adminUpdateDriverAssignmentStatus(
 
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarder_driver")
       .select("id, status, profile_id, forwarder_id, fd_date, accepted_at, completed_at")
       .eq("id", d.id)
@@ -227,6 +235,10 @@ export async function adminUpdateDriverAssignmentStatus(
         completed_at: string | null;
       }>();
 
+    if (existingErr) {
+      console.error(`[forwarder_driver mutation lookup] failed`, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
     if (existing.status === d.status) return { ok: true };  // no-op
 
@@ -314,30 +326,40 @@ export async function adminAssignDriverToForwarder(
       // member_code → profile_id lookup; case-insensitive (uppercase
       // stored, but admins might type lowercase).
       const code = d.member_code!.toUpperCase();
-      const { data: prof } = await admin
+      const { data: prof, error: profErr } = await admin
         .from("profiles")
         .select("id")
         .eq("member_code", code)
         .maybeSingle<{ id: string }>();
+      if (profErr) {
+        console.error(`[profiles list] failed`, { code: profErr.code, message: profErr.message });
+      }
       if (!prof) return { ok: false, error: `ไม่พบ profile member_code = ${code}` };
       driverProfileId = prof.id;
     }
 
     // 2. Verify forwarder exists + grab info for the notification ──
-    const { data: forwarder } = await admin
+    const { data: forwarder, error: forwarderErr } = await admin
       .from("forwarders")
       .select("id, f_no, profile_id, status")
       .eq("id", d.forwarder_id)
       .maybeSingle<{ id: string; f_no: string; profile_id: string; status: string }>();
+    if (forwarderErr) {
+      console.error(`[forwarders mutation lookup] failed`, { code: forwarderErr.code, message: forwarderErr.message });
+      return { ok: false, error: `db_error:${forwarderErr.code ?? "unknown"}` };
+    }
     if (!forwarder) return { ok: false, error: "forwarder_not_found" };
 
     // 3. Reject if there's already an OPEN assignment ─────────
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarder_driver")
       .select("id, status")
       .eq("forwarder_id", d.forwarder_id)
       .in("status", [1, 2])  // 1=assigned, 2=accepted (open states)
       .maybeSingle<{ id: string; status: number }>();
+    if (existingErr) {
+      console.error(`[forwarder_driver list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
     if (existing) {
       return {
         ok: false,

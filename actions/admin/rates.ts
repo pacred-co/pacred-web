@@ -56,7 +56,7 @@ export async function adminUpsertGeneralRate(
 
     // Read-before-write so we can audit before/after + report whether this is
     // an insert or update.
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("rate_general")
       .select("id, tier1, tier2, tier3")
       .eq("customer_group",   d.customer_group)
@@ -65,6 +65,9 @@ export async function adminUpsertGeneralRate(
       .eq("product_type",     d.product_type)
       .eq("basis",            d.basis)
       .maybeSingle<{ id: string; tier1: number | null; tier2: number | null; tier3: number | null }>();
+    if (existingErr) {
+      console.error(`[rate_general list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     const { data: written, error } = await admin
       .from("rate_general")
@@ -121,11 +124,15 @@ export async function adminDeleteGeneralRate(
     const admin = createAdminClient();
 
     // Audit the full row before deletion so we can reconstruct if needed.
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("rate_general")
       .select("customer_group, source_warehouse, transport_type, product_type, basis, tier1, tier2, tier3")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[rate_general mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error } = await admin.from("rate_general").delete().eq("id", d.id);
@@ -162,7 +169,7 @@ export async function adminUpsertVipRate(
 
   return withAdmin<{ id: string; created: boolean }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("rate_vip")
       .select("id, rate")
       .eq("customer_group",   d.customer_group)
@@ -171,6 +178,9 @@ export async function adminUpsertVipRate(
       .eq("product_type",     d.product_type)
       .eq("basis",            d.basis)
       .maybeSingle<{ id: string; rate: number }>();
+    if (existingErr) {
+      console.error(`[rate_vip list] failed`, { code: existingErr.code, message: existingErr.message });
+    }
 
     const { data: written, error } = await admin
       .from("rate_vip")
@@ -221,11 +231,15 @@ export async function adminDeleteVipRate(
 
   return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("rate_vip")
       .select("customer_group, source_warehouse, transport_type, product_type, basis, rate")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[rate_vip mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error } = await admin.from("rate_vip").delete().eq("id", d.id);
@@ -288,7 +302,7 @@ export async function adminUpsertCustomUserRate(
       const lookup = await resolveCustomerToProfileId(admin, d.customer_ref);
       if (!lookup.ok) return { ok: false, error: lookup.error };
 
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("rate_custom_user")
         .select("id, rate")
         .eq("profile_id",       lookup.profile_id)
@@ -297,6 +311,9 @@ export async function adminUpsertCustomUserRate(
         .eq("product_type",     d.product_type)
         .eq("basis",            d.basis)
         .maybeSingle<{ id: string; rate: number }>();
+      if (existingErr) {
+        console.error(`[rate_custom_user list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       const { data: written, error } = await admin
         .from("rate_custom_user")
@@ -349,11 +366,15 @@ export async function adminDeleteCustomUserRate(
 
   return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("rate_custom_user")
       .select("profile_id, source_warehouse, transport_type, product_type, basis, rate")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[rate_custom_user mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error } = await admin.from("rate_custom_user").delete().eq("id", d.id);
@@ -404,7 +425,7 @@ export async function adminUpsertCustomHsRate(
       if (!lookup.ok) return { ok: false, error: lookup.error };
 
       // SELECT-then-write (no UNIQUE constraint to onConflict against)
-      const { data: existing } = await admin
+      const { data: existing, error: existingErr } = await admin
         .from("rate_custom_hs")
         .select("id, rate, rate_before")
         .eq("profile_id",       lookup.profile_id)
@@ -414,6 +435,9 @@ export async function adminUpsertCustomHsRate(
         .eq("product_type",     d.product_type)
         .eq("basis",            d.basis)
         .maybeSingle<{ id: string; rate: number; rate_before: number | null }>();
+      if (existingErr) {
+        console.error(`[rate_custom_hs list] failed`, { code: existingErr.code, message: existingErr.message });
+      }
 
       let writtenId: string;
       if (existing) {
@@ -480,11 +504,15 @@ export async function adminDeleteCustomHsRate(
 
   return withAdmin<{ id: string }>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("rate_custom_hs")
       .select("profile_id, hs_code, source_warehouse, transport_type, product_type, basis, rate, rate_before")
       .eq("id", d.id)
       .maybeSingle();
+    if (beforeErr) {
+      console.error(`[rate_custom_hs mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
 
     const { error } = await admin.from("rate_custom_hs").delete().eq("id", d.id);

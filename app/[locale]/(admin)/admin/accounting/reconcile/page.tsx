@@ -79,7 +79,7 @@ export default async function ReconcilePage() {
   const sinceIso = getRecentWindowIso(DAYS_BACK);
 
   // 1. All recent forwarders (window: 90d)
-  const { data: forwardersRaw } = await admin
+  const { data: forwardersRaw, error: forwardersRawErr } = await admin
     .from("forwarders")
     .select(`
       id, f_no, profile_id, status, total_price, created_at,
@@ -88,6 +88,9 @@ export default async function ReconcilePage() {
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(2000);
+  if (forwardersRawErr) {
+    console.error(`[forwarders list] failed`, { code: forwardersRawErr.code, message: forwardersRawErr.message });
+  }
   type RawForwarder = Omit<Forwarder, "profile"> & { profile: Forwarder["profile"] | Forwarder["profile"][] | null };
   const forwarders: Forwarder[] = ((forwardersRaw ?? []) as RawForwarder[]).map((r) => ({
     ...r,
@@ -95,7 +98,7 @@ export default async function ReconcilePage() {
   }));
 
   // 2. All completed import_payment wallet_tx (window: 90d)
-  const { data: txs } = await admin
+  const { data: txs, error: txsErr } = await admin
     .from("wallet_transactions")
     .select("id, reference_id, amount, status, created_at")
     .eq("reference_type", "forwarder")
@@ -105,6 +108,9 @@ export default async function ReconcilePage() {
     .order("created_at", { ascending: false })
     .limit(2000)
     .returns<WalletTx[]>();
+  if (txsErr) {
+    console.error(`[wallet_transactions list] failed`, { code: txsErr.code, message: txsErr.message });
+  }
 
   // Index wallet_tx by f_no for O(1) join
   const txByFno = new Map<string, WalletTx>();
@@ -155,11 +161,14 @@ export default async function ReconcilePage() {
     const f = fwdByFno.get(tx.reference_id);
     if (!f) {
       // Outside the window OR truly orphaned. Try a direct lookup to avoid false positive.
-      const { data: anyF } = await admin
+      const { data: anyF, error: anyFErr } = await admin
         .from("forwarders")
         .select("id, f_no, profile_id, status, total_price, created_at, profile:profiles!profile_id(member_code, first_name, last_name)")
         .eq("f_no", tx.reference_id)
         .maybeSingle<Forwarder>();
+      if (anyFErr) {
+        console.error(`[forwarders list] failed`, { code: anyFErr.code, message: anyFErr.message });
+      }
       if (!anyF) {
         bucketC.push({
           bucket: "C",
@@ -191,7 +200,7 @@ export default async function ReconcilePage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · บัญชี</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี</p>
         <h1 className="mt-1 text-2xl font-bold">Payment ↔ Order Reconciliation</h1>
         <p className="mt-1 text-sm text-muted">
           เช็คความตรงระหว่าง forwarder status กับ wallet_tx (90 วันล่าสุด).

@@ -121,11 +121,15 @@ export async function adminUpdateFreightQuote(
   return withAdmin([...ROLES_CREATE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: before } = await admin
+    const { data: before, error: beforeErr } = await admin
       .from("freight_quotes")
       .select("status, quote_no")
       .eq("id", d.id)
       .maybeSingle<{ status: string; quote_no: string }>();
+    if (beforeErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: beforeErr.code, message: beforeErr.message });
+      return { ok: false, error: `db_error:${beforeErr.code ?? "unknown"}` };
+    }
     if (!before) return { ok: false, error: "not_found" };
     if (before.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -176,24 +180,31 @@ export async function adminAddQuoteItem(
   return withAdmin([...ROLES_CREATE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_quotes")
       .select("status, quote_no")
       .eq("id", d.freight_quote_id)
       .maybeSingle<{ status: string; quote_no: string }>();
+    if (parentErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
     // Auto-assign position if not given.
     let position = d.position ?? 1;
     if (!d.position) {
-      const { data: maxRow } = await admin
+      const { data: maxRow, error: maxRowErr } = await admin
         .from("freight_quote_items")
         .select("position")
         .eq("freight_quote_id", d.freight_quote_id)
         .order("position", { ascending: false })
         .limit(1)
         .maybeSingle<{ position: number }>();
+      if (maxRowErr) {
+        console.error(`[freight_quote_items list] failed`, { code: maxRowErr.code, message: maxRowErr.message });
+      }
       position = (maxRow?.position ?? 0) + 1;
     }
 
@@ -246,18 +257,26 @@ export async function adminUpdateQuoteItem(
   return withAdmin([...ROLES_CREATE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("freight_quote_items")
       .select("id, freight_quote_id, quantity, unit_price_thb")
       .eq("id", d.id)
       .maybeSingle<{ id: string; freight_quote_id: string; quantity: number; unit_price_thb: number }>();
+    if (rowErr) {
+      console.error(`[freight_quote_items mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_quotes")
       .select("status")
       .eq("id", row.freight_quote_id)
       .maybeSingle<{ status: string }>();
+    if (parentErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -302,18 +321,26 @@ export async function adminDeleteQuoteItem(
   return withAdmin([...ROLES_CREATE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("freight_quote_items")
       .select("id, freight_quote_id")
       .eq("id", d.id)
       .maybeSingle<{ id: string; freight_quote_id: string }>();
+    if (rowErr) {
+      console.error(`[freight_quote_items mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("freight_quotes")
       .select("status")
       .eq("id", row.freight_quote_id)
       .maybeSingle<{ status: string }>();
+    if (parentErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code ?? "unknown"}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -458,11 +485,14 @@ export async function adminMarkQuoteAccepted(
     // converted_to_shipment_id, and the UNIQUE index on source_quote_id
     // (migration 0050) means concurrent converts collapse to one shipment.
     try {
-      const { data: quoteRow } = await admin
+      const { data: quoteRow, error: quoteRowErr } = await admin
         .from("freight_quotes")
         .select("profile_id, converted_to_shipment_id")
         .eq("id", input.id)
         .maybeSingle<{ profile_id: string | null; converted_to_shipment_id: string | null }>();
+      if (quoteRowErr) {
+        console.error(`[freight_quotes list] failed`, { code: quoteRowErr.code, message: quoteRowErr.message });
+      }
 
       if (quoteRow && !quoteRow.converted_to_shipment_id && quoteRow.profile_id) {
         const convertRes = await adminConvertQuoteToShipment({ id: input.id });
@@ -554,7 +584,7 @@ export async function adminConvertQuoteToShipment(
   return withAdmin([...ROLES_APPROVE], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: quote } = await admin
+    const { data: quote, error: quoteErr } = await admin
       .from("freight_quotes")
       .select("id, quote_no, status, profile_id, buyer_name_snapshot, buyer_contact_snapshot, transport_mode, port_loading, port_discharge, place_delivery, incoterm, converted_to_shipment_id, notes")
       .eq("id", input.id)
@@ -568,6 +598,10 @@ export async function adminConvertQuoteToShipment(
         converted_to_shipment_id: string | null;
         notes: string | null;
       }>();
+    if (quoteErr) {
+      console.error(`[freight_quotes mutation lookup] failed`, { code: quoteErr.code, message: quoteErr.message });
+      return { ok: false, error: `db_error:${quoteErr.code ?? "unknown"}` };
+    }
     if (!quote) return { ok: false, error: "not_found" };
     if (quote.status !== "accepted") return { ok: false, error: "not_accepted" };
     if (!quote.profile_id)           return { ok: false, error: "quote_has_no_profile" };
@@ -612,11 +646,15 @@ export async function adminConvertQuoteToShipment(
 
     // UNIQUE on source_quote_id may fire if a concurrent convert won.
     if (insErr && (insErr.code === "23505" || /duplicate|unique/i.test(insErr.message))) {
-      const { data: peer } = await admin
+      const { data: peer, error: peerErr } = await admin
         .from("freight_shipments")
         .select("id")
         .eq("source_quote_id", quote.id)
         .maybeSingle<{ id: string }>();
+      if (peerErr) {
+        console.error(`[freight_shipments mutation lookup] failed`, { code: peerErr.code, message: peerErr.message });
+        return { ok: false, error: `db_error:${peerErr.code ?? "unknown"}` };
+      }
       if (!peer) return { ok: false, error: "convert_race: 23505 but no peer shipment" };
       // Backfill the quote link on our side too (best-effort).
       await admin
@@ -671,11 +709,15 @@ async function flipStatus(
   to:           string,
   extra:        Record<string, unknown>,
 ): Promise<AdminActionResult<void>> {
-  const { data: row } = await admin
+  const { data: row, error: rowErr } = await admin
     .from("freight_quotes")
     .select("status")
     .eq("id", id)
     .maybeSingle<{ status: string }>();
+  if (rowErr) {
+    console.error(`[freight_quotes mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+    return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+  }
   if (!row) return { ok: false, error: "not_found" };
   if (row.status !== expectedFrom) return { ok: false, error: `bad_status:${row.status}` };
 
@@ -690,16 +732,22 @@ async function flipStatus(
 
 async function recomputeQuoteTotals(quoteId: string): Promise<void> {
   const admin = createAdminClient();
-  const { data: itemsRaw } = await admin
+  const { data: itemsRaw, error: itemsRawErr } = await admin
     .from("freight_quote_items")
     .select("quantity, unit_price_thb")
     .eq("freight_quote_id", quoteId);
+  if (itemsRawErr) {
+    console.error(`[freight_quote_items list] failed`, { code: itemsRawErr.code, message: itemsRawErr.message });
+  }
   const items = (itemsRaw ?? []) as Array<{ quantity: number; unit_price_thb: number }>;
-  const { data: header } = await admin
+  const { data: header, error: headerErr } = await admin
     .from("freight_quotes")
     .select("vat_pct")
     .eq("id", quoteId)
     .maybeSingle<{ vat_pct: number }>();
+  if (headerErr) {
+    console.error(`[freight_quotes list] failed`, { code: headerErr.code, message: headerErr.message });
+  }
   const vat_pct = Number(header?.vat_pct ?? 7);
 
   const totals = computeQuoteTotals({

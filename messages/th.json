@@ -374,15 +374,15 @@
   "login": {
     "title": "เข้าสู่ระบบ",
     "emailLabel": "เบอร์โทรศัพท์หรือรหัสสมาชิก",
-    "emailPlaceholder": "0812345678 หรือ PR001",
+    "emailPlaceholder": "เบอร์โทรศัพท์หรือรหัสสมาชิก",
     "passwordLabel": "รหัสผ่าน",
-    "passwordPlaceholder": "••••••••",
+    "passwordPlaceholder": "รหัสผ่านใหม่เพื่อเข้าสู่ระบบ 6-20 ตัวอักษร",
     "forgotPassword": "ลืมรหัสผ่าน?",
     "rememberMe": "จำฉันไว้ในระบบ",
     "submit": "เข้าสู่ระบบ",
     "orContinueWith": "หรือเข้าสู่ระบบด้วย",
-    "noAccount": "ยังไม่มีบัญชี?",
-    "registerLink": "สมัครสมาชิก",
+    "noAccount": "ยังไม่มีบัญชีผู้ใช้งาน?",
+    "registerLink": "สร้างบัญชี",
     "comingSoon": "เร็วๆ นี้"
   },
   "register": {
@@ -2585,10 +2585,25 @@
       "super": "ผู้ดูแลระบบสูงสุด",
       "ops": "ฝ่ายปฏิบัติการ Cargo",
       "accounting": "ฝ่ายบัญชี",
-      "salesAdmin": "ฝ่ายขาย Cargo",
+      "salesAdmin": "ผู้จัดการฝ่ายขาย Cargo",
+      "sales": "ฝ่ายขาย Cargo",
+      "qa": "ฝ่าย QA & QC",
       "warehouse": "ฝ่ายโกดัง",
       "driver": "พนักงานขับรถ",
-      "interpreter": "ล่ามจีน"
+      "interpreter": "ล่ามจีน",
+      "freightSalesManager": "ผู้จัดการฝ่ายขาย Freight",
+      "freightSales": "ฝ่ายขาย Freight",
+      "freightExportManager": "ผู้จัดการฝ่าย Export",
+      "freightExportCs": "CS / Doc Export",
+      "freightExportDoc": "Shipping Doc Export",
+      "freightExportClearance": "Shipping Clearance (Export)",
+      "freightClearanceBoth": "Shipping Clearance (Import & Export)",
+      "freightExportMessenger": "Messenger Export",
+      "freightImportManager": "ผู้จัดการฝ่าย Import",
+      "freightImportCs": "CS & Doc Import",
+      "freightImportDoc": "Shipping Doc Import",
+      "freightImportClearance": "Shipping Clearance (Import)",
+      "freightImportMessenger": "Messenger Import"
     },
     "account": {
       "profile": "โปรไฟล์ของฉัน",
@@ -2606,6 +2621,9 @@
     },
     "hr": {
       "title": "จัดการทรัพยากรบุคคล",
+      "titleSection": "HR",
+      "humanResource": "จัดการทรัพยากรบุคคล",
+      "corporateAssets": "จัดการทรัพย์สินองค์กร",
       "orgChartImage": "ผังองค์กรแบบภาพ",
       "orgChartTable": "ผังองค์กรแบบตาราง",
       "recruitment": "สรรหาบุคคล",
@@ -2686,7 +2704,30 @@
       "cntReport": "รายงานตู้สินค้า",
       "whHistory": "ประวัติเข้าโกดังไทย",
       "assignDriver": "มอบงานคนขับรถ",
+      "driverWork": "ดูงานคนขับ (มือถือ)",
       "combineBill": "รวมบิลสินค้า"
+    },
+    "forwarderImport": {
+      "title": "บริการฝากนำเข้า",
+      "cargo": "Cargo",
+      "freight": "Freight",
+      "fcl": "FCL",
+      "lcl": "LCL",
+      "truck": "รถ",
+      "sea": "เรือ",
+      "air": "แอร์"
+    },
+    "apiForwarderUpdate": {
+      "title": "อัปเดตฝากนำเข้า",
+      "momo": "MOMO",
+      "cn": "CargoCenter"
+    },
+    "apiSheets": {
+      "adjustGroup": "ปรับรายการ Sheet",
+      "ctt": "CTT",
+      "sang": "แสง (Sang)",
+      "mk": "MK",
+      "mx": "MX"
     },
     "payment": {
       "title": "บริการฝากโอน/ชำระ",
@@ -2711,8 +2752,16 @@
       "driver": "งานขนส่งคนขับรถ",
       "web": "การเข้าถึงเว็บไซต์"
     },
+    "accounting": {
+      "title": "ระบบบัญชี",
+      "cargo": "Cargo",
+      "freight": "Freight"
+    },
+    "manageCustomersAll": {
+      "title": "ลูกค้าทั้งหมด"
+    },
     "accCargo": {
-      "title": "รายงานรับรู้รายได้ Cargo",
+      "title": "ระบบบัญชี Cargo",
       "inOut": "รายรับ - รายจ่าย",
       "topup": "รายการเติมเงิน",
       "shop": "รายงานฝากสั่ง",
@@ -2746,7 +2795,14 @@
       "rateVip": "เรทลูกค้า VIP",
       "rateCustomUser": "เรท Custom-user",
       "rateCustomHs": "เรท Custom-HS",
-      "vipTiers": "ประเภทสมาชิก VIP"
+      "vipTiers": "ประเภทสมาชิก VIP",
+      "system": "ระบบ",
+      "crons": "Cron jobs",
+      "systemNotifs": "การแจ้งเตือนระบบ",
+      "csvImports": "นำเข้าข้อมูล (CSV)",
+      "tools": "เครื่องมือ",
+      "orgEmail": "อีเมลในองค์กร",
+      "adminUsers": "พนักงาน admin"
     },
     "userCargo": {
       "title": "ระบบจัดการลูกค้า",
@@ -2800,7 +2856,13 @@
       "thaiTransport": "จัดการขนส่งไทย",
       "meetingRoom": "จองห้องประชุม",
       "history": "บันทึกการทำรายการแอดมิน",
-      "incidents": "แจ้งเตือนระบบ (Incident)"
+      "incidents": "แจ้งเตือนระบบ (Incident)",
+      "kpi": "แดชบอร์ด KPI",
+      "contactMessages": "ข้อความติดต่อจากลูกค้า",
+      "taxInvoices": "ใบกำกับภาษี",
+      "workboard": "Work Board (งานทีม)",
+      "inbox": "Inbox งานของฉัน",
+      "withdrawalsAll": "รายการเบิกเงิน (รวม)"
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",
@@ -2809,6 +2871,7 @@
       "csvImports": "ปรับรายการอัตโนมัติ (CSV)"
     },
     "driver": {
+      "work": "งานวันนี้ (มือถือ)",
       "toDeliver": "งานที่ต้องส่ง",
       "history": "ประวัติงาน",
       "barcode": "สแกนบาร์โค้ด"
@@ -2892,5 +2955,65 @@
     "openPdf": "เปิดไฟล์ PDF",
     "slipAlt": "สลิปการจ่ายเงินค่าตู้",
     "slipMissing": "ไม่มีไฟล์สลิป"
+  },
+  "qaInspection": {
+    "title": "ตรวจสอบสินค้า (QA & QC)",
+    "subtitle": "บันทึกการตรวจสินค้าก่อนจัดส่งให้ลูกค้า — แจ้งของปลอม / กักของ / ตรวจผ่าน",
+    "newCta": "บันทึก QA ใหม่",
+    "newTitle": "บันทึก QA ใหม่",
+    "newSubtitle": "เลือกรายการนำเข้า (f_no) → ตรวจสอบ → ระบุผลและรูปประกอบ",
+    "detailTitle": "รายละเอียด QA",
+    "currentState": "ผลตรวจปัจจุบัน",
+    "forwarderSection": "ข้อมูลรายการนำเข้า",
+    "photoGallery": "รูปประกอบ",
+    "updateSection": "แก้ไขผลตรวจ",
+    "backToList": "กลับรายการ",
+    "verdict": {
+      "all": "ทั้งหมด",
+      "pass": "ผ่าน",
+      "fail": "ตก",
+      "hold": "กักของ",
+      "fake_product": "ของปลอม"
+    },
+    "col": {
+      "inspectedAt": "วันที่ตรวจ",
+      "fNo": "เลขนำเข้า (f_no)",
+      "cabinet": "ตู้",
+      "member": "ลูกค้า",
+      "tracking": "แทรคกิ้งจีน",
+      "verdict": "ผลตรวจ",
+      "blacklist": "Blacklist",
+      "photos": "รูป"
+    },
+    "blacklistTag": "Blacklist",
+    "blacklistLabel": "ห้ามรับสินค้าจากร้านนี้ในอนาคต (Blacklist)",
+    "blacklistAutoFake": "ตั้งอัตโนมัติเมื่อผลคือของปลอม",
+    "notesLabel": "หมายเหตุ / รายละเอียด",
+    "notesPlaceholder": "บันทึกสภาพสินค้า สี ไซส์ ความเสียหาย ของแท้/ปลอม ฯลฯ",
+    "noPhotos": "ยังไม่มีรูปประกอบ",
+    "photoAlt": "รูปจาก QA",
+    "photoUnavailable": "เปิดรูปไม่ได้",
+    "searchPlaceholder": "ค้นหา f_no / ตู้ / รหัสลูกค้า / แทรคกิ้งจีน",
+    "searchSubmit": "ค้นหา",
+    "clearSearch": "ล้างคำค้น",
+    "loadError": "โหลดข้อมูลไม่สำเร็จ",
+    "emptyState": "ยังไม่มีรายการ QA",
+    "saveBtn": "บันทึก",
+    "savingBtn": "กำลังบันทึก…",
+    "createBtn": "บันทึก QA",
+    "updateOk": "บันทึกการเปลี่ยนแปลงแล้ว",
+    "uploadingProgress": "กำลังอัปโหลดรูป {i}/{n}…",
+    "form": {
+      "fNoLabel": "เลขนำเข้า (f_no)",
+      "fNoPlaceholder": "เช่น 123456",
+      "fNoHelp": "หมายเลข f_no จากตาราง tb_forwarder (ระบบขนส่ง)",
+      "photosLabel": "อัปโหลดรูป (jpg/png/webp/heic)",
+      "photosHelp": "อัปโหลดได้ไม่เกิน {max} รูป · ขนาดไฟล์ไม่เกิน 10 MB",
+      "photosSelected": "เลือกไว้"
+    },
+    "err": {
+      "fNoRequired": "กรุณาระบุ f_no (ตัวเลขล้วน)",
+      "uploadFailed": "อัปโหลดรูปไม่สำเร็จ"
+    }
   }
 }

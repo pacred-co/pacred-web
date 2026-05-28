@@ -6,8 +6,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
+import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { getWalletAvailableBalance } from "@/lib/wallet/balance";
 import { getCargoBillingGate } from "@/lib/forwarder/billing-gate";
+import { logger, redactId } from "@/lib/logger";
 
 const STATUSES = [
   "pending_payment","shipped_china","in_transit","arrived_thailand",
@@ -62,11 +64,15 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
     const admin = createAdminClient();
 
     // Fetch existing for diff + customer notification + V-A2 rollback note merging
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarders")
       .select("id, profile_id, status, total_price, note_admin")
       .eq("f_no", d.f_no)
       .maybeSingle<{ id: string; profile_id: string; status: string; total_price: number; note_admin: string | null }>();
+    if (existingErr) {
+      console.error("[forwarders mutation lookup] f_no=", d.f_no, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (!existing) return { ok: false, error: "not_found" };
 
     const update: Record<string, unknown> = { admin_id_update: adminId };
@@ -164,11 +170,14 @@ export async function adminBulkUpdateForwarderStatus(
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("forwarders")
       .select("id, f_no, profile_id, status")
       .in("f_no", f_nos);
-
+    if (existingErr) {
+      console.error("[forwarders bulk status lookup] f_nos=", f_nos, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (!existing || existing.length === 0) return { ok: false, error: "not_found" };
 
     const dateCol = STATUS_DATE_COL[status];
@@ -251,11 +260,15 @@ export async function adminMarkForwarderPaid(
   return withAdmin<MarkForwarderPaidData>(["super", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: forwarder } = await admin
+    const { data: forwarder, error: forwarderErr } = await admin
       .from("forwarders")
       .select("id, profile_id, f_no, status, total_price")
       .eq("f_no", d.f_no)
       .maybeSingle<{ id: string; profile_id: string; f_no: string; status: string; total_price: number }>();
+    if (forwarderErr) {
+      console.error("[adminPayForwarder forwarder lookup] f_no=", d.f_no, { code: forwarderErr.code, message: forwarderErr.message });
+      return { ok: false, error: `db_error:${forwarderErr.code}` };
+    }
     if (!forwarder) return { ok: false, error: "not_found" };
 
     if (forwarder.status === "cancelled") {
@@ -298,8 +311,13 @@ export async function adminMarkForwarderPaid(
       }
     }
 
-    // Idempotency check
-    const { data: existingTx } = await admin
+    // Idempotency check — §0c CRITICAL: must refuse-to-proceed on DB error.
+    // If Supabase fails silently (PgBouncer timeout / transient) and we treat
+    // it as "no existing tx", we'd INSERT a duplicate → DOUBLE-CHARGE the
+    // customer's wallet. Errors here MUST bubble up; the 23505 partial-unique
+    // index (0061) is the only safety net we have and it can't catch races
+    // through silent-null returns. Wave 19 BUG#1 sweep added the destructure.
+    const { data: existingTx, error: existingTxErr } = await admin
       .from("wallet_transactions")
       .select("id")
       .eq("reference_type", "forwarder")
@@ -307,6 +325,17 @@ export async function adminMarkForwarderPaid(
       .eq("kind",           "import_payment")
       .eq("status",         "completed")
       .maybeSingle<{ id: string }>();
+    if (existingTxErr) {
+      console.error("[forwarders.adminPayForwarder] idempotency lookup failed", {
+        f_no: forwarder.f_no,
+        code: existingTxErr.code,
+        message: existingTxErr.message,
+        details: existingTxErr.details,
+      });
+      // REFUSE the payment — admin should retry. Better to error than risk
+      // a double-charge from a silent null.
+      return { ok: false, error: `ตรวจสอบรายการชำระเดิมไม่สำเร็จ — ลองใหม่อีกครั้ง (db:${existingTxErr.code})` };
+    }
     if (existingTx) {
       // Already paid — nudge status forward if still pending_payment
       if (forwarder.status === "pending_payment") {
@@ -359,7 +388,7 @@ export async function adminMarkForwarderPaid(
       // caught a concurrent double-debit. Re-SELECT the winning tx + nudge
       // status forward — mirrors the idempotency branch above.
       if (txErr.code === "23505" || /duplicate|unique/i.test(txErr.message)) {
-        const { data: raced } = await admin
+        const { data: raced, error: racedErr } = await admin
           .from("wallet_transactions")
           .select("id")
           .eq("reference_type", "forwarder")
@@ -367,6 +396,15 @@ export async function adminMarkForwarderPaid(
           .eq("kind", "import_payment")
           .eq("status", "completed")
           .maybeSingle<{ id: string }>();
+        if (racedErr) {
+          console.error("[forwarders.adminPayForwarder] post-23505 raced lookup failed", {
+            f_no: forwarder.f_no,
+            code: racedErr.code,
+            message: racedErr.message,
+          });
+          // Fall through to the original 23505 wallet-insert error — at least
+          // the operator sees a real db error instead of "lucky" success.
+        }
         if (raced) {
           if (forwarder.status === "pending_payment") {
             await admin
@@ -440,6 +478,231 @@ export async function adminMarkForwarderPaid(
     revalidatePath(`/admin/forwarders/${forwarder.f_no}`);
     revalidatePath("/admin/wallet");
     return { ok: true, data: { tx_id: tx.id, already_paid: false } };
+  });
+}
+
+// ── Bulk status update — tb_forwarder (Wave 5 P0) ────────────────────────────
+//
+// Mirrors `adminBulkUpdateForwarderStatus` (above, REBUILT `forwarders` table
+// path) but mutates the legacy `tb_forwarder` table that the rewritten
+// /admin/forwarders page actually reads from (Wave 3 P0 #1).
+//
+// Legacy columns (per migration 0081):
+//   fstatus           varchar(2)  — '1'..'7' · '99'
+//   fdateadminstatus  timestamp   — UPDATE on every admin status change
+//   fdatestatusN      timestamp   — stamp the matching column for the new status
+//   userid            varchar(10) — legacy text id (joins tb_users)
+//
+// Notification: the legacy `tb_users.userid` is a text key, not a `profile_id`
+// uuid that sendNotification() expects. The bridge from userid → profile_id
+// (`tb_user_id_to_profile`) is not yet built; for now we just log the intent
+// and add a TODO. Status change still lands in the DB + audit log; customer
+// just doesn't get an in-app push yet. This matches the trade-off in the
+// page comments (`forwarders-table.tsx` L24-25).
+//
+// Keep the existing rebuilt-table `adminBulkUpdateForwarderStatus` until the
+// last consumer migrates — both lanes coexist during the D1 transition.
+
+const TB_FORWARDER_STATUSES = ["1", "2", "3", "4", "5", "6", "7", "99"] as const;
+type TbForwarderStatus = (typeof TB_FORWARDER_STATUSES)[number];
+
+const bulkTbSchema = z.object({
+  fids:    z.array(z.number().int().positive()).min(1).max(100),
+  fstatus: z.enum(TB_FORWARDER_STATUSES),
+  // Wave 23 (2026-05-27 ภูม flag · live walkthrough): bulk + detail share
+  // this action — optional fields below let single-row callers (the detail
+  // page action panel) set tracking/cabinet/note in one go, AND let the
+  // bulk-bar assign a common cabinet to a batch (e.g. "GZE-2026-001" for
+  // all rows in one container). Each field is OPTIONAL — when absent the
+  // column is NOT touched (legacy behaviour preserved · no accidental nulls).
+  //
+  // Why width 300 on cabinet_number? Matches the legacy
+  // tb_forwarder.fcabinetnumber varchar(300) constraint (per migration 0081).
+  // Why width 50 on tracking_th? Matches the legacy ftrackingth varchar(50).
+  cabinet_number: z.string().trim().max(300).optional(),
+  tracking_th:    z.string().trim().max(50).optional(),
+  fnote:          z.string().trim().max(2000).optional(),
+});
+
+// `fdatestatusN` map — only stamp a column for statuses that have one
+// (status '1' has no dedicated date column · '99' is "special" too).
+const TB_STATUS_DATE_COL: Record<TbForwarderStatus, string | null> = {
+  "1":  null,
+  "2":  "fdatestatus2",
+  "3":  "fdatestatus3",
+  "4":  "fdatestatus4",
+  "5":  "fdatestatus5",
+  "6":  "fdatestatus6",
+  "7":  "fdatestatus7",
+  "99": null,
+};
+
+export async function adminBulkUpdateForwarderTbStatus(
+  input: z.infer<typeof bulkTbSchema>,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const parsed = bulkTbSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const { fids, fstatus, cabinet_number, tracking_th, fnote } = parsed.data;
+
+  return withAdmin<{ updated: number }>(["ops", "super"], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    // Snapshot before — for audit log + change detection + the cabinet-close
+    // date back-fill (Wave 24 #192 · 2026-05-27 ดึก · see comment below).
+    const { data: before, error: readErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose")
+      .in("id", fids);
+    if (readErr) return { ok: false, error: readErr.message };
+    if (!before || before.length === 0) return { ok: false, error: "not_found" };
+
+    const beforeRows = before as unknown as Array<{
+      id: number;
+      fstatus: string;
+      userid: string;
+      fidorco: string | null;
+      fcabinetnumber: string | null;
+      fdatecontainerclose: string | null;
+    }>;
+
+    const nowIso = new Date().toISOString();
+    const dateCol = TB_STATUS_DATE_COL[fstatus];
+    // tb_forwarder.adminidupdate is varchar(10) — same legacy pcsc_main
+    // constraint that bit /admin/forwarders/new (Wave 23 P0 fix 5254f8d).
+    // Sister bug-fix 2026-05-27 — ภูม bulk-update of #51973 hit the same
+    // ceiling because adminId ("admin_pasit_pap" etc) was inserted raw.
+    const adminIdSafe = String(adminId).slice(0, 10);
+
+    // 🚨 Wave 24 #192 (2026-05-27 ดึก · ภูม live walkthrough · order #51974):
+    //
+    // Legacy `report-cnt.php` filters the "เข้าโกดังไทยแล้ว" view by
+    // DATE(fDateContainerClose) BETWEEN start AND end. Rows with NULL
+    // fDateContainerClose are invisible on that report — even if fstatus is
+    // already 4 (ถึงไทย) and the cabinet number is set.
+    //
+    // The legacy partner-API integrations (api-forwarder-cn.php · momo.php ·
+    // gogo.php · api-sheets-* etc) ALL set fDateContainerClose at the same
+    // time they set fCabinetNumber (when fStatus transitions to '3'). When
+    // admin assigns a cabinet manually via our bulk-bar OR detail-panel
+    // (Wave 24 #179/#180), we forgot the parallel fDateContainerClose write
+    // → orders never surface on /admin/report-cnt.
+    //
+    // Fix: when admin sets `cabinet_number` for an order whose row currently
+    // has NULL/empty fdatecontainerclose, stamp fdatecontainerclose=now().
+    // Per-row decision: a multi-row bulk where some rows already have a
+    // close-date keeps the EXISTING value (don't clobber legacy data).
+    //
+    // The legacy partner-API path used `manifest_date` from the carrier's
+    // payload. Admin manual path has no manifest — `now()` is the honest
+    // proxy ("the moment admin sealed/assigned the container"). When ภูม
+    // later wires manifest_date through (Wave 25+), this back-fill becomes
+    // an upper bound + can be overridden.
+    const cabinetAssigned = cabinet_number !== undefined && cabinet_number.trim() !== "";
+    const needsBackfillSet = cabinetAssigned
+      ? new Set(beforeRows.filter((r) => !r.fdatecontainerclose).map((r) => r.id))
+      : new Set<number>();
+
+    const update: Record<string, unknown> = {
+      fstatus,
+      fdateadminstatus: nowIso,
+      adminidupdate:    adminIdSafe,
+      ...(dateCol ? { [dateCol]: nowIso } : {}),
+      // Optional fields — only included when caller explicitly passed them.
+      // Empty-string from the form means "explicitly clear" (legacy NOT NULL
+      // varchar columns default to "" / "-"); undefined means "don't touch".
+      ...(cabinet_number !== undefined ? { fcabinetnumber: cabinet_number } : {}),
+      ...(tracking_th    !== undefined ? { ftrackingth: tracking_th || "-" } : {}),
+      ...(fnote          !== undefined ? { fnote: fnote || null }            : {}),
+    };
+
+    // Path A — no back-fill rows: single bulk update covers everything.
+    // Path B — some rows need fdatecontainerclose stamped: split into 2 updates
+    //          (the back-fill subset gets the extra column; the rest don't).
+    //          A 2-statement split is honest about which rows changed when,
+    //          and keeps the audit log accurate. Cheaper than a per-row loop.
+    if (needsBackfillSet.size === 0) {
+      const { error: updErr } = await admin
+        .from("tb_forwarder")
+        .update(update)
+        .in("id", fids);
+      if (updErr) return { ok: false, error: updErr.message };
+    } else {
+      const backfillIds = Array.from(needsBackfillSet);
+      const otherIds = fids.filter((id) => !needsBackfillSet.has(id));
+
+      // 1) rows that need the close-date back-fill
+      const { error: updWithCloseErr } = await admin
+        .from("tb_forwarder")
+        .update({ ...update, fdatecontainerclose: nowIso })
+        .in("id", backfillIds);
+      if (updWithCloseErr) return { ok: false, error: updWithCloseErr.message };
+
+      // 2) rows that already had a close-date — keep it intact
+      if (otherIds.length > 0) {
+        const { error: updOthersErr } = await admin
+          .from("tb_forwarder")
+          .update(update)
+          .in("id", otherIds);
+        if (updOthersErr) return { ok: false, error: updOthersErr.message };
+      }
+    }
+
+    await logAdminAction(adminId, "forwarder.bulk_update_tb", "tb_forwarder", "bulk", {
+      fids,
+      before_statuses: beforeRows.map((r) => ({ id: r.id, fstatus: r.fstatus })),
+      after:           { fstatus },
+    });
+
+    // Wave 16 follow-up A (2026-05-25): resolver wired. Bulk-resolve every
+    // changed row's legacy userid → profiles.id, then fire status-change
+    // notifications. Each call wrapped in try/catch so one failed delivery
+    // doesn't block the bulk operation. (Same pattern as forwarder-check
+    // action — uses `lib/auth/tb-users-resolver.ts` + sendNotification.)
+    const changed = beforeRows.filter((r) => r.fstatus !== fstatus);
+    if (changed.length > 0) {
+      try {
+        const profileMap = await resolveProfileIdsForLegacyUserids(
+          changed.map((r) => r.userid),
+        );
+        let notified = 0;
+        let noProfile = 0;
+        for (const row of changed) {
+          const profileId = profileMap.get(row.userid);
+          if (!profileId) { noProfile++; continue; }
+          try {
+            await sendNotification(profileId, notify.forwarderStatusChanged({
+              fNo:         row.fidorco ?? String(row.id),
+              status:      fstatus,
+              forwarderId: String(row.id),
+            }));
+            notified++;
+          } catch (err) {
+            logger.warn("forwarder.bulk_update_tb", "notification failed (continuing bulk)", {
+              fid:       row.id,
+              profileId,
+              error:     err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        logger.info("forwarder.bulk_update_tb", `notifications fired ${notified}/${changed.length} (no profile: ${noProfile})`, {
+          adminId:       redactId(adminId),
+          fstatus,
+          notified,
+          no_profile:    noProfile,
+        });
+      } catch (err) {
+        // Resolver-level failure (e.g. DB error during bulk lookup) —
+        // log + continue. The bulk UPDATE already succeeded.
+        logger.warn("forwarder.bulk_update_tb", "notification resolver failed (bulk update OK, notifications skipped)", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    revalidatePath("/admin/forwarders");
+    return { ok: true, data: { updated: beforeRows.length } };
   });
 }
 

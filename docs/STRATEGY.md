@@ -302,8 +302,10 @@ Every Claude Code session has a starter skills kit. Skills = playbooks the agent
 | **mobile-first-verify** | Before pushing a customer surface · "check this on mobile" · "is this responsive" | Render at the 360/390px reference viewports + assert no horizontal scroll · tap targets ≥ 44px · text ≥ 16px |
 | **legacy-fidelity-check** | Before shipping any D1 Phase-B port screen · "fidelity check" · "เหมือนของเดิมไหม" | Audit a port screen element-by-element vs its legacy PCS original — the owner's "copy 100% first" gate |
 | **landing-conversion-audit** | Before ads point at a landing page · "พร้อมยิงแอดยัง" · "conversion audit" | Pre-flight a landing for CONVERT + TRACK + Quality-Score |
+| **debug-mantra** | Any bug session · "/debug-mantra" · "ช่วยดูบัค" · stack trace pasted | Recite the 4-step mantra (reproduce → fail path → falsify → breadcrumb), then apply in order — no fix before reliable repro |
+| **management-talk** | "เขียนให้พี่ป๊อปอ่าน" · "exec summary" · "ทำให้เป็น non-tech" · "Slack/email/standup version" | Translate engineer-to-engineer content for engineering-org leadership, shaped to the channel |
 
-14 skills shipped. Index: [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
+16 skills shipped. Index: [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 
 📋 Skills are project assets — ก๊อต iterates on them via skill-creator's eval loop. See [`/.claude/skills/INDEX.md`](../.claude/skills/INDEX.md).
 

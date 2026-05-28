@@ -65,10 +65,14 @@ async function recomputeHeaderTotals(
   admin: ReturnType<typeof createAdminClient>,
   declarationId: string,
 ): Promise<{ declared: number; duty: number; vat: number }> {
-  const { data: rows } = await admin
+  const { data: rows, error: rowsErr } = await admin
     .from("customs_declaration_lines")
     .select("id, declared_value_thb, duty_thb, vat_thb")
     .eq("declaration_id", declarationId);
+  if (rowsErr) {
+    console.error("[customs-declarations recomputeTotals] declarationId=", declarationId, { code: rowsErr.code, message: rowsErr.message });
+    // Don't throw — best-effort totals — but the caller may persist stale numbers
+  }
   const list = ((rows ?? []) as LineRow[]).map((r) => ({
     declared_value_thb: Number(r.declared_value_thb ?? 0),
     duty_thb:           Number(r.duty_thb ?? 0),
@@ -105,23 +109,31 @@ export async function adminCreateDeclaration(
     const admin = createAdminClient();
 
     // Verify the parent shipment exists.
-    const { data: shipment } = await admin
+    const { data: shipment, error: shipmentErr } = await admin
       .from("freight_shipments")
       .select("id, job_no, status")
       .eq("id", d.freight_shipment_id)
       .maybeSingle<{ id: string; job_no: string | null; status: string }>();
+    if (shipmentErr) {
+      console.error("[customs-declarations create shipment lookup] id=", d.freight_shipment_id, { code: shipmentErr.code, message: shipmentErr.message });
+      return { ok: false, error: `db_error:${shipmentErr.code}` };
+    }
     if (!shipment) return { ok: false, error: "shipment_not_found" };
     if (shipment.status === "cancelled") return { ok: false, error: "shipment_cancelled" };
 
     // Refuse if there's already a non-cancelled declaration (partial unique
     // index enforces this DB-side too, but a clean error is friendlier).
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from("customs_declarations")
       .select("id, status")
       .eq("freight_shipment_id", d.freight_shipment_id)
       .neq("status", "cancelled")
       .limit(1)
       .maybeSingle<{ id: string; status: string }>();
+    if (existingErr) {
+      console.error("[customs-declarations create existing lookup] shipmentId=", d.freight_shipment_id, { code: existingErr.code, message: existingErr.message });
+      return { ok: false, error: `db_error:${existingErr.code}` };
+    }
     if (existing) {
       return { ok: false, error: `existing_declaration:${existing.status}:${existing.id}` };
     }
@@ -154,7 +166,7 @@ export async function adminCreateDeclaration(
       exchange_rate:        number | null;
       hs_code:              string | null;
     };
-    const { data: inv } = await admin
+    const { data: inv, error: invErr } = await admin
       .from("freight_invoices")
       .select("id, commercial_value_thb, exchange_rate, hs_code")
       .eq("freight_shipment_id", d.freight_shipment_id)
@@ -173,11 +185,15 @@ export async function adminCreateDeclaration(
         gross_weight_kg: number | null;
         hs_code:         string | null;
       };
-      const { data: fiLines } = await admin
+      const { data: fiLines, error: fiLinesErr } = await admin
         .from("freight_invoice_lines")
         .select("position, description, qty, unit, amount_usd, gross_weight_kg, hs_code")
         .eq("freight_invoice_id", inv.id)
         .order("position", { ascending: true });
+      if (fiLinesErr) {
+        // Soft-fail — seeding lines is best-effort; declaration still useful empty.
+        console.error("[customs-declarations create freight_invoice_lines lookup] invoiceId=", inv.id, { code: fiLinesErr.code, message: fiLinesErr.message });
+      }
       const list = (fiLines ?? []) as FiLineRow[];
 
       if (list.length > 0) {
@@ -189,10 +205,14 @@ export async function adminCreateDeclaration(
         const codes = Array.from(new Set(list.map((l) => l.hs_code).filter((c): c is string => !!c)));
         const dutyByCode = new Map<string, number>();
         if (codes.length > 0) {
-          const { data: rates } = await admin
+          const { data: rates, error: ratesErr } = await admin
             .from("hs_codes")
             .select("code, default_duty_pct")
             .in("code", codes);
+          if (ratesErr) {
+            // Soft-fail — duty rates default to 0 (admin can edit later).
+            console.error("[customs-declarations create hs_codes lookup] codes=", codes, { code: ratesErr.code, message: ratesErr.message });
+          }
           for (const r of (rates ?? []) as Array<{ code: string; default_duty_pct: number | null }>) {
             dutyByCode.set(r.code, Number(r.default_duty_pct ?? 0));
           }
@@ -262,11 +282,15 @@ export async function adminUpdateDeclarationHeader(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (rowErr) {
+      console.error("[customs-declarations updateHeader row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -311,23 +335,31 @@ export async function adminAddDeclarationLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id")
       .eq("id", d.declaration_id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error("[customs-declarations addLine parent lookup] declarationId=", d.declaration_id, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code}` };
+    }
     if (!parent) return { ok: false, error: "not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
     let position = d.position ?? 1;
     if (!d.position) {
-      const { data: maxRow } = await admin
+      const { data: maxRow, error: maxRowErr } = await admin
         .from("customs_declaration_lines")
         .select("position")
         .eq("declaration_id", d.declaration_id)
         .order("position", { ascending: false })
         .limit(1)
         .maybeSingle<{ position: number }>();
+      if (maxRowErr) {
+        // Soft-fail — default position to 1 (next-position calc is convenience).
+        console.error("[customs-declarations addLine maxPos lookup] declarationId=", d.declaration_id, { code: maxRowErr.code, message: maxRowErr.message });
+      }
       position = (maxRow?.position ?? 0) + 1;
     }
 
@@ -389,18 +421,26 @@ export async function adminUpdateDeclarationLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declaration_lines")
       .select("id, declaration_id, declared_value_thb, duty_rate_pct")
       .eq("id", d.id)
       .maybeSingle<{ id: string; declaration_id: string; declared_value_thb: number; duty_rate_pct: number }>();
+    if (rowErr) {
+      console.error("[customs-declarations updateLine row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("customs_declarations")
       .select("status, freight_shipment_id")
       .eq("id", row.declaration_id)
       .maybeSingle<{ status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error("[customs-declarations updateLine parent lookup] declarationId=", row.declaration_id, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -455,18 +495,26 @@ export async function adminDeleteDeclarationLine(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declaration_lines")
       .select("id, declaration_id")
       .eq("id", parsed.data.id)
       .maybeSingle<{ id: string; declaration_id: string }>();
+    if (rowErr) {
+      console.error("[customs-declarations deleteLine row lookup] id=", parsed.data.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
 
-    const { data: parent } = await admin
+    const { data: parent, error: parentErr } = await admin
       .from("customs_declarations")
       .select("status, freight_shipment_id")
       .eq("id", row.declaration_id)
       .maybeSingle<{ status: string; freight_shipment_id: string }>();
+    if (parentErr) {
+      console.error("[customs-declarations deleteLine parent lookup] declarationId=", row.declaration_id, { code: parentErr.code, message: parentErr.message });
+      return { ok: false, error: `db_error:${parentErr.code}` };
+    }
     if (!parent) return { ok: false, error: "parent_not_found" };
     if (parent.status !== "draft") return { ok: false, error: "not_draft" };
 
@@ -504,19 +552,27 @@ export async function adminSubmitDeclaration(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (rowErr) {
+      console.error("[customs-declarations submit row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "draft") return { ok: false, error: "not_draft" };
 
     // Must have at least one line.
-    const { count: linesCount } = await admin
+    const { count: linesCount, error: countErr } = await admin
       .from("customs_declaration_lines")
       .select("*", { count: "exact", head: true })
       .eq("declaration_id", d.id);
+    if (countErr) {
+      console.error("[customs-declarations submit lines count] declarationId=", d.id, { code: countErr.code, message: countErr.message });
+      return { ok: false, error: `db_error:${countErr.code}` };
+    }
     if (!linesCount || linesCount === 0) {
       return { ok: false, error: "no_lines" };
     }
@@ -570,11 +626,15 @@ export async function adminMarkAccepted(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (rowErr) {
+      console.error("[customs-declarations markAccepted row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "submitted") return { ok: false, error: "not_submitted" };
 
@@ -619,11 +679,15 @@ export async function adminMarkReleased(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string }>();
+    if (rowErr) {
+      console.error("[customs-declarations markReleased row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status !== "accepted") return { ok: false, error: "not_accepted" };
 
@@ -661,11 +725,15 @@ export async function adminCancelDeclaration(
   return withAdmin([...ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("customs_declarations")
       .select("id, status, freight_shipment_id, declaration_no")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; freight_shipment_id: string; declaration_no: string | null }>();
+    if (rowErr) {
+      console.error("[customs-declarations cancel row lookup] id=", d.id, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (row.status === "released")  return { ok: false, error: "already_released" };
     if (row.status === "cancelled") return { ok: false, error: "already_cancelled" };

@@ -1,10 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { PageTopMenubar } from "@/components/admin/page-top-menubar";
+import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { SalesPayoutActions } from "./actions-cell";
 
 const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
   approved: "bg-blue-50 text-blue-700 border-blue-200",
   paid: "bg-green-50 text-green-700 border-green-200",
   rejected: "bg-red-50 text-red-700 border-red-200",
@@ -53,7 +55,10 @@ export default async function AdminSalesPayoutsPage({
     .limit(200);
 
   if (sp.status) q = q.eq("status", sp.status);
-  const { data } = await q;
+  const { data, error } = await q;
+  if (error) {
+    console.error(`[sales_payouts list] failed`, { code: error.code, message: error.message });
+  }
   type Profile = { member_code: string | null; first_name: string | null; last_name: string | null; phone: string | null };
   type TeamLeader = { team_code: string; commission_pct: number; profile: Profile | Profile[] | null };
   type RawRow = Omit<NonNullable<typeof data>[number], "team_leader"> & { team_leader: TeamLeader | TeamLeader[] | null };
@@ -64,9 +69,11 @@ export default async function AdminSalesPayoutsPage({
   });
 
   return (
-    <main className="p-6 lg:p-8 space-y-5">
+    <>
+      <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/sales-payouts" />
+      <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">
           {sp.kind === "shop-goods" ? "เบิกเงินค่าสินค้า" : "เบิกค่าคอม (sales payouts)"}
         </h1>
@@ -134,6 +141,7 @@ export default async function AdminSalesPayoutsPage({
         )}
       </div>
     </main>
+    </>
   );
 }
 

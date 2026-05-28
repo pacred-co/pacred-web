@@ -31,13 +31,16 @@ type Row = {
 
 export default async function AdminCarriersPage() {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("carriers")
     .select("id, code, name_th, name_en, tracking_url_template, is_active, sort_order, note, created_at, updated_at")
     .order("is_active", { ascending: false })
     .order("sort_order", { ascending: true })
     .order("name_th",    { ascending: true })
     .returns<Row[]>();
+  if (error) {
+    console.error(`[carriers list] failed`, { code: error.code, message: error.message });
+  }
 
   const rows = data ?? [];
   const activeCount   = rows.filter((r) => r.is_active).length;
@@ -46,7 +49,7 @@ export default async function AdminCarriersPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ปฏิบัติการ</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ปฏิบัติการ</p>
         <h1 className="mt-1 text-2xl font-bold">จัดการขนส่ง (Carriers)</h1>
         <p className="mt-1 text-sm text-muted">
           เพิ่ม/แก้ไขผู้ให้บริการขนส่ง (SPX/J&amp;T/Flash/EMS/Lalamove ฯลฯ).

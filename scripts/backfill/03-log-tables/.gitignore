@@ -1,0 +1,5 @@
+# Generated SQL files carry customer PII (userid · IP · user-agent · session
+# IDs · audit-log payloads with names/phones/addresses). Per the migration
+# runbook §5 — converted PCS data must NOT be committed.
+*.sql
+_all.sql

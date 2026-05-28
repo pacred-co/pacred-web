@@ -58,7 +58,7 @@ export default async function AdminCargoThaiPage() {
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN</p>
         <h1 className="mt-1 text-2xl font-bold">CargoThai sync</h1>
         <p className="mt-1 text-sm text-muted">
           ดึงข้อมูล container + product manifest จาก CargoThai (https://cargothai.tech/api/service/GetContainerV2)

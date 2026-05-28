@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Pilot migration generator: subset of 0113 — only tb_users, tb_admin, tb_co.
+Pilot migration generator: per-batch subset of the full camelCase rename.
 
 Reads scripts/_camelcase-map.json (produced by gen-camelcase-migration.py).
-Outputs supabase/migrations/0113_align_pilot_users_admin_co.sql with
-the RENAMEs for just the 3 pilot tables (~80 renames).
+Edit PILOT_TABLES + MIGRATION_OUT then run to emit the batch.
 
-The full 996-rename migration (0113_align_legacy_camelcase.sql) is
-KEPT as a draft sibling — when the pilot is verified live, run the
-full one.
+Batch history:
+- 0113 (2026-05-27) — tb_users + tb_admin + tb_co (~80 renames). Applied.
+- 0114 (2026-05-27) — hotfix: re-declare generate_member_code() with quoted "userID".
+- 0115 (2026-05-28) — tb_forwarder family (~196 renames). Cargo flow core.
 """
 import json
 import sys
@@ -16,8 +16,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAP_IN = REPO_ROOT / "scripts" / "_camelcase-map.json"
-MIGRATION_OUT = REPO_ROOT / "supabase" / "migrations" / "0113_align_pilot_users_admin_co.sql"
-PILOT_TABLES = ["tb_users", "tb_admin", "tb_co"]
+MIGRATION_OUT = REPO_ROOT / "supabase" / "migrations" / "0115_align_container_payment_tables.sql"
+# Batch 2a — container-payment admin tables. Smallest, safest cargo-adjacent
+# slice. Only 2 files in the codebase touch these (admin-only); the full
+# tb_forwarder family is deferred to batch 2b because it's entangled with
+# 18 customer-facing pages + would need ~380 manual edits.
+PILOT_TABLES = [
+    "tb_cnt",
+    "tb_cnt_item",
+    "tb_check_forwarder",
+]
 
 def main():
     if not MAP_IN.exists():
@@ -30,16 +38,25 @@ def main():
 
     lines = []
     lines.append("-- ============================================================")
-    lines.append("-- 0113 (PILOT) - tb_users + tb_admin + tb_co camelCase rename")
+    lines.append("-- 0115 (batch 2a) - container-payment admin tables camelCase")
     lines.append("-- ============================================================")
-    lines.append("-- Pilot subset of the full 0113_align_legacy_camelcase.sql")
-    lines.append("-- (996 renames across 108 tables). Apply this first, verify")
-    lines.append("-- Pacred customer + admin flows still work, then ship the rest.")
+    lines.append("-- Batch 2a of the cross-app camelCase alignment (was 0113 +")
+    lines.append("-- 0114 hotfix for batch 1 = tb_users + tb_admin + tb_co).")
+    lines.append("-- This batch covers ONLY the container-payment admin tables")
+    lines.append("-- (smallest cargo-adjacent slice, 2 admin files touch them).")
+    lines.append("-- Batch 2b = full tb_forwarder family (~177 renames, 18")
+    lines.append("-- customer-facing pages) is deferred until those pages can")
+    lines.append("-- be migrated one screen at a time.")
     lines.append("--")
     for t in PILOT_TABLES:
         if t in pilot_map:
             lines.append(f"-- - {t} ({len(pilot_map[t])} renames)")
     lines.append(f"-- Total: {total} renames across {len(pilot_map)} tables.")
+    lines.append("--")
+    lines.append("-- Pre-flight verified: no PL/pgSQL function bodies reference")
+    lines.append("-- these tables (0010_forwarder.sql functions operate on the")
+    lines.append("-- REBUILT public.forwarders table, not legacy tb_forwarder).")
+    lines.append("-- So no companion 0116-style hotfix expected.")
     lines.append("--")
     lines.append("-- Source: ก๊อต's spec at pacred-admin-next/docs/database/")
     lines.append("-- No type changes. No data changes. Idempotent (IF EXISTS guard).")

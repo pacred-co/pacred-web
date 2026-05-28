@@ -15,13 +15,18 @@
 
 import { z } from "zod";
 
-// ── Entity types — the 10 domain tables work_items can index ────────
+// ── Entity types — the domain tables work_items can index ───────────
 // entity_ref is the natural key of that table, as text.
+//
+// Wave 3 cleanup (2026-05-20 ค่ำ): `cargo_container` / `cargo_shipment`
+// are kept in the enum for legacy work_item rows but the spine tables
+// were retired — new work_items should not target these types. The
+// faithful port routes container work to `forwarder` (per tb_forwarder).
 export const WORK_ENTITY_TYPES = [
   "forwarder",            // entity_ref = forwarders.f_no
   "service_order",        // entity_ref = service_orders.h_no
-  "cargo_container",      // entity_ref = cargo_containers.code
-  "cargo_shipment",       // entity_ref = cargo_shipments.shipment_code
+  "cargo_container",      // RETIRED (legacy spine) — kept for old rows only
+  "cargo_shipment",       // RETIRED (legacy spine) — kept for old rows only
   "freight_shipment",     // entity_ref = freight_shipments.id (uuid::text)
   "customs_declaration",  // entity_ref = customs_declarations.id (uuid::text)
   "freight_invoice",      // entity_ref = freight_invoices.id (uuid::text)
@@ -49,8 +54,11 @@ export function workEntityHref(type: WorkEntityType, ref: string): string {
   switch (type) {
     case "forwarder":           return `/admin/forwarders/${ref}`;
     case "service_order":       return `/admin/service-orders`;
-    case "cargo_container":     return `/admin/warehouse/containers/${ref}`;
-    case "cargo_shipment":      return `/admin/warehouse/containers`;
+    // Wave 3: spine retired — both retired types now route to the
+    // faithful report-cnt page so legacy work_item cards still resolve
+    // to a useful destination.
+    case "cargo_container":     return `/admin/report-cnt`;
+    case "cargo_shipment":      return `/admin/report-cnt`;
     case "freight_shipment":    return `/admin/freight/shipments/${ref}`;
     case "customs_declaration": return `/admin/freight/declarations/${ref}`;
     case "freight_invoice":     return `/admin/freight/shipments`;

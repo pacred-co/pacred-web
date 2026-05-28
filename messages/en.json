@@ -374,15 +374,15 @@
   "login": {
     "title": "Sign In",
     "emailLabel": "Phone number or Member ID",
-    "emailPlaceholder": "0812345678 or PR001",
+    "emailPlaceholder": "Phone number or member code",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "••••••••",
+    "passwordPlaceholder": "Password to sign in, 6-20 characters",
     "forgotPassword": "Forgot password?",
     "rememberMe": "Keep me signed in",
     "submit": "Sign In",
     "orContinueWith": "Or sign in with",
-    "noAccount": "Don't have an account?",
-    "registerLink": "Sign up",
+    "noAccount": "Don't have a user account?",
+    "registerLink": "Create account",
     "comingSoon": "COMING SOON"
   },
   "register": {
@@ -2585,10 +2585,25 @@
       "super": "Super Admin",
       "ops": "Cargo Operations",
       "accounting": "Accounting",
-      "salesAdmin": "Cargo Sales",
+      "salesAdmin": "Cargo Sales Manager",
+      "sales": "Cargo Sales Staff",
+      "qa": "QA & QC",
       "warehouse": "Warehouse",
       "driver": "Driver",
-      "interpreter": "Interpreter"
+      "interpreter": "Interpreter",
+      "freightSalesManager": "Freight Sales Manager",
+      "freightSales": "Freight Sales Staff",
+      "freightExportManager": "Export Manager",
+      "freightExportCs": "Export CS / Doc",
+      "freightExportDoc": "Export Shipping Doc",
+      "freightExportClearance": "Export Shipping Clearance",
+      "freightClearanceBoth": "Shipping Clearance (Import & Export)",
+      "freightExportMessenger": "Export Messenger",
+      "freightImportManager": "Import Manager",
+      "freightImportCs": "Import CS & Doc",
+      "freightImportDoc": "Import Shipping Doc",
+      "freightImportClearance": "Import Shipping Clearance",
+      "freightImportMessenger": "Import Messenger"
     },
     "account": {
       "profile": "My profile",
@@ -2606,6 +2621,9 @@
     },
     "hr": {
       "title": "Manage HR",
+      "titleSection": "HR",
+      "humanResource": "Human Resource",
+      "corporateAssets": "Corporate Assets",
       "orgChartImage": "Org chart (visual)",
       "orgChartTable": "Org chart (table)",
       "recruitment": "Recruitment",
@@ -2686,7 +2704,30 @@
       "cntReport": "Container report",
       "whHistory": "TH warehouse intake history",
       "assignDriver": "Assign driver jobs",
+      "driverWork": "Driver work-list (mobile)",
       "combineBill": "Combine bills"
+    },
+    "forwarderImport": {
+      "title": "Import service",
+      "cargo": "Cargo",
+      "freight": "Freight",
+      "fcl": "FCL",
+      "lcl": "LCL",
+      "truck": "Truck",
+      "sea": "Sea",
+      "air": "Air"
+    },
+    "apiForwarderUpdate": {
+      "title": "Update import entries",
+      "momo": "MOMO",
+      "cn": "CargoCenter"
+    },
+    "apiSheets": {
+      "adjustGroup": "Adjust sheet entries",
+      "ctt": "CTT",
+      "sang": "Sang",
+      "mk": "MK",
+      "mx": "MX"
     },
     "payment": {
       "title": "Yuan transfer service",
@@ -2711,8 +2752,16 @@
       "driver": "Driver delivery jobs",
       "web": "Website access"
     },
+    "accounting": {
+      "title": "Accounting",
+      "cargo": "Cargo",
+      "freight": "Freight"
+    },
+    "manageCustomersAll": {
+      "title": "All customers"
+    },
     "accCargo": {
-      "title": "Cargo revenue recognition",
+      "title": "Accounting (Cargo)",
       "inOut": "Income - expenses",
       "topup": "Top-ups",
       "shop": "Shop-order report",
@@ -2746,7 +2795,14 @@
       "rateVip": "VIP customer rates",
       "rateCustomUser": "Custom-user rates",
       "rateCustomHs": "Custom-HS rates",
-      "vipTiers": "VIP membership tiers"
+      "vipTiers": "VIP membership tiers",
+      "system": "System",
+      "crons": "Cron jobs",
+      "systemNotifs": "System notifications",
+      "csvImports": "CSV bulk import",
+      "tools": "Tools",
+      "orgEmail": "Organization email",
+      "adminUsers": "Admin users"
     },
     "userCargo": {
       "title": "Customer management",
@@ -2800,7 +2856,13 @@
       "thaiTransport": "Manage TH carriers",
       "meetingRoom": "Meeting-room booking",
       "history": "Admin action log",
-      "incidents": "System incidents"
+      "incidents": "System incidents",
+      "kpi": "KPI Dashboard",
+      "contactMessages": "Customer contact messages",
+      "taxInvoices": "Tax invoices",
+      "workboard": "Work Board (team)",
+      "inbox": "My inbox",
+      "withdrawalsAll": "Withdrawals (all)"
     },
     "warehouse": {
       "containers": "Containers",
@@ -2809,6 +2871,7 @@
       "csvImports": "Bulk CSV import"
     },
     "driver": {
+      "work": "Today's jobs (mobile)",
       "toDeliver": "Jobs to deliver",
       "history": "Job history",
       "barcode": "Barcode scan"
@@ -2892,5 +2955,65 @@
     "openPdf": "Open PDF",
     "slipAlt": "Container payment slip",
     "slipMissing": "No slip file"
+  },
+  "qaInspection": {
+    "title": "QA & QC Inspection",
+    "subtitle": "Record pre-shipment QA — flag fake products, hold suspect items, mark pass",
+    "newCta": "New QA record",
+    "newTitle": "New QA inspection",
+    "newSubtitle": "Pick the import job (f_no) → inspect → record verdict + photos",
+    "detailTitle": "QA inspection detail",
+    "currentState": "Current verdict",
+    "forwarderSection": "Import job info",
+    "photoGallery": "Photos",
+    "updateSection": "Update verdict",
+    "backToList": "Back to list",
+    "verdict": {
+      "all": "All",
+      "pass": "Pass",
+      "fail": "Fail",
+      "hold": "Hold",
+      "fake_product": "Fake product"
+    },
+    "col": {
+      "inspectedAt": "Inspected at",
+      "fNo": "Import no. (f_no)",
+      "cabinet": "Container",
+      "member": "Customer",
+      "tracking": "China tracking",
+      "verdict": "Verdict",
+      "blacklist": "Blacklist",
+      "photos": "Photos"
+    },
+    "blacklistTag": "Blacklist",
+    "blacklistLabel": "Blacklist this shop (block future orders)",
+    "blacklistAutoFake": "auto-set when verdict = fake product",
+    "notesLabel": "Notes / details",
+    "notesPlaceholder": "Note item condition, color, size, damage, authenticity etc.",
+    "noPhotos": "No photos attached",
+    "photoAlt": "QA photo",
+    "photoUnavailable": "Photo unavailable",
+    "searchPlaceholder": "Search f_no / container / member / China tracking",
+    "searchSubmit": "Search",
+    "clearSearch": "Clear search",
+    "loadError": "Failed to load",
+    "emptyState": "No QA records yet",
+    "saveBtn": "Save",
+    "savingBtn": "Saving…",
+    "createBtn": "Save inspection",
+    "updateOk": "Changes saved",
+    "uploadingProgress": "Uploading photo {i}/{n}…",
+    "form": {
+      "fNoLabel": "Import no. (f_no)",
+      "fNoPlaceholder": "e.g. 123456",
+      "fNoHelp": "f_no value from tb_forwarder (import jobs table)",
+      "photosLabel": "Upload photos (jpg/png/webp/heic)",
+      "photosHelp": "Up to {max} photos · file size ≤ 10 MB",
+      "photosSelected": "selected"
+    },
+    "err": {
+      "fNoRequired": "Import no. (numeric) is required",
+      "uploadFailed": "Photo upload failed"
+    }
   }
 }

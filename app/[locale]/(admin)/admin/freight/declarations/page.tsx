@@ -90,7 +90,10 @@ export default async function AdminCustomsDeclarationsListPage({
       `declaration_no.ilike.%${q}%,customs_control_no.ilike.%${q}%,broker_name.ilike.%${q}%`,
     );
   }
-  const { data: raw } = await query;
+  const { data: raw, error: rawErr } = await query;
+  if (rawErr) {
+    console.error(`[customs_declarations list] failed`, { code: rawErr.code, message: rawErr.message });
+  }
 
   type RawShipment = NonNullable<Row["shipment"]>;
   type RawProfile  = NonNullable<RawShipment["profile"]>;
@@ -110,9 +113,12 @@ export default async function AdminCustomsDeclarationsListPage({
   // Counts per status (lightweight extra round-trip).
   const counts: Record<CustomsDeclarationStatus, number> = {} as Record<CustomsDeclarationStatus, number>;
   for (const s of CUSTOMS_DECLARATION_STATUSES) counts[s] = 0;
-  const { data: countRows } = await admin
+  const { data: countRows, error: countRowsErr } = await admin
     .from("customs_declarations")
     .select("status");
+  if (countRowsErr) {
+    console.error(`[customs_declarations list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: CustomsDeclarationStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -122,11 +128,14 @@ export default async function AdminCustomsDeclarationsListPage({
   // shipments and surface their declarations.
   let extraJobMatches: Row[] = [];
   if (q && /^a\d/i.test(q)) {
-    const { data: jobs } = await admin
+    const { data: jobs, error: jobsErr } = await admin
       .from("freight_shipments")
       .select("id")
       .ilike("job_no", `%${q}%`)
       .limit(50);
+    if (jobsErr) {
+      console.error(`[freight_shipments list] failed`, { code: jobsErr.code, message: jobsErr.message });
+    }
     const shipIds = (jobs ?? []).map((j: { id: string }) => j.id);
     if (shipIds.length > 0) {
       let q2 = admin
@@ -144,7 +153,10 @@ export default async function AdminCustomsDeclarationsListPage({
         .in("freight_shipment_id", shipIds)
         .order("created_at", { ascending: false });
       if (status) q2 = q2.eq("status", status);
-      const { data: extra } = await q2;
+      const { data: extra, error: extraErr } = await q2;
+      if (extraErr) {
+        console.error(`[customs_declarations list] failed`, { code: extraErr.code, message: extraErr.message });
+      }
       // Supabase PostgREST returns FK joins as arrays even for single-row
       // relationships; cast via unknown then normalise to single object.
       type RowWithMaybeArrShipment = Omit<Row, "shipment"> & {
@@ -168,7 +180,7 @@ export default async function AdminCustomsDeclarationsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-6xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · FREIGHT</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold">ใบขนสินค้า (V-E11)</h1>
           <p className="text-xs text-muted mt-1">
             workflow: ร่าง → ยื่นที่ด่านศุลฯ → ตรวจรับ → ตรวจปล่อย · ภายในของ Pacred ไม่ใช่ NetBay

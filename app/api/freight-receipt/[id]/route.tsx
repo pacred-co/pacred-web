@@ -93,12 +93,15 @@ export async function GET(
 
   // ── 1. Auth + row visibility (RLS scopes) ──
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+  if (dataErr) {
+    console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+  }
   if (!user) {
     return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
   }
 
-  const { data: invoice } = await supabase
+  const { data: invoice, error: invoiceErr } = await supabase
     .from("freight_invoices")
     .select(`
       id, profile_id, freight_shipment_id, status, invoice_no, issued_at, created_at,
@@ -108,6 +111,9 @@ export async function GET(
     `)
     .eq("id", id)
     .maybeSingle<InvoiceRow>();
+  if (invoiceErr) {
+    console.error(`[freight_invoices list] failed`, { code: invoiceErr.code, message: invoiceErr.message });
+  }
 
   if (!invoice) {
     return NextResponse.json({ error: "not_found_or_unauthorised" }, { status: 404 });
@@ -127,18 +133,24 @@ export async function GET(
   // ── 3. Related data via admin client (row visibility proved access) ──
   const admin = createAdminClient();
 
-  const { data: linesRaw } = await admin
+  const { data: linesRaw, error: linesRawErr } = await admin
     .from("freight_invoice_lines")
     .select("position, description, qty, unit, amount_usd")
     .eq("freight_invoice_id", invoice.id)
     .order("position", { ascending: true });
+  if (linesRawErr) {
+    console.error(`[freight_invoice_lines list] failed`, { code: linesRawErr.code, message: linesRawErr.message });
+  }
 
-  const { data: paymentsRaw } = await admin
+  const { data: paymentsRaw, error: paymentsRawErr } = await admin
     .from("freight_invoice_payments")
     .select("method, amount_thb, paid_at, bank_ref, status")
     .eq("freight_invoice_id", invoice.id)
     .eq("status", "recorded")
     .order("paid_at", { ascending: true });
+  if (paymentsRawErr) {
+    console.error(`[freight_invoice_payments list] failed`, { code: paymentsRawErr.code, message: paymentsRawErr.message });
+  }
 
   // Exchange rate: the line amounts are stored in USD on freight_invoice_lines
   // (migration 0051). The invoice's commercial_value_thb already reflects
@@ -198,11 +210,14 @@ export async function GET(
   };
 
   // Shipment job_no for the cross-ref line.
-  const { data: shipment } = await admin
+  const { data: shipment, error: shipmentErr } = await admin
     .from("freight_shipments")
     .select("job_no")
     .eq("id", invoice.freight_shipment_id)
     .maybeSingle<{ job_no: string | null }>();
+  if (shipmentErr) {
+    console.error(`[freight_shipments list] failed`, { code: shipmentErr.code, message: shipmentErr.message });
+  }
   data.job_no = shipment?.job_no ?? null;
 
   const filename = `pacred-freight-${invoice.invoice_no ?? id}.pdf`;

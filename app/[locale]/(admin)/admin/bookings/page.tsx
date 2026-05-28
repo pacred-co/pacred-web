@@ -99,14 +99,20 @@ export default async function AdminBookingsListPage({
     .limit(200);
   if (status) query = query.eq("status", status);
 
-  const { data: rowsRaw } = await query;
+  const { data: rowsRaw, error: rowsRawErr } = await query;
+  if (rowsRawErr) {
+    console.error(`[bookings list] failed`, { code: rowsRawErr.code, message: rowsRawErr.message });
+  }
   const rows = (rowsRaw ?? []) as BookingRow[];
 
   // Counts for filter chips (across all rows so chips show queue depth).
   const counts: Record<BookingStatus, number> = {
     draft: 0, submitted: 0, contacted: 0, quoted: 0, won: 0, lost: 0, cancelled: 0,
   };
-  const { data: countRows } = await admin.from("bookings").select("status");
+  const { data: countRows, error: countRowsErr } = await admin.from("bookings").select("status");
+  if (countRowsErr) {
+    console.error(`[bookings list] failed`, { code: countRowsErr.code, message: countRowsErr.message });
+  }
   for (const r of (countRows ?? []) as Array<{ status: BookingStatus }>) {
     counts[r.status] = (counts[r.status] ?? 0) + 1;
   }
@@ -116,7 +122,7 @@ export default async function AdminBookingsListPage({
     <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
       <header className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · ขายและ Pricing</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ขายและ Pricing</p>
           <h1 className="mt-1 text-2xl font-bold">{t("listTitle")} (BK-1)</h1>
           <p className="text-xs text-muted mt-1">{t("subtitle")}</p>
         </div>

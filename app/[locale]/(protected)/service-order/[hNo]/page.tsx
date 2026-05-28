@@ -43,20 +43,29 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   let walletBalance: number | null = null;
   if (o.status === "2") {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: dataErr } = await supabase.auth.getUser();
+    if (dataErr) {
+      console.error(`[supabase list] failed`, { code: dataErr.code, message: dataErr.message });
+    }
     if (user) {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from("profiles")
         .select("member_code")
         .eq("id", user.id)
         .maybeSingle<{ member_code: string | null }>();
+      if (profileErr) {
+        console.error(`[profiles list] failed`, { code: profileErr.code, message: profileErr.message });
+      }
       if (profile?.member_code) {
         const admin = createAdminClient();
-        const { data: wallet } = await admin
+        const { data: wallet, error: walletErr } = await admin
           .from("tb_wallet")
           .select("wallettotal")
           .eq("userid", profile.member_code)
           .maybeSingle<{ wallettotal: number }>();
+        if (walletErr) {
+          console.error(`[tb_wallet list] failed`, { code: walletErr.code, message: walletErr.message });
+        }
         walletBalance = Number(wallet?.wallettotal ?? 0);
       } else {
         walletBalance = 0;
@@ -70,7 +79,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold tracking-widest text-primary-500">{t("kicker")} · {t("detailTitle")}</p>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">{t("kicker")} · {t("detailTitle")}</p>
             <div className="mt-1 flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold font-mono text-foreground">{o.h_no}</h1>
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[o.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>

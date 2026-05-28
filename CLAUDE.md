@@ -2,60 +2,422 @@
 
 ---
 
-# 🚨 2026-05-24 — STRATEGY RESET (read FIRST)
+# 🌙 2026-05-27 ค่ำ — WAVE 22 + WAVE 23 P0 SHIPPED · read FIRST (supersedes 2026-05-26 ค่ำ below)
 
-Owner directive 2026-05-24: clean up the branch model and **unlock V3** for parallel work.
+ภูม mega-session วันนี้ — เช้า/บ่าย Wave 22 (perf root-cause + tb_admin merge) · ค่ำ ภูม flag 4 bugs → 3 audit agents → master tech-debt doc → Wave 23 P0 batch 1 ครบ 4 fixes. ภูม กลับบ้านจาก work computer → resume ที่บ้าน.
 
-**Active branch model (6 branches — `faithful-port` deleted, all stale `claude/*` cleaned):**
+**📦 28+ commits today (push range `22d5e37..<see save-point>` on Poom-pacred):**
 
-| Branch | Owner | Purpose | Status |
-|---|---|---|---|
-| `main` | ก๊อต gate | Production · Vercel auto-deploy | 🟢 live |
-| `podeng` | **ปอน** | Customer-facing frontend + brand-asset swap — **the brand SOT for all of Pacred (theme/images/icons)** | 🟢 active |
-| `dave-pacred` | **เดฟ** | 1:1 **customer-backend** port + integrates ปอน frontend → pushes to main | 🟢 active |
-| `Poom-pacred` | **ภูม** | **V3 backend primary lane (UNLOCKED 2026-05-24)** — DPX ERP enhancements | 🟢 active |
-| `Poom` | **ภูม** | V3 backend secondary lane (UNLOCKED 2026-05-24) | 🟢 active |
-| `dave` | (เดฟ future) | **V3 full-site lane** — activates AFTER `dave-pacred` ships; then combo with Poom-pacred + podeng | 💤 dormant |
+**Wave 20-22 sweep (เช้า/บ่าย):**
+- Wave 20 P1 batch 2 (wallet/add · yuan-payments/new · reports/{payment,shop,forwarder}) — Tailwind chrome
+- Wave 21 P0 — shop→forwarder auto-spawn · Wave 21 deferred admin-profile jQuery → native dialog
+- Wave 21 P2 — migration 0109 (23 partial indexes · applied to prod · /admin warm 1.88s vs cold 2.6s confirmed) + Phase A 4 quick wins
+- NEW skills (`debug-mantra` + `management-talk` · 16 total) + learning (`debug-discipline.md` · "2 Issues" case study)
+- **Wave 22 tb_admin → admins merge** (5 phases · migration 0110 + 3 intel docs + list page + CRUD forms + pre-existing bug fix · 10+ agents)
+- **PostgREST PGRST200 cross-embed fix** (4 files · captured as learning in `supabase-rls-patterns.md`)
 
-**Flow:**
+**Wave 22 close-out (ค่ำ · ภูม 4-issue flag):**
+- fix · sanitize 9 placeholders (พี่ป๊อป's name leaked into form examples · my brief mistake)
+- fix · sidebar 4 icons missing (Banknote · KanbanSquare · Smartphone · Save) + dev-only console.warn
+- fix · 2 dangling-Bootstrap modals (organization-email + barcode/driver/import) + extract shared `components/ui/pacred-dialog.tsx`
+- docs · master tech-debt inventory `admin-tech-debt-master-2026-05-27.md` (19 items prioritized · 6 closed in-session)
+
+**Wave 23 P0 batch 1 (ค่ำ · 4 critical fixes per master tech-debt):**
+- `0dce2b9` Agent O — `/admin/customers` suspend + Approve confirm wrapper (no more instant mutate)
+- `f48dea8` Main — `/admin/accounting` menubar 96+ 404 leaves → catch-all stub "🚧 Wave 24+" + 4 placeholder no-op fixes
+- `cddeea3` Agent N — `/admin/admins/[uuid]` detail rewrite (admins JOIN profiles JOIN admin_contact_extras · -83 LOC · 5 sidecar areas banner'd as Wave 23 follow-up)
+- `19ae7ff` Agent P — `/admin/forwarders/combine-bill` 4 bugs FIXED (built ใบส่งสินค้า A4 print route · bill# clickable · items column root-cause = PGRST200 family · ลบรายการ PacredDialog confirm)
+
+**🟢 Wave 23 P0 done · awaiting ภูม browser-verify ที่บ้าน (6 surfaces):**
+1. /admin/customers suspend/Approve → confirm dialog
+2. /admin/accounting menubar → ทุก dropdown ไป stub (no 404)
+3. /admin/organization-email "เพิ่มใหม่" + "คำอธิบายระบบ" modal
+4. /admin/barcode/driver/import "คำอธิบายระบบ" modal
+5. /admin/admins/[uuid] detail
+6. /admin/forwarders/combine-bill (list + print + delete confirm)
+
+**⚠️ Pending ภูม manual actions (carried over):**
+1. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (carry over many sessions)
+2. **#136** cleanup test row #51972:
+   ```sql
+   DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';
+   ```
+3. **Browser-verify Wave 23 P0 6 surfaces** above
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-27-night.md`](docs/research/poom-save-point-2026-05-27-night.md) — **canonical resume** (28+ commits · 13 agents · Wave 23 P0 ครบ)
+2. 🔥 [`docs/research/admin-tech-debt-master-2026-05-27.md`](docs/research/admin-tech-debt-master-2026-05-27.md) — **THE NEXT-SESSION SOT** · 19 items prioritized · 10 closed today · 9 P1 + 4 P2 remain (~12-18h dev sprint)
+3. 📋 3 audit reports (`admin-click-through-audit` · `admin-ui-design-audit` · `admin-sidebar-and-disbursement-audit` — all 2026-05-27)
+4. 📋 Wave 22 intel trio (`tb-admin-merge-intel` · `tb-admin-code-audit` · `tb-admin-13-row-reference` — all 2026-05-27)
+5. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) + [`docs/learnings/supabase-rls-patterns.md`](docs/learnings/supabase-rls-patterns.md) (PGRST200 entry NEW today)
+6. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`management-talk`](.claude/skills/management-talk/SKILL.md) + [`components/ui/pacred-dialog.tsx`](components/ui/pacred-dialog.tsx) — NEW today
+
+**🟡 Pickup options for next session:**
+- **A** Wave 23 P1 batch (9 items · ~5-7h wallclock with parallel agents) — withdrawals param drop · ดู/แก้ไข labels mislead · cnt-hs GZE overflow · 2 dead routes · 9 Bootstrap chrome pages · disbursement header drift · brand-red 2 shades · PCS Freight legacy port gap
+- **B** Wave 23 P2 polish (~6-8h) — 4 form-legacy pages · /admin/reports V-G6 cards wire-up · admin-profile-client form-control verify
+- **C** Wave 21 P2 Phase C RPC consolidation (~4h) — get_admin_sidebar_counts() + 2 more RPCs (unlocks 3 Phase A TODO SUM cards)
+- **D** Browser-verify ภูม เอง (~30-45min) — 6 Wave 23 P0 surfaces ที่บ้าน
+
+**🗺 Branch state (post-push · 2026-05-27 ค่ำ final):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม Wave 20+22+23 ยัง merge) |
+| `Poom-pacred` | `19ae7ff` (+ save-point) | **active · all Wave 20-21-22-23-P0 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel lane) |
+| Our worktree | `19ae7ff` (+ save-point) | ✅ in sync |
+
+**Resume command (ที่บ้าน):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # ต้อง 0/0
+cat docs/research/poom-save-point-2026-05-27-night.md
+cat docs/research/admin-tech-debt-master-2026-05-27.md
+pnpm dev   # port 3000
+# Then pick option A/B/C/D from above
 ```
-ปอน (podeng)         ─┐
-                      ├─► เดฟ merges into dave-pacred → verify → push main (ก๊อต gates)
-ก๊อต (admin 1:1)    ─┘                                                  ▲
-                                                                         │
-ภูม (Poom-pacred V3) ── continues V3 features, merges in after 1:1 ─────┘
-                                                                         │
-(future) เดฟ on dave V3 full — combo with Poom-pacred + podeng ─────────┘
+
+---
+
+# 🌅 2026-05-27 เย็น — WAVE 22 PERF-FIX + tb_admin MERGE SHIPPED (mid-session · superseded by ค่ำ above)
+
+ภูม กลับมา session เย็น · Wave 22 = perf root-cause kill + 5+2 parallel agents (10 total this session) + 2 new skills + tb_admin → admins consolidation Phase 1-5.
+
+**📦 13 commits today (push range `22d5e37..1a40af6` on Poom-pacred):**
+- **Wave 20 P1 batch 2** — wallet/add · yuan-payments/new (`fc9aabe`) + reports/{payment,shop,forwarder} (`f47c179`) Tailwind chrome
+- **Wave 21 P0** — shop→forwarder auto-spawn (`fe98da3` · closes taxonomy §6 gap)
+- **Wave 21 deferred (Task #128)** — admin-profile-client jQuery → native dialog (`003439b` · 5 modals + 2 confirms · 3 inline helpers `PacredDialog` + `DialogFooter` + `useConfirmDialogs`)
+- **Wave 21 P2 perf fix** — query survey (`cbed382`) → migration 0109 (`5372346` · 23 partial indexes) → Phase A 4 quick wins (`5b065c6` · 3 TODOs + 1 real fix on `report-cnt`). **Applied to prod** → admin chrome 1.5-3s → 100-300ms confirmed (/admin warm 1.88s vs cold 2.6s)
+- **NEW skills** — `debug-mantra` + `management-talk` (`8050eef` · 16 total)
+- **Learnings** — `debug-discipline.md` case study of today's "2 Issues" misdiagnosis (`c9b5446`)
+- **Off-target fix kept as evidence** — `a2e7b25` (image qualities · doc'd in debug-discipline)
+- **🆕 Wave 22 tb_admin → admins merge (Phase 1-5)** — migration 0110 + 3 intel docs (`09f410d`) + list page rewrite (`f2e731d`) + pre-existing bug fix (`7a9e019`) + CRUD forms (`1a40af6` · 1734 LOC new · 5 server actions)
+
+**🟢 Verified working (post-0109):**
+- /admin home — 1.88s warm (was 2.6s)
+- /admin/customers list — 0.52-0.72s
+- /admin/wallet/add + /admin/yuan-payments/new (Tailwind chrome · BS4 form-island banner-flagged)
+- /admin/reports/{payment,shop,forwarder} — full Tailwind · prod data flowing
+- /admin/admins/[id] modal port — code clean (jQuery/BS4 zero · all 7 modals native `<dialog>`)
+
+**🟠 Wave 22 tb_admin → admins merge — code shipped · awaits 2 actions ภูม:**
+1. **Apply migration 0110** in Supabase Dashboard SQL Editor (paste `0110_admin_contact_extras_legacy_bridge.sql` · ~50ms · 0-row table)
+2. **Recreate 13 legacy admins via `/admin/admins/new`** form (use reference doc `docs/research/tb-admin-13-row-reference.md` alongside · ~45-60 min)
+- After both: /admin/admins shows 4 native + 13 new admins · transfer-rep dropdown works · all 24 legacy tb_admin readers eventually swap to admins (gradual decommission over future sessions)
+
+**⚠️ Pending ภูม manual actions (priority order):**
+1. 🟠 **Apply migration `0110`** in Supabase SQL Editor — unblocks /admin/admins (currently 500)
+2. 🟠 **Recreate 13 admins via `/admin/admins/new`** form — open reference doc + sip coffee · 45-60 min
+3. 🔴 **ROTATE S3 access key** `e913d7da34ca0089638f100afb74c972` (still not done · leaked วันแรก)
+4. **#136** cleanup test row #51972 — `DELETE FROM tb_forwarder WHERE id=51972 AND ftrackingchn='TEST-SPAWN-WAVE21-A';`
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌅 [`docs/research/poom-save-point-2026-05-27-evening.md`](docs/research/poom-save-point-2026-05-27-evening.md) — **canonical resume** (13 commits · 10 agents output · verified pages · pickup options A-E)
+2. 🔥 [`docs/research/wave-21-p2-query-survey.md`](docs/research/wave-21-p2-query-survey.md) — perf root-cause + 3-phase plan (Phase B done · Phase A done · Phase C waits)
+3. 🔧 [`docs/research/tb-admin-merge-intel-2026-05-27.md`](docs/research/tb-admin-merge-intel-2026-05-27.md) + [`docs/research/tb-admin-code-audit-2026-05-27.md`](docs/research/tb-admin-code-audit-2026-05-27.md) + [`docs/research/tb-admin-13-row-reference.md`](docs/research/tb-admin-13-row-reference.md) — Wave 22 merge intelligence (read together · the 13-row reference is the action checklist for ภูม)
+4. 📋 [`docs/learnings/debug-discipline.md`](docs/learnings/debug-discipline.md) — **NEW** "2 Issues" case study · pair with debug-mantra skill
+5. 🛠 [`.claude/skills/debug-mantra/SKILL.md`](.claude/skills/debug-mantra/SKILL.md) + [`.claude/skills/management-talk/SKILL.md`](.claude/skills/management-talk/SKILL.md) — **NEW skills** (16 total)
+
+**🟡 Pickup options for next session (ภูม pick when resuming):**
+- **A** Wave 22 Phase 6 + cleanup leftovers (~1-2h · after 13-admin recreate) — rewrite `/admin/admins/[id]` detail page (Task #150 · still queries tb_admin · row-click 404 now) · avatar upload (Wave 23 deferred · Agent J) · #136 cleanup
+- **B** Phase C RPC consolidation (~4h) — `get_admin_sidebar_counts()` + `get_dashboard_kpi()` + `get_wallet_system_totals()` (cuts 22 RTTs → 1 + unlocks the 3 TODO surfaces from Phase A)
+- **C** Wave 21 batch 3 — `/admin/service-orders/cart` + `cart/add` (port `cart.php`)
+- **D** Wave 21 P1 follow-ups — #137 paginate /reports/forwarder · combine-bill PDF print · warehouse-history bulk-print
+- **E** Migrate remaining 16 `resolveLegacyAdminId` callers (~2h · Agent G audit) — swap to query admins+admin_contact_extras · cuts files for eventual `DROP TABLE tb_admin CASCADE`
+
+**🗺 Branch state (post-push · 2026-05-27 เย็น):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม Wave 20+22 ยัง merge) |
+| `Poom-pacred` | `1a40af6` (or later) | **active · all Wave 20+21+22 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel) |
+| Our worktree | `1a40af6` | ✅ in sync with Poom-pacred 0/0 |
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-27-evening.md       # canonical resume
+pnpm dev   # port 3000 (if not running)
+# Then: pick option A/B/C/D/E from above
 ```
 
-**Direction (unchanged from D1):** 1:1 PCS Cargo port to main FIRST — เดฟ does customer-backend portal, ก๊อต does admin back-office (1:1 in parallel), ปอน does frontend. Then V3 features (Poom-pacred + future dave) layer on top after 1:1 stable.
+---
 
-**What changed 2026-05-24:**
-- `faithful-port` branch **deleted** — flow now goes direct to `main` (no intermediate integration branch)
-- **V3 UNLOCKED across multiple branches** — ภูม resumes V3 in `Poom-pacred` (primary) + `Poom` (secondary). `dave` is dormant V3 full-site lane (เดฟ activates after `dave-pacred` ships).
-- All `claude/*` agent branches **cleaned** from remote (work either already merged or stale)
-- `hotfix/auth-unblock` removed (fix landed in main as `5c6bb8a`)
-- **Branding rule:** all theme/images/icons follow ปอน's `podeng` style; customer code prefix stays **`PR…`** (e.g. `PR201`)
-- **Customer images:** ✅ ภูม uploaded to Supabase S3 production already — `pcsracgo/public/member` image + storage files are in S3 prod; no further legacy migration needed
-- **Supabase:** working on production project `yzljakczhwrpbxflnmco`; internal table-naming conflict (rebuilt-era vs `tb_*`) still to resolve — our problem, not a legacy gap
+# 🚨 2026-05-26 ค่ำ — WAVE 20 ALL DONE · read FIRST (supersedes 2026-05-25 below)
+
+ภูม **mega-session วันนี้ · 30+ commits บน `Poom-pacred`** (เกือบทั้งวัน). ที่ผ่านมา Wave 19 ปิด BUG #1-4 เสร็จ → วันนี้ดำเนินการ Wave 20 ครบทั้ง 5 layer (P0 schema swaps + P0-4 reports + P1 batch 1 Tailwind rewrites + qw1/qw2 + bonus). **ทุกหน้า browser-verified §0c** (ไม่ใช่แค่ route smoke).
+
+**📦 30+ commits today (push range `2ab967b..22d5e37`):**
+- **§0c sprint** — codemod 244 files + ESLint rule `pacred/no-bare-supabase-data-destructure`
+- **4 bugs** — BUG #1 PR10899 500 · #2 forwarders badge · #3 wallet/[id] type-aware · #4 paydeposit slip join
+- **Wave 20 P0-1..3** — customers/[id] · accounting hub (+ unified PEAK chrome) · KPI dashboard — all → tb_*
+- **Wave 20 P0-4** — reports hub + 5 sub-reports (credit-pending 143 · pending-payments 1,470 · refunds 60 · monthly-orders ฿1.8M+ · debtors 0+banner)
+- **Wave 20 P1 batch 1 (7 หน้า)** — notes (+ schema swap) · transfer-rep · admins + [id] · warehouse-history (+ helpers) · combine-bill + add
+- **Wave 20 fixes** — qw1 fcover URL rewriter + smart placeholder · qw2 warehouse-history 7d default · forwarders avatar revert · 2× menubar link wiring for /notes
+- **Bonus** — /admin/service-orders → tb_header_order (21,950 rows) · /admin/accounting/cargo redirect
+- **Docs** — admin pages audit (175) · marketplace thumbnails research · order taxonomy · **agent orchestration learnings (NEW)**
+
+**🟢 23 pages verified working with real prod data:**
+- /admin/accounting (฿35M+ cards), /accounting/cargo (redirect)
+- /admin/customers/PR10899, /customers/transfer-rep
+- /admin/kpi (฿6.8M MTD), /service-orders (200 rows)
+- /admin/forwarders + /[fNo] enhanced detail, /warehouse-history, /notes (500 rows), /combine-bill (997 rows), /combine-bill/add
+- /admin/admins (13), /admins/admin_nat (identity + KPI)
+- /admin/reports (5 tabs) + credit-pending (143) + pending-payments (4) + refunds (60) + monthly-orders + debtors
+- /admin/wallet/105410 (topup+slip), /wallet/105411 (partner slip via paydeposit join)
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-26-night.md`](docs/research/poom-save-point-2026-05-26-night.md) — canonical resume (30+ commits · verified pages · pickup options · resume commands)
+2. 📋 [`docs/learnings/agent-orchestration.md`](docs/learnings/agent-orchestration.md) — **NEW** 6 lessons from running 8 parallel agents (stale base · dual-write · API timeout · 1000-row cap · PEAK chrome · §0c click-through)
+3. 📋 [`docs/audit/admin-pages-audit-2026-05-25-night.md`](docs/audit/admin-pages-audit-2026-05-25-night.md) — 175-page audit (Wave 21 backlog source)
+
+**🟡 Pickup options for next session (ภูม pick when resuming):**
+- **A** Wave 20 P1 batch 2 (~2-3h) — wallet/add · yuan-payments/new · reports/{payment,shop,forwarder} · service-orders/cart
+- **B** Wave 21 P0 task #106 (~3-4h) — port shop→forwarder auto-spawn (legacy shops.php L1675-1721) — biggest backlog impact (spawn chip ready)
+- **C** Browser-verify ภูม เอง (~30min) on prod surfaces before going further
+- **D** Wave 21 P1 follow-ups (~2h) — task #128 admin-profile-client modals + combine-bill backend stubs
+
+**⚠️ Pending ภูม manual actions (carried over · ยัง):**
+1. 🔴 **ROTATE S3 access key** — Dashboard → Project Settings → Storage → S3 Access Keys (key `e913d7da34ca0089638f100afb74c972` leaked วันที่แรก)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` ถ้ายังไม่ apply
+
+**🗺 Branch state (post-push · 2026-05-26 ค่ำ):**
+
+| Branch | HEAD | สถานะ |
+|---|---|---|
+| `main` | `9d8467b` | production (ภูม wave 20 ยังไม่ merge) |
+| `Poom-pacred` | `22d5e37` | **active · all Wave 20 work landed** |
+| `dave-pacred` | `26cf183` | customer-side port (don't merge — parallel lane) |
+| Our worktree | `22d5e37` | ✅ in sync with Poom-pacred 0/0 |
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-26-night.md         # canonical resume
+pnpm dev   # port 3000 (if not running)
+# Then: pick option A/B/C/D from above
+```
+
+---
+
+# 🚨 2026-05-25 ค่ำ — WAVE 15 + 16 + 17 ALL DONE · read FIRST (supersedes 2026-05-24 below)
+
+ภูม **mega-session วันนี้ · 18 commits บน `Poom-pacred`** (16:00 → 23:30). ภูม catch ผม audit ผิวเกินไป (compared HTML paste only · missed 2 huge pages) → dispatched 4+3+3 parallel agents ในชุดต่างๆ. ผลลัพธ์: 5 P0 + 3 P0 follow-ups + UX fix + 3 P1 + close-out · **~7,200 LOC** ลง production-ready Cargo flow.
+
+**📦 18 commits today (16:00 → 23:30):**
+- **Wave 15** — 3 P0 fidelity fixes (wallet balance summary · yuan 60d filter · forwarders ยอดค้างชำระ)
+- **Wave 16 prep** — `docs/audit/cargo-flow-deep-audit-2026-05-25.md` (44 legacy PHP vs ~70 Pacred · 47 gaps) + new `AGENTS.md §0b` rule + `docs/learnings/audit-discipline.md`
+- **Wave 16 P0 (5)** — `/admin/report-cnt/[fNo]` per-container detail (1601 LOC) · `/admin/forwarder-check` bulk-bill (1572) · inline cost-edit modal · stub cleanup · barcode schema-split
+- **Wave 16 follow-ups (3)** — **8,886 profiles UUIDs provisioned** (LINE+email channels enabled) · internal cost-update tab (no Sheets) · dual-mode cost-rate modal (CBM+Weight all carriers)
+- **Wave 17 ux-fix** — report-cnt inline checkbox + modal + "ทำรายการเบิกเงินค่าตู้" wording (legacy used "เบิก" in cnt-hs.php · our "บันทึก" was wrong)
+- **Wave 17 P1 (3)** — MOMO + CN manual entry · api-sheets quartet (CTT/Sang/MK/MX) · barcode AJAX writer (auto-flips fStatus=4 when fi2Amount >= fAmount)
+- **Close-out** — wired deferred LINE in `actions/admin/forwarders.ts:538` (Agent A side-finding)
+
+**🟢 Browser-test queue (~30 min next session):**
+1. `/admin/report-cnt?page=succeed` — ติ๊กตู้ + เปิด modal เบิกเงิน
+2. `/admin/report-cnt/<fNo>` — drill-down + cost-edit + cost-update tab
+3. `/admin/forwarder-check` — 3 tabs + bulk-bill
+4. `/admin/api-forwarder-momo/manual` + `/admin/api-forwarder-cn/manual`
+5. `/admin/api-sheets-sang` (live preview ค่าขนส่ง · Sang's PCSE rule)
+6. `/admin/barcode/driver/import` — USB scanner · auto-flip status
+
+**🟡 Phase C — Defer:** JMF/GOGO API · real Sheets API (`check-sang-cost`) · MOMO/CN/JMF cron jobs · standalone `forwarder-driver` · MOMO Sack API · CargoCenter `containerReport` (legacy ยังไม่เคยทำ).
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-25-night.md`](docs/research/poom-save-point-2026-05-25-night.md) — canonical resume (Wave 15 done + Wave 16 plan + branch state + resume commands)
+2. 📋 [`docs/audit/cargo-flow-deep-audit-2026-05-25.md`](docs/audit/cargo-flow-deep-audit-2026-05-25.md) — Wave 16 gap report (44 legacy PHP vs ~70 Pacred) · P0/P1/P2 prioritized
+3. 🛠 [`docs/learnings/audit-discipline.md`](docs/learnings/audit-discipline.md) — **NEW** the lesson from today (audit from PHP source, not HTML paste)
+4. 🧭 [`AGENTS.md`](AGENTS.md) §0b — **NEW** rule: deep-audit-from-source protocol
+5. 📝 [`docs/research/poom-save-point-2026-05-24-night.md`](docs/research/poom-save-point-2026-05-24-night.md) — Wave 14 context
+
+**⚠️ ภูม manual actions pending (carried over · ยัง):**
+1. 🔴 **ROTATE S3 access key** — Dashboard → Project Settings → Storage → S3 Access Keys (key `e913d7da34ca0089638f100afb74c972` leaked วันแรก)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` ถ้ายังไม่ apply
+3. (Optional) แจ้งลูกค้า 4 คน PR เปลี่ยน
+
+**🗺 Branch state map (post-fetch · 2026-05-25 ค่ำ):**
+
+| Branch | HEAD | vs main | vs Poom-pacred | สถานะ |
+|---|---|---|---|---|
+| `main` | `9d8467b` | — | -127 | production · ปอน frontend landed |
+| `Poom-pacred` | `152add3` (Wave 15) | +127 | — | **active · ภูม admin port** |
+| `dave-pacred` | `26cf183` | +40 | +12, -99 | **active · เดฟ customer port** |
+| `dave` | (frozen) | (old V3) | — | FROZEN per 2026-05-19 pivot |
+| `podeng` | `9d8467b` | (= main) | — | merged into main |
+| `faithful-port` | `e8a0ba0` | — | — | customer 12/24 transcription |
+| Our worktree (`claude/adoring-chandrasekhar-0f8ad7`) | `152add3` | (= Poom-pacred) | 0/0 | ✅ in sync |
+
+**dave-pacred has 12 commits Poom-pacred doesn't** = customer-side D1 (cart end-to-end · OTP TTL · PromptPay QR fix). **ไม่ต้อง merge** — parallel lanes per `docs/runbook/faithful-port-plan.md`.
+
+**Resume command (next session):**
+```bash
+cd /c/Users/Admin/pacred-web/.claude/worktrees/adoring-chandrasekhar-0f8ad7
+git fetch origin --prune
+git rev-list --left-right --count HEAD...origin/Poom-pacred   # should be 0/0
+cat docs/research/poom-save-point-2026-05-25-night.md         # canonical resume
+# Then: browser-test 7 surfaces above OR start Phase C (JMF/GOGO/cron)
+```
+
+---
+
+# 🌙 2026-05-24 EVENING — WAVE 14 COMPLETE (read FIRST · supersedes 2026-05-22 below)
+
+ภูม session ที่บ้านวันนี้. **1 new commit** บน `Poom-pacred` (`d287992`).
+พักก่อน · พรุ่งนี้ว่ากันใหม่.
+
+**📦 What landed tonight (Wave 14 · 3 parallel streams):**
+- **Agent D** — Wave 12-C ภาค 2: forwarder edit dimensions (4 files · ~860 LOC ·
+  `actions/admin/forwarders-edit.ts` + `[fNo]/edit/{page,edit-form}.tsx` +
+  detail page entry button). Pure Tailwind UI per §0a — admin กรอก weight/CBM/
+  crate AFTER goods arrive China warehouse.
+- **Agent B** — Fidelity audit: `docs/audit/fidelity-gap-2026-05-24.md` (282 LOC ·
+  **47 gaps** documented: 18 🔴 workflow · 22 🟠 polish · 7 🟢 keep). Top 3 P0
+  ranked with file paths + LOC estimates.
+- **Me (orchestration)** — 10 routes smoke + 3 Chrome screenshots verified
+  brand-red theme + Wave 12-D inline edit + Wave 12-C v2 form. **Phantom
+  discovered:** Phase A migration `tb_priceuser_*` ไม่เคยมี · Wave 9 ภูมิรู้แล้ว ·
+  ของจริง `tb_rate_vip_*` + `tb_hs_rate_custom_*` ทั้งหมดบน prod แล้ว.
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🌙 [`docs/research/poom-save-point-2026-05-24-night.md`](docs/research/poom-save-point-2026-05-24-night.md) — canonical resume (1-commit summary · top 3 P0 queue · 6 decision options)
+2. 📋 [`docs/audit/fidelity-gap-2026-05-24.md`](docs/audit/fidelity-gap-2026-05-24.md) — 47-gap inventory with line citations to legacy PHP
+3. 📝 [`docs/research/poom-save-point-2026-05-23-night.md`](docs/research/poom-save-point-2026-05-23-night.md) — yesterday's context (Wave 9-13 details)
+
+**⚠️ Pending ภูม manual actions (carried over):**
+1. 🔴 ROTATE S3 access key (security · `e913d7da34ca0089638f100afb74c972` leaked)
+2. (Optional) Apply migration `0094_view_sales_by_rep.sql` via Supabase dashboard
+3. (Optional) แจ้งลูกค้า 4 คน PR เปลี่ยน
+
+**Top pickup ลำดับแนะนำ:** D (5 นาที cleanup) → B (yuan date filter, 30 นาที)
+→ A (Top 3 P0, 3 ชม). หรือเลือก option อื่นจาก 6 ตัวเลือกใน save-point §"พรุ่งนี้ตัดสิน".
+
+---
+
+# 🚨 2026-05-22 EVENING — WAVE 7.3 + WAVE 8 COMPLETE (read FIRST · supersedes 2026-05-20 below)
+
+ภูม ran tonight's session at the home computer. **4 new commits**
+land on `Poom-pacred` (`245e206..01fdebc`). Machine change tonight
+(home → work tomorrow).
+
+**📦 What landed tonight (19 surfaces · ~3,800 LOC):**
+- **Wave 7.3** (`11ebcbc`) — wired the last 12 orphan admin pages
+  into sidebar (`ระบบ` + `เครื่องมือ` Settings groups) + 4 page
+  top-menubars (cargo/forwarders/wallet/reports). Closes the
+  re-audit-2026-05-21-night 🔴 DEAD list.
+- **Wave 8 Group A** (`9fccdd2`) — 3 bulk-approve bars on `tb_*` schema:
+  wallet · yuan · customer-pending. Browser-verified on PROD data
+  (1,470 wallet pending rows show checkbox each).
+- **Wave 8 Group B+C** (`01fdebc`) — admin manual entry forms (wallet/add
+  + yuan/new + customers/transfer-rep) + reports SQL rewrites
+  (sales-by-rep · user-sales-history × 2) + Postgres view
+  `vw_sales_by_rep` (migration 0094).
+
+**⚠️ ภูม manual steps before next session:**
+1. Apply migration `supabase/migrations/0094_view_sales_by_rep.sql` via
+   Supabase dashboard (idempotent · `create or replace view`).
+2. Browser-test the 4 new Wave 8 surfaces with small entries on PROD.
+3. Re-install Claude for Chrome extension on the work computer.
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-22-night.md`](docs/research/poom-save-point-2026-05-22-night.md) — the canonical resume doc (commit list · env state · pending actions · resume commands)
+2. 📋 [`docs/audit/page-inventory-2026-05-21-night.md`](docs/audit/page-inventory-2026-05-21-night.md) — page-by-page checklist (Wave 7.3 rows now all ✅)
+3. 🛠 [`docs/audit/re-audit-2026-05-21-night.md`](docs/audit/re-audit-2026-05-21-night.md) — P0/P1/P2 list (P0 + P1 + most-P2 closed by Wave 7.3+8)
+
+**Top next pickup:** Phase A migration backlog (`tb_priceuser_*`
+unblock rates pages · 2-3 ชม · ภูม+ก๊อต).
+
+---
+
+# 🚨 2026-05-20 EVENING — PHASE 1 PUSH (read FIRST · supersedes 2026-05-19 below)
+
+ภูม ran a 12-hour Phase 1 push tonight. 8 commits land on `Poom-pacred`
+(`b584c22..90c1dbe` + this save-point commit). Customers tapping in from
+running ads — the sprint is "rip the band-aid before they hit the rough edges".
+
+**🔥 Env change:** Pacred is now **Supabase prod only** —
+`https://yzljakczhwrpbxflnmco.supabase.co` (ก๊อต took dev project for
+other work · Pro plan upgraded). `.env.local` updated locally (gitignored
+so backup at `.env.local.dev-backup-2026-05-20`). **Resume on a new
+machine → manually update `NEXT_PUBLIC_SUPABASE_URL` +
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` per the save-point doc.**
+
+**📦 What landed today:** Wave 1 (faithful port of `report-cnt.php` +
+11-button audit menu + 9 audit queues + spine list tombstoned) · Wave 2
+(8 barcode routes faithful-ported · gateway routing · `tb_cnt` cnt-payment
+flow · 3 audit queues wired with `tb_header_order` + 41-ZIP free-shipping
+list · 8 spine scan routes deleted) · Wave 3 (Quagga2 installed ·
+DataTables-Responsive added · iOS auto-zoom fixed on register · 4 audits
+landed: fidelity / mobile / pcs-complete-analysis / pcs-admin-roles /
+pcs-business-flow). Spine retirement migration `0090` written but DEFERRED
+(14 cargo_* consumers still need cleanup · Wave 4).
+
+**🎯 SOTs for tomorrow's resume — read in order:**
+1. 🚨 [`docs/research/poom-save-point-2026-05-20-night.md`](docs/research/poom-save-point-2026-05-20-night.md) — the canonical resume doc (env-change steps · 8-commit summary · open questions · resume commands)
+2. 📋 [`docs/audit/pcs-master-synthesis-2026-05-20.md`](docs/audit/pcs-master-synthesis-2026-05-20.md) — P0/P1/P2 action list from 5 audits (6 P0 items remain · ~14-21 ชม)
+3. 🛠 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — Option A locked · Wave 2 done · Wave 3 partial · Wave 4 backlog
+4. 🧰 [`docs/audit/fidelity-2026-05-20.md`](docs/audit/fidelity-2026-05-20.md) — element-by-element diff of 7 admin screens vs legacy
+
+**🚨 Top P0 for next session:** rewrite `/admin/forwarders` to read
+`tb_forwarder` (currently reads the REBUILT `forwarders` table — staff
+will read wrong status to customers). 4-6 ชม.
+
+**Critical discovery — newrealdatapcs:** ภูม pointed at
+`C:\Users\Admin\Downloads\newrealdatapcs\` as พี่เดฟ's "real latest"
+PCS Cargo update. The PHP code there is BYTE-IDENTICAL to our existing
+snapshot (16,184 files · 0 hash diffs). The real value = พี่เดฟ's 5
+markdown analysis docs at `N'POOM - PCS LEARNNING/` (6,826L combined),
+which we've digested into the 4 audits above.
+
+---
+
+# 🚨 2026-05-19 EVENING — DIRECTION SHIFT
+
+The team pivoted from V3 (the `main → dave → Poom` loop where Wave A/B/R1
+sidebar-fidelity work shipped this morning) to a **literal 1:1 transcription**
+of legacy PHP → Next.js per the owner's "100% sameness FIRST" rule.
+
+**New branch loop:**
+- **`Poom-pacred`** (ภูม · admin transcription · 187 `pcs-admin/*.php` files)
+- **`dave-pacred`** (เดฟ · customer transcription + integrates)
+- **`podeng`** (ปอน · customer-portal frontend)
+- → **`faithful-port`** (integration target · เดฟ-owned)
+- → ก๊อต production gate → **`main`** (Vercel auto-deploy)
+
+V3 branches (`Poom`, `dave`) are **FROZEN** — preserved + already merged into
+`faithful-port`, so today's morning work isn't lost — but no new commits land
+there until further notice.
+
+**Method:** 1:1 transcription · same HTML markup · same SQL · `PCS → PR` branding
+only · zero design decisions. Legacy source on ภูม's machine at
+`C:\Users\Admin\pcscargo\` (187 admin + 42 customer-portal `.php` files).
+
+**Status (2026-05-19 night):** register/login fix shipped to `main` · customer
+portal **7/~24** screens transcribed 1:1 on `dave-pacred` (`menu`→dashboard ·
+china-address · account-settings · search · wallet · addresses · cart) · admin
+pilot done (`admin-table`→`/admin/admins`) · Bootstrap-4 + jQuery + FontAwesome
+vendor JS being staged for 1:1 interactivity. Full status + the 4-person
+work-split → [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md).
 
 **Authoritative SOTs (read in order):**
-1. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — branch model · 4-person work-split · status (updated 2026-05-24)
-2. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — canonical 1:1 method
-3. 🔍 [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md) — 10 critical missing flows + sprint sequence + owner-assigned ownership map
-4. 📑 [`docs/research/d1-audit-pcscargo-2026-05-24.md`](docs/research/d1-audit-pcscargo-2026-05-24.md) — exhaustive pcscargo.co.th customer + admin .php inventory + modal/AJAX/cron sweep
-5. 📑 [`docs/research/d1-audit-backoffice-2026-05-24.md`](docs/research/d1-audit-backoffice-2026-05-24.md) — `backoffice.pcscargo.co.th` MVC admin port checklist (MOMO LCL tracking)
-6. 📑 [`docs/research/d1-audit-pcsseafreight-2026-05-24.md`](docs/research/d1-audit-pcsseafreight-2026-05-24.md) — `pcs-seafreight.com` freight company audit (V3 freight reference)
-7. 🧭 [`docs/decisions/0017-pacred-faithful-pcs-port.md`](docs/decisions/0017-pacred-faithful-pcs-port.md) — D1 ADR (V2 = faithful port)
-8. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (`tb_*` inventory)
+1. 🚨 [`docs/research/poom-save-point-2026-05-19-night.md`](docs/research/poom-save-point-2026-05-19-night.md) — the direction-shift save-point · branch state · per-role lanes · PCS→PR table · resume commands
+2. 📋 [`docs/runbook/faithful-port-plan.md`](docs/runbook/faithful-port-plan.md) — the plan · branch model · 4-person work-split · status · cross-cutting infra
+3. 🛠 [`docs/runbook/faithful-port-transcription.md`](docs/runbook/faithful-port-transcription.md) — the canonical method · 1:1 transcription steps + admin pattern §8
+4. 🧰 [`.claude/skills/legacy-php-sweep/SKILL.md`](.claude/skills/legacy-php-sweep/SKILL.md) — supporting skill
+5. 🗺 [`docs/runbook/pcs-data-migration.md`](docs/runbook/pcs-data-migration.md) — Phase A data load (the `tb_*` table inventory)
 
-**Pattern references:**
-- Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` (uses ปอน's Tailwind chrome — NOT verbatim legacy CSS)
-- Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx`
+**Pattern references (read before transcribing your first screen):**
+- Customer pilot: `app/[locale]/(protected)/dashboard/page.tsx` + `public/legacy/pcs/menu.css`
+- Admin pilot: `app/[locale]/(admin)/admin/admins/page.tsx` + `public/legacy/pcs/admin/admin-base.css`
 
-**Legacy source locations (read-only references):**
-- Mac: `/Users/dev/Desktop/pcscargo/` (May 21 snapshot with `.git`)
-- Full extract 2026-05-24: `/Users/dev/Desktop/pcs-realshit/REALSHITDATAPCS/pcsc/` (~25GB code-only — `public_html/` + `backoffice.pcscargo.co.th/` + `pcs-seafreight.com/` + `sms/`)
+The D1 phase doc + per-role briefs below are still authoritative for company
+context · the SHIFT only changes the **work-loop** and the **method**, not the
+goal. Goal stays: faithful PCS Cargo port · zero retraining · D1.
 
 ---
 
@@ -146,7 +508,7 @@ Owner directive 2026-05-24: clean up the branch model and **unlock V3** for para
 - [`docs/STRATEGY.md`](docs/STRATEGY.md) — read once per session, refer back as needed
 
 **🛠 Skills kit (playbooks the agent follows when triggered):**
-- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 12 starter skills: phase-verify-loop · bug-swarm-loop · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify
+- [`.claude/skills/INDEX.md`](.claude/skills/INDEX.md) — 16 skills: phase-verify-loop · bug-swarm-loop · debug-mantra · management-talk · audit-kpi-dashboard · test-coverage-writer · refactor-readability · performance-hunter · scholar-immortal · copyist-unlimited · legacy-php-sweep · qa-flow-simulator · branch-integrate-loop · mobile-first-verify · legacy-fidelity-check · landing-conversion-audit
 
 **📚 Learnings (compounding knowledge — read before re-debugging):**
 - [`docs/learnings/_index.md`](docs/learnings/_index.md) — every agent / dev adds new entries via `scholar-immortal` skill
@@ -188,7 +550,7 @@ Owner directive 2026-05-24: clean up the branch model and **unlock V3** for para
 
 # Project Snapshot — pacred-web
 
-Last updated: 2026-05-24 (post strategy-reset · faithful-port branch removed · V3 unlocked on Poom-pacred · podeng merged into dave-pacred · 10 critical legacy-flow gaps identified — see [`docs/research/d1-deep-audit-2026-05-24.md`](docs/research/d1-deep-audit-2026-05-24.md))
+Last updated: 2026-05-19 (D1 — Phase A data loaded to dev + prod · Phase B wave-1 integrated — see [ADR-0017](docs/decisions/0017-pacred-faithful-pcs-port.md) + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md))
 
 > **Pacred** — ระบบเว็บไซต์บริษัทนำเข้า-ส่งออก / ชิปปิ้ง / เคลียร์ศุลกากร / ฝากสั่งซื้อสินค้าจากจีน
 > Marketing site + landing pages + customer member portal + admin back-office. The rebuilt app launched 2026-05-17, but on **2026-05-18 the owner redirected the project (D1)** — Pacred is now a **faithful port of the legacy PCS Cargo system** (`PCS` → `PR`). Current work: **Phase A ✅ DONE** (legacy `pcsc_main` fully loaded to prod Supabase — all 117 tables incl. 3 log tables backfilled post-Pro · customer images on S3 prod) → **Phase B in progress** (workflow fidelity — wave 1 integrated on `dave-pacred`, 1:1 transcription continues on customer + admin lanes — wave-17+ work also accumulating on `Poom-pacred` for V3 features). See the "CURRENT DIRECTION — D1" section at the top of this file + [`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) for the full phase plan.
@@ -343,21 +705,19 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 > ⚠️ **CANONICAL doc moved to [`docs/team.md`](docs/team.md)** — full role/branch/merge policy + daily workflow + safety rules
 > ห้าม duplicate รายละเอียดที่นี่ — อ่านที่ `docs/team.md` ครั้งเดียว ที่เดียว
 
-**TL;DR (updated 2026-05-24):**
+**TL;DR:**
 
-| คน | บทบาท | Active branch | Push to main |
+| คน | บทบาท | Branch | Push to main |
 |---|---|---|---|
-| **ก๊อต** | Senior Advisor + Admin 1:1 lane + Production gate | (own commits on main + admin 1:1 commits) | ✅ |
-| **เดฟ** | Project Lead / Integrator / Customer-backend 1:1 | `dave-pacred` | ✅ (after gating) |
-| **ปอน** | Frontend / Customer-portal UI / SEO | `podeng` | ❌ (own branch → เดฟ merges) |
-| **ภูม** | Backend / V3 continuation (UNLOCKED) | `Poom-pacred` | ❌ (own branch → merges after 1:1 ships) |
+| **ก๊อต** | Senior Advisor | (review only) | ✅ |
+| **เดฟ** | Project Lead | `dave` | ✅ |
+| **ปอน** | Frontend & SEO | `podeng` | ❌ (own branch) |
+| **ภูม** | Backend & Cargo Port | `Poom` | ❌ (own branch) |
 
 **Daily sync (every morning):**
 ```bash
-git fetch origin --prune
-git checkout <my-branch> && git pull --ff-only       # ปอน=podeng, ภูม=Poom-pacred, เดฟ=dave-pacred
-git merge main --no-edit                              # pull main into your branch
-# work, commit local freely; push only at save-points (per push_frequency_strict)
+git checkout main && git pull origin main
+git checkout <my-branch> && git merge main && git push origin <my-branch>
 ```
 
 **Conflict / safety:** อย่าใช้ `--force` / `reset --hard` ถ้าไม่แน่ใจ — full safety rules ใน [`docs/team.md`](docs/team.md) §5

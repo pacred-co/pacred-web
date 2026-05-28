@@ -321,11 +321,15 @@ export async function adminCancelBroadcast(
     const admin = createAdminClient();
     const now = new Date().toISOString();
 
-    const { data: row } = await admin
+    const { data: row, error: rowErr } = await admin
       .from("broadcasts")
       .select("id, status, title")
       .eq("id", d.id)
       .maybeSingle<{ id: string; status: string; title: string }>();
+    if (rowErr) {
+      console.error(`[broadcasts mutation lookup] failed`, { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
+    }
     if (!row) return { ok: false, error: "not_found" };
     if (!["draft", "scheduled"].includes(row.status)) {
       return { ok: false, error: `cannot_cancel_status:${row.status}` };

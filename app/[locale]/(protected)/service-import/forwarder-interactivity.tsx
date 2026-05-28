@@ -226,7 +226,7 @@ export function ForwarderInteractivity({
             ·  Hidden on auth/admin via the route group. */}
       {showPayBar && (
         <div className="fixed left-2 right-2 md:left-0 md:right-0 z-[40] bottom-24 md:bottom-0 bg-white/95 dark:bg-surface/95 backdrop-blur-md border border-border md:border-0 md:border-t rounded-2xl md:rounded-none shadow-[0_-6px_24px_rgba(0,0,0,0.12)] md:shadow-[0_-6px_20px_rgba(0,0,0,0.08)] overflow-hidden">
-          <div className="max-w-[1280px] mx-auto flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
+          <div className="flex items-center gap-2 md:gap-3 px-3 py-2 md:px-6 md:py-3 md:pl-[280px] md:pr-[88px]">
             {/* Select-all — icon-only on tight viewports, label appears ≥360px */}
             <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
               <input

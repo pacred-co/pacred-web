@@ -41,7 +41,7 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
     return (
       <main className="p-6 lg:p-8 space-y-5">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · LEARNING</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · LEARNING</p>
           <div className="mt-1 text-xs text-muted">
             <Link href="/admin/learning" className="hover:text-primary-600 hover:underline">← ย้อนกลับไปหน้ารวม</Link>
           </div>
@@ -108,7 +108,7 @@ export default async function AdminLearningPage({ searchParams }: { searchParams
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <div>
-        <p className="text-xs font-semibold tracking-widest text-primary-500">ADMIN · LEARNING</p>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · LEARNING</p>
         <h1 className="mt-1 text-2xl font-bold">📚 เรียนรู้และข้อมูลภายใน</h1>
         <p className="mt-1 text-sm text-muted">เนื้อหาสำหรับพนักงานทุกฝ่าย</p>
       </div>
