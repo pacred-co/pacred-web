@@ -93,12 +93,12 @@ type Profile = {
   phone: string | null;
 } | null;
 
-// Legacy user shape — tb_users keyed by userid text (PR12345 / PCS10843).
+// Legacy user shape — tb_users keyed by userID text (PR12345 / PCS10843).
 type LegacyUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 type FRow = {
@@ -136,7 +136,7 @@ function profileName(p: Profile) {
 }
 function userDisplayName(u: LegacyUser | null) {
   if (!u) return "—";
-  return [u.username, u.userlastname].filter(Boolean).join(" ") || "—";
+  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
 }
 
 /**
@@ -155,14 +155,14 @@ async function fetchUsersByUserId(
   if (unique.length === 0) return map;
   const { data, error } = await admin
     .from("tb_users")
-    .select("userid, username, userlastname, usertel")
-    .in("userid", unique);
+    .select("userID, userName, userLastName, userTel")
+    .in("userID", unique);
   if (error) {
     console.error(`[tb_users batch] failed`, { code: error.code, message: error.message });
     return map;
   }
   for (const u of (data ?? []) as LegacyUser[]) {
-    map.set(u.userid, u);
+    map.set(u.userID, u);
   }
   return map;
 }
@@ -538,9 +538,9 @@ export default async function AdminReportsPage({
 
   const forwarderCsv: CsvRow[] = forwarderRows.map((r) => ({
     เลขที่: r.f_no,
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     คลัง: r.source_warehouse,
     ขนส่ง: TRANSPORT_LABEL[r.transport_type] ?? r.transport_type,
     น้ำหนักkg: r.weight_kg,
@@ -554,9 +554,9 @@ export default async function AdminReportsPage({
 
   const shopCsv: CsvRow[] = shopRows.map((r) => ({
     เลขที่: r.h_no,
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     รายการ: r.title ?? "",
     ชิ้น: r.item_count,
     ยอด: r.total_thb,
@@ -566,9 +566,9 @@ export default async function AdminReportsPage({
   }));
 
   const yuanCsv: CsvRow[] = yuanRows.map((r) => ({
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     ช่องทาง: r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "",
     ปลายทาง: r.recipient_detail ?? "",
     หยวน: r.yuan_amount,
@@ -593,9 +593,9 @@ export default async function AdminReportsPage({
   }));
 
   const paymentCsv: CsvRow[] = walletRows.map((r) => ({
-    รหัสสมาชิก: r.user?.userid ?? "",
+    รหัสสมาชิก: r.user?.userID ?? "",
     ชื่อ: userDisplayName(r.user),
-    เบอร์: r.user?.usertel ?? "",
+    เบอร์: r.user?.userTel ?? "",
     ประเภท: WALLET_TYPE_LABEL[r.type] ?? `type ${r.type}`,
     จำนวน: r.amount,
     ธนาคาร: r.bank_name ?? "",
@@ -663,12 +663,12 @@ export default async function AdminReportsPage({
       .select("id", { count: "exact", head: true })
       .gte("fdate", nDaysAgoIso(30))
       .in("fstatus", ["5", "6", "7"]),
-    // V-G6 #2 sales-by-rep — distinct adminidsale from tb_users. PostgREST
+    // V-G6 #2 sales-by-rep — distinct adminIDSale from tb_users. PostgREST
     // can't COUNT DISTINCT, so pull the column + Set-dedupe in JS (cap
     // 50,000 rows — there are ~8,898 prod users so a single page suffices).
     admin.from("tb_users")
-      .select("adminidsale")
-      .not("adminidsale", "is", null).neq("adminidsale", "")
+      .select("adminIDSale")
+      .not("adminIDSale", "is", null).neq("adminIDSale", "")
       .limit(50_000),
     // V-G6 #3 hs-code-revenue — distinct HS codes used in last 90d. Same
     // Set-dedupe pattern (cap 20,000 lines mirrors the underlying report).
@@ -699,7 +699,7 @@ export default async function AdminReportsPage({
   // V-G6 dedup pass — Set on the raw selects (only 3 of the 4 V-G6 cards
   // need it; #1 forwarder-volume has its count direct from count:exact).
   const vg6SalesByRepCnt = new Set(
-    (vg6SalesByRepRaw.data ?? []).map((r) => (r as { adminidsale: string }).adminidsale),
+    (vg6SalesByRepRaw.data ?? []).map((r) => (r as { adminIDSale: string }).adminIDSale),
   ).size;
   const vg6HsCodeRevenueCnt = new Set(
     (vg6HsCodeRevenueRaw.data ?? []).map((r) => (r as { hs_code: string }).hs_code),
@@ -834,9 +834,9 @@ export default async function AdminReportsPage({
                 <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">#{r.f_no}</Link>
               </td>
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                <div className="font-mono">{r.user?.userID ?? "—"}</div>
                 <div>{userDisplayName(r.user)}</div>
-                <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.source_warehouse} / {TRANSPORT_LABEL[r.transport_type] ?? r.transport_type}</td>
               <td className="px-4 py-3 text-right text-xs">
@@ -868,9 +868,9 @@ export default async function AdminReportsPage({
                 <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
               </td>
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                <div className="font-mono">{r.user?.userID ?? "—"}</div>
                 <div>{userDisplayName(r.user)}</div>
-                <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.title ?? "—"}</td>
               <td className="px-4 py-3 text-right text-xs">{r.item_count}</td>
@@ -896,9 +896,9 @@ export default async function AdminReportsPage({
           {yuanRows.map((r) => (
             <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                <div className="font-mono">{r.user?.userID ?? "—"}</div>
                 <div>{userDisplayName(r.user)}</div>
-                <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
               <td className="px-4 py-3 text-xs">{r.channel ? PAYTYPE_LABEL[r.channel] ?? r.channel : "—"}</td>
               <td className="px-4 py-3 text-xs max-w-[160px] text-muted">{r.recipient_detail ?? "—"}</td>
@@ -960,9 +960,9 @@ export default async function AdminReportsPage({
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userid ?? "—"}</div>
+                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
                   <div>{userDisplayName(r.user)}</div>
-                  <div className="text-muted">{r.user?.usertel ?? ""}</div>
+                  <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
                 <td className="px-4 py-3 text-xs">{WALLET_TYPE_LABEL[r.type] ?? `type ${r.type}`}</td>
                 <td className={`px-4 py-3 text-right font-mono ${renderedAmount < 0 ? "text-red-700" : "text-green-700"}`}>

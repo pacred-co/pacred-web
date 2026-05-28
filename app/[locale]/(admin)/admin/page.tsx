@@ -121,10 +121,10 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // Leaving the fetch for now: PostgREST has no SUM endpoint + accepting a
     // stale cache here would diverge from staff "always fresh" expectation.
     admin.from("tb_wallet").select("wallettotal").limit(50_000),
-    // Customer counts — useractive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
-    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "0"),
-    admin.from("tb_users").select("id", { count: "exact", head: true }).eq("useractive", "1"),
-    admin.from("tb_users").select("id", { count: "exact", head: true }),
+    // Customer counts — userActive '1' = ใช้งานแล้ว · '0' = ยังไม่ใช้งาน.
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "0"),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }).eq("userActive", "1"),
+    admin.from("tb_users").select("ID", { count: "exact", head: true }),
     // Cancelled orders this month — hstatus='6' on tb_header_order.
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "6").gte("hdate", monthStart),
     // Pending queues (tab badge counts).
@@ -380,10 +380,10 @@ type RowShape = {
 };
 
 type RawUserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 /**
@@ -400,17 +400,17 @@ async function loadUsersByUserId(
   if (unique.length === 0) return new Map();
   const { data, error } = await admin
     .from("tb_users")
-    .select("userid,username,userlastname,usertel")
-    .in("userid", unique);
+    .select("userID,userName,userLastName,userTel")
+    .in("userID", unique);
   if (error) {
     console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
   }
-  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userid, u]));
+  return new Map(((data ?? []) as unknown as RawUserRow[]).map((u) => [u.userID, u]));
 }
 
 function nameOf(u: RawUserRow | undefined): string {
   if (!u) return "—";
-  const n = `${u.username ?? ""} ${u.userlastname ?? ""}`.trim();
+  const n = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
   return n || "—";
 }
 
@@ -605,26 +605,26 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       });
     }
 
-    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users useractive='0') ───────────────────
+    // ── ลูกค้าที่ยังไม่ใช้งาน (tb_users userActive='0') ───────────────────
     case "inactiveCustomers": {
       const { data, error } = await admin
         .from("tb_users")
-        .select("id,userid,username,userlastname,usertel,useremail,userregistered,usercompany")
-        .eq("useractive", "0")
-        .order("userregistered", { ascending: false, nullsFirst: false })
+        .select("ID,userID,userName,userLastName,userTel,userEmail,userRegistered,userCompany")
+        .eq("userActive", "0")
+        .order("userRegistered", { ascending: false, nullsFirst: false })
         .limit(50);
       if (error) {
         console.error(`[tb_users list] failed`, { code: error.code, message: error.message });
       }
       const rows = (data ?? []) as unknown as RawUserListRow[];
       return rows.map((u) => ({
-        id: String(u.id),
-        created_at: u.userregistered ?? "",
-        member_code: u.userid,
-        customer_name: `${u.username ?? ""} ${u.userlastname ?? ""}`.trim() || "—",
+        id: String(u.ID),
+        created_at: u.userRegistered ?? "",
+        member_code: u.userID,
+        customer_name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—",
         amount: 0,
-        detail: `${u.usertel ?? "—"}${u.useremail ? ` · ${u.useremail}` : ""}`,
-        link: `/admin/customers/${u.userid}`,
+        detail: `${u.userTel ?? "—"}${u.userEmail ? ` · ${u.userEmail}` : ""}`,
+        link: `/admin/customers/${u.userID}`,
         status: "registered",
       }));
     }
@@ -640,7 +640,7 @@ type RawWalletHsRow   = { id: number | string; date: string | null; amount: numb
 type RawHeaderOrderRow = { id: number | string; hno: string | null; hstatus: string | null; htotalpriceuser: number | string; hdate: string | null; htitle: string | null; userid: string };
 type RawForwarderRow  = { id: number | string; fdate: string | null; fstatus: string | null; fidorco: string | null; ftotalprice: number | string; ftransporttype: string | null; fweight: number | string; userid: string; fcabinetnumber: string | null; fcredit: string | null };
 type RawPaymentRow    = { id: number | string; paydate: string | null; paystatus: string | null; paytype: string | null; payyuan: number | string; paythb: number | string; userid: string };
-type RawUserListRow   = { id: number | string; userid: string; username: string | null; userlastname: string | null; usertel: string | null; useremail: string | null; userregistered: string | null; usercompany: string | null };
+type RawUserListRow   = { ID: number | string; userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null; userRegistered: string | null; userCompany: string | null };
 
 // sales_payouts (rebuilt schema · the one tab without a legacy equivalent)
 type ProfileShape       = { member_code: string | null; first_name: string | null; last_name: string | null; company_name: string | null };

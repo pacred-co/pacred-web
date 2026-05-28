@@ -46,10 +46,10 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 200;
 
 type LegacyUser = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 
 type LegacyForwarder = {
@@ -89,7 +89,7 @@ function thb(n: number): string {
 }
 function userDisplayName(u: LegacyUser | null): string {
   if (!u) return "—";
-  return [u.username, u.userlastname].filter(Boolean).join(" ") || "—";
+  return [u.userName, u.userLastName].filter(Boolean).join(" ") || "—";
 }
 
 // Module-scope helper so React Compiler doesn't flag Date.now as impure-in-render.
@@ -174,13 +174,13 @@ export default async function RefundsReport({
   if (userIds.length > 0) {
     const { data: userRows, error: userErr } = await admin
       .from("tb_users")
-      .select("userid, username, userlastname, usertel")
-      .in("userid", userIds);
+      .select("userID, userName, userLastName, userTel")
+      .in("userID", userIds);
     if (userErr) {
       console.error(`[tb_users batch] failed`, { code: userErr.code, message: userErr.message });
     }
     for (const u of (userRows ?? []) as LegacyUser[]) {
-      userMap.set(u.userid, u);
+      userMap.set(u.userID, u);
     }
   }
 
@@ -256,7 +256,7 @@ export default async function RefundsReport({
     dateslip:     r.dateslip ?? "",
     userid:       r.userid,
     name:         userDisplayName(r.user),
-    phone:        r.user?.usertel ?? "",
+    phone:        r.user?.userTel ?? "",
     amount:       Math.abs(r.amount),
     reforder:     r.reforder ?? "",
     forwarder_status: r.forwarder ? legacyForwarderStatusThai(r.forwarder.fstatus) : "",
@@ -353,7 +353,7 @@ export default async function RefundsReport({
                         </Link>
                       </p>
                       <p className="font-mono text-[10px] text-muted">{r.userid}</p>
-                      {r.user?.usertel && <p className="text-[10px] text-muted">☎ {r.user.usertel}</p>}
+                      {r.user?.userTel && <p className="text-[10px] text-muted">☎ {r.user.userTel}</p>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-green-700">{thb(r.amount)}</td>
                     <td className="px-4 py-3 text-xs">

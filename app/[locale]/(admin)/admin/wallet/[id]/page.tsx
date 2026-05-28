@@ -152,12 +152,12 @@ type WalletHsRow = {
 };
 
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
-  useremail: string | null;
-  userpicture: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
+  userEmail: string | null;
+  userPicture: string | null;
 };
 
 type LinkedWalletHsRow = {
@@ -218,8 +218,8 @@ export default async function AdminWalletDetail({
   ] = await Promise.all([
     admin
       .from("tb_users")
-      .select("userid,username,userlastname,usertel,useremail,userpicture")
-      .eq("userid", row.userid)
+      .select("userID,userName,userLastName,userTel,userEmail,userPicture")
+      .eq("userID", row.userid)
       .maybeSingle(),
     admin
       .from("tb_wallet")
@@ -375,8 +375,8 @@ export default async function AdminWalletDetail({
   const status = row.status ?? "1";
   const isPending = status === "1";
   const userid = row.userid;
-  const customerName = `${user?.username ?? ""} ${user?.userlastname ?? ""}`.trim() || "—";
-  const userAvatar = await resolveLegacyUrl(user?.userpicture ?? null, "profile-thumb");
+  const customerName = `${user?.userName ?? ""} ${user?.userLastName ?? ""}`.trim() || "—";
+  const userAvatar = await resolveLegacyUrl(user?.userPicture ?? null, "profile-thumb");
 
   // Wave 19 BUG #4: type-aware labels for breadcrumb + page title.
   const typeKey = row.type ?? "1";

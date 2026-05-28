@@ -34,10 +34,10 @@ type WalletRow = {
   wallettotal: number;
 };
 type UserRow = {
-  userid: string;
-  username: string | null;
-  userlastname: string | null;
-  usertel: string | null;
+  userID: string;
+  userName: string | null;
+  userLastName: string | null;
+  userTel: string | null;
 };
 type CashBackRow = {
   userid: string;
@@ -75,13 +75,13 @@ export default async function DebtorsReport() {
   let cbMap: Record<string, number> = {};
   if (useridList.length > 0) {
     const [usersRes, cbRes] = await Promise.all([
-      admin.from("tb_users").select("userid, username, userlastname, usertel").in("userid", useridList),
+      admin.from("tb_users").select("userID, userName, userLastName, userTel").in("userID", useridList),
       admin.from("tb_cash_back").select("userid, cbtotal").in("userid", useridList),
     ]);
     if (usersRes.error) {
       console.error(`[tb_users debtors join] failed`, { code: usersRes.error.code, message: usersRes.error.message });
     } else {
-      userMap = Object.fromEntries(((usersRes.data ?? []) as UserRow[]).map((u) => [u.userid, u]));
+      userMap = Object.fromEntries(((usersRes.data ?? []) as UserRow[]).map((u) => [u.userID, u]));
     }
     if (cbRes.error) {
       console.error(`[tb_cash_back debtors join] failed`, { code: cbRes.error.code, message: cbRes.error.message });
@@ -96,8 +96,8 @@ export default async function DebtorsReport() {
     const u = userMap[w.userid];
     return {
       userid: w.userid,
-      name: u ? [u.username, u.userlastname].filter(Boolean).join(" ") : "",
-      phone: u?.usertel ?? "",
+      name: u ? [u.userName, u.userLastName].filter(Boolean).join(" ") : "",
+      phone: u?.userTel ?? "",
       wallet_balance: w.wallettotal,
       cashback_balance: cbMap[w.userid] ?? 0,
     };
@@ -164,13 +164,13 @@ export default async function DebtorsReport() {
               <tbody>
                 {wallets.map((w) => {
                   const u = userMap[w.userid];
-                  const customerName = u ? [u.username, u.userlastname].filter(Boolean).join(" ") : "";
+                  const customerName = u ? [u.userName, u.userLastName].filter(Boolean).join(" ") : "";
                   return (
                     <tr key={w.userid} className="border-t border-border">
                       <td className="px-4 py-3 text-xs">
                         <p>{customerName || "—"}</p>
                         <p className="font-mono text-[10px] text-muted">{w.userid}</p>
-                        {u?.usertel && <p className="text-[10px] text-muted">☎ {u.usertel}</p>}
+                        {u?.userTel && <p className="text-[10px] text-muted">☎ {u.userTel}</p>}
                       </td>
                       <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${Number(w.wallettotal) < 0 ? "text-red-700" : "text-muted"}`}>
                         {thb(Number(w.wallettotal))}
