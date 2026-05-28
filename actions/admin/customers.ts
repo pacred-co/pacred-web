@@ -190,7 +190,7 @@ export async function adminConvertToJuristic(
     const { data: before, error: beforeErr } = await admin
       .from("profiles")
       .select("id, account_type, member_code, first_name, last_name")
-      .eq("ID", d.profile_id)
+      .eq("id", d.profile_id)
       .maybeSingle<{ ID: string; account_type: "personal" | "juristic"; member_code: string | null; first_name: string | null; last_name: string | null }>();
     if (beforeErr) {
       console.error(`[adminConvertToJuristic profiles read] failed`, { code: beforeErr.code, message: beforeErr.message, profile_id: d.profile_id });
@@ -217,8 +217,11 @@ export async function adminConvertToJuristic(
     const { error: profErr } = await admin
       .from("profiles")
       .update({ account_type: "juristic" })
-      .eq("ID", d.profile_id);
-    if (profErr) return { ok: false, error: profErr.message };
+      .eq("id", d.profile_id);
+    if (profErr) {
+      console.error(`[adminConvertToJuristic profiles update] failed`, { code: profErr.code, message: profErr.message, profile_id: d.profile_id });
+      return { ok: false, error: profErr.message };
+    }
 
     // Step 2 — upsert the corporate row
     const corporatePayload: Record<string, unknown> = {
@@ -241,7 +244,7 @@ export async function adminConvertToJuristic(
       await admin
         .from("profiles")
         .update({ account_type: before.account_type })
-        .eq("ID", d.profile_id);
+        .eq("id", d.profile_id);
       return { ok: false, error: corpErr.message };
     }
 
