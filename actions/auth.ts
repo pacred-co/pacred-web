@@ -32,6 +32,7 @@ import {
   type SignInInput,
 } from "@/lib/validators/auth";
 import { requestOtp, verifyOtp } from "./otp";
+import { logger } from "@/lib/logger";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -428,7 +429,20 @@ export async function uploadJuristicDoc(
       contentType: file.type,
       upsert: true,
     });
-  if (uploadErr) return { ok: false, error: "upload_failed" };
+  if (uploadErr) {
+    // 2026-05-28 — surface the storage error in Vercel logs so we can tell
+    // bucket-policy vs not-signed-in vs RLS-deny apart when a juristic
+    // step-3 user reports "won't proceed". Without this the client only
+    // sees ERR.upload_failed = "อัปโหลดไฟล์ไม่สำเร็จ", which is too generic
+    // to diagnose remotely.
+    logger.error("auth", "juristic-upload storage failed", uploadErr, {
+      userId: user.id,
+      docType,
+      mime: file.type,
+      size: file.size,
+    });
+    return { ok: false, error: "upload_failed" };
+  }
 
   const { error: insertErr } = await supabase.from("documents").insert({
     profile_id: user.id,
@@ -437,7 +451,14 @@ export async function uploadJuristicDoc(
     mime_type: file.type,
     size_bytes: file.size,
   });
-  if (insertErr) return { ok: false, error: "doc_record_failed" };
+  if (insertErr) {
+    logger.error("auth", "juristic-upload doc-record insert failed", insertErr, {
+      userId: user.id,
+      docType,
+      code: insertErr.code,
+    });
+    return { ok: false, error: "doc_record_failed" };
+  }
 
   return { ok: true, data: { storage_path: path } };
 }
@@ -453,7 +474,13 @@ export async function completeJuristicRegistration(): Promise<ActionResult> {
     .from("profiles")
     .update({ status: "active" })
     .eq("id", user.id);
-  if (error) return { ok: false, error: "update_failed" };
+  if (error) {
+    logger.error("auth", "juristic-complete profiles status=active failed", error, {
+      userId: user.id,
+      code: error.code,
+    });
+    return { ok: false, error: "update_failed" };
+  }
 
   return { ok: true };
 }
