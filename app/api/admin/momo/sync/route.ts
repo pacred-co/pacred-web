@@ -27,6 +27,7 @@ import {
   mapImportTrackArray,
   mapContainerClosedArray,
   mapSackInfoSingle,
+  extractContainerClosedTracks,
   type MomoInternalAdminRecord,
 } from "@/lib/integrations/momo-isolated";
 import { guardAdmin, errorStatus } from "../_shared";
@@ -95,33 +96,35 @@ export async function POST(request: Request) {
       const upRows = importMapped
         .filter((r) => r.trackingNo) // upsert requires the unique key
         .map((r) => ({
-          momo_tracking_no:  r.trackingNo,
-          momo_sack_no:      r.sackNo,
-          momo_container_no: r.containerNo,
+          momo_tracking_no:    r.trackingNo,
+          momo_sack_no:        r.sackNo,
+          momo_container_no:   r.containerNo,
+          // ── 0119 container identity (ref/round id — same value as legacy col, clearer name) ──
+          momo_container_ref:  r.momoContainerRef,
           // ── 0118 mirror columns ──
-          momo_user_code:    r.momoUserCode,
-          momo_user_group:   r.momoUserGroup,
-          momo_cg_no:        r.momoCgNo,
-          ship_by:           r.shipBy,
-          weight_kg:         r.weightKg,
-          cbm:               r.cbm,
-          quantity:          r.quantity,
+          momo_user_code:      r.momoUserCode,
+          momo_user_group:     r.momoUserGroup,
+          momo_cg_no:          r.momoCgNo,
+          ship_by:             r.shipBy,
+          weight_kg:           r.weightKg,
+          cbm:                 r.cbm,
+          quantity:            r.quantity,
           // ── status + range ──
-          date_from:         start,
-          date_to:           end,
-          phase:             r.phase,
-          shipment_status:   r.shipmentStatus,
-          billing_status:    r.billingStatus,
-          job_status:        r.jobStatus,
-          issue_status:      r.issueStatus,
-          admin_status_text: r.adminStatusText,
-          current_location:  r.currentLocation,
-          etd:               r.etd,
-          eta:               r.eta,
-          momo_updated_at:   r.momoUpdatedAt,
-          raw:               r.raw as never,
-          last_synced_at:    new Date().toISOString(),
-          updated_at:        new Date().toISOString(),
+          date_from:           start,
+          date_to:             end,
+          phase:               r.phase,
+          shipment_status:     r.shipmentStatus,
+          billing_status:      r.billingStatus,
+          job_status:          r.jobStatus,
+          issue_status:        r.issueStatus,
+          admin_status_text:   r.adminStatusText,
+          current_location:    r.currentLocation,
+          etd:                 r.etd,
+          eta:                 r.eta,
+          momo_updated_at:     r.momoUpdatedAt,
+          raw:                 r.raw as never,
+          last_synced_at:      new Date().toISOString(),
+          updated_at:          new Date().toISOString(),
         }));
       if (upRows.length > 0) {
         const { error: upErr } = await admin
@@ -151,28 +154,35 @@ export async function POST(request: Request) {
       const upRows = mapped
         .filter((r) => r.containerNo)
         .map((r) => ({
-          momo_container_no: r.containerNo,
-          momo_sack_no:      r.sackNo,
+          momo_container_no:   r.containerNo,
+          momo_sack_no:        r.sackNo,
+          // ── 0119 container identity ──
+          momo_container_ref:  r.momoContainerRef,
+          container_batch_no:  r.containerBatchNo,
+          real_container_no:   r.realContainerNo,
           // ── 0118 mirror columns ──
-          ship_by:           r.shipBy,
-          total_kg:          r.totalKg,
-          total_cbm:         r.totalCbm,
-          total_parcel:      r.totalParcel,
+          ship_by:             r.shipBy,
+          total_kg:            r.totalKg,
+          total_cbm:           r.totalCbm,
+          total_parcel:        r.totalParcel,
           // ── status + range ──
-          date_from:         start,
-          date_to:           end,
-          closed_at:         r.momoUpdatedAt,
-          phase:             r.phase,
-          shipment_status:   r.shipmentStatus,
-          admin_status_text: r.adminStatusText,
-          raw:               r.raw as never,
-          last_synced_at:    new Date().toISOString(),
-          updated_at:        new Date().toISOString(),
+          date_from:           start,
+          date_to:             end,
+          closed_at:           r.momoUpdatedAt,
+          phase:               r.phase,
+          shipment_status:     r.shipmentStatus,
+          admin_status_text:   r.adminStatusText,
+          raw:                 r.raw as never,
+          last_synced_at:      new Date().toISOString(),
+          updated_at:          new Date().toISOString(),
         }));
       if (upRows.length > 0) {
-        const { error: upErr } = await admin
+        // Upsert + select() returns the persisted rows (with their id),
+        // which we need to populate the track_details[] explosion below.
+        const { data: persisted, error: upErr } = await admin
           .from("momo_container_closed")
-          .upsert(upRows, { onConflict: "momo_container_no" });
+          .upsert(upRows, { onConflict: "momo_container_no" })
+          .select("id, momo_container_no, raw");
         if (upErr) {
           failedCount += upRows.length;
           errors.push({
@@ -182,6 +192,67 @@ export async function POST(request: Request) {
           });
         } else {
           upsertedCount += upRows.length;
+
+          // ── 0119 — Explode raw.track_details[] into momo_container_closed_tracks.
+          // For each persisted container, extract per-tracking rows from its raw
+          // and upsert by (container_closed_id, momo_tracking_no). This is the
+          // JOIN BRIDGE that lets us link tracking → real container later.
+          const trackRows: Array<{
+            container_closed_id: string;
+            momo_container_ref:  string | null;
+            container_batch_no:  string | null;
+            real_container_no:   string | null;
+            momo_tracking_no:    string;
+            weight_kg:           number | null;
+            cbm:                 number | null;
+            width:               number | null;
+            height:              number | null;
+            length:              number | null;
+            quantity:            number | null;
+            raw:                 unknown;
+            last_synced_at:      string;
+            updated_at:          string;
+          }> = [];
+          const nowIso = new Date().toISOString();
+          for (const row of persisted ?? []) {
+            const parentId = (row as { id?: string }).id;
+            if (!parentId) continue;
+            const extracted = extractContainerClosedTracks((row as { raw?: unknown }).raw);
+            for (const t of extracted) {
+              trackRows.push({
+                container_closed_id: parentId,
+                momo_container_ref:  t.momoContainerRef,
+                container_batch_no:  t.containerBatchNo,
+                real_container_no:   t.realContainerNo,
+                momo_tracking_no:    t.trackingNo,
+                weight_kg:           t.weightKg,
+                cbm:                 t.cbm,
+                width:               t.width,
+                height:              t.height,
+                length:              t.length,
+                quantity:            t.quantity,
+                raw:                 t.raw,
+                last_synced_at:      nowIso,
+                updated_at:          nowIso,
+              });
+            }
+          }
+          if (trackRows.length > 0) {
+            const { error: trkErr } = await admin
+              .from("momo_container_closed_tracks")
+              .upsert(trackRows, {
+                onConflict: "container_closed_id,momo_tracking_no",
+              });
+            if (trkErr) {
+              errors.push({
+                scope:   "container_closed_tracks_upsert",
+                error:   "MOMO_DB_UPSERT_FAILED",
+                message: trkErr.message,
+              });
+            } else {
+              upsertedCount += trackRows.length;
+            }
+          }
         }
       }
     } else {

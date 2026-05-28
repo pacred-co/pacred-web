@@ -34,6 +34,8 @@ export {
   mapContainerClosedArray,
   mapSackInfoRecord,
   mapSackInfoSingle,
+  // Migration 0119 — per-tracking explode from container_closed.raw.track_details[].
+  extractContainerClosedTracks,
   isoToDateOnly,
 } from "./mapper";
 
@@ -45,6 +47,7 @@ export type {
   MomoIssueStatus,
   MomoBadgeColor,
   MomoInternalAdminRecord,
+  MomoContainerClosedTrack,
   MomoClientResult,
   MomoErrorCode,
 } from "./types";

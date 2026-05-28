@@ -112,6 +112,18 @@ export type MomoInternalAdminRecord = {
   trackingNo:      string | null;
   sackNo:          string | null;
   containerNo:     string | null;
+  // ── Container identity disambiguation (migration 0119 — 2026-05-28) ──
+  // The legacy `containerNo` is ambiguous (= ref on import_track, = real
+  // container number on container_closed). These 3 fields make it explicit:
+  momoContainerRef: string | null;     // ref/round id (e.g. "PR20260527-SEA01")
+                                       //   import_track: raw.container_no
+                                       //   container:   raw.fid
+  containerBatchNo: string | null;     // momo batch (e.g. "GZS260525-2")
+                                       //   container: raw.cid
+                                       //   (not surfaced on import_track endpoint)
+  realContainerNo:  string | null;     // real shipping container (e.g. "JXLU6157980")
+                                       //   container: raw.cid_code
+                                       //   (not surfaced on import_track endpoint)
   // ── Mirror fields extracted from raw (migration 0118 — 2026-05-28) ──
   // Each mapper populates the subset that exists in its source endpoint;
   // the others stay null (e.g. user_code only exists in import_track).
@@ -137,6 +149,41 @@ export type MomoInternalAdminRecord = {
   eta:             string | null;
   momoUpdatedAt:   string | null;
   raw:             unknown;             // full MOMO record for debug + remap
+};
+
+/**
+ * Per-tracking row exploded from container_closed.raw.track_details[].
+ *
+ * Migration 0119 — populates `momo_container_closed_tracks`. This is the
+ * JOIN bridge that lets us link a tracking number to its real container.
+ * Without these rows, container_closed shows up as cid_code only with no
+ * way to know which tracking is inside.
+ */
+export type MomoContainerClosedTrack = {
+  /** raw.track_details[i].reTrack */
+  trackingNo:        string;
+  /** Parent container_closed.id (filled by sync after upserting the parent). */
+  containerClosedId: string;
+  /** Mirror of parent's momo_container_ref (raw.fid). */
+  momoContainerRef:  string | null;
+  /** Mirror of parent's container_batch_no (raw.cid). */
+  containerBatchNo:  string | null;
+  /** Mirror of parent's real_container_no (raw.cid_code). */
+  realContainerNo:   string | null;
+  /** raw.track_details[i].kg */
+  weightKg:          number | null;
+  /** raw.track_details[i].cbm */
+  cbm:               number | null;
+  /** raw.track_details[i].width */
+  width:             number | null;
+  /** raw.track_details[i].height */
+  height:            number | null;
+  /** raw.track_details[i].length */
+  length:            number | null;
+  /** raw.track_details[i].total_quantity */
+  quantity:          number | null;
+  /** Full track_details[i] for audit. */
+  raw:               unknown;
 };
 
 // ── HTTP client result envelope ───────────────────────────────

@@ -54,6 +54,7 @@
 
 import type {
   MomoBillingStatus,
+  MomoContainerClosedTrack,
   MomoInternalAdminRecord,
   MomoIssueStatus,
   MomoJobStatus,
@@ -201,6 +202,12 @@ export function mapImportTrackRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity disambiguation ──
+    // import_track endpoint: raw.container_no holds the ref/round id
+    // (e.g. "PR20260527-SEA01"). It is NOT the real container number.
+    momoContainerRef: containerNo,   // same value, clearer field name
+    containerBatchNo: null,          // not surfaced on import_track endpoint
+    realContainerNo:  null,          // not surfaced on import_track endpoint
     // ── 0118 mirror fields — populate from raw subset ──
     momoUserCode:  asStr(r.user_code),
     momoUserGroup: asStr(r.user_group),
@@ -235,10 +242,16 @@ export function mapContainerClosedRecord(raw: unknown): MomoInternalAdminRecord 
   const r = asBag(raw);
   if (!r) return fallback(raw);
 
-  // MOMO container has BOTH cid (group code, e.g. "GZS260525-2") AND
-  // cid_code (real container number, e.g. "JXLU6157980"). Use cid_code
-  // when present, else cid.
-  const containerNo = asStr(r.cid_code) || asStr(r.cid);
+  // MOMO container endpoint has 3 distinct identifiers:
+  //   raw.fid       = ref/round id    (e.g. "PR20260527-SEA01")
+  //   raw.cid       = batch number    (e.g. "GZS260525-2")
+  //   raw.cid_code  = real container  (e.g. "JXLU6157980")
+  // The legacy `containerNo` column holds cid_code (real) for backward
+  // compat; the new explicit fields below disambiguate.
+  const momoContainerRef = asStr(r.fid);
+  const containerBatchNo = asStr(r.cid);
+  const realContainerNo  = asStr(r.cid_code);
+  const containerNo      = realContainerNo || containerBatchNo;   // legacy: prefer real
   const trackingNo  = null;                          // closed-list is per-container
   const sackNo      = null;
 
@@ -265,6 +278,10 @@ export function mapContainerClosedRecord(raw: unknown): MomoInternalAdminRecord 
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity disambiguation ──
+    momoContainerRef,
+    containerBatchNo,
+    realContainerNo,
     // ── 0118 mirror fields — container-level (no per-tracking weights) ──
     momoUserCode:  null,    // container is aggregate of many users
     momoUserGroup: null,
@@ -329,6 +346,10 @@ export function mapSackInfoRecord(raw: unknown): MomoInternalAdminRecord {
     trackingNo,
     sackNo,
     containerNo,
+    // ── 0119 container identity — sack endpoint doesn't surface these ──
+    momoContainerRef: null,
+    containerBatchNo: null,
+    realContainerNo:  null,
     // ── 0118 mirror fields — sack-level ──
     momoUserCode:  null,    // sack is aggregate; user_code is per-tracking
     momoUserGroup: null,
@@ -367,6 +388,9 @@ function fallback(raw: unknown): MomoInternalAdminRecord {
     trackingNo:       null,
     sackNo:           null,
     containerNo:      null,
+    momoContainerRef: null,
+    containerBatchNo: null,
+    realContainerNo:  null,
     momoUserCode:     null,
     momoUserGroup:    null,
     momoCgNo:         null,
@@ -389,6 +413,65 @@ function fallback(raw: unknown): MomoInternalAdminRecord {
     momoUpdatedAt:    null,
     raw,
   };
+}
+
+// ─────────────────────────────────────────────────────────────
+// (0119) Container Closed → per-tracking explode (track_details[])
+// ─────────────────────────────────────────────────────────────
+// Brief 2026-05-28 — Phase A root-cause fix. container_closed.raw has
+// a `track_details: [{reTrack, kg, cbm, ...}]` array that lists every
+// tracking inside the closed container. Without this explode, there
+// is no DB edge from tracking → real container number.
+//
+// Note: this function does NOT need the parent's DB id — the sync
+// route fills `containerClosedId` after upserting the parent. Mirror
+// fields (ref/batch/real) are copied from the parent's raw so each
+// track row is self-describing for fast index lookup.
+
+/**
+ * Extract per-tracking rows from a single container_closed raw item.
+ *
+ * @param raw  The full container_closed item from MOMO API (one element
+ *             of the array returned by /api/func/get/container/closed/...).
+ * @returns    Array of track records (one per `raw.track_details[i]`),
+ *             with `containerClosedId` left as empty string — the sync
+ *             route fills it in after upserting the parent. Returns []
+ *             when raw is malformed or has no track_details.
+ */
+export function extractContainerClosedTracks(
+  raw: unknown,
+): Array<Omit<MomoContainerClosedTrack, "containerClosedId">> {
+  const r = asBag(raw);
+  if (!r) return [];
+
+  const arr = Array.isArray(r.track_details) ? (r.track_details as unknown[]) : [];
+  if (arr.length === 0) return [];
+
+  const momoContainerRef = asStr(r.fid);
+  const containerBatchNo = asStr(r.cid);
+  const realContainerNo  = asStr(r.cid_code);
+
+  const out: Array<Omit<MomoContainerClosedTrack, "containerClosedId">> = [];
+  for (const item of arr) {
+    const t = asBag(item);
+    if (!t) continue;
+    const trackingNo = asStr(t.reTrack);
+    if (!trackingNo) continue;   // can't insert without the unique key
+    out.push({
+      trackingNo,
+      momoContainerRef,
+      containerBatchNo,
+      realContainerNo,
+      weightKg: asNum(t.kg),
+      cbm:      asNum(t.cbm),
+      width:    asNum(t.width),
+      height:   asNum(t.height),
+      length:   asNum(t.length),
+      quantity: asInt(t.total_quantity),
+      raw:      item,
+    });
+  }
+  return out;
 }
 
 /** Smart dispatcher — detects which MOMO shape the record is and maps
