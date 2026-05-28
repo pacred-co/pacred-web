@@ -113,8 +113,8 @@ export async function adminUpdateFurlough(
     const admin = createAdminClient();
     const { error } = await admin
       .from("tb_admin")
-      .update({ admintmp: d.admin_tmp })
-      .eq("adminid", d.admin_id);
+      .update({ adminTMP: d.admin_tmp })
+      .eq("adminID", d.admin_id);
     if (error) return { ok: false, error: error.message };
 
     await logAdminAction(adminId, "admin-profile.furlough", "tb_admin", d.admin_id, d);
@@ -325,21 +325,21 @@ export async function adminUpdateProfile(
 
     // ── (a) tb_admin personal columns (L94-113) ──
     const personalUpdate: Record<string, unknown> = {};
-    if (d.admin_tel        !== undefined) personalUpdate.admintel        = d.admin_tel;
-    if (d.admin_email      !== undefined) personalUpdate.adminemail      = d.admin_email;
-    if (d.admin_name       !== undefined) personalUpdate.adminname       = d.admin_name;
-    if (d.admin_last_name  !== undefined) personalUpdate.adminlastname   = d.admin_last_name;
-    if (d.admin_nickname   !== undefined) personalUpdate.adminnickname   = d.admin_nickname;
-    if (d.admin_sex        !== undefined) personalUpdate.adminsex        = d.admin_sex;
-    if (d.marital_status   !== undefined) personalUpdate.maritalstatus   = d.marital_status;
+    if (d.admin_tel        !== undefined) personalUpdate.adminTel        = d.admin_tel;
+    if (d.admin_email      !== undefined) personalUpdate.adminEmail      = d.admin_email;
+    if (d.admin_name       !== undefined) personalUpdate.adminName       = d.admin_name;
+    if (d.admin_last_name  !== undefined) personalUpdate.adminLastName   = d.admin_last_name;
+    if (d.admin_nickname   !== undefined) personalUpdate.adminNickname   = d.admin_nickname;
+    if (d.admin_sex        !== undefined) personalUpdate.adminSex        = d.admin_sex;
+    if (d.marital_status   !== undefined) personalUpdate.maritalStatus   = d.marital_status;
     if (d.religion         !== undefined) personalUpdate.religion        = d.religion;
     if (d.nationality      !== undefined) personalUpdate.nationality     = d.nationality;
-    if (d.national_id_card !== undefined) personalUpdate.nationalidcard  = d.national_id_card;
-    if (d.admin_birthday)                 personalUpdate.adminbirthday   = d.admin_birthday;
-    if (d.expiry_date)                    personalUpdate.expirydate      = d.expiry_date;
+    if (d.national_id_card !== undefined) personalUpdate.nationalIDCard  = d.national_id_card;
+    if (d.admin_birthday)                 personalUpdate.adminBirthday   = d.admin_birthday;
+    if (d.expiry_date)                    personalUpdate.expiryDate      = d.expiry_date;
 
     if (Object.keys(personalUpdate).length > 0) {
-      const r = await admin.from("tb_admin").update(personalUpdate).eq("adminid", d.admin_id);
+      const r = await admin.from("tb_admin").update(personalUpdate).eq("adminID", d.admin_id);
       if (r.error) return { ok: false, error: r.error.message };
     }
 
@@ -383,10 +383,10 @@ export async function adminUpdateProfile(
     // ── (b) tb_admin job-position columns (L174-226) ──
     if (d.update_job_position) {
       const jobUpdate: Record<string, unknown> = {};
-      if (d.company_type !== undefined) jobUpdate.companytype = d.company_type;
-      if (d.admin_type   !== undefined) jobUpdate.admintype   = d.admin_type;
-      if (d.admin_tmp    !== undefined) jobUpdate.admintmp    = d.admin_tmp;
-      if (d.salary_type  !== undefined) jobUpdate.salarytype  = d.salary_type;
+      if (d.company_type !== undefined) jobUpdate.companyType = d.company_type;
+      if (d.admin_type   !== undefined) jobUpdate.adminType   = d.admin_type;
+      if (d.admin_tmp    !== undefined) jobUpdate.adminTMP    = d.admin_tmp;
+      if (d.salary_type  !== undefined) jobUpdate.salaryType  = d.salary_type;
       // Legacy L180-191: if adminType==7 → department/section = NULL,
       // else use the posted values (or 0 if empty).
       if (d.admin_type === "7") {
@@ -402,17 +402,17 @@ export async function adminUpdateProfile(
       const isOpenEndedType =
         d.admin_type === "1" || d.admin_type === "5" || d.admin_type === "6" || d.admin_type === "7";
       if (isOpenEndedType) {
-        jobUpdate.startdate = null;
-        jobUpdate.enddate   = null;
+        jobUpdate.startDate = null;
+        jobUpdate.endDate   = null;
       } else {
-        if (d.start_date !== undefined) jobUpdate.startdate = d.start_date || null;
-        if (d.end_date   !== undefined) jobUpdate.enddate   = d.end_date   ? `${d.end_date} 23:59:59` : null;
+        if (d.start_date !== undefined) jobUpdate.startDate = d.start_date || null;
+        if (d.end_date   !== undefined) jobUpdate.endDate   = d.end_date   ? `${d.end_date} 23:59:59` : null;
       }
       if (d.salary !== undefined && d.salary !== null && d.salary !== "") {
         jobUpdate.salary = Number(d.salary);
       }
       if (Object.keys(jobUpdate).length > 0) {
-        const r = await admin.from("tb_admin").update(jobUpdate).eq("adminid", d.admin_id);
+        const r = await admin.from("tb_admin").update(jobUpdate).eq("adminID", d.admin_id);
         if (r.error) return { ok: false, error: r.error.message };
       }
     }

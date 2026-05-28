@@ -38,9 +38,9 @@
  * shape; same downstream `tb_bill_item` linkage; cleaner round-trip.
  *
  * adminID note: legacy `tb_bill.adminid` is a varchar(30) holding the
- * legacy `tb_admin.adminid` (username, e.g. "POPP"). Pacred admins sign
+ * legacy `tb_admin.adminID` (username, e.g. "POPP"). Pacred admins sign
  * in via Supabase Auth (UUID). We resolve the legacy username via
- * `tb_admin.adminemail` → `adminid` lookup keyed off the current Supabase
+ * `tb_admin.adminEmail` → `adminID` lookup keyed off the current Supabase
  * user's email; if no match (e.g. a Pacred-native admin without a legacy
  * row yet) we fall back to a 30-char truncation of the email so the
  * insert never fails its NOT NULL.
@@ -59,7 +59,7 @@ import {
 } from "@/lib/validators/admin-combine-bill";
 
 // ────────────────────────────────────────────────────────────
-// Helper — resolve the current Supabase user's legacy `tb_admin.adminid`
+// Helper — resolve the current Supabase user's legacy `tb_admin.adminID`
 // (the username string the legacy `tb_bill.adminid` column expects).
 // ────────────────────────────────────────────────────────────
 //
@@ -79,13 +79,13 @@ async function resolveLegacyAdminId(): Promise<string> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
-    .select("adminid")
-    .eq("adminemail", email)
-    .maybeSingle<{ adminid: string | null }>();
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  if (data?.adminid) return data.adminid;
+  if (data?.adminID) return data.adminID;
 
   // Fall back to a 30-char email slice so the NOT NULL never trips.
   return email.slice(0, 30);

@@ -20,10 +20,10 @@
  * super covers ITDT/CEO. Same union the read-only cart page uses
  * (app/[locale]/(admin)/admin/service-orders/cart/page.tsx L256).
  *
- * "Current admin's legacy adminid" — the legacy `$_COOKIE["pcs_admin_adminID"]`
- * is the staff's `tb_admin.adminid` string. Pacred stores admins by Supabase
- * auth UUID, not by the legacy adminid; we bridge by looking up the current
- * user's email in `tb_admin.adminemail`. If the lookup fails (Pacred-native
+ * "Current admin's legacy adminID" — the legacy `$_COOKIE["pcs_admin_adminID"]`
+ * is the staff's `tb_admin.adminID` string. Pacred stores admins by Supabase
+ * auth UUID, not by the legacy adminID; we bridge by looking up the current
+ * user's email in `tb_admin.adminEmail`. If the lookup fails (Pacred-native
  * admin without a legacy mirror row), the action falls back to using the
  * Supabase auth UUID as the userid for cart-owner mode — keeps the staff
  * unblocked while we backfill the legacy admin mirror.
@@ -80,7 +80,7 @@ const PCS_PICKUP_ADDRESS = {
 } as const;
 
 /**
- * Resolve the current admin's legacy `tb_admin.adminid` from their Supabase
+ * Resolve the current admin's legacy `tb_admin.adminID` from their Supabase
  * email (legacy `$_COOKIE["pcs_admin_adminID"]` bridge). Returns "" if no
  * legacy mirror row — callers should fall back to the Supabase auth UUID
  * for owner-mode operations.
@@ -90,13 +90,13 @@ async function resolveLegacyAdminId(email: string | null): Promise<string> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
-    .select("adminid")
-    .eq("adminemail", email)
-    .maybeSingle<{ adminid: string }>();
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string }>();
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  return data?.adminid ?? "";
+  return data?.adminID ?? "";
 }
 
 // ════════════════════════════════════════════════════════════

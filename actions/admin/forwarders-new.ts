@@ -64,13 +64,13 @@ async function resolveLegacyAdminId(): Promise<string> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
-    .select("adminid")
-    .eq("adminemail", email)
-    .maybeSingle<{ adminid: string | null }>();
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  if (data?.adminid) return data.adminid;
+  if (data?.adminID) return data.adminID;
   return email.slice(0, 30);
 }
 

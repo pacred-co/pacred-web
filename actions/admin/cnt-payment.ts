@@ -38,8 +38,8 @@
  *
  * adminID note: same approach as `combine-bill.ts` —
  * `tb_cnt.adminidcreate` is a varchar(30) holding the legacy
- * `tb_admin.adminid` username (e.g. "POPP"). We resolve it via the
- * current Supabase user's email → `tb_admin.adminemail` → `adminid`
+ * `tb_admin.adminID` username (e.g. "POPP"). We resolve it via the
+ * current Supabase user's email → `tb_admin.adminEmail` → `adminID`
  * lookup; fallback to a 30-char email slice so the NOT NULL holds.
  *
  * Faithful-port gotcha: the legacy SELECT-after-INSERT (report-cnt.php
@@ -117,7 +117,7 @@ export type CreateCntPaymentInput = z.input<typeof createCntPaymentSchema>;
 
 // ────────────────────────────────────────────────────────────
 // Helper — resolve the current Supabase user's legacy
-// tb_admin.adminid (the varchar(30) username string).
+// tb_admin.adminID (the varchar(30) username string).
 // Same pattern as combine-bill.ts `resolveLegacyAdminId`.
 // ────────────────────────────────────────────────────────────
 async function resolveLegacyAdminId(): Promise<string> {
@@ -132,13 +132,13 @@ async function resolveLegacyAdminId(): Promise<string> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
-    .select("adminid")
-    .eq("adminemail", email)
-    .maybeSingle<{ adminid: string | null }>();
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  if (data?.adminid) return data.adminid;
+  if (data?.adminID) return data.adminID;
 
   return email.slice(0, 30);
 }

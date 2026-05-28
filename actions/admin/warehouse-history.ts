@@ -32,8 +32,8 @@
  *
  * adminID note (same as combine-bill.ts): legacy
  * `tb_forwarder.adminidupdate` is a varchar holding the legacy
- * `tb_admin.adminid` username. We resolve the current Supabase user's
- * legacy username via `tb_admin.adminemail` (fall back to a 30-char
+ * `tb_admin.adminID` username. We resolve the current Supabase user's
+ * legacy username via `tb_admin.adminEmail` (fall back to a 30-char
  * email truncation if not yet linked).
  */
 
@@ -69,13 +69,13 @@ async function resolveLegacyAdminId(): Promise<string> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
-    .select("adminid")
-    .eq("adminemail", email)
-    .maybeSingle<{ adminid: string | null }>();
+    .select("adminID")
+    .eq("adminEmail", email)
+    .maybeSingle<{ adminID: string | null }>();
   if (error) {
     console.error(`[tb_admin list] failed`, { code: error.code, message: error.message });
   }
-  if (data?.adminid) return data.adminid;
+  if (data?.adminID) return data.adminID;
   return email.slice(0, 30);
 }
 
